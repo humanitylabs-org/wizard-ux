@@ -235,13 +235,13 @@
     else { save(); render(); }
   }
   /* ⌥⇧W reopens the last closed window (Omarchy-style safety net for ⌥W): same desk, same spot, same chat or screen. */
-  const closedWins = [];
+  const closedWins = (() => { const v = store.get('closed', []); return Array.isArray(v) ? v.filter(c => c && c.w && typeof c.w.id === 'string').slice(-12) : []; })(); // kept across reloads
   function rememberClosed(id, t) {
     const d = ws[t]; let w; try { w = JSON.parse(JSON.stringify(W[id])); } catch (_) { return; }
-    closedWins.push({ w, desk: d.id, deskAt: t, at: d.wins.indexOf(id), split: d.split }); if (closedWins.length > 12) closedWins.shift();
+    closedWins.push({ w, desk: d.id, deskAt: t, at: d.wins.indexOf(id), split: d.split }); if (closedWins.length > 12) closedWins.shift(); store.set('closed', closedWins);
   }
   function reopenClosed() {
-    let c; do c = closedWins.pop(); while (c && W[c.w.id]);
+    let c; do c = closedWins.pop(); while (c && W[c.w.id]); store.set('closed', closedWins);
     if (!c) return toast('↺', 'Nothing closed to reopen', 1500);
     closePalette({ restore: false }); toggleKeys(false); closeSettings(); closeUsage();
     let t = ws.findIndex(d => d.id === c.desk);
@@ -273,6 +273,11 @@
     else if (s.startsWith('d:')) { const i = ws.findIndex(d => d.id === s.slice(2)); if (i !== cur) lastWs = cur; goWs(i); if (homeOpen) leaveHome(); }
     else { if (wsOf(s) !== cur) lastWs = cur; focusWin(s); }
     log('jump-back');
+  }
+  function flipLight() {
+    const tw = window.WosSkin?.twin?.();
+    if (!tw) return toast('◐', 'This skin has no light / dark version', 1600);
+    window.WosSkin.set(tw.id); toast('◐', tw.name, 1000); log('skin:' + tw.id);
   }
   /* ⌥− / ⌥= (Omarchy's resize): the window in front gets narrower / wider. Each desk keeps its own split. */
   const SPLIT = [0.25, 0.75];
@@ -1229,6 +1234,7 @@
       { kind: 'cmd', name: 'Narrower window', icon: '⇔', keys: `${MOD}−`, run: () => resizeFocused(-1) },
       { kind: 'cmd', name: 'Reopen closed window', icon: '↺', keys: `${MOD}⇧W`, run: () => reopenClosed() },
       { kind: 'cmd', name: 'Back to where you were', icon: '↩', keys: `${MOD}Z`, run: () => jumpBack() },
+      { kind: 'cmd', name: 'Dark / Light', icon: '◐', keys: `${MOD}B`, run: () => flipLight() },
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
@@ -2022,7 +2028,7 @@
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['R', 'Refresh window', ''], ['A', 'Reply about this', 'Chats opens beside the app with the selected words, or what is on screen'], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
+    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['B', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], ['A', 'Reply about this', 'Chats opens beside the app with the selected words, or what is on screen'], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
@@ -2128,6 +2134,10 @@
         }
         for (const [k, { o }] of Object.entries(best)) { const t = o.querySelector('.wbar .t') || o.querySelector('.wbar'); if (vis(t)) chip(t, k, 'start'); }
       }
+      // No window in front (Home, empty desk): ⇧W Reopen sits on the new-desktop +.
+      if (!f && closedWins.some(c => !W[c.w.id])) { const n = $('#wsList [data-newdesk]'); if (vis(n)) chip(n, '⇧W', 'below', 'Reopen'); }
+      // B flips Dark / Light: on the Settings gear, saying where it goes.
+      { const tw = window.WosSkin?.twin?.(), n = $('#settingsBtn'); if (tw && vis(n)) chip(n, 'B', 'below', tw.light ? 'Light' : 'Dark'); }
       // Z on where it goes back to: that window's title, that desk's number, or Home.
       if (spotLive(spotPrev) && spotPrev !== (homeOpen ? 'home' : f?.id)) {
         const s = spotPrev, i = s === 'home' ? -1 : s.startsWith('d:') ? ws.findIndex(x => x.id === s.slice(2)) : wsOf(s);
@@ -2284,6 +2294,8 @@
     // ⌥⇧W reopen the last closed window · ⌥Z back to where you were · ⌥− / ⌥= window narrower / wider. Even while typing.
     if (alt && shift && code === 'KeyW') return hit(() => { if (!e.repeat) reopenClosed(); });
     if (alt && !shift && code === 'KeyZ') return hit(() => { if (!e.repeat) jumpBack(); });
+    // ⌥B Dark ⇄ Light: the same skin's light or dark twin (Dark ⇄ Light, Landscapes Dark ⇄ Landscapes Light).
+    if (alt && !shift && code === 'KeyB') return hit(() => { if (!e.repeat) flipLight(); });
     if (alt && (code === 'Minus' || code === 'Equal')) return hit(() => resizeFocused(code === 'Equal' ? 1 : -1));
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
@@ -2337,7 +2349,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[AGIWFHJKLNTVPZ]|Slash|Comma|Minus|Equal|Bracket(Left|Right))$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[ABGIWFHJKLNTVPZ]|Slash|Comma|Minus|Equal|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }

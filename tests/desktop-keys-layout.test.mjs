@@ -210,11 +210,19 @@ test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back
   assert.match(js, /chip\(n, '⇧W', 'below', 'Reopen'\)/);
   assert.match(js, /chip\(b, '=', side, 'Wider'\); chip\(b, '−', side, 'Narrower'\)/);
   assert.match(js, /chip\(n, 'Z', 'below', 'Back'\)/);
-  assert.match(js, /Key\[AGIWFHJKLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
+  assert.match(js, /Key\[ABGIWFHJKLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
 });
 
 test('resize keeps the stock split until asked, and is kept per desk', () => {
   const start = js.indexOf('  function splitOf('), body = js.slice(start, js.indexOf('\n', start));
   const splitOf = vm.runInNewContext(`const SPLIT = [0.25, 0.75]; (${body.trim().replace(/^function splitOf/, 'function')})`);
   assert.equal(splitOf({}, 2), 0.5); assert.equal(splitOf({}, 3), 0.56); assert.equal(splitOf({ split: 0.66 }, 2), 0.66); assert.equal(splitOf({ split: 0.9 }, 2), 0.5);
+});
+
+test('⌥B flips Dark / Light within the same skin, shown on the Settings gear; closed windows survive a reload', () => {
+  assert.match(js, /alt && !shift && code === 'KeyB'\) return hit\(\(\) => \{ if \(!e\.repeat\) flipLight\(\); \}\)/);
+  assert.match(js, /chip\(n, 'B', 'below', tw\.light \? 'Light' : 'Dark'\)/);
+  assert.match(js, /store\.get\('closed', \[\]\)/);
+  const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
+  assert.match(skins, /obsidian: 'obsidian-light', 'obsidian-light': 'obsidian', landscapes: 'landscapes-light', 'landscapes-light': 'landscapes'/);
 });
