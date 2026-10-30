@@ -45,3 +45,11 @@ test('colors and tweaks are separate: onboarding offers every color; Look offers
   assert.match(e, /chooseSkin\(\) \{ if \(wornOwner\(\) !== owner\) return apply\(\); return Promise\.resolve\(\); \}/, 'a color pick never swaps the tweak set');
   for (const who of ['wizard', 'miguel']) assert.equal(typeof JSON.parse(read(`web/tweaks/${who}/profile.json`)).name, 'string', who + ' set has a display name');
 });
+
+test('features on for everyone are plain settings where they act, not tweaks', () => {
+  const s = read('web/core/settings.js');
+  assert.doesNotMatch(s, /Built in/, 'no "built-in tweaks"');
+  assert.match(s, /register\(\{ id: 'notifications-in-chats', page: 'chats'/);
+  assert.match(s, /register\(\{ id: 'home-network', page: 'appearance'/);
+  assert.match(s, /const exp = s\.tweaks\.filter\(t => !t\.builtin\);/, 'Tweaks lists only contributed ones');
+});
