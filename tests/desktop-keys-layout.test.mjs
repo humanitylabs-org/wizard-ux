@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8');
@@ -76,7 +77,15 @@ test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk'
 
 test('⌥G Pick anything: letter chips on every clickable, typed letters click it, guide lists it', () => {
   assert.match(js, /code === 'KeyG'\) return hit\(\(\) => \{ if \(!e\.repeat\) pick\.start\(\); \}\)/);
-  assert.match(js, /function onKey\(e, fromFrame = false\) \{\n    if \(pick\.active\(\)\) return pick\.key\(e\);/);
+  // Pick still owns ordinary keys; the search-only IME/repeat guard is permitted before it.
+  const start = js.indexOf('  function onKey(e, fromFrame = false)');
+  const head = js.slice(start, js.indexOf('    keyHints.down(e);', start));
+  const context = { pick: { active: () => true, key: () => 'picked' }, window: {} };
+  vm.createContext(context); vm.runInContext(head + ' return "shell"; }', context);
+  for (const flags of [{}, {repeat:true}, {isComposing:true}, {keyCode:229}]) {
+    assert.equal(context.onKey({key:'Escape',target:{matches:()=>false},...flags}), 'picked');
+    assert.equal(context.onKey({key:'g',target:{matches:()=>true},...flags}), 'picked');
+  }
   assert.match(js, /\[data-chopen\],\[data-chdraft\]/);
   assert.match(js, /querySelectorAll\('iframe'\)/);
   assert.ok(js.includes("['G', 'Pick anything',"));
