@@ -806,8 +806,11 @@
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
             const d = deferred[seenKeyOf(s)];
-            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
-            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt; delete s.device;
+            if (d) {
+              if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt;
+              if (typeof d.device === 'string' && d.device) s.device = d.device;
+            }
             applyLocal(s);
           }
           // A settled action stays applied until a list read that started after it lands.
@@ -860,8 +863,11 @@
           const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
           for (const s of list) {
             const d = deferred[seenKeyOf(s)];
-            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
-            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt; delete s.device;
+            if (d) {
+              if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt;
+              if (typeof d.device === 'string' && d.device) s.device = d.device;
+            }
             applyLocal(s);
           }
           addSynthetic(list, id);
@@ -1211,6 +1217,31 @@
       return p.record;
     },
     defer(id) { return this._act(id, { deferred: true, deferredAt: new Date().toISOString() }, () => this._defer(id, true)); },
+    setDevice(id, device, agent) {
+      const value = String(device || '').replace(/\s+/g, ' ').trim();
+      const initial = agent === undefined ? this.session(id) : this.sessionFor(id, agent);
+      if (!initial) return Promise.resolve(false);
+      const owner = agent === undefined ? this.ownerOf(initial) : agent, key = `${owner || 'hermes'}\u0000${id}`, writes = (this._deviceWrites ||= new Map());
+      const write = async () => {
+        const s = agent === undefined ? this.session(id) : this.sessionFor(id, agent);
+        if (!s || value === String(s.device || '')) return !!s;
+        const before = s.device;
+        if (value) s.device = value; else delete s.device;
+        this.emit();
+        try {
+          const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', device: value, ...(owner && owner !== 'hermes' ? { agent_id: owner } : {}) }) })).json();
+          if (!p?.record || String(p.record.device || '') !== value || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread device was not saved.');
+          this.deferred[seenKeyOf(s)] = p.record; setTimeout(() => this.refresh(), 50); return true;
+        } catch (e) {
+          if (before) s.device = before; else delete s.device;
+          this.emit(); return false;
+        }
+      };
+      const earlier = writes.get(key), pending = earlier ? earlier.then(write, write) : write();
+      writes.set(key, pending);
+      const cleanup = () => { if (writes.get(key) === pending) writes.delete(key); };
+      pending.then(cleanup, cleanup); return pending;
+    },
     /* Rename: James's own title for a thread. It locks the name: the agent never renames it after this. */
     async rename(id, title) {
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);

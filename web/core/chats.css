@@ -124,6 +124,9 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-row .tp { display: flex; gap: 8px; align-items: baseline; }
 .ch-row .tp b { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-row .tp time { flex: 0 0 auto; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ch-device-tag { flex: 0 1 auto; max-width: 92px; padding: 2px 7px; border: 1px solid color-mix(in srgb, var(--cyan) 38%, transparent); border-radius: 99px; color: color-mix(in srgb, var(--cyan) 86%, var(--ink)); background: color-mix(in srgb, var(--cyan) 9%, transparent); font-size: 10.5px; line-height: 1.25; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-head > .ch-device-tag.header { flex: 0 1 auto; max-width: 86px; min-height: 28px; padding: 4px 9px; font-size: 11px; text-align: center; }
+.ch-head > .ch-device-tag.header:active { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
 .ch-row .pv { font-size: 13.5px; line-height: 1.35; color: var(--ink-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ch-row.unread .tp b { color: var(--ink); font-weight: 750; }
 .ch-row.unread .pv { color: var(--ink-2); }
@@ -343,7 +346,7 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-row { transition: transform 160ms var(--ease); touch-action: pan-y; -webkit-touch-callout: none; }
 /* Long-press / swipe actions sheet */
 .ch-sheet { position: absolute; inset: 0; z-index: 8; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: ch-fade 160ms both; }
-.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: linear-gradient(rgba(20, 13, 44, .98), rgba(20, 13, 44, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-top: 1px solid var(--line-2); }
+.ch-sheet-b { width: 100%; max-height: min(86%, calc(100% - 48px)); overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: linear-gradient(rgba(20, 13, 44, .98), rgba(20, 13, 44, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-top: 1px solid var(--line-2); }
 .ch-sheet-t { padding: 8px 10px 10px; font-size: 13px; font-weight: 750; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-sheet-b button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); text-align: left; }
 .ch-sheet-b button:active { background: rgba(205, 190, 255, .1); }
@@ -547,6 +550,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-chip { flex: 0 1 auto; min-width: 0; max-width: 46%; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border-radius: 99px; background: rgba(185, 155, 255, .16); border: 1px solid rgba(185, 155, 255, .32); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-chip button { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); font-size: 11px; background: rgba(255, 255, 255, .06); }
 .ch-fdot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--violet-2, #b99bff); }
+.ch-fdot.device { background: var(--cyan, #5cd6ff); }
 .ch-fdot.unread { background: var(--pink, #ff5ccf); }
 .ch-fdot.needs { background: var(--amber, #ffbe55); }
 .ch-fdot.check { background: #5cd6ff; }

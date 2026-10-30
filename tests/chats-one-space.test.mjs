@@ -21,7 +21,7 @@ function device(box, agents = { t1: 'hermes', fresh: 'hermes' }) {
   const el = { insertAdjacentHTML: (_, html) => sheets.push(html), querySelector: () => null }
   const env = { LIVE: { ...dev, agentOf: sid => agents[sid] || '', workGroups: () => ({ ready: [] }), isNew: () => false }, localStorage: dev.ctx.localStorage,
     window: dev.ctx.window, Event: dev.ctx.Event, AGS: () => ({ defaultId: () => 'hermes' }), focusAgents: () => [{ id: 'hermes' }, { id: 'philosopher' }],
-    toast: (...a) => toasts.push(a[1]), W: {}, esc: s => String(s), PIN_SVG: '', RENAME_SVG: '', PIN: { has: () => false }, topicOn: () => false,
+    toast: (...a) => toasts.push(a[1]), W: {}, esc: s => String(s), PIN_SVG: '', RENAME_SVG: '', DEVICE_SVG: '', PIN: { has: () => false }, topicOn: () => false,
     ACT: {}, threadActions: () => [], rowOf: (_, sid) => ({ sessionId: sid, title: sid }), track: { querySelector: () => el }, closeRowSheet() {}, vib() {},
     isWorking: () => false, actionLabel: () => '' }
   vm.createContext(env)
