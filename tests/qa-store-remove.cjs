@@ -45,12 +45,13 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
    }
    if(p==='/wizard-os-home/store-install/_remove/ledger' && req.method()==='GET') {
     st.polls++;
-    const final={failed:{state:'failed',error:'Not removed: the App Manager is busy (409). Ledger is still installed.'},unknown:{state:'unknown',error:'Removing Ledger hasn’t finished yet. Refresh to check.'},mismatch:{state:'removed',identity:{repo:'example/ledger',commit:F}},stale:{state:'removed'},success:{state:'removed'}}[st.mode];
-    if(st.mode==='success') st.installed.delete('ledger');
+    const final={failed:{state:'failed',error:'Not removed: the App Manager is busy (409). Ledger is still installed.'},unknown:{state:'unknown',error:'Removing Ledger hasn’t finished yet. Refresh to check.'},mismatch:{state:'removed',identity:{repo:'example/ledger',commit:F}},stale:{state:'removed'},success:{state:'removed'}}[st.mode] || (st.mode==='unknown-gone' && {state:'unknown',error:'Removing Ledger hasn’t finished yet. Refresh to check.'});
+    if(st.mode==='success' || st.mode==='unknown-gone') st.installed.delete('ledger');
     return route.fulfill({json:{app:'ledger',identity:ident,...final}});
    }
    if(!['GET','HEAD'].includes(req.method())) { st.unsafe.push(req.method()+' '+p); return route.abort(); }
    if(p.includes('/store-data/')) {
+    if(p.includes('/index/search') && st.indexDown) return route.fulfill({status:503,json:{error:'down'}});
     if(p.includes('/index/search')) return route.fulfill({json:{apps:catalog,sources:[{id:'standard',name:'Standard',stale:false}],next_offset:null}});
     if(p.endsWith('/api/apps/installed')) return route.fulfill({json:{installed:[...st.installed].map(id=>({info:{id,urn:id+':wizardapps'},app:{status:'running'}}))}});
     if(p.endsWith('/wizard/v1/installed-apps')) return route.fulfill({json:{architecture:'amd64',complete:true,unavailable:[],
@@ -143,6 +144,14 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
     assert.ok(st.installed.has('ledger'),mode);
    }
    assert.equal(await page.evaluate(()=>window.changed.filter(x=>x==='ledger').length),3,'unknown/mismatch/stale refresh the app list; refusals do not');
+   // Unknown receipt while the readback already lacks the app: still not reported as removed (needs both).
+   st.mode='unknown-gone'; await openReview(); await tap(f.locator('#sheet [data-remove-confirm]'));
+   await f.waitForFunction(()=>window.__store.state().removing===0 && document.querySelector('#sheet [role="alert"]'),null,{timeout:15000});
+   assert.match(await f.locator('#sheet [role="alert"]').innerText(),/Refresh to check/,'unknown-gone');
+   assert.equal(await f.locator('#sheet').isVisible(),true,'unknown-gone keeps the review');
+   assert.doesNotMatch(await f.locator('#toast').innerText().catch(()=>''),/removed/,'unknown-gone claims nothing');
+   st.installed.add('ledger'); await tap(f.locator('#sheet .rm-cancel'));
+   await f.evaluate(()=>document.querySelector('#refresh').click()); await f.locator('#detail [data-open="ledger"]').waitFor({timeout:15000});
    // Success: a double tap posts once, the registry is read back, the shell refreshes and the owner lands on the list.
    st.mode='success'; const before=st.posts.length; await openReview();
    const go=f.locator('#sheet [data-remove-confirm]');
@@ -160,6 +169,12 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
    await tap(f.locator('#refresh')); await f.locator('#refresh:not([disabled])').waitFor();
    assert.equal(await f.locator('.row[data-app^="cards|"]').count(),1);
    assert.equal(await f.locator('.row[data-app^="ledger|"] [data-get]').innerText(),'Get');
+   // A later catalog outage keeps every repository of the conflicted row (the raw catalog is reused, not merged rows).
+   st.indexDown=true; await tap(f.locator('#refresh')); await f.locator('#refresh:not([disabled])').waitFor(); st.indexDown=false;
+   assert.equal(await f.locator('.row[data-app^="cards|"]').count(),1,'outage keeps one cards row');
+   await tap(f.locator('.row[data-app^="cards|"] .tx')); await f.locator('#detail .src-list').waitFor();
+   assert.match(await f.locator('#detail .src-list').innerText(),/fork-team\/cards/,'outage keeps alternate repositories');
+   await tap(f.locator('#detail [data-back]'));
    // Canonical hosted Back: list → Store root, then hands Back to the shell; the Store stays mounted.
    assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),true); assert.equal(await f.locator('#discover').isVisible(),true);
    assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),false);

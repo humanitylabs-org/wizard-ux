@@ -80,7 +80,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     $('refresh').disabled=true;
     const [idx, inst, registry] = await Promise.allSettled([allApps(force), get('api/apps/installed'), get('wizard/v1/installed-apps')]);
     $('refresh').disabled=false;
-    const catalog=idx.status==='fulfilled'?idx.value:{apps:S.apps,sources:S.sources};
+    // Keep the raw catalog: merged rows drop per-repository details, so an outage must reuse the last raw read.
+    const catalog=idx.status==='fulfilled'?(S.catalog=idx.value):(S.catalog||{apps:S.apps,sources:S.sources});
     S.error=idx.status==='fulfilled'?'':'The App Index isn’t reachable right now.'; S.sources=catalog.sources;
     S.apps = (Array.isArray(catalog.apps) ? catalog.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
     S.installed.clear();
@@ -303,8 +304,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     await load(true);
     S.removing.delete(r.id);
     const now = readback(r.id);
-    if (now !== 'gone') {
-      r.error = now === 'unknown' ? 'Wizard couldn’t confirm the removal. Refresh to check.' : gone ? `Removal finished, but Wizard still lists ${r.name}. Refresh to check.` : r.error;
+    // Removed needs both: the App Manager's receipt for this identity AND a readback without the app.
+    if (now !== 'gone' || !gone) {
+      r.error = now === 'unknown' ? 'Wizard couldn’t confirm the removal. Refresh to check.' : now === 'present' && gone ? `Removal finished, but Wizard still lists ${r.name}. Refresh to check.` : r.error;
       refresh(); return;
     }
     // Finishing action: leave the review and the removed app's page in one go, back to where the owner came from.
