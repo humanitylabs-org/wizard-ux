@@ -130,9 +130,9 @@
   }
   // A new skin starts from what this device runs now (the color no longer decides tweaks).
   async function defaults() {
-    const list = await installed(), who = wornOwner(), published = who ? await profile(who) : null;
-    const on = id => published?.tweaks.includes(id) && !(published.off || []).includes(id);
-    return Object.fromEntries(list.map(m => [m.id, globalIds().includes(m.id) ? !globalOff(m.id) : (mixOf(m.id) ?? !!on(m.id))]));
+    const list = await installed();
+    // What actually runs now, including the worn own skin's choices.
+    return Object.fromEntries(list.map(m => [m.id, enabled(m.id, recipe())]));
   }
   // Authors with tweaks here, for the quick buttons: display name from their profile, else the id.
   async function authors() {

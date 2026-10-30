@@ -53,3 +53,12 @@ test('features on for everyone are plain settings where they act, not tweaks', (
   assert.match(s, /register\(\{ id: 'home-network', page: 'appearance'/);
   assert.match(s, /const exp = s\.tweaks\.filter\(t => !t\.builtin\);/, 'Tweaks lists only contributed ones');
 });
+
+test('review: a new skin starts from the worn own skin\'s choices; an upgraded device keeps the retired Home map CSS for its first frame', () => {
+  const e = read('web/core/experience.js'), cat = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.match(e, /list\.map\(m => \[m\.id, enabled\(m\.id, recipe\(\)\)\]\)/);
+  for (const old of Object.keys(cat.aliases)) {
+    assert.ok(!cat.tweaks.includes(old), old + ' is retired');
+    if (old === 'miguel/machines-home') assert.match(read(`web/tweaks/${old}/tweak.css`), /html\[data-tweaks~="miguel\/machines-home"\] \.home > :is\(\.home-top/, 'boot preload still hides stock Home');
+  }
+});
