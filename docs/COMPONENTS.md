@@ -30,7 +30,7 @@ Visual: <side-by-side screenshot, or "none">
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → source chat |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + live change keep state |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback | literal colours in native screens |
-| Native offline/connect | `ReachScreen` / `ReachPolicy`, `ConnectActivity` / `ServerSettings` (same package); `WizReach` | duplicate offline/address UI |
+| Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings` (same package); web `WizReach` | duplicate offline/address UI |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` | app transcriber | stale/foreign denied; unavailable explicit |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
@@ -56,8 +56,8 @@ Visual: <side-by-side screenshot, or "none">
 | Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Done | `WizCore` (`chats.js`, `.css`); Ready/Home/original alerts, Priority groups `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send release/cache; Esc `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
-| Repaint a live view without flicker (changed nodes only) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` per live tick |
-| Models, retry, composer mic, receipts, reading place | `WosChatPower` (`chat-power.js`: reading anchor, repair, viewport/keyboard cleanup); `WosModels` (`chat-models.js`: pooled Claude first, provider-access Error + Retry/Choose another, acknowledged source-bound retry); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`: history/live tools) | model/error/reading-place forks; duplicate diagnosis/live steps |
+| Repaint a live view without flicker (changed nodes only) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
+| Models, retry, composer mic, receipts, reading place; model label clear of draft text | `WosChatPower` (`chat-power.js`: anchor/repair); `WosModels` (`chat-models.js`: pooled Claude, Retry/Choose); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | model/error/reading forks; controls over draft text |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing/sections |
 | Pinned threads (synced), tweaks | `WosChatPins` (`chat-pins.js`) in `WosParts` | device-local pin lists |
@@ -70,7 +70,7 @@ Visual: <side-by-side screenshot, or "none">
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings in both shells | `WosSettings.register` (`settings.js`), `focus(id)`, `WosFeatures`; Reply style note; `WizConfig.responseStyle` | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
-| App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
+| Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
 | App glyph tiles | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + legacy defaults | lists |

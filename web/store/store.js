@@ -2,9 +2,10 @@
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease} from './store-install.js';
+import {removalPlan, removeInstalledApp, canRemove, confirmView} from './store-remove.js';
 await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
 import {sourceLabel, installedOnlyApps} from './store-source.js';
@@ -36,13 +37,14 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map() };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
   const provenance = a => sourceLabel(a, S.installed.get(key(a)));
   const chip = (a, installed=true) => { const s=installed?provenance(a):sourceLabel(a); return `<span class="source-chip" data-source="${s.kind}">${s.label}</span>`; };
-  const badge = a => chip(a) + (a.conflict ? '<span class="conflict-badge">Source conflict</span>' : '');
+  // The only conflict marker: a status beside the name (a listing conflict, or an installed copy from another repository).
+  const badge = a => chip(a) + (a.conflict || S.installed.get(key(a))?.conflict ? '<span class="conflict-badge">Source conflict</span>' : '');
   try { const config = parent.WizConfig || window.WizConfig; const mark = () => { $('preview').hidden = !config?.isPreview?.(); }; mark(); config?.ready?.then(mark); } catch (_) {}
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
@@ -78,15 +80,18 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     $('refresh').disabled=true;
     const [idx, inst, registry] = await Promise.allSettled([allApps(force), get('api/apps/installed'), get('wizard/v1/installed-apps')]);
     $('refresh').disabled=false;
-    const catalog=idx.status==='fulfilled'?idx.value:{apps:S.apps,sources:S.sources};
+    // Keep the raw catalog: merged rows drop per-repository details, so an outage must reuse the last raw read.
+    const catalog=idx.status==='fulfilled'?(S.catalog=idx.value):(S.catalog||{apps:S.apps,sources:S.sources});
     S.error=idx.status==='fulfilled'?'':'The App Index isn’t reachable right now.'; S.sources=catalog.sources;
     S.apps = (Array.isArray(catalog.apps) ? catalog.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
     S.installed.clear();
     const snapshot=registry.status==='fulfilled' ? registry.value : {wam:[],shell:[],complete:false}; S.snapshot=snapshot;
     S.apps.push(...installedOnlyApps(S.apps,snapshot.wam || []).map(clean).filter(Boolean).filter(isUserApp));
-    S.apps.sort(compareApps);
     S.architecture=['amd64','arm64'].includes(snapshot.architecture) ? snapshot.architecture : '';
-    const runtipi=inst.status==='fulfilled' && Array.isArray(inst.value.installed) ? inst.value.installed : [];
+    const runtipi=inst.status==='fulfilled' && Array.isArray(inst.value.installed) ? inst.value.installed : []; S.runtipi=runtipi;
+    // One entry per app ID: same-ID rows from different repositories merge, keeping the exactly installed one.
+    const proved=new Map(S.apps.map(a=>[a,resolveInstalled(a,snapshot,runtipi)]));
+    S.apps=mergeConflicts(S.apps,a=>proved.get(a)).sort(compareApps);
     S.complete=snapshot.complete===true && Array.isArray(snapshot.wam) && Array.isArray(snapshot.shell) && inst.status==='fulfilled' && Array.isArray(inst.value.installed);
     for (const a of S.apps) {
       const i=resolveInstalled(a,snapshot,runtipi); if(i) S.installed.set(key(a),i);
@@ -129,7 +134,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   function action(a, cls = '') {
     const state=status(a);
     if (S.busy.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Installing…</span>`;
-    if(state==='conflict') return `<span class="get warn ${cls}">Resolve conflict</span>`;
+    if (S.removing?.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Removing…</span>`;
+    // A source conflict is shown by the "Source conflict" badge beside the name; nothing here pretends to resolve it.
+    if(state==='conflict') return '';
     if(state==='unknown') return `<span class="get wait ${cls}" aria-label="Status unavailable">Status unavailable</span>`;
     if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get wait ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
     if(state==='switch' || state==='update') return `<button class="get upd ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
@@ -168,6 +175,15 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     showList('Results', hits, `${hits.length} for “${S.q}”`);
   }
 
+  const removable = a => isInstalled(a) && !S.busy.has(a.id) && canRemove(S.installed.get(key(a)), S.complete);
+  // Same-ID listings from different repositories: say which exist and which one is installed. No fake resolve action:
+  // replacing an installed app with another repository is not available from the Store yet.
+  function sourcesSection(a) {
+    const list = a.sources?.length ? a.sources : [{repo:a.repo, version:a.version, publisher:a.publisher}], has = list.some(s => s.installed);
+    return `<section class="d-sec"><h3>Sources</h3><p class="d-note">${list.length > 1 ? `${list.length} repositories list an app called ${esc(a.name)}.` : `Another repository also lists an app called ${esc(a.name)}.`}</p>
+      <dl class="info src-list">${list.map(s => `<div><dt>${esc(s.repo)}</dt><dd>${s.installed ? '<b>Installed</b>' : esc(s.version ? 'Version ' + s.version : '')}</dd></div>`).join('')}</dl>
+      <p class="d-note src-note">${has ? 'Wizard keeps the installed one. Switching to another repository isn’t available here yet.' : 'Installing is blocked while more than one repository uses this ID.'}</p></section>`;
+  }
   function showDetail(id) {
     const base=find(id); if(!base) return; const a=selected(base);
     const k = kindOf(a), [c1, c2] = hue(a.id);
@@ -181,9 +197,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const info = [['Kind', k.one], ['Source', provenance(a).label + (provenance(a).detail ? ' · ' + provenance(a).detail : '')], ['Publisher', a.publisher], ['Version', a.version], ['Commit', a.commit], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
-        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(a)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}${['beta','link','local'].includes(provenance(a).kind) && installShareLink({...a,...S.installed.get(key(a))}) ? `<button type="button" class="share-action" data-share="${esc(key(a))}">Share</button>` : ''}</div></div>
+        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(a)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}${removable(a) ? `<button type="button" class="remove-action" data-remove="${esc(key(a))}">Remove app</button>` : ''}${['beta','link','local'].includes(provenance(a).kind) && installShareLink({...a,...S.installed.get(key(a))}) ? `<button type="button" class="share-action" data-share="${esc(key(a))}">Share</button>` : ''}</div></div>
       ${base.releases.length ? `<section class="d-sec"><label class="release-label">Release <select id="release-choice" data-release="${esc(key(base))}">${S.selections.get(key(base))==='unavailable'?'<option selected disabled>Selected release no longer available</option>':''}${base.releases.map(r=>`<option value="${esc(`${r.source}:${r.commit}`)}" ${S.selections.get(key(base))!=='unavailable' && r.source===a.source && r.commit===a.commit?'selected':''}>${sourceLabel(r).label} · ${esc(r.version)} · ${esc(r.source_name)}</option>`).join('')}</select></label><p class="d-note">Beta marks availability, not your installed channel. Open uses your existing app; choosing another release never installs it automatically.</p></section>` : ''}
-      ${base.conflict?'<section class="d-sec"><p class="d-note">This app ID belongs to different repositories across sources. Installation is blocked here; ask your agent to resolve the source conflict without overwriting an installed app.</p></section>':''}
+      ${base.conflict ? sourcesSection(base) : ''}
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
@@ -217,6 +233,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   function showSheet(k) {
     if (k === '@link') return showLinkSheet();
+    if (k.startsWith('@remove:')) return showRemoveSheet();
     $('sheet').setAttribute('aria-label','Models and connections');
     const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
     const left = pending(c?.data);
@@ -255,6 +272,49 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       ${l.loading?'<p class="mc-lede" role="status">Checking the GitHub app…</p>':''}
       ${l.error?`<div class="link-error" role="alert">${a?'Installation not confirmed:':"This install link isn't valid:"} ${esc(l.error)}</div>`:''}
       ${a?`<section class="d-sec"><p class="sheet-source">${chip(a,false)}</p><p class="d-note">${a.catalog_source?'Also available in the catalog.':'Not in the catalog.'} ${esc(s.detail || 'Shared by a link.')}</p><p class="d-sum">${esc(a.summary)}</p><dl class="info"><div><dt>Repository</dt><dd>${esc(a.repo)}</dd></div><div><dt>Commit</dt><dd>${esc(a.commit)}</dd></div><div><dt>Kind</dt><dd>${esc(kindOf(a).one)}</dd></div></dl><p class="d-note">Only install apps from people you trust. The App Manager checks this exact release before installing.</p></section><div class="mc-done">${S.busy.has(a.id)?'<span class="get wait" role="status">Installing…</span>':['get','update','switch'].includes(status(a))?`<button type="button" class="get big" data-link-install>${status(a)==='get'?'Install':status(a)==='update'?'Update':'Switch to this release'}</button>`:action(a)}</div>`:''}`;
+  }
+  /* ---------------- Remove app: review on the Store's sheet layer, one exact request, readback, then leave ---------------- */
+  function showRemoveSheet() {
+    const r = S.remove || {}, base = find(r.key), a = base ? selected(base) : {name:r.name};
+    $('sheet').setAttribute('aria-label', 'Remove app');
+    $('sheet').innerHTML = confirmView(r.plan, {name: a.name || r.name, installed: r.installed}, {esc, loading: r.loading, error: r.error, busy: S.removing.has(r.id)});
+  }
+  async function openRemove(k) {
+    const base = find(k); if (!base) return; const a = selected(base), installed = S.installed.get(key(base));
+    if (!removable(a) || !installed) return;
+    const r = S.remove = {key: k, from: top() === 'detail' ? S.stack.at(-1).arg : null, id: installed.id, name: a.name, installed: {repo: installed.repo, commit: installed.commit || ''}, loading: true};
+    push('sheet', '@remove:' + r.key); showRemoveSheet(); window.scrollTo(0, 0);
+    $('sheet').querySelector('[data-back]')?.focus({preventScroll: true});   // keyboard starts on the safe way out
+    try { r.plan = await removalPlan(r.id); } catch (err) { r.error = err.message; }
+    finally { r.loading = false; if (onReview(r)) { showRemoveSheet(); ($('sheet').querySelector('.rm-cancel') || $('sheet').querySelector('[data-back]'))?.focus({preventScroll: true}); } }
+  }
+  const onReview = r => S.remove === r && top() === 'sheet' && S.stack.at(-1).arg === '@remove:' + r.key;
+  // Readback after a fresh load: 'gone' only when complete App Manager and Runtipi lists both lack this app id.
+  const readback = id => !S.complete ? 'unknown' : (S.snapshot?.wam || []).some(i => i.id === id || i.app_id === id) || (S.runtipi || []).some(i => i.info?.id === id) ? 'present' : 'gone';
+  async function confirmRemove() {
+    const r = S.remove; if (!r?.plan || S.removing.has(r.id) || S.busy.has(r.id)) return;
+    const sheet = '@remove:' + r.key;
+    S.removing.add(r.id); r.error = ''; showRemoveSheet(); refresh();
+    let gone = false;
+    try {
+      await removeInstalledApp(r.plan);
+      gone = true;
+    } catch (err) { r.error = err.message || 'Not removed.'; if (!err.unknown) { S.removing.delete(r.id); if (onReview(r)) showRemoveSheet(); refresh(); return; } }
+    try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: r.id }, location.origin); } catch (_) {}
+    await load(true);
+    S.removing.delete(r.id);
+    const now = readback(r.id);
+    // Removed needs both: the App Manager's receipt for this identity AND a readback without the app.
+    if (now !== 'gone' || !gone) {
+      r.error = now === 'unknown' ? 'Wizard couldn’t confirm the removal. Refresh to check.' : now === 'present' && gone ? `Removal finished, but Wizard still lists ${r.name}. Refresh to check.` : r.error;
+      refresh(); return;
+    }
+    // Finishing action: leave the review and the removed app's page in one go, back to where the owner came from.
+    if (top() === 'sheet' && S.stack.at(-1).arg === sheet) pop();
+    if (top() === 'detail' && S.stack.at(-1).arg === r.from) pop();
+    if (S.remove === r) S.remove = null;
+    refresh();   // the list/search underneath repaints from the readback (Get, or gone)
+    toast(`<b>${esc(r.name)} removed</b>`);
   }
   async function shareApp(base) {
     if(!base) return;
@@ -300,6 +360,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
     if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true); else if (under?.t === 'sheet') showSheet(under.arg);
+    // Leaving the removal review returns keyboard focus to the action that opened it.
+    if (was.t === 'sheet' && String(was.arg).startsWith('@remove:') && under?.t === 'detail') $('detail').querySelector('[data-remove]')?.focus({preventScroll: true});
     const y = scrolls.pop() || 0; requestAnimationFrame(() => window.scrollTo(0, y));
     return true;
   }
@@ -327,7 +389,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     try { const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { credentials: 'same-origin', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (_) { return null; }
   }
   async function install(a, options = {}) {
-    if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
+    if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || S.removing.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     if(a.install_link && S.link) S.link.error='';
     S.busy.add(a.id); refresh();
@@ -364,6 +426,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (e.target.closest('[data-back]')) { pop(); return; }
     const sh = e.target.closest('[data-share]'); if(sh) { shareApp(find(sh.dataset.share)); return; }
     const li = e.target.closest('[data-link-install]'); if(li) { install(S.link?.app); return; }
+    const rm = e.target.closest('[data-remove]'); if (rm) { e.stopPropagation(); openRemove(rm.dataset.remove); return; }
+    const rc = e.target.closest('[data-remove-confirm]'); if (rc) { e.stopPropagation(); if (!rc.disabled) confirmRemove(); return; }
     const g = e.target.closest('[data-get]');
     if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base), state=status(a);
       if(!['get','switch','update'].includes(state)) return;
@@ -408,7 +472,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
-  window.__store = { openInstallLink: input => openInstallLink(typeof input === 'string' && input.startsWith('?') ? new URLSearchParams(input) : input), state: () => ({ loaded:S.loaded, busy:S.busy.size, layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
+  window.__store = { openInstallLink: input => openInstallLink(typeof input === 'string' && input.startsWith('?') ? new URLSearchParams(input) : input), state: () => ({ loaded:S.loaded, busy:S.busy.size, layers: S.stack.map(x => x.t), removing: S.removing.size, apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
   adoptAppearance('App Store');
   paint(); load();
   const initialLink=new URLSearchParams(location.search);

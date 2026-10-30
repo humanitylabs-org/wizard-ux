@@ -35,6 +35,9 @@ enum WizardAddress {
     static var pendingPair: String?
     static var pendingError: String?
     static var showConnect = false
+    /// The saved Wizard didn't open in time (UnreachableWatch): the next start shows the connect screen's Tailscale
+    /// guide for it, not Change Wizard.
+    static var showUnreachable = false
 
     /// `wizard://connect?origin=…` from the Camera app, Safari or another app. Returns true when it was ours; other
     /// `wizard://` routes (Store install links) return false so Capacitor delivers them to the Wizard's pages.
@@ -69,6 +72,10 @@ final class WizardViewController: CAPBridgeViewController {
     private var mediaGate: MediaGate?
     /// True when this start shows the bundled connect screen (no Wizard yet, Change Wizard, or a pairing link).
     private(set) var connectMode = false
+    /// This start shows the connect screen because the saved Wizard didn't open (not Change Wizard).
+    private(set) var unreachableMode = false
+    private var unreachableTimer: Timer?
+    private var loadingCover: WKWebView?
     private var foregroundObserver: NSObjectProtocol?
 
     override func instanceDescriptor() -> InstanceDescriptor {
@@ -77,7 +84,9 @@ final class WizardViewController: CAPBridgeViewController {
         // Mirrors the Android app's `WizardOS-Android/<version>` so Wizard UX can tell the native app from Safari.
         descriptor.appendedUserAgentString = "WizardOS-iOS/\(version)"
         connectMode = WizardAddress.showConnect || WizardAddress.home == nil
+        unreachableMode = connectMode && WizardAddress.showUnreachable && WizardAddress.home != nil
         WizardAddress.showConnect = false
+        WizardAddress.showUnreachable = false
         if !connectMode, let home = WizardAddress.home, let host = WizardAddress.current?.host {
             descriptor.serverURL = home.absoluteString
             // Every page of this Wizard (not only /wizard-os-home/) stays in the app, e.g. hosted apps and deep links.
@@ -104,6 +113,7 @@ final class WizardViewController: CAPBridgeViewController {
         }
 
         injectPluginProxies(into: web)
+        if !connectMode { watchUnreachable(web) }
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
@@ -134,7 +144,67 @@ final class WizardViewController: CAPBridgeViewController {
             WKUserScript(source: core + register, injectionTime: .atDocumentStart, forMainFrameOnly: true))
     }
 
+    /// A Wizard that doesn't answer often doesn't fail either: with Tailscale off, or with the Wizard's computer off, the
+    /// connection just hangs (Capacitor's errorPath only follows a failed load). So from launch the connect screen's
+    /// full-screen loader covers the web view (`showLoadingCover`), until a Wizard page has started (the cover fades
+    /// out) or the mark passes (the app restarts into the connect screen's Tailscale guide, which keeps checking and
+    /// opens the Wizard by itself). The mark is short when this is a Tailscale address and Tailscale is off on this
+    /// phone (it can't work), else long enough for a slow network. Android: ReachPolicy.CONNECTING_MS / GIVE_UP_MS.
+    private func watchUnreachable(_ web: WKWebView) {
+        guard let wizard = WizardAddress.current?.absoluteString else { return }
+        showLoadingCover(over: web, host: WizardOrigin.host(wizard))
+        let hopeless = WizardOrigin.needsTailscale(wizard) && !TailscaleNet.isOn()
+        let mark = Date().addingTimeInterval(hopeless ? 1.5 : 10)
+        unreachableTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self, weak web] timer in
+            guard let self, let web else { timer.invalidate(); return }
+            // Before a Wizard page commits, the web view still shows its empty start document (about:blank).
+            web.evaluateJavaScript("location.protocol") { result, _ in
+                guard timer.isValid else { return }
+                let scheme = (result as? String) ?? ""
+                if scheme == "https:" || scheme == "capacitor:" { // the Wizard (or Capacitor's error page) is showing
+                    timer.invalidate(); self.hideLoadingCover(); return
+                }
+                guard Date() >= mark, self.view.window != nil else { return }
+                timer.invalidate()
+                CAPLog.print("⚡️  Wizard: \(wizard) didn't open; showing the connect screen")
+                web.stopLoading()
+                WizardAddress.showConnect = true
+                WizardAddress.showUnreachable = true
+                WizardViewController.restart(from: self)
+            }
+        }
+    }
+
+    /// The bundled connect page in loader-only mode (`www/index.html#loading=<host>`): the same full-screen loader the
+    /// connect screen shows while connecting. Its own small web view, laid over Capacitor's, which loads underneath.
+    private func showLoadingCover(over web: WKWebView, host: String) {
+        guard let page = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "public"),
+              var parts = URLComponents(url: page, resolvingAgainstBaseURL: false) else { return }
+        parts.fragment = "loading=" + (host.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: ".-:"))) ?? "")
+        guard let url = parts.url else { return }
+        let cover = WKWebView(frame: web.bounds, configuration: WKWebViewConfiguration())
+        cover.isOpaque = false
+        cover.backgroundColor = UIColor(red: 5 / 255, green: 3 / 255, blue: 12 / 255, alpha: 1)
+        cover.scrollView.backgroundColor = cover.backgroundColor
+        cover.scrollView.isScrollEnabled = false
+        cover.translatesAutoresizingMaskIntoConstraints = false
+        web.addSubview(cover)
+        NSLayoutConstraint.activate([
+            cover.topAnchor.constraint(equalTo: web.topAnchor), cover.bottomAnchor.constraint(equalTo: web.bottomAnchor),
+            cover.leadingAnchor.constraint(equalTo: web.leadingAnchor), cover.trailingAnchor.constraint(equalTo: web.trailingAnchor),
+        ])
+        cover.loadFileURL(url, allowingReadAccessTo: page.deletingLastPathComponent())
+        loadingCover = cover
+    }
+
+    private func hideLoadingCover() {
+        guard let cover = loadingCover else { return }
+        loadingCover = nil
+        UIView.animate(withDuration: 0.2, animations: { cover.alpha = 0 }, completion: { _ in cover.removeFromSuperview() })
+    }
+
     deinit {
+        unreachableTimer?.invalidate()
         if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
     }
 
@@ -200,9 +270,13 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "changeWizard", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelChange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "tailscale", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "check", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openTailscale", returnType: CAPPluginReturnPromise),
     ]
 
     private var connectMode: Bool { (bridge?.viewController as? WizardViewController)?.connectMode ?? false }
+    private var unreachableMode: Bool { (bridge?.viewController as? WizardViewController)?.unreachableMode ?? false }
 
     @objc func info(_ call: CAPPluginCall) {
         let pending = WizardAddress.pendingPair
@@ -210,7 +284,7 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
             "address": WizardAddress.current.map { WizardOrigin.host($0.absoluteString) } ?? "",
             "home": WizardAddress.home?.absoluteString ?? "",
             // The bundled screen opened on purpose (Change Wizard or a pairing link), not because the Wizard failed.
-            "changing": connectMode && WizardAddress.current != nil,
+            "changing": connectMode && WizardAddress.current != nil && !unreachableMode,
             "pending": pending ?? "",
             "pendingHost": pending.map(WizardOrigin.host) ?? "",
             "pendingError": WizardAddress.pendingError ?? "",
@@ -269,7 +343,7 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         WizardProbe.check(origin) { [weak self] problem in
-            if let problem { call.reject(problem, "unreachable"); return }
+            if let problem { call.reject(problem, WizardProbe.noAnswer(problem) ? "offline" : "unreachable"); return }
             WizardAddress.save(origin: origin)
             WizardAddress.pendingPair = nil
             call.resolve(["origin": origin])
@@ -296,6 +370,33 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
         WizardAddress.pendingPair = nil
         call.resolve()
         DispatchQueue.main.async { [weak self] in WizardViewController.restart(from: self?.bridge?.viewController) }
+    }
+
+    /// `{ on }`: whether Tailscale's VPN is running on this iPhone (TailscaleNet). The guide's first line only.
+    @objc func tailscale(_ call: CAPPluginCall) {
+        call.resolve(["on": TailscaleNet.isOn()])
+    }
+
+    /// `{ address }` → `{ ok, problem }`: the same check as `connect`, without saving or opening anything. The guide asks
+    /// this every few seconds and on return to the app, then connects once the Wizard answers.
+    @objc func check(_ call: CAPPluginCall) {
+        guard let raw = call.getString("address"), let origin = WizardOrigin.typed(raw) else {
+            call.reject("That isn't an https Wizard address.", "invalid")
+            return
+        }
+        WizardProbe.check(origin) { problem in
+            call.resolve(["ok": problem == nil, "offline": problem.map(WizardProbe.noAnswer) ?? false,
+                          "missing": problem.map(WizardProbe.notFound) ?? false, "problem": problem ?? ""])
+        }
+    }
+
+    /// Tailscale's App Store page: Get, or Open when it is already installed (iOS has no supported way to open
+    /// another app directly).
+    @objc func openTailscale(_ call: CAPPluginCall) {
+        call.resolve()
+        DispatchQueue.main.async {
+            if let url = URL(string: "https://apps.apple.com/app/tailscale/id1470499037") { UIApplication.shared.open(url) }
+        }
     }
 
     @objc func openSettings(_ call: CAPPluginCall) {

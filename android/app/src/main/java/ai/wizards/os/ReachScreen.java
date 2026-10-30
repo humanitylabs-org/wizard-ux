@@ -33,8 +33,12 @@ final class ReachScreen {
     private final Activity a;
     private final FrameLayout view;
     private final TextView title, body, status, detail, retry, tailscale, server;
+    private final LinearLayout col;
+    private final TailscaleGuideView guide;
     private boolean offline;
     private ReachPolicy.Why shown;
+    /** The WebView's error for this outage (kept when a network change redraws without one). */
+    private String lastError;
 
     ReachScreen(Activity a, FrameLayout parent, Runnable onRetry, Runnable onTailscale) {
         this.a = a;
@@ -44,7 +48,7 @@ final class ReachScreen {
         view.setVisibility(View.GONE);
         view.setContentDescription("Wizard connection");
 
-        LinearLayout col = new LinearLayout(a);
+        col = new LinearLayout(a);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
         col.setPadding(dp(32), 0, dp(32), 0);
@@ -81,6 +85,12 @@ final class ReachScreen {
         col.addView(server, lp(dp(28)));
         view.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        // A Wizard on Tailscale: the step-by-step guide instead (TailscaleGuide), in this screen's colours.
+        guide = new TailscaleGuideView(a, new TailscaleGuideView.Palette(BG, INK, TailscaleGuideView.withAlpha(INK, 0.78f),
+                TailscaleGuideView.withAlpha(INK, 0.5f), VIOLET, Color.rgb(91, 61, 214), Color.WHITE,
+                TailscaleGuideView.withAlpha(INK, 0.1f), TailscaleGuideView.withAlpha(INK, 0.13f)),
+                () -> a.startActivity(new android.content.Intent(a, ConnectActivity.class)));
+        view.addView(guide.view(), new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         parent.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
@@ -94,6 +104,7 @@ final class ReachScreen {
     /** Past the connecting mark with nothing painted yet. Never replaces the offline look. */
     void connecting() {
         if (offline) return;
+        guide.hide(); col.setVisibility(View.VISIBLE);
         title.setVisibility(View.GONE);
         body.setVisibility(View.GONE);
         retry.setVisibility(View.GONE);
@@ -106,8 +117,21 @@ final class ReachScreen {
     }
 
     void offline(ReachPolicy.Why why, String raw, boolean tailscaleInstalled) {
+        // A reason found under another state (e.g. no ts.net name resolves while Tailscale is off) no longer applies.
+        if (shown != why) lastError = null;
         offline = true;
         shown = why;
+        String origin = ai.wizards.os.device.AppState.origin(a);
+        if (why != ReachPolicy.Why.NO_NETWORK && TailscaleGuide.applies(origin)) {
+            // On a Tailscale address with a network: the guide. NOT_ANSWERING here means Tailscale is on.
+            col.setVisibility(View.GONE);
+            if (raw != null) lastError = raw;
+            // Tailscale on: a name that doesn't resolve means another network; a hang means the Wizard is off.
+            guide.show(origin, why == ReachPolicy.Why.NOT_ANSWERING, TailscaleGuide.missingFrom(lastError), tailscaleInstalled);
+            view.setVisibility(View.VISIBLE);
+            return;
+        }
+        guide.hide(); col.setVisibility(View.VISIBLE);
         title.setText(ReachPolicy.title(why));
         body.setText(ReachPolicy.body(why));
         title.setVisibility(View.VISIBLE);
@@ -141,6 +165,7 @@ final class ReachScreen {
 
     void hide() {
         offline = false;
+        lastError = null;
         shown = null;
         view.setVisibility(View.GONE);
     }
