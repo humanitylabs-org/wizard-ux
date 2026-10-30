@@ -88,11 +88,6 @@ def g_chats():
     place = lambda p: T(p, s, 256 - 256 * s, 336 - 408 * s)
     return U(D(bubble, place(hat())), place(hat_door()))
 
-@glyph('signal', 'A disc with signal radiating from one point: your feed, not noise.')
-def g_signal():
-    disc = circle(256, 256, 152)
-    rings = U(stroke(circle(166, 346, 128), 28), stroke(circle(166, 346, 206), 28))
-    return D(disc, I(rings, disc), circle(166, 346, 42))
 
 @glyph('search', 'A lens with a spark in it: search that answers.')
 def g_search():
@@ -107,12 +102,6 @@ def g_wisdom():
     flame = P("M256 186 C274 222 304 248 304 290 C304 322 282 344 256 344 C230 344 208 322 208 290 C208 256 240 236 256 186 Z")
     return D(book, flame, rrect(249, 330, 14, 90, 2))
 
-@glyph('music', 'An eighth note whose flag is the curl of the hat\u2019s hook.')
-def g_music():
-    head = R(P("M140 368 a66 50 0 1 0 132 0 a66 50 0 1 0 -132 0 Z"), -22, 206, 368)
-    stem = rrect(242, 110, 32, 262, 6)
-    flag = P("M242 110 C300 112 352 150 356 214 C358 246 344 270 324 288 C334 254 334 222 316 200 C300 180 278 176 274 176 L274 130 Z")
-    return U(head, stem, flag)
 
 @glyph('track', 'A record in the crosshairs: hunting down the track.')
 def g_track():
@@ -121,11 +110,6 @@ def g_track():
     groove = I(stroke(circle(256, 256, 96), 16), disc)
     return D(disc, ticks, groove, circle(256, 256, 26))
 
-@glyph('bag', 'A bag with a spark punched through: the agent does the finding.')
-def g_bag():
-    handle = stroke("M196 196 V170 A60 60 0 0 1 316 170 V196", 34)
-    body = rrect(124, 184, 264, 228, 36)
-    return D(U(handle, body), spark(256, 300, 66, 0.12))
 
 @glyph('mic', 'A microphone whose capsule is cut with three lines: record, transcribe, outline.')
 def g_mic():
@@ -136,9 +120,6 @@ def g_mic():
     lines = U(rrect(214, 152, 84, 26, 13), rrect(214, 198, 84, 26, 13), rrect(214, 244, 52, 26, 13))
     return D(U(cap, yoke, stem, base), lines)
 
-@glyph('eye', 'A watching eye cut into a sphere: a question about the world that keeps looking.')
-def g_eye():
-    return U(D(circle(256, 256, 156), P("M80 256 Q256 120 432 256 Q256 392 80 256 Z")), circle(256, 256, 46))
 
 @glyph('projects', 'A board with three lanes hanging from the top, each at a different stage.')
 def g_projects():
@@ -163,14 +144,6 @@ def g_cine():
     play = P("M226 262 L326 312 L226 362 Z")
     return U(D(slate, play), bar)
 
-@glyph('social', 'Two wizards, the smaller one cut free of the larger: a network of people.')
-def g_social():
-    door = hat_door
-    big = T(D(hat(), door()), 0.8, 9.2, 81.6)
-    small_shape = T(hat(), 0.58, 181.52, 171.36)
-    small = T(D(hat(), door()), 0.58, 181.52, 171.36)
-    halo = stroke(small_shape, 30)
-    return U(D(big, halo), small)
 
 @glyph('files', 'A folder with the Wizard door cut into its base: your stuff lives in the Wizard\u2019s house.')
 def g_files():
@@ -234,39 +207,9 @@ def g_meditate():
     body = P("M232 196 H280 C316 196 330 230 338 272 C344 302 360 318 398 326 C432 334 436 376 404 394 C380 406 132 406 108 394 C76 376 80 334 114 326 C152 318 168 302 174 272 C182 230 196 196 232 196 Z")
     return D(U(head, body), circle(256, 276, 26))
 
-@glyph('inbox', 'A drop with an arrow cut through: things land here for you.')
-def g_inbox():
-    drop = P("M256 72 L355.5 264.6 A112 112 0 1 1 156.5 264.6 Z")
-    return D(drop, P("M240 236 H272 V318 H304 L256 374 L208 318 H240 Z"))
 
-# Library extras from the sigil board (for apps we will build: Drop, Secret Drop, Mail, Link, Recall, App Store)
-@glyph('secret', 'A drop with a keyhole: secrets go in, nobody else gets the key.')
-def g_secret():
-    drop = P("M256 72 L355.5 264.6 A112 112 0 1 1 156.5 264.6 Z")
-    return D(drop, circle(256, 300, 28), P("M244 310 L268 310 L280 372 L232 372 Z"))
 
-@glyph('mail', 'An envelope whose flap is the hat turned upside down.')
-def g_mail():
-    env = rrect(104, 156, 304, 216, 28)
-    flap = T(hat(), 1.0, 0, 0).transform(1, 0, 0, -0.52, 0, 156 + 0.52 * 408)
-    return D(env, flap)
 
-@glyph('link', 'Two rings locked together: phone and box, paired.')
-def g_link():
-    a = stroke(circle(190, 256, 100), 40); b = stroke(circle(322, 256, 100), 40)
-    # a passes over b at the top crossing, b over a at the bottom
-    top = I(circle(256, 160, 46), b)
-    bot = I(circle(256, 352, 46), a)
-    gap_b = I(stroke(circle(190, 256, 100), 80), circle(256, 172, 60))
-    gap_a = I(stroke(circle(322, 256, 100), 80), circle(256, 340, 60))
-    return U(D(b, gap_b), D(a, gap_a), I(a, circle(256,172,60)), I(b, circle(256,340,60)))
-
-@glyph('recall', 'A crystal ball on its stand with a glint cut out: ask it what you already know.')
-def g_recall():
-    ball = circle(256, 220, 132)
-    glint = stroke("M178 202 A82 82 0 0 1 240 140", 24)
-    stand = P("M180 372 H332 L360 412 H152 Z")
-    return U(D(ball, glint), stand)
 
 @glyph('apps', 'Four tiles, one of them is a hat: where the Wizard gets new powers.')
 def g_apps():
@@ -466,6 +409,54 @@ def g_bank():
     return D(U(roof, beam, cols, base), circle(256, 142, 22))
 
 # ---------- normalise + emit ----------
+# First batch (Robert, 8-12 Oct 2026): the approved sheet, ported outline-for-outline from its masks.
+from first_batch import FIRST_BATCH
+
+@glyph('signal', 'A satellite dish on its stand, its feed reaching for the sky: your signal, pulled in.')
+def g_signal(): return P(FIRST_BATCH['signal'])
+
+@glyph('eye', 'An eye cut into a sphere, its corners clear of the edge: a question about the world that keeps looking.')
+def g_eye(): return P(FIRST_BATCH['topics'])
+
+@glyph('social', 'A disc with three circuit traces rising into it, each ending in a node: your people, connected.')
+def g_social(): return P(FIRST_BATCH['social'])
+
+@glyph('bag', 'A tapered shopping bag with a gem cut into it: the agent does the finding.')
+def g_bag(): return P(FIRST_BATCH['shopping'])
+
+@glyph('secret', 'A drop with a short keyhole: secrets go in, nobody else gets the key.')
+def g_secret(): return P(FIRST_BATCH['secret-drop'])
+
+@glyph('inbox', 'A drop with an arrow cut through: things land here for you.')
+def g_inbox(): return P(FIRST_BATCH['drop'])
+
+@glyph('mail', 'A solid envelope with a deep tapered V: mail, not Gmail.')
+def g_mail(): return P(FIRST_BATCH['mail'])
+
+@glyph('music', 'Over-ear headphones: your music.')
+def g_music(): return P(FIRST_BATCH['music'])
+
+@glyph('link', 'Two chain links cut into a disc: phone and box, paired.')
+def g_link(): return P(FIRST_BATCH['link'])
+
+@glyph('recall', 'A crystal ball on its stand: ask it what you already know.')
+def g_recall(): return P(FIRST_BATCH['recall'])
+
+@glyph('camera', 'A video camera with circuit traces in its body: your meetings, recorded and summarised.')
+def g_camera(): return P(FIRST_BATCH['meetings'])
+
+@glyph('seal', 'A scalloped seal with the Wizard hat cut out: what your Wizard is allowed to do.')
+def g_seal(): return P(FIRST_BATCH['authority'])
+
+@glyph('radar', 'A disc with one sweep cut from the centre to the rim and a blip caught in it: the scan.')
+def g_radar():
+    import math
+    a0, a1, r = math.radians(-90), math.radians(-30), 220
+    sweep = P(f"M256 256 L{256 + r*math.cos(a0):.1f} {256 + r*math.sin(a0):.1f} A{r} {r} 0 0 1 {256 + r*math.cos(a1):.1f} {256 + r*math.sin(a1):.1f} Z")
+    bx, by = 256 + 104 * math.cos(math.radians(-58)), 256 + 104 * math.sin(math.radians(-58))
+    return U(D(circle(256, 256, 152), sweep), circle(round(bx, 1), round(by, 1), 20))
+
+
 def fmt(p):
     pen = SVGPathPen(None, ntos=lambda v: str(int(round(v))))
     p.draw(pen)
