@@ -1203,6 +1203,9 @@
     if (!a) return false;
     if (a.id === 'setup' && window.WosWelcome) { openingEnd(a.id); closeSheets(true); window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
+    // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
+    const pageSlug = a.url && window.WosPages?.match(a.url);
+    if (pageSlug) { closeSheets(true); placeApp(w => w.app === 'pages' && w.pageSlug === pageSlug, {app:'pages', appId:'pages', pageSlug}, opts); return true; }
     if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
