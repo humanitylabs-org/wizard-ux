@@ -277,7 +277,7 @@ export default function setup(api) {
       const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.5, fit);   // a narrow side: rounder orbits
       const x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
       const depth = Math.sin(s.a); // >0 in front of the orb, <0 behind it
-      const sc = .78 + .22 * (depth + 1) / 2;
+      const sc = (.78 + .22 * (depth + 1) / 2) * (fit < .6 ? .62 : 1);   // a narrow gap: smaller satellites
       s.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
       s.el.style.zIndex = depth > 0 ? 7 : 4;
       s.el.style.opacity = (.55 + .45 * (depth + 1) / 2).toFixed(3);
@@ -315,7 +315,7 @@ export default function setup(api) {
     const right = st?.chat ? Math.min(W * .5, st.chat.width || 0) : folded ? STRIP : 0;
     free = Math.max(160, W - left - right); cxTarget = left + free / 2;
     const wide = O * 2.9;   // the orb with its orbits
-    fit = Math.max(.25, Math.min(1, (free * .5 - 56) / (O * 1.65)));   // the orbits stay inside the free space
+    fit = Math.max(.34, Math.min(1, (free * .5 - 56) / (O * 1.65)));   // the orbits stay inside the free space
     const k = free < wide ? Math.max(.42, Math.min(1, free / wide)) : 1;   // a narrow free side: the orb itself steps down
     scene.dataset.tight = free < 420 ? 'tight' : '';
     scene.style.setProperty('--ob-free', Math.round(free) + 'px'); scene.style.setProperty('--ob-k', k.toFixed(3));
