@@ -36,8 +36,12 @@
  * (core/skin-host.js); no shell internals, no second composer. */
 import { STYLES, RETIRED, renderer, mix } from './styles.js';
 import { assignKeys, keyOf, isLeftAlt, HOLD_MS } from './keys.js';
+import { COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList, glyphOf, colourOf, hash, boltPainter } from './shared.js';
+import phone from './phone.js';
 
 export default function setup(api) {
+  // The phone wears the same scene on Home only (phone.js: same look, sky and satellites; the rest stays the phone's).
+  if (api.env.shell === 'phone') return phone(api);
   if (api.env.shell !== 'desktop') return () => {};
   const doc = document, root = doc.documentElement;
   const HOLD_MS = 420, STRIP = 46;
@@ -46,7 +50,6 @@ export default function setup(api) {
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = paths => { const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); for (const d of paths) { const p = doc.createElementNS(SVG, 'path'); p.setAttribute('d', d); s.append(p); } return s; };
   const I = { apps: ['M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z'], fold: ['m9.5 6 6 6-6 6'], unfold: ['m14.5 6-6 6 6 6'] };
-  const hash = s => { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.codePointAt(0), 16777619) >>> 0; return h; };
 
   /* ---------- the scene ---------- */
   const scene = el('section', 'ob-scene', { 'aria-label': 'Home', 'aria-live': 'off' });
@@ -101,27 +104,8 @@ export default function setup(api) {
   scene.append(sky, field, orbWrap, caption, keyRow, dock, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
-  /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended ---------- */
-  const probe = el('canvas').getContext('2d');
-  const norm = c => { if (!c || !probe) return ''; probe.fillStyle = 'black'; probe.fillStyle = c; const v = probe.fillStyle; return /^#[0-9a-f]{6}$/i.test(v) ? v : ''; };
-  const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
-  // Seventeen colours: sixteen from the tweak's tokens (--ob-look-<id>: four colours each) and the skin's own accent.
-  const COLOURS = [['nebula', 'Nebula'], ['ember', 'Ember'], ['tide', 'Tide'], ['gold', 'Gold'], ['mono', 'Mono'], ['emerald', 'Emerald'], ['rose', 'Rose'], ['arctic', 'Arctic'],
-    ['marble', 'Marble'], ['obsidian', 'Obsidian'], ['bronze', 'Bronze'], ['royal', 'Royal'], ['crimson', 'Crimson'], ['cyber', 'Cyber'], ['sunset', 'Sunset'], ['ocean', 'Ocean'], ['skin', 'Skin accent']];
-  const pals = new Map();
-  function palette(id) {
-    const now = performance.now(), hit = pals.get(id);
-    if (hit && hit.ok && now - hit.at < 5000) return hit;
-    const white = norm(cssVar('--ob-white')) || norm('white'), core = norm(cssVar('--ob-core')) || norm('black');
-    let list = id === 'skin' ? [] : cssVar('--ob-look-' + id).split(',').map(s => norm(s.trim())).filter(Boolean);
-    const acc = norm(cssVar('--wz-accent')) || norm(cssVar('--ob-v1')) || norm('slateblue');
-    // the skin's accent, in four shades of itself (deep, light, pale, warm)
-    if (id === 'skin') list = [acc, mix(acc, white, .35), mix(acc, white, .65), mix(acc, norm(cssVar('--ob-amber')) || white, .3)];
-    const ok = list.length >= 4 && !!cssVar('--ob-look-nebula');   // tokens loaded
-    const p = { at: now, ok, c: list.length >= 4 ? list.slice(0, 4) : [acc, acc, acc, acc], white, core, face: norm(cssVar('--ob-face')) || white };
-    pals.set(id, p); return p;
-  }
-  const A = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+  /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended (shared.js) ---------- */
+  const palette = palettes(doc);
 
   /* ---------- voice ---------- */
   const modeOf = v => !v || v.state === 'idle' ? 'idle' : v.state === 'think' ? 'thinking' : v.state === 'paused' ? 'paused' : 'listening';
@@ -193,12 +177,8 @@ export default function setup(api) {
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
 
   /* ---------- sky + orb ---------- */
-  // Kept per device: style + colour. The v3 single "look" (nebula / ember / tide / oracle) maps onto them once.
-  const has = (L, id) => L.some(l => l[0] === id);
-  const legacy = api.storage.get('look');
-  let styleId = api.storage.get('style'), colourId = api.storage.get('colour');
-  if (!has(STYLES, styleId)) styleId = legacy === 'oracle' ? 'oracle' : RETIRED.includes(styleId) ? 'plasma' : 'glass';   // v7 retired five styles
-  if (!has(COLOURS, colourId)) colourId = legacy === 'oracle' ? 'gold' : has(COLOURS, legacy) ? legacy : 'nebula';
+  // Kept per device: style + colour (shared.js lookOf: the same stored choice the phone wears).
+  let { styleId, colourId } = lookOf(api);
   const sx = sky.getContext('2d'), ox = orbCv.getContext('2d');
   const mk = n => { const c = el('canvas'); c.width = c.height = n; return c; };
   let W = 0, H = 0, DPR = 1, O = 300, stars = [], drawOrb = renderer(styleId, mk);
@@ -212,21 +192,11 @@ export default function setup(api) {
     O = Math.round(Math.min(W * .34, H * (H < 800 ? .32 : .36), 300));
     scene.style.setProperty('--orb', O + 'px');
     orbCv.width = orbCv.height = Math.round(O * 2 * DPR);
-    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    stars = Array.from({ length: Math.round(W * H / 5200) }, () => ({ x: rnd() * W, y: rnd() * H, r: rnd() * 1.1 + .2, p: rnd() * 6.3, s: .3 + rnd() }));
+    stars = starsFor(W, H);
     aim(); paintApps(); placeSats(0);
     return true;
   }
-  function drawSky(t, lv) {
-    const P = palette(colourId), c = P.c, gx = cx || W / 2, cy = H * .46;
-    sx.clearRect(0, 0, W, H);
-    const g = sx.createRadialGradient(gx, cy, 0, gx, cy, Math.max(W, H) * .7);
-    g.addColorStop(0, A(c[0], .16 + lv * .1)); g.addColorStop(.35, A(c[1], .05)); g.addColorStop(1, 'transparent');
-    sx.fillStyle = g; sx.fillRect(0, 0, W, H);
-    sx.fillStyle = P.white;
-    for (const s of stars) { sx.globalAlpha = .25 + .45 * (.5 + .5 * Math.sin(t * s.s + s.p)); sx.beginPath(); sx.arc(s.x, s.y, s.r, 0, 7); sx.fill(); }
-    sx.globalAlpha = 1;
-  }
+  function drawSky(t, lv) { paintSky(sx, { W, H, gx: cx || W / 2, cy: H * .46, t, lv, P: palette(colourId), stars }); }
   const frameOf = (t, lv, state, fl, blink, col = colourId, cmd = 0) => ({ t, lv, state, fl, blink, cmd, P: palette(col) });
 
   /* ---------- the look picker: Style × Colour ---------- */
@@ -297,10 +267,7 @@ export default function setup(api) {
 
   /* ---------- apps: round glass satellites on two tilted orbits ---------- */
   // The app's own logo first (the Store's picture of it); its designed glyph otherwise; never a bare letter.
-  const GUESS = [[/crm|contact|people|profile/i, 'profile'], [/command|console|terminal/i, 'console'], [/board|\bpr\b|project|kanban/i, 'projects'], [/money|bank|finance|monarch|simplefin|teller/i, 'dollar'],
-    [/health|whoop|fit/i, 'gauge'], [/music|tube|audio|podcast/i, 'music'], [/mail|google/i, 'mail'], [/home|house/i, 'home'], [/backup|cloud/i, 'cloud'], [/twitter|social|\bx\b/i, 'social'], [/data|web|bright/i, 'globe']];
-  const glyphOf = a => { const m = /sg-([a-z-]+)/.exec(a.icon || ''); return m && !/\bsgl\b/.test(a.icon || '') ? m[1] : (GUESS.find(([re]) => re.test(a.id + ' ' + a.name)) || [0, 'spark'])[1]; };
-  const colourOf = a => (/--c:\s*([^;"]+)/.exec(a.icon || '') || [0, 'var(--wz-accent)'])[1].trim();
+  // glyphOf / colourOf: shared.js (the phone draws its satellites with the same marks)
   let appSig = '', sats = [];
   // Each app is just its own mark, clean-cut on the sky: its logo (a tile logo stays a tile, a free-form logo stays
   // free-form) or its glyph in its own colour. No plate, ring or bubble behind it; only a soft shadow for legibility.
@@ -343,11 +310,7 @@ export default function setup(api) {
    * and still running) and (b) regular apps with an unread count float. Agents, connectors, agent apps, system and
    * in-development apps never float for a count (the shell's own kinds: core/app-kinds.js); everything stays one
    * search away (the search pill / ⌥O, ⌥Space, a command, the ⌥ letters); no All apps satellite. Nothing running and nothing new: just the orb. */
-  const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
-  function orbitApps() {
-    const all = api.apps.list(), run = new Map(api.panel.running().map(r => [r.id, r]));
-    return all.filter(a => run.has(a.id) ? !a.agent && !a.connector : regular(a) && (badgeMap[a.id] || 0) > 0).map(a => ({ ...a, run: run.get(a.id) || null }));
-  }
+  const orbitApps = () => orbitList(api, badgeMap);   // shared.js: the one list the phone floats too
   let satScale = 1;
   function fits(n) {
     if (!W) return { cap: n, scale: 1 };
@@ -590,46 +553,7 @@ export default function setup(api) {
    * still, glowing line. */
   const bolts = { chat: 0, app: 0 };   // 0..1, eased in when a panel has arrived, out when it closes
   let boltSeed = 1, boltAt = 0;
-  function jag(x1, y1, x2, y2, seed, amp) {
-    let pts = [[x1, y1], [x2, y2]], a = amp, rnd = seed;
-    const r = () => { rnd = (rnd * 16807) % 2147483647; return rnd / 2147483647 - .5; };
-    for (let d = 0; d < 5; d++) {
-      const next = [pts[0]];
-      for (let i = 1; i < pts.length; i++) {
-        const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
-        const off = r() * a, mx = (ax + bx) / 2 - dy / len * off, my = (ay + by) / 2 + dx / len * off;
-        next.push([mx, my], pts[i]);
-      }
-      pts = next; a *= .55;
-    }
-    // pinned at both ends: the jitter fades to nothing at the orb and at the target
-    const n = pts.length - 1;
-    return pts.map(([x, y], i) => { const u = i / n, t = Math.sin(Math.PI * u), bx = x1 + (x2 - x1) * u, by = y1 + (y2 - y1) * u; return [bx + (x - bx) * t, by + (y - by) * t]; });
-  }
-  function stroke(pts, w, col) { sx.lineWidth = w; sx.strokeStyle = col; sx.beginPath(); sx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) sx.lineTo(pts[i][0], pts[i][1]); sx.stroke(); }
-  function glowAt(x, y, rad, col, a) { const g = sx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, A(col, a)); g.addColorStop(1, A(col, 0)); sx.fillStyle = g; sx.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
-  function bolt(x1, y1, x2, y2, t, strength, seed, P) {
-    if (strength <= .01 || Math.abs(x2 - x1) < 6) return;
-    const c = P.c, len = Math.hypot(x2 - x1, y2 - y1), amp = Math.max(9, Math.min(30, len * .34));
-    const main = jag(x1, y1, x2, y2, seed, amp), twin = jag(x1, y1, x2, y2, seed * 7 + 3, amp * 1.15), third = jag(x1, y1, x2, y2, seed * 13 + 5, amp * .7);
-    sx.lineCap = 'round'; sx.lineJoin = 'round';
-    // the air around it glows, then a faint second and third arc, then the hot core
-    stroke(main, 24, A(c[0], .045 * strength)); stroke(main, 11, A(c[0], .11 * strength)); stroke(main, 5, A(c[1], .2 * strength));
-    stroke(twin, 2.2, A(c[0], .35 * strength)); stroke(twin, .8, A(c[2], .5 * strength));
-    stroke(third, 1.2, A(c[1], .3 * strength));
-    stroke(main, 2.4, A(c[2], .85 * strength)); stroke(main, 1, A(P.white, strength));
-    // short forks off the main strike
-    let rnd = seed;
-    const r = () => { rnd = (rnd * 48271) % 2147483647; return rnd / 2147483647; };
-    for (let f = 0; f < 3; f++) {
-      const i = 5 + Math.floor(r() * (main.length - 10)), [fx, fy] = main[i] || main[0], ang = (r() - .5) * 2.6 + Math.atan2(y2 - y1, x2 - x1), fl = Math.max(10, len * (.14 + r() * .18));
-      const fork = jag(fx, fy, fx + Math.cos(ang) * fl, fy + Math.sin(ang) * fl, seed + f * 101, fl * .45).slice(0, 22);
-      stroke(fork, 4, A(c[0], .12 * strength)); stroke(fork, .9, A(c[2], .6 * strength));
-    }
-    // contact: where it leaves and where it lands, and a spark of energy running along it
-    glowAt(x1, y1, 16, c[1], .4 * strength); glowAt(x2, y2, 26, c[0], .5 * strength); glowAt(x2, y2, 7, P.white, .75 * strength);
-    if (!reduced) { const u = (t * 1.4 + seed % 7 / 7) % 1, i = Math.floor(u * (main.length - 1)), [px, py] = main[i]; glowAt(px, py, 18, c[2], .6 * strength); glowAt(px, py, 4.5, P.white, strength); }
-  }
+  const { bolt, glowAt } = boltPainter(sx, reduced);   // shared.js: the phone strikes with the same drawing
   function drawBolts(t, dt) {
     const P = palette(colourId), cy = H * .46;
     const step = (k, on) => reduced ? (on ? 1 : 0) : Math.max(0, Math.min(1, k + (on ? dt * 2.2 : -dt * 5)));

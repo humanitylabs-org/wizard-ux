@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-// Desktop: wears the Orb layout; turning it off brings the classic desktop back. Phone: changes nothing.
+// Wears the Orb layout on both shells (desktop: the orb scene instead of desks; phone: the orb scene on Home only);
+// turning it off brings Desks back.
 export default async function check(f) {
-  if (f.doc.documentElement.dataset.shell !== 'desktop') { assert.equal(f.host.layout, 'classic'); return; }
   assert.equal(f.host.layout, 'orb');
   assert.equal(f.doc.documentElement.dataset.layout, 'orb');
   await f.clear();

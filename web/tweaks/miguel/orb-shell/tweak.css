@@ -1,8 +1,9 @@
-/* Orb desktop: the layout's rules live in web/layouts/orb/layout.css (scoped to the desktop shell and the Orb layout).
+/* Orbs view: the layout's rules live in web/layouts/orb/layout.css (desktop) and phone.css (phone Home).
  * Only the scene's own colours sit here (a skin layer), taken from the approved concept: the night sky and its ink, the
  * glass, the amber "ready" glow and the orb's colours. Each colour is four stops (--ob-look-<id>) that every orb style
- * (layout.js / styles.js) draws with; "Skin accent" is worked out from the skin's own --wz-accent. */
-html[data-shell="desktop"][data-layout="orb"] {
+ * (layout.js / phone.js / styles.js) draws with; "Skin accent" is worked out from the skin's own --wz-accent. The same
+ * tokens on both shells, so the phone's orb is the desktop's orb. */
+html[data-layout="orb"] {
   --ob-sky: #05040a; --ob-core: #07060f; --ob-white: #ffffff; --ob-face: #fff1c9;
   --ob-ink: #eceaf6; --ob-ink2: rgba(236, 234, 246, .62); --ob-ink3: rgba(236, 234, 246, .38);
   --ob-amber: #ffbf5a; --ob-ok: #6ee7a8;
@@ -30,3 +31,20 @@ html[data-shell="desktop"][data-layout="orb"] {
   --ob-look-ocean: #1366c9, #2ec4d6, #0a2a6e, #8de4ff;
   --ob-v1: #7c5cff; --ob-v2: #c26bff; --ob-v3: #4cc9ff;
 }
+/* Phone Home from the first frame (before the layout's script has drawn anything): the night sky in place of the
+ * stock Home, and only Home's top stays (which Wizard, Desks | Orbs, the AI fuel gauge, the gear). The orb and its
+ * satellites come from layouts/orb/phone.js. Every other screen of the phone is untouched. */
+html[data-shell="phone"][data-layout="orb"] .home-desk::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--ob-sky); }
+html[data-shell="phone"][data-layout="orb"] .home-desk .home > :not([data-slot="home-main"], .home-tools) { display: none !important; }
+html[data-shell="phone"][data-layout="orb"] .home-desk .mh-glance.is-widget > :not(.is-ai) { display: none !important; }
+/* Over the sky Home reads in the scene's ink on every skin (light skins included). */
+html[data-shell="phone"][data-layout="orb"] .home-desk {
+  --wz-text: var(--ob-ink); --wz-text-secondary: var(--ob-ink2); --ink: var(--ob-ink); --ink-2: var(--ob-ink2); --ink-3: var(--ob-ink3);
+  color: var(--ob-ink); color-scheme: dark;
+}
+/* the fuel gauge and the which-Wizard button (machines-home) in the same ink; its dropdown keeps the skin's own card */
+html[data-shell="phone"][data-layout="orb"] .home-desk .mh-glance { --mh-ink: var(--ob-ink); --mh-ink-2: var(--ob-ink2); --mh-ink-3: var(--ob-ink3); --mh-track: var(--ob-line2); }
+html[data-shell="phone"][data-layout="orb"] .home-desk .mh-wiz { color: var(--ob-ink) !important; }
+
+html[data-shell="phone"][data-layout="orb"] .home-desk :is(.mh-g-ef, .mh-g-label) { color: var(--ob-ink2) !important; }
+html[data-shell="phone"][data-layout="orb"] .home-desk .mh-g-cells i:not(.on) { background: var(--ob-line2) !important; }

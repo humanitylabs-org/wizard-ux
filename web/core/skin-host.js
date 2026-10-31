@@ -24,8 +24,9 @@
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
-    // Desktop only (Miguel's miguel/orb-shell tweak wears it): the orb in the middle, apps around it, threads under it.
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'Desktop: the orb in the middle, apps around it, your threads under it', css: true, js: true }),
+    // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
+    // phone = the same orb scene on Home only (layouts/orb/phone.js).
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
   ]);
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
@@ -434,6 +435,20 @@
         dock: on => live() && panelHolders.has(a) ? !!shell.panelDock?.(!!on) : false,
         back: () => live() ? !!shell.panelBack?.() : false,
         state: () => { const s = live() ? shell.panelState?.() : null; if (!s) return null; const o = { ...s }; for (const k of ['list', 'chat', 'app']) if (o[k]) o[k] = Object.freeze({ ...o[k] }); return Object.freeze(o); },
+      }),
+      /* Phone only (null elsewhere): the Home desk's section, where a layout's Home scene goes (it slides with the
+       * desks), and the dock orb's box, where a layout drawing the dock orb puts its canvas (the stock gestures stay on
+       * it: a layout may hand it a press with dispatchEvent). The layout removes what it put there on teardown. */
+      phone: Object.freeze({
+        home: () => live() ? shell.homeHost?.() || null : null,
+        orb: () => live() ? shell.orbHost?.() || null : null,
+        // An app's mark as the dock draws it (logo or sigil, colour, live count; 'wizard' = Chats with its Ready count),
+        // as a fresh element the layout may place; null when the app is unknown.
+        mark: id => {
+          const h = live() && typeof id === 'string' && id ? shell.phoneMark?.(id) : '';
+          if (!h || !isDoc) return null;
+          const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
+        },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
