@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const defaults = window.WizLauncherDefaults, key = 'wos.launcher.cache.v1', marker = 'launcher-seed-v1';
-  let current = defaults, shared = false;
+  let current = defaults, shared = false, settled = false;
   const object = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const listeners = new Set();
   function accept(prefs) {
@@ -42,10 +42,19 @@
   }
   window.WizLauncher = {
     get: name => current[name], accept, load, get shared() { return shared; },
+    // True once the first preferences load has finished (answered, failed or timed out).
+    get settled() { return settled; },
+    // Paint from the cache/defaults after one second; the uncancelled load still
+    // publishes late preferences through the registry's existing onChange path.
+    async waitForShell() {
+      let timer;
+      try { await Promise.race([window.WizLauncher.ready, new Promise(resolve => { timer = setTimeout(resolve, 1000); })]); }
+      finally { clearTimeout(timer); }
+    },
     hasHostedThread: id => current.hostedThreadApps.includes(id),
     displayName: app => Object.hasOwn(current.displayNames, app.id) ? current.displayNames[app.id] : app.name,
     onChange: fn => { listeners.add(fn); return () => listeners.delete(fn); },
   };
-  window.WizLauncher.ready = load();
+  window.WizLauncher.ready = load().finally(() => { settled = true; });
   addEventListener('focus', load);
 })();
