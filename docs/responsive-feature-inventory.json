@@ -376,6 +376,13 @@
       ],
       "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
     },
+    "core/my-changes-demo.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "My Changes clickable demo (wizard-os #316), synthetic data"
+    },
     "core/my-skin.js": {
       "loadedBy": [
         "phone",
@@ -827,6 +834,8 @@
     "core/links.css",
     "core/links.js",
     "core/mic.js",
+    "core/my-changes-demo.css",
+    "core/my-changes-demo.js",
     "core/my-skin.js",
     "core/notif-bell.js",
     "core/os-updates.js",

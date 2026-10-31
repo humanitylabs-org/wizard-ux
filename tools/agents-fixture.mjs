@@ -208,8 +208,18 @@ function seedPrivate() {
   // A Mizel-style app delivery (assistant-only recap), newer than every main thread: tops the unified Chats.
   addSession(a.id, 'wizard_app_mizel_fixture1', 'Mizel recap · Fixture standup', [{ role: 'assistant', content: 'Fixture recap: three decisions, two follow-ups.', timestamp: t - 60 }]);
 }
+// --seed=private,changes: also the My Changes demo threads (core/my-changes-demo.js keys its cards by these ids).
+function seedChanges() {
+  const t = now(), ask = (sid, title, q, a, ago) => addSession('hermes', sid, title, [{ role: 'user', content: q, timestamp: t - ago }, { role: 'assistant', content: a, timestamp: t - ago + 40 }]);
+  ask('wizard_change_orb', 'Bigger orb on Home', 'Make the orb on Home a bit bigger', 'Done. I made the orb 20% bigger as a tweak on your skin, so only you see it. Undo, keep it, or share it with everyone from the card above.', 900);
+  ask('wizard_change_tweaks', 'Select all for tweaks', 'Can tweaks have a Select all?', 'Built it and opened a pull request. It is on staging now: try Settings › Appearance, then tell me Keep or Undo.', 5400);
+  ask('wizard_change_draft', 'Chats keeps my unsent draft', 'My draft disappeared when I switched apps', 'Fixed. Unsent drafts now stay when you switch apps. It is live on this box.', 30000);
+  ask('wizard_change_calendar', 'Dark calendar', 'Make the calendar dark', 'Done on your skin. (You undid it later.)', 90000);
+  ask('wizard_change_reply', 'Reply to selected words', 'When I select words in any app I want to reply about them', 'Built: select words in any app and the menu offers Reply in chat. I am checking it before it goes to GitHub.', 2400);
+}
 if (MAIN === 'fixture') seedMain();
-if (SEED === 'private') seedPrivate();
+if (SEED.split(',').includes('changes')) seedChanges();
+if (SEED.split(',').includes('private')) seedPrivate();
 
 function agentParam(u, body) { return String(u.searchParams.get('agent') || body?.agent || ''); }
 function startRun(a, s, body) {

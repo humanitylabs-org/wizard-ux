@@ -1,0 +1,32 @@
+/* My Changes demo (core/my-changes-demo.js): the change card in a thread and Settings › My Changes.
+ * Appearance v1 roles only; the card is opaque (text-bearing) on every skin. */
+.cc-card { margin: 10px 12px 14px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--wz-border, rgba(185, 155, 255, .28));
+  background: var(--wz-surface-raised, var(--wz-panel, #1a1230)); color: var(--wz-text, #efeaff); font-size: 14px; line-height: 1.35; }
+.cc-h { display: flex; align-items: center; gap: 8px; }
+.cc-kicker { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--wz-text-secondary, #b9b0d6); }
+.cc-demo { font-size: 10.5px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px;
+  color: var(--wz-warning, #b3261e); border: 1px dashed currentColor; }
+.cc-state { margin-left: auto; font-size: 12.5px; color: var(--wz-accent, #b99bff); }
+.cc-skin .cc-state, .cc-live .cc-state { color: var(--wz-success, #2e9d5b); }
+.cc-undone .cc-state { color: var(--wz-text-muted, #8a83a3); }
+.cc-title { margin-top: 4px; font-weight: 700; font-size: 15.5px; }
+.cc-steps { display: flex; flex-wrap: wrap; gap: 4px 0; margin: 10px 0 6px; padding: 0; list-style: none; font-size: 12px; }
+.cc-steps li { display: flex; align-items: center; color: var(--wz-text-secondary, #b9b0d6); }
+.cc-steps li + li::before { content: ''; width: 14px; height: 1.5px; margin: 0 4px; background: var(--wz-border, rgba(185, 155, 255, .35)); }
+.cc-steps li span { padding: 3px 8px; border-radius: 99px; border: 1px solid var(--wz-border, rgba(185, 155, 255, .3)); }
+.cc-steps li.done span { color: var(--wz-text, #efeaff); }
+.cc-steps li.now span { background: var(--wz-accent, #8f63ff); border-color: var(--wz-accent, #8f63ff); color: var(--wz-on-accent, #fff); font-weight: 700; }
+.cc-steps li.now.undone span { background: var(--wz-surface, #2a2140); border-color: var(--wz-border, #555); color: var(--wz-text-secondary, #b9b0d6); text-decoration: line-through; }
+.cc-note { margin: 4px 0 0; color: var(--wz-text-secondary, #b9b0d6); }
+.cc-next { margin: 6px 0 0; }
+.cc-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cc-btn { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 99px; font: 650 13px/1 system-ui, sans-serif; text-decoration: none; cursor: pointer;
+  background: var(--wz-accent, #8f63ff); color: var(--wz-on-accent, #fff); border: 1px solid var(--wz-accent, #8f63ff); }
+.cc-btn.ghost { background: transparent; color: var(--wz-text, #efeaff); border-color: var(--wz-border, rgba(185, 155, 255, .4)); }
+.cc-page .cc-card { margin: 10px 0; }
+.cc-page h4 { display: flex; align-items: center; gap: 8px; }
+.cc-tabs { display: flex; gap: 6px; margin: 8px 0 4px; }
+.cc-tabs button { flex: 1; min-height: 40px; border-radius: 12px; border: 1px solid var(--wz-border, rgba(185, 155, 255, .3)); background: var(--wz-surface, transparent);
+  color: var(--wz-text, #efeaff); font: 650 13.5px/1 system-ui, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.cc-tabs button small { opacity: .7; font-weight: 600; }
+.cc-tabs button[aria-selected="true"] { background: var(--wz-accent, #8f63ff); border-color: var(--wz-accent, #8f63ff); color: var(--wz-on-accent, #fff); }
