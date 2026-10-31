@@ -1696,8 +1696,9 @@
   setEl.innerHTML = '<button class="st-close" data-close aria-label="Close settings">✕</button><div id="settingsBody"></div>';
   document.body.appendChild(setEl);
   let settingsFocus = null, settingsReturn = '';
+  let barMics = null;  // the one-mic bar choice, set once the mic exists (below)
   const settingsView = window.WosSettings.mount($('#settingsBody'), {
-    shell: 'desktop', outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
+    shell: 'desktop', barMics: () => barMics, outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
     helpSub: 'Keyboard shortcuts, desks and Back',
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
@@ -1737,6 +1738,8 @@
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
+    // From Home (every skin, classic or Miguel's) Settings opens as a centred panel over Home and never moves to a desk
+    // beside Chats (James, 31 Oct 2026: "I just want settings to open on the home screen").
     if (homeOpen) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
       if (!settingsModal) settingsFocus = document.activeElement;
       settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
@@ -1873,7 +1876,12 @@
   voiceMenu.innerHTML = [['micBtn', 'Talk about this', `${MOD}S`], ['generalVoice', 'New voice chat', `${MOD}V`], ['dictateBtn', 'Dictate here', `${MOD}D`], ['commandBtn', 'Tell the computer', `${MOD}C`]]
     .map(([id, t, k]) => `<button type="button" role="menuitem" data-voice-go="${id}"><span>${t}</span><kbd>${k}</kbd></button>`).join('');
   document.body.appendChild(voiceMenu);
-  document.documentElement.classList.add('one-mic');
+  /* James, 31 Oct 2026: the bar keeps one mic by default (fewer icons on the right). Nothing replaces the three folded
+   * buttons; the mic's menu and their keys reach them, and Settings › Voice & typing can put them back in the bar. */
+  const allMics = () => store.get('allMics', false) === true;
+  const paintMics = () => document.documentElement.classList.toggle('one-mic', !allMics());
+  paintMics();
+  barMics = Object.freeze({ get: allMics, set: on => { store.set('allMics', !!on); paintMics(); } });  // Settings › Voice & typing
   const closeVoiceMenu = () => { if (!voiceMenu.hidden) { voiceMenu.hidden = true; mic.setAttribute('aria-expanded', 'false'); } };
   voiceMenuBack = () => { if (voiceMenu.hidden) return false; closeVoiceMenu(); mic.focus(); return true; };
   const openVoiceMenu = () => { const r = mic.getBoundingClientRect(); voiceMenu.style.top = (r.bottom + 6) + 'px'; voiceMenu.style.right = Math.max(8, innerWidth - r.right - 60) + 'px'; voiceMenu.hidden = false; mic.setAttribute('aria-expanded', 'true'); voiceMenu.querySelector('button')?.focus({ preventScroll: true }); };

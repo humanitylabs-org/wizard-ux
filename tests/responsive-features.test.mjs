@@ -45,7 +45,7 @@ test('shell adapters cannot retain a second Settings renderer, picker, or hardco
   assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
   assert.doesNotMatch(settings, /data-skinfamily=/, 'colors are one list, not grouped by skin');
   assert.match(settings, /<h4>Skin<\/h4>/);
-  assert.match(settings, /data-tweak-all/, 'Look offers Select all for tweaks');
+  assert.match(settings, /data-tweakauthor=/, 'Look offers an All switch per person');
   assert.match(read('web/core/deeplink.js'), /WosSettings\?\.features\.some/);
 });
 
@@ -148,9 +148,9 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
 test('Look / tweaks Back returns to Settings before shell root Back, in both mounts', () => {
   const { sandbox, roots } = harness();
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
-  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',description:'No pin button on chats',on:true}],active:['miguel/hidden-pin']} };
+  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',description:'No pin button on chats',author:'miguel',on:true}],active:['miguel/hidden-pin']} };
   for (const { root, view } of roots) {
-    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*Select all[^]*1 of 1 on[^]*Hide pin buttons/);
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*data-tweakauthor="miguel"[^]*1 of 1 on[^]*data-tweak-toggle="miguel\/hidden-pin"/);
     assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
     assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
   }

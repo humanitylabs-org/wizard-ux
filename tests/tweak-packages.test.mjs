@@ -19,13 +19,15 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
   const id = 'miguel/hidden-pin'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
-  await f.host.loadTweaks([id, 'miguel/home-bars'], f.slots, { teamAuthors: ['miguel'] });
-  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/home-bars']); assert.match(f.toasts[0], /miguel\/hidden-pin paused after an update · ask your Wizard to update it/); await f.clear();
+  await f.host.loadTweaks([id, 'miguel/send-and-go'], f.slots, { teamAuthors: ['miguel'] });
+  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /miguel\/hidden-pin paused after an update · ask your Wizard to update it/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
-  const f = fixture(); let api;
+  // An untrusted package that asks for data.read (as the retired home-bars did) still gets no data.
+  const asks = { ...JSON.parse(read('web/tweaks/miguel/hidden-pin/manifest.json')), capabilities: ['layout', 'data.read'] };
+  const f = fixture({ manifests: { 'miguel/hidden-pin': asks } }); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/home-bars'], f.slots);
+  await f.host.loadTweaks(['miguel/hidden-pin'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
@@ -49,7 +51,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size, 'every installed tweak is offered, whoever wrote it');
   await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/hidden-pin', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
   await E.toggle('miguel/hidden-pin'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
-  profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/home-bars', 'miguel/hidden-pin'] }; await E.refresh();
+  profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/hidden-pin'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
@@ -72,7 +74,7 @@ test('event access is capability-gated, render payloads have no DOM, stale model
   await f.clear(); assert.equal(await api.thread.model({id:'test-model',provider:'test'}),null); assert.deepEqual(Array.from(await api.models.list()),[]);
 });
 test('a core repaint removes the origin marker: teardown never resurrects stale duplicate actions', async () => {
-  const f=fixture(); await f.mount('miguel/switch-row-actions');
+  const f=fixture(); await f.mount('miguel/model-pills');
   const marker=f.thread.children.find(n=>n.tagName==='comment'); assert.ok(marker); marker.remove();
   const replacement=f.doc.createElement('div'); replacement.setAttribute('data-part','thread-actions'); f.thread.append(replacement);
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);
@@ -89,7 +91,7 @@ function wizardExperience(storage = new Map()) {
   return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)), all:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
-  let f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/machines-home'), 'the network map is on by default for the Wizard skin'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
+  let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).mix, { 'wizard/two-orbs': true });
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -313,3 +315,21 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
   assert.ok(!f.all().includes('wizard/unified-inbox'), 'deliberate legacy off is not overwritten');
 });
 
+
+test('a merged tweak keeps the device\'s switch: Defer and Done on means the model switch (with them) is on', async () => {
+  const storage = new Map([['wos.skin', 'landscapes'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: { 'miguel/switch-row-actions': true }, defaultsMigrated: true, machinesHomeMoved: true })]]);
+  let active = [];
+  const window = { WosSkin: { current: 'landscapes', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
+  vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
+  await window.WosExperience.refresh();
+  assert.ok(active.includes('miguel/model-pills'));
+  assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/model-pills': true }, 'moved once, old id gone');
+});
+
+test('Settings › Look: tweaks grouped by author, each with an "All of theirs" switch, in every skin (Miguel, 31 Oct 2026)', () => {
+  const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
+  assert.match(rows, /class="tw-author"/, 'one section per author');
+  assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
+  assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
+  assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
+});

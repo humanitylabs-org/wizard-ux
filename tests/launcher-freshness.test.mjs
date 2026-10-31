@@ -10,7 +10,8 @@ test('focus refresh coalesces reads and failed/malformed snapshots retain the li
   const document = {hidden:false,addEventListener:(name,fn)=>events.set(name,fn)};
   const ctx = {window,document,CustomEvent:class{},URL,location:new URL('https://wizard.test/'),
     localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},
-    addEventListener:(name,fn)=>events.set(name,fn),fetch:async()=>{
+    addEventListener:(name,fn)=>events.set(name,fn),fetch:async(url)=>{
+      if (String(url).includes('/app-logos')) return {ok:false}; // app logos are read beside the list (core/apps.js)
       calls++;
       if(mode==='throw') throw new Error('offline');
       if(mode==='hold') await new Promise(r=>{release=r;});
@@ -43,7 +44,8 @@ test('opening a picker during an older fetch queues one fresh snapshot after tha
   const window = {WizCore:{norm:s=>s.toLowerCase()},WizConfig:{endpoint:()=>'/apps'},dispatchEvent(){}};
   const ctx = {window,document:{hidden:false,addEventListener:(k,f)=>events.set(k,f)},CustomEvent:class{},URL,
     location:new URL('https://wizard.test/'),localStorage:{getItem:()=>null,setItem(){}},
-    addEventListener:(k,f)=>events.set(k,f),fetch:async()=>{
+    addEventListener:(k,f)=>events.set(k,f),fetch:async(url)=>{
+      if (String(url).includes('/app-logos')) return {ok:false}; // app logos are read beside the list (core/apps.js)
       calls++; const captured = snapshot;
       if (hold) await new Promise(r=>releases.push(r));
       return {ok:true,json:async()=>captured};

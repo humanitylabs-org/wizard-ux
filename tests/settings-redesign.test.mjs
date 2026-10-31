@@ -161,18 +161,18 @@ test('settings.css: rows are hairline lines, not boxes', () => {
   }
   assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{|\.st-suggestion \{/);
 });
-test('Look is only the skin and the tweaks: Select all turns every tweak on, then off', async () => {
+test('Look is only the skin and the tweaks, grouped by person, each with an All switch', async () => {
   for (const shell of ['phone', 'desktop']) {
     const h = harness({shell}); const calls = [];
     h.s.WosMySkin = { state: { empty: true, script: {} } };
-    h.s.WosExperience = { authors: async () => [], setAll: async v => { calls.push(v); }, toggle: async () => {}, state: { busy: false, error: '', tweaks: [
+    h.s.WosExperience = { authors: async () => [], chooseAuthor: async who => { calls.push(who); }, toggle: async () => {}, state: { busy: false, error: '', tweaks: [
       { id: 'miguel/hidden-pin', name: 'Hide pin buttons', author: 'miguel', on: true }, { id: 'wizard/two-orbs', name: 'Two orbs', author: 'wizard', on: false }] } };
     h.view.focus('look');
     const html = h.root.innerHTML.split('data-settings-feature="look"')[1].split('<section')[0];
-    assert.doesNotMatch(html, /Your skins|New skin|data-newskin|data-ownskin|data-tweakauthor|Edit with your Wizard|<details/);
-    assert.match(html, /<h4>Skin<\/h4>[^]*<h4>Tweaks<\/h4>[^]*data-tweak-all role="switch" aria-checked="false"[^]*Select all[^]*1 of 2 on[^]*Hide pin buttons[^]*Two orbs/);
-    h.act('data-tweak-all'); await tick();
-    assert.deepEqual(calls, [undefined], 'Select all lets the tweak store decide all-on or all-off');
+    assert.doesNotMatch(html, /Your skins|New skin|data-newskin|data-ownskin|Edit with your Wizard|<details/);
+    assert.match(html, /<h4>Skin<\/h4>[^]*<h4>Tweaks<\/h4>[^]*data-tweakauthor="miguel" role="switch" aria-checked="true"[^]*1 of 1 on[^]*Hide pin buttons[^]*data-tweakauthor="wizard" role="switch" aria-checked="false"[^]*0 of 1 on[^]*Two orbs/);
+    h.act('data-tweakauthor', 'miguel'); await tick();
+    assert.deepEqual(calls, ['miguel'], 'the All switch turns that person\'s tweaks on or off');
   }
 });
 test('arrows reach every tile without silently wearing or opening it', () => {

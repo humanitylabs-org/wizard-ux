@@ -1,8 +1,8 @@
 {
-  "id": "wizard/machines-home",
+  "id": "miguel/machines-home",
   "name": "Machines on Home",
   "version": "1.4.0",
-  "author": "wizard",
+  "author": "miguel",
   "apiVersion": 1,
   "capabilities": [
     "layout",

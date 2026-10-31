@@ -114,7 +114,7 @@ test('CSS stays non-executable, loads last in both shells, and scripts use the s
 
 test('own skins are retired: Look offers no Your skins, New skin, remove or edit panel', () => {
   const s = read('web/core/settings.js');
-  assert.doesNotMatch(s, /data-newskin|data-ownskin|Your skins|New skin|Edit with your Wizard|Remove skin|data-tweakauthor/);
+  assert.doesNotMatch(s, /data-newskin|data-ownskin|Your skins|New skin|Edit with your Wizard|Remove skin/);
   assert.doesNotMatch(SRC, /\/wizard\/v1\/skins|recipes\.(?:skins|active)|\.wear\(|\.leave\(/, 'the overlay never reads or writes own-skin recipes');
   assert.match(read('web/core/skins.js'), /const SKINS = \[\s*\{ id: 'nebula'/);
 });
