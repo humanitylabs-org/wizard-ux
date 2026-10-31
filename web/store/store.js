@@ -120,9 +120,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const isInstalled = a => !!S.installed.get(key(a)) && !S.installed.get(key(a)).conflict;
   // A share link pins an exact release: treat it as an explicit selection so a different installed commit offers Switch.
   const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)) || !!a.install_link,S.complete);
-  // The shell knows which apps have a view it can open; only those get "Open".
+  // The live shell registry is authoritative. Immediately after installation its refresh can still be in flight,
+  // so the same-origin installed-app snapshot is the safe bridge; the host refreshes again before opening.
   const openId = a => S.installed.get(key(a))?.id || '';
-  const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
+  const canOpen = a => { if (!framed) return false; const id=openId(a); try { if (typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(id)) return true; } catch (_) {} return (S.snapshot?.shell || []).some(x => x?.id === id && x.url); };
 
   /* ---------------- pieces ---------------- */
   function icon(a, size = 'm') {
