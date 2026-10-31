@@ -20,24 +20,26 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
 - The **orb** at 46% height, following the take (`voice` events: listening rings, a faster spin while sending, one
   sharp ring when a command take ends or a new thread turns Ready) and the mic level (`api.orb.onLevel`). Click = talk
   (a new chat; click again to send). Hold = a local command (release runs it).
-- Its look is a **Style × a Colour**, picked in a quiet **Look** button bottom right that opens a popover (live
-  previews of every style in the chosen colour; Esc or a click outside folds it) and kept per device (`api.storage`
-  `style`, `colour`; the v3 `look` carries over once). Seven styles, each its own canvas-2D drawing in
-  `web/layouts/orb/styles.js`: **Glass** (the concept's glassy orb, default), **Oracle** (the concept's calm face; the
-  mouth follows the voice), **Plasma** (a soft nebula cloud, no rim), **Swarm** (a turning sphere of points with a few
-  constellation links), **Hologram** (a lattice sphere in dashed rings and ticks), **Glitch** (an ordered-dither
-  entity that tears while you speak), **Chrome** (a liquid-metal blob whose outline ripples). Nine colours: **Nebula**
-  (default), **Ember**, **Tide**, **Gold**, **Mono**, **Emerald**, **Rose**, **Arctic** (four stops each, skin-layer
-  tokens `--ob-look-*` in the tweak's `tweak.css`) and **Skin accent** (four shades of the skin's `--wz-accent`).
-  Drawn in-house; ideas (not code) from Teknium's Uncommon Web: Bayer dithering (dithercn, dither-avatar), a
-  Fibonacci dot sphere (Cobe), constellations (tsParticles), sliced glitches (PowerGlitch), liquid chrome (Paper
-  Shaders' LiquidMetal), the Tron hologram (ENCOM Globe). No vendored code.
-- The owner's apps (picker order, up to 10 + All apps) are the concept's **round glass satellites** on two tilted
-  orbits, alternating rings at even steps, drifting slowly the same way (never sliding onto each other); in front of
+- Its look is a **Style × a Colour**, picked in a quiet **Look** button (live previews of every style in the chosen
+  colour; Esc or a click outside folds it), kept per device (`api.storage` `style`, `colour`). Thirteen styles, each
+  its own canvas-2D drawing in `web/layouts/orb/styles.js`: **Glass** (default), **Oracle** (a calm face), **Plasma**,
+  **Swarm**, **Hologram**, **Glitch**, **Chrome**, and (v6) **Marble** (a classical Greek head in veined white stone:
+  a small signed-distance sculpture ray-marched once on the CPU into a lit image with ambient occlusion and a 3D vein
+  mask; the veins and the closed eyes light up with the voice and the lips part while it listens), **Sun** (granules,
+  a darker limb, a corona of flares that leap with the voice), **Black hole** (shadow, photon ring, a Doppler-bright
+  accretion disc bent over the top), **Crystal** (a turning cut icosahedron lit per facet), **Aurora** (curtains
+  rippling in a dark glass sphere) and **Planet** (a banded world under a tilted ring). Seventeen colours: Nebula
+  (default), Ember, Tide, Gold, Mono, Emerald, Rose, Arctic, Marble, Obsidian, Bronze, Royal, Crimson, Cyber,
+  Sunset, Ocean (four stops each, skin-layer tokens `--ob-look-*` in the tweak's `tweak.css`) and Skin accent. All
+  drawn in-house: no image assets, no vendored code. Ideas (not code) from Teknium's Uncommon Web for the v4 styles.
+- The owner's apps (picker order, up to 10 + All apps) float on two tilted orbits as **just their own mark** (v6: no
+  glass plate, ring or bubble behind them; a tile logo stays a tile, a free-form logo or a glyph stands alone, with a
+  soft shadow for legibility), each with the shell's own **count badge** (`api.apps.badges(watch)`: the counts on desk
+  marks and the dock, live; a running app reports its own through WizardApp badge), alternating rings at even steps, drifting slowly the same way (never sliding onto each other); in front of
   the orb they are bigger and brighter, behind it smaller and dimmer. Label on hover; a click opens the app. Each wears
   its **own logo** (`api.apps.logo(id)` → `store-data/logo/<id>`; template / Runtipi placeholders count as none) in a
   round frame, else its designed glyph in its own colour. Never a letter.
-- Under the orb: the agent's name and a caption line while a take runs. The real keys are the hint line near the
+- Under the orb: only a caption line while a take runs (no name label: the orb is the entity). The real keys are the hint line near the
   bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to type (new chat). The fuel gauge and the
   gear stay top right; the Classic | Orb switch sits in the bar's centre.
 - **Around a fixed orb** (v6, Miguel: "the orb never moves"). The orb stays at the screen's centre whatever is open;
