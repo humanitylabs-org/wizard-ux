@@ -31,7 +31,8 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
   (`actions`: what Chats offers on that thread, `snooze` / `done` only); `null` while connecting.
 - `api.sessions.act(id, 'snooze' | 'done')`, `open(id)`, `openList('ready' | 'working')`.
 - `api.apps.list()` → `{ id, name, icon }`; `open(id)`; `all()` (⌥O).
-- `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look).
+- `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look), `api.desk.emptyHome()`: closing the last window of
+  a desk goes Home instead of to another desk (`WosSkinHost.emptyHome`, read by `closeWin`); released on teardown.
 - `api.voice.command()`: a local command take (⌥C); call again to run it.
 - `api.orb.ready()` loads `orb.js` on a page without it (desktop), so `api.orb.create` works there;
   `api.route().home` is true while Home is in front.

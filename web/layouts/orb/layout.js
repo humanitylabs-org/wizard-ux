@@ -16,7 +16,7 @@
 export default function setup(api) {
   if (api.env.shell !== 'desktop') return () => {};
   const doc = document, root = doc.documentElement;
-  const HOLD_MS = 420, MAX_APPS = 11, MAX_READY = 4, MAX_WORKING = 2;
+  const HOLD_MS = 420, MAX_APPS = 12, MAX_READY = 4, MAX_WORKING = 2;
   const SVG = 'http://www.w3.org/2000/svg';
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = paths => { const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); for (const d of paths) { const p = doc.createElementNS(SVG, 'path'); p.setAttribute('d', d); s.append(p); } return s; };
@@ -154,6 +154,7 @@ export default function setup(api) {
     name.textContent = api.agents.here()?.label || 'Wizard';
     paintApps(); paintThreads();
   }
+  api.desk.emptyHome();     // no desk numbers here: closing the last window of a desk comes back to the orb
   api.listen(out, 'click', () => api.desk.look());
   api.listen(mini, 'click', () => api.desk.home());
   api.on('route', paint);

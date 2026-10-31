@@ -319,6 +319,7 @@
   /* Layouts are built-in shell code, so they also get the shell's own lists and actions (no DOM crosses):
    * the Working / Ready threads with the actions Chats offers on each, Snooze / Done through Chats' own threadAct
    * (so a snooze tweak's interception applies), the owner's quick apps, Home and Settings › Look. */
+  const emptyHomes = new Set();   // layouts that asked for desktop.js closeWin to go Home when a desk empties
   function shellApi(a, base) {
     const live = () => !a.dead && !!shell;
     return {
@@ -338,6 +339,8 @@
       desk: Object.freeze({
         home: () => { if (live()) shell.home?.(); },
         look: () => { if (live()) shell.openSettings?.('look'); },
+        // Closing the last window of a desk goes Home instead of to another desk (desks are out of sight). Released on teardown.
+        emptyHome() { if (!live()) return () => {}; emptyHomes.add(a); const off = () => { emptyHomes.delete(a); a.offs.delete(off); }; a.offs.add(off); return off; },
       }),
     };
   }
@@ -717,6 +720,8 @@
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     get layout() { return layoutId; },
+    /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
+    get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
     orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },

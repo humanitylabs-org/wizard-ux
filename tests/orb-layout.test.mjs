@@ -77,7 +77,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'list', 'open']);
-  assert.deepEqual(Object.keys(api.desk).sort(), ['home', 'look']);
+  assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
   assert.equal(typeof api.orb.ready, 'function');
   const L = api.sessions.list(); assert.equal(L.ready[0].id, 'r1'); L.ready[0].title = 'changed';
@@ -87,11 +87,13 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   api.sessions.open('r1'); api.sessions.openList('ready'); api.sessions.openList('archive');
   assert.equal(api.apps.list()[0].id, 'files'); api.apps.open('files'); api.apps.all(); api.desk.home(); api.desk.look();
   assert.equal(api.voice.command(), 'voice'); api.voice.talk();
+  assert.equal(D.host.emptyHome, false); api.desk.emptyHome(); assert.equal(D.host.emptyHome, true, 'closing a desk\'s last window goes Home');
   assert.equal(api.route().home, true);
   const mount = { nodeType: 1, remove() { D.mounted.splice(D.mounted.indexOf(this), 1); } }; api.mount(mount); assert.equal(D.mounted.length, 1, 'mounted on the desktop stage');
   assert.deepEqual(D.calls, [['snooze', 'r1'], ['done', 'r1'], ['open', 'r1'], ['list', 'ready'], ['app', 'files'], ['picker'], ['home'], ['settings', 'look'], ['command'], ['talk']]);
   D.host.setLayout('classic'); await settle();
   assert.equal(D.mounted.length, 0, 'own nodes removed'); assert.deepEqual(D.calls.at(-1), ['teardown']);
+  assert.equal(D.host.emptyHome, false, 'desks behave as before once it is off');
   const n = D.calls.length;
   assert.equal(api.sessions.list(), null); assert.equal(api.sessions.act('r1', 'done'), false); api.apps.open('files'); api.desk.home(); api.voice.command();
   assert.equal(api.apps.list().length, 0); assert.equal(D.calls.length, n, 'stale handles are inert');
@@ -112,6 +114,7 @@ test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and
   assert.match(src, /CHATS\.threadActions\(s\)\.filter\(a => a === 'snooze' \|\| a === 'done'\)/);
   assert.match(src, /window\.WosSkinHost\?\.voice\(st\)/); assert.match(src, /window\.WosSkinHost\?\.level\(l\)/);
   assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length/);
+  assert.match(src, /removeDesktop\(d\); if \(window\.WosSkinHost\?\.emptyHome\) goHome\(\);/);
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions,/);
 });
 
