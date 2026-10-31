@@ -8,13 +8,11 @@
     "miguel"
   ],
   "tweaks": [
-    "miguel/switch-row-actions",
     "miguel/swipe-strip",
     "miguel/send-and-go",
     "miguel/model-pills",
     "miguel/hidden-pin",
     "miguel/snooze-someday",
-    "miguel/home-bars",
     "wizard/two-orbs",
     "miguel/machines-home",
     "miguel/arrange-download",
@@ -27,6 +25,7 @@
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
-    "wizard/machines-home": "miguel/machines-home"
+    "wizard/machines-home": "miguel/machines-home",
+    "miguel/switch-row-actions": "miguel/model-pills"
   }
 }

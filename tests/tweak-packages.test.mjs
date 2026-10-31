@@ -19,13 +19,15 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
   const id = 'miguel/hidden-pin'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
-  await f.host.loadTweaks([id, 'miguel/home-bars'], f.slots, { teamAuthors: ['miguel'] });
-  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/home-bars']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
+  await f.host.loadTweaks([id, 'miguel/send-and-go'], f.slots, { teamAuthors: ['miguel'] });
+  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
-  const f = fixture(); let api;
+  // An untrusted package that asks for data.read (as the retired home-bars did) still gets no data.
+  const asks = { ...JSON.parse(read('web/tweaks/miguel/hidden-pin/manifest.json')), capabilities: ['layout', 'data.read'] };
+  const f = fixture({ manifests: { 'miguel/hidden-pin': asks } }); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/home-bars'], f.slots);
+  await f.host.loadTweaks(['miguel/hidden-pin'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
@@ -49,7 +51,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size, 'every installed tweak is offered, whoever wrote it');
   await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/hidden-pin', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
   await E.toggle('miguel/hidden-pin'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
-  profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/home-bars', 'miguel/hidden-pin'] }; await E.refresh();
+  profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/hidden-pin'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
@@ -72,7 +74,7 @@ test('event access is capability-gated, render payloads have no DOM, stale model
   await f.clear(); assert.equal(await api.thread.model({id:'test-model',provider:'test'}),null); assert.deepEqual(Array.from(await api.models.list()),[]);
 });
 test('a core repaint removes the origin marker: teardown never resurrects stale duplicate actions', async () => {
-  const f=fixture(); await f.mount('miguel/switch-row-actions');
+  const f=fixture(); await f.mount('miguel/model-pills');
   const marker=f.thread.children.find(n=>n.tagName==='comment'); assert.ok(marker); marker.remove();
   const replacement=f.doc.createElement('div'); replacement.setAttribute('data-part','thread-actions'); f.thread.append(replacement);
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);
