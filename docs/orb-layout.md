@@ -47,12 +47,20 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   with the shell's own **count badge** (`api.apps.badges(watch)`; bigger on a badge-only app). On two tilted orbits,
   alternating rings at even steps, drifting slowly the same way; past what fits at 74% size the rest stay in the search
   pill (no All apps satellite). A click opens (or brings back) the app.
-- **Closing an app only hides it** (`api.panel.park(true)`): ✕, Esc or ⌥⇧A slide its panel away but its window stays
+- **Apps are desks** (v8, Miguel: one-to-one with desks). An app opened in the Orbs view is a real desk with that one
+  app on it, saved and synced like every desk, so looking away, a reload or another device never closes it; every
+  desk with an app is one satellite (its focused app, else its first; desks opened in the Desks view float too), and
+  the Desks view shows the same desks. Opening an app that already has a desk brings that desk back, never a copy.
+  (Before v8 the app panel lived outside the desks, in memory only: a reload, or a tweak reload, which disposes and
+  re-runs every tweak and so turned the panel off for a blink, closed every running app. A tweak reload or a layout
+  load now holds the panel until it settles: `panelHold` in `core/skin-host.js`.)
+- **Closing an app only hides it**: ✕, Esc or ⌥⇧A slide its panel away but its desk stays open and its window stays
   mounted out of sight (`panel-parked`: frame alive, music keeps playing, still counted as open for its mic), and its
   satellite keeps a soft halo on its own mark and a tiny dot under it, never a ring or plate around it (three tiny
   bars in the dot's place while a same-origin audio/video element plays). Its satellite, a
-  command or opening it again brings it back exactly as it was. **Right-click a satellite**: Open, Close (Close really
-  quits it: `api.panel.quit(id)`; the satellite leaves). Turning the Orbs view off closes them all.
+  command or opening it again brings it back exactly as it was. **Right-click a satellite**: Open, Close (Close closes its
+  desk: `api.panel.quit(id)`; the satellite leaves). Turning the Orbs view off keeps them: the Desks view shows the
+  same desks (each app's page reloads once as it moves between the views).
 - **Commands (⌥C, or hold the orb)** are the orb's own (v7): the same on-device grammar as everywhere
   (`core/commands.js`, never sent to the agent; a tap is still a message). The orb tightens into a brighter core inside
   a turning ring, the caption under it says what it is doing ("Say a command · let go or ⌥C to run it", then "Working
@@ -97,8 +105,8 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   | ↵ | after a command with no match: ask the agent instead |
   Fold, wide and widths are kept per device.
 - **No desks.** The workspace numbers are gone and desk keys do nothing (⌥1…9, ⌥[ ⌥], moving windows, full screen,
-  ⌥P); ⌥T just offers the apps. The desks underneath are never touched: turning the Orb off brings them back exactly
-  (and the desk you were on).
+  ⌥P); ⌥T just offers the apps. Desks are still the model underneath (an app = a desk, above); turning the Orb off
+  shows them (and the desk you were on).
 - Motion: one ~30 fps loop, only while the scene is in front and the page is visible. Reduced motion: still frames.
 
 ## Layouts a tweak can wear
@@ -117,9 +125,11 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
 - `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look), `api.desk.emptyHome()`: closing the last window of
   a desk goes Home instead of to another desk (`WosSkinHost.emptyHome`, read by `closeWin`); released on teardown.
 - `api.panel.claim()`: no desks while held (`WosSkinHost.panelMode`; the adapter's `panelMode(on)`). desktop.js then
-  sends every new window to a panel window outside the desks (`panelOpen`: never tiled, never synced, not restored
-  after a reload; `findWin` sees only the panels; desk keys return early); Home stays in front. Released on teardown:
-  the panels go and the desk in front before comes back.
+  sends every new window to a panel (`panelOpen`): an app (a frame or a page) to its own desk shown in the app panel
+  (`panelDeskShow`; its window lives in the panel layer while the Orbs view is on, so it never moves or reloads there);
+  a Chats window or a built-in view to a panel window outside the desks (never synced). `findWin` sees only the
+  panels; desk keys return early; Home stays in front. Released on teardown (after a tweak reload settles): the chat
+  panels go, the apps' desks stay, and the desk in front before comes back.
 - Two content panels (`panelOpen`): a Chats window goes to the **chat** panel (`panel`), anything else to the **app**
   panel (`panelApp`, `data-side="right"`); each holds one window at a time with its own Back list, and both can be
   open. The one in front for keys and Esc is the one holding focus, else the one opened or clicked last, else the chat.
@@ -141,8 +151,9 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
 - `api.keys.on({ down, up, hold })`: every key the desktop gets (app frames too) before its own bindings (`down`
   returns true when used; `WosSkinHost.key` / `keyUp` from `onKey`); `hold: true` keeps the shell's own hold-⌥ chips off
   (`WosSkinHost.holdKeys`). `api.keys.guide(fn)` → `[{ el, key, word }]` chips added to the ⌥/ guide (`keyChips`).
-- `api.panel.close('chat' | 'app')` closes that one (`panelCloseKind`). `api.panel.park(on)`: a closed app only hides
-  (`panelPark`; opening it again unparks the same window); `quit(id)` really closes it (`panelQuit`); `running()` →
+- `api.panel.close('chat' | 'app')` closes that one (`panelCloseKind`). An app's desk always only hides on close
+  (`panelPark`; opening it again shows the same window); `api.panel.park(on)` decides that for a built-in view;
+  `quit(id)` closes the app's desk (`panelQuit` → `panelDeskClose`); `running()` →
   `[{ id, open, playing }]`. `api.apps.list()` rows also carry `system`, `dev`, `connector`, `agent` (the shell's kinds).
 - `api.orb.ready()` loads `orb.js` on a page without it (desktop), so `api.orb.create` works there;
   `api.route().home` is true while Home is in front.

@@ -302,7 +302,12 @@
       l.setAttribute('blocking', 'render'); document.head.appendChild(l); layoutCss = l; requested.push(l.href);
     }
   }
+  // Loading a layout holds the panel too (a tweak reload re-wears it a moment after the tweaks settle).
   async function loadLayout(id) {
+    panelHold++;
+    try { return await loadLayoutNow(id); } finally { panelHold--; panelSync(); }
+  }
+  async function loadLayoutNow(id) {
     const seq = ++layoutSeq;
     dispose(layoutRec, 'switch');
     const L = layoutOf(id); const key = 'layout:' + id;
@@ -438,9 +443,10 @@
   }
   const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
   const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
-  let panelOn = false;
+  let panelOn = false, panelHold = 0;
   function panelSync() {
     const on = [...panelHolders].some(l => !l.dead);
+    if (!on && panelOn && panelHold) return;   // a tweak reload in flight: decide once it settles (see loadTweaks)
     if (on === panelOn) return; panelOn = on;
     try { shell?.panelMode?.(on); } catch (e) { try { console.warn('[layout] panel mode:', e); } catch (_) {} }
   }
@@ -755,7 +761,14 @@
     });
     return Object.freeze(api);
   }
-  async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
+  /* A tweak reload (Settings, a skin pick, coming back to the tab) disposes and re-runs every tweak. A layout's panel
+   * must not drop for that blink (Miguel lost every running Orbs app to it): the panel turns off only once the load
+   * has settled and no layout claims it again. */
+  async function loadTweaks(...args) {
+    panelHold++;
+    try { return await loadTweaksNow(...args); } finally { panelHold--; panelSync(); }
+  }
+  async function loadTweaksNow(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
     const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
     const want = entries.filter(safeTweakId);
     for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
@@ -831,7 +844,7 @@
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
     /* desktop.js: a layout without desks holds the right-side panel (everything opens there, desks stay put). */
-    get panelMode() { return panelOn && [...panelHolders].some(l => !l.dead); },
+    get panelMode() { return panelOn && (panelHold > 0 || [...panelHolders].some(l => !l.dead)); },
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
     /* desktop.js: a layout draws the command take (api.voice.onCommand); its result goes there, not to a toast. */
     get commandUi() { return commandUis.size > 0; },
