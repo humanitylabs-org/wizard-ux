@@ -699,10 +699,7 @@
       let x = g; for (const id of d.wins) { const w = Math.round(avail * (W[id]?.share > 0 ? W[id].share * scale : free)); rects[id] = [x, g, w, H_ - 2 * g]; x += w + g; }
     } else if (n === 1) {
       const width = Math.min(maxWidth, Math.max(0, W_ - 2 * g));
-      // A layout may ask for a card instead of a full-height window (Orb: --desktop-window-max-height), centred.
-      const maxH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-height'));
-      const height = maxH > 0 ? Math.min(maxH, H_ - 2 * g) : H_ - 2 * g;
-      rects[d.wins[0]] = [(W_ - width) / 2, maxH > 0 ? (H_ - height) / 2 : g, width, height];
+      rects[d.wins[0]] = [(W_ - width) / 2, g, width, H_ - 2 * g];
     } else if (n === 2) {
       const avail2 = Math.max(0, W_ - 3 * g), sp = splitOf(d, 2); // ⌥− / ⌥= move the split
       const lw = sp === 0.5 ? Math.min(maxWidth, avail2 / 2) : Math.min(maxWidth, avail2 * sp), rw = sp === 0.5 ? lw : Math.min(maxWidth, avail2 - avail2 * sp);

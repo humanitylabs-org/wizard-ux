@@ -1,4 +1,4 @@
-/* Classic | Orb switch (Miguel, 31 Oct 2026): while the Orb desktop is being iterated, one click flips it on or off for
+/* Classic | Orb switch (Miguel, 31 Oct 2026): in the middle of the top bar, in place of the date and time. While the Orb desktop is being iterated, one click flips it on or off for
  * this device from the desktop itself, in both modes, never through Settings. It only switches miguel/orb-shell, the
  * same way Settings › Look › Tweaks does (the device's tweak mix, no reload), so it can never leave him stuck: the
  * switch stays in the bar whichever side is on. The highlighted side follows what the desktop really wears
@@ -23,6 +23,6 @@ export default function setup(api) {
   const paint = () => { const on = api.settings.tweakOn(ORB); classic.setAttribute('aria-pressed', String(!on)); orb.setAttribute('aria-pressed', String(on)); };
   box.append(classic, orb);
   paint(); api.on('route', paint);
-  api.slot.mount('bar-start', box, -10);
+  api.slot.mount('bar-center', box, -10);
   return () => box.remove();
 }

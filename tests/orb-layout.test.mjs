@@ -7,7 +7,7 @@
 //   - its CSS can only ever apply to the desktop shell wearing the Orb layout; no second composer, no raw storage.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
 
@@ -130,18 +130,22 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   for (const banned of ['localStorage', 'sessionStorage', 'fetch(', 'XMLHttpRequest', '__wux', '__wos', 'setTimeout', 'setInterval', 'textarea', 'contenteditable', 'querySelector', 'getElementById'])
     assert.ok(!js.includes(banned), `layout.js uses ${banned}`);
   assert.match(js, /api\.sessions\.act\(s\.id, act\)/); assert.match(js, /api\.env\.shell !== 'desktop'/);
-  // The entity: three looks kept per device, reactive to the take and the level; motion only while Home is in front.
-  assert.match(js, /const LOOKS = \[\['nebula', 'Nebula', nebula\], \['glitch', 'Glitch', glitch\], \['swarm', 'Swarm', swarm\]\]/);
+  // The approved concept's scene: its sky and glassy orb drawn in canvas, four looks kept per device, reactive to the
+  // take and the level; motion only while Home is in front. No vendored shader library any more.
+  assert.match(js, /const LOOKS = \[\['nebula', 'Nebula'\], \['ember', 'Ember'\], \['tide', 'Tide'\], \['oracle', 'Oracle'\]\]/);
+  assert.match(js, /function drawSky\(/); assert.match(js, /function drawOrb\(/);
   assert.match(js, /api\.storage\.set\('look', id\)/); assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
   assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
   assert.match(js, /prefers-reduced-motion: reduce/);
-  assert.match(js, /import\('\.\/vendor\/paper-shaders\/shader-mount\.js'\)/, 'Nebula: Paper Shaders, loaded only when picked');
-  // Apps: their own logo, else a designed glyph; never a letter tile.
-  assert.match(js, /api\.apps\.logo\(a\.id\)/); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl") && !js.includes('a.icon; face.append') || js.includes('sglogo'), 'no letter sigils drawn');
-  // Threads: every Ready thread with Snooze / Done; Working is one chip.
-  assert.ok(!/MAX_READY|slice\(0, MAX_READY\)/.test(js), 'no cap on Ready');
+  assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored Paper Shaders');
+  // Apps: round satellites on two tilted orbits with depth; their own logo, else a designed glyph; never a letter tile.
+  assert.match(js, /ring: i % 2 \? 1 : 1\.32/); assert.match(js, /const depth = Math\.sin\(s\.a\)/);
+  assert.match(js, /api\.apps\.logo\(a\.id\)/); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');
+  // Threads: every Ready thread is a pill with Snooze / Done; two rows, then "+N more" opens the Ready list; Working is one pill.
+  assert.match(js, /MAX_ROWS = 2/); assert.match(js, /`\+\$\{hidden\} more`/); assert.match(js, /api\.sessions\.openList\('ready'\)/);
   assert.match(js, /`\$\{working\.length\} working`/);
-  for (const f of ['LICENSE', 'NOTICE', 'README.md', 'shader-mount.js', 'shaders/metaballs.js']) assert.ok(read('web/layouts/orb/vendor/paper-shaders/' + f).length > 40, 'vendored with its licence: ' + f);
+  // The hint names the shell's real keys (⌥V new voice chat, ⌥N new chat; Right ⌘ in the Mac app).
+  assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /mod \+ 'N'/);
   const m = JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json'));
   assert.deepEqual(m.capabilities, ['layout']);
   const prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
@@ -164,7 +168,7 @@ test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never 
 
 test('Classic | Orb switch: desktop only, switches only its own author\'s tweak, through the device tweak mix', async () => {
   const src = read('web/tweaks/miguel/orb-switch/tweak.js');
-  assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /api\.slot\.mount\('bar-start', box/);
+  assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /api\.slot\.mount\('bar-center', box/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
   assert.match(host, /!id\.startsWith\(a\.id\.split\('\/'\)\[0\] \+ '\/'\)\) return Promise\.resolve\(false\)/, 'own author only');
@@ -180,9 +184,16 @@ test('Classic | Orb switch: desktop only, switches only its own author\'s tweak,
   assert.match(css, /html\[data-shell="desktop"\]:not\(\[data-layout="orb"\]\) \.os-side\.is-classic/, 'the lit side follows what is really worn');
 });
 
-test('a lone window in the Orb desktop is a centred card (desktop.js reads --desktop-window-max-height)', () => {
-  const src = read('web/desktop/desktop.js');
-  assert.match(src, /getPropertyValue\('--desktop-window-max-height'\)/);
-  assert.match(read('web/layouts/orb/layout.css'), /--desktop-window-max-height: 720px;/);
-  assert.ok(!read('web/desktop/desktop.css').includes('--desktop-window-max-height'), 'classic desktop keeps full-height windows');
+test('bar-center: a core slot in the middle of the desktop bar; the clock steps aside while it holds anything', () => {
+  const html = read('web/desktop.html');
+  assert.match(html, /<div class="bar-c">\s*<div class="bar-center" data-slot="bar-center"><\/div>\s*<button id="clock"/);
+  assert.ok(JSON.parse(read('web/core/slots.json')).slots['bar-center'], 'in the slot contract');
+  const css = read('web/desktop/desktop.css');
+  assert.match(css, /\.bar-center:empty \{ display: none; \}/); assert.match(css, /\.bar-center:not\(:empty\) ~ #clock \{ display: none; \}/);
+  assert.match(css, /html\.voice-on \.bar-center \{ visibility: hidden; \}/, 'out of the voice pill\'s way');
+});
+
+test('the Orb desktop opens threads in the stock window (no card override)', () => {
+  assert.ok(!read('web/desktop/desktop.js').includes('--desktop-window-max-height'));
+  assert.ok(!read('web/layouts/orb/layout.css').includes('--desktop-window-max'));
 });
