@@ -46,13 +46,15 @@ HOUSE = {
     'mizel':         ('mic',      30,  None),
     'shopping':      ('bag',      55,  None),
     'wisdom':        ('wisdom',   78,  None),
-    'cinequeue':     ('cine',     100, None),
+    'movies':        ('cine',     100, None),
+    'cinequeue':     ('cine',     100, None),   # Movies' id before ids followed names
     'trackhunt':     ('track',    128, None),
     'android-apps':  ('android',  150, None),
     'topics':        ('eye',      178, None),
     'messenger':     ('chats',    191, None),
     'wizard-signal': ('signal',   205, None),
-    'meditation':    ('meditate', 218, None),
+    'meditate':      ('meditate', 218, None),
+    'meditation':    ('meditate', 218, None),   # Meditate's old launcher id
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
@@ -66,7 +68,8 @@ HOUSE = {
     'v-week':        ('week',     310, None),
     'v-month':       ('month',    262, 0.08),
     'v-inbox':       ('inbox',    166, None),
-    'usuals':        ('usuals',   42,  None),
+    'food':          ('usuals',   42,  None),
+    'usuals':        ('usuals',   42,  None),   # Food's id before ids followed names
     'side-button':   ('side',     300, 0.07),
     'maps':          ('pin',      114, None),
     'app-store':     ('apps',     284, None),

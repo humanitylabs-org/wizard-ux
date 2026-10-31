@@ -32,6 +32,11 @@
   /* Installed Wizard apps (apps.json) and the owner's own links (launcher.json), from the Agent Service.
    * Cached on the device so the launcher paints instantly; refreshed at start and on focus. */
   const REMOTE_KEY = 'wux.apps.v1';
+  // Retired app ids remain lookup aliases only. Tiles and new windows use the installed canonical id.
+  const APP_ID_ALIASES = window.WizCore.appIdAliases = Object.freeze({
+    cinequeue: 'movies', usuals: 'food', meditation: 'meditate',
+    'outline-streaming-demo': 'outline', 'voice-outline': 'outline', 'wizard-connectors': 'connected-accounts',
+  });
   const DEV_KEY = 'wux.apps.dev.v1';
   let DEV = (() => { try { return new Set(JSON.parse(localStorage.getItem(DEV_KEY) || '[]')); } catch (_) { return new Set(); } })();
   // Reviewed legacy migrations, not supplied by apps or guessed from cache prefixes.
@@ -189,6 +194,7 @@
       APPS.splice(0, APPS.length, ...list);
       for (const k of Object.keys(APP)) delete APP[k];
       for (const a of APPS) APP[a.id] = a;
+      for (const [old, id] of Object.entries(APP_ID_ALIASES)) if (!APP[old] && APP[id]) APP[old] = APP[id];
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
 
