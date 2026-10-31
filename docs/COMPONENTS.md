@@ -1,6 +1,6 @@
 # Shared components
 
-**Appearance:** [Wizard app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). Inventory.
+[Appearance rules](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
 
@@ -15,7 +15,7 @@ Reuse:
 
 `Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
-## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
+## Apps (`WizardApp`)
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
