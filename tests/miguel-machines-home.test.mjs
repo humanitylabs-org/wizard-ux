@@ -199,11 +199,15 @@ test('Settings › Network & security fills even before Home has been shown', ()
 test('review fixes: one Home map at a time, boot guess expires, unreadable usage is not "signed out"', () => {
   const exp = read('web/core/experience.js'), host = read('web/core/skin-host.js');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.deepEqual(cat.oneOf, [['miguel/machines-home', 'wizard/machines-home']], 'the owner\'s package wins over the stock one');
-  assert.ok(cat.defaults.includes('wizard/machines-home'), 'the system hub is on in every skin family');
+  // James, 31 Oct 2026: the network Home is Miguel's alone; no stock copy, nothing on by default for every skin.
+  assert.equal(cat.oneOf, undefined, 'no stock Home map to choose between');
+  assert.ok(!cat.defaults.some(id => id.endsWith('/machines-home')), 'the network Home is never a release-wide default');
+  assert.ok(!cat.tweaks.includes('wizard/machines-home') && cat.tweaks.includes('miguel/machines-home'));
+  // The oneOf mechanism stays for any later pair of packages that fill the same place.
+  const group = { oneOf: [['miguel/machines-home', 'wizard/machines-home']] };
   assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => enabled\(id, own\)\), own\)/);
   const src1 = 'return ' + exp.match(/const oneOf = (\(ids, own = recipe\(\)\) => .*);\n/)[1];
-  const make = (offs = [], recipeOff = []) => new Function('catalog', 'recipe', 'recipeChoice', 'offFor', 'owner', 'globalOff', src1)(cat, () => null, (own, id) => recipeOff.includes(id) ? false : undefined, () => offs, 'miguel', () => false);
+  const make = (offs = [], recipeOff = []) => new Function('catalog', 'recipe', 'recipeChoice', 'offFor', 'owner', 'globalOff', src1)(group, () => null, (own, id) => recipeOff.includes(id) ? false : undefined, () => offs, 'miguel', () => false);
   const pick = make();  // the shipped function
   assert.deepEqual(make([], ['miguel/machines-home'])(['wizard/machines-home', 'x/y']), ['x/y'], 'a My skin off for the owner package keeps the stock one off too');
   assert.deepEqual(make(['miguel/machines-home'])(['wizard/machines-home']), [], 'a saved off does too');
@@ -211,7 +215,7 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   assert.deepEqual(pick(['wizard/machines-home']), ['wizard/machines-home']);
   assert.match(host, /tweaksAsked = true;/, 'the real list marks the boot guess settled');
   assert.match(host, /if \(expected\.size\) setTimeout\(\(\) => \{ if \(tweaksAsked\) return; for \(const t of \[\.\.\.expected\]\)/, 'a boot that never loads drops the guessed styles');
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && \(p\.status === 'unavailable' \|\| \(left == null && !money\)\);/, who + ': an unavailable service never counts as current');
     assert.match(src, /S\.devFresh, !!S\.res\.devicesError, devices\(\)\.map\(d => \[d\.id, d\.name, d\.status, d\.error, JSON\.stringify\(d\.access \|\| null\),/, who + ': new security facts repaint the page');
@@ -220,7 +224,7 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
 });
 
 test('second review: no unverified all-clear, stock loading state, Settings dialog keeps focus, Back closes the mic menu', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /: allClear\(\) \? h\('span', \{ text: 'Nothing answers from the internet/, who + ': all-clear only when every machine was checked');
     assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => cleared\(d\.access\)\);/, who + ': and only from a fresh reading');
@@ -237,7 +241,7 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
 });
 
 test('third review: AI page offers sign-in with no accounts, backup read failure is not "no backup", tab label never claims an unchecked all-clear', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /if \(!subs\(\)\.length\) return aiList\.replaceChildren\(h\('div', \{ cls: 'mh-ai-foot' \}, h\('span', \{ cls: 'mh-more-info', text: 'No AI account signed in yet\.' \}\),/, who);
     assert.match(src, /else if \(j && typeof j === 'object'\) \{ S\.backupRead = 'none'; S\.backup = null; api\.storage\.set\('backup', null\); \}/, who + ': a real empty answer clears the old backup');
@@ -253,7 +257,7 @@ test('fourth review: sign-in state survives normalisation, managed workspaces ge
   const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
   assert.match(usage, /const signedOut = \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
   assert.match(usage, /\['stale', 'unavailable', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:childOut \|\| a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const signedOut = p\.signedOut === true \|\|/, who);
     assert.match(src, /Security for \$\{g\.name\}’s Wizard shows on that Wizard/, who);
@@ -271,7 +275,7 @@ test('fifth review: System pages open by deep link; phone Ready opens the unfilt
 });
 
 test('sixth review: stale AI and backup readings say so; the AI page is scoped on managed workspaces', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`), css = read(`web/tweaks/${who}/machines-home/tweak.css`);
     assert.match(src, /const aiStale = \(\) => !!S\.res\.aiError \|\| subs\(\)\.some\(s => s\.stale && !s\.out && !s\.na\);/, who + ': a stale service counts too');
     assert.match(src, /\(r\.stale \? ' · last reading' : ''\)/, who);
@@ -306,7 +310,7 @@ test('eighth review: only stamped assets are immutable; a child sign-out survive
 });
 
 test('ninth review: failed first reads say so (AI accounts, network); availability changes repaint', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /if \(!subs\(\)\.length && S\.res\.aiError\) return aiList\.replaceChildren\(h\('span', \{ cls: 'mh-more-info', text: 'Couldn’t read your AI accounts just now\. It will try again\.' \}\)\);/, who);
     assert.match(src, /const why = S\.res\.devicesError \? 'Couldn’t read your network just now\. It will try again\.' : '';/, who);
@@ -317,32 +321,33 @@ test('ninth review: failed first reads say so (AI accounts, network); availabili
 
 test('tenth review: Home Settings is always the panel; the glance counts only this Wizard\'s people', () => {
   const desk = read('web/desktop/desktop.js');
-  assert.match(desk, /if \(homeOpen\) \{  \/\/ from Home it is always the centred panel/);
+  assert.match(desk, /if \(homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem\?\.\(\)\)\) \{  \/\/ from Home it is always the centred panel/, 'with Miguel\'s Home (System pages filled)');
   assert.match(desk, /if \(settingsWin\(\)\) hostSettings\(\);  \/\/ back into its desk window/, 'the desk window gets its panel back');
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     const glance = src.slice(src.indexOf('function renderGlance()'), src.indexOf('\n  }\n', src.indexOf('function renderGlance()')));
     assert.ok(!/[^y]people\(\)/.test(glance) && glance.includes('myPeople()'), who);
   }
 });
 
-test('eleventh review: both Home map packages share one store; a cancelled hold never swallows the next mic click', async () => {
-  for (const who of ['miguel', 'wizard']) assert.equal(JSON.parse(read(`web/tweaks/${who}/machines-home/manifest.json`)).storage, 'machines-home', who);
+test('eleventh review: the Home map keeps one shared store; a cancelled hold never swallows the next mic click', async () => {
+  for (const who of ['miguel']) assert.equal(JSON.parse(read(`web/tweaks/${who}/machines-home/manifest.json`)).storage, 'machines-home', who);
   const f = fixture(); const apis = {};
-  f.host._test.setImporter(async url => ({ default: a => { apis[String(url).includes('/wizard/') ? 'w' : 'm'] = a; return () => {}; } }));
+  f.host._test.setImporter(async url => ({ default: a => { apis.m = a; return () => {}; } }));
   await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
   apis.m.storage.set('ws', 'mine-x');
-  await f.host.loadTweaks(['wizard/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
-  assert.equal(apis.w.storage.get('ws'), 'mine-x', 'switching skins keeps the choice');
-  f.lsMap.set('wos.skin.miguel/machines-home.nick', JSON.stringify({ a: 'old' }));
-  assert.equal(JSON.stringify(apis.w.storage.get('nick')), '{"a":"old"}', 'a pre-upgrade copy kept by the other package is found');
+  await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
+  assert.equal(apis.m.storage.get('ws'), 'mine-x', 'reloading keeps the choice');
+  // A device that wore the retired stock copy (wizard/machines-home) keeps those choices in Miguel's package.
+  f.lsMap.set('wos.skin.wizard/machines-home.nick', JSON.stringify({ a: 'old' }));
+  assert.equal(JSON.stringify(apis.m.storage.get('nick')), '{"a":"old"}', 'a copy kept by the retired stock package is found');
   await f.clear?.();
   const desk = read('web/desktop/desktop.js');
   assert.match(desk, /for \(const ev of \['pointerleave', 'pointercancel'\]\) mic\.addEventListener\(ev, \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
 });
 
 test('twelfth review: unread chat counts are unknown, not zero', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /counts\(\) \|\| \{ working: 0, ready: 0, unknown: true \}/, who);
     assert.match(src, /const chatWords = x => x\.unknown \? 'chats not loaded yet'/, who);
@@ -352,7 +357,7 @@ test('twelfth review: unread chat counts are unknown, not zero', () => {
 
 test('thirteenth review: Resources stays in Settings; the owner\'s meter pick holds through an outage; reachability is not claimed', () => {
   assert.match(read('web/core/settings.js'), /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \},/);
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /if \(chosen\.length\) return \{ use: live\.filter\(s => S\.meter\.includes\(s\.id\)\), custom: true \};/, who);
     assert.match(src, /Who can reach whom isn’t checked here\./, who);
@@ -361,7 +366,7 @@ test('thirteenth review: Resources stays in Settings; the owner\'s meter pick ho
 });
 
 test('fourteenth review: only Wizard machines are helpers; a stale probe is a last reading, not offline', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const isAgent = d => d\.id === MAIN \|\| !d\.group \|\| d\.group === 'agent';/, who);
     assert.match(src, /others = helpers\(\)\.map\(d => machine\(d\.id\)\)/, who);
@@ -377,7 +382,7 @@ test('fourteenth review: only Wizard machines are helpers; a stale probe is a la
 
 test('fifteenth review: the desktop bar keeps its readings live over open windows', () => {
   assert.match(read('web/core/skin-host.js'), /live: el => \{ if \(!a\.dead && el\?\.nodeType === 1\) window\.WosResources\?\.watch\?\.\(el\); \},/);
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const back = !barBox\.isConnected; if \(api\.slot\.mount\('dock-end', barBox, -1\) && back\) api\.data\.read\.resources\.live\?\.\(barBox\);/, who);
   }
@@ -385,7 +390,7 @@ test('fifteenth review: the desktop bar keeps its readings live over open window
 
 test('sixteenth review: an unavailable group reaches its accounts; a saved or aged AI reading is a last reading', () => {
   assert.match(read('web/core/usage.js'), /\['stale', 'unavailable', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status/);
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const aiOld = p => \{ const at = Date\.parse\(p\.fetchedAt \|\| S\.res\.ai\?\.fetchedAt \|\| ''\); return !S\.aiLive \|\| !at \|\| Date\.now\(\) - at > 300000; \};/, who);
     assert.match(src, /stale: p\.status === 'stale' \|\| aiOld\(p\), resets:/, who);
@@ -404,7 +409,7 @@ test('seventeenth review: a new My skin shows one switch per replacement group a
 });
 
 test('eighteenth review: machines from a saved or failed-read snapshot are last readings, not online', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /status = !S\.devFresh \? 'stale' : d\.status;\n    return \{ id, name: pretty\(d\.name\), status, was: d\.status, stale: status === 'stale',/, who);
   }
@@ -415,7 +420,7 @@ test('nineteenth review: a signed-out account is never a live usage reading; a v
   assert.match(usage, /status: signedOut \? 'unavailable' : \['ok', 'stale', 'unavailable'\]\.includes\(p\.status\)/);
   assert.match(usage, /p\.signedOut \? 'signed out · sign in again to read usage'/);
   assert.match(read('web/core/resources.js'), /bad\?\(p\.signedOut\?'Signed out':'Unavailable'\):/);
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /function paint\(force\) \{\n    \/\/ [^\n]*\n    if \(S\.ws !== 'mine' && S\.res\.devices && !managedOf\(S\.ws\)\) \{ S\.ws = 'mine'; api\.storage\.set\('ws', 'mine'\); \}\n    renderGlance\(\);/, who);
   }
@@ -432,7 +437,7 @@ test('twentieth review: a deferred System link is cancelled by a newer link, Bac
 
 test('twenty-first review: the default model\'s credit accounts lead the meter; an aged in-memory device reading is not fresh', () => {
   assert.match(read('web/core/resources.js'), /devices:S\.devices,devicesAt:S\.devicesAt,devicesError:S\.devicesError,/);
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const mine = want \? live\.filter\(s => s\.kind === want\) : \[\], unit = mine\.some\(s => s\.unit === 'plan'\) \? 'plan' : 'credit';/, who);
     assert.match(src, /const pool = mine\.filter\(s => s\.unit === unit\), plans = live\.filter\(s => s\.unit === 'plan'\);/, who);
@@ -443,7 +448,7 @@ test('twenty-first review: the default model\'s credit accounts lead the meter; 
 });
 
 test('twenty-second review: the all-clear needs a dated check; any cached machine state is a last reading', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const cleared = a => a\?\.exposure === 'tailscale' && \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(String\(a\.checked \|\| ''\)\);/, who);
     assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => cleared\(d\.access\)\);/, who);
@@ -455,7 +460,7 @@ test('twenty-second review: the all-clear needs a dated check; any cached machin
 });
 
 test('final review: personal-device presence needs a fresh reading; meter edits keep unreadable picks; any provider can be the default', () => {
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.equal((src.match(/online: S\.devFresh \? /g) || []).length, 2, who + ': unknown (null) without a fresh reading');
     assert.match(src, /d\.online === null \? ' unk'/, who);
@@ -473,7 +478,7 @@ test('final review 2: exposure dates must be real; an open warning from a last r
   const tomorrow = new Date(Date.now() + 36 * 3600e3).toISOString().slice(0, 10);
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: tomorrow }).checked, undefined, 'tomorrow is not a completed check');
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2026-10-28' }).checked, '2026-10-28');
-  for (const who of ['miguel', 'wizard']) {
+  for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /\[bad\.length && S\.devFresh \? \['fix'/, who);
     assert.equal((src.match(/open to the internet\$\{S\.devFresh \? '' : ' \(last reading\)'\}/g) || []).length, 2, who + ': Home tile and desktop icon qualify a last reading');
