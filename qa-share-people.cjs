@@ -39,7 +39,7 @@ fs.mkdirSync(OUT,{recursive:true});
     const missing=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
     await missing.route('**/wizard/v1/apps',r=>r.fulfill({json:{schema:1,apps:[],in_development:[],slots:{},parking:[]}}));
     // Do not wait for the bootstrap's Messenger-only demo button in the uninstalled fixture.
-    const mp=await missing.newPage(); await mp.goto(BASE); await mp.waitForFunction(()=>!!window.WosShareSheet&&!!window.WosChat);
+    const mp=await missing.newPage(); await mp.goto(BASE); await mp.waitForFunction(()=>!!window.WosShareSheet&&!!window.WosChat&&(window.WosAgents?.list||[]).length>0);
     await mp.evaluate(()=>{window.__result=WosShareSheet.show({text:'Synthetic'},()=> 'unsupported');});
     await mp.waitForSelector('.wos-share.on'); assert.equal(await mp.locator('[data-shs-people]').count(),0);
     assert.equal(await mp.locator('[data-shs-app="messenger"]').count(),0); await mp.evaluate(()=>WosShareSheet.back());
