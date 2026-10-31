@@ -1206,18 +1206,22 @@
     const w = host && W[host.dataset.win]; if (!w || !['agents'].includes(w.appId)) return;
     openAgentChats(d.id, { backTo: w.id, thread: d.thread === '__new__' ? '__new__' : '' });
   });
-  /* Agent shortcuts select Focus in the main Chats window; no per-agent window or desk. */
+  /* Agent shortcuts select Focus in the main Chats window; no per-agent window or desk. Resolves with that window.
+   * o.share (the share sheet's Agents row): the main agent keeps the list's All focus unless another agent is in
+   * front, like an app reply (openContextDraft), and works on an install without an agents registry. */
   async function openAgentChats(id, o = {}) {
     const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
-    if (!AG.get(id)) await AG.load(true);
-    if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
+    const mainShare = !!o.share && !AG.isOther(id);
+    if (!AG.get(id) && !mainShare) await AG.load(true);
+    if (!AG.get(id) && !mainShare) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
     closeSheets(true);
     const w = placeApp(mainChats, { app: 'chats', thread: null });
     if (!w) return false;
-    CHATS.setFocus(w, { kind: 'agent', key: id });
+    if (!mainShare) CHATS.setFocus(w, { kind: 'agent', key: id });
+    else if (CHATS.winAgent(w)) CHATS.setFocus(w, null);
     if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
-    return true;
+    return w;
   }
   window.WizOpenAgentChats = openAgentChats;
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
