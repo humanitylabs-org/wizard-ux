@@ -42,18 +42,23 @@ export default function setup(api) {
   scene.append(stageEl, threads, hint, out);
   // With windows open: a small orb top left goes back to the scene (⌥` still works).
   const mini = el('button', 'ob-mini', { type: 'button', title: 'Home (⌥`)', 'aria-label': 'Home' });
-  mini.append(el('span', 'ob-mini-orb', { 'aria-hidden': 'true' }), el('span', 'ob-mini-dot', { 'aria-hidden': 'true' }));
+  const miniOrb = el('span', 'ob-mini-orb', { 'aria-hidden': 'true' }), miniCv = el('canvas'), miniFb = el('img', '', { alt: '', src: 'robert-thread-orb.png' });
+  miniCv.width = miniCv.height = 64; miniFb.hidden = true; miniOrb.append(miniCv, miniFb);
+  mini.append(miniOrb, el('span', 'ob-mini-dot', { 'aria-hidden': 'true' }));
   api.mount(scene); api.mount(mini);
 
   /* ---------- the orb: the shell's own orb.js ---------- */
-  let eng = null;
+  let eng = null, small = null;
   const modeOf = v => !v || v.state === 'idle' ? 'idle' : v.state === 'think' ? 'think' : v.state === 'paused' ? 'paused' : v.command ? 'command' : 'listen';
   let voice = api.voice.state();
   api.orb.ready().then(ok => {
     if (!ok || eng) return;
     eng = api.orb.create(cv, fb, { R: .62 });
     if (!eng) { glass.classList.add('flat'); return; }
-    eng.setMode(modeOf(voice)); paintVisible();
+    eng.setMode(modeOf(voice));
+    // The same orb, small and still, is the way Home while windows are open.
+    small = api.orb.create(miniCv, miniFb, { R: .62 }); small?.setRestingMotion?.(false);
+    paintVisible();
   });
   api.orb.onLevel(v => eng?.setLevel(v));
   api.on('voice', v => {
@@ -146,7 +151,7 @@ export default function setup(api) {
       scene.classList.toggle('is-on', h); scene.inert = !h;
       mini.hidden = h;
     }
-    eng?.sleep(!h);
+    eng?.sleep(!h); small?.sleep(h);
   }
   function paint() {
     paintVisible();
@@ -161,5 +166,5 @@ export default function setup(api) {
   api.on('home', paint);   // every Home repaint (live threads, outbox) lands here
   paint();
 
-  return () => { delete root.dataset.orbScene; eng?.sleep(true); };
+  return () => { delete root.dataset.orbScene; eng?.sleep(true); small?.sleep(true); };
 }
