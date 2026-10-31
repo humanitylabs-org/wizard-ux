@@ -317,21 +317,13 @@ window.WosChatPower = function chatPower(A) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
     if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
-    if (sh.mode === 'retry' && sh.retryRunId) {
-      // The picker is a snapshot, not permission to change a request that has
-      // already recovered. Recheck before saving a model; admission checks again.
-      let latest;
-      try { latest = await LIVE.sessionInfo(sh.sid); }
-      catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return; }
-      if (latest?.retryRunId !== sh.retryRunId) {
-        toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return;
-      }
-    }
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
     // this thread is left exactly as it is. Private → standard is never offered (a private thread lists only its own).
     if (o.agent && o.private && !LIVE.agentOf?.(sh.sid)) { if (sh.mode === 'thread' && A.continueInAgent) A.continueInAgent(sh.wid, sh.sid, o); return; }
+    // A model pick on a failed thread means retry, from the panel or composer.
+    if (sh.mode === 'retry' || failedShown(s)) return retryThread(sh.wid, sh.sid, o, sh.retryRunId, direct?.alive);
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
@@ -341,7 +333,6 @@ window.WosChatPower = function chatPower(A) {
       if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
     }
-    if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o, sh.retryRunId);
     toast('◇', same ? `Already on ${o.name}` : `This thread now uses ${o.name}`, 1600);
     if (w) A.renderThreadNow(w);
   }
@@ -350,9 +341,9 @@ window.WosChatPower = function chatPower(A) {
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s.id));
   function failureHtml(w, s) {
     if (!M || !failedShown(s)) return '';
-    const c = ch(w.id), busy = E?.busy.get(s.id) || (c.retrying === s.id ? 'retry' : '');
+    const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
     const req = requestOf(w, s);
-    return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, canRetry: !!req });
+    return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, retryLabel: retrying.get(s.id), canRetry: !!req });
   }
   // Retry and Choose another model stay live on every failed thread. A failed turn the owner didn't type (a
   // coordinator's follow-through note, a photo-only message, a run a watcher started) is retried with a plain
@@ -377,21 +368,40 @@ window.WosChatPower = function chatPower(A) {
   }
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
-  const retrying = new Set();
-  async function retryThread(wid, sid, o, sourceId) {
+  const retrying = new Map();
+  async function retryThread(wid, sid, o, sourceId, alive) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
     if (retrying.has(sid) || M?.pending?.has(sid) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
     const savedId = sourceId || s.retryRunId;
     const wasWaiting = s.status === 'queued' && s.queueReason === 'provider_access';
-    retrying.add(sid);
+    retrying.set(sid, o ? `Retrying on ${o.name}…` : 'Retrying…');
     const w = H.win(wid), c = w ? ch(wid) : null; if (c) c.retrying = sid;
+    // Acknowledge on the selection tap, before detail/model-save/disk can wait.
     try {
+      for (const id of Object.keys(A.CH)) { const view = H.win(id); if (view?.thread === sid) A.renderThreadNow(view); }
       // A list/snapshot preview is never retry input, even after an earlier detail read.
       try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
-      // Recovery may already have won while the picker was open. Never turn that
-      // stale card into an ordinary new send of preview text (or a second run).
-      if ((savedId && s?.retryRunId !== savedId) || (wasWaiting && !s?.retryRunId)) {
+      // Recovery may win while the picker or a model PUT is waiting. Never
+      // turn that stale card into a fresh send. The server also fences savedId.
+      const changed = () => !s || (savedId ? s.retryRunId !== savedId : !FAILED.has(s.status)) || (wasWaiting && !s.retryRunId);
+      if (alive && !alive()) return false;
+      if (changed()) {
         toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return false;
+      }
+      if (o) {
+        const cur = threadModel(s);
+        if (cur.model !== o.value || (o.provider && cur.provider !== o.provider)) {
+          let route;
+          try { route = await M.setThreadModel(sid, o); }
+          catch (_) { toast('!', 'Couldn’t change the model · try again', 2600); return false; }
+          if (alive && !alive()) return false;
+          Object.assign(s, route);
+          // Saving can take seconds. Hydrate again ONLY across that await; a
+          // same-model retry reuses the single fresh preflight above.
+          try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
+          if (alive && !alive()) return false;
+          if (changed()) { toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return false; }
+        }
       }
       // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
       // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
