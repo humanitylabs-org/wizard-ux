@@ -7,5 +7,5 @@
   "capabilities": [
     "layout"
   ],
-  "description": "Desktop: the orb in the middle with your apps around it, your chats beside it and what you open on the side, instead of desks. Off = the Desks view"
+  "description": "Desktop: the orb in the middle with your apps around it, your chats beside it and what you open on the side, instead of desks. Phone (experimental): the same orb on Home, the rest as it is. Off = the Desks view"
 }

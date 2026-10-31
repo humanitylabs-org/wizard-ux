@@ -1,7 +1,8 @@
 # Orbs view (layout `orb`, tweaks `miguel/orb-shell` + `miguel/orb-switch`)
 
-Opt-in, desktop only, off by default: Settings › Look › Tweaks › **Orbs view**. The desktop has two equal views,
-**Desks** and **Orbs**; switching it off brings the Desks view straight back (no reload). The phone is untouched: the tweak does nothing there.
+Opt-in, off by default: Settings › Look › Tweaks › **Orbs view**. The desktop has two equal views,
+**Desks** and **Orbs**; switching it off brings the Desks view straight back (no reload). On the phone (experimental) it
+changes Home only; see **Phone** below.
 
 **Desks | Orbs switch** (`miguel/orb-switch`, its own tweak; tweak ids unchanged so devices keep their choice): a segmented control in the middle of the desktop bar,
 in place of the date and time, visible in both modes. It mounts in the core `bar-center` slot (`web/desktop.html`,
@@ -108,6 +109,28 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   ⌥P); ⌥T just offers the apps. Desks are still the model underneath (an app = a desk, above); turning the Orb off
   shows them (and the desk you were on).
 - Motion: one ~30 fps loop, only while the scene is in front and the page is visible. Reduced motion: still frames.
+
+## Phone (experimental, 31 Oct 2026)
+
+The same tweak and the same layout: `layout.js` hands the phone shell to `phone.js` (+ `phone.css`, loaded by it), and
+the switch (`miguel/orb-switch`) sits at the top of phone Home (`home-main`, between the which-Wizard menu and the gear,
+on their line). Per device, no reload.
+
+- **Home** shows the desktop scene: the same sky, the same orb in the device's stored Style × Colour (no picker on the
+  phone yet: Glass · Nebula unless chosen on that device), the same status satellites, and Home's own top (which
+  Wizard, Desks | Orbs, the fuel gauge, the gear for Settings). The stock Home content and the other machines-home tiles
+  are hidden from the first frame (`orb-shell/tweak.css`), with the night sky as the placeholder.
+- **One source with the desktop** (`shared.js`): `lookOf`, `palettes`, `starsFor` / `paintSky` and `orbitApps` (which
+  apps float). The phone adapter (`app.js`) answers the same layout calls: `apps()` (the desktop's row shape and kinds),
+  `panelRunning()` (the app on each desk, one per app) and `route().home`. So when the desktop's satellites change
+  (`orbitApps`, or what `api.panel.running()` means), the phone follows.
+- **Continuity**: the orb is the dock orb. On Home it grows out of the dock into the centre; a thread, Chats, an app,
+  another desk (Home dragged past half way) or a voice take sends it back into the dock (250 ms, eased, no bounce),
+  where `phone.js` draws it in the same look inside `#orbWrap` (the stock drawing steps aside while
+  `html[data-orb-phone]`). The stock gestures stay on the dock orb: a press on the centre orb is handed to `#orbWrap`
+  as it starts (same pointer id), so tap, hold and the swipes are the dock orb's own.
+- Layout-only hosts: `api.phone.home()` (the Home desk section; the sky lives there and slides with the desks) and
+  `api.phone.orb()` (the dock orb's box). Desks (the tweak off) removes every node and flag: the stock phone is back.
 
 ## Layouts a tweak can wear
 

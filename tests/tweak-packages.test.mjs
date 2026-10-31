@@ -6,6 +6,8 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
   test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/orb-switch'].includes(id) ? 'desktop' : 'phone'));
+  // The Orbs view and its switch act on both shells (the phone: Home only).
+  if (['miguel/orb-shell', 'miguel/orb-switch'].includes(id)) test(`${id}: shipped contract on the phone shell too`, () => contract(id, check, 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];

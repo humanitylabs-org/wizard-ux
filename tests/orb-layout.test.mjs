@@ -1,6 +1,6 @@
-// Orb desktop (Miguel, 31 Oct 2026): the miguel/orb-shell tweak wears the built-in Orb layout on the desktop only.
+// Orb desktop (Miguel, 31 Oct 2026): the miguel/orb-shell tweak wears the built-in Orb layout.
 // These tests hold its contract:
-//   - phone: the tweak changes nothing (no layout, no files);
+//   - phone (experimental): the same layout, Home only (layouts/orb/phone.js; guards in tests/orb-phone-home.test.mjs);
 //   - desktop: the layout gets the shell's own lists and actions (Working / Ready rows, Snooze / Done through Chats'
 //     threadAct, quick apps, Home, Settings › Look) and nothing else; every handle dies with the layout;
 //   - turning the tweak off (or a load where it is no longer on) brings the classic desktop straight back;
@@ -46,13 +46,14 @@ function desk({ layout = null } = {}) {
   return { host, ctx, mounted, links, calls, adapter, ls, get api() { return api; } };
 }
 
-test('phone: Orb desktop changes nothing (no layout, no layout files)', async () => {
+test('phone: Orbs wears the same Orb layout (its phone part draws Home only); off gives the stock phone back', async () => {
   const f = fixture({ shell: 'phone' });
   await f.mount('miguel/orb-shell');
   assert.ok(f.host.tweakState.includes('miguel/orb-shell'));
-  assert.equal(f.host.layout, 'classic'); assert.equal(f.doc.documentElement.dataset.layout, undefined);
-  assert.ok(!f.doc.head.children.some(l => /layouts\//.test(l.href || '')), 'no layout css on the phone');
+  assert.equal(f.host.layout, 'orb'); assert.equal(f.doc.documentElement.dataset.layout, 'orb');
   await f.clear();
+  assert.equal(f.host.layout, 'classic'); assert.equal(f.doc.documentElement.dataset.layout, undefined);
+  assert.ok(!f.doc.head.children.some(l => /layouts\//.test(l.href || '')), 'no layout css left on the phone');
 });
 
 test('desktop: on wears the Orb layout, off brings the classic desktop back', async () => {
@@ -191,8 +192,8 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
     assert.ok(p.startsWith('html[data-shell="desktop"][data-layout="orb"]'), `unscoped selector: ${p}`);
   }
   const strip = f => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  const js = strip('web/layouts/orb/layout.js'), styles = strip('web/layouts/orb/styles.js');
-  for (const [file, src] of [['layout.js', js], ['styles.js', styles]])
+  const js = strip('web/layouts/orb/layout.js'), styles = strip('web/layouts/orb/styles.js'), shared = strip('web/layouts/orb/shared.js');
+  for (const [file, src] of [['layout.js', js], ['styles.js', styles], ['shared.js', shared], ['phone.js', strip('web/layouts/orb/phone.js')]])
     for (const banned of ['localStorage', 'sessionStorage', 'fetch(', 'XMLHttpRequest', '__wux', '__wos', 'setTimeout', 'setInterval', 'textarea', 'contenteditable', 'querySelector', 'getElementById', 'Math.random'])
       assert.ok(!src.includes(banned), `${file} uses ${banned}`);
   assert.match(js, /api\.env\.shell !== 'desktop'/);
@@ -208,11 +209,13 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(styles, /const CAP = 640;/, 'frame cost capped'); assert.match(styles, /if \(cost > 12 && q > \.4\) \{ q = Math\.max\(\.4, q \* \.8\);/, 'a slow GPU renders fewer pixels');
   assert.deepEqual([...styles.match(/export const RETIRED = Object\.freeze\(\[([^\]]*)\]\)/)[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]), ['swarm', 'holo', 'glitch', 'crystal', 'aurora']);
   assert.ok(!/function (swarm|holo|glitch|crystal|aurora|bust|headSDF)\(/.test(styles), 'retired styles are gone');
-  assert.match(js, /const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n    \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);
+  assert.match(js, /import \{ COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList \} from '\.\/shared\.js';/, 'one look, sky and satellite list for both shells');
+  assert.match(shared, /export const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n  \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);
   const tcss = read('web/tweaks/miguel/orb-shell/tweak.css');
   for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic', 'marble', 'obsidian', 'bronze', 'royal', 'crimson', 'cyber', 'sunset', 'ocean']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));
-  assert.match(js, /function drawSky\(/); assert.match(js, /api\.storage\.set\('style', styleId\); api\.storage\.set\('colour', colourId\);/);
-  assert.match(js, /if \(!has\(STYLES, styleId\)\) styleId = legacy === 'oracle' \? 'oracle' : RETIRED\.includes\(styleId\) \? 'plasma' : 'glass';/, 'the v3 look carries over; a retired style becomes Plasma');
+  assert.match(js, /function drawSky\(t, lv\) \{ paintSky\(sx, /); assert.match(shared, /export function paintSky\(/); assert.match(js, /api\.storage\.set\('style', styleId\); api\.storage\.set\('colour', colourId\);/);
+  assert.match(js, /let \{ styleId, colourId \} = lookOf\(api\);/);
+  assert.match(shared, /if \(!has\(STYLES, styleId\)\) styleId = legacy === 'oracle' \? 'oracle' : RETIRED\.includes\(styleId\) \? 'plasma' : 'glass';/, 'the v3 look carries over; a retired style becomes Plasma');
   assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
   assert.match(js, /popOff = api\.back\.push\(\(\) => openPop\(false\)\)/, 'Esc folds the picker first');
   assert.match(js, /if \(!pop\.hidden && \(frameN\+\+ & 1\)\) previews\(t\);/, 'previews only while the picker is open');
@@ -276,12 +279,12 @@ test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never 
   D.host.setLayout('classic'); await settle();
 });
 
-test('Desks | Orbs switch: desktop only, switches only its own author\'s tweak, through the device tweak mix', async () => {
+test('Desks | Orbs switch: desktop bar and phone Home, switches only its own author\'s tweak, through the device tweak mix', async () => {
   const src = read('web/tweaks/miguel/orb-switch/tweak.js');
   // two equal views, named Desks and Orbs (Miguel, 31 Oct 2026); the tweak ids stay, so devices keep their choice
   assert.match(src, /side\(false, 'Desks'\), orb = side\(true, 'Orbs'\)/); assert.ok(!/'Classic'|'Orb'\)/.test(src));
   assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orbs view'); assert.equal(JSON.parse(read('web/tweaks/miguel/orb-switch/manifest.json')).name, 'Desks | Orbs switch');
-  assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /api\.slot\.mount\('bar-center', box/);
+  assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /if \(desk\) api\.slot\.mount\('bar-center', box, -10\);\n  else api\.slot\.mount\('home-main', box, -20\);/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
   assert.match(host, /!id\.startsWith\(a\.id\.split\('\/'\)\[0\] \+ '\/'\)\) return Promise\.resolve\(false\)/, 'own author only');
@@ -381,9 +384,10 @@ test('Orbs view command take: the orb\'s own state and caption; results instead 
 });
 
 test('Orbs view satellites are status: running apps (closing only hides; Close quits) and regular apps with a count', () => {
-  const js = read('web/layouts/orb/layout.js'), desk = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
-  assert.match(js, /const regular = a => !a\.system && !a\.dev && !a\.connector && !a\.agent;/);
-  assert.match(js, /return all\.filter\(a => run\.has\(a\.id\) \? !a\.agent && !a\.connector : regular\(a\) && \(badgeMap\[a\.id\] \|\| 0\) > 0\)/);
+  const js = read('web/layouts/orb/layout.js'), shared = read('web/layouts/orb/shared.js'), desk = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
+  assert.match(js, /const orbitApps = \(\) => orbitList\(api, badgeMap\);/, 'the shared list (the phone floats the same one)');
+  assert.match(shared, /export const regular = a => !a\.system && !a\.dev && !a\.connector && !a\.agent;/);
+  assert.match(shared, /return all\.filter\(a => run\.has\(a\.id\) \? !a\.agent && !a\.connector : regular\(a\) && \(badgeMap\[a\.id\] \|\| 0\) > 0\)/);
   assert.match(desk, /system: !!AK\?\.isSystem\?\.\(a\), dev: !!AK\?\.inDev\?\.\(a\), connector: !!AK\?\.isConnector\?\.\(a\), agent: !!a\.agent \|\| a\.kind === 'chats'/, 'the shell\'s own kinds, no list of ids');
   assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close', \(\) => \{ api\.panel\.quit\(a\.id\);/);
   assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && \(panelParks \|\| panelDeskApp\(w\)\) && !quit;/);
