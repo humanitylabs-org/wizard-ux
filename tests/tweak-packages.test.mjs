@@ -5,7 +5,7 @@ import { fixture, contract, read } from './fixtures/tweaks.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, id === 'miguel/send-and-go' ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell'].includes(id) ? 'desktop' : 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];

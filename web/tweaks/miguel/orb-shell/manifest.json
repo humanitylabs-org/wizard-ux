@@ -1,0 +1,11 @@
+{
+  "id": "miguel/orb-shell",
+  "name": "Orb desktop",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Desktop: the orb in the middle, your apps around it, Working and Ready threads under it with Snooze and Done. Off = the classic desktop"
+}
