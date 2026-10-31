@@ -236,6 +236,59 @@ async function begin(page, appId = 'mizel', opts = {}) {
     await p.evaluate(()=>{WizardOSDevice.recActive=()=>JSON.stringify({id:'known-legacy',kind:'auto',ms:100,source:'app'});});
     assert.equal(await p.evaluate(()=>WizAppCapture.getState().nativeOwnershipReady),true);await p.evaluate(()=>{delete window.WizardOSDevice;});
   });
+  // James's phone (31 Oct 2026): a native start that never settled left the shared recorder `active`, so every app
+  // read the mic as busy until Wizard reloaded. The start is bounded, names the hung stage and frees the mic.
+  const hungDevice = () => {
+    window.deviceCalls = []; window.nativeActive = null;
+    window.WizardOSDevice = { recActive: () => JSON.stringify(nativeActive),
+      // No permission yet: the bridge returns no id, so the shared adapter probes getUserMedia first.
+      recStart: kind => { deviceCalls.push('start:' + kind); if (!window.permitted || nativeActive) return null; const id = 'native-' + deviceCalls.length; nativeActive = { id, ms: 900, source: 'app' }; return id; },
+      recLevel: () => 40, recPause: () => {}, recStop: id => { deviceCalls.push('stop:' + id); nativeActive = null; return JSON.stringify({ id, ms: 900 }); },
+      recClaim: id => JSON.stringify({ id, ms: 900 }), recRead: () => JSON.stringify({ b64: btoa('AAC-data'), next: -1 }),
+      recCancel: id => { deviceCalls.push('cancel:' + id); if (nativeActive?.id === id) nativeActive = null; }, recDone: id => { deviceCalls.push('done:' + id); } };
+    window.realGUM ||= navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.releaseProbe = () => { window.permitted = true; resolve({ getTracks: () => [] }); }; });
+  };
+  const restoreDevice = () => p.evaluate(() => { delete window.WizardOSDevice; navigator.mediaDevices.getUserMedia = window.realGUM; delete navigator.permissions.query; });
+  const startOutcome = (appId, opts) => p.evaluate(async ({ appId, opts }) => { const t = Date.now(); try { window.session = await WizAppCapture.start(appId, opts); return { ok: true, ms: Date.now() - t }; } catch (e) { return { code: e.code, stage: e.stage, message: e.message, ms: Date.now() - t }; } }, { appId, opts });
+  await test('hung-native-start-is-bounded-frees-the-mic-and-cancels-the-late-take', async () => {
+    await p.reload(); await ready(p);
+    await p.evaluate(hungDevice); await p.evaluate(() => { navigator.permissions.query = async () => ({ state: 'granted' }); });
+    const hung = await startOutcome('messenger', { kind: 'audio', meta: { purpose: 'synthetic' } });
+    assert.equal(hung.code, 'start_timeout', JSON.stringify(hung)); assert.equal(hung.stage, 'microphone permission'); assert.match(hung.message, /microphone permission/);
+    assert.ok(hung.ms >= 9500 && hung.ms < 12000, 'bounded near 10 s: ' + hung.ms);
+    await p.waitForFunction(() => WizAppCapture.getState().active === false && WizAppCapture.getState().hold === false, null, { timeout: 3000 });
+    // Any app can start right away: not busy, not "resume the existing capture first".
+    await p.evaluate(() => { window.permitted = true; });
+    const next = await startOutcome('messenger', { kind: 'audio', meta: { purpose: 'synthetic' } });
+    assert.equal(next.ok, true, JSON.stringify(next));
+    const nextNative = await p.evaluate(() => nativeActive.id);
+    // The abandoned probe answers now: the newer take keeps recording and the late start claims nothing.
+    await p.evaluate(() => releaseProbe()); await p.waitForTimeout(300);
+    assert.equal(await p.evaluate(() => nativeActive?.id), nextNative, 'late start never touches the newer take');
+    assert.equal(await p.evaluate(() => WizAppCapture.getState().active), true);
+    await p.evaluate(async () => { await session.cancel(); });
+    assert.equal(await p.evaluate(() => WizAppCapture.getState().active), false);
+    // A late native take nobody waits for any more is cancelled, and its reservation removed.
+    await p.evaluate(() => { window.permitted = false; navigator.mediaDevices.getUserMedia = () => new Promise(resolve => { window.releaseProbe = () => { window.permitted = true; resolve({ getTracks: () => [] }); }; }); });
+    const again = await startOutcome('messenger', { kind: 'audio', meta: { purpose: 'synthetic' } });
+    assert.equal(again.code, 'start_timeout', JSON.stringify(again));
+    await p.evaluate(() => releaseProbe());
+    await p.waitForFunction(() => deviceCalls.some(c => c.startsWith('cancel:')) && !nativeActive, null, { timeout: 3000 });
+    await p.waitForFunction(async () => (await WizAppCapture.pending('messenger')).length === 0, null, { timeout: 3000 });
+    assert.equal(await p.evaluate(() => WizAppCapture.getState().hold), false);
+    await restoreDevice();
+  });
+  await test('microphone-prompt-still-open-is-not-cut-off-at-the-start-bound', async () => {
+    await p.reload(); await ready(p);
+    await p.evaluate(hungDevice); await p.evaluate(() => { navigator.permissions.query = async () => ({ state: 'prompt' }); });
+    await p.evaluate(() => { window.promptOutcome = null; WizAppCapture.start('messenger', { kind: 'audio', meta: { purpose: 'synthetic' } }).then(s => { window.session = s; promptOutcome = 'started'; }, e => { promptOutcome = e.code; }); });
+    await p.waitForTimeout(11000);
+    assert.equal(await p.evaluate(() => promptOutcome), null, 'owner answering the prompt keeps the start alive');
+    await p.evaluate(() => releaseProbe()); await p.waitForFunction(() => promptOutcome);
+    assert.equal(await p.evaluate(() => promptOutcome), 'started');
+    await p.evaluate(async () => { await session.cancel(); }); await restoreDevice();
+  });
   await p.screenshot({ path: path.join(evidence, 'capture-contract.png') });
   assert.deepEqual(errors, []);
   fs.writeFileSync(path.join(evidence, 'receipt.json'), JSON.stringify({ hostname: os.hostname(), sourceSHA: process.env.SOURCE_SHA, treeHash: process.env.SOURCE_TREE, moduleSHA256: crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'web/core/app-capture.js'))).digest('hex'), command: 'node qa-app-capture/run.cjs', browser: browser.version(), receipts, errors, limitation: 'Native contract mocks only, not Android hardware/native foreground service QA. Synthetic browser microphone; no production task upload.' }, null, 2));
