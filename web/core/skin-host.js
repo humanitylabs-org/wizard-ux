@@ -271,7 +271,7 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home, panel: ['thread', 'list', 'app'].includes(r.panel) ? r.panel : null, panelApp: !!r.panelApp });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home, panel: ['thread', 'list', 'app'].includes(r.panel) ? r.panel : null, panelList: !!r.panelList });
   }
   /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
    * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
@@ -284,7 +284,7 @@
   if (isDoc) window.addEventListener?.('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
-    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}|${r.panelApp ? 1 : 0}`;
+    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}|${r.panelList ? 1 : 0}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
   }
@@ -365,20 +365,19 @@
       /* No desks: while a layout holds the panel, whatever opens (a thread, a list, an app) shows in ONE panel on the
        * right over Home instead of on a desk (desktop.js, outside the desks: never tiled, never synced). Opening another
        * thing replaces it; back() reopens the one before. The desks underneath stay exactly as they were, and release
-       * (or teardown) gives them back. state() → { kind: 'thread' | 'list' | 'app', title, width, back, chat, app } or null.
-       * dock(true) keeps the stock Chats list docked in the right-hand panel for good (its threads open in it and go
-       * back to it) and opens apps in a second panel from the left, one at a time; dock(false) folds the list away.
-       * close('app' | 'chat') closes that side; close() the one in front. */
+       * (or teardown) gives them back. state() → { kind: 'thread' | 'list' | 'app' | null, title, width, back, list } or null.
+       * dock(true) keeps the stock Chats list docked in its own panel on the LEFT for good; a thread picked in it opens
+       * in the panel on the right, which closes when the thread is finished. dock(false) folds the list away. */
       panel: Object.freeze({
         claim() {
           if (!live()) return () => {};
           panelHolders.add(a); panelSync();
           const off = () => { panelHolders.delete(a); a.offs.delete(off); panelSync(); }; a.offs.add(off); return off;
         },
-        close: which => live() ? !!shell.panelClose?.(...(which === 'app' || which === 'chat' ? [which] : [])) : false,
+        close: () => live() ? !!shell.panelClose?.() : false,
         dock: on => live() && panelHolders.has(a) ? !!shell.panelDock?.(!!on) : false,
         back: () => live() ? !!shell.panelBack?.() : false,
-        state: () => { const s = live() ? shell.panelState?.() : null; return s ? Object.freeze({ ...s, ...(s.chat ? { chat: Object.freeze({ ...s.chat }) } : {}), ...(s.app ? { app: Object.freeze({ ...s.app }) } : {}) }) : null; },
+        state: () => { const s = live() ? shell.panelState?.() : null; return s ? Object.freeze({ ...s, ...(s.list ? { list: Object.freeze({ ...s.list }) } : {}) }) : null; },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {

@@ -12,13 +12,13 @@
  *     - the owner's apps as round glass satellites on two tilted orbits (front bigger and brighter, behind dimmer),
  *       drifting slowly; the label shows on hover; a click opens the app. The app's own logo, else its glyph.
  *     - under the orb: its name and a caption line (what the take is doing); the real keys as the hint line.
- *   v5 (Miguel, 31 Oct 2026): the conversations are the STOCK Chats list, docked for good on the right (api.panel.dock:
- *   the same window, tabs Ready / Working / Archive, its sort, search, pins and every tweak on it), full height under
- *   the bar, in a softer glass that sits in the scene. A thread opens in that same column (list → thread, like the
- *   phone); Done, Snooze, Back, Esc and a send all go back to the list. A handle on its edge (or ⌥\) folds it to a
- *   slim strip with the Ready count. Apps (a satellite, All apps) open in their own panel from the LEFT, one at a
- *   time; ✕, Esc or a click on the sky slides it away. The orb sits in the free space between (and steps back when
- *   that gets narrow); the Look picker sits just left of the column. The desks are untouched underneath: turning the
+ *   v5 (Miguel, 31 Oct 2026), in thirds: LEFT the STOCK Chats list, docked for good (api.panel.dock: the same window,
+ *   Ready / Working / Archive, its sort, search, pins, every tweak and every Chats key), full height under the bar in a
+ *   softer glass; a handle on its edge (or ⌥\\) folds it to a slim strip with the Ready count. CENTRE the orb scene.
+ *   RIGHT the content panel: a thread picked in the list (a click, ⌥↓) or an app (a satellite, All apps) slides in from
+ *   the right over the orb, one thing at a time (a quiet ‹ goes back to the one before); its ✕ / Esc slides it away.
+ *   Done, Snooze, a send or its ‹ close a thread's panel and put the keyboard back in the list. The Look picker sits at
+ *   the bottom of the orb area, beside the list. The desks are untouched underneath: turning the
  *   Orb off brings them back exactly.
  *
  * Motion runs only while the page is visible, at about 30 fps; reduced motion = still frames. Colours are skin-layer
@@ -47,12 +47,12 @@ export default function setup(api) {
   orbWrap.append(orbCv, orbBtn);
   const name = el('div', 'ob-name');
   const caption = el('div', 'ob-caption', { role: 'status' });
-  // The docked Chats list's fold handle (on its left edge) and, folded, the slim strip with the Ready count.
+  // The docked Chats list's fold handle (on its right edge) and, folded, the slim strip with the Ready count.
   const foldBtn = el('button', 'ob-fold', { type: 'button', title: 'Hide conversations (' + (/Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '') ? '⌥' : 'Alt+') + '\\)', 'aria-label': 'Hide conversations', 'aria-keyshortcuts': 'Alt+Backslash' });
-  foldBtn.append(icon(I.fold));
+  foldBtn.append(icon(I.unfold));
   const strip = el('button', 'ob-strip', { type: 'button', title: 'Show conversations', 'aria-keyshortcuts': 'Alt+Backslash' });
   const badge = el('b', 'ob-badge');
-  strip.append(icon(I.unfold), badge, el('span', 'ob-strip-l', { text: 'Chats' }));
+  strip.append(icon(I.fold), badge, el('span', 'ob-strip-l', { text: 'Chats' }));
   const hint = el('div', 'ob-hint');
   const mac = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
   const native = !!globalThis.webkit?.messageHandlers?.wizardNative;
@@ -284,7 +284,7 @@ export default function setup(api) {
     }
   }
 
-  /* ---------- conversations: the stock Chats list, docked on the right (shell panel); folded = a slim strip ---------- */
+  /* ---------- conversations: the stock Chats list, docked on the left (shell panel); folded = a slim strip ---------- */
   let folded = api.storage.get('folded') === true, readyCount = -1;
   function paintReady() {
     const L = api.sessions.list();
@@ -308,11 +308,10 @@ export default function setup(api) {
   let running = false, lastT = 0, cancel = null, home = null, blinkAt = 3;
   /* ---------- the panel: whatever opens slides in on the right; the scene moves to the middle of what is left ---------- */
   let panelKind = null;
-  // The free space: between the app panel on the left (if any) and the docked list (or its folded strip) on the right.
+  // The free space: right of the docked list (or its folded strip). The panel on the right covers it while it is open.
   function aim(jump = false) {
     const st = api.panel.state();
-    const left = st?.app ? Math.min(W * .7, st.app.width || 0) : 0;
-    const right = st?.chat ? Math.min(W * .5, st.chat.width || 0) : folded ? STRIP : 0;
+    const left = st?.list ? Math.min(W * .5, st.list.width || 0) : folded ? STRIP : 0, right = 0;
     free = Math.max(160, W - left - right); cxTarget = left + free / 2;
     const wide = O * 2.9;   // the orb with its orbits
     fit = Math.max(.34, Math.min(1, (free * .5 - 56) / (O * 1.65)));   // the orbits stay inside the free space
@@ -328,23 +327,20 @@ export default function setup(api) {
     scene.style.setProperty('--ob-cx', Math.round(cx) + 'px');
   }
   function paintPanel() {
-    const st = api.panel.state(), k = st?.app ? 'app' : st?.chat?.kind || null;
-    // a thread opened while the list was folded (a key, the voice, a notification) unfolds it
-    if (folded && st?.chat) { folded = false; api.storage.set('folded', false); api.panel.dock(true); paintFold(); }
+    const st = api.panel.state(), k = st?.kind || null;
     if (k !== panelKind) { panelKind = k; scene.dataset.panel = k || ''; }
-    const sig = `${k}|${st?.app?.width || 0}|${st?.chat?.width || 0}|${folded}`;
+    const sig = `${k}|${st?.list?.width || 0}|${folded}`;
     if (W) aim();
     if (sig === panelSig) return; panelSig = sig;
     api.frame(() => { if (!W) return; aim(); if (reduced) still(); });  // the panels' widths, once laid out
     api.after(480, () => { if (W) { aim(); if (reduced) still(); } });   // and once they have slid in
   }
   let panelSig = '';
-  // A click on the open sky (not the orb or an app) puts the app panel away and folds the picker; the list stays.
+  // A click on the open sky (not the orb or an app) folds the picker; the list stays.
   api.listen(scene, 'pointerdown', e => {
     if (e.button) return;
     const bare = e.target === scene || e.target === sky || e.target === field;
     if (!pop.hidden && !picker.contains(e.target)) openPop(false);
-    if (bare && panelKind === 'app') api.panel.close('app');
   });
   function draw(now) {
     const t = now / 1000, dt = lastT ? Math.min(.1, (now - lastT) / 1000) : 0;
@@ -392,7 +388,7 @@ export default function setup(api) {
     name.textContent = api.agents.here()?.label || 'Wizard';
     paintReady(); paintApps();
   }
-  api.panel.claim();        // no desks: Chats docked on the right, apps in a panel from the left, over the scene
+  api.panel.claim();        // no desks: the Chats list docked on the left; a thread or an app opens in the panel on the right
   api.panel.dock(!folded);
   paintFold();
   api.desk.emptyHome();
