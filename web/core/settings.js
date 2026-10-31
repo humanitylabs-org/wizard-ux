@@ -224,7 +224,7 @@
       if (!opened) ctx.toast?.('✎', esc(`Ask your Wizard: “change my ${M.active?.name || 'own'} skin so…”`), 4000);
     }
   }
-  // Settings › Look: every color in one grid (any author), then tweaks as their own choice. My skin stays an overlay.
+  // Settings › Look: one tile per family, then only that family's colours. My skin stays an overlay.
   const lookName = (S, id) => S.list.find(k => k.id === id)?.name || '';
   // Skin picker: a grid of small preview cards, one per look, in the skins' own order. Each card is a miniature of
   // that look (its background, a reply and a sent bubble, the dock with its orb) drawn in CSS from its own tokens, with
@@ -246,26 +246,20 @@
     .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
   const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
-  /* Tweaks are separate from color: a row of published sets to start from (Standard, Miguel's, …), then one
-   * disclosure with every installed tweak as a switch. Picking a set clears the per-tweak choices. */
+  /* A skin brings its author's tweaks. One disclosure under the picker lists them with on/off; skins without
+   * tweaks show nothing. No separate setup, following or copy: changing skin is the only way in or out. */
   const tweakSwitches = (items, attr, busy = false) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
     if (!s.tweaks.length && !s.error) return '';
-    if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
-    const name = who => (authorList || []).find(a => a.id === who)?.name || who;
-    // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
-    const exp = s.tweaks.filter(t => !t.builtin);
-    const rows = list => tweakSwitches(list.map(t => ({ ...t, description: [t.description, t.builtin ? '' : 'by ' + name(t.author)].filter(Boolean).join(' · ') })), 'data-tweak-toggle', s.busy);
-    const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${err}${rows(exp)}</div>`;
-    const on = exp.filter(t => t.on).length;
-    // Quick buttons: one per author; they add to what is on (tap James's and Miguel's = all), tap again to take them off.
-    const quick = (authorList || []).filter(a => a.ids.length).map(a => { const all = a.ids.every(id => exp.find(t => t.id === id)?.on); return `<button type="button" class="tw-quick" data-tweakauthor="${esc(a.id)}" aria-pressed="${all}"${s.busy ? ' disabled' : ''}>${all ? '✓ ' : ''}${esc(a.name)}’s (${a.ids.length})</button>`; }).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Off unless you turn them on. Each one is someone’s idea being tried out.</p>${quick ? `<div class="tw-quicks" role="group" aria-label="Get someone’s tweaks">${quick}</div>` : ''}<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>All tweaks</b><small>${on} of ${exp.length} on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${err}${rows(exp)}</details></div>`;
+    const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
+    const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
+    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
+    const on = s.tweaks.filter(t => t.on).length;
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
-  let tweaksOpen = false, authorList = null;
+  let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
@@ -278,14 +272,14 @@
       return `<button type="button" class="skp-card" data-ownskin="${esc(skin.id)}" aria-pressed="${M.active?.id === skin.id}" aria-label="${esc(skin.name)}">${palette ? mini(palette) : ''}<span class="skp-nm">${esc(skin.name)}</span></button>`;
     }).join('');
   }
-  async function draftDefaults(ctx, base) {
+  async function draftDefaults(ctx, family) {
     const draft = ctx.skinDraft; if (!draft) return;
     const seq = draft.seq = (draft.seq || 0) + 1;
-    draft.base = base || draft.base; draft.error = '';
+    draft.family = family.id; draft.base = family.palettes[0]; draft.error = '';
     // The list is warmed when Look opens, so Loading only shows on a cold first read.
     draft.loading = !window.WosExperience.installedReady; ctx.render?.();
     try {
-      let [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults()]);
+      let [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
       if (ctx.skinDraft !== draft || draft.seq !== seq) return;
       // A replacement group (two Home maps) is one switch: keep only the member that would load, so the draft never
       // shows two and never saves the hidden one as off (any member saved off turns the whole group off).
@@ -300,19 +294,27 @@
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
   }
   function newSkinHtml(S, draft) {
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><h4>Base skin</h4><div class="skp" role="group" aria-label="Base skins">${S.list.map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+    const family = S.families.find(f => f.id === draft.family);
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === draft.family ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">All installed tweaks · starts with the base skin’s defaults.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
     if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
     const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();
-    // One list of every color, whoever made it (James's five, Novaire's two, Miguel's four), in the skins' own order.
-    const colours = `<div class="skp-colours"><div class="skp" role="group" aria-label="${esc(own?.name || 'All')} skins">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>`;
-    const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S)}${newTile()}</div></div>` : '';
+    const fams = S.families || [{ id: cur, name: base, palettes: S.list.map(k => k.id) }];
+    const worn = S.familyOf?.(cur) || fams[0]?.id;
+    const family = fams.find(f => f.id === worn) || fams[0];
+    const ordered = [...fams].sort((a, b) => ['wizard', 'mizel', 'novairecito'].indexOf(a.id) - ['wizard', 'mizel', 'novairecito'].indexOf(b.id));
+    const tiles = ordered.map(f => {
+      const k = S.list.find(k => k.id === (S.lastIn?.(f.id) || f.palettes[0]));
+      return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
+    }).join('');
+    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S)}${newTile()}</div>`;
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -326,6 +328,9 @@
   }, input(ctx, el) {
     if (!ctx.skinDraft) return;
     if (el.matches('[data-skin-name]')) ctx.skinDraft.name = el.value;
+    if (el.matches('[data-skin-base]') && ctx.skinDraft.family !== el.value) {
+      const family = window.WosSkin.families.find(f => f.id === el.value); if (family) void draftDefaults(ctx, family);
+    }
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
@@ -338,14 +343,14 @@
     if (el.closest('[data-skin-undo-dismiss]')) { ctx.skinUndo = null; ctx.render(); return true; }
     if (el.closest('[data-newskin]')) {
       ctx.skinDraft = { name: '', items: [], tweaks: {} };
-      void draftDefaults(ctx, S.current);
+      void draftDefaults(ctx, S.families.find(f => f.id === S.familyOf(S.current)) || S.families[0]);
       ctx.root.querySelector('[data-skin-name]')?.focus(); return true;
     }
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
       if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
-      if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, draft.base); return true; }
+      if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, S.families.find(f => f.id === draft.family)); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
         if (draft.saving) return true; draft.saving = true; ctx.render();
         skinAction(() => M.create(draft), () => { draft.saving = false; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; ctx.render(); }); return true;
@@ -355,16 +360,15 @@
     const remove = el.closest('[data-ownskin-remove]');
     if (remove) { ctx.skinRemove = M.recipes.find(s => s.id === remove.dataset.ownskinRemove); ctx.render(); ctx.root.querySelector('[data-skin-remove-cancel]')?.focus(); return true; }
     const own = el.closest('[data-ownskin]');
-    // Tapping the skin you wear takes it off (back to plain color + tweaks); any other one puts it on.
-    if (own) { skinAction(() => M.active?.id === own.dataset.ownskin ? M.leave() : M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
+    if (own) { skinAction(() => M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const set = el.closest('[data-tweakset] > summary');
     if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
-    const quick = el.closest('[data-tweakauthor]');
-    if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
+    const family = el.closest('[data-skinfamily]');
+    if (family) { skinAction(() => M?.leave?.(), () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); ctx.render?.(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
       void window.WosExperience?.chooseSkin?.();
@@ -388,10 +392,6 @@
     if (!el.closest('[data-wg-reset]')) return false;
     window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
   } });
-  /* Features on for everyone (catalog `defaults`) are plain settings where they act: one switch each, no author. */
-  const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
-  const settingAct = (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); if (!b) return false; void window.WosExperience.toggle(b.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; };
-  register({ id: 'home-network', page: 'appearance', html: () => { const r = settingRow('wizard/machines-home'); return r ? `<div class="st-group"><h4>Home</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
@@ -544,7 +544,6 @@
     // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
     // page head is the one title and the content sits straight on the Settings page, with no box around it.
     html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
-  register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
