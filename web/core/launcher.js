@@ -42,6 +42,13 @@
   }
   window.WizLauncher = {
     get: name => current[name], accept, load, get shared() { return shared; },
+    // Paint from the cache/defaults after one second; the uncancelled load still
+    // publishes late preferences through the registry's existing onChange path.
+    async waitForShell() {
+      let timer;
+      try { await Promise.race([window.WizLauncher.ready, new Promise(resolve => { timer = setTimeout(resolve, 1000); })]); }
+      finally { clearTimeout(timer); }
+    },
     hasHostedThread: id => current.hostedThreadApps.includes(id),
     displayName: app => Object.hasOwn(current.displayNames, app.id) ? current.displayNames[app.id] : app.name,
     onChange: fn => { listeners.add(fn); return () => listeners.delete(fn); },
