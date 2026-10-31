@@ -59,6 +59,8 @@ async function settle(p) { await p.evaluate(() => Promise.all(document.getAnimat
           writes.push({ method: req.method(), path: new URL(req.url()).pathname });
           return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
         }
+        // The owner's synced desks would land mid-seed and race the fixture; QA starts from no saved workspace.
+        if (new URL(req.url()).pathname.startsWith('/wizard/v1/workspaces')) return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
         if (req.isNavigationRequest() && req.frame().parentFrame()) return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><head><title>QA app fixture</title></head><body style="background:#151020;color:#e9dfff;font:18px system-ui;padding:48px"><h1>Desktop close check</h1><p>Isolated app frame · owner data is read-only.</p><input aria-label="App input" placeholder="Focus stays with this desktop"></body></html>' });
         return route.continue();
       });
@@ -73,27 +75,10 @@ async function settle(p) { await p.evaluate(() => Promise.all(document.getAnimat
       await p.evaluate(() => { __wux.goHome(); __wux.closeCurrent(); });
       ok((await state(p)).count === 3 && await p.evaluate(() => Object.keys(__wux.wins).length === 3), `${skin}: Home shortcut preserves parked desktops`);
       await p.evaluate(() => __wux.goWs(1));
-      await p.mouse.move(900, 30); await p.locator('#clock').focus();
-      ok(await p.locator('[data-wsclose="1"]').evaluate(el => getComputedStyle(el).visibility === 'hidden'), `${skin}: ✕ hidden away from tile`);
       await p.locator('.ws[data-ws="1"]').hover();
-      ok(await p.locator('[data-wsclose="1"]').isVisible(), `${skin}: hover reveals ✕`);
+      ok(await p.locator('[data-wsclose], .ws-close').count() === 0, `${skin}: hovering a tile shows no close ✕`);
       ok(await p.locator('.ws[data-ws="1"] .dbg').innerText() === '7', `${skin}: unread badge retained`);
-      const closeBox = await p.locator('[data-wsclose="1"]').boundingBox(), badgeBox = await p.locator('.ws[data-ws="1"] .dbg').boundingBox();
-      ok(closeBox.x + closeBox.width <= badgeBox.x, `${skin}: ✕ and unread badge do not overlap`);
-      await p.locator('#bar').evaluate((bar, box) => {
-        const under = document.createElement('span'); under.id = 'qa-close-underlay';
-        Object.assign(under.style, { position: 'fixed', top: box.y + 'px', left: box.x + 'px', width: '14px', height: '14px', zIndex: '1', background: '#00ff00', color: '#ff0000', font: 'bold 9px monospace', pointerEvents: 'none' });
-        under.textContent = 'XX'; bar.appendChild(under);
-      }, closeBox);
-      const closeClip = { x: closeBox.x + 4, y: closeBox.y + 4, width: 6, height: 6 };
-      const closeLoud = await p.screenshot({ clip: closeClip });
-      await p.evaluate(() => { const el = document.querySelector('#qa-close-underlay'); el.textContent = ''; el.style.background = '#0000ff'; });
-      ok(closeLoud.equals(await p.screenshot({ clip: closeClip })), `${skin}: ✕ pixels fully opaque over loud text`);
-      await p.evaluate(() => document.querySelector('#qa-close-underlay').remove());
-      await p.screenshot({ path: path.join(OUT, `${skin}-hover-unread.png`) });
       await p.locator('.bar-l').screenshot({ path: path.join(OUT, `${skin}-hover-unread-detail.png`) });
-      await p.mouse.move(900, 30); await p.locator('.ws[data-ws="1"]').focus();
-      ok(await p.locator('[data-wsclose="1"]').isVisible(), `${skin}: keyboard focus reveals ✕`);
       await menuAt(p); await settle(p);
       ok(await p.getByRole('menuitem', { name: 'Close desktop', exact: true }).count() === 1, `${skin}: right-click offers Close desktop`);
       await p.screenshot({ path: path.join(OUT, `${skin}-context-menu.png`) });
@@ -119,8 +104,8 @@ async function settle(p) { await p.evaluate(() => Promise.all(document.getAnimat
       ok(await p.locator('.wos-context-menu').count() === 0, `${skin}: scroll dismisses menu`);
       await menuAt(p); await p.evaluate(() => dispatchEvent(new Event('blur')));
       ok(await p.locator('.wos-context-menu').count() === 0, `${skin}: window blur dismisses menu`);
-      // Close current middle desktop with the actual hover control.
-      await p.locator('.ws[data-ws="1"]').hover(); await p.locator('[data-wsclose="1"]').click();
+      // Close current middle desktop from its right-click menu.
+      await menuAt(p); await p.getByRole('menuitem', { name: 'Close desktop', exact: true }).click();
       let s = await state(p);
       ok(s.count === 2 && s.desk === setup.desks[0] && s.cur === 0, `${skin}: closing middle desktop lands left and drops tile`);
       ok(s.focus === setup.ids[0] && s.active === setup.ids[0], `${skin}: left app owns DOM focus`);
@@ -167,8 +152,7 @@ async function settle(p) { await p.evaluate(() => Promise.all(document.getAnimat
       await p.keyboard.press('Alt+w'); s = await state(p);
       ok(s.count === 2 && s.desk === shortcut.desks[1] && s.active === shortcut.ids[1], `${skin}: Alt+W last-window close prunes and focuses left`);
       await p.evaluate(() => { __wux.newDesktop(); __wux.closePalette(); });
-      ok(await p.locator('[data-wsclose="2"]').count() === 1, `${skin}: an empty extra desktop has a close control`);
-      await p.locator('.ws[data-ws="2"]').hover(); await p.locator('[data-wsclose="2"]').click();
+      await menuAt(p, 2); await p.getByRole('menuitem', { name: 'Close desktop', exact: true }).click();
       s = await state(p); ok(s.count === 2 && s.desk === shortcut.desks[1], `${skin}: empty desktop closes left`);
       // Last desktop: explicit close keeps one empty desk and opens Home.
       await p.evaluate(() => { while (__wux.ws.length > 1) __wux.closeDesktop(__wux.ws.length - 1); __wux.closeDesktop(0); });
