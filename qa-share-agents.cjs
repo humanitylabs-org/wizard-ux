@@ -110,7 +110,7 @@ async function phone(browser) {
   await p.waitForFunction(sid => window.__wos?.live?.ok && window.__wos.live.session(sid), SID, { timeout: 30000 });
   await p.waitForFunction(() => (window.WosAgents?.list || []).length >= 3, null, { timeout: 15000 });
   const openThread = async () => {
-    const wid = await p.evaluate(sid => { const w = Object.values(__wos.wins).find(x => x.app === 'chats' && !x.agent); if (__wos.chats.winAgent(w)) __wos.chats.setFocus(w, null); __wos.openChat(w.id, sid); __wos.focusWin(w.id); return w.id; }, SID);
+    const wid = await p.evaluate(sid => { const w = Object.values(__wos.wins).find(x => x.app === 'chats' && !x.agent); if (__wos.chats.winAgent(w)) __wos.chats.setFocus(w, null); __wos.openChat(w.id, sid); __wos.focusWin(w.id); __wos.goDesk(__wos.desks.findIndex(d => d.wins.includes(w.id)), true); return w.id; }, SID);
     await p.waitForSelector(`[data-chats="${wid}"] .msg.a [data-mshare]`, { timeout: 10000 });
     return wid;
   };
