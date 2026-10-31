@@ -11,8 +11,7 @@ const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, detai
 (async () => {
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   try {
-    const context = await browser.newContext({ viewport: { width: 400, height: 860 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1,
-      ...(report.host ? { extraHTTPHeaders: { Host: report.host } } : {}) });
+    const context = await browser.newContext({ viewport: { width: 400, height: 860 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
     const page = await context.newPage(), errors = [], marks = [];
     page.on('pageerror', e => errors.push(e.message));
     page.on('request', r => { if (r.method() === 'POST' && new URL(r.url()).pathname === '/notifications/api/mark') marks.push(r.postDataJSON()); });
@@ -68,7 +67,7 @@ const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, detai
     check('no browser page errors', errors.length === 0, errors);
     await context.close();
     if (process.env.ALERT_BASELINE_JS) {
-      const before = await browser.newContext({ viewport: { width: 400, height: 860 }, isMobile: true, hasTouch: true, ...(report.host ? { extraHTTPHeaders: { Host: report.host } } : {}) });
+      const before = await browser.newContext({ viewport: { width: 400, height: 860 }, isMobile: true, hasTouch: true });
       await before.route('**/core/chats.js*', route => route.fulfill({ status: 200, contentType: 'application/javascript', body: fs.readFileSync(process.env.ALERT_BASELINE_JS, 'utf8') }));
       const p = await before.newPage(); await p.goto(target); await p.waitForSelector('.ch-notif-row[data-chnotif="preview-alert-archive"]');
       const d = await before.newCDPSession(p), r = await p.locator('.ch-notif-row[data-chnotif="preview-alert-archive"]').boundingBox();
