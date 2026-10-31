@@ -684,12 +684,12 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.compact .ch-row .pv { display: none; }
 /* Archive reads as a different place: a light tinted panel. */
 .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-/* Desktop: Archive on top, then Working, then Ready uninterrupted at the bottom. */
-html[data-shell="desktop"] .ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+/* Archive on top, then Working, then Ready uninterrupted at the bottom, on desktop and phone alike (By status layout;
+   James, 31 Oct 2026). Skins that arrange the phone list themselves (obsidian, landscapes) outrank these rules. */
+.ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
+.ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
+.ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
+.ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
 /* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
 .ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
