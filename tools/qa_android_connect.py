@@ -161,6 +161,33 @@ def main():
             shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
             pref_path = '/data/user/0/ai.wizards.os/shared_prefs/wizard_server.xml'
             before = shell('if test -e ' + pref_path + '; then cat ' + pref_path + '; fi').strip()
+            synthetic_pairing = upgrade_only and config.get('baseline_origin_mode') == 'synthetic-fixture-paired'
+            marker_path = '/data/user/0/ai.wizards.os/files/synthetic-upgrade-marker.txt'
+            marker = None
+            if synthetic_pairing:
+                # Published 82 is origin-less. This is explicit synthetic persisted-state
+                # setup on a FRESH owned emulator, not UI/account/owner-authentication proof.
+                check('published generic baseline has empty encoded defaults',
+                      not apk_build_config(old).get('ORIGIN') and not apk_build_config(old).get('HOME_URL'))
+                check('unpaired published baseline naturally shows Connect', not before and 'ConnectActivity' in top())
+                shell('am', 'force-stop', 'ai.wizards.os')
+                app_uid = re.search(r'(?:userId|appId)=(\d+)', shell('dumpsys', 'package', 'ai.wizards.os')).group(1)
+                fixture = ET.Element('map'); ET.SubElement(fixture, 'string', name='origin').text = config['origin']
+                local_pref = out / 'synthetic-wizard-server.xml'
+                local_pref.write_bytes(ET.tostring(fixture, encoding='utf-8', xml_declaration=True))
+                marker = 'SYNTHETIC-ONLY signed-upgrade retained data fixture\n'
+                local_marker = out / 'synthetic-upgrade-marker.txt'; local_marker.write_text(marker)
+                shell('mkdir', '-p', '/data/user/0/ai.wizards.os/shared_prefs', '/data/user/0/ai.wizards.os/files')
+                adb_run('push', local_pref, pref_path); adb_run('push', local_marker, marker_path)
+                shell('chown', '-R', app_uid + ':' + app_uid, '/data/user/0/ai.wizards.os/shared_prefs', '/data/user/0/ai.wizards.os/files')
+                shell('chmod', '600', pref_path, marker_path)
+                shell('restorecon', '-RF', '/data/user/0/ai.wizards.os/shared_prefs', '/data/user/0/ai.wizards.os/files')
+                shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
+                before = shell('cat', pref_path).strip()
+                check('synthetic paired baseline naturally launches without Connect',
+                      'ai.wizards.os/.MainActivity' in top() and 'ConnectActivity' not in top())
+                check('synthetic paired baseline reads the configured origin',
+                      {e.attrib.get('name'): e.text for e in ET.fromstring(before)}.get('origin') == config['origin'])
             if upgrade_only and config.get('baseline_origin_mode') == 'empty-default-recovery':
                 check('current generic baseline has no baked origin', not apk_build_config(old).get('ORIGIN'))
                 check('current baseline naturally opens Connect without stored origin', not before and 'ConnectActivity' in top())
@@ -181,6 +208,8 @@ def main():
             adb_run('install', '-r', owner_apk)
             immediate = shell('if test -e ' + pref_path + '; then cat ' + pref_path + '; fi').strip()
             check('install preserves the exact pre-launch origin preferences', immediate == before)
+            if synthetic_pairing:
+                check('synthetic app data marker survives in-place update', shell('cat', marker_path) == marker)
             new_dump = shell('dumpsys', 'package', 'ai.wizards.os')
             check('published release upgrades in place with same UID', bool(re.search(r'(?:userId|appId)=' + old_uid + r'\b', new_dump)) and first in new_dump)
             check('notification grant preserved', 'android.permission.POST_NOTIFICATIONS: granted=true' in new_dump)
@@ -213,6 +242,8 @@ def main():
                        'upgrade_network': 'offline, deliberately no owner traffic', 'published': False,
                        'pre_pref_baseline': config.get('pre_pref_baseline', False),
                        'upgrade_only': upgrade_only, 'host': 'forum' if FORUM else 'thales',
+                       'synthetic_pairing_fixture': config.get('baseline_origin_mode') == 'synthetic-fixture-paired',
+                       'authenticated_owner_proof': False,
                        'baseline_origin_mode': config.get('baseline_origin_mode', 'baked-preference-migration'),
                        'old_sha256': hashlib.sha256(old.read_bytes()).hexdigest(),
                        'new_sha256': hashlib.sha256(owner_apk.read_bytes()).hexdigest()}

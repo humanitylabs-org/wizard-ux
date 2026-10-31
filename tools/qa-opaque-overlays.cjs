@@ -11,7 +11,7 @@ const {chromium} = require('playwright');
 const root = path.resolve(process.env.QA_WEB_DIR || path.join(__dirname, '..'));
 const read = f => fs.readFileSync(path.join(root, 'web', f), 'utf8');
 const skins = ['nebula', 'grove', 'tide', 'ember', 'signal'];
-const phoneCSS = ['core/base.css', 'styles.css', 'core/chats.css', 'core/chat-power.css', 'core/desks.css', 'core/tour.css', 'core/polish.css', 'core/update-banner.css', 'core/home-surfaces.css', 'core/home-screen-apps.css', 'core/scheduled-reminders.css', 'core/app-route.css', 'core/share-wizard.css', 'core/sel-menu.css', 'core/skins.css'];
+const phoneCSS = ['core/base.css', 'styles.css', 'core/chats.css', 'core/chat-power.css', 'core/desks.css', 'core/tour.css', 'core/polish.css', 'core/update-banner.css', 'core/home-surfaces.css', 'core/home-screen-apps.css', 'core/scheduled-reminders.css', 'core/app-route.css', 'core/attach-chip.css', 'core/share-wizard.css', 'core/sel-menu.css', 'core/skins.css'];
 const groups = {
  phone: phoneCSS,
  desktop: ['core/base.css', 'core/chats.css', 'desktop/desktop.css', 'core/update-banner.css', 'core/skins.css'],
@@ -30,7 +30,12 @@ const cases = [
  {group:'phone',name:'corner-timer',cls:'timer',wrap:'device orb-corner'},
  {group:'phone',name:'dock',cls:'dock',wrap:'device'},
  {group:'phone',name:'scrub-label',cls:'sc-label',wrap:'scrub'},
- {group:'phone',name:'share-wizard',cls:'dv-sheet',wrap:'wz-share'},
+ ...[
+  ['share-wizard','dv-sheet'],['share-compose','dv-compose'],['share-destination','dv-dest'],
+  ['share-agent-row','dv-row dv-agent'],['share-chat-row','dv-row dv-chat'],
+  ['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],
+ ].map(([name,cls])=>({group:'phone',name,cls,wrap:'wz-share dv-wrap'})),
+ {group:'phone',name:'share-option',tag:'button',wrap:'wz-share dv-wrap',middle:'dv-picker'},
  {group:'phone',name:'message-popover',cls:'ch-sheet-b',wrap:'ch-mpop'},
  {group:'phone',name:'reminder-footer',cls:'',tag:'footer',wrap:'boom-card'},
  {group:'phone',name:'tour-step-three',cls:'tr-copy',wrap:'tour',attrs:'data-step="3"'},
@@ -50,7 +55,7 @@ function html(test, skin, hosted) {
  const css = [...new Set(['kit/wizard-tokens.css',...groups[test.group]])].map(read).join('\n');
  const tag=test.tag||'section';
  const panel=`<${tag} id="${test.id||'qa-panel'}" class="${test.cls||''}" data-qa-panel><strong>Readable ${test.name}</strong><p>Nothing behind this panel should show through.</p></${tag}>`;
- const wrap=`<div ${test.wrapId?`id="${test.wrapId}"`:''} class="${test.wrap||''}" ${test.attrs||''}>${panel}</div>`;
+ const wrap=`<div ${test.wrapId?`id="${test.wrapId}"`:''} class="${test.wrap||''}" ${test.attrs||''}>${test.middle?`<div class="${test.middle}" style="position:absolute;inset:0;margin:0;max-height:none;overflow:visible">${panel}</div>`:panel}</div>`;
  return `<!doctype html><html data-skin="${skin}" data-shell="${test.group==='desktop'?'desktop':'phone'}" class="${hosted?'wz-hosted':''}"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><style>
  * {animation:none!important;transition:none!important;caret-color:transparent!important}
  html,body {margin:0;width:390px;height:844px;overflow:hidden}
@@ -75,7 +80,7 @@ async function realShell(browser, results) {
    const ext=path.extname(f);const types={'.css':'text/css','.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'};
    return r.fulfill({status:200,contentType:types[ext]||'application/octet-stream',body:fs.readFileSync(f)});
   }
-  const body=/\/sessions$/.test(u.pathname)?{data:[],has_more:false}:{};
+  const body=/\/sessions$/.test(u.pathname)?{data:[],has_more:false}:u.pathname==='/wizard/v1/agents'?{agents:[{id:'synthetic-main',label:'Synthetic',is_default:true,status:'running'},{id:'synthetic-private',label:'Synthetic Private',privacy:'private',status:'running'}]}:{};
   return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
  await ctx.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour','done')});
@@ -83,22 +88,30 @@ async function realShell(browser, results) {
  await page.goto('http://opaque.test/wizard-os-home/',{waitUntil:'load'});
  await page.waitForFunction(()=>window.__wos&&window.WosSkin,{timeout:30000});
  await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important} canvas{visibility:hidden!important}'});
- for(const skin of skins)for(const hosted of [true,false])for(const name of ['settings','overview','link-menu']) {
+ for(const skin of skins)for(const hosted of [true,false])for(const name of ['settings','overview','link-menu','share-sheet','share-picker']) {
   await page.evaluate(({skin,hosted,name})=>{
    document.querySelectorAll('[data-qa-hide]').forEach(e=>{e.style.removeProperty('visibility');e.removeAttribute('data-qa-hide')});
    document.querySelector('#qa-real-behind')?.remove();
    document.querySelector('.wiz-linkmenu')?.remove();
    __wos.closeSheets();__wos.closeOverview();
+   WizShareWizard.back();WizShareWizard.back();
    WosSkin.set(skin);document.documentElement.classList.toggle('wz-hosted',hosted);
    if(name==='settings')__wos.openSheet('settings');
    else if(name==='overview')__wos.openOverview();
-   else {
+   else if(name.startsWith('share-')) {
+    WizShareWizard.open({text:'Synthetic quoted message',from:'Synthetic fixture',items:[{name:'synthetic.pdf',mime:'application/pdf',bytes:42}]});
+   } else {
     let a=document.querySelector('#qa-real-link');if(!a){a=document.createElement('a');a.id='qa-real-link';a.className='bub';a.href='https://example.org/';a.textContent='Test link';(document.querySelector('#track')||document.body).appendChild(a)}
     a.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:100,clientY:200}));
    }
   },{skin,hosted,name});
-  const sel={settings:'#settings.open',overview:'#overview.open','link-menu':'.wiz-linkmenu'}[name];
+  if(name==='share-picker')await page.locator('.dv-agent').click();
+  const sel={settings:'#settings.open',overview:'#overview.open','link-menu':'.wiz-linkmenu','share-sheet':'.wz-share .dv-sheet','share-picker':'.wz-share .dv-picker'}[name];
   const panel=page.locator(sel);await panel.waitFor({state:'visible'});
+  if(name.startsWith('share-')&&['nebula','grove'].includes(skin)&&hosted&&process.env.QA_SHOTS) {
+   fs.mkdirSync(process.env.QA_SHOTS,{recursive:true});
+   await page.screenshot({path:path.join(process.env.QA_SHOTS,`in-shell-${skin}-${name}.png`)});
+  }
   await panel.evaluate((e,loud)=>{
    // Hide other shell content, never the panel's ancestors. The controlled backdrop
    // is its immediately preceding sibling at the same stacking level.
@@ -112,7 +125,7 @@ async function realShell(browser, results) {
   const inset=Math.min(32,b.height/5);
   const clip={x:b.x+32,y:b.y+inset,width:b.width-64,height:b.height-inset*2};
   const over=await page.screenshot({clip});
-  if(skin==='nebula'&&hosted&&process.env.QA_SHOTS){fs.mkdirSync(process.env.QA_SHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.QA_SHOTS,`${process.env.QA_PHASE||'after'}-real-${name}.png`)})}
+  if(['nebula','grove'].includes(skin)&&hosted&&process.env.QA_SHOTS){fs.mkdirSync(process.env.QA_SHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.QA_SHOTS,`${process.env.QA_PHASE||'after'}-real-${skin}-${name}.png`)})}
   await page.evaluate(()=>document.querySelector('#qa-real-behind').style.visibility='hidden');
   const bare=await page.screenshot({clip});
   results.push({skin,hosted,group:'real-shell',panel:name,opaque:over.equals(bare)});

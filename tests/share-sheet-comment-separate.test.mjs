@@ -39,6 +39,15 @@ test('James: outside tap closes the top layer like Back; picker is opaque and sk
   assert.match(css,/\.dv-picker \{[^}]*linear-gradient\(var\(--dv-raised\),var\(--dv-raised\)\), linear-gradient\(var\(--dv-base\),var\(--dv-base\)\) black/s); // opaque backstop without literal colours (style ratchet)
   assert.match(css,/var\(--wz-base/); assert.match(css,/var\(--wz-accent/);
 });
+test('James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options', () => {
+  const css=read('web/core/share-wizard.css'), guard=read('tools/qa-opaque-overlays.cjs');
+  assert.match(css,/--dv-base: var\(--wz-panel/);
+  for (const cls of ['dv-row','dv-picker button']) {
+    const block=css.slice(css.indexOf('.wz-share .'+cls+' {')).split('}')[0];
+    assert.doesNotMatch(block,/background:transparent|backdrop-filter/);
+  }
+  for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option']) assert.ok(guard.includes(name));
+});
 test('James: real Chats outbox receives explicit second-agent id for NEW and EXISTING chats, without inheriting another window route/model', async () => {
   const src = read('web/core/chats.js'), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);
   for (const [sid,agent] of [['__new__','synthetic-private'],['existing-synthetic','synthetic-private'],['__new__','']]) {

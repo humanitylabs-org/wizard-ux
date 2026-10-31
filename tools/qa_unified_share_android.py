@@ -314,7 +314,8 @@ def require_build(returncode, build, cfg, junit, failures):
 
 def require_full_native_fix_junit(root, junit):
     """A product storage change requires a fresh complete suite plus the added custody regressions."""
-    if junit != dict(tests=384, failures=0, errors=0, skipped=0):
+    # Live c36f0748 adds eight tests; all 392 @Test methods remain required.
+    if junit != dict(tests=392, failures=0, errors=0, skipped=0):
         raise RuntimeError('Full native-fix JUnit mismatch: ' + json.dumps(junit, sort_keys=True))
     path = root / 'source/android/app/build/test-results/testDebugUnitTest/TEST-ai.wizards.os.share.UnifiedShareStoreTest.xml'
     tree = ET.parse(path).getroot()

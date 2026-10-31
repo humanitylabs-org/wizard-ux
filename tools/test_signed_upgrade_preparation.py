@@ -52,6 +52,13 @@ class SignedUpgradePreparationTest(unittest.TestCase):
             self.assertIn(text, source)
         self.assertNotIn("shell('echo", source)
 
+    def test_synthetic_paired_upgrade_is_explicit_and_retains_real_baseline_checks(self):
+        source = Path(qa.__file__).read_text()
+        for text in ['synthetic-fixture-paired', 'synthetic app data marker survives in-place update',
+                     'unpaired published baseline naturally shows Connect', 'authenticated_owner_proof',
+                     'published generic baseline has empty encoded defaults']:
+            self.assertIn(text, source)
+
     def test_vps_refused_before_any_subprocess(self):
         with patch.object(qa.sys, 'platform', 'linux'), patch.object(qa, 'FORUM', False), patch.object(qa.subprocess, 'run') as run:
             with self.assertRaisesRegex(SystemExit, 'Trusted'):

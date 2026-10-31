@@ -440,7 +440,7 @@ class ControllerTest(unittest.TestCase):
             self.assertEqual(len(names), 6)
             xml = '<testsuite>' + ''.join('<testcase name="%s"/>' % n for n in names) + '</testsuite>'
             path.write_text(xml)
-            good = dict(tests=384, failures=0, errors=0, skipped=0)
+            good = dict(tests=392, failures=0, errors=0, skipped=0)
             runner.require_full_native_fix_junit(root, good)
             for counts in (dict(good, tests=381), dict(good, skipped=1), dict(good, failures=1), dict(good, errors=1)):
                 with self.assertRaisesRegex(RuntimeError, 'Full native-fix JUnit mismatch'):
