@@ -74,10 +74,8 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
       }
       for (const skin of ['nebula', 'signal']) {
         await recover();
-        await page.evaluate(() => (window.__wos || window.__wux).openSettings('look'));
-        await page.locator('[data-skinfamily="wizard"]').click();
-        await page.locator(`[data-skinpick="${skin}"]`).click();
-        await page.waitForFunction(skin => document.documentElement.dataset.skin === skin && document.querySelector(`[data-skinpick="${skin}"]`)?.getAttribute('aria-pressed') === 'true', skin);
+        await page.evaluate(skin => WosSkin.set(skin), skin); // same live skin switch the existing status QA uses
+        await page.waitForFunction(skin => document.documentElement.dataset.skin === skin, skin);
         await page.evaluate(() => window.__wos ? __wos.closeSheets() : __wux.closeSettings());
         await page.waitForTimeout(700); // finite shell/skin transitions must settle before evidence
         await fail();
