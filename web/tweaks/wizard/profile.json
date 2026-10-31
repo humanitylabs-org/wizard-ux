@@ -5,8 +5,7 @@
   "tweaks": [
     "wizard/two-orbs",
     "wizard/app-borders",
-    "wizard/unified-inbox",
-    "wizard/machines-home"
+    "wizard/unified-inbox"
   ],
   "off": [
     "wizard/two-orbs",
