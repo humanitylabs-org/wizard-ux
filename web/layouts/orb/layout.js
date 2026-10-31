@@ -36,8 +36,12 @@
  * (core/skin-host.js); no shell internals, no second composer. */
 import { STYLES, RETIRED, renderer, mix } from './styles.js';
 import { assignKeys, keyOf, isLeftAlt, HOLD_MS } from './keys.js';
+import { COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList } from './shared.js';
+import phone from './phone.js';
 
 export default function setup(api) {
+  // The phone wears the same scene on Home only (phone.js: same look, sky and satellites; the rest stays the phone's).
+  if (api.env.shell === 'phone') return phone(api);
   if (api.env.shell !== 'desktop') return () => {};
   const doc = document, root = doc.documentElement;
   const HOLD_MS = 420, STRIP = 46;
@@ -97,27 +101,8 @@ export default function setup(api) {
   scene.append(sky, field, orbWrap, caption, keyRow, dock, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
-  /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended ---------- */
-  const probe = el('canvas').getContext('2d');
-  const norm = c => { if (!c || !probe) return ''; probe.fillStyle = 'black'; probe.fillStyle = c; const v = probe.fillStyle; return /^#[0-9a-f]{6}$/i.test(v) ? v : ''; };
-  const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
-  // Seventeen colours: sixteen from the tweak's tokens (--ob-look-<id>: four colours each) and the skin's own accent.
-  const COLOURS = [['nebula', 'Nebula'], ['ember', 'Ember'], ['tide', 'Tide'], ['gold', 'Gold'], ['mono', 'Mono'], ['emerald', 'Emerald'], ['rose', 'Rose'], ['arctic', 'Arctic'],
-    ['marble', 'Marble'], ['obsidian', 'Obsidian'], ['bronze', 'Bronze'], ['royal', 'Royal'], ['crimson', 'Crimson'], ['cyber', 'Cyber'], ['sunset', 'Sunset'], ['ocean', 'Ocean'], ['skin', 'Skin accent']];
-  const pals = new Map();
-  function palette(id) {
-    const now = performance.now(), hit = pals.get(id);
-    if (hit && hit.ok && now - hit.at < 5000) return hit;
-    const white = norm(cssVar('--ob-white')) || norm('white'), core = norm(cssVar('--ob-core')) || norm('black');
-    let list = id === 'skin' ? [] : cssVar('--ob-look-' + id).split(',').map(s => norm(s.trim())).filter(Boolean);
-    const acc = norm(cssVar('--wz-accent')) || norm(cssVar('--ob-v1')) || norm('slateblue');
-    // the skin's accent, in four shades of itself (deep, light, pale, warm)
-    if (id === 'skin') list = [acc, mix(acc, white, .35), mix(acc, white, .65), mix(acc, norm(cssVar('--ob-amber')) || white, .3)];
-    const ok = list.length >= 4 && !!cssVar('--ob-look-nebula');   // tokens loaded
-    const p = { at: now, ok, c: list.length >= 4 ? list.slice(0, 4) : [acc, acc, acc, acc], white, core, face: norm(cssVar('--ob-face')) || white };
-    pals.set(id, p); return p;
-  }
-  const A = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+  /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended (shared.js) ---------- */
+  const palette = palettes(doc);
 
   /* ---------- voice ---------- */
   const modeOf = v => !v || v.state === 'idle' ? 'idle' : v.state === 'think' ? 'thinking' : v.state === 'paused' ? 'paused' : 'listening';
@@ -189,12 +174,8 @@ export default function setup(api) {
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
 
   /* ---------- sky + orb ---------- */
-  // Kept per device: style + colour. The v3 single "look" (nebula / ember / tide / oracle) maps onto them once.
-  const has = (L, id) => L.some(l => l[0] === id);
-  const legacy = api.storage.get('look');
-  let styleId = api.storage.get('style'), colourId = api.storage.get('colour');
-  if (!has(STYLES, styleId)) styleId = legacy === 'oracle' ? 'oracle' : RETIRED.includes(styleId) ? 'plasma' : 'glass';   // v7 retired five styles
-  if (!has(COLOURS, colourId)) colourId = legacy === 'oracle' ? 'gold' : has(COLOURS, legacy) ? legacy : 'nebula';
+  // Kept per device: style + colour (shared.js lookOf: the same stored choice the phone wears).
+  let { styleId, colourId } = lookOf(api);
   const sx = sky.getContext('2d'), ox = orbCv.getContext('2d');
   const mk = n => { const c = el('canvas'); c.width = c.height = n; return c; };
   let W = 0, H = 0, DPR = 1, O = 300, stars = [], drawOrb = renderer(styleId, mk);
@@ -208,21 +189,11 @@ export default function setup(api) {
     O = Math.round(Math.min(W * .34, H * (H < 800 ? .32 : .36), 300));
     scene.style.setProperty('--orb', O + 'px');
     orbCv.width = orbCv.height = Math.round(O * 2 * DPR);
-    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    stars = Array.from({ length: Math.round(W * H / 5200) }, () => ({ x: rnd() * W, y: rnd() * H, r: rnd() * 1.1 + .2, p: rnd() * 6.3, s: .3 + rnd() }));
+    stars = starsFor(W, H);
     aim(); paintApps(); placeSats(0);
     return true;
   }
-  function drawSky(t, lv) {
-    const P = palette(colourId), c = P.c, gx = cx || W / 2, cy = H * .46;
-    sx.clearRect(0, 0, W, H);
-    const g = sx.createRadialGradient(gx, cy, 0, gx, cy, Math.max(W, H) * .7);
-    g.addColorStop(0, A(c[0], .16 + lv * .1)); g.addColorStop(.35, A(c[1], .05)); g.addColorStop(1, 'transparent');
-    sx.fillStyle = g; sx.fillRect(0, 0, W, H);
-    sx.fillStyle = P.white;
-    for (const s of stars) { sx.globalAlpha = .25 + .45 * (.5 + .5 * Math.sin(t * s.s + s.p)); sx.beginPath(); sx.arc(s.x, s.y, s.r, 0, 7); sx.fill(); }
-    sx.globalAlpha = 1;
-  }
+  function drawSky(t, lv) { paintSky(sx, { W, H, gx: cx || W / 2, cy: H * .46, t, lv, P: palette(colourId), stars }); }
   const frameOf = (t, lv, state, fl, blink, col = colourId, cmd = 0) => ({ t, lv, state, fl, blink, cmd, P: palette(col) });
 
   /* ---------- the look picker: Style × Colour ---------- */
@@ -339,11 +310,7 @@ export default function setup(api) {
    * and still running) and (b) regular apps with an unread count float. Agents, connectors, agent apps, system and
    * in-development apps never float for a count (the shell's own kinds: core/app-kinds.js); everything stays one
    * search away (the search pill / ⌥O, ⌥Space, a command, the ⌥ letters); no All apps satellite. Nothing running and nothing new: just the orb. */
-  const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
-  function orbitApps() {
-    const all = api.apps.list(), run = new Map(api.panel.running().map(r => [r.id, r]));
-    return all.filter(a => run.has(a.id) ? !a.agent && !a.connector : regular(a) && (badgeMap[a.id] || 0) > 0).map(a => ({ ...a, run: run.get(a.id) || null }));
-  }
+  const orbitApps = () => orbitList(api, badgeMap);   // shared.js: the one list the phone floats too
   let satScale = 1;
   function fits(n) {
     if (!W) return { cap: n, scale: 1 };

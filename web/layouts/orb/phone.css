@@ -1,0 +1,72 @@
+/* Orbs view on the phone (layouts/orb/phone.js), loaded by that script only. Scoped to the phone shell wearing the Orb
+ * layout while the scene is mounted (html[data-orb-phone]); the desktop and Desks never see a rule of it. The colours
+ * are the wearing tweak's skin-layer tokens (--ob-*: miguel/orb-shell tweak.css). */
+
+/* ---------- Home: the night sky under Home's own top (which Wizard, Desks | Orbs, the fuel gauge, the gear) ---------- */
+/* Behind everything on Home (z-index -1 in the desk strip's own stacking context), so Home's top keeps its exact
+ * places; the stock Home markup is never re-positioned. */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sky {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: -1; pointer-events: none; background: var(--ob-sky);
+}
+/* ---------- the orb and its satellites: over the desks, under the dock and every sheet ---------- */
+/* No stacking context of their own (no z-index, opacity or transform on the layer and the field), so each satellite
+ * sits in front of the orb or behind it by its depth. */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer,
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-field { position: absolute; inset: 0; pointer-events: none; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb {
+  --obp-orb: 240px;
+  position: absolute; left: 50%; top: var(--obp-cy, 50%); width: var(--obp-orb); height: var(--obp-orb);
+  margin: calc(var(--obp-orb) / -2) 0 0 calc(var(--obp-orb) / -2); z-index: 5; transform-origin: 50% 50%; visibility: hidden; pointer-events: none;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb:is([data-show="on"], [data-show="fly"]) { visibility: visible; }
+/* in flight it passes over the dock, onto (or out of) the dock orb */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb[data-show="fly"] { z-index: 51; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbc { width: 100%; height: 100%; display: block; transition: transform 180ms ease; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb.is-pressed .obp-orbc { transform: scale(.96); }
+/* The hit area is the sphere itself (about 60% of the canvas), never its halo. */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbbtn {
+  position: absolute; left: 50%; top: 50%; width: 60%; height: 60%; transform: translate(-50%, -50%); padding: 0; border: 0; border-radius: 50%;
+  background: none; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb:not([data-show="on"]) .obp-orbbtn { pointer-events: none; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbbtn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
+
+/* ---------- satellites: each app's own mark, clean-cut on the sky (positions, depth and drift from phone.js) ---------- */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat {
+  position: absolute; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; padding: 0; border: 0; border-radius: 11px;
+  display: grid; place-items: center; z-index: 4; will-change: transform; pointer-events: auto; background: none; color: inherit; -webkit-tap-highlight-color: transparent;
+  transition: visibility 0s;
+}
+/* off Home they fade out with it (their depth opacity is inline; this wins while hidden) */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer:not(.is-home) .obp-sat { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: opacity 250ms ease, visibility 0s linear 250ms; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-face {
+  width: 36px; height: 36px; display: grid; place-items: center; pointer-events: none;
+  filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 10px color-mix(in srgb, var(--c) 35%, transparent));
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .sgi { width: 40px; height: 40px; flex: none; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 82%, var(--ob-white)) !important; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-logo { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 22%; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-badge {
+  position: absolute; top: -4px; right: -6px; min-width: 17px; height: 17px; padding: 0 5px; box-sizing: border-box; border-radius: 99px;
+  display: grid; place-items: center; pointer-events: none; z-index: 1;
+  background: var(--ob-amber); color: var(--ob-core); font: 700 calc(var(--wz-text-sm, 0.8125rem) * .72) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--ob-sky);
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-badge[hidden] { display: none !important; }
+/* open on a desk: a tiny dot under the mark (the desktop's "running out of sight") */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-run {
+  position: absolute; left: 50%; bottom: -7px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--ob-ink2); opacity: 0;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat[data-run="hidden"] .ob-sat-run,
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat[data-run="open"] .ob-sat-run { opacity: 1; }
+
+/* ---------- the dock orb: the same Style × Colour, drawn in the stock orb's own box; the stock drawing steps aside ---------- */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #orbWrap > :is(#orb, #orbFallback, .orb-halo, .orb-ring) { opacity: 0 !important; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-dockc {
+  position: absolute; inset: -38%; width: 176%; height: 176%; z-index: 1; pointer-events: none; display: none;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-dockc[data-show="on"] { display: block; }
+/* while the orb is up in the middle of Home the dock's orb slot is empty (no sigil either) */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone][data-orb-at="centre"] #orbWrap .orb-app { opacity: 0 !important; }
+/* back on Home: they fade in with the scene (from nothing to their depth) while the orb grows into place */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home .obp-sat { animation: obp-in 250ms ease; }
+@keyframes obp-in { from { opacity: 0; } }
