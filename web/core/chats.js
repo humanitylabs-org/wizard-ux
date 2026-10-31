@@ -1810,11 +1810,20 @@ window.WizCore.chats = function createChats(H) {
       const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
       for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
     }
-    return s.trimEnd();
+    // A `MEDIA:/abs/path` line is the agent sending a picture. The Agent Service turns it into the thumbnail when the
+    // transcript lands; the live stream still carries the raw line, so leave it out (also while it is half typed).
+    s = s.replace(STREAM_MEDIA, '');
+    const tail = s.slice(s.lastIndexOf('\n') + 1).trimStart();
+    if (tail && (tail.startsWith('MEDIA:') || 'MEDIA:'.startsWith(tail))) s = s.slice(0, s.lastIndexOf('\n') + 1);
+    return s.replace(/\n{3,}/g, '\n\n').trimEnd();
   };
+  const STREAM_MEDIA = /^[ \t]*MEDIA:[ \t]*\/[^\r\n]*$/gm;
+  // The same picture as the transcript shows it: a positioned thumbnail, or the line saying it could not be shown.
+  const SHOWN_MEDIA = /!\[[^\]\n]*\]\(\/wizard\/attachments\/[0-9a-f]{32}(?: "[^"\n]*")?\)|\[file: [^\]\n]* unavailable\]/g;
   // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
-  const bare = v => streamAnswer(v).replace(/\s+/g, '');
+  // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
+  const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
   const streamShown = (st, turns) => {
     const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
     if (!ans || !got.endsWith(ans)) return false;
