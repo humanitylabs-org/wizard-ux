@@ -153,21 +153,18 @@ test('App borders migrates stored framed exactly once, leaves everyone else bord
     if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
   }
 });
-test('own recipes expose all installed tweaks, use published defaults and isolate builtin choices', async () => {
-  const f = wizardExperience();
-  f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
-  f.window.WosSkin.families.push({id:'mizel',name:'Mizel',tweaks:'miguel'});
-  await f.E.refresh(); const defaults = await f.E.defaults();
-  assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
-  assert.equal(defaults['miguel/model-pills'], false, 'a new skin starts from what runs now');
-  await f.E.chooseAuthor('miguel'); assert.equal((await f.E.defaults())['miguel/model-pills'], true);
-  await f.E.chooseAuthor('miguel');
-  const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
-  f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
-  await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
-  assert.deepEqual(f.active(),['miguel/model-pills']);
-  await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
-  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+test('Select all turns every shown tweak on and survives a reload; again turns them all off; no own skin can override', async () => {
+  let f = wizardExperience(); await f.E.refresh();
+  const shown = () => f.E.state.tweaks.filter(t => !t.builtin);
+  await f.E.setAll(); assert.ok(shown().every(t => t.on), 'every switch is on');
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  for (const g of cat.oneOf || []) assert.ok(f.all().filter(id => g.includes(id)).length <= 1, 'a replacement group still loads one member');
+  const on = f.all().slice().sort();
+  f.window.WosMySkin = { active: { id: 'old', tweaks: {} }, update() { throw new Error('never written'); } };
+  f = wizardExperience(f.storage); f.window.WosMySkin = { active: { id: 'old', tweaks: {} } }; await f.E.refresh();
+  assert.deepEqual(f.all().slice().sort(), on, 'reload keeps every choice; a stale own-skin object changes nothing');
+  await f.E.setAll(); assert.ok(shown().every(t => !t.on), 'tapped again with all on: all off');
+  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), []);
 });
 
 test('installed list warms base profiles so picking Mizel does not wait for another network request', async () => {
@@ -316,11 +313,6 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
   const saved = new Map([['wos.skin-tweaks.v1', JSON.stringify({version:1, off:{miguel:['miguel/unified-inbox']}})]]);
   let f = wizardExperience(saved); await f.E.refresh();
   assert.ok(!f.all().includes('wizard/unified-inbox'), 'deliberate legacy off is not overwritten');
-  f = wizardExperience();
-  const skin = {tweaks:{'miguel/unified-inbox':false}};
-  f.window.WosMySkin={active:skin, update(v){Object.assign(skin.tweaks,v.tweaks);}};
-  await f.E.refresh(); assert.ok(!f.all().includes('wizard/unified-inbox'), 'old recipe off survives alias');
-  await f.E.toggle('wizard/unified-inbox'); assert.ok(f.all().includes('wizard/unified-inbox'));
 });
 
 

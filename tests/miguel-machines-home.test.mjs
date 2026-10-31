@@ -399,15 +399,10 @@ test('sixteenth review: an unavailable group reaches its accounts; a saved or ag
   }
 });
 
-test('seventeenth review: a new My skin shows one switch per replacement group and never saves the hidden member off', () => {
+test('seventeenth review: Settings shows one switch per replacement group (own skins retired)', () => {
   assert.match(read('web/core/experience.js'), /groups: \(\) => \(catalog\?\.oneOf \|\| \[\]\)\.map\(g => \[\.\.\.g\]\),/);
-  const src = read('web/core/settings.js');
-  assert.match(src, /for \(const g of window\.WosExperience\.groups\?\.\(\) \|\| \[\]\) \{/);
-  assert.match(src, /const pick = present\.find\(id => map\[id\]\) \|\| present\[0\];/);
-  assert.match(src, /map = Object\.fromEntries\(Object\.entries\(map\)\.filter\(\(\[id\]\) => id === pick \|\| !present\.includes\(id\)\)\);/);
-  assert.match(src, /items = items\.filter\(t => t\.id === pick \|\| !present\.includes\(t\.id\)\);/);
+  assert.match(read('web/core/experience.js'), /shownInGroup\(id\)/);
 });
-
 test('eighteenth review: machines from a saved or failed-read snapshot are last readings, not online', () => {
   for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
