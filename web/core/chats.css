@@ -683,6 +683,9 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* While searching, Archive is the last section on every skin and phone/desktop shell (the repeated class outranks
    the skins' own Archive-on-top rules). */
 .ch-list.ch-list.ch-list .ch-sec.ch-sec-last[data-sec] { order: 9; position: static; margin-top: 0; }
+/* The completed search line follows Archive even in status/skin flex lists. Busy progress keeps its existing placement;
+   error and titles-only footers have no data-chbs attribute, but belong below the results too. */
+.ch-list .ch-bodysearch:not(.busy) { order: 10; }
 
 /* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
 .ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }

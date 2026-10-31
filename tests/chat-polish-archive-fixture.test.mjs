@@ -1,0 +1,80 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+// Never import qa-chat-polish.cjs: that launches a browser. Execute only its pure, synthetic HTTP fixture.
+const qa = fs.readFileSync(new URL('../qa-chat-polish.cjs', import.meta.url), 'utf8');
+function fixture() {
+  const start = qa.indexOf('/* archive parity fixture start */'), end = qa.indexOf('/* archive parity fixture end */');
+  assert.ok(start >= 0 && end > start, 'Archive QA must have a routed synthetic fixture, not just the qa_private main-index sentinel');
+  const ctx = vm.createContext({ URL, Date, NOW: 1800000000000 });
+  vm.runInContext(qa.slice(start, end) + '\nthis.api = { agents: ARCHIVE_AGENTS, reply: archiveReply };', ctx);
+  return ctx.api;
+}
+const url = q => new URL('https://wizard.test/wizard/hermes/api/sessions' + q);
+test('Archive fixture honors main, host-profile, container and restricted agent list/index/body scope', () => {
+  const { agents, reply } = fixture();
+  assert.deepEqual(Array.from(agents, a => a.kind), ['main', 'host-profile', 'container', 'restricted']);
+  assert.equal(agents[3].privacy, 'private');
+  assert.equal(agents[1].runtime.kind, 'host-profile');
+  assert.equal(agents[2].runtime.kind, 'container');
+  assert.equal(agents[3].permissions.network, false);
+  for (const agent of agents) {
+    const scope = agent.id === 'hermes' ? '' : agent.id;
+    const query = scope ? `&agent=${scope}` : '';
+    const listed = reply(url(`?view=list&window=archive-50${query}`));
+    assert.equal(listed.status, 200);
+    assert.equal(listed.body.archive_total, 1);
+    assert.equal(listed.body.archive_returned, 1);
+    assert.equal(listed.body.has_more, false);
+    assert.ok(listed.body.data.every(r => r.agent === agent.id));
+    const first = reply(url(`?fields=slim${query}`)).body;
+    assert.equal(first.fields, 'slim');
+    assert.ok(first.build && first.snapshot && first.account_scope && first.archive_cursor);
+    assert.equal(first.data.length, 1);
+    const second = reply(url(`?fields=slim&cursor=${first.archive_cursor}${query}`)).body;
+    assert.equal(second.archive_cursor, null);
+    assert.ok(second.data[0].archived);
+    assert.ok(second.data.every(r => r.agent === agent.id));
+    const body = reply(url(`?mode=body&q=archive%20parity${query}`)).body;
+    assert.equal(body.mode, 'body');
+    assert.equal(body.search_total, 2);
+    assert.equal(body.partial, false);
+    assert.ok(body.data.every(r => r.agent === agent.id && r.snippet.includes('archive parity')));
+    assert.equal(reply(url(`?mode=body&q=missing${query}`)).body.search_total, 0);
+    const id = listed.body.data[0].id;
+    const detail = new URL(`https://wizard.test/wizard/hermes/api/sessions/${id}${scope ? '?agent=' + scope : ''}`);
+    assert.equal(reply(detail).body.session.id, id);
+    detail.pathname += '/messages';
+    assert.equal(reply(detail).body.data.length, 2);
+    detail.search = '?agent=nonexistent';
+    assert.equal(reply(detail).status, 404, 'unknown route must not receive main rows');
+  }
+  assert.equal(reply(url('?agent=nonexistent')).status, 404);
+  const restricted = reply(url('?agent=qa-restricted')).body.data[0];
+  assert.equal(reply(new URL(`https://wizard.test/wizard/hermes/api/sessions/${restricted.id}`)).status, 404, 'restricted detail cannot be read through main');
+});
+test('Archive browser checks drive the real shell route entry and inspect the focused Chats list on both shells', () => {
+  fixture();
+  const start = qa.indexOf('async function archiveRouteChecks('), end = qa.indexOf('/* archive route checks end */');
+  assert.ok(start >= 0 && end > start);
+  const checks = qa.slice(start, end);
+  assert.match(checks, /WizOpenAgentChats\(id\)/);
+  assert.match(checks, /w\.focus\?\.kind === 'agent'/);
+  assert.match(checks, /w\.focus\.key === id/);
+  assert.match(checks, /ARCHIVE_AGENTS/);
+  assert.match(checks, /\['obsidian', 'landscapes'\]/);
+  assert.match(checks, /\['day', 'status'\]/);
+  assert.match(checks, /getBoundingClientRect/);
+  assert.match(checks, /data-chbs="done"/);
+  assert.match(checks, /sections\.v1/);
+  assert.match(checks, /archiveFetch/);
+  assert.match(checks, /W\.archiveFetch\.length = 0/);
+  assert.match(checks, /W\.offline = false; W\.down = false; W\.voice = 'ok'/);
+  assert.match(checks, /const requestMark = W\.archiveFetch\.length/);
+  assert.match(checks, /W\.archiveFetch\.slice\(requestMark\)/);
+  assert.match(checks, /!scopedEvidence\.has\(agent\.id\)/);
+  assert.match(qa, /archiveRoutes \? \{ serviceWorkers: 'block' \} : \{\}/);
+  assert.match(qa, /await archiveRouteChecks\(b, false\)/);
+  assert.match(qa, /await archiveRouteChecks\(b, true\)/);
+});
