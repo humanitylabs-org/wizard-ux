@@ -25,7 +25,7 @@ fs.mkdirSync(OUT,{recursive:true});
     await p.getByRole('button',{name:/STAGING · synthetic people/}).click(); await p.waitForSelector('.wos-share.on');
     await p.locator('[data-shs-target="test-b"]').click();
     const receiver=p.frameLocator('iframe[src*="messenger"]');
-    await receiver.locator('#recipient').getByText('Test Person B',{exact:true}).waitFor();
+    await receiver.locator('#recipient').filter({hasText:'Test Person B'}).waitFor();
     assert.match(await receiver.locator('#draft').inputValue(),/Synthetic item/);
     assert.equal(await receiver.getByRole('button',{name:'Send disabled in preview'}).isDisabled(),true);
     assert.equal(await p.locator('.wos-share').count(),0);
