@@ -15,11 +15,13 @@
  *   v5 (Miguel, 31 Oct 2026), in thirds: LEFT the STOCK Chats list, docked for good (api.panel.dock: the same window,
  *   Ready / Working / Archive, its sort, search, pins, every tweak and every Chats key), full height under the bar in a
  *   softer glass; a handle on its edge (or ⌥\\) folds it to a slim strip with the Ready count. CENTRE the orb scene.
- *   RIGHT the content panel: a thread picked in the list (a click, ⌥↓) or an app (a satellite, All apps) slides in from
- *   the right over the orb, one thing at a time (a quiet ‹ goes back to the one before); its ✕ / Esc slides it away.
- *   Done, Snooze, a send or its ‹ close a thread's panel and put the keyboard back in the list. The Look picker sits at
- *   the bottom of the orb area, beside the list. The desks are untouched underneath: turning the
- *   Orb off brings them back exactly.
+ *   v6 (Miguel, 31 Oct 2026): THE ORB NEVER MOVES. It stays at the screen's centre; panels only cover the sides. A
+ *   thread picked in the list (a click, ⌥↓) opens in a column right beside the list (closing it folds it back into the
+ *   list); an app (a satellite, All apps) opens in the right third, one at a time. Both can be open together. An open
+ *   app's satellite stops drifting and pins between the orb and its panel, and an electric bolt in the orb's colour
+ *   runs orb → app → panel (a quieter one runs orb → chat column). Each panel's ‹ goes back to the one before, ✕ / Esc
+ *   closes it; Done, Snooze, a send or ‹ close the chat column and put the keyboard back in the list. The desks are
+ *   untouched underneath: turning the Orb off brings them back exactly.
  *
  * Motion runs only while the page is visible, at about 30 fps; reduced motion = still frames. Colours are skin-layer
  * tokens (--ob-*, the wearing tweak's tweak.css), read lazily. Everything goes through the layout API
@@ -140,8 +142,8 @@ export default function setup(api) {
   const sx = sky.getContext('2d'), ox = orbCv.getContext('2d');
   const mk = n => { const c = el('canvas'); c.width = c.height = n; return c; };
   let W = 0, H = 0, DPR = 1, O = 300, stars = [], drawOrb = renderer(styleId, mk);
-  // Where the scene's centre is: the middle of what the panel leaves free (eased while it slides).
-  let cx = 0, cxTarget = 0, free = 0, fit = 1;
+  // The orb never moves: the scene's centre is the screen's centre whatever is open (panels only cover the sides).
+  let cx = 0, fit = 1;
   function size() {
     const w = scene.clientWidth, h = scene.clientHeight; if (!w || !h) return false;
     if (w === W && h === H) return true;
@@ -152,7 +154,7 @@ export default function setup(api) {
     orbCv.width = orbCv.height = Math.round(O * 2 * DPR);
     let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     stars = Array.from({ length: Math.round(W * H / 5200) }, () => ({ x: rnd() * W, y: rnd() * H, r: rnd() * 1.1 + .2, p: rnd() * 6.3, s: .3 + rnd() }));
-    aim(true); placeSats(0);
+    aim(); placeSats(0);
     return true;
   }
   function drawSky(t, lv) {
@@ -267,20 +269,41 @@ export default function setup(api) {
     // the concept's two rings, apps alternating between them at even steps round the orb, all drifting the same slow
     // way: neighbours always sit on different rings and two apps never slide onto each other
     sats = items.map((it, i) => ({ ...it, a: i / items.length * Math.PI * 2 + .4, ring: i % 2 ? 1 : 1.32, speed: .035 }));
+    extra = null; pinExtra();
     placeSats(0);
   }
+  // An app opened that has no satellite (All apps, beyond the first ten): a satellite of its own while it is open.
+  let extra = null;
+  function pinExtra() {
+    const id = G.app?.id || null;
+    if (extra && extra.id !== id) { const gone = extra; extra = null; sats = sats.filter(s => s !== gone); gone.el.remove(); }
+    if (!id || sats.some(s => s.id === id)) return;
+    const a = api.apps.list().find(x => x.id === id); if (!a) return;
+    extra = { id, el: sat(a), a: 0, ring: 1, speed: 0, pk: 1 };
+    extra.el.classList.add('is-extra'); field.append(extra.el); sats.push(extra);
+  }
+  // An app open in the panel: its satellite stops drifting and pins between the orb and the panel (eased there and
+  // back); the bolts run orb → it → the panel's edge.
+  const smooth = v => v * v * (3 - 2 * v);
   function placeSats(dt) {
     if (!W) return;
-    const cy = H * .46;
+    const cy = H * .46, pinId = G.app ? G.app.id : null;
     for (const s of sats) {
       if (!reduced) s.a += s.speed * dt;
-      const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.5, fit);   // a narrow side: rounder orbits
-      const x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
+      const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.5, fit);
+      let x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
       const depth = Math.sin(s.a); // >0 in front of the orb, <0 behind it
-      const sc = (.78 + .22 * (depth + 1) / 2) * (fit < .6 ? .62 : 1);   // a narrow gap: smaller satellites
+      let sc = .78 + .22 * (depth + 1) / 2, op = .55 + .45 * (depth + 1) / 2;
+      const want = pinId && s.id === pinId ? 1 : 0;
+      s.pk = reduced ? want : (s.pk || 0) + (want - (s.pk || 0)) * Math.min(1, dt * 5);
+      if (s.pk < .002) s.pk = 0;
+      const k = smooth(Math.min(1, s.pk));
+      if (k > 0) { x += (G.pinX - x) * k; y += (cy - y) * k; sc += (1.1 - sc) * k; op += (1 - op) * k; }
       s.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
-      s.el.style.zIndex = depth > 0 ? 7 : 4;
-      s.el.style.opacity = (.55 + .45 * (depth + 1) / 2).toFixed(3);
+      s.el.style.zIndex = k > 0 ? 8 : depth > 0 ? 7 : 4;
+      s.el.style.opacity = op.toFixed(3);
+      s.el.classList.toggle('is-pinned', k > .5);
+      s.x = x; s.y = y; s.sc = sc;
     }
   }
 
@@ -306,34 +329,111 @@ export default function setup(api) {
 
   /* ---------- motion: one ~30 fps loop, only while the scene is in front and the page is visible ---------- */
   let running = false, lastT = 0, cancel = null, home = null, blinkAt = 3;
-  /* ---------- the panel: whatever opens slides in on the right; the scene moves to the middle of what is left ---------- */
-  let panelKind = null;
-  // The free space: right of the docked list (or its folded strip). The panel on the right covers it while it is open.
-  function aim(jump = false) {
-    const st = api.panel.state();
-    const left = st?.list ? Math.min(W * .5, st.list.width || 0) : folded ? STRIP : 0, right = 0;
-    free = Math.max(160, W - left - right); cxTarget = left + free / 2;
-    const wide = O * 2.9;   // the orb with its orbits
-    fit = Math.max(.34, Math.min(1, (free * .5 - 56) / (O * 1.65)));   // the orbits stay inside the free space
-    const k = free < wide ? Math.max(.42, Math.min(1, free / wide)) : 1;   // a narrow free side: the orb itself steps down
-    scene.dataset.tight = free < 420 ? 'tight' : '';
-    scene.style.setProperty('--ob-free', Math.round(free) + 'px'); scene.style.setProperty('--ob-k', k.toFixed(3));
-    scene.style.setProperty('--ob-right', Math.round(right) + 'px'); scene.style.setProperty('--ob-left', Math.round(left) + 'px');
-    if (jump || reduced || !cx) { cx = cxTarget; scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); }
-  }
-  function ease(dt) {
-    if (Math.abs(cxTarget - cx) < .5) { if (cx !== cxTarget) { cx = cxTarget; scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); } return; }
-    cx += (cxTarget - cx) * Math.min(1, dt * 7);
-    scene.style.setProperty('--ob-cx', Math.round(cx) + 'px');
+  /* ---------- the panels around a fixed orb ----------
+   * The orb stays at the screen's centre, always (it never moves or recentres). Panels only cover the sides:
+   *   - the docked list on the left (its width: --ob-col-w);
+   *   - a chat in a column right beside it (--ob-chat-w), as wide as fits before the orb; on a smaller screen the
+   *     orb steps down in size where it stands so the column still fits beside it;
+   *   - an app in the right third (--ob-app-w), its satellite pinned between the orb and the panel.
+   * The widths are worked out here (they depend on the orb's size) and handed to layout.css as variables. */
+  let G = { L: 0, chatR: 0, appL: 0, k: 1, r: 0, pinX: 0, chat: null, app: null };
+  const GAP = 34, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function aim() {
+    if (!W) return;
+    const st = api.panel.state(), r = O * .3;
+    const listW = Math.round(clamp(W * .22, 280, 400)), L = folded ? STRIP : listW;
+    let C = W / 2 - L - r - GAP;   // the chat column, up to the orb with room for its bolt
+    C = Math.round(C >= 360 ? Math.min(C, W / 3, 520) : clamp(W / 2 - L - r * .7 - GAP, 300, 360));
+    const chat = st?.chat || null, app = st?.app || null;
+    const chatR = chat?.right > 0 ? chat.right : L + C;
+    const k = chat ? clamp((W / 2 - chatR - GAP) / r, .45, 1) : 1;   // the orb fits beside an open chat, in place
+    const A = Math.round(Math.max(360, Math.min(W / 3 - 12, W / 2 - r - 120)));
+    const appL = app?.left > 0 ? app.left : W - 12 - A;
+    const orbR = W / 2 + r * k;
+    G = { L, chatR, appL, k, r, chat, app, pinX: Math.round((orbR + appL) / 2) };
+    cx = W / 2;
+    root.style.setProperty('--ob-col-w', listW + 'px'); root.style.setProperty('--ob-chat-w', C + 'px');
+    root.style.setProperty('--ob-beside-left', L + 'px'); root.style.setProperty('--ob-app-w', A + 'px');
+    const left = (folded ? STRIP : listW) + (chat ? C : 0);
+    scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); scene.style.setProperty('--ob-k', k.toFixed(3));
+    scene.style.setProperty('--ob-left', Math.round(left) + 'px');
+    scene.style.setProperty('--ob-free', Math.round(Math.max(160, (app ? appL : W) - left)) + 'px');
+    pinExtra();
   }
   function paintPanel() {
     const st = api.panel.state(), k = st?.kind || null;
-    if (k !== panelKind) { panelKind = k; scene.dataset.panel = k || ''; }
-    const sig = `${k}|${st?.list?.width || 0}|${folded}`;
+    const sig = `${k}|${st?.list?.width || 0}|${folded}|${st?.chat ? 1 : 0}|${st?.app?.id || ''}`;
+    scene.dataset.panel = k || ''; scene.dataset.chat = st?.chat ? 'open' : ''; scene.dataset.app = st?.app ? 'open' : '';
     if (W) aim();
     if (sig === panelSig) return; panelSig = sig;
-    api.frame(() => { if (!W) return; aim(); if (reduced) still(); });  // the panels' widths, once laid out
+    api.frame(() => { if (!W) return; aim(); if (reduced) still(); });  // the panels' places, once laid out
     api.after(480, () => { if (W) { aim(); if (reduced) still(); } });   // and once they have slid in
+  }
+  /* ---------- the bolts: the orb powering what is open ----------
+   * Jagged lightning in the orb's colour on the sky canvas: orb → the pinned app → the app panel's edge, and a quieter
+   * one orb → the chat column. Re-struck a few times a second, with a spark running along it; reduced motion = one
+   * still, glowing line. */
+  const bolts = { chat: 0, app: 0 };   // 0..1, eased in when a panel has arrived, out when it closes
+  let boltSeed = 1, boltAt = 0;
+  function jag(x1, y1, x2, y2, seed, amp) {
+    let pts = [[x1, y1], [x2, y2]], a = amp, rnd = seed;
+    const r = () => { rnd = (rnd * 16807) % 2147483647; return rnd / 2147483647 - .5; };
+    for (let d = 0; d < 5; d++) {
+      const next = [pts[0]];
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+        const off = r() * a, mx = (ax + bx) / 2 - dy / len * off, my = (ay + by) / 2 + dx / len * off;
+        next.push([mx, my], pts[i]);
+      }
+      pts = next; a *= .55;
+    }
+    // pinned at both ends: the jitter fades to nothing at the orb and at the target
+    const n = pts.length - 1;
+    return pts.map(([x, y], i) => { const u = i / n, t = Math.sin(Math.PI * u), bx = x1 + (x2 - x1) * u, by = y1 + (y2 - y1) * u; return [bx + (x - bx) * t, by + (y - by) * t]; });
+  }
+  function stroke(pts, w, col) { sx.lineWidth = w; sx.strokeStyle = col; sx.beginPath(); sx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) sx.lineTo(pts[i][0], pts[i][1]); sx.stroke(); }
+  function glowAt(x, y, rad, col, a) { const g = sx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, A(col, a)); g.addColorStop(1, A(col, 0)); sx.fillStyle = g; sx.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+  function bolt(x1, y1, x2, y2, t, strength, seed, P) {
+    if (strength <= .01 || Math.abs(x2 - x1) < 6) return;
+    const c = P.c, len = Math.hypot(x2 - x1, y2 - y1), amp = Math.max(9, Math.min(30, len * .34));
+    const main = jag(x1, y1, x2, y2, seed, amp), twin = jag(x1, y1, x2, y2, seed * 7 + 3, amp * 1.15), third = jag(x1, y1, x2, y2, seed * 13 + 5, amp * .7);
+    sx.lineCap = 'round'; sx.lineJoin = 'round';
+    // the air around it glows, then a faint second and third arc, then the hot core
+    stroke(main, 24, A(c[0], .045 * strength)); stroke(main, 11, A(c[0], .11 * strength)); stroke(main, 5, A(c[1], .2 * strength));
+    stroke(twin, 2.2, A(c[0], .35 * strength)); stroke(twin, .8, A(c[2], .5 * strength));
+    stroke(third, 1.2, A(c[1], .3 * strength));
+    stroke(main, 2.4, A(c[2], .85 * strength)); stroke(main, 1, A(P.white, strength));
+    // short forks off the main strike
+    let rnd = seed;
+    const r = () => { rnd = (rnd * 48271) % 2147483647; return rnd / 2147483647; };
+    for (let f = 0; f < 3; f++) {
+      const i = 5 + Math.floor(r() * (main.length - 10)), [fx, fy] = main[i] || main[0], ang = (r() - .5) * 2.6 + Math.atan2(y2 - y1, x2 - x1), fl = Math.max(10, len * (.14 + r() * .18));
+      const fork = jag(fx, fy, fx + Math.cos(ang) * fl, fy + Math.sin(ang) * fl, seed + f * 101, fl * .45).slice(0, 22);
+      stroke(fork, 4, A(c[0], .12 * strength)); stroke(fork, .9, A(c[2], .6 * strength));
+    }
+    // contact: where it leaves and where it lands, and a spark of energy running along it
+    glowAt(x1, y1, 16, c[1], .4 * strength); glowAt(x2, y2, 26, c[0], .5 * strength); glowAt(x2, y2, 7, P.white, .75 * strength);
+    if (!reduced) { const u = (t * 1.4 + seed % 7 / 7) % 1, i = Math.floor(u * (main.length - 1)), [px, py] = main[i]; glowAt(px, py, 18, c[2], .6 * strength); glowAt(px, py, 4.5, P.white, strength); }
+  }
+  function drawBolts(t, dt) {
+    const P = palette(colourId), cy = H * .46;
+    const step = (k, on) => reduced ? (on ? 1 : 0) : Math.max(0, Math.min(1, k + (on ? dt * 2.2 : -dt * 5)));
+    bolts.chat = step(bolts.chat, !!G.chat); bolts.app = step(bolts.app, !!G.app);
+    if (!bolts.chat && !bolts.app) return;
+    if (!reduced && t - boltAt > .09) { boltAt = t; boltSeed = 1 + (hash(boltSeed + ':' + Math.floor(t * 100)) % 2147483000); }   // a fresh strike
+    const seed = reduced ? 977 : boltSeed, R = G.r * G.k * .97, flick = reduced ? 1 : .82 + .18 * Math.sin(t * 37);
+    sx.save(); sx.globalCompositeOperation = 'lighter';
+    if (bolts.chat) bolt(cx - R, cy, G.chatR, cy, t, bolts.chat * .62 * flick, seed + 11, P);
+    if (bolts.app) {
+      const s = sats.find(x => x.id === G.app?.id), half = 27 * (s?.sc || 1.1);
+      if (s && s.pk > .6) {
+        const pin = smooth(Math.min(1, (s.pk - .6) / .4)) * bolts.app * flick;
+        bolt(cx + R, cy, s.x - half, s.y, t, pin, seed + 23, P);
+        bolt(s.x + half, s.y, G.appL, cy, t, pin, seed + 41, P);
+        glowAt(s.x, s.y, 46, P.c[0], .22 * pin);
+      } else if (!s) bolt(cx + R, cy, G.appL, cy, t, bolts.app * flick, seed + 23, P);
+    }
+    sx.restore();
   }
   let panelSig = '';
   // A click on the open sky (not the orb or an app) folds the picker; the list stays.
@@ -349,10 +449,10 @@ export default function setup(api) {
     level += (lvlTarget - level) * .25;
     if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
     const blink = t > blinkAt && t < blinkAt + .14; if (t > blinkAt + .14) blinkAt = t + 2.5 + ((hash(Math.floor(t)) % 300) / 100);
-    ease(dt);
     drawSky(t, level);
     drawOrb(ox, orbCv.width, frameOf(t, level, modeOf(voice), flash, blink));
     placeSats(dt);
+    drawBolts(t, dt);
     if (!pop.hidden && (frameN++ & 1)) previews(t);
     if (++pickN > 90) { pickN = 0; paintPick(t); }
   }
@@ -398,5 +498,5 @@ export default function setup(api) {
   paint();
   onVoice(voice);
 
-  return () => { running = false; cancel?.(); delete root.dataset.orbScene; };
+  return () => { running = false; cancel?.(); delete root.dataset.orbScene; for (const v of ['--ob-col-w', '--ob-chat-w', '--ob-beside-left', '--ob-app-w']) root.style.removeProperty(v); };
 }

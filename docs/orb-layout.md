@@ -40,22 +40,27 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
 - Under the orb: the agent's name and a caption line while a take runs. The real keys are the hint line near the
   bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to type (new chat). The fuel gauge and the
   gear stay top right; the Classic | Orb switch sits in the bar's centre.
-- **In thirds** (v5, Miguel: "don't redesign it, bake the stock session list permanently in"). **Left: the stock
-  Chats list, docked** for good: the same Chats window as everywhere (Archive / Working / Ready, the Ready sort
-  Newest / Priority / By subject, search, pins, snooze-someday and every tweak on it), full height from under the bar
-  to the bottom, about 28% of the width (340-420 px), in a softer glass (the skin's own window glass a little clearer
-  and blurred into the scene, no frame or shadow). It only lists: a thread picked in it opens on the right.
-- **Centre: the orb scene**, centred in what the list leaves. The **Look** picker sits at the bottom of the orb area,
-  just right of the list.
-- **Right: the content panel.** A thread (a click in the list, ⌥↓ / ⌥↑ the next / previous Ready thread, ⌥N a new chat,
-  a notification) or an app (a satellite, All apps, a link) slides in from the right over the orb area, about two
-  thirds of the width; the list stays visible. One thing at a time: another thread or app replaces it, and a quiet ‹
-  goes back to the one before. Its ✕ or Esc slides it away and the orb shows again. Send, Done, Snooze (also ⌥→ / ⌥←)
-  close a thread's panel and give the keyboard back to the list (a send leaves like the phone's: the host's
-  `leaveOnSend` in `leaveAfterSend`), so ⌥↓ goes straight on to the next one.
-- A handle on the list's right edge (or **⌥\\**) folds it to a slim strip on the left edge with the Ready count; a click
-  (or ⌥\\) unfolds it. Kept per device. Folded, the orb centres in the whole width. Folding the list is separate from
-  closing the content panel.
+- **Around a fixed orb** (v6, Miguel: "the orb never moves"). The orb stays at the screen's centre whatever is open;
+  panels only cover the sides (satellites under them are simply covered). **Left: the stock Chats list, docked** for
+  good (v5, "bake the stock session list in"): the same Chats window as everywhere (Archive / Working / Ready, the
+  Ready sort Newest / Priority / By subject, search, pins, snooze-someday and every tweak on it), full height under the
+  bar, 22% of the width (280-400 px), in a softer glass. It only lists.
+- **A chat opens in a column right beside the list** (a click in the list, ⌥↓ / ⌥↑ the next / previous Ready thread,
+  ⌥N a new chat, a notification): the same glass, full height, as an extension of the list; it grows out of the list's
+  edge and folds back into it. It is as wide as fits before the orb (up to a third of the screen); where it can't fit
+  beside a full-size orb (laptop screens) the orb steps down in size where it stands (never below 45%), so it stays
+  visible and clickable. Send, Done, Snooze (also ⌥→ / ⌥←), ‹, ✕ or Esc close it and give the keyboard back to the
+  list, so ⌥↓ goes straight on to the next one. Another thread replaces it, with a quiet ‹ back.
+- **An app opens in the right third** (a satellite, All apps, a link), one at a time (another replaces it, with ‹);
+  ✕ or Esc closes it. A chat and an app can be open together; Esc closes the chat first.
+- **The orb powers what is open.** The open app's satellite stops drifting and pins between the orb and its panel
+  (an app with no satellite gets one while it is open); an electric bolt in the orb's colour runs orb → that icon →
+  the panel's edge, and a quieter one orb → the chat column. Jagged arcs with a glow, a second and third strand,
+  short forks and a spark running along them, re-struck about ten times a second on the sky canvas in the same
+  ~30 fps loop; reduced motion = one still glowing arc. Closing the panel lets the icon go back to its orbit.
+- The **Look** picker sits at the bottom of the orb area, right of whatever is open on the left.
+- **⌥\\** (or the handle on the list's edge) folds the list to a slim strip with the Ready count; a chat column then
+  opens beside the strip. Kept per device.
 - **No desks.** The workspace numbers are gone and desk keys do nothing (⌥1…9, ⌥[ ⌥], moving windows, full screen,
   ⌥P); ⌥T just offers the apps. The desks underneath are never touched: turning the Orb off brings them back exactly
   (and the desk you were on).
@@ -80,15 +85,19 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
   sends every new window to a panel window outside the desks (`panelOpen`: never tiled, never synced, not restored
   after a reload; `findWin` sees only the panels; desk keys return early); Home stays in front. Released on teardown:
   the panels go and the desk in front before comes back.
+- Two content panels (`panelOpen`): a Chats window goes to the **chat** panel (`panel`), anything else to the **app**
+  panel (`panelApp`, `data-side="right"`); each holds one window at a time with its own Back list, and both can be
+  open. The one in front for keys and Esc is the one holding focus, else the one opened or clicked last, else the chat.
 - `api.panel.dock(on)` (after `claim`): the stock Chats list gets its own panel on the **left** for good (`panelList`;
-  its bar is hidden, it never closes); `dock(false)` folds it away. The list only lists: whenever it would show a thread
-  (`syncChatsPane` sees `w.thread`), `panelForward` steps it back to the list and opens that thread in the content
-  panel on the right (`panel`, one window at a time, Back list kept). When that panel's thread is finished (its thread
-  turns null: Done, Snooze, ‹, a send) `panelThreadLeft` closes it and focus goes back to the list. The panel in front
-  for keys and Esc is the one holding focus, else the one opened or clicked last.
-- `api.panel.close()` closes the content panel, `api.panel.back()`, `api.panel.state()` → `{ kind: 'thread' | 'list'
-  | 'app' | null, title, width, back, list: { width } | null }` or null; `api.route().panel` is the content panel's
-  kind and `api.route().panelList` whether the list is docked (a `route` event fires when either changes).
+  its bar is hidden, it never closes); `dock(false)` folds it away. Docked, the chat panel is a column beside it
+  (`data-side="beside"`). The list only lists: whenever it would show a thread (`syncChatsPane` sees `w.thread`),
+  `panelForward` steps it back to the list and opens that thread in the chat panel. When that thread is finished (it
+  turns null: Done, Snooze, ‹, a send) `panelThreadLeft` closes it and focus goes back to the list.
+- `api.panel.close()` closes the panel in front, `api.panel.back()`, `api.panel.state()` → `{ kind, title, width,
+  back, list: { width }, chat: { kind, left, right }, app: { id, title, left, right } }` (each part null when closed;
+  stage pixels at rest) or null; `api.route().panel` is the open content kind, `panelList` whether the list is docked
+  and `panelApp` the open app's id (a `route` event fires when any changes). The layout sets the panels' widths
+  (`--ob-col-w`, `--ob-chat-w`, `--ob-beside-left`, `--ob-app-w` on `<html>`): they depend on the orb's size.
 - `api.back.push(close)`: the layout's own overlay (the look popover) joins the shell's Esc order.
 - `api.voice.command()`: a local command take (⌥C); call again to run it.
 - `api.orb.ready()` loads `orb.js` on a page without it (desktop), so `api.orb.create` works there;

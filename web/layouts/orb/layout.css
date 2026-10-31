@@ -1,8 +1,8 @@
 /* Orb layout (desktop only; layout.js). Everything is scoped to html[data-shell="desktop"][data-layout="orb"], so the
  * phone and the classic desktop never see a rule of it. The Home scene is the approved concept's night scene on every
- * skin (its colours are the wearing tweak's --ob-* tokens). There are no desks: whatever opens shows in the shell's one
- * pair of panels (desktop.css .panel-layer): the stock Chats list docked on the right in a soft glass, an app from the left
- * with the concept's round glass. Motion is driven by
+ * skin (its colours are the wearing tweak's --ob-* tokens). There are no desks: whatever opens shows in the shell's
+ * panels (desktop.css .panel-layer) around an orb that never moves: the stock Chats list docked on the left in a soft
+ * glass, a chat in a column beside it, an app in the right third with the concept's round glass. Motion is driven by
  * layout.js (paused off Home, hidden tabs and reduced motion); CSS only adds hover/press touches. */
 
 /* ---------- the bar: only the switch / clock slot, the fuel gauge, updates and Settings stay ---------- */
@@ -96,9 +96,10 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat-n {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; }
 
-/* ---------- in thirds: the stock Chats list docked on the left (desktop.js panel, api.panel.dock), the orb in the
- * middle, a thread or an app in the content panel from the right ---------- */
-html[data-shell="desktop"][data-layout="orb"] { --ob-col-w: min(420px, max(340px, 28vw)); }
+/* ---------- around a fixed orb: the stock Chats list docked on the left (desktop.js panel, api.panel.dock), a chat in
+ * a column beside it, an app in the right third; the orb stays at the screen's centre. layout.js sets the widths
+ * (--ob-col-w, --ob-chat-w, --ob-beside-left, --ob-app-w: they depend on the orb's size); these are first-frame values. ---------- */
+html[data-shell="desktop"][data-layout="orb"] { --ob-col-w: clamp(280px, 22vw, 400px); --ob-chat-w: 340px; --ob-app-w: calc(33.333vw - 12px); }
 /* Softer than a window: the skin's own window glass, a little clearer and blurred into the scene, no frame or shadow,
  * full height under the bar. Its own text and controls stay the skin's (legible on light skins too). */
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] {
@@ -108,11 +109,18 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-doc
 }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock].focus { border-color: var(--ob-dock-line); box-shadow: none; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] .dchats { background: none; }
-/* The content panel: about two thirds, from the list's edge to the right, over the orb. A thread shows alone (its
- * window's own list pane stays hidden: the list is the docked one). */
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"] { width: calc(100% - var(--ob-col-w) - 24px); background: var(--sk-win, var(--wz-base)); }
-html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-fold="folded"]) .panel-layer > .win.panel[data-side="right"] { width: calc(100% - 70px); }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"][data-panel="chat"] .dchats :is(.pane-list, .pane-split) { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] { z-index: 3; }
+/* A chat: a column right beside the list, the same soft glass, full height; it grows out of the list's edge and folds
+ * back into it. The thread shows alone (its window's own list pane stays hidden: the list is the docked one). */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="beside"] {
+  z-index: 2; top: 0; bottom: 0; left: var(--ob-beside-left, var(--ob-col-w)); right: auto; width: var(--ob-chat-w); border-radius: 0; border: 0; box-shadow: none;
+  border-right: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 92%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15); backdrop-filter: blur(24px) saturate(1.15);
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="beside"].focus { border-color: var(--ob-dock-line); box-shadow: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:is([data-side="beside"], [data-side="right"])[data-panel="chat"] .dchats :is(.pane-list, .pane-split) { display: none; }
+/* An app: the right third, one at a time. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"] { z-index: 2; width: var(--ob-app-w); background: var(--sk-win, var(--wz-base)); }
 /* The fold handle, on the list's right edge; folded: a slim strip on the left with the Ready count. */
 html[data-shell="desktop"][data-layout="orb"] .ob-fold {
   position: absolute; z-index: 9; left: var(--ob-left, 0px); top: 50%; width: 22px; height: 58px; margin-top: -29px; padding: 0;
@@ -192,7 +200,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { bo
 
 /* ---------- the panels (no desks): the docked list (above) and an app from the left, holding the real windows ---------- */
 html[data-shell="desktop"][data-layout="orb"] :is(.ob-name, .ob-caption) { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([data-dock]) { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([data-dock], [data-side="beside"]) { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
@@ -206,18 +214,19 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-pan
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar > :not(button) { display: none !important; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]):has(.panel-back) .ch-head { padding-right: 88px; }
-/* a narrow free space: the orb steps back, its name and the hint give way */
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-tight="tight"] :is(.ob-name, .ob-hint) { opacity: 0; }
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-tight="tight"] .ob-orbwrap { opacity: .7; }
 html[data-shell="desktop"][data-layout="orb"] .ob-name { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .ob-hint { transition: opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms, left 380ms var(--wz-ease); }
 html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transform 380ms var(--wz-ease), opacity 300ms ease; }
 
-/* a thread or an app open on the right covers the orb area: the scene quiets down behind its glass */
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) :is(.ob-hint, .ob-name, .ob-caption, .ob-picker) { opacity: 0; pointer-events: none; }
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) :is(.ob-orbwrap, .ob-field) { opacity: .3; }
-html[data-shell="desktop"][data-layout="orb"] .ob-field { transition: opacity 300ms ease; }
+/* Something open beside the orb: the orb stays exactly where it is, fully lit and clickable; only the key hint gives
+ * way (the panels would cut it). */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-hint { opacity: 0; pointer-events: none; }
+/* the list's fold handle steps aside while a chat column stands against it (⌥\ still folds) */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-chat="open"] .ob-fold { display: none; }
+/* The app's satellite, pinned between the orb and its panel while it is open: lit, in the orb's bolt. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned { border-color: var(--ob-line2); box-shadow: 0 0 34px -2px var(--c), 0 0 0 1px var(--ob-line2), inset 0 0 14px -4px var(--c); }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opacity: 1; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
