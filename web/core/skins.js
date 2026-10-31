@@ -392,7 +392,10 @@
   paint(pos); // tokens before first paint (no flash of the wrong skin)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
+  // Light / dark twins (Miguel, 30 Oct 2026): ⌥B on desktop flips between them. Only palettes with a real twin.
+  const TWINS = { obsidian: 'obsidian-light', 'obsidian-light': 'obsidian', landscapes: 'landscapes-light', 'landscapes-light': 'landscapes' };
   window.WosSkin = {
+    twin(id = this.current) { const t = TWINS[id]; const s = t && SKINS.find(x => x.id === t); return s ? { id: s.id, name: s.name, light: TWINS[t] === id && /-light$/.test(t) } : null; },
     list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet, face: FACES[s.id] || null, t: { ...s.t } })),
     // Skins (families) with their palettes, in list order. Picking a skin puts on the palette last worn in it.
     families: FAMS,

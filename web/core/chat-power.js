@@ -257,6 +257,10 @@ window.WosChatPower = function chatPower(A) {
   /* Miguel's skins only (Dark, Light, Landscapes; M.ours()): a four-position slide switch (Opus · Astra · Sol · the
    * private Tinfoil model) above the composer, drag or tap; ⋯ opens every model. James's skins keep the model label. */
   const SW_NAMES = ['Opus', 'Astra', 'Sol', '']; // slot 4: the private model's own name (privateName), in the privacy colour
+  // An empty slot means its account isn't usable right now: tapping it opens that app at the fix (Reconnect / Connect).
+  const SW_FIX = ['/wizard-claude/?reconnect=1', '/wizard-chatgpt/?reconnect=1', '/wizard-chatgpt/?reconnect=1', '/wizard-tinfoil/?connect=1'];
+  const SW_FIX_TITLE = ['Claude needs attention · tap to fix', 'ChatGPT needs attention · tap to fix', 'ChatGPT needs attention · tap to fix', 'Set up Tinfoil · tap to connect'];
+  function openFix(path) { const app = path.split('/')[1]; if (!window.WizOpenApp?.(app, path)) H.openLink?.(path, app); }
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
@@ -284,7 +288,7 @@ window.WosChatPower = function chatPower(A) {
     const pv = M.privateName ? M.privateName(opts[3]?.value) : { name: '', version: '' };
     const nameAt = i => i === 3 ? (opts[3] ? pv.name : 'Private') : SW_NAMES[i];
     const verAt = i => i === 3 ? pv.version : switchVersion(opts[i]?.value);
-    return `<div class="ms${at === 3 ? ' secure-on' : ''}" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === 3 ? ' secure' : ''}${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ' disabled'}${i === 3 ? ` aria-label="${esc([nameAt(3), verAt(3)].filter(Boolean).join(' '))}, private"` : ''}><span class="ms-name">${esc(nameAt(i))}</span> <small class="ms-version">${i === 3 && window.WosAgents?.lock ? window.WosAgents.lock() : ''}${esc(verAt(i))}</small></button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
+    return `<div class="ms${at === 3 ? ' secure-on' : ''}" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === 3 ? ' secure' : ''}${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ` aria-disabled="true" data-msfix="${SW_FIX[i]}" title="${esc(SW_FIX_TITLE[i])}"`}${i === 3 ? ` aria-label="${esc([nameAt(3), verAt(3)].filter(Boolean).join(' '))}, private"` : ''}><span class="ms-name">${esc(nameAt(i))}</span> <small class="ms-version">${i === 3 && window.WosAgents?.lock ? window.WosAgents.lock() : ''}${esc(verAt(i))}</small></button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
   }
   async function switchTo(wid, i) {
     const w = H.win(wid); if (!w?.thread) return;
@@ -296,7 +300,7 @@ window.WosChatPower = function chatPower(A) {
     let drag = null;
     document.addEventListener('pointerdown', e => { const tr = e.target.closest?.('.ms-track'); if (!tr) return; const r = tr.getBoundingClientRect(); drag = { tr, r, wid: tr.parentElement.dataset.mswid, moved: false, x0: e.clientX }; tr.setPointerCapture?.(e.pointerId); });
     document.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true; if (!drag.moved) return; const f = Math.max(0, Math.min(1, (e.clientX - drag.r.left) / drag.r.width)); drag.tr.parentElement.style.setProperty('--ms-i', (f * SW_NAMES.length - .5).toFixed(3)); drag.tr.classList.add('dragging'); });
-    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * SW_NAMES.length); const w = H.win(d.wid); if (!w?.thread) return; const state = switchOpts(w, LIVE.session(w.thread)); if (state.opts[i]) { d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); } else d.tr.parentElement.style.setProperty('--ms-i', state.at < 0 ? 1 : state.at); };
+    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * SW_NAMES.length); const w = H.win(d.wid); if (!w?.thread) return; const state = switchOpts(w, LIVE.session(w.thread)); if (state.opts[i]) { d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); } else { d.tr.parentElement.style.setProperty('--ms-i', state.at < 0 ? 1 : state.at); if (!d.moved) openFix(SW_FIX[i]); } };
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', () => { if (drag) { drag.tr.classList.remove('dragging'); drag = null; } });
   })();
 
@@ -304,7 +308,10 @@ window.WosChatPower = function chatPower(A) {
   function ensureModels() {
     if (!M || modelsAsked) return;
     modelsAsked = true;
-    M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
+    const repaint = () => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } };
+    M.load().then(repaint); // background: waits for a selection
+    // A later background reload that changed the catalogue (e.g. ChatGPT's real list replacing Hermes' placeholder).
+    window.addEventListener?.('wos:models', repaint);
   }
   async function pickModel(o, direct) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
@@ -392,7 +399,7 @@ window.WosChatPower = function chatPower(A) {
       const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
       if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
       const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
-      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
+      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
@@ -604,14 +611,16 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    // Revalidate every open; repaint only if the catalogue/default actually changed.
-    const key = () => JSON.stringify([M.options || [], M.privateOptions?.()]);
+    // Revalidate every open; repaint only if visible choices or the Claude status note changed.
+    // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
+    const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.()]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
       // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
       const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
-      if (!M.options || key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
+      if (key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
     });
   }
   function openFiles(pane) {

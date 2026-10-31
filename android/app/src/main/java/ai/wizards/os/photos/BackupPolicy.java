@@ -11,6 +11,22 @@ import java.util.Locale;
 /** Pure contracts; our implementation, independent of Immich's mobile application. */
 public final class BackupPolicy {
     private BackupPolicy() {}
+    /** The capabilities of one network that the Wi-Fi-only rule reads, so the rule runs on the JVM. */
+    public static final class Net {
+        final boolean internet, unmetered, wifi, vpn;
+        public Net(boolean internet, boolean unmetered, boolean wifi, boolean vpn) { this.internet=internet; this.unmetered=unmetered; this.wifi=wifi; this.vpn=vpn; }
+    }
+    /** May a backup item upload now? With Wi-Fi only, a VPN (the tailnet) counts when an unmetered Wi-Fi network sits
+     *  under it. The VPN itself is often reported metered, so it is checked before the active network's own metering. */
+    public static boolean networkAllowed(Net active, Iterable<Net> all, boolean wifiOnly) {
+        if(active==null || !active.internet) return false;
+        if(!wifiOnly) return true;
+        if(active.vpn) {
+            for(Net n:all) if(n!=null && !n.vpn && n.wifi && n.internet && n.unmetered) return true;
+            return false;
+        }
+        return active.unmetered && active.wifi;
+    }
     public static final String CALLBACK = "ai.wizards.os://photos/oauth-callback";
     public static String server(String input, boolean test) {
         URI u = URI.create(input.trim());

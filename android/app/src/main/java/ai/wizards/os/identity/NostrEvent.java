@@ -75,15 +75,37 @@ public final class NostrEvent {
             case 3: return "Change who you follow";
             case 13: return "Send a sealed friend request";
             case 30078:
-                if ("wizard-devices".equals(tag(e, "d"))) return hasTag(e, "revoked") ? "Remove a Wizard from your Wizard ID" : "Let this Wizard receive for you";
+                if (deviceEvent(e)) return hasTag(e, "revoked") ? "Remove a Wizard from your Wizard ID" : "Let this Wizard receive for you";
                 return "Unfamiliar request";
             case 1078:
-                if (hasTagValue(e, "t", "wizard-profile") && tag(e, "p").matches("[0-9a-f]{64}")) return "Add " + shortNpub(tag(e, "p")) + " as a friend";
+                if (friendEvent(e)) return "Add " + shortNpub(tag(e, "p")) + " as a friend";
                 return "Unfamiliar request";
             case 30117: return "Publish " + name(e) + " as your skin";
             case 30617: return "Publish " + name(e) + " as your app";
             default: return "Unfamiliar request";
         }
+    }
+    private static final String KEY = "[0-9a-f]{64}";
+    /** A friendly label hides the raw event, so every tag must be one the label describes (partial matches stay Unfamiliar). */
+    private static boolean deviceEvent(JSONObject e) throws JSONException {
+        JSONArray tags = e.getJSONArray("tags"); int d = 0, keys = 0;
+        for (int i = 0; i < tags.length(); i++) {
+            JSONArray t = tags.getJSONArray(i); String key = t.optString(0);
+            if ("d".equals(key) && t.length() == 2 && "wizard-devices".equals(t.optString(1))) d++;
+            else if ("p".equals(key) && t.length() <= 4 && t.optString(1).matches(KEY)) keys++;
+            else if ("revoked".equals(key) && t.length() <= 3 && t.optString(1).matches(KEY)) keys++;
+            else return false;
+        }
+        return d == 1 && keys > 0;
+    }
+    private static boolean friendEvent(JSONObject e) throws JSONException {
+        JSONArray tags = e.getJSONArray("tags"); int p = 0;
+        for (int i = 0; i < tags.length(); i++) {
+            JSONArray t = tags.getJSONArray(i); String key = t.optString(0);
+            if ("p".equals(key) && t.length() == 2 && t.optString(1).matches(KEY)) p++;
+            else if (!"t".equals(key) || t.length() != 2) return false;
+        }
+        return p == 1 && hasTagValue(e, "t", "wizard-profile");
     }
     public static String tag(JSONObject e, String key) throws JSONException {
         JSONArray tags = e.getJSONArray("tags");

@@ -11,7 +11,7 @@ test('Store semantics preserve action precedence, hooks and compatibility while 
   for (const [state, options, cls, label] of [
     ['get', {}, '', 'Get'], ['installed', {installed:true,open:true}, 'open', 'Open'],
     ['installed', {installed:true}, 'have', '✓ Installed'], ['update', {}, 'upd', 'Update'],
-    ['switch', {}, 'upd', 'Switch release'], ['conflict', {}, 'warn', 'Resolve conflict'],
+    ['switch', {}, 'upd', 'Switch release'],
     ['unknown', {}, 'wait', 'Status unavailable'], ['update', {busy:true}, 'wait', 'Installing…'],
     ['get', {reason:'arm64 only'}, 'wait', 'Not compatible'],
     ['get', {reason:'unknown host',architecture:''}, 'wait', 'Compatibility unavailable'],
@@ -21,6 +21,23 @@ test('Store semantics preserve action precedence, hooks and compatibility while 
     assert.ok(html.includes(label), html);
     if (['wait','warn','have'].includes(cls)) assert.doesNotMatch(html, /data-get|data-open/);
   }
+  // A source conflict is a status (the "Source conflict" badge beside the name), never a pill that looks tappable.
+  const conflict = render('conflict');
+  assert.doesNotMatch(conflict, /class="get|data-get|data-open|<button/);
+  assert.doesNotMatch(conflict, /Resolve/);
+});
+test('Open replaces Installed once the installed app is openable', () => {
+  const html = render('installed', {installed:true, open:true});
+  assert.match(html, /class="get open big"[^>]*data-open="fixture"[^>]*>Open<\/button>/);
+  assert.doesNotMatch(html, /Installed|install-actions/);
+  assert.match(src, /\$\{action\(a, 'big'\)\}/, 'the detail renderer uses the same exclusive action');
+});
+test('a fresh installed-app snapshot exposes Open before the parent registry finishes refreshing', () => {
+  const declaration = src.match(/^  const canOpen = a => .*;$/m)?.[0];
+  assert.ok(declaration, 'canOpen declaration');
+  const result = Function('S', 'framed', 'parent', 'openId', 'a', `${declaration}; return canOpen(a);`)(
+    {snapshot:{shell:[{id:'fixture',url:'/fixture/'}]}}, true, {WizCanOpen:() => false}, () => 'fixture', {id:'fixture'});
+  assert.equal(result, true);
 });
 test('new status colour rules use tokens, not literal white or fixed washes', () => {
   const css = read('web/store/store.css');

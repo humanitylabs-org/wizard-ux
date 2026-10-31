@@ -37,7 +37,7 @@
     const v = verified, host = window.WosSkinHost;
     if (off || !own() || !v || approval() !== v.sha256 || !host?.personalState.ready || started === v.sha256) return;
     started = v.sha256;
-    await host.loadPersonal(v.bytes, () => !off && !!own() && verified === v && approval() === v.sha256);
+    await host.loadPersonal(v.bytes, () => !off && !!own() && verified === v && approval() === v.sha256, scriptFile());
     emit();
   }
   function turnOn(event) {
@@ -47,11 +47,21 @@
     try { localStorage.setItem(OK, state.script.sha256); } catch (_) { return false; }
     state.script.approved = true; startScript(); emit(); return true;
   }
+  // Where the owner (and their agent) find the script: the worn own skin's folder in Files.
+  const scriptFile = () => String(state.info?.path || FILE).replace(/skin\.css$/, 'skin.js');
+  // A script that failed to load or set up is switched off (approval revoked, so the next load starts off) and
+  // keeps its file and reason for Settings until different bytes arrive.
+  function failed(detail) {
+    if (!detail || !state.script.exists) return;
+    state.script.error = { file: detail.file || scriptFile(), message: String(detail.message || 'error').slice(0, 160), sha256: state.script.sha256 };
+    turnOff();
+  }
   async function refreshScript(seq) {
     const info = state.info?.script;
+    const lastError = state.script.error?.sha256 && state.script.error.sha256 === info?.sha256 ? state.script.error : null;
     if (info?.exists) { migrate('skin.js'); apply(state.css); }
     if (!info?.exists || verified?.sha256 !== info.sha256) { verified = null; stopScript(); }
-    state.script = { exists: !!info?.exists, sha256: info?.sha256 || null, bytes: info?.bytes || 0, approved: false };
+    state.script = { exists: !!info?.exists, sha256: info?.sha256 || null, bytes: info?.bytes || 0, approved: false, file: scriptFile(), error: lastError };
     if (!info?.exists || approval() !== info.sha256) { turnOff(); }
     if (!info?.exists || !/^[a-f0-9]{64}$/.test(info.sha256 || '') || info.bytes > MAX) { stopScript(); return; }
     try {
@@ -62,7 +72,8 @@
       const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join('');
       if (seq !== refreshSeq) return;
       if (hash !== info.sha256 || hash !== r.headers.get('X-Wizard-Sha256')) throw new Error('script changed while reading');
-      if (window.WosSkinHost?.scriptProblem(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) throw new Error('use the skin hook API');
+      const problem = window.WosSkinHost?.scriptProblem(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+      if (problem) { state.script.error = { file: scriptFile(), message: typeof problem === 'string' ? problem : 'use the skin hook API', sha256: hash }; throw new Error('use the skin hook API'); }
       verified = verified?.sha256 === hash ? verified : { bytes, sha256: hash };
       state.script.valid = true;
       state.script.approved = approval() === hash;
@@ -111,7 +122,7 @@
   function create({ name, base, tweaks }) {
     name = String(name || '').trim();
     if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
     if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
     const map = Object.fromEntries(Object.entries(tweaks || {}).filter(([id,v]) => /^[a-z0-9-]+\/[a-z0-9-]+$/.test(id) && typeof v === 'boolean'));
     const skin = { id: 'skin-' + crypto.randomUUID(), name, base, tweaks: map };
@@ -121,7 +132,7 @@
   function update(values) {
     const skin = own(); if (!skin) return;
     const base = values.base || skin.base;
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
     const next = { ...skin, base, tweaks: { ...skin.tweaks, ...(values.tweaks || {}) } };
     persist({ ...recipes, skins: recipes.skins.map(s => s.id === skin.id ? next : s) });
     if (window.WosSkin.current !== base) window.WosSkin.set(base); recipeChanged();
@@ -211,7 +222,7 @@
   async function createOnBox({ name, base, tweaks }) {
     name = String(name || '').trim();
     if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
     if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
     const made = await request('', 'POST', { name, base, tweaks: tweaks || {}, activate: true });
     await syncBox(); return clone(recipes.skins.find(s => s.id === made.id));
@@ -312,6 +323,7 @@
     window.addEventListener?.('wos:skin', () => { if (!selecting && own() && own().base !== window.WosSkin.current) { const pending = api.leave(); pending?.catch?.(() => {}); } });
     if (isDoc && !off) {
       window.addEventListener?.('storage', e => { if (e.key === OK) { stopScript(); refresh(); } });
+      window.addEventListener?.('wos:personal-error', e => failed(e.detail));
       refresh();
       // Stylesheets added to <head> later (skin packages) must not land above My skin.
       document.addEventListener('DOMContentLoaded', () => { if (!state.empty && el) styleEl(); });

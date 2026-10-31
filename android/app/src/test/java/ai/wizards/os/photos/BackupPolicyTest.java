@@ -28,4 +28,21 @@ public class BackupPolicyTest {
     }
     @Test public void multipartFilenameCannotInjectHeaders() { assertEquals("a__b_.jpg",BackupPolicy.filename("a\r\nb\".jpg")); }
     @Test public void pkceUsesS256Base64Url() { assertEquals("ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",BackupPolicy.digest("abc")); }
+    // James, Wi-Fi only on behind the tailnet VPN: the VPN is the active network and reports metered. Backup must still
+    // run on the Wi-Fi under it, and must not use mobile data under it.
+    private static BackupPolicy.Net net(boolean internet,boolean unmetered,boolean wifi,boolean vpn) { return new BackupPolicy.Net(internet,unmetered,wifi,vpn); }
+    @Test public void wifiOnlyLooksThroughAMeteredVpnToItsWifi() {
+        BackupPolicy.Net vpn=net(true,false,true,true), wifi=net(true,true,true,false), cell=net(true,false,false,false);
+        assertTrue(BackupPolicy.networkAllowed(vpn,java.util.Arrays.asList(vpn,wifi),true));
+        assertFalse(BackupPolicy.networkAllowed(vpn,java.util.Arrays.asList(vpn,cell),true));
+        assertTrue(BackupPolicy.networkAllowed(vpn,java.util.Arrays.asList(vpn,cell),false));
+    }
+    @Test public void wifiOnlyWithoutVpn() {
+        BackupPolicy.Net wifi=net(true,true,true,false), cell=net(true,false,false,false), metered=net(true,false,true,false);
+        assertTrue(BackupPolicy.networkAllowed(wifi,java.util.Arrays.asList(wifi),true));
+        assertFalse(BackupPolicy.networkAllowed(cell,java.util.Arrays.asList(cell),true));
+        assertFalse(BackupPolicy.networkAllowed(metered,java.util.Arrays.asList(metered),true));
+        assertFalse(BackupPolicy.networkAllowed(null,java.util.Collections.emptyList(),false));
+        assertFalse(BackupPolicy.networkAllowed(net(false,true,true,false),java.util.Collections.emptyList(),false));
+    }
 }

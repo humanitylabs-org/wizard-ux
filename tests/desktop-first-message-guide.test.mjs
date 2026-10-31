@@ -16,7 +16,9 @@ test('the desktop shell loads the tour module and its styles, before setup-launc
 });
 test('desktop adapter: first-run guide, ?view=tour and the Keys sheet replay all reach WosTour.desk', () => {
   const js = read('web/desktop/desktop.js');
-  assert.match(js, /WosSetupLaunch\?\.boot\(\{[^]*?alongsideOnly: true,[^]*?tour: why => DESK_TOUR\?\.start\(why\)/);
+  // First run is the Welcome modal now; the guide stays reachable from ?view=tour and the Keys sheet.
+  assert.match(js, /window\.WosWelcome\?\.boot\(\{/);
+  assert.doesNotMatch(js, /WosSetupLaunch\?\.boot\(/);
   assert.match(js, /if \(v === 'tour' && window\.WosTour\?\.desk\)/);
   assert.match(js, /data-keystour/);
   // The guide must be attached before deep links are consumed, or ?view=tour finds no host.
@@ -82,8 +84,11 @@ test('Esc / Back dismisses the desktop guide (Codex #482): after sheets above it
   for (const above of ['closePalette()', 'toggleKeys(false)', 'closeSettings()', 'closeInbox()']) assert.ok(body.indexOf(above) < at, above + ' closes first');
   for (const below of ['if (homeOpen)', 'CHATS.threadBack(f)', 'closeWin(']) assert.ok(body.indexOf(below) > at, below + ' comes after');
 });
-test('desktop boot passes a busy check: recording, an open sheet or typed text holds the guide back', () => {
-  const js = read('web/desktop/desktop.js');
-  assert.match(js, /busy: \(\) => VOICE\.state !== 'idle' \|\| !setEl\.hidden \|\| !pal\.hidden \|\|/);
-  assert.match(read('web/app.js'), /busy: \(\) => V\.state !== 'idle' \|\| !!sheet \|\| idx !== HOME/);
+test('both shells boot the Welcome modal and open it for the Setup app', () => {
+  for (const f of ['web/desktop/desktop.js', 'web/app.js']) {
+    const js = read(f);
+    assert.match(js, /window\.WosWelcome\?\.boot\(\{[^]*?send: async text =>/, f);
+    assert.match(js, /a\.id === 'setup' && window\.WosWelcome/, f);
+  }
+  assert.doesNotMatch(read('web/desktop.html'), /pwa-install\.js/);
 });

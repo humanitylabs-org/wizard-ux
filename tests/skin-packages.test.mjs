@@ -264,6 +264,8 @@ test('the API hands a skin no shell internals', async () => {
   assert.equal(seen.app.tap(), false, 'no front app cannot dispatch a tap');
   assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb));
   assert.deepEqual(Object.keys(seen.voice).sort(), ['cancel', 'dictate', 'state', 'talk', 'tap']);
+  // The app in front may lend the orb its main button (WizardApp.orb.claim): a frozen snapshot and a tap, nothing else.
+  assert.ok(Object.isFrozen(seen.app)); assert.deepEqual(Object.keys(seen.app).sort(), ['orb', 'tap']);
   assert.ok(Object.isFrozen(seen) && Object.isFrozen(seen.nav));
   assert.deepEqual(Object.keys(seen.nav).sort(), ['back', 'deskCount', 'goDesk', 'openList', 'openThread']);
   seen.storage.set('x', { a: 1 });

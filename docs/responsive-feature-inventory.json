@@ -389,6 +389,14 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/offline-kit.js": {
+      "loadedBy": [],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+    },
+    "core/offline-sw.js": {
+      "loadedBy": [],
+      "note": "Opt-in app service worker for WizOffline; importScripts from an app worker, not either shell"
+    },
     "core/orb-handoff.js": {
       "loadedBy": [
         "phone"
@@ -408,6 +416,13 @@
         "desktop"
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/pages.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared Pages list, opaque viewer, versioned editor and bridge"
     },
     "core/phone-connect.js": {
       "loadedBy": [
@@ -617,6 +632,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/welcome.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/workspace-navigation.js": {
       "loadedBy": [
         "phone",
@@ -636,7 +658,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Shared per-app needs checklist and app-open admission"
+      "note": "Shared connection checklist and required-needs admission"
     },
     "core/incognito-chat.js": {
       "loadedBy": [
@@ -647,6 +669,31 @@
     }
   },
   "exceptions": {
+    "pwa-install.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Phone-only install banner (Add to Home Screen is needed for voice); desktop browsers offer install in the address bar (Miguel, 29 Oct 2026)."
+    },
+    "core/device-port.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Optional exact-origin Android shell capability transport."
+    },
+    "core/device-recording.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android shell foreground-service recorder; browsers retain their recorder."
+    },
+    "core/device-orb.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android shell overlay capability; not a desktop overlay."
+    },
+    "core/orb-handoff.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Meeting-loan coordinator is currently wired only to the phone orb; desktop admission remains a separate acceptance gap, not claimed parity."
+    },
     "app.js": {
       "classification": "adapter",
       "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here.",
@@ -812,6 +859,8 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/pages.css",
+    "core/pages.js",
     "core/phone-connect.css",
     "core/phone-connect.js",
     "core/photos-relay.js",
@@ -853,13 +902,16 @@
     "core/voice-legacy.js",
     "core/voice-status.js",
     "core/web-update.js",
+    "core/welcome.css",
+    "core/welcome.js",
     "core/workspace-navigation.js",
     "core/workspace-sync.js",
     "favicon.ico",
     "icon-192.png",
+    "kit/controls.css",
+    "kit/shell-tokens.css",
     "live.js",
     "manifest.webmanifest",
-    "outbox.js",
-    "pwa-install.js"
+    "outbox.js"
   ]
 }

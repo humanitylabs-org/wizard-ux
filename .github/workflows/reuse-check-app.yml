@@ -36,3 +36,7 @@ jobs:
         env:
           APP_REPO: ${{ github.workspace }}/app
         run: node wizard-shared/tools/reuse-check-app.mjs
+      - name: Style ratchet (canonical mirror from trusted wizard-ux main, never app PR code)
+        env:
+          STYLE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 wizard-shared/tools/style/check_style.py app --policy wizard-shared/tools/style/style-policy.json --base "$STYLE_BASE"

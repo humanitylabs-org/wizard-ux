@@ -313,7 +313,7 @@
     return out;
   }
   function session(s) {
-    return Object.freeze({ id: s.row.id,
+    return Object.freeze({ id: s.row.id, reattached: () => !!s.reattached,
       getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
         hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused' || s.phase === 'handoff',
         durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
@@ -834,6 +834,7 @@
     if (s?.row.appId === appId) {
       await s.readyPromise;
       if (active !== s) return null;
+      s.reattached = true; // a stale document's failed start must not stop the take this document now owns
       return session(s);
     }
     if (s) return null;

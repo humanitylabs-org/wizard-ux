@@ -1,0 +1,1163 @@
+{
+ "merge": "origin/main 8592bd38fd7cad79421193df9ce12ff99d5e7595 into live/agent-parity-20261022 dfd43a82872c2f43f47af5eb910f839802374de0",
+ "reference": [
+  "docs/owner-shell-sync-20261027.md",
+  "docs/owner-shell-sync-refresh-conflicts.json"
+ ],
+ "conflictFiles": 74,
+ "conflictBlocks": 160,
+ "heldForStaging": [
+  "#719",
+  "#536",
+  "#668",
+  "#764",
+  "#755"
+ ],
+ "notes": [
+  "owner-skins.json takes main (c02f56de): live was unchanged since merge base; main adds Miguel-approved Signal hash (7af7c803). No hashes regenerated.",
+  "Offline-chat exclusion (16 paths) holds on the LIVE variant only; FULL (staging) carries #536/#719 by design and fails tests/owner-offline-chat-exclusion."
+ ],
+ "blocks": [
+  {
+   "file": ".github/workflows/responsive-features.yml",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): adds store deeplink QA run",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 1,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 2,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 3,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 4,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 5,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 6,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 7,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 8,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/COMPONENTS.md",
+   "block": 9,
+   "choice": "main",
+   "reason": "main compact inventory; live-only rows (Incognito, held Send/Discard, outside-tap Back) re-added after resolution within byte budget",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/OPAQUE_OVERLAYS.md",
+   "block": 1,
+   "choice": "main",
+   "reason": "main documents #703 owner-authorised correction of #658 (inherited base defaults opaque, authored package skins keep their material); matches CSS taken from main",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/app-setup/README.md",
+   "block": 1,
+   "choice": "main",
+   "reason": "trivially mergeable: main superset (adds current-main integration section)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/responsive-feature-inventory.json",
+   "block": 1,
+   "choice": "main",
+   "reason": "main adds core/pages.js entry",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/responsive-feature-inventory.json",
+   "block": 2,
+   "choice": "combined",
+   "reason": "combined: main app-setup note + live Incognito entry",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/responsive-feature-inventory.json",
+   "block": 3,
+   "choice": "main",
+   "reason": "main adds native phone-only entries",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/responsive-feature-inventory.json",
+   "block": 4,
+   "choice": "main",
+   "reason": "main adds pages assets",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "docs/shared-app-services-host.md",
+   "block": 1,
+   "choice": "combined",
+   "reason": "combined (as #632 ledger): independent context-draft and modal-backdrop contracts",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "package.json",
+   "block": 1,
+   "choice": "main",
+   "reason": "same two scripts, order only",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-app-capture/outline-pcm.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-app-orb.cjs",
+   "block": 1,
+   "choice": "live",
+   "reason": "as #632 ledger: preserve all browser executable overrides",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-chats-search-escape.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main shared tools/qa-playwright.cjs loader",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-orb-send-two-images.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-setup-app.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main QA follows WzSheet dialogs and native Back evidence",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-setup-app.cjs",
+   "block": 2,
+   "choice": "main",
+   "reason": "main QA follows WzSheet dialogs and native Back evidence",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-setup-app.cjs",
+   "block": 3,
+   "choice": "main",
+   "reason": "main QA follows WzSheet dialogs and native Back evidence",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-setup-app.cjs",
+   "block": 4,
+   "choice": "main",
+   "reason": "main QA follows WzSheet dialogs and native Back evidence",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-setup-app.cjs",
+   "block": 5,
+   "choice": "main",
+   "reason": "main QA follows WzSheet dialogs and native Back evidence",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "qa-stream-replay-no-duplicate.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/agent-held-take-model.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): routed-agent provider pick tests",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/app-registry-shared.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/app-setup.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/app-share-wizard.browser.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main shell-tokens stylesheet",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/app-share-wizard.browser.cjs",
+   "block": 2,
+   "choice": "main",
+   "reason": "main durable native share proof",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/desktop-chat-hud.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "regex accepts canLeave (which calls live CHATS.beforeLeave)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/desktop-close-desktop.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): canLeave + rememberClosed",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/device-setup-preservation.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/fixtures/tweaks.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/model-sheet-revalidate.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main key() compares visible rows; live extractor would not compile against it",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/opened-alert-original-details.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/ready-open-ask.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/retry-sign-in-outage.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): routed agent retries",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/settings-redesign.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/settings-redesign.test.mjs",
+   "block": 2,
+   "choice": "main",
+   "reason": "main Connections availability read",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/share-sheet.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "follows share-sheet.js choice (main keeps images out of pre-registration default)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/skin-packages.test.mjs",
+   "block": 1,
+   "choice": "live",
+   "reason": "keep live app-orb facade assertions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/status-connectivity.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "follows status.js: main offline pop-up (#727) supersedes live banner; live invariant (waiting sends never diagnose outage) still asserted",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/status-connectivity.test.mjs",
+   "block": 2,
+   "choice": "main",
+   "reason": "follows status.js: main offline pop-up (#727) supersedes live banner; live invariant (waiting sends never diagnose outage) still asserted",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/status-connectivity.test.mjs",
+   "block": 3,
+   "choice": "main",
+   "reason": "follows status.js: main offline pop-up (#727) supersedes live banner; live invariant (waiting sends never diagnose outage) still asserted",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/status-connectivity.test.mjs",
+   "block": 4,
+   "choice": "main",
+   "reason": "follows status.js: main offline pop-up (#727) supersedes live banner; live invariant (waiting sends never diagnose outage) still asserted",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/status-connectivity.test.mjs",
+   "block": 5,
+   "choice": "main",
+   "reason": "follows status.js: main offline pop-up (#727) supersedes live banner; live invariant (waiting sends never diagnose outage) still asserted",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/times-follow-phone-timezone.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/tweak-packages.test.mjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "follows experience.js (#755 colours/tweaks split; release-wide unified-inbox default kept)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/tweak-packages.test.mjs",
+   "block": 2,
+   "choice": "main",
+   "reason": "follows experience.js (#755 colours/tweaks split; release-wide unified-inbox default kept)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/tweak-packages.test.mjs",
+   "block": 3,
+   "choice": "main",
+   "reason": "follows experience.js (#755 colours/tweaks split; release-wide unified-inbox default kept)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/tweak-packages.test.mjs",
+   "block": 4,
+   "choice": "main",
+   "reason": "follows experience.js (#755 colours/tweaks split; release-wide unified-inbox default kept)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/tweak-packages.test.mjs",
+   "block": 5,
+   "choice": "main",
+   "reason": "follows experience.js (#755 colours/tweaks split; release-wide unified-inbox default kept)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tests/tweak-packages.test.mjs",
+   "block": 6,
+   "choice": "main",
+   "reason": "follows experience.js (#755 colours/tweaks split; release-wide unified-inbox default kept)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tools/qa-opaque-overlays.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main: kit has no .wz-menu/.wz-toast classes (unused in shell); sheet + close stay gated",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "tools/qa-tap-outside-closes.cjs",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): label forwarding proof",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/app.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main adds Welcome/Pages routes ahead of the same live setup gate",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/app.js",
+   "block": 2,
+   "choice": "live",
+   "reason": "live isFront (foreground-only fingerprint prompts) and no retired exitUntil; main is identical otherwise",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-capture.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): reattached flag",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-client.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): label-forwarded click keeps outside-tap Back",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-client.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "identical except trailing blank line",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-services.js",
+   "block": 1,
+   "choice": "live",
+   "reason": "live OPS superset (vault.* for fingerprint vault) + vault/foreground-only fingerprint code; main has no ops live lacks",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-services.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "same calls, main order",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-services.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): reattached session not stopped",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-services.js",
+   "block": 4,
+   "choice": "combined",
+   "reason": "combined: live vault facade + main audio.duck",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-services.js",
+   "block": 5,
+   "choice": "main",
+   "reason": "identical except blank line",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/app-setup.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/appearance-host.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): Settings embeds themed",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/base.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main dropped unused --wz-panel-raised (0ad52f81); --wz-panel opaque material kept",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-kit.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-kit.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-kit.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-kit.js",
+   "block": 4,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-power.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): agent on retry",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-power.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent) (#762)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chat-power.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent) (#762)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chats.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main priority groups (notification ordering) + live Yesterday/Past-week top-bar ordering both present",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chats.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "same live ordering; main hides move arrows outside Ready",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chats.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): no duplicate original alert",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chats.js",
+   "block": 4,
+   "choice": "combined",
+   "reason": "combined: live dropped detailNav (8df948fd Ready speed) + main savedFor reset (#719)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/chats.js",
+   "block": 5,
+   "choice": "combined",
+   "reason": "combined: main offline saved copy (#719) + live error text (8df948fd, tests/ready-thread-loading)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/config.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "same logic, main helper name",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/context-menu.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main canonical tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 4,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 5,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 6,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/experience.js",
+   "block": 7,
+   "choice": "main",
+   "reason": "main #755 tweak model already contains live globalIds/defaultsOff release defaults",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/notif-bell.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): forced refresh",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/notif-bell.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/reach.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main adds checks export",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/resources.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/resources.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent) (#763 Reconnect)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/resources.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/resources.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/resources.js",
+   "block": 4,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/scheduled-reminders.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main hint matches zoneNow default",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/settings.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main shell-tokens.css aliases",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/settings.css",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/settings.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main #755 tweaks by author",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/settings.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main release-wide settings rows",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-sheet.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main deliberately keeps images out of Messenger pre-registration default (dfd55749); registration still adds them",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.css",
+   "block": 2,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.css",
+   "block": 3,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.css",
+   "block": 4,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): serialised delivery lane + durable native share",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): serialised delivery lane + durable native share",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): serialised delivery lane + durable native share",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.js",
+   "block": 4,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): serialised delivery lane + durable native share",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/share-wizard.js",
+   "block": 5,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): serialised delivery lane + durable native share",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/skin-host.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "equivalent guard",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/skins.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main :where() lowers fallback specificity (#703) - inherited defaults stay opaque",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/skins.css",
+   "block": 2,
+   "choice": "main",
+   "reason": "main :where() lowers fallback specificity (#703)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/core/status.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main offline pop-up (#727) with same read-only connection evidence rule",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main canonical tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main canLeave wraps live CHATS.beforeLeave (Incognito guard); Welcome/Pages/reopen-closed additions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main canLeave wraps live CHATS.beforeLeave (Incognito guard); Welcome/Pages/reopen-closed additions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main canLeave wraps live CHATS.beforeLeave (Incognito guard); Welcome/Pages/reopen-closed additions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.js",
+   "block": 4,
+   "choice": "main",
+   "reason": "main canLeave wraps live CHATS.beforeLeave (Incognito guard); Welcome/Pages/reopen-closed additions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.js",
+   "block": 5,
+   "choice": "main",
+   "reason": "main canLeave wraps live CHATS.beforeLeave (Incognito guard); Welcome/Pages/reopen-closed additions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/desktop/desktop.js",
+   "block": 6,
+   "choice": "main",
+   "reason": "main canLeave wraps live CHATS.beforeLeave (Incognito guard); Welcome/Pages/reopen-closed additions",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/controls.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-tokens.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main adds type/target tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-tokens.css",
+   "block": 2,
+   "choice": "main",
+   "reason": "main adds type/target tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-tokens.css",
+   "block": 3,
+   "choice": "main",
+   "reason": "main adds type/target tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-tokens.css",
+   "block": 4,
+   "choice": "main",
+   "reason": "main adds type/target tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-tokens.css",
+   "block": 5,
+   "choice": "main",
+   "reason": "main adds type/target tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-tokens.css",
+   "block": 6,
+   "choice": "main",
+   "reason": "main adds type/target tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-ui.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-ui.css",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-ui.css",
+   "block": 3,
+   "choice": "main",
+   "reason": "opaque --wz-panel material",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-ui.css",
+   "block": 4,
+   "choice": "main",
+   "reason": "opaque --wz-panel",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/kit/wizard-ui.css",
+   "block": 5,
+   "choice": "main",
+   "reason": "main canonical kit: .wz-menu/.wz-toast unused anywhere in shell (b1548c09)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/layouts/two-orb/layout.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main canonical tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/live.js",
+   "block": 1,
+   "choice": "live",
+   "reason": "live equivalent fix (status only when reported, keeps queueReason)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/live.js",
+   "block": 2,
+   "choice": "combined",
+   "reason": "combined: live Incognito target terminal read + main seq resume/backoff",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/live.js",
+   "block": 3,
+   "choice": "combined",
+   "reason": "combined: main stall timestamp + live Incognito base URL",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/live.js",
+   "block": 4,
+   "choice": "combined",
+   "reason": "combined: main stall/online recovery + live terminal(status)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/outbox.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent): provider-aware agent pick",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/index.html",
+   "block": 1,
+   "choice": "main",
+   "reason": "main kit tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/index.html",
+   "block": 2,
+   "choice": "main",
+   "reason": "main dialog sheet (WzSheet: tap outside/Back via dialog cancel)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.css",
+   "block": 1,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.css",
+   "block": 2,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.css",
+   "block": 3,
+   "choice": "main",
+   "reason": "main type tokens",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main WzSheet dialogs replace manual back holds (Back via native dialog cancel)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main WzSheet dialogs",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "main kit classes",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/setup/setup.js",
+   "block": 4,
+   "choice": "main",
+   "reason": "main kit classes",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/store/store.js",
+   "block": 1,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/store/store.js",
+   "block": 2,
+   "choice": "main",
+   "reason": "main is the canonical newer version (superset of live intent) (#757 remove)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/store/store.js",
+   "block": 3,
+   "choice": "main",
+   "reason": "copy",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/tweaks/catalog.json",
+   "block": 1,
+   "choice": "main",
+   "reason": "main adds machines-home release default (#668)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/tweaks/miguel/profile.json",
+   "block": 1,
+   "choice": "main",
+   "reason": "unified-inbox is a release-wide catalog default in both; no set needs to list it",
+   "phase": "live-main-20261031"
+  },
+  {
+   "file": "web/tweaks/wizard/profile.json",
+   "block": 1,
+   "choice": "main",
+   "reason": "main named profile + machines-home (#668/#755)",
+   "phase": "live-main-20261031"
+  },
+  {
+   "phase": "post-resolution",
+   "file": "docs/COMPONENTS.md",
+   "block": "manual",
+   "choice": "combined",
+   "reason": "re-add live-only rows lost under main compaction: Incognito row, held Send/Discard on outbox row, outside tap on Back row; compact mic + Snooze rows to stay under 14000-byte budget (13983)"
+  },
+  {
+   "phase": "post-resolution",
+   "file": "web/desktop/desktop.js",
+   "block": "canLeave",
+   "choice": "combined",
+   "reason": "main canLeave keeps live CHATS.beforeLeave(id) Incognito guard as a direct call (tests/incognito-chat), still tolerant when absent (tests/desktop-close-desktop)"
+  },
+  {
+   "phase": "post-resolution",
+   "file": "tests/status-connectivity.test.mjs",
+   "block": "auto-merged tail",
+   "choice": "combined",
+   "reason": "auto-merged live assertions referenced live-only `banner` local; define it so live (banner cleared) and main assertions both run"
+  }
+ ]
+}

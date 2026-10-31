@@ -73,10 +73,10 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.keyboard.press('Escape'); await p.waitForTimeout(400);
     s = await state(p);
     const warned = await p.locator('#toast').textContent();
-    ok(s.url.includes('wizard-os-home') && /again to exit/i.test(warned), 'Back on Home only warns: “Press back again to exit”', warned);
+    ok(s.url.includes('wizard-os-home') && /you're home/i.test(warned), 'Back on Home stays: “You’re home”, never an exit warning', warned);
     await p.waitForTimeout(2400);
     s = await state(p);
-    ok(s.url.includes('wizard-os-home') && !s.back.exitArmed && s.back.watchers >= 1, 'warning expires after 2 s and Back re-arms', JSON.stringify(s.back));
+    ok(s.url.includes('wizard-os-home') && !s.back.exitArmed && s.back.watchers >= 1, 'Back re-arms at Home (no exit window)', JSON.stringify(s.back));
     // Many Backs in a row (no taps in between) must each be consumed, never leak to the browser.
     await p.evaluate(() => { __wos.goDesk(0); }); await p.waitForTimeout(300);
     await p.locator(`.desk[data-desk="${0}"]`).tap({ position: { x: 200, y: 300 } }).catch(() => {});

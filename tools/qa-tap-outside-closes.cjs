@@ -26,7 +26,7 @@ window.WosUsage={normalize:()=>({providers:[]}),html:()=>'<p>No fixture usage</p
 const app = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/kit/wizard-ui.css"><script src="/core/app-client.js"></script><script src="/kit/wizard-sheet.js"></script>
 <style>dialog{box-sizing:border-box;position:fixed;inset:auto 10px 10px;width:300px;height:150px;margin:0;padding:20px}#hold{position:fixed;top:10px;left:10px}</style>
-<button id="hold">Hold</button><dialog id="sheet"><button id="action">Action</button></dialog>
+<button id="hold">Hold</button><dialog id="sheet"><button id="action">Action</button><label for="opt">Option</label><input type="checkbox" id="opt"><label id="wrap"><input type="checkbox" id="opt2"> Wrapped</label></dialog>
 <script>
 window.activated=0;window.cancelled=0;
 action.onclick=()=>activated++;
@@ -110,6 +110,12 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       await open();await frame.locator('#action').tap();assert.equal(await frame.evaluate(()=>activated),1);assert.equal(await isOpen(),true);
       await frame.locator('#action').focus();await page.keyboard.press('Enter');assert.equal(await frame.evaluate(()=>activated),2);await frame.evaluate(()=>sheet.close());
     });
+    await check('hosted dialog: <label for> and wrapping labels still toggle their controls',async()=>{
+      await open();await frame.locator('label[for=opt]').tap();assert.equal(await frame.evaluate(()=>opt.checked),true,'label for= toggles');
+      await frame.locator('#wrap').tap();assert.equal(await frame.evaluate(()=>opt2.checked),true,'wrapping label toggles');
+      await frame.locator('label[for=opt]').click();assert.equal(await frame.evaluate(()=>opt.checked),false,'mouse click on label toggles back');
+      assert.equal(await isOpen(),true);await frame.evaluate(()=>sheet.close());
+    });
     await check('hosted dialog: long-press opening release cannot dismiss or activate a menu item',async()=>{
       await frame.locator('#hold').dispatchEvent('pointerdown',{pointerId:1,pointerType:'touch',bubbles:true});
       await frame.waitForFunction(()=>sheet.open);
@@ -181,6 +187,18 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
     await check('shell Resources popup: outside runs Back cleanup',async()=>{
       await page.evaluate(()=>{const b=document.createElement('button');b.dataset.resOpen='server';document.querySelector('#device').append(b);b.click();});
       assert.equal(await page.evaluate(()=>WosResources.state.panel),true);await page.locator('.rs-backdrop').tap({position:{x:5,y:5}});assert.equal(await page.evaluate(()=>WosResources.state.panel),false);await mounted();
+    });
+    await check('shell Resources close stays tappable while the install prompt is pending',async()=>{
+      await page.addStyleTag({content:'.rs-sheet{top:12px!important;bottom:50px!important}'});await page.addScriptTag({url:origin+'/pwa-install.js'});
+      try{
+        await page.evaluate(()=>{const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{};e.userChoice=Promise.resolve({outcome:'dismissed'});dispatchEvent(e);});
+        await page.waitForSelector('#wizard-pwa-install');
+        await page.evaluate(()=>{const b=document.createElement('button');b.dataset.resOpen='server';document.querySelector('#device').append(b);b.click();});
+        assert.equal(await page.locator('#wizard-pwa-install').count(),0,'install prompt must yield to the Resources sheet');
+        const box=await page.locator('[data-res-close]').boundingBox();assert.ok(box);await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+        assert.equal(await page.evaluate(()=>WosResources.state.panel),false);
+      }finally{await page.evaluate(()=>{WosResources?.close?.();dispatchEvent(new Event('appinstalled'));});}
+      await mounted();
     });
     await check('shell media viewer: outside photo closes; photo menu release ignored then backdrop closes only menu',async()=>{
       await page.evaluate(()=>WosChat.viewer.open([{kind:'image',url:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"/>',name:'Fixture'}]));

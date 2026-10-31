@@ -42,6 +42,26 @@ export function resolveInstalled(a, snapshot, runtipi) {
   // Runtipi proves presence by package ID, not which shell launcher owns the repo.
   return managed ? {id:'',status:managed.app?.status || 'unknown'} : null;
 }
+// Installed identity proved for this exact row: same repository in the WAM registry, or a reviewed host alias.
+// A Runtipi-only match (id '') or a same-ID copy from another repository proves nothing about which source it is.
+export const exactInstall = (a,i) => !!i && !i.conflict && (i.repo ? sameRepo(a.repo,i.repo) : !!i.id);
+// One entry per app ID. Rows from one repository (however its name is spelled) are one source. Same-ID rows from
+// different repositories become one conflicted row that keeps the exactly installed repository (when exactly one
+// is installed) and lists each repository once in `sources`.
+export function mergeConflicts(apps, installedOf = () => null) {
+  const groups = new Map();
+  for (const a of apps) { if (!groups.has(a.id)) groups.set(a.id, new Map()); const g = groups.get(a.id), k = repo(a.repo) || a.repo; if (!g.has(k)) g.set(k, []); g.get(k).push(a); }
+  const out = [];
+  for (const byRepo of groups.values()) {
+    const sources = [...byRepo.values()].map(rows => { const exact = rows.find(a => exactInstall(a, installedOf(a))); return {row:exact || rows[0], installed:!!exact}; });
+    if (sources.length < 2) { out.push(sources[0].row); continue; }
+    const installed = sources.filter(s => s.installed), one = installed.length === 1 ? installed[0] : null;
+    const ordered = one ? [one, ...sources.filter(s => s !== one)] : sources;
+    out.push({...(one || sources[0]).row, conflict:true, sources:ordered.map(({row:a}) => ({repo:a.repo, version:a.version, publisher:a.publisher, source:a.source,
+      installed:a === one?.row}))});
+  }
+  return out;
+}
 export function preferredRelease(a,i) {
   return (a.releases || []).find(r => i?.commit && sameRepo(i.repo,r.repo) && i.commit === r.commit) || a;
 }
@@ -63,7 +83,8 @@ export function newerVersion(a,b) {
   return false;
 }
 export function releaseState(a,i,explicit,complete) {
-  if(a.conflict || i?.conflict) return 'conflict';
+  // A shared ID blocks installs, but never hides the copy that is provably installed from this row's repository.
+  if(i?.conflict || (a.conflict && !exactInstall(a,i))) return 'conflict';
   if(!i) return complete ? 'get' : 'unknown';
   if(a.commit && i.commit === a.commit && sameRepo(a.repo,i.repo)) return 'installed';
   const newer = sameRepo(a.repo,i.repo) && a.commit && i.commit && i.source && i.channel && a.source === i.source && a.channel === i.channel && newerVersion(a.version,i.version);

@@ -36,7 +36,8 @@ test('render keeps the HUD above every desk and Home; the open HUD counts as vis
 });
 
 test('two controls only: float over every desk, and back to desktop 1 (Miguel: no minimize, no orb, no put-back-here)', () => {
-  assert.doesNotMatch(js, /hud-min|hud-dock|hudFold|hudOrb|code === 'KeyB'/);
+  assert.doesNotMatch(js, /hud-min|hud-dock|hudFold|hudOrb/);
+  assert.doesNotMatch(js, /code === 'KeyB'\) return hit\(\(\) => \{[^\n]*hud/i); // ⌥B never comes back as the floating chat
   assert.doesNotMatch(html, /hudOrb|<script src="orb\.js">/);
   const bar = js.slice(js.indexOf('function barHtml('), js.indexOf('return `<div class="wbar" data-drag>', js.indexOf('function barHtml(')));
   assert.deepEqual([...bar.matchAll(/data-wact="([^"]+)"/g)].map(m => m[1]), ['hud-home', 'close']);
@@ -44,7 +45,7 @@ test('two controls only: float over every desk, and back to desktop 1 (Miguel: n
 
 test('keys, voice and chat actions follow the keyboard into the HUD; desk routes never reuse it (Codex P1/P2)', () => {
   assert.match(js, /const focused = \(\) => hudHasFocus\(\) \? W\[hud\.id\] : homeOpen \? null : W\[ws\[cur\]\.focus\] \|\| null;/);
-  assert.match(js, /function closeWin\(id, internal = false\) \{\n\s*if \(!internal && !CHATS\.beforeLeave\(id\)\) return;\n\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
+  assert.match(js, /function closeWin\(id, internal = false\) \{\n(?:\s*if \(!internal && !canLeave\(id\)\) return;\n)?\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
   assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ hudFocus\(\); return; \}/);
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);
   assert.match(js, /function toNewChat\(wid, why\) \{\n\s*const w = W\[wid\]; if \(hud\?\.id === wid \|\|/);

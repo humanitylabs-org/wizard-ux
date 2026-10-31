@@ -619,7 +619,7 @@
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
     if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
-    // Wizard's own sheet first (people → Wizard apps → Other apps…); no receiver for this kind = straight out.
+    // Wizard's own sheet first (people → Apps → Other apps…); no receiver for this kind = straight out.
     if (!data.direct && !directShareDepth && window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
     return shareOut(payload);
   }
@@ -886,6 +886,7 @@
   function show() {
     const el = build(), it = V.items[V.i]; if (!it) return;
     V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
+    dropPdf(); el.querySelector('.mv-bar [data-mv="save"]').textContent = it.kind === 'image' ? 'Save' : '⤓ Download';
     const stage = el.querySelector('.mv-stage');
     for (const m of stage.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
     el.dataset.kind = it.kind;
@@ -905,10 +906,26 @@
         const isMd = /markdown/.test(it.mime || '') || /\.(md|markdown)$/i.test(it.name || '');
         stage.innerHTML = `<div class="mv-doc">${isMd ? `<div class="bub md-doc">${md(t)}</div>` : `<pre>${esc(t)}</pre>`}</div>`;
       }).catch(() => { if (V.items[V.i] === want) stage.innerHTML = fileCard(it, 'Can’t preview this file here. Share or save it to open it.'); });
-    } else stage.innerHTML = fileCard(it, /pdf/.test(it.mime || '') ? 'Share or save it to open it in a PDF app.' : 'Share or save it to open it in another app.');
+    } else if ((isPdf(it) || !it.mime) && pdfInline()) {
+      // PDFs open right here in the browser's own PDF reader: the attachment route always answers as a download,
+      // so the bytes are fetched once and shown from a typed blob: frame (CSP frame-src allows blob:).
+      stage.innerHTML = '<div class="mv-doc"><p class="mv-wait">Opening…</p></div>';
+      const want = it;
+      fetchBlob(it.url).then(b => b.size > 64 * 1048576 ? Promise.reject(new Error('big')) : b).then(b => {
+        if (V.items[V.i] !== want || !viewer.isOpen()) return;
+        // A plain link (no type known up front) previews only when the bytes turn out to be a PDF.
+        if (!isPdf(it) && !/pdf/i.test(b.type || '')) { stage.innerHTML = fileCard(it, 'Download it to open it in another app.'); return; }
+        dropPdf(); V.pdf = URL.createObjectURL(new Blob([b], { type: 'application/pdf' }));
+        stage.innerHTML = `<iframe class="mv-pdf" src="${esc(V.pdf)}" title="${esc(it.name || 'PDF')}"></iframe>`;
+      }).catch(() => { if (V.items[V.i] === want) stage.innerHTML = fileCard(it, 'Can’t preview this PDF here. Download it to open it.'); });
+    } else stage.innerHTML = fileCard(it, isPdf(it) ? 'Download it to open it in a PDF app.' : 'Download it to open it in another app.');
     paint();
   }
-  const fileCard = (it, hint) => `<div class="mv-file"><span class="mv-ic">📄</span><b>${esc(it.name || 'File')}</b><small>${esc([it.mime, sizeLabel(it.bytes)].filter(Boolean).join(' · '))}</small><p>${esc(hint)}</p></div>`;
+  const isPdf = it => /pdf/i.test(it.mime || '') || /\.pdf$/i.test(it.name || '');
+  // Browsers with a built-in PDF reader say so; the Android app's WebView has none and keeps the card + Download.
+  const pdfInline = () => navigator.pdfViewerEnabled === true && !appDownloads();
+  function dropPdf() { if (V.pdf) { try { URL.revokeObjectURL(V.pdf); } catch (_) {} V.pdf = ''; } }
+  const fileCard = (it, hint) => `<div class="mv-file"><span class="mv-ic">📄</span><b>${esc(it.name || 'File')}</b><small>${esc([it.mime, sizeLabel(it.bytes)].filter(Boolean).join(' · '))}</small><p>${esc(hint)}</p><button type="button" class="mv-dl" data-mv="save">⤓ Download</button></div>`;
   const viewer = {
     open(items, i = 0) {
       items = (items || []).filter(x => x && x.url); if (!items.length) return false;
@@ -920,7 +937,7 @@
       if (!V.el || V.el.hidden) return false;
       if (menu(false)) return true; // Back/Esc: the Save/Share menu first, the photo stays open
       for (const m of V.el.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
-      stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; V.items = []; V.ptr.clear(); V.g = null;
+      stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; dropPdf(); V.items = []; V.ptr.clear(); V.g = null;
       K.onChange(false); return true;
     },
     isOpen: () => !!V.el && !V.el.hidden,
@@ -952,5 +969,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

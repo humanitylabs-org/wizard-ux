@@ -26,7 +26,7 @@
   function html() {
     let h = '<section class="recommended" aria-label="Recommended next"><h2>Recommended next</h2><p class="intro">Optional. Install only what you want, then sign in. Nothing runs until you choose it.</p>';
     if (status === 'loading') return h + '<p class="muted">Checking available apps…</p></section>';
-    if (status === 'error') return h + '<p class="muted">Recommendations aren’t available right now.</p><button class="link" data-recommended-retry>Try again</button></section>';
+    if (status === 'error') return h + '<p class="muted">Recommendations aren’t available right now.</p><button class="link wz-button secondary" data-recommended-retry>Try again</button></section>';
     h += '<div class="rows">';
     for (const a of apps) {
       const waiting = busy.has(a.id), blocked = !a.installed && !a.selection;

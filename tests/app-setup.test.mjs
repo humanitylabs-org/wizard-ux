@@ -98,6 +98,8 @@ test('both launchers put admission before window creation; Back peels setup befo
     const src = read(file), start = src.indexOf('  function openApp('), gate = src.indexOf('WosAppSetup.gate', start), next = src.indexOf('\n  function ', start + 5);
     assert.ok(gate > start && gate < next); assert.match(src.slice(start, gate + 140), /setupChecked: true/);
     const back = src.indexOf("return 'app-setup'"); assert.ok(back > 0);
+    // A late setup sheet only lands on the app still in front, on the phone and on desktop.
+    assert.match(src, /WosAppSetup\?\.init\(\{[^}]*isFront: id =>/, `${file} passes isFront`);
   }
   const store = read('web/store/store.js'); assert.match(store, /Setup\.html\(routerId\(a\)/); assert.match(store, /Setup\.html\(id/); assert.match(store, /await installRelease\(/);
 });
@@ -141,4 +143,12 @@ test('compact disclosures escape need copy and never use purpose as the row name
   assert.match(rows, /class="mc-name">Live transcription/);
   assert.match(rows, /&lt;img onerror=alert\(1\)&gt;/);
   assert.doesNotMatch(rows, /<img/);
+});
+
+test('install links open the Store window synchronously so the link reaches its frame (both shells)', () => {
+  for (const [file, call] of [['web/app.js', "openApp(APP['app-store'], {}, { setupChecked: true })"], ['web/desktop/desktop.js', "openApp(APP['app-store'], { setupChecked: true })"]]) {
+    const src = read(file), at = src.indexOf("if (v === 'install') {");
+    assert.ok(at > 0, file); assert.ok(src.slice(at, at + 400).includes(call), `${file} skips the async setup gate for the install link`);
+    assert.ok(src.slice(at, src.indexOf(call, at)).includes('WosAppSetup?.close()'), `${file} cancels an earlier pending setup gate first`);
+  }
 });

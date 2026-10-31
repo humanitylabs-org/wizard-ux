@@ -434,6 +434,7 @@ window.WizCore.chats = function createChats(H) {
   // One status for a thread, shared by its list row and its open header (James, 25 Oct 2026: the open thread shows
   // the same raised hand / tick as its row, so a thread that needs him says so while he reads it).
   function stiKind(s) {
+
     const working = isWorking(s), needs = ['waiting_for_approval', 'unknown', 'failed', 'interrupted'].includes(s.status);
     // Personal Snooze lowers effective priority, not just list position. Keep the underlying
     // attention/status intact so Restore (or a newer reply) recovers it, including approvals/errors.
@@ -545,7 +546,10 @@ window.WizCore.chats = function createChats(H) {
     // Keep one order bar, then all awake groups, then the snoozed tail (no new category).
     if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }, sec) + withNotes(list.filter(deferredOf), nt ? nt.later.slice().sort(noteTimeOrder) : [], rowFn, noteByTime);
     const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => { const on = readyOrder === o || (o === 'newest' && readyOrder === 'oldest'); return `<button type="button" data-rdyorder="${o}" aria-pressed="${on}"${on ? ' class="on"' : ''}>${o === 'newest' && readyOrder === 'oldest' ? 'Oldest' : READY_ORDER_LABEL[o]}</button>`; }).join('')}</div>`;
+    // Yesterday and Past week follow Ready's order but carry no controls: the order bar and subject moves live on Ready
+    // only, so a move never rewrites the saved subject order from a partial list.
     const top = sec === 'ready' ? bar : '', mk = k => sec === 'ready' ? `subj:${k}` : `subj:${sec}:${k}`;
+    if (readyOrder === 'priority') return top + priorityGroups(list, awake, rowFn, sec) + later;
     if (readyOrder !== 'subject') return top + withNotes(list, awake, rowFn) + later;
     const groups = new Map();
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
@@ -556,7 +560,7 @@ window.WizCore.chats = function createChats(H) {
     const keys = subjectSort([...groups.keys()], (a, b) => (a === 'Other') - (b === 'Other') || waits(b) - waits(a) || size(b) - size(a) || a.localeCompare(b));
     const ar = (dir, k, off, label, glyph) => `<button type="button" data-subjmove="${dir}" data-subjkey="${esc(k)}" aria-label="${label} ${esc(k)}"${off ? ' disabled' : ''}>${glyph}</button>`;
     return top + keys.map((k, i) => { const l = groups.get(k), wN = waits(k), last = i === keys.length - 1;
-      return `<div class="ch-subj" data-morph-key="${esc(mk(k))}"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${size(k)}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + withNotes(l, notesOf(k), rowFn); }).join('') + later;
+      return `<div class="ch-subj" data-morph-key="${esc(mk(k))}"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${size(k)}</small>${sec === 'ready' ? `<span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span>` : ''}</div>` + withNotes(l, notesOf(k), rowFn); }).join('') + later;
   }
   /* Notifications listed in Ready like any chat (a live package holds WosSkinHost.inboxList): unread ones are awake
    * rows that Newest / Oldest place by when they arrived, Priority by their own priority (4–5 beside Needs you, 3
@@ -574,7 +578,19 @@ window.WizCore.chats = function createChats(H) {
   }
   const noteAt = it => (Number(it.time) || 0) * 1000, sesAt = s => Date.parse(LIVE.cardAt(s)) || 0;
   const noteRank = it => it.priority >= 4 ? 1 : it.priority === 3 ? 2 : 3;
-  const sesRank = s => ['waiting_for_approval', 'unknown'].includes(s.status) ? 0 : deferredOf(s) ? 9 : attOf(s)?.state === 'needs_you' ? 1 : attOf(s)?.state === 'check' ? 2 : 3;
+  const SES_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
+  const sesRank = s => LIVE.readyRank ? LIVE.readyRank(s) : ['waiting_for_approval', 'unknown'].includes(s.status) ? 0 : deferredOf(s) ? 9 : SES_RANK[attOf(s)?.state] || 5;
+  /* Priority shows its groups (Miguel, 29 Oct 2026: "they're not grouped properly … it doesn't really change from
+   * newest"): a small header per status, most urgent first, newest first inside each. Notifications join the group of
+   * their own priority (4–5 Needs you, 3 Your call, the rest FYI). */
+  const PRI_LABEL = { 0: 'Needs approval', 1: 'Needs you', 2: 'Your call', 3: 'FYI', 4: 'Done', 5: 'No status', 9: 'Snoozed' };
+  function priorityGroups(list, awake, rowFn, sec) {
+    const groups = new Map();
+    for (const s of list) { const r = sesRank(s); if (!groups.has(r)) groups.set(r, { rows: [], notes: [] }); groups.get(r).rows.push(s); }
+    for (const it of awake) { const r = noteRank(it); if (!groups.has(r)) groups.set(r, { rows: [], notes: [] }); groups.get(r).notes.push(it); }
+    return [...groups.keys()].sort((a, b) => a - b).map(r => { const g = groups.get(r), n = g.rows.length + g.notes.length;
+      return `<div class="ch-subj ch-pri" data-pri="${r}" data-morph-key="${esc(sec === 'ready' ? `pri:${r}` : `pri:${sec}:${r}`)}"><span>${PRI_LABEL[r] || 'Other'}</span><small>${n}</small></div>` + withNotes(g.rows, g.notes, rowFn); }).join('');
+  }
   // The notes' own order, and whether a note goes above a given chat row, for the current Ready order.
   const noteOrder = (a, b) => readyOrder === 'oldest' ? noteAt(a) - noteAt(b) : readyOrder === 'newest' ? noteAt(b) - noteAt(a) : noteRank(a) - noteRank(b) || noteAt(b) - noteAt(a);
   function noteBefore(it, s) {
@@ -627,6 +643,7 @@ window.WizCore.chats = function createChats(H) {
   // A thread James just wrote to sits in Working from the tap on; its status follows the message (live.js PEND).
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
   function workLabel(s) {
+    if (s?.status === 'queued' && s.queueReason === 'provider_access') return 'AI could not start';
     if (s.pend && PEND_LABEL[s.pend]) return PEND_LABEL[s.pend];
     return s.status === 'stopping' ? 'Stopping…' : window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working');
   }
@@ -727,7 +744,7 @@ window.WizCore.chats = function createChats(H) {
   // fresh New chat whose composer stays empty: the item rides beside the draft as its reply (KIT.reply), shown as a
   // small bubble above the composer and framed into the message only when it is sent. Repeated taps reuse the
   // same draft; after it is sent or dismissed (×), a new tap starts a new reply.
-  function openContextDraft(wid, key, item) {
+  function openContextDraft(wid, key, item, text = '') {
     const w = W[wid]; if (!w) throw new Error('Main Chats unavailable');
     const reply = KIT.reply.clean(typeof item === 'string' ? { key, title: '', message: item } : { ...(item || {}), key });
     if (!reply) throw new Error('Invalid reply context');
@@ -738,7 +755,7 @@ window.WizCore.chats = function createChats(H) {
     let slot = Object.keys(all).find(k => all[k]?.reply?.key === key && (k === 'new' || SAVED_NEW.test(k)));
     if (!slot) {
       slot = 'new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      all[slot] = { text: '', files: [], at: Date.now(), reply };
+      all[slot] = { text: String(text || '').slice(0, 2000), files: [], at: Date.now(), reply };
       localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all));
     }
     openNewDraft(wid, slot);
@@ -1296,6 +1313,7 @@ window.WizCore.chats = function createChats(H) {
   const MIC_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
   const CLIP_SVG = '<svg viewBox="0 0 24 24"><path d="m9.5 17.5 7.7-7.7a3 3 0 0 0-4.2-4.2l-8 8a5 5 0 0 0 7.1 7.1l8-8"/></svg>';
   const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></svg>';
+  const DL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
   /* ---- voice notes: mic + "Voice note" + length, tap to play (Telegram-style) ---- */
   const DUR_KEY = 'wos.voice-durations.v1';
   let DUR = (() => { try { return JSON.parse(localStorage.getItem(DUR_KEY) || '{}'); } catch (e) { return {}; } })();
@@ -1344,7 +1362,10 @@ window.WizCore.chats = function createChats(H) {
     // shrink-to-fit bubble at zero width, so only network images remain lazy.
     if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="${esc(m.name || 'Photo')}" loading="${/^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
     if (m.kind === 'audio') return `<div class="mcard aud"><span class="mic">♪</span><span class="mn"><b>${esc(m.name)}</b><audio controls preload="none" src="${esc(m.url)}"></audio>${m.transcript ? `<small>${esc(m.transcript)}</small>` : ''}</span></div>`;
-    return `<button type="button" class="mcard" data-mi="${k}"><span class="mic">${m.kind === 'video' ? PLAY_SVG : CLIP_SVG}</span><span class="mn"><b>${esc(m.name)}</b><small>${esc(m.kind === 'video' ? 'Video' : (m.mime.split('/')[1] || 'File').toUpperCase())}${m.bytes ? ' · ' + esc(fsize(m.bytes)) : ''}</small></span></button>`;
+    // A file or video card: tap it to view it in Wizard; the ⤓ beside the name downloads it in one tap.
+    const card = `<button type="button" class="mcard" data-mi="${k}"><span class="mic">${m.kind === 'video' ? PLAY_SVG : CLIP_SVG}</span><span class="mn"><b>${esc(m.name)}</b><small>${esc(m.kind === 'video' ? 'Video' : (m.mime.split('/')[1] || 'File').toUpperCase())}${m.bytes ? ' · ' + esc(fsize(m.bytes)) : ''}</small></span></button>`;
+    if (!m.url) return card;
+    return `<div class="mfile">${card}<button type="button" class="mdl" data-mdl="${k}" title="Download" aria-label="Download ${esc(m.name || 'file')}">${DL_SVG}</button></div>`;
   }
   function mediaBlock(c, list) {
     if (!list.length) return '';
@@ -1808,15 +1829,36 @@ window.WizCore.chats = function createChats(H) {
       const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
       for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
     }
-    return s.trimEnd();
+    // A `MEDIA:/abs/path` line is the agent sending a picture. The Agent Service turns it into the thumbnail when the
+    // transcript lands; the live stream still carries the raw line, so leave it out (also while it is half typed).
+    s = s.replace(STREAM_MEDIA, '');
+    const tail = s.slice(s.lastIndexOf('\n') + 1).trimStart();
+    if (tail && (tail.startsWith('MEDIA:') || 'MEDIA:'.startsWith(tail))) s = s.slice(0, s.lastIndexOf('\n') + 1);
+    return s.replace(/\n{3,}/g, '\n\n').trimEnd();
   };
+  const STREAM_MEDIA = /^[ \t]*MEDIA:[ \t]*\/[^\r\n]*$/gm;
+  // The same picture as the transcript shows it: a positioned thumbnail, or the line saying it could not be shown.
+  const SHOWN_MEDIA = /!\[[^\]\n]*\]\(\/wizard\/attachments\/[0-9a-f]{32}(?: "[^"\n]*")?\)|\[file: [^\]\n]* unavailable\]/g;
   // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
-  const bare = v => streamAnswer(v).replace(/\s+/g, '');
+  // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
+  const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
   const streamShown = (st, turns) => {
     const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
     if (!ans || !got.endsWith(ans)) return false;
     return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+  };
+  // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
+  // earlier notes), while the stream replays them from its first event. Draw only what the transcript lacks, or the
+  // same line shows twice: once as a message, once under "Replying…" (Miguel, 29 Oct 2026).
+  const streamUnshown = (text, turns) => {
+    const t = (turns || []).at(-1);
+    if (!t || (t.a && t.a.final !== false)) return text;
+    const shown = [...(t.notes || []), t.a?.text || ''].map(bare).join('');
+    if (!shown) return text;
+    let i = 0, j = 0;
+    for (; i < text.length && j < shown.length; i++) { if (/\s/.test(text[i])) continue; if (text[i] !== shown[j]) return text; j++; }
+    return j === shown.length ? text.slice(i).trimStart() : text;
   };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
@@ -1853,7 +1895,7 @@ window.WizCore.chats = function createChats(H) {
     if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
-    const visible = st && !st.landed ? streamAnswer(st.text) : '';
+    const visible = st && !st.landed ? streamUnshown(streamAnswer(st.text), turns) : '';
     // James: one activity surface. Timed tool rows belong to the existing WosWork disclosure;
     // the stream adds only answer text, never a second steps list or a steps-only bubble.
     return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
@@ -1886,7 +1928,7 @@ window.WizCore.chats = function createChats(H) {
     const NV = isNew && !pend.length ? notifOf(w) : null;
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
     const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
-    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
+    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
     else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
@@ -1921,6 +1963,10 @@ window.WizCore.chats = function createChats(H) {
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
     msgs += syncStream(w, c, turns, TAG);
+    // A saved copy painted after a failed read says so, so it never passes for a fresh one.
+    // Only within the open whose read failed; the next good read clears it.
+    if (!isNew && turns && c.savedFor === w.thread && c.savedNav === c.readNav)
+      msgs += `<div class="ch-renamed ch-saved" role="status"><span>Saved copy${c.savedAt ? ' from ' + esc(new Date(c.savedAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })) : ''} · can’t reach Wizard right now</span></div>`;
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
     PW?.capture(box); // save the shared eye-line record before rows above it change
@@ -2355,7 +2401,7 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
       if (retireLanded(w.thread, turns)) changed = true;
@@ -2384,6 +2430,13 @@ window.WizCore.chats = function createChats(H) {
         // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
         // instead of a stale, still-editable copy of a deleted thread.
         if (gone) { Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' }); LIVE.forgetMessages?.(sid); }
+        // No answer at all (offline): paint this device's saved copy, labelled, instead of an empty error. Turns already
+        // on screen from an earlier read stay, but now carry the same label, so they never pass for a fresh copy.
+        else if (!e.status && (c.loadedFor === sid || c.cachedFor === sid) && c.turns) { if (c.savedFor !== sid || c.savedNav !== nav) Object.assign(c, { savedFor: sid, savedNav: nav, savedAt: c.at || 0 }); }
+        else if (!e.status) {
+          const saved = LIVE.savedMessages?.(sid);
+          if (saved?.rows?.length) try { Object.assign(c, { turns: toTurns(saved.rows), cachedFor: sid, cachedNav: nav, loadedFor: '', savedFor: sid, savedNav: nav, savedAt: saved.at }); } catch (_) {}
+        }
         c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
@@ -2654,9 +2707,9 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  // Typed text uses the full width of the box. Only when the last line would run into the model label (bottom-right)
-  // does the box add one line, so the label sits under the text and nothing is hidden (James 18 Oct 2026).
-  // A textarea can't wrap one line early, so a hidden mirror measures where the last line ends.
+  // Empty composers keep the model name in the free bottom-right corner. As soon as there is a draft, the name gets
+  // its own strip below the textarea so its 40px tap target can never intercept text selection or editing. The mirror
+  // still catches placeholder collisions and scrolling states where the editable area cannot safely share the corner.
   let mirror = null;
   function fitLabel(root) {
     const ta = root?.matches?.('textarea') ? root : root?.querySelector('.ch-field textarea');
@@ -2671,12 +2724,16 @@ window.WizCore.chats = function createChats(H) {
     const text = ta.value || ta.placeholder || '';
     mirror.textContent = text; const end = document.createElement('span'); end.textContent = '\u200b'; mirror.appendChild(end);
     const lastEnd = end.offsetLeft; // x where the last line ends
+    const lineHeight = parseFloat(cs.lineHeight) || 0;
+    const lineCount = lineHeight > 0 ? Math.round(mirror.offsetHeight / lineHeight) : 1;
     const room = inner - lw + 12; // last-line text may come within ~8px of the label's visible name (the label has 10px inner padding)
-    // The name gets its own strip below the text (outside the scrolling area) when the last line would reach it, or
-    // once the box is at full height and scrolls: a scrolled textarea can't be trusted to keep bottom padding clear.
+    // The name gets its own strip for every draft: its 40px tap target otherwise sits on top of the editable row and
+    // steals taps used to place or drag the selection. Keep the measured fallbacks for an empty placeholder collision
+    // or scrolling box too, because those states cannot safely share the editable area.
     const scrolls = ta.scrollHeight > ta.clientHeight + 2;
+    const hasDraft = ta.value.length > 0;
     ta.style.paddingBottom = '';
-    ta.parentElement.classList.toggle('lab-row', lastEnd > room || scrolls);
+    ta.parentElement.classList.toggle('lab-row', hasDraft || lineCount >= 3 || lastEnd > room || scrolls);
   }
   function growTa(ta) {
     if (!ta) return;
@@ -2839,6 +2896,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, true); return true; }
+    const mdl = e.target.closest('[data-mdl]'); if (mdl) { e.preventDefault(); const m = ch(id).media?.[+mdl.dataset.mdl]; if (m) KIT.download(m); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }
     const ml = e.target.closest('a[data-mlink]'); if (ml) { e.preventDefault(); const u = ml.dataset.mlink; KIT.viewer.open([{ url: u, name: ml.textContent.trim() || 'File', kind: 'file', mime: '' }]); return true; }
     const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session, { via: 'link' }); return true; }

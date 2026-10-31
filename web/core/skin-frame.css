@@ -16,6 +16,9 @@ html[data-skin-frame="borderless"] .win {
  * rest of the window keeps the skin material. */
 html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed) { background: var(--frame-top, var(--frame-bg, #0f1014)); }
 html[data-shell="desktop"][data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed) { background: var(--frame-top, var(--frame-bg, #05030c)); }
+/* Settings is not an app window: a page it embeds (.st-embed, Settings › Connections) leaves it the skin material. */
+html[data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed),
+html[data-shell="desktop"][data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed) { background: var(--sk-win); }
 html[data-skin-frame="borderless"] .win.wz-themed:has(> .wbody iframe) {
   background: linear-gradient(var(--frame-top, transparent), var(--frame-top, transparent)) top / 100% var(--sf-head, 48px) no-repeat,
     var(--frame-bg, var(--sk-win));

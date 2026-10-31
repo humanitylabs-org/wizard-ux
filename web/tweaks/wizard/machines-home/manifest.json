@@ -1,0 +1,17 @@
+{
+  "id": "wizard/machines-home",
+  "name": "Machines on Home",
+  "version": "1.4.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav",
+    "data.read",
+    "models",
+    "inbox",
+    "settings"
+  ],
+  "description": "Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings \u203a System holds your network, AI, security and storage",
+  "storage": "machines-home"
+}

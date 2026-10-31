@@ -4,8 +4,8 @@
     "wizard"
   ],
   "profiles": [
-    "miguel",
-    "wizard"
+    "wizard",
+    "miguel"
   ],
   "tweaks": [
     "miguel/switch-row-actions",
@@ -15,17 +15,19 @@
     "miguel/hidden-pin",
     "miguel/snooze-someday",
     "miguel/home-bars",
-    "miguel/machines-home",
     "wizard/two-orbs",
+    "wizard/machines-home",
     "miguel/arrange-download",
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox"
   ],
   "defaults": [
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "wizard/machines-home"
   ],
   "aliases": {
-    "miguel/unified-inbox": "wizard/unified-inbox"
+    "miguel/unified-inbox": "wizard/unified-inbox",
+    "miguel/machines-home": "wizard/machines-home"
   }
 }

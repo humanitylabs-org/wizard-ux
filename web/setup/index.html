@@ -7,7 +7,10 @@
 <title>Setup</title>
 <link rel="stylesheet" href="../core/base.css">
 <link rel="stylesheet" href="../core/phone-connect.css">
+<link rel="stylesheet" href="../kit/wizard-tokens.css">
 <link rel="stylesheet" href="setup.css">
+<link rel="stylesheet" href="../kit/wizard-ui.css">
+<script defer src="../kit/wizard-sheet.js"></script>
 <script src="../core/app-client.js"></script>
 <script defer src="vendor/qrcode.js"></script>
 <script defer src="../core/phone-connect.js"></script>
@@ -15,18 +18,18 @@
 <script defer src="setup.js"></script>
 </head>
 <body>
-<main class="app" id="app" aria-live="polite">
+<main class="app wz-app" id="app" aria-live="polite">
   <section class="screen" id="list" aria-label="Setup"></section>
   <section class="screen" id="phone" aria-label="Connect another device" hidden></section>
 </main>
 <div class="scrim" id="scrim" hidden></div>
-<div class="menu" id="menu" role="menu" hidden><button role="menuitem" data-act="ask-reset">Disconnect and start over…</button></div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+<dialog class="wz-sheet" id="menu" aria-label="Device actions"><button class="wz-row" data-act="ask-reset">Disconnect and start over…</button></dialog>
+<dialog class="wz-sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <h2 id="sheetTitle">Disconnect and start over?</h2>
   <p>Wizard leaves your Tailscale network. Your device won’t reach it until you set this up again.</p>
-  <button class="btn quiet" data-act="reset">Disconnect</button>
-  <button class="link" data-act="cancel-reset">Cancel</button>
-</div>
+  <button class="wz-button destructive" data-act="reset">Disconnect</button>
+  <button class="link wz-button secondary" data-act="cancel-reset">Cancel</button>
+</dialog>
 <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

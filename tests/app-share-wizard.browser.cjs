@@ -8,7 +8,7 @@ const server=http.createServer(async(req,res)=>{
  const p=new URL(req.url,'http://localhost').pathname;
  if(req.method==='POST'){const chunks=[];for await(const c of req)chunks.push(c);const body=Buffer.concat(chunks);if(p==='/api/uploads'){await new Promise(r=>setTimeout(r,400));posts.push({kind:'upload',bytes:body.length});res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({id:'f'+posts.length,name:req.headers['x-name'],mime:req.headers['content-type'],bytes:body.length}));}if(p==='/api/chat'){posts.push({kind:'send',...JSON.parse(body)});return res.end(JSON.stringify({durable:true,id:'test-send'}));}}
  if(p==='/messenger/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end('<script src="/core/app-client.js"></script><p>Disposable Messenger test frame</p>');}
- if(p==='/wizard-os-home/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/core/attach-chip.css"><link rel="stylesheet" href="/core/share-wizard.css"><script src="/core/attach-chip.js"></script><style>body{margin:0;font:15px system-ui;background:var(--wz-canvas);color:var(--wz-text)}:root{--wz-canvas:#131c20;--wz-surface:#21303b;--wz-surface-raised:#2c3b48;--wz-text:#e6f1f6;--wz-text-secondary:#a2b2bf;--wz-text-muted:#8193a3;--wz-accent:#89b4fa;--wz-accent-soft:#283950;--wz-on-accent:#101c30;--wz-border:#435363}iframe{width:100%;height:100vh;border:0}</style></head><body><script>window.WizCore={apps:()=>({APPS:[{id:'messenger',kind:'wizard',url:'/messenger/'}]})};</script><script src="/core/share-wizard.js"></script><script src="/core/app-services.js"></script><iframe id="app" src="/messenger/"></iframe><script>WizAppServices.attach(document.querySelector('iframe'),{appId:'messenger',path:'/messenger/',isVisible:()=>true});</script></body></html>`);}
+ if(p==='/wizard-os-home/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/kit/shell-tokens.css"><link rel="stylesheet" href="/core/attach-chip.css"><link rel="stylesheet" href="/core/share-wizard.css"><script src="/core/attach-chip.js"></script><style>body{margin:0;font:15px system-ui;background:var(--wz-canvas);color:var(--wz-text)}:root{--wz-canvas:#131c20;--wz-surface:#21303b;--wz-surface-raised:#2c3b48;--wz-text:#e6f1f6;--wz-text-secondary:#a2b2bf;--wz-text-muted:#8193a3;--wz-accent:#89b4fa;--wz-accent-soft:#283950;--wz-on-accent:#101c30;--wz-border:#435363}iframe{width:100%;height:100vh;border:0}</style></head><body><script>window.WizCore={apps:()=>({APPS:[{id:'messenger',kind:'wizard',url:'/messenger/'}]})};</script><script src="/core/share-wizard.js"></script><script src="/core/app-services.js"></script><iframe id="app" src="/messenger/"></iframe><script>WizAppServices.attach(document.querySelector('iframe'),{appId:'messenger',path:'/messenger/',isVisible:()=>true});</script></body></html>`);}
  const file=path.join(root,'web',p);if(file.startsWith(path.join(root,'web'))&&fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':'text/css');return res.end(fs.readFileSync(file));}res.statusCode=404;res.end();
 });
 (async()=>{
@@ -66,6 +66,26 @@ const server=http.createServer(async(req,res)=>{
  await app.evaluate(()=>{window.result=WizardApp.share.wizard({files:[],text:'Cancel me'});});await page.locator('.wz-share').waitFor();
  await page.evaluate(()=>WizShareWizard.back());assert.equal(await app.evaluate(()=>window.result),'cancelled');
  assert.equal(posts.slice(start).filter(p=>p.kind==='send').length,3);
+ // Native shares (durable): the sheet still closes at once, but 'sent' waits for the receipt so device.js keeps the
+ // staged copy (shareDone) until the message is saved; a failed send stays pending until the retry sheet settles.
+ await page.evaluate(()=>{window.dres='pending';WizShareWizard.open({durable:true,text:'Native words',items:[{name:'n.txt',mime:'text/plain',bytes:1,blob:new Blob(['n'],{type:'text/plain'})}]}).then(r=>window.dres=r);});
+ await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden',timeout:1000});
+ assert.equal(await page.evaluate(()=>window.dres),'pending','native share is not released while uploading');
+ await page.waitForFunction(()=>!WizShareWizard.busy);assert.equal(await page.evaluate(()=>window.dres),'sent');
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.chats.uploadFile=async()=>{throw new Error('offline');};window.dres='pending';WizShareWizard.open({durable:true,text:'Native fail',items:[{name:'n.txt',mime:'text/plain',bytes:1,blob:new Blob(['n'],{type:'text/plain'})}]}).then(r=>window.dres=r);});
+ await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.dv-status',{hasText:'check the connection'}).waitFor({timeout:5000});
+ assert.equal(await page.evaluate(()=>window.dres),'pending','failed native send keeps the staged copy');
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.chats.uploadFile=h.__up;WizShareWizard.back();});await page.waitForFunction(()=>window.dres==='cancelled');
+ // Two overlapping deliveries never share one temporary Chats window (the first must not close it under the second).
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.__send=h.chats.sendChat;h.chats.sendChat=async(wid,...r)=>{await new Promise(x=>setTimeout(x,800));if(!h.wins[wid])throw new Error('window closed under send');return h.__send(wid,...r);};});
+ const before2=posts.filter(p=>p.kind==='send').length;
+ await page.evaluate(()=>{window.r1=WizShareWizard.open({text:'Overlap A',items:[{name:'a.txt',mime:'text/plain',bytes:1,blob:new Blob(['a'],{type:'text/plain'})}]});});
+ await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden'});
+ await page.evaluate(()=>{window.r2=WizShareWizard.open({text:'Overlap B'});});await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden'});
+ await page.waitForFunction(()=>!WizShareWizard.busy||document.querySelector('.wz-share'),null,{timeout:10000});
+ assert.equal(await page.locator('.wz-share').count(),0,'no retry sheet: both overlapping sends landed');
+ assert.deepEqual(posts.filter(p=>p.kind==='send').slice(before2).map(p=>p.text).sort(),['Overlap A','Overlap B']);
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.chats.sendChat=h.__send;});
  await page.close();}
  fs.writeFileSync(ev+'/receipt.json',JSON.stringify({shells:['phone','desktop'],posts},null,2));console.log('pass: 2 shells; real installed-frame share.wizard → shared sheet; 10 uploads → 1 message; no DEV; two skins; Cancel/Back');
  }finally{await browser.close();server.close();}

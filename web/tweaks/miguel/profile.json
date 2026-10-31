@@ -1,5 +1,6 @@
 {
   "id": "miguel",
+  "name": "Miguel",
   "version": 1,
   "skin": "obsidian",
   "tweaks": [
@@ -10,10 +11,8 @@
     "miguel/hidden-pin",
     "miguel/snooze-someday",
     "miguel/home-bars",
-    "miguel/machines-home",
     "miguel/arrange-download",
-    "miguel/refresh-button",
-    "wizard/unified-inbox"
+    "miguel/refresh-button"
   ],
   "flags": {}
 }

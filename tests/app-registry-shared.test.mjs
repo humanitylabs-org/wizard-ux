@@ -9,13 +9,13 @@ import vm from 'node:vm';
 
 const src = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
 
-function boot() {
+function boot(onEvent = () => {}) {
   let events = 0;
   const store = new Map();
   const win = {
     WizCore: {}, location: { origin: 'http://x', pathname: '/' },
     addEventListener() {}, removeEventListener() {},
-    dispatchEvent(e) { if (e.type === 'wizard:apps') events++; return true; },
+    dispatchEvent(e) { if (e.type === 'wizard:apps') { events++; onEvent(win); } return true; },
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
   };
   const ctx = { window: win, document: { addEventListener() {}, hidden: false }, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } },
@@ -33,4 +33,12 @@ test('apps(shell) returns one shared registry and does not re-announce on lookup
   for (let i = 0; i < 50; i++) assert.equal(win.WizCore.apps('mobile'), a);
   assert.equal(events(), after, 'looking up the registry must not dispatch wizard:apps');
   assert.notEqual(win.WizCore.apps('desktop'), a);
+});
+
+test('cold app-registry creation is safe when a wizard:apps listener immediately asks for it', () => {
+  let observed;
+  const { win, events } = boot(w => { observed = w.WizCore.apps('mobile'); });
+  const registry = win.WizCore.apps('mobile');
+  assert.equal(observed, registry); assert.equal(events(), 1);
+  assert.ok(registry.APP.setup); assert.ok(registry.APP.troubleshooter);
 });

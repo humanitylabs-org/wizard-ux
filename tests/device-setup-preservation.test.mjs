@@ -11,6 +11,9 @@ test('completed Setup retains its separate spaced tinted connect-another entry',
   assert.match(setup, /act === 'list-connect-device'\) openPhone\(true\)/);
   assert.match(setup, /if \(another\) PC.connectAnother\(\)/);
   assert.match(setup, /st === 'done' \? 'Device connected'/);
+  assert.match(setup, /class="row wz-row" data-act="open-phone"/);
+  assert.match(setup, /window\.WzSheet\.open\(\$\('menu'\)\)/);
+  assert.match(setup, /window\.WzSheet\.open\(\$\('sheet'\)\)/);
   assert.match(css, /\.wz-button\.add-device\s*\{[^}]*margin-top:\s*16px;[^}]*background:\s*var\(--acs\);[^}]*color:\s*var\(--ac\)/);
 });
 test('step two completion retains a green shared check and Show again', () => {

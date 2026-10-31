@@ -212,6 +212,7 @@
   function winBody(w) {
     switch (w.app) {
       case 'chats': return `<div class="chats" data-chats="${w.id}"></div>`;
+      case 'pages': return '<div class="pg-host"></div>';
       case 'feature': return '<div class="shared-feature"></div>';
       case 'frame': return renderFrame(w);
       default: return renderApp(w);
@@ -233,6 +234,7 @@
   }
   function mountWin(w, el) {
     if (w.app === 'feature') window.WosFeatures.mount(w.featureId, el.querySelector('.shared-feature'),w.featureOptions);
+    if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'), {slug:w.pageSlug || '', close:() => closeWin(w.id)});
     if (w.app === 'chats') renderChats(w);
     watchFrames(el);
   }
@@ -770,6 +772,7 @@
     window.WizBackgroundAudio?.closeApp(w?.appId)?.catch(() => toast('♫', 'Audio could not stop. Pause it from the media controls.'));
   }
   function closeWin(id, quiet, preservePlayback = false) {
+    if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return;
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
     if (!CHATS.beforeLeave(id)) return;
@@ -989,11 +992,18 @@
     const src = W[srcId], sid = src?.app === 'chats' && src.thread && src.thread !== '__new__' ? src.thread : '';
     return { desk: desks[deskOf(srcId)]?.id || desks[idx].id, win: srcId || '', sid, title: sid ? (LIVE?.session(sid)?.title || winTitle(src)) : (src ? winTitle(src) : '') };
   }
-  function openLinkDesk(href, fromEl) {
+  function openLinkDesk(href, fromEl, setupChecked = false) {
     let u; try { u = new URL(href, location.href); } catch (e) { return false; }
     if (u.origin !== location.origin) return false;
     const srcId = (fromEl && fromEl.closest ? fromEl.closest('.win')?.dataset.win : '') || desks[idx].focus;
     const src = W[srcId], rel = u.pathname + u.search + u.hash;
+    const pageSlug = window.WosPages?.match(href);
+    if (pageSlug) return !!openWin({app:'pages', appId:'pages', pageSlug, from:fromOf(srcId)});
+    // Without the Pages API preserve the ordinary link sheet, not a privileged frame.
+    if (/^\/pages\//.test(u.pathname)) return false;
+    const targetApp = appAt(rel);
+    if (targetApp && !setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(targetApp, () => openLinkDesk(href, fromEl, true));
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
@@ -1213,6 +1223,11 @@
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    if (a.id === 'setup' && window.WosWelcome) { openingEnd(a.id); closeSheets(true); window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
+    if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
+    // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
+    const pageSlug = a.url && window.WosPages?.match(a.url);
+    if (pageSlug) { closeSheets(true); placeApp(w => w.app === 'pages' && w.pageSlug === pageSlug, {app:'pages', appId:'pages', pageSlug}, opts); return true; }
     if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
@@ -1453,7 +1468,7 @@
     foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
-   * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
+   * Same order as the App Store: Apps = anything with a screen you use; Agent apps = backend-only apps your agent uses
    * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '');
   /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
@@ -1917,7 +1932,7 @@
     if (!q) {
       const recentIds = store.get('recent', window.WizLauncher?.get('recents') || []).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
@@ -3631,6 +3646,8 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
+    window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
     if (window.WizShareWizard?.back()) return 'share-wizard';
     if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
@@ -3658,6 +3675,7 @@
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
+      if (f.app === 'pages') { if (window.WosPages.back(winEl(f.id)?.querySelector('.pg-host'))) return 'pages'; closeWin(f.id); return 'pages-close'; }
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'chats' && (CHATS.hasFilter(f) || CHATS.ch(f.id).q)) {
         const c = CHATS.ch(f.id), back = c.filterFrom, did = CHATS.clearFilter(f);
@@ -3793,8 +3811,13 @@
   });
   const firstRun = !store.get('coached', false) && !window.WosTour?.done();
   // Setup (core/setup-launch.js) opens first on a box's first run; the tour then waits for the first return to Home.
-  if (window.WosSetupLaunch) window.WosSetupLaunch.boot({ firstRunTour: firstRun, open: id => { const a = APP[id]; if (a) openApp(a); }, tour: why => window.WosTour?.start(why), markTour: () => window.WosTour?.mark(), isHome: () => idx === HOME && !sheet && !document.hidden && !window.WosTour?.active, busy: () => V.state !== 'idle' || !!sheet || idx !== HOME });
-  else if (firstRun) setTimeout(() => { if (!(window.__deeplinkLog || []).length) window.WosTour?.start('first-run'); else window.WosTour?.mark(); }, 600);
+  // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
+  // the automatic Setup window and gesture tour (Miguel, 29 Oct 2026); "help" and ?view=tour still open the tour.
+  void firstRun;
+  window.WosWelcome?.boot({ app: id => APP[id] || null, openStore: () => { const a = APP['app-store']; if (a) openApp(a); },
+    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => V.state !== 'idle',
+    // One main Chats window, and the new thread opens in it as soon as it is saved.
+    send: async text => { closeSheets(true); const w = placeApp(mainChats, { app: 'chats', thread: null }); if (!w) throw new Error('Chats unavailable'); const it = await sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (it?.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openWizardThread(sid)); return it || null; } });
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
   // on Back (James's rule), just like the browser guard above.
@@ -3942,7 +3965,9 @@
       if (v === 'home') { window.WosResources?.back(); return goDesk(0, true); }
       if (v === 'apps') return openSheet('launcher');
       if (v === 'install') {
-        openApp(APP['app-store']);
+        // The Store window must exist now to receive the link; the Store needs no setup check of its own.
+        window.WosAppSetup?.close(); // an earlier app's pending check or sheet must not reopen it over the Store
+        openApp(APP['app-store'], {}, { setupChecked: true });
         const w=Object.values(W).find(w=>w.appId==='app-store');
         return window.WizCore.deeplink.installInFrame(w && document.querySelector(`[data-win="${w.id}"] iframe`),installQuery);
       }
@@ -4011,16 +4036,21 @@
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
     goDesk: i => goDesk(i),
+    // Ready / Working counts as Home shows them, and the same lists their cards open (data.read.sessions).
+    sessions: () => { const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
+    openSessions: kind => (kind === 'working' ? openChatsFiltered('working', { card: true }) : openChatsList()),  // Ready = the whole list, any old filter cleared
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
+    openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
-    contextDraft: (key, item, words) => { const w = skinChatsWin(); if (!w) return false; CHATS.openContextDraft(w.id, key, item); CHATS.renderChats(w); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); return true; },
+    contextDraft: (key, item, words, draft) => { let w = skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => desks.length,
     root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => $('#dock'),
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
-    toast: text => toast('◇', text, 2400),
+    // Skin scripts pass plain text (file names, error messages): escaped, like the desktop toast.
+    toast: text => toast('◇', esc(String(text ?? '')), 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
     agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),

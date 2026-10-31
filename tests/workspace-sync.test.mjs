@@ -30,6 +30,39 @@ test('closing a desk here closes it on the box; a desk changed elsewhere meanwhi
   assert.deepEqual(plain(S.merge(base, { desks: [D('a', chats('w1'))] }, remote)).desks.map(d => d.id), ['a', 'b']);
 });
 
+test('a desk closed on one device stays closed when the other device only changed what it shows', () => {
+  const base = { desks: [D('a', chats('w1')), D('b', { ...app('w2', 'money'), url: '/money/' })] };
+  // Elsewhere: b closed. Here: b's app moved to another page (not yet sent). Before: b came back, needing a second close.
+  const local = { desks: [D('a', chats('w1')), D('b', { ...app('w2', 'money'), url: '/money/#/budget' })] };
+  assert.deepEqual(plain(S.merge(base, local, { desks: [D('a', chats('w1'))] })).desks.map(d => d.id), ['a']);
+  // Mirror: closed here while the other device changed the page inside it.
+  const remote = { desks: [D('a', chats('w1')), D('b', { ...app('w2', 'money'), url: '/money/#/budget' })] };
+  assert.deepEqual(plain(S.merge(base, { desks: [D('a', chats('w1'))] }, remote)).desks.map(d => d.id), ['a']);
+  // A window opened on that desk here since the close is new work, so it is kept (on its own).
+  const added = { desks: [D('a', chats('w1')), D('b', app('w2', 'money'), app('w5', 'files'))] };
+  assert.deepEqual(plain(S.merge(base, added, { desks: [D('a', chats('w1'))] })).desks.map(d => [d.id, d.wins.map(w => w.id)]), [['a', ['w1']], ['b', ['w5']]]);
+});
+
+test('a window closed on one device stays closed when the other device edited its desk', () => {
+  const base = { desks: [D('a', chats('w1'), app('w2', 'cinequeue'))] };
+  const remote = { desks: [D('a', chats('w1'))] };                                          // Movies closed there
+  const local = { desks: [D('a', { ...chats('w1'), thread: 't1' }, app('w2', 'cinequeue'))] }; // chat opened a thread here
+  const out = plain(S.merge(base, local, remote));
+  assert.deepEqual(out.desks, [D('a', { ...chats('w1'), thread: 't1' })]);
+  // And a window the other device opened on the same desk meanwhile is kept.
+  const remote2 = { desks: [D('a', chats('w1'), app('w2', 'cinequeue'), app('w3', 'files'))] };
+  assert.deepEqual(plain(S.merge(base, local, remote2)).desks[0].wins.map(w => w.id), ['w1', 'w2', 'w3']);
+});
+
+test('a window moved to another desk elsewhere while edited here keeps the move and the edit', () => {
+  const base = { desks: [D('a', chats('w1'), app('w2', 'money')), D('b', app('w3', 'files'))] };
+  const remote = { desks: [D('a', chats('w1')), D('b', app('w3', 'files'), app('w2', 'money'))] }; // w2 moved to b there
+  const local = { desks: [D('a', chats('w1'), { ...app('w2', 'money'), url: '/money/#/budget' }), D('b', app('w3', 'files'))] }; // w2 page changed here
+  const out = plain(S.merge(base, local, remote));
+  assert.deepEqual(out.desks.map(d => [d.id, d.wins.map(w => w.id)]), [['a', ['w1']], ['b', ['w3', 'w2']]]);
+  assert.equal(out.desks[1].wins[1].url, '/money/#/budget');
+});
+
 test('a window moved to another desk here is not duplicated', () => {
   const base = { desks: [D('a', chats('w1'), app('w2', 'files')), D('b', app('w3', 'wisdom'))] };
   const local = { desks: [D('a', chats('w1')), D('b', app('w3', 'wisdom'), app('w2', 'files'))] };

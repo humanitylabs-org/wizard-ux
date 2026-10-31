@@ -44,13 +44,15 @@ test('More models expands to the other families once each, above the primary thr
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
 });
 
-test('the thread header no longer carries the model; the label lives inside the message box with early wrap', () => {
+test('the thread header no longer carries the model; a draft keeps the label outside the editable rows', () => {
   const chats = read('web/core/chats.js'), power = read('web/core/chat-power.js'), css = read('web/core/chat-power.css');
   assert.match(chats, /<div class="ch-field"><textarea/);
   assert.match(chats, /\$\{mlabel\}<\/div>/);
   assert.match(chats, /const chip = PW && !PW\.modelLabel \? PW\.modelChip\(w, s\) : ''/);
   assert.match(chats, /function fitLabel\(root\)/);
-  assert.match(chats, /classList\.toggle\('lab-row', lastEnd > room \|\| scrolls\)/);
+  assert.match(chats, /const lineCount = lineHeight > 0 \? Math\.round\(mirror\.offsetHeight \/ lineHeight\) : 1;/);
+  assert.match(chats, /const hasDraft = ta\.value\.length > 0;/);
+  assert.match(chats, /classList\.toggle\('lab-row', hasDraft \|\| lineCount >= 3 \|\| lastEnd > room \|\| scrolls\)/);
   assert.match(css, /\.ch-field\.lab-row \{ flex-direction: column; padding-bottom: 24px;/);
   assert.match(chats, /'px';\n    fitLabel\(ta\);\n(    if \(ta\.scrollTop !== top\) ta\.scrollTop = top;\n)?  \}/); // measured after the height is set, so a full, scrolling box is detected
   // Measuring collapses the box to 'auto'; the owner's scroll position is put back afterwards (James, 21 Oct 2026).

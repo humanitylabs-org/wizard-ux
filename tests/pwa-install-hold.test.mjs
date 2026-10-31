@@ -31,6 +31,17 @@ test('pwa-install exposes the hold() the tour calls', () => {
   assert.equal(typeof window.WizardPwaInstall?.hold, 'function');
 });
 
+test('named holds do not release one another', () => {
+  const { window, listeners, nodes } = page();
+  window.WizardPwaInstall.hold(true, 'tour');
+  window.WizardPwaInstall.hold(true, 'resources');
+  listeners.beforeinstallprompt({ preventDefault() {}, prompt: async () => {}, userChoice: Promise.resolve({}) });
+  window.WizardPwaInstall.hold(false, 'resources');
+  assert.equal(nodes.length, 0, 'the tour still holds the banner');
+  window.WizardPwaInstall.hold(false, 'tour');
+  assert.equal(nodes.length, 1, 'the banner returns after every owner releases it');
+});
+
 test('a held banner is not shown, and shows again once released', () => {
   const { window, listeners, nodes } = page();
   window.WizardPwaInstall.hold(true);

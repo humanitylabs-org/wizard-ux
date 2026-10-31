@@ -38,7 +38,7 @@ const cases = [
  {group:'desktop',name:'voice-pill',id:'voicePill'},
  {group:'desktop',name:'voice-tray',cls:'voice-tray',wrapId:'voicePill'},
  {group:'desktop',name:'update-thread-menu',cls:'dv-wl',wrapId:'dvWeb',attrs:'data-shell="desktop"'},
- ...['wz-sheet','wz-menu','wz-toast','wz-sheet-x'].map(cls=>({group:'kit',name:cls,cls})),
+ ...['wz-sheet','wz-sheet-x'].map(cls=>({group:'kit',name:cls,cls})),
  ...['menu','sheet','toast'].map(cls=>({group:'setup',name:cls,cls})),
  ...['top','toast on'].map(cls=>({group:'store',name:cls.split(' ')[0],cls})),
  {group:'agents',name:'agent-sheet',cls:'card',wrap:'ag-sheet'},

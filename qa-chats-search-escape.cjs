@@ -1,6 +1,6 @@
 // Synthetic shell acceptance. No live reads; every write intercepted, no agent sends.
 const fs=require('fs'),path=require('path'),assert=require('assert/strict');
-const {chromium}=require(process.env.QA_PLAYWRIGHT||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const BASE=process.argv[2]||process.env.QA_ORIGIN;
 if(!BASE) throw Error('Pass a synthetic origin URL');
 const entry=new URL(BASE);

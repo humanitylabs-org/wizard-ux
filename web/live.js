@@ -498,7 +498,10 @@
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
   const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  // Priority ranks every status line, so Done threads (nothing left to do) sink below FYI answers and unlabelled
+  // threads come last: with only needs you / check ranked, most of Ready tied and Priority read like Newest.
+  const ATT_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
+  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : ATT_RANK[s.attention?.state] || 5;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
   // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
@@ -763,6 +766,7 @@
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    readyRank,
     readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
@@ -1302,13 +1306,26 @@
         if (target) { try { r.result = await (await read(url)).json(); r.status = r.result.status || status; } catch (_) { r.status = 'failed'; } }
         notify();
       };
-      let retries = 0;
+      // Resume across drops (spotty wifi, a phone waking up): Hermes and the Agent Service number every frame (SSE id
+      // and data.seq) and replay the run on each new read, so a reconnect skips every frame this stream already showed.
+      // Unnumbered streams keep the old rule: reconnect only before any answer bytes, never duplicate text.
+      let retries = 0, lastSeq = -1, numbered = false;
+      const BACKOFF = [500, 1000, 2000, 4000, 8000, 15000, 30000], MAX_RETRIES = 20, STALL_MS = 90000;
       const event = e => {
         if (r.stopped || r.terminal) return;
         let d; try { d = JSON.parse(e.data); } catch (_) { return; }
         if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
         const type = d.event || e.type;
-        if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        r.seenAt = Date.now();
+        // The replay lost frames this stream never showed: the text would have a hole, so drop it and let the
+        // transcript read bring the answer (still reading steps and the end of the run).
+        if (type === 'replay.truncated') {
+          if (lastSeq >= 0 && Number(d.oldest_retained_seq) > lastSeq + 1 && !r.gap) { r.gap = true; r.text = ''; notify(); }
+          return;
+        }
+        const seq = Number.isInteger(d.seq) ? d.seq : /^\d+$/.test(e.lastEventId || '') ? Number(e.lastEventId) : null;
+        if (seq != null) { if (seq <= lastSeq) return; lastSeq = seq; numbered = true; retries = 0; }
+        if (type === 'message.delta' && typeof d.delta === 'string') { if (!r.gap) { r.text += d.delta; notify(); } }
         // Live steps, like the CLI: the tool that is running and the ones just finished.
         if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
         if (type === 'tool.completed' && d.tool) {
@@ -1319,24 +1336,34 @@
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
       };
+      const canResume = () => !r.stopped && !r.terminal && (numbered || !r.text);
       const connect = () => {
-        if (r.stopped || r.terminal) return;
-        r.steps = []; // a reconnect replays the run from its first event
+        clearTimeout(r.reconnect); r.reconnect = null;
+        if (r.stopped || r.terminal || r.source) return;
+        if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
         try {
+          r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
           r.source = new window.EventSource(base ? `${url}/events` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
-          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
-          r.source.onopen = () => { r.live = true; };
+          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
+          r.source.onopen = () => { r.live = true; r.seenAt = Date.now(); };
           r.source.onerror = () => {
             r.live = false;
             close();
-            // Some queued main sends close before yielding any answer bytes.
-            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
-            // another read of the same run, never another admission/send.
-            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+            // Another read of the same run, never another admission/send. Offline waits for the network to return.
+            if (!canResume() || retries >= MAX_RETRIES) return;
+            if (window.navigator?.onLine === false) { r.waitingOnline = true; return; }
+            r.reconnect = setTimeout(connect, BACKOFF[Math.min(retries++, BACKOFF.length - 1)]);
           };
         } catch (_) { close(); }
       };
+      // Back online or back in front: read again now instead of waiting out the backoff (a few more tries at most).
+      const resumeNow = () => {
+        if (window.document?.hidden || window.navigator?.onLine === false || r.source || !canResume()) return;
+        r.waitingOnline = false; retries = Math.min(retries, MAX_RETRIES - 3); connect();
+      };
+      window.addEventListener?.('online', resumeNow);
+      window.document?.addEventListener('visibilitychange', resumeNow);
       connect();
       const poll = async () => {
         if (r.stopped || r.terminal) return;
@@ -1344,11 +1371,18 @@
           const d = await (await read(url)).json();
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) void terminal(d.status);
+          // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
+          else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
+          // Some systems never fire 'online': a status read that worked is proof enough.
+          else if (!r.source && r.waitingOnline) resumeNow();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         // The status read is only the safety net while the live stream is open.
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
       };
-      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.dispose = () => {
+        r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame);
+        window.removeEventListener?.('online', resumeNow); window.document?.removeEventListener('visibilitychange', resumeNow); RUN_STREAMS.delete(key);
+      };
       r.timer = setTimeout(poll, 500);
     }
     r.listeners.add(paint);
@@ -1520,6 +1554,9 @@
     const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
     return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
   };
+  // No answer from Wizard at all (offline, plane wifi): the last copy this device kept, whatever its age. chats.js
+  // shows it only after a read has failed, labelled as a saved copy, and the next good read replaces it.
+  L.savedMessages = id => { const c = keepable(id) && TC.get(id); return c && Array.isArray(c.rows) ? { rows: c.rows, at: c.at || 0 } : null; };
   // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
   L.forgetMessages = async id => {
     if (!id) return; TC.delete(id);
