@@ -268,8 +268,11 @@ test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never 
   D.host.setLayout('classic'); await settle();
 });
 
-test('Classic | Orb switch: desktop only, switches only its own author\'s tweak, through the device tweak mix', async () => {
+test('Desks | Orbs switch: desktop only, switches only its own author\'s tweak, through the device tweak mix', async () => {
   const src = read('web/tweaks/miguel/orb-switch/tweak.js');
+  // two equal views, named Desks and Orbs (Miguel, 31 Oct 2026); the tweak ids stay, so devices keep their choice
+  assert.match(src, /side\(false, 'Desks'\), orb = side\(true, 'Orbs'\)/); assert.ok(!/'Classic'|'Orb'\)/.test(src));
+  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orbs view'); assert.equal(JSON.parse(read('web/tweaks/miguel/orb-switch/manifest.json')).name, 'Desks | Orbs switch');
   assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /api\.slot\.mount\('bar-center', box/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);

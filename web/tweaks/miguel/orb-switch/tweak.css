@@ -1,4 +1,4 @@
-/* Classic | Orb switch: a segmented control in the middle of the desktop bar, where the date and time were (core hides
+/* Desks | Orbs switch: a segmented control in the middle of the desktop bar, where the date and time were (core hides
  * the clock while the bar-center slot holds anything). Styled like the bar's own controls (neutral glass, the skin's
  * ink), so it reads on dark, light and photo skins; over the Orb scene the layout hands the bar the scene's ink. */
 html[data-shell="desktop"] .os-switch {

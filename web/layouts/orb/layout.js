@@ -31,7 +31,7 @@ import { STYLES, renderer, mix } from './styles.js';
 export default function setup(api) {
   if (api.env.shell !== 'desktop') return () => {};
   const doc = document, root = doc.documentElement;
-  const HOLD_MS = 420, MAX_APPS = 10, STRIP = 46;
+  const HOLD_MS = 420, STRIP = 46;
   const SVG = 'http://www.w3.org/2000/svg';
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
@@ -154,7 +154,7 @@ export default function setup(api) {
     orbCv.width = orbCv.height = Math.round(O * 2 * DPR);
     let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     stars = Array.from({ length: Math.round(W * H / 5200) }, () => ({ x: rnd() * W, y: rnd() * H, r: rnd() * 1.1 + .2, p: rnd() * 6.3, s: .3 + rnd() }));
-    aim(); placeSats(0);
+    aim(); paintApps(); placeSats(0);
     return true;
   }
   function drawSky(t, lv) {
@@ -273,14 +273,27 @@ export default function setup(api) {
     node.textContent = n > 99 ? '99+' : n ? String(n) : ''; node.hidden = !n;
     b.setAttribute('aria-label', 'Open ' + name + (n ? ` · ${n} new` : ''));
   }
+  // Every installed app with a screen floats here (the shell's own kinds: no agent apps, connectors or agents; no
+  // cap). When the two orbits can't hold them all at a readable size the marks shrink, and only past that the last
+  // ones fold into an All apps mark.
+  let satScale = 1;
+  function fits(n) {
+    if (!W) return { cap: n, scale: 1 };
+    const perim = r => 2 * Math.PI * Math.sqrt((r * r + (r * .34) ** 2) / 2), cap = s => Math.floor((perim(O * 1.65) + perim(O * 1.65 / 1.32)) / (64 * s));
+    for (const sc of [1, .86, .74]) if (n <= cap(sc)) return { cap: n, scale: sc };
+    return { cap: Math.max(1, cap(.74) - 1), scale: .74 };
+  }
   function paintApps() {
-    const apps = api.apps.list().slice(0, MAX_APPS), sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|');
-    if (sig === appSig) return; appSig = sig;
+    const every = api.apps.list(), fit = fits(every.length), apps = every.slice(0, fit.cap), more = every.length > apps.length;
+    const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|') + (more ? '|+' : '') + '|' + fit.scale;
+    if (sig === appSig) return; appSig = sig; satScale = fit.scale;
     const items = apps.map(a => ({ id: a.id, el: sat(a) }));
-    const all = el('button', 'ob-sat is-all', { type: 'button', 'aria-label': 'All apps (⌥O)' });
-    const f = el('span', 'ob-sat-face'); f.append(icon(I.apps)); all.append(f, el('b', 'ob-sat-n', { text: 'All apps' }));
-    api.listen(all, 'click', () => api.apps.all());
-    items.push({ id: '~all', el: all });
+    if (more) {
+      const all = el('button', 'ob-sat is-all', { type: 'button', 'aria-label': 'All apps (⌥O)' });
+      const f = el('span', 'ob-sat-face'); f.append(icon(I.apps)); all.append(f, el('b', 'ob-sat-n', { text: 'All apps' }));
+      api.listen(all, 'click', () => api.apps.all());
+      items.push({ id: '~all', el: all });
+    }
     field.replaceChildren(...items.map(i => i.el));
     // the concept's two rings, apps alternating between them at even steps round the orb, all drifting the same slow
     // way: neighbours always sit on different rings and two apps never slide onto each other
@@ -309,7 +322,7 @@ export default function setup(api) {
       const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.5, fit);
       let x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
       const depth = Math.sin(s.a); // >0 in front of the orb, <0 behind it
-      let sc = .78 + .22 * (depth + 1) / 2, op = .55 + .45 * (depth + 1) / 2;
+      let sc = (.78 + .22 * (depth + 1) / 2) * satScale, op = .55 + .45 * (depth + 1) / 2;
       const want = pinId && s.id === pinId ? 1 : 0;
       s.pk = reduced ? want : (s.pk || 0) + (want - (s.pk || 0)) * Math.min(1, dt * 5);
       if (s.pk < .002) s.pk = 0;

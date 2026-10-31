@@ -88,7 +88,7 @@ before it runs.
 ## Layouts a tweak can wear
 
 A tweak with the `layout` capability wears a built-in layout (`web/layouts/<id>/`) with `api.layout.use(id)`:
-`two-orb` (`wizard/two-orbs`, phone) and `orb` (`miguel/orb-shell`, Orb desktop, desktop only). Switching the tweak
+`two-orb` (`wizard/two-orbs`, phone) and `orb` (`miguel/orb-shell`, the Orbs view, desktop only). Switching the tweak
 off releases it and the stock shell comes back; a stored layout no live tweak wears goes back to Classic after
 tweaks load. Layouts also get the shell's own thread rows, Snooze / Done (Chats' `threadAct`), quick apps, Home and
 Settings › Look (`shellApi` in `core/skin-host.js`): see `docs/orb-layout.md`. A layout without desks holds the
