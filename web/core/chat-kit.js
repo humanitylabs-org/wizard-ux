@@ -469,6 +469,17 @@
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); return true; } catch (e) { return false; /* a draft must never block typing */ }
   }
 
+  /* ================= inbox hint: Notifications shows as threads in Chats =================
+   * The Notifications package registers WosSkinHost.inboxThreads a moment after the page boots. Until then the
+   * Chats list would show every notification-reply draft as a Draft row, then drop them when the package
+   * arrived (James, 31 Oct 2026: "I see this every time my app refreshes, then they disappear"). The last known
+   * answer is kept here so the first paint already agrees with the settled one. */
+  const INBOX_HINT = 'wos.inbox-threads.v1';
+  const inboxHint = {
+    get() { try { return localStorage.getItem(INBOX_HINT) === '1'; } catch (e) { return false; } },
+    set(on) { try { on ? localStorage.setItem(INBOX_HINT, '1') : localStorage.removeItem(INBOX_HINT); } catch (e) {} },
+  };
+
   /* ================= copy / share / save ================= */
   async function copyText(text) {
     text = String(text ?? '');
@@ -969,5 +980,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, inboxHint, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();
