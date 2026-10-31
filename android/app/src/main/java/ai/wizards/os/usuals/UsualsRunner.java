@@ -155,7 +155,7 @@ public final class UsualsRunner {
             mode = Mode.IDLE; status = "Nothing was recorded";
             note("teach: nothing recorded");
             if (cover != null) cover.hide();
-            if (!ordered) backToWizard("usuals");
+            if (!ordered) backToWizard("food");
             return;
         }
         String seen = lastCheckout != null ? UsualsPolicy.total(lastCheckout)
@@ -177,7 +177,7 @@ public final class UsualsRunner {
             main.postDelayed(() -> { if (mode == Mode.IDLE && cover != null && cover.showingSaved()) cover.hide(); }, 7000);
         } else {
             if (cover != null) cover.hide();
-            backToWizard("usuals");
+            backToWizard("food");
         }
         browsing = false;
         note("saved id " + id);
@@ -195,7 +195,7 @@ public final class UsualsRunner {
     /** Rename on the "Saved" card: Wizard OS opens on Food with the name field. */
     void renameSaved() {
         if (cover != null) cover.hide();
-        backToWizard("usuals");
+        backToWizard("food");
     }
 
     private String uniqueName(String base) {
@@ -209,7 +209,7 @@ public final class UsualsRunner {
         note("cancel in " + mode);
         stopQuietly();
         status = "Cancelled";
-        backToWizard("usuals");
+        backToWizard("food");
     }
 
     private void stopQuietly() {
@@ -802,7 +802,7 @@ public final class UsualsRunner {
 
     private void backToWizard(String action) {
         Intent i = new Intent(app, ai.wizards.os.MainActivity.class);
-        i.setAction(ai.wizards.os.MainActivity.ACTION_USUALS);
+        i.setAction(ai.wizards.os.MainActivity.ACTION_FOOD);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         Context from = svc() != null ? svc() : app;
         try { from.startActivity(i); } catch (Exception e) { Log.w(TAG, "back to Wizard OS failed", e); }

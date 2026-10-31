@@ -18,6 +18,8 @@
   'use strict';
   const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
   const HOUSE = /*HOUSE*/;
+  // Canonical app names keep the approved palette through compatibility aliases, not new colours.
+  for (const [id, old] of Object.entries(/*HOUSE_ALIASES*/)) HOUSE[id] = HOUSE[old];
   const BRAND = /*BRAND*/;
   const FALLBACK = /*FALLBACK*/;
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
