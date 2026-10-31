@@ -1,1 +1,7 @@
-/* Orb desktop: every rule lives in web/layouts/orb/layout.css (scoped to the desktop shell and the Orb layout). */
+/* Orb desktop: the layout's rules live in web/layouts/orb/layout.css (scoped to the desktop shell and the Orb layout).
+ * Only the entity's own colours sit here (a skin layer): Wizard violet on every skin, with a cool and a warm companion,
+ * plus the white / ink used on app glyph tiles. layout.js reads --ob-v1…5 for the looks it draws in canvas. */
+html[data-shell="desktop"][data-layout="orb"] {
+  --ob-v1: #8b5cf6; --ob-v2: #c4b5fd; --ob-v3: #6d28d9; --ob-v4: #e879f9; --ob-v5: #60a5fa;
+  --ob-white: #fff; --ob-ink: #1a1030;
+}

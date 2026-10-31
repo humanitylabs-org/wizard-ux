@@ -76,7 +76,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'list', 'open']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'list', 'logo', 'open']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
   assert.equal(typeof api.orb.ready, 'function');
@@ -129,9 +129,60 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   const js = read('web/layouts/orb/layout.js').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const banned of ['localStorage', 'sessionStorage', 'fetch(', 'XMLHttpRequest', '__wux', '__wos', 'setTimeout', 'setInterval', 'textarea', 'contenteditable', 'querySelector', 'getElementById'])
     assert.ok(!js.includes(banned), `layout.js uses ${banned}`);
-  assert.match(js, /api\.sessions\.act\(s\.id, act\)/); assert.match(js, /api\.orb\.create\(/); assert.match(js, /api\.env\.shell !== 'desktop'/);
+  assert.match(js, /api\.sessions\.act\(s\.id, act\)/); assert.match(js, /api\.env\.shell !== 'desktop'/);
+  // The entity: three looks kept per device, reactive to the take and the level; motion only while Home is in front.
+  assert.match(js, /const LOOKS = \[\['nebula', 'Nebula', nebula\], \['glitch', 'Glitch', glitch\], \['swarm', 'Swarm', swarm\]\]/);
+  assert.match(js, /api\.storage\.set\('look', id\)/); assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
+  assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
+  assert.match(js, /prefers-reduced-motion: reduce/);
+  assert.match(js, /import\('\.\/vendor\/paper-shaders\/shader-mount\.js'\)/, 'Nebula: Paper Shaders, loaded only when picked');
+  // Apps: their own logo, else a designed glyph; never a letter tile.
+  assert.match(js, /api\.apps\.logo\(a\.id\)/); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl") && !js.includes('a.icon; face.append') || js.includes('sglogo'), 'no letter sigils drawn');
+  // Threads: every Ready thread with Snooze / Done; Working is one chip.
+  assert.ok(!/MAX_READY|slice\(0, MAX_READY\)/.test(js), 'no cap on Ready');
+  assert.match(js, /`\$\{working\.length\} working`/);
+  for (const f of ['LICENSE', 'NOTICE', 'README.md', 'shader-mount.js', 'shaders/metaballs.js']) assert.ok(read('web/layouts/orb/vendor/paper-shaders/' + f).length > 40, 'vendored with its licence: ' + f);
   const m = JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json'));
   assert.deepEqual(m.capabilities, ['layout']);
   const prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(prof.tweaks.includes('miguel/orb-shell') && prof.off.includes('miguel/orb-shell'), 'listed under Miguel, off by default');
+});
+
+test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never fetch', async () => {
+  const D = desk(); const asked = [];
+  const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+  D.ctx.fetch = async url => { asked.push(String(url)); return { ok: true, headers: { get: () => 'image/png' }, blob: async () => ({ size: png.length, arrayBuffer: async () => png.buffer }) }; };
+  D.ctx.crypto = globalThis.crypto; D.ctx.AbortSignal = AbortSignal; D.ctx.Uint8Array = Uint8Array; D.ctx.URL.createObjectURL = () => 'blob:logo';
+  D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
+  assert.equal(await D.api.apps.logo('files'), 'blob:logo');
+  assert.equal(await D.api.apps.logo('files'), 'blob:logo'); assert.equal(asked.length, 1, 'one read per app per page');
+  assert.match(asked[0], /\/wizard-os-home\/store-data\/logo\/files$/);
+  assert.equal(await D.api.apps.logo('../x'), null); assert.equal(asked.length, 1);
+  assert.ok(read('web/core/skin-host.js').includes("'59b4d70aa80ab18cd3bcfa0e998d2f1b570bd86c2edac5be588f4a64626675c6'"), 'the template logo means no logo');
+  D.host.setLayout('classic'); await settle();
+});
+
+test('Classic | Orb switch: desktop only, switches only its own author\'s tweak, through the device tweak mix', async () => {
+  const src = read('web/tweaks/miguel/orb-switch/tweak.js');
+  assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /api\.slot\.mount\('bar-start', box/);
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
+  assert.match(host, /!id\.startsWith\(a\.id\.split\('\/'\)\[0\] \+ '\/'\)\) return Promise\.resolve\(false\)/, 'own author only');
+  assert.match(host, /window\.WosExperience\?\.toggle\?\.\(id\)/);
+  const f = fixture({ shell: 'desktop' }); let api;
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/orb-switch'], f.slots, { teamAuthors: ['miguel'] });
+  const asked = []; f.ctx.window.WosExperience = { toggle: async id => { asked.push(id); } };
+  assert.equal(await api.settings.toggleTweak('wizard/two-orbs'), false, 'never another author\'s tweak');
+  assert.equal(await api.settings.toggleTweak('miguel/orb-shell'), true); assert.deepEqual(asked, ['miguel/orb-shell']);
+  await f.clear();
+  const css = read('web/tweaks/miguel/orb-switch/tweak.css');
+  assert.match(css, /html\[data-shell="desktop"\]:not\(\[data-layout="orb"\]\) \.os-side\.is-classic/, 'the lit side follows what is really worn');
+});
+
+test('a lone window in the Orb desktop is a centred card (desktop.js reads --desktop-window-max-height)', () => {
+  const src = read('web/desktop/desktop.js');
+  assert.match(src, /getPropertyValue\('--desktop-window-max-height'\)/);
+  assert.match(read('web/layouts/orb/layout.css'), /--desktop-window-max-height: 720px;/);
+  assert.ok(!read('web/desktop/desktop.css').includes('--desktop-window-max-height'), 'classic desktop keeps full-height windows');
 });

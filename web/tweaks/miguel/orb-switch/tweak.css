@@ -1,0 +1,28 @@
+/* Classic | Orb switch: a small segmented chip at the start of the desktop bar, styled like the bar's own controls
+ * (neutral glass, the skin's ink), readable on dark, light and photo skins. In the Orb desktop the bar is bare, so the
+ * chip gets its own glass and the layout's small Home blob moves right of it. */
+html[data-shell="desktop"] .os-switch {
+  display: inline-flex; align-items: center; gap: 1px; height: 24px; padding: 2px; margin: 0 6px 0 4px; border-radius: 12px; flex: none; align-self: center;
+  background: color-mix(in srgb, var(--wz-text) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text) 12%, transparent);
+  pointer-events: auto;
+}
+html[data-shell="desktop"] .os-side {
+  height: 20px; padding: 0 9px; border: 0; border-radius: 10px; background: none; cursor: pointer;
+  font: 600 calc(var(--wz-text-sm) * 0.846)/1 var(--wz-font-ui); letter-spacing: .01em; color: var(--wz-text-secondary);
+  transition: background 140ms, color 140ms;
+}
+html[data-shell="desktop"] .os-side:hover { color: var(--wz-text); }
+html[data-shell="desktop"] .os-side:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 1px; }
+/* The side the desktop really wears: Classic unless the Orb layout is on. */
+html[data-shell="desktop"]:not([data-layout="orb"]) .os-side.is-classic,
+html[data-shell="desktop"][data-layout="orb"] .os-side.is-orb {
+  color: var(--wz-text); background: var(--sk-win, var(--wz-surface-raised));
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--wz-base) 40%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--wz-text) 14%, transparent);
+}
+html[data-shell="desktop"] .os-switch.is-busy { opacity: .6; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .os-switch {
+  margin-left: 10px; background: color-mix(in srgb, var(--wz-base) 64%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+/* The Orb desktop's own "Classic desktop" button (Settings › Look) is redundant next to this switch. */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene .ob-out { display: none; }
+html[data-shell="desktop"][data-layout="orb"] { --ob-mini-left: 136px; }
