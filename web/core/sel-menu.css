@@ -2,7 +2,7 @@
 ::selection { background: rgba(143, 99, 255, .42); color: #fff; }
 .selmenu {
   position: fixed; left: 0; top: 0; z-index: 260; display: flex; align-items: stretch; gap: 2px; padding: 4px;
-  border-radius: 16px; background: linear-gradient(rgba(24, 16, 48, .94), rgba(24, 16, 48, .94)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid rgba(185, 155, 255, .28);
+  border-radius: 16px; background: linear-gradient(var(--wz-surface-raised, rgba(127, 127, 127, .1)), var(--wz-surface-raised, rgba(127, 127, 127, .1))), var(--wz-base, var(--bg, #05030c)); border: 1px solid var(--wz-border, var(--line, rgba(185, 155, 255, .28)));
   box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 0 1px rgba(0, 0, 0, .3), 0 0 22px rgba(143, 99, 255, .18);
 
   max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; /* an app's own items plus the shell's fit a phone */
@@ -18,7 +18,7 @@
 .selmenu[hidden] { display: none; }
 .selmenu button {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 52px; min-height: 48px;
-  padding: 6px 8px; border: 0; border-radius: 12px; background: none; color: var(--ink, #efeaff);
+  padding: 6px 8px; border: 0; border-radius: 12px; background: none; color: var(--wz-text, var(--ink, #efeaff));
   font: 650 11.5px/1.1 system-ui, sans-serif; letter-spacing: .01em; white-space: nowrap; -webkit-tap-highlight-color: transparent;
 }
 .selmenu button:active { background: rgba(143, 99, 255, .26); }
