@@ -112,62 +112,21 @@ test('CSS stays non-executable, loads last in both shells, and scripts use the s
   assert.ok(inv.sharedAssets.includes('core/my-skin.js'));
 });
 
-test('Look offers named recipes, New skin and a Wizard edit hint, never Reset or a missing files id', () => {
+test('own skins are retired: Look offers no Your skins, New skin, remove or edit panel', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /data-newskin/); assert.match(s, /data-ownskin-remove/);
-  assert.match(s, /Edit with your Wizard/);
-  assert.match(s, /\['wizard-files', 'files'\]\.find/);
-  assert.doesNotMatch(s, /data-myskin="reset"|data-myskin-tile/);
-  assert.doesNotMatch(s, /browse skins|get skins|skin store|community skins/i);
+  assert.doesNotMatch(s, /data-newskin|data-ownskin|Your skins|New skin|Edit with your Wizard|Remove skin|data-tweakauthor/);
+  assert.doesNotMatch(SRC, /\/wizard\/v1\/skins|recipes\.(?:skins|active)|\.wear\(|\.leave\(/, 'the overlay never reads or writes own-skin recipes');
   assert.match(read('web/core/skins.js'), /const SKINS = \[\s*\{ id: 'nebula'/);
 });
-
-test('recipes create multiple, wear immediately, isolate edits, reload and remove/Undo', async () => {
-  const b = await boot();
-  assert.equal(b.M.recipes.length, 0);
-  const first = b.M.create({name:'Quiet',base:'nebula',tweaks:{'wizard/app-borders':true}});
-  const second = b.M.create({name:'Bright',base:'obsidian-light',tweaks:{'wizard/app-borders':false}});
-  assert.equal(b.M.recipes.length, 2); assert.equal(b.ctx.WosSkin.current, 'obsidian-light');
-  b.M.wear(first.id); b.M.update({base:'obsidian-light',tweaks:{'wizard/app-borders':false}});
-  assert.equal(b.M.recipes[1].base, 'obsidian-light');
-  b.M.wear(second.id);
-  const again = await boot({saved:b.store.get('wos.own-skins.v1')});
-  assert.equal(again.M.active.id, second.id); assert.equal(again.ctx.WosSkin.current, 'obsidian-light');
-  const removed = again.M.remove(second.id);
-  assert.equal(again.M.active,null); assert.equal(again.M.recipes.length,1);
-  assert.equal(again.ctx.WosSkin.current,'obsidian-light');
-  again.M.restore(removed); assert.equal(again.M.active.id,second.id); assert.equal(again.M.recipes.length,2);
-  again.M.restore(removed); assert.equal(again.M.recipes.length,2,'Undo is idempotent');
-  again.M.leave(); assert.equal(again.M.active,null);
+test('the overlay never switches the picked skin and applies whatever the box serves', async () => {
+  const b = await boot({ responses: [{ status: 200, type: 'text/css', body: '.dock{opacity:.5}' }] });
+  assert.ok(b.style(), 'served CSS applies without any worn recipe');
+  b.ctx.WosSkin.set('obsidian-light'); await new Promise(r => setTimeout(r, 5));
+  assert.equal(b.ctx.WosSkin.current, 'obsidian-light'); assert.ok(b.style(), 'changing skin keeps the overlay');
+  assert.ok(b.calls.every(c => c.method === 'GET' && !String(c.url).startsWith('/wizard/v1/skins')));
 });
-test('legacy overlay migrates once; removing never resurrects it or deletes shared files', async () => {
-  const b = await boot({cached:'.dock{opacity:.5}',responses:[{throw:true}]});
-  assert.equal(b.M.active.name,'My skin'); assert.equal(b.M.active.base,'nebula');
-  b.M.remove(b.M.active.id); assert.equal(b.style(),null);
-  const again = await boot({cached:'.dock{opacity:.5}',saved:b.store.get('wos.own-skins.v1'),responses:[{throw:true}]});
-  assert.equal(again.M.recipes.length,0); assert.equal(again.style(),null);
-  assert.equal(again.store.get('wos.myskin.v1'),'.dock{opacity:.5}');
-  assert.ok(again.calls.every(c=>c.method==='GET'));
-});
-test('a late nonempty service overlay announces the migrated own recipe to the tweak loader', async () => {
-  const b = await boot({responses:[{status:200,type:'text/css',body:'.dock{opacity:.5}'}]});
-  assert.equal(b.M.active.name,'My skin');
-  assert.equal(b.dispatched.filter(e=>e==='wos:own-skin').length,1);
-  await b.M.refresh(); assert.equal(b.dispatched.filter(e=>e==='wos:own-skin').length,1);
-});
-test('overlay only applies while own skin is worn, including builtin changes outside Settings', async () => {
-  const b = await boot({cached:'.dock{opacity:.5}',responses:[{throw:true}]});
-  const id = b.M.active.id; b.M.leave(); assert.equal(b.style(),null);
-  b.M.wear(id); assert.ok(b.style());
-  b.ctx.WosSkin.set('obsidian-light'); assert.equal(b.M.active,null); assert.equal(b.style(),null);
-});
-test('bad names, palettes, duplicates and storage failure never claim a created recipe', async () => {
-  const b = await boot();
-  for (const name of ['', '  ', 'a'.repeat(61)]) assert.throws(()=>b.M.create({name,base:'nebula'}));
-  assert.throws(()=>b.M.create({name:'Quiet',base:'unknown'}));
-  b.M.create({name:'Quiet',base:'nebula'});
-  assert.throws(()=>b.M.create({name:' quiet ',base:'nebula'}));
-  assert.equal(b.M.recipes.length,1);
-  const full = await boot({quota:true}); assert.throws(()=>full.M.create({name:'Quiet',base:'nebula'}));
-  assert.equal(full.M.recipes.length,0); assert.equal(full.M.active,null);
+test('retired recipe caches are cleared so they can never force a skin again', async () => {
+  const b = await boot({ saved: JSON.stringify({ version: 1, skins: [{ id: 'My skin', name: 'My skin', base: 'landscapes', tweaks: {} }], active: 'My skin' }) });
+  assert.equal(b.store.has('wos.own-skins.v1'), false);
+  assert.equal(b.ctx.WosSkin.current, 'nebula');
 });
