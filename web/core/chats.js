@@ -795,10 +795,12 @@ window.WizCore.chats = function createChats(H) {
   /* An app item's own buttons (inbox feed): Open (`app`: the app itself, at the item when it says where), each declared action as `x:<id>`, except the
    * one that types (the composer is its box) and the one that finishes it (`done`, else `read`: that is the Done
    * button, wearing the app's label). */
-  const noteDoneAct = it => it?.app ? (it.actions.find(a => a.id === 'done' && !a.ask && !a.input) || it.actions.find(a => a.id === 'read' && !a.ask && !a.input) || null) : null;
-  const noteInput = it => it?.app ? it.actions.find(a => a.input && !a.ask) || null : null;
+  // Only while a package holds the app feeds (WosSkinHost.inboxFeeds); otherwise stock notification buttons.
+  const feedsOn = () => !!window.WosSkinHost?.inboxFeeds;
+  const noteDoneAct = it => it?.app && feedsOn() ? (it.actions.find(a => a.id === 'done' && !a.ask && !a.input) || it.actions.find(a => a.id === 'read' && !a.ask && !a.input) || null) : null;
+  const noteInput = it => it?.app && feedsOn() ? it.actions.find(a => a.input && !a.ask) || null : null;
   function noteAppActs(it) {
-    if (!it?.app || it.archived) return [];
+    if (!it?.app || it.archived || !feedsOn()) return [];
     const fin = noteDoneAct(it);
     return [...(window.WizCanOpen?.(it.app) ? ['app'] : []), ...it.actions.filter(a => !a.input && a !== fin).map(a => 'x:' + a.id)];
   }
@@ -2651,7 +2653,7 @@ window.WizCore.chats = function createChats(H) {
     // An app item's typing action (inbox feed, e.g. Messenger's Reply): words typed in the box go to that app, never
     // to Wizard. Only typing: Resolve this and an app's ask buttons send their ask to Wizard through here too.
     // The window steps back at once; the words stay as this item's draft until the app takes them.
-    const NVin = isNew && here && !voice && !audio && how === 'typing in the Chats window' && !winAgent(w) ? notifOf(w) : null, inA = NVin ? noteInput(NVin.item) : null;
+    const NVin = isNew && here && !voice && !audio && how === 'typing in the Chats window' && !winAgent(w) && feedsOn() ? notifOf(w) : null, inA = NVin ? noteInput(NVin.item) : null;
     if (inA && text && !files.length && reply && reply.key === 'notifications:' + NVin.id) {
       const item = NVin.item, to = notePlain(item.title) || item.appName || 'the app';
       KIT.drafts.set('new', text); c.draft = ''; c.files = []; chatsBack(w); KIT.drafts.set('new', text);

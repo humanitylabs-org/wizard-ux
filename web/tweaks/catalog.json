@@ -21,6 +21,7 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
+    "miguel/app-inbox",
     "miguel/orb-shell",
     "miguel/orb-switch"
   ],

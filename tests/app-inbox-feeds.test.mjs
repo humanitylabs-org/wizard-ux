@@ -8,26 +8,29 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const src = readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8');
-function load(feeds, marks = {}) {
-  const S = { posts: [], gets: [], feeds, marks };
+function load(feeds, marks = {}, { on = true, sources = {} } = {}) {
+  const S = { posts: [], gets: [], feeds, marks, sources };
   const json = (d, ok = true) => ({ ok, headers: { get: () => 'application/json' }, json: async () => d });
   const fetch = async (url, o = {}) => {
     S.gets.push(url);
-    if (o.method === 'POST') { S.posts.push([url, JSON.parse(o.body)]); if (url.includes('/api/mark')) { const b = JSON.parse(o.body); for (const id of b.ids) S.marks[id] = { read: !!(b.read || b.archived), archived: !!b.archived, at: b.at?.[id] || 0 }; } return json({ ok: true }); }
+    if (o.method === 'POST') { S.posts.push([url, JSON.parse(o.body)]); if (url.includes('/api/sources')) { const b = JSON.parse(o.body); S.sources = { ...S.sources, [b.app]: { chats: b.chats, phone: true } }; return json({ ok: true, sources: S.sources }); } if (url.includes('/api/mark')) { const b = JSON.parse(o.body); for (const id of b.ids) S.marks[id] = { read: !!(b.read || b.archived), archived: !!b.archived, at: b.at?.[id] || 0 }; } return json({ ok: true }); }
     if (url.includes('/notifications/api/items')) return json({ items: [{ id: 'n1', time: 100, title: 'Cron', message: 'ran' }] });
     if (url.includes('/notifications/api/count')) return json({ unread: 1, needs: 0 });
     if (url.includes('/notifications/api/marks')) return json({ marks: S.marks });
+    if (url.includes('/notifications/api/sources')) return json({ sources: S.sources });
     const m = /^\/([a-z0-9-]+)\/api\/inbox$/.exec(url);
     if (m) return S.feeds[m[1]] ? json({ inbox: 1, items: S.feeds[m[1]] }) : { ok: false, status: 404, headers: { get: () => 'text/html' }, json: async () => ({}) };
     return json({});
   };
   const apps = { APPS: [{ id: 'messenger', kind: 'wizard', source: 'apps.json', name: 'Messenger' }, { id: 'files', kind: 'wizard', source: 'apps.json', name: 'Files' }, { id: 'wizard', kind: 'chats', name: 'Chats' }] };
-  const win = { WizCanOpen: () => true, WizAppOpen: () => false, addEventListener() {}, dispatchEvent() {}, CustomEvent: class {},
+  const win = { WosSkinHost: { inboxList: true }, WizCanOpen: () => true, WizAppOpen: () => false, addEventListener() {}, dispatchEvent() {}, CustomEvent: class {},
     WizCore: { apps: () => apps, backendApps: () => [{ id: 'notifications' }], appMetadata: id => ({ id, name: id === 'messenger' ? 'Messenger' : id }) } };
   const ctx = { window: win, document: { addEventListener() {}, querySelectorAll: () => [] }, addEventListener() {}, setInterval() {}, setTimeout() {},
     fetch, CustomEvent: class {}, location: { origin: 'http://x' } };
+  const ls = new Map(); ctx.localStorage = { getItem: k => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, String(v)) };
   win.window = win; vm.runInNewContext(src, ctx);
-  return { B: win.WosBell, S };
+  if (on) win.WosBell.feeds(true);
+  return { B: win.WosBell, S, ls };
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(r => setImmediate(r)); };
 const chat = (over = {}) => ({ key: 'chat:!a', title: 'Carlos', text: '2 new · see you at 5', time: 200, priority: 3, open: '#/chat/a',
@@ -84,4 +87,63 @@ test('feed text is data: unsafe open paths are dropped and fields are bounded', 
   const apps = got.filter(i => i.app);
   assert.equal(apps.length, 1, 'an item without a key is skipped');
   assert.equal(apps[0].open, ''); assert.equal(apps[0].title.length, 300);
+});
+
+const same = (a, b, m) => assert.equal(JSON.stringify(a), JSON.stringify(b), m);
+// Off by default: the feeds are a tweak's (miguel/app-inbox holds api.inbox.feeds). Until one holds them, the inbox is
+// the stock Notifications-only path: no app is asked for a feed, no app item, no feed state saved on the device.
+test('feeds off (stock): no app is ever asked for a feed and marks stay the plain Notifications ones', async () => {
+  const { B, S, ls } = load({ messenger: [chat()] }, {}, { on: false });
+  let got = []; B.watch(i => { got = i; }); await settle();
+  same(got.map(i => i.id), ['n1'], 'only Notifications items');
+  assert.equal(S.gets.filter(u => /\/api\/(inbox|marks|sources)/.test(u)).length, 0, 'no feed, marks or sources reads');
+  await B.mark(['n1'], { read: true }); await settle();
+  same(S.posts.map(p => p[0]), ['/notifications/api/mark']); assert.equal('at' in S.posts[0][1], false);
+  assert.equal(S.gets.filter(u => /\/api\/inbox/.test(u)).length, 0);
+  assert.equal(ls.size, 0, 'nothing kept on the device');
+  assert.equal(B.readyCount(), 1);
+  same(await B.sources.list(), [], 'no per-app choice to offer');
+  assert.equal(await B.sources.set('messenger', { chats: false }), false);
+});
+
+test('turning the feeds off drops app items at once; on again brings them back', async () => {
+  const { B } = load({ messenger: [chat()] });
+  let got = []; B.watch(i => { got = i; }); await settle();
+  assert.equal(got.filter(i => i.app).length, 1);
+  B.feeds(false); await settle();
+  assert.equal(got.filter(i => i.app).length, 0); assert.equal(B.readyCount(), 1);
+  const id = 'a-messenger-' + '0'.repeat(16);
+  assert.equal(await B.act(id, 'read'), false);
+  B.feeds(true); await settle();
+  assert.equal(got.filter(i => i.app).length, 1);
+});
+
+test('an app kept out of Chats (Notifications /api/sources chats:false): no rows, no count; still offered in Settings', async () => {
+  const { B, S } = load({ messenger: [chat()], files: [chat({ key: 'f1', title: 'File' })] }, {}, { sources: { messenger: { chats: false, phone: true } } });
+  let got = []; B.watch(i => { got = i; }); await settle();
+  same(got.filter(i => i.app).map(i => i.app), ['files'], 'Messenger items stay in Messenger');
+  assert.equal(B.readyCount(), 2, 'its items are not counted (Notifications + Files)');
+  const list = await B.sources.list();
+  same(list.map(r => [r.id, r.name, r.chats]), [['messenger', 'Messenger', false], ['files', 'files', true]], 'every app with a feed, hidden ones too');
+  // Switching it back on is saved on the box (JSON) and the items return.
+  assert.equal(await B.sources.set('messenger', { chats: true }), true); await settle();
+  same(S.posts.at(-1), ['/notifications/api/sources', { app: 'messenger', chats: true }]);
+  assert.ok(got.some(i => i.app === 'messenger'));
+  // And off again hides them at once.
+  assert.equal(await B.sources.set('messenger', { chats: false }), true); await settle();
+  assert.equal(got.some(i => i.app === 'messenger'), false); assert.equal(B.readyCount(), 2);
+  assert.equal(await B.sources.set('Bad Id', { chats: false }), false); assert.equal(await B.sources.set('files', { chats: 'no' }), false);
+});
+
+// Chats shows app buttons and sends typed words to an app only while the feeds are held (WosSkinHost.inboxFeeds).
+test('chats.js gates every app-item control on the held feeds', () => {
+  const c = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  assert.match(c, /const feedsOn = \(\) => !!window\.WosSkinHost\?\.inboxFeeds;/);
+  assert.match(c, /if \(!it\?\.app \|\| it\.archived \|\| !feedsOn\(\)\) return \[\];/, 'no app buttons');
+  assert.match(c, /const noteInput = it => it\?\.app && feedsOn\(\)/, 'no typing to the app');
+  assert.match(c, /how === 'typing in the Chats window' && !winAgent\(w\) && feedsOn\(\)/, 'typed words go to Wizard as stock');
+  const h = readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  assert.match(h, /get inboxFeeds\(\) \{ return inboxFeeds\.size > 0; \}/);
+  assert.doesNotMatch(h, /miguel\/app-inbox/, 'core never names a package');
+  assert.doesNotMatch(c + readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8'), /miguel\/app-inbox/);
 });

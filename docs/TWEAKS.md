@@ -96,6 +96,15 @@ Settings › Look (`shellApi` in `core/skin-host.js`): see `docs/orb-layout.md`.
 synced), `api.panel.close()` / `back()` / `state()`, `api.route().panel`; releasing it gives the desks back untouched.
 `api.back.push(close)` puts the layout's own popover in the Esc order.
 
+## App inbox feeds (trusted `inbox` capability)
+
+Installed apps can list what needs the owner (`GET /<app>/api/inbox`, inbox feed v1). The shell reads those feeds only
+while a package holds `api.inbox.feeds({ on: true, act })`: off, nothing asks an app for a feed and Chats shows no app
+buttons (stock). `act(action, id)` sees an app item's buttons first (`app`, `x:<action id>`, `done`) and returns true
+when it handled one; the rest go to the inbox threads package. `api.inbox.sources.list()` / `.set(appId, { chats })`
+read and save the per-app "show in Chats" choice on the box (Notifications `/api/sources`). Settings sections may use
+the `notifications` page (hidden while empty). Example: `web/tweaks/miguel/app-inbox`.
+
 ## Updates (Settings › About & updates)
 
 - **Version**: **Standard** (the official version; `releases/stable`) or **Early access** (newest changes first,

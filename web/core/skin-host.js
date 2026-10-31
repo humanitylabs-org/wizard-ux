@@ -452,7 +452,7 @@
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
   const homeHtml = new WeakMap();   // Home element -> the markup paintHome last wrote
-  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), inboxFeeds = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
@@ -518,6 +518,19 @@
         return window.WizLive?.putPrefs ? await window.WizLive.putPrefs(JSON.parse(JSON.stringify(patch)), { requireShared: true }) === true : false;
       },
     });
+  }
+  // Settings pages a package may fill (core/settings.js lists each; a page with nothing on it stays hidden).
+  const SETTINGS_PAGES = Object.freeze(['overview', 'ai', 'network', 'storage', 'notifications']);
+  // An installed app's mark (its sigil) as a fresh node a package can place; null when the sigils are not loaded.
+  function appIcon(id, name) {
+    if (!isDoc || !window.WizSigil?.html) return null;
+    try {
+      const meta = window.WizCore?.appMetadata?.(id) || { id, name: name || id };
+      const t = document.createElement('template');
+      t.innerHTML = typeof window.WizSigil.box === 'function' ? window.WizSigil.box('span', 'emo', meta) : `<span class="emo">${window.WizSigil.html(meta)}</span>`;
+      const span = t.content.firstElementChild; span?.setAttribute('aria-hidden', 'true');
+      return span || null;
+    } catch (_) { return null; }
   }
   function tweakApi(a, manifest, trusted) {
     const base = makeApi(a), caps = new Set(manifest.capabilities.filter(c => trusted || c === 'layout' || c === 'nav'));
@@ -690,7 +703,7 @@
     if (caps.has('settings')) api.settings = Object.freeze({
       section(id, page, node, opts = {}) {
         if (!trusted || a.dead) throw new Error('Trusted settings required');
-        if (!['overview', 'ai', 'network', 'storage'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
+        if (!SETTINGS_PAGES.includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
         const W = window.WosSettings; if (!W?.register) return () => {};
         const fid = ('tweak-' + a.id + '-' + id).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80);
         const subtitle = typeof opts.subtitle === 'function' ? guard(a, 'settings.subtitle', opts.subtitle) : null;
@@ -700,7 +713,7 @@
         let done = false; const release = () => { if (!done) { done = true; off(); node.remove?.(); } };
         a.offs.add(release); return release;
       },
-      open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage'].includes(page)) shell?.openSettings?.(page); },
+      open: page => { if (!a.dead && SETTINGS_PAGES.includes(page)) shell?.openSettings?.(page); },
       // One of the author's own tweaks, switched for this device the same way as Settings › Look (WosExperience
       // mix, no reload). Own author only: a package can never switch someone else's tweak.
       tweakOn: id => typeof id === 'string' && id.startsWith(a.id.split('/')[0] + '/') && tweaks.has(id) && !tweaks.get(id).dead,
@@ -742,11 +755,33 @@
         const message = it.app ? `${it.message}\n\n(From the ${it.appName || it.app} app, ${it.app}; item ${it.key})` : it.message;
         return !!shell.contextDraft('notifications:' + it.id, { title, message }, String(words || ''));
       },
+      /* App inbox feeds (installed apps' own "needs you" items, inbox feed v1). Off until a package holds
+       * feeds({ on: true }): before that WosBell never asks an app for a feed and Chats shows no app buttons.
+       * `act(action, id)` is asked first for an app item's buttons and keys ('app', 'x:<action id>', 'done', …);
+       * returning true means handled, anything else falls through to the inbox threads package. Released on teardown. */
+      feeds(opts = {}) {
+        if (a.dead || opts?.on !== true) return () => {};
+        inboxFeeds.set(a.id, { act: typeof opts.act === 'function' ? guard(a, 'inbox.feeds.act', opts.act) : null });
+        window.WosBell?.feeds?.(true);
+        const off = () => { if (inboxFeeds.delete(a.id)) { if (!inboxFeeds.size) window.WosBell?.feeds?.(false); window.dispatchEvent?.(new Event('wos:prefs')); } a.offs.delete(off); };
+        a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
+      },
+      /* Per app, show its items in Chats or keep them in the app (saved on the box by Notifications, so every device
+       * agrees). list(): each installed app with a feed, { id, name, chats, icon } (icon = a fresh sigil node). Only
+       * while this package holds feeds. */
+      sources: Object.freeze({
+        async list() {
+          if (a.dead || !inboxFeeds.has(a.id) || !window.WosBell?.sources) return [];
+          const rows = await window.WosBell.sources.list();
+          return a.dead ? [] : rows.map(r => Object.freeze({ id: r.id, name: r.name, chats: r.chats, icon: appIcon(r.id, r.name) }));
+        },
+        set: (id, patch = {}) => a.dead || !inboxFeeds.has(a.id) || typeof patch?.chats !== 'boolean' || !window.WosBell?.sources ? Promise.resolve(false) : window.WosBell.sources.set(String(id), { chats: patch.chats }),
+      }),
       // App inbox feed items (WosBell): run one of the app's own buttons (POST /<app>/api/inbox/act), or open the
       // app at the item. Only for an item the app itself listed; the shell checks the action is one it declared.
-      act: (id, action, text = '') => a.dead || !window.WosBell?.act ? Promise.resolve(false) : window.WosBell.act(String(id), String(action), String(text || '')),
+      act: (id, action, text = '') => a.dead || !inboxFeeds.has(a.id) || !window.WosBell?.act ? Promise.resolve(false) : window.WosBell.act(String(id), String(action), String(text || '')),
       open(id) {
-        if (a.dead) return false;
+        if (a.dead || !inboxFeeds.has(a.id)) return false;
         const it = window.WosBell?.item?.(id); if (!it?.app || typeof window.WizOpenApp !== 'function') return false;
         if (!it.open) return !!window.WizOpenApp(it.app);
         let base = ''; try { base = (window.WizCore?.apps?.('mobile')?.APPS || []).find(x => x.id === it.app)?.url || ''; } catch (_) {}
@@ -822,7 +857,12 @@
     /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
     get inboxThreads() { return inboxThreads.size > 0; },
     get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
-    inboxAct(action, id, text) { for (const h of inboxThreads.values()) { h.act(String(action), String(id), text == null ? undefined : String(text)); return true; } return false; },
+    /* chats.js: app items' own buttons render and typed replies go to the app only while a package holds feeds. */
+    get inboxFeeds() { return inboxFeeds.size > 0; },
+    inboxAct(action, id, text) {
+      for (const h of inboxFeeds.values()) if (h.act && h.act(String(action), String(id), text == null ? undefined : String(text)) === true) return true;
+      for (const h of inboxThreads.values()) { h.act(String(action), String(id), text == null ? undefined : String(text)); return true; } return false;
+    },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },

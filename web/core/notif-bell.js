@@ -37,11 +37,16 @@
    * Its items join the Notifications items here, so the inbox in Chats (and later the phone) shows them with the
    * app's own buttons. A thing handled in the app leaves its feed, so its row clears everywhere by itself. Done /
    * Snooze without an app action are inbox marks (Notifications /api/marks) covering the item's activity time:
-   * newer activity brings it back. Which apps have a feed is learnt once per app (6 h for a "no"). */
+   * newer activity brings it back. Which apps have a feed is learnt once per app (6 h for a "no").
+   * OFF unless a trusted package holds it (skin-host api.inbox.feeds → feeds(true)): until then no app is ever
+   * asked for a feed and everything below is the stock Notifications-only path. Per app, the owner can keep its
+   * items in the app instead (Notifications /api/sources, chats: false, the same on every device): no rows, no
+   * count here; the app keeps its own badge. */
   const FEED_KEY = 'wos.inbox.feeds.v1', MARK_KEY = 'wos.inbox.appmarks.v1';
   const FEED_SKIP = new Set(['notifications', 'wizard', 'wizard-agent-service', 'wizard-ux', 'setup', 'side-button', 'pages']);
-  const FD = { known: (() => { try { return JSON.parse(localStorage.getItem(FEED_KEY) || '{}') || {}; } catch (e) { return {}; } })(), last: {}, marks: null };
-  const saveKnown = () => { try { localStorage.setItem(FEED_KEY, JSON.stringify(FD.known)); } catch (e) {} };
+  const FD = { on: false, known: null, last: {}, marks: null, sources: null };
+  const known = () => FD.known || (FD.known = (() => { try { return JSON.parse(localStorage.getItem(FEED_KEY) || '{}') || {}; } catch (e) { return {}; } })());
+  const saveKnown = () => { try { localStorage.setItem(FEED_KEY, JSON.stringify(known())); } catch (e) {} };
   const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/, ACTID = /^[a-z0-9_-]{1,32}$/;
   const hash = t => { let a = 0x811c9dc5, b = 0x01000193; for (const c of String(t)) { const k = c.codePointAt(0); a = Math.imul(a ^ k, 16777619) >>> 0; b = Math.imul(b ^ k, 2246822519) >>> 0; } return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0'); };
   const appItemId = (app, key) => 'a-' + app + '-' + hash(key);
@@ -72,28 +77,52 @@
     try { const r = await timed(fetch('/notifications/api/marks', { cache: 'no-store', credentials: 'same-origin' })); if (r.ok) { const d = await r.json(); if (d && d.marks) { FD.marks = d.marks; return; } } } catch (e) {}
     if (!FD.marks) try { FD.marks = JSON.parse(localStorage.getItem(MARK_KEY) || '{}') || {}; } catch (e) { FD.marks = {}; }
   }
+  // Which apps show in Chats (absent = shown). Read with every feed read, so a change on one device reaches the rest.
+  async function loadSources() {
+    if (!installed()) { FD.sources = {}; return FD.sources; }
+    try { const r = await timed(fetch('/notifications/api/sources', { cache: 'no-store', credentials: 'same-origin' })); if (r.ok) { const d = await r.json(); if (d && d.sources && typeof d.sources === 'object') FD.sources = d.sources; } } catch (e) {}
+    return FD.sources || {};
+  }
+  const shown = (app, src = FD.sources || {}) => !(src[app] && src[app].chats === false);
   async function loadFeeds() {
     const now = Date.now(), apps = feedApps(), out = [];
-    await Promise.all(apps.map(async id => {
-      const k = FD.known[id];
+    const [src] = await Promise.all([loadSources(), ...apps.map(async id => {
+      const k = known()[id];
       if (k && k.s === 'no' && now - k.at < 6 * 3600e3) return;
       try {
         const items = await getFeed(id);
-        if (!items) { if (!k || k.s !== 'yes') { FD.known[id] = { s: 'no', at: now }; saveKnown(); } else if (FD.last[id]) out.push(...FD.last[id].items); return; }
-        if (!k || k.s !== 'yes') { FD.known[id] = { s: 'yes', at: now }; saveKnown(); }
+        if (!items) { if (!k || k.s !== 'yes') { known()[id] = { s: 'no', at: now }; saveKnown(); } else if (FD.last[id]) out.push(...FD.last[id].items); return; }
+        if (!k || k.s !== 'yes') { known()[id] = { s: 'yes', at: now }; saveKnown(); }
         const list = items.slice(0, 50).map(it => fromFeed(id, it)).filter(Boolean);
         FD.last[id] = { at: now, items: list }; out.push(...list);
       } catch (e) {
         // A feed that stops answering keeps its last items a few minutes (no flicker), then they go.
         if (FD.last[id] && now - FD.last[id].at < 5 * 60e3) out.push(...FD.last[id].items);
-        else if (!k) { FD.known[id] = { s: 'no', at: now }; saveKnown(); }
+        else if (!k) { known()[id] = { s: 'no', at: now }; saveKnown(); }
       }
-    }));
-    if (out.length) await loadMarks();
+    })]);
+    const kept = out.filter(it => shown(it.app, src));
+    if (kept.length) await loadMarks();
     const M = FD.marks || {};
-    return out.map(it => { const m = M[it.id]; const covers = m && Number(m.at) >= it.time; return { ...it, read: !!(covers && (m.read || m.archived)), archived: !!(covers && m.archived) }; });
+    return kept.map(it => { const m = M[it.id]; const covers = m && Number(m.at) >= it.time; return { ...it, read: !!(covers && (m.read || m.archived)), archived: !!(covers && m.archived) }; });
+  }
+  // Stock: the Notifications app's items only.
+  async function loadNotes() {
+    if (!IN.subs.size || !installed()) return;
+    const seq = ++IN.seq;
+    try {
+      const r = await fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (seq !== IN.seq || !Array.isArray(d.items)) return;
+      const before = JSON.stringify(IN.items);
+      IN.items = Object.freeze(d.items.filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
+      for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+      if (before !== JSON.stringify(IN.items)) inboxChanged();
+    } catch (e) {}
   }
   async function loadItems() {
+    if (!FD.on) return loadNotes();
     if (!IN.subs.size) return;
     const seq = ++IN.seq;
     try {
@@ -112,13 +141,40 @@
   /* An app's own button on one of its items: POST /<app>/api/inbox/act { key, action, text }. The item usually
    * leaves the app's feed afterwards; the list reloads at once. */
   async function act(id, action, text) {
-    const it = IN.items.find(i => i.id === String(id)); if (!it || !it.app || !it.actions.some(a => a.id === action && !a.ask)) return false;
+    const it = FD.on ? IN.items.find(i => i.id === String(id)) : null; if (!it || !it.app || !it.actions.some(a => a.id === action && !a.ask)) return false;
     let ok = false;
     try {
       const r = await timed(fetch(`/${it.app}/api/inbox/act`, { method: 'POST', credentials: 'same-origin', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: it.key, action, ...(text ? { text: String(text).slice(0, 8000) } : {}) }) }), 15000);
       ok = r.ok;
     } catch (e) {}
     if (ok) { IN.items = Object.freeze(IN.items.filter(i => i.id !== it.id)); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } inboxChanged(); }
+    await loadItems();
+    return ok;
+  }
+  const emit = () => { for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } inboxChanged(); };
+  // skin-host only (api.inbox.feeds): on while a trusted package holds it. Off drops app items at once.
+  function feeds(on) {
+    on = on === true; if (on === FD.on) return;
+    FD.on = on;
+    if (!on) { FD.last = {}; IN.seq++; if (IN.items.some(i => i.app)) { IN.items = Object.freeze(IN.items.filter(i => !i.app)); emit(); } }
+    loadItems();
+  }
+  /* The per-app choice, for a Settings page (skin-host api.inbox.sources, while feeds are on): every installed app
+   * that has a feed, with whether it shows in Chats. set() saves it on the box (Notifications /api/sources). */
+  async function sourceList() {
+    if (!FD.on) return [];
+    // The choice is re-read with every feed read; ask the box only when nothing has been read yet.
+    const src = FD.sources || await loadSources(), k = known();
+    return feedApps().filter(id => k[id] && k[id].s === 'yes').map(id => ({ id, name: appName(id), chats: shown(id, src) }));
+  }
+  async function setSource(app, patch) {
+    if (!FD.on || !APPID.test(String(app)) || !installed() || typeof patch?.chats !== 'boolean') return false;
+    let ok = false;
+    try {
+      const r = await timed(fetch('/notifications/api/sources', { method: 'POST', credentials: 'same-origin', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app: String(app), chats: patch.chats }) }), 8000);
+      if (r.ok) { const d = await r.json(); if (d && d.sources) FD.sources = d.sources; ok = true; }
+    } catch (e) {}
+    if (ok && !patch.chats && IN.items.some(i => i.app === app)) { IN.items = Object.freeze(IN.items.filter(i => i.app !== app)); emit(); }
     await loadItems();
     return ok;
   }
@@ -133,7 +189,7 @@
   const readyCount = () => window.WosSkinHost?.inboxList ? IN.items.filter(i => !i.archived).length : 0;
   async function mark(ids, marks) {
     ids = (ids || []).map(String).filter(Boolean); if (!ids.length) return false;
-    const appIds = ids.filter(id => id.startsWith('a-'));
+    const appIds = FD.on ? ids.filter(id => id.startsWith('a-')) : [];
     if (!installed() && appIds.length < ids.length) return false;
     // Moves at once; a failed write puts it back on the reload below. Archiving also marks read (the server does too).
     const next = { ...marks, ...(marks.archived ? { read: true } : {}) };
@@ -182,5 +238,5 @@
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  window.WosBell = { html, refresh, paint, watch, mark, act, readyCount, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, act, feeds, sources: Object.freeze({ list: sourceList, set: setSource }), readyCount, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
