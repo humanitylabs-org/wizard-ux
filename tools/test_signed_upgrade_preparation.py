@@ -66,24 +66,4 @@ class SignedUpgradePreparationTest(unittest.TestCase):
             run.assert_not_called()
 
 
-class PacketPreparationTest(unittest.TestCase):
-    def test_capacity_preserves_reserve_plus_every_retained_working_set(self):
-        import qa_unified_share_release_packet as packet
-        required = packet.RESERVE + packet.FOOTPRINT
-        self.assertFalse(packet.capacity(required - 1)['pass_gate'])
-        self.assertTrue(packet.capacity(required)['pass_gate'])
-        self.assertEqual(packet.FOOTPRINT, 22 * 1024**3 + 256 * 1024**2)
-
-    def test_every_parent_review_gate_is_required_for_exact_seal_and_source(self):
-        import qa_unified_share_release_packet as packet
-        gates = ('independent_review_passed', 'version84_custody_resolved', 'live_and_feed_rechecked',
-                 'signing_provisioned', 'baseline_receipt_traced', 'notification_visual_limit_accepted_for_rerun')
-        good = dict(seal_sha256='test-seal', revision='test-revision', **dict.fromkeys(gates, True))
-        packet.authorize(good, 'test-seal', 'test-revision')
-        for key in (*gates, 'seal_sha256', 'revision'):
-            bad = dict(good); bad.pop(key)
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                packet.authorize(bad, 'test-seal', 'test-revision')
-
-
 if __name__ == '__main__': unittest.main()

@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-import qa_unified_share_forum_packet as packet
+import qa_unified_share_release_packet as packet
 
 
 class ForumPacketTest(unittest.TestCase):
@@ -21,15 +21,23 @@ class ForumPacketTest(unittest.TestCase):
             cfg = dict(revision='a' * 40, host='forum', version_code=86)
             (root / 'packet.json').write_text(json.dumps(cfg))
             (root / 'source.tar.gz').write_bytes(b'SYNTHETIC UNIT ARCHIVE BYTES, NOT SOURCE')
-            seal = dict(revision=cfg['revision'], files={n: packet.sha(root / n) for n in ('packet.json', 'source.tar.gz')})
+            files = {n: packet.sha(root / n) for n in ('packet.json', 'source.tar.gz')}
+            seal = dict(revision=cfg['revision'], files={'/srv/work/unit/' + n: d for n, d in files.items()})
             (root / 'packet-seal.json').write_text(json.dumps(seal))
             digest = packet.sha(root / 'packet-seal.json')
-            self.assertEqual(packet.verify(root, digest), cfg)
+            real = packet.Path
+            mapped = lambda p: real(str(p).replace('/srv/work/unit', str(root), 1))
+            with patch.object(packet, 'Path', mapped):
+                self.assertEqual(packet.verify(root, digest), cfg)
             with self.assertRaisesRegex(ValueError, 'packet seal drift'):
                 packet.verify(root, 'wrong')
             (root / 'source.tar.gz').write_bytes(b'DRIFT')
-            with self.assertRaisesRegex(ValueError, 'sealed input drift'):
+            with patch.object(packet, 'Path', mapped), self.assertRaisesRegex(ValueError, 'sealed input drift'):
                 packet.verify(root, digest)
+            outside = dict(seal, files={str(root / 'packet.json'): files['packet.json']})
+            (root / 'packet-seal.json').write_text(json.dumps(outside))
+            with self.assertRaisesRegex(ValueError, 'sealed input drift'):
+                packet.verify(root, packet.sha(root / 'packet-seal.json'))
 
     def test_full_junit_count_and_skips_are_not_relaxed(self):
         with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as name:
