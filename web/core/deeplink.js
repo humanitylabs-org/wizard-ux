@@ -29,7 +29,7 @@
     const q = u.searchParams, out = {};
     const installing=q.get('view')==='install' || (u.protocol==='wizard:' && u.hostname==='install');
     const sid = q.get('session') || ''; if (!installing && SESSION_ID.test(sid)) out.session = sid;
-    const view = u.protocol==='wizard:' && u.hostname==='install' ? 'install' : (q.get('view') || '').trim(); if (!out.session && (VIEWS.has(view) || window.WosFeatures?.has(view) || window.WosSettings?.features.some(f => f.aliases.includes(view)) || window.WosSettings?.systemPages?.includes(view))) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
+    const view = u.protocol==='wizard:' && u.hostname==='install' ? 'install' : (q.get('view') || '').trim(); if (!out.session && (VIEWS.has(view) || window.WosFeatures?.has(view) || window.WosSettings?.features.some(f => f.aliases.includes(view)))) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
     if (out.view === 'install') { const q=new URLSearchParams(u.search), shell=q.has('shell'); q.delete('shell'); out.install=u.protocol==='wizard:'?u.href:shell?'?'+q:u.search; }
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
     const open = (q.get('open') || '').trim(); if (!out.session && !out.view && (/^[a-z0-9-]{1,40}$/i.test(open) || /^agent:[a-z0-9][a-z0-9-]{0,40}$/.test(open))) out.open = open;

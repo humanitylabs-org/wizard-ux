@@ -26,24 +26,10 @@ export const USES = new Set(['standby', 'helper']);
 export const peerGroup = (os, name, reg) => reg.groups[String(name).toLowerCase()] || (/^(ios|android|macos|ipados)$/i.test(os || '') ? 'human' : 'other');
 
 // ---------- registry ----------
-// How a machine can be reached from outside, as the owner (or the agent, after testing it from another machine) wrote
-// it down: exposure is one of three words, never guessed; `how` is the owner's way in; details hold ports and the rest.
-const EXPOSURE = new Set(['tailscale', 'internet', 'unchecked']);
-export function cleanAccess(a) {
-  if (!a || typeof a !== 'object') return null;
-  const exposure = EXPOSURE.has(a.exposure) ? a.exposure : 'unchecked';
-  // A real calendar date, not in the future (a typo must never count as a completed exposure check).
-  const realDay = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || '')); if (!m) return false; const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-    return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && m[0] <= new Date().toISOString().slice(0, 10); };  // today (UTC) at the latest
-  const checked = realDay(a.checked) ? a.checked : null;
-  const details = (Array.isArray(a.details) ? a.details : []).map(x => clip(x, 140)).filter(Boolean).slice(0, 8);
-  return {exposure, ...(checked ? {checked} : {}), ...(clip(a.how, 80) ? {how: clip(a.how, 80)} : {}), ...(details.length ? {details} : {})};
-}
-const withAccess = a => { const c = cleanAccess(a); return c ? {access: c} : {}; };
 export function cleanRegistry(raw) {
   const j = raw && typeof raw === 'object' ? raw : {};
   const names = v => (Array.isArray(v) ? v : []).map(x => clip(x, 64).toLowerCase()).filter(Boolean).slice(0, 8);
-  const thisBox = {name: clip(j.this?.name, 40) || null, role: clip(j.this?.role, 60) || null, tailnet: names(j.this?.tailnet), ...(clip(j.this?.wizard, 40) ? {wizard: clip(j.this.wizard, 40)} : {}), ...(clip(j.this?.owner, 40) ? {owner: clip(j.this.owner, 40)} : {}), ...withAccess(j.this?.access)};
+  const thisBox = {name: clip(j.this?.name, 40) || null, role: clip(j.this?.role, 60) || null, tailnet: names(j.this?.tailnet)};
   const seen = new Set(['this']), devices = [];
   for (const d of Array.isArray(j.devices) ? j.devices : []) {
     const id = clip(d?.id, 32).toLowerCase();
@@ -51,7 +37,7 @@ export function cleanRegistry(raw) {
     const c = d.connect || {};
     if (c.type !== 'ssh' || !HOST_RE.test(String(c.host || ''))) continue;
     seen.add(id);
-    devices.push({id, name: clip(d.name, 40) || id, role: clip(d.role, 60) || null, group: GROUPS.has(d.group) ? d.group : 'agent', ...(USES.has(d.use) ? {use: d.use} : {}), connect: {type: 'ssh', host: String(c.host), ...(c.shell === 'powershell' ? {shell: 'powershell'} : {})}, tailnet: names(d.tailnet), ...withAccess(d.access)});
+    devices.push({id, name: clip(d.name, 40) || id, role: clip(d.role, 60) || null, group: GROUPS.has(d.group) ? d.group : 'agent', ...(USES.has(d.use) ? {use: d.use} : {}), connect: {type: 'ssh', host: String(c.host), ...(c.shell === 'powershell' ? {shell: 'powershell'} : {})}, tailnet: names(d.tailnet)});
     if (devices.length >= 24) break;
   }
   // Tailnet machines the Wizard does not read: which group the owner sees them under (human / client / other).
@@ -70,7 +56,7 @@ export function cleanRegistry(raw) {
     if (!ID_RE.test(id) || !name || mseen.has(id)) continue;
     mseen.add(id);
     const where = clip(m.where, 120), peer = clip(m.peer, 64).toLowerCase();
-    managed.push({id, name, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m), ...withAccess(m.access)});
+    managed.push({id, name, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m)});
     if (managed.length >= 12) break;
   }
   return {version: 1, this: thisBox, devices, hide: names(j.hide), groups, ...(managed.length ? {managed} : {})};
@@ -247,15 +233,14 @@ export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, 
     };
     const thisKeys = new Set([...reg.this.tailnet, net?.self.name.toLowerCase(), net?.self.dns].filter(Boolean));
     thisKeys.forEach(k => used.add(k));
-    const devices = [shape({id: 'this', kind: 'this', group: 'agent', name: reg.this.name || pretty(net?.self.name) || pretty(hostname().split('.')[0]), role: reg.this.role || 'Wizard runs here', ...(reg.this.access ? {access: reg.this.access} : {})}, local, null)];
+    const devices = [shape({id: 'this', kind: 'this', group: 'agent', name: reg.this.name || pretty(net?.self.name) || pretty(hostname().split('.')[0]), role: reg.this.role || 'Wizard runs here'}, local, null)];
     reg.devices.forEach((d, i) => {
       const peer = findPeer(matchKeys(d)); if (peer) used.add(peer.name.toLowerCase());
-      devices.push(shape({id: d.id, kind: 'ssh', group: d.group, name: d.name, role: d.role, ...(d.use ? {use: d.use} : {}), ...(d.access ? {access: d.access} : {})}, remote[i], peer));
+      devices.push(shape({id: d.id, kind: 'ssh', group: d.group, name: d.name, role: d.role, ...(d.use ? {use: d.use} : {})}, remote[i], peer));
     });
     const hide = new Set(reg.hide);
     const network = net ? {available: true, peers: net.peers.filter(p => !used.has(p.name.toLowerCase()) && !used.has(p.dns) && !hide.has(p.name.toLowerCase()) && !hide.has(p.dns)).map(({name, dns, os, online, lastSeen}) => ({name, os, online, lastSeen: online ? null : lastSeen, group: peerGroup(os, reg.groups[dns] ? dns : name, reg)})).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name))} : {available: false, peers: []};
     const managed = (reg.managed || []).map(m => { const p = m.peer && net?.peers.find(x => x.name.toLowerCase() === m.peer || x.dns === m.peer); return {...m, ...(m.peer ? {peerOnline: p ? !!p.online : null} : {})}; });
-    const me = {...(reg.this?.wizard ? {wizard: reg.this.wizard} : {}), ...(reg.this?.owner ? {owner: reg.this.owner} : {})};
-    return {at: new Date(now()).toISOString(), devices, network, ...(Object.keys(me).length ? {this: me} : {}), ...(managed.length ? {managed} : {})};
+    return {at: new Date(now()).toISOString(), devices, network, ...(managed.length ? {managed} : {})};
   };
 }

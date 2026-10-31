@@ -1077,7 +1077,6 @@
   function leaveHome() {
     window.WosResources?.back();
     if (!homeOpen) return;
-    if (settingsModal) closeSettings();
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
@@ -1518,15 +1517,10 @@
    * its ✕, ⌥W, Esc or ⌥, like every window. There is still one Settings panel (setEl); the window hosts it, and when
    * the window goes (however it goes) the panel is hidden and parked on <body>. */
   const settingsWin = () => Object.values(W).find(w => w?.app === 'settings') || null;
-  // From Home, Settings opens as a centred panel over Home instead of a window on a desk (Home is not a desk).
-  let settingsModal = false;
-  const scrim = document.createElement('div'); scrim.className = 'dsettings-scrim'; scrim.hidden = true; document.body.appendChild(scrim);
-  scrim.addEventListener('click', () => closeSettings());
-  const settingsFocused = () => settingsModal ? !setEl.hidden : !homeOpen && focused()?.app === 'settings';
+  const settingsFocused = () => !homeOpen && focused()?.app === 'settings';
   function hostSettings() {
-    if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
-    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
+    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); return; }
     if (w) return;
     if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;
@@ -1536,38 +1530,14 @@
     window.WosScenery?.update();
   }
   afterRender = hostSettings;
-  let voiceMenuBack = () => false;  // set once the one-mic menu exists
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
-    if (homeOpen) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
-      if (!settingsModal) settingsFocus = document.activeElement;
-      settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
-      if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
-      scrim.hidden = false;
-    } else if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
+    if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
     setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
   }
-  // The Home Settings dialog keeps Tab inside itself while it is open (closeSettings restores the opener).
-  document.addEventListener('keydown', e => {
-    if (!settingsModal || e.key !== 'Tab') return;
-    const f = [...setEl.querySelectorAll('a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])')].filter(n => !n.disabled && !n.closest('[hidden],[inert]') && n.getClientRects().length);
-    const at = document.activeElement, inside = setEl.contains(at);
-    if (!f.length) { e.preventDefault(); return; }
-    if (e.shiftKey && (!inside || at === f[0])) { e.preventDefault(); f[f.length - 1].focus(); }
-    else if (!e.shiftKey && (!inside || at === f[f.length - 1])) { e.preventDefault(); f[0].focus(); }
-  }, true);
-  function closeSettings() {
-    if (settingsModal) {
-      settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
-      scrim.hidden = true; setEl.hidden = true;
-      if (settingsWin()) hostSettings();  // back into its desk window (shown there again)
-      if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
-      window.WosScenery?.update(); return;
-    }
-    const w = settingsWin(); if (w) closeWin(w.id); else hostSettings();
-  }
+  function closeSettings() { const w = settingsWin(); if (w) closeWin(w.id); else hostSettings(); }
   function toggleSettings() { if (settingsFocused()) closeSettings(); else openSettings(); }
   function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
   setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
@@ -1669,29 +1639,6 @@
   paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));
-  /* One mic in the bar: click talks about this; right-click or hold shows every voice action. The other three buttons
-   * stay in the DOM (their keys ⌥V ⌥D ⌥C and the keys guide keep working), folded out of the bar. */
-  const voiceMenu = document.createElement('div'); voiceMenu.className = 'voice-menu'; voiceMenu.setAttribute('role', 'menu'); voiceMenu.hidden = true;
-  voiceMenu.innerHTML = [['micBtn', 'Talk about this', `${MOD}S`], ['generalVoice', 'New voice chat', `${MOD}V`], ['dictateBtn', 'Dictate here', `${MOD}D`], ['commandBtn', 'Tell the computer', `${MOD}C`]]
-    .map(([id, t, k]) => `<button type="button" role="menuitem" data-voice-go="${id}"><span>${t}</span><kbd>${k}</kbd></button>`).join('');
-  document.body.appendChild(voiceMenu);
-  document.documentElement.classList.add('one-mic');
-  const closeVoiceMenu = () => { if (!voiceMenu.hidden) { voiceMenu.hidden = true; mic.setAttribute('aria-expanded', 'false'); } };
-  voiceMenuBack = () => { if (voiceMenu.hidden) return false; closeVoiceMenu(); mic.focus(); return true; };
-  const openVoiceMenu = () => { const r = mic.getBoundingClientRect(); voiceMenu.style.top = (r.bottom + 6) + 'px'; voiceMenu.style.right = Math.max(8, innerWidth - r.right - 60) + 'px'; voiceMenu.hidden = false; mic.setAttribute('aria-expanded', 'true'); voiceMenu.querySelector('button')?.focus({ preventScroll: true }); };
-  mic.setAttribute('aria-haspopup', 'menu');
-  mic.title = 'Talk about this (⌥S) · right-click or hold for more';
-  let holdT = 0, held = false;
-  mic.addEventListener('contextmenu', e => { e.preventDefault(); voiceMenu.hidden ? openVoiceMenu() : closeVoiceMenu(); });
-  mic.addEventListener('pointerdown', e => { if (e.button) return; held = false; clearTimeout(holdT); holdT = setTimeout(() => { held = true; openVoiceMenu(); }, 480); });
-  mic.addEventListener('pointerup', () => clearTimeout(holdT));
-  // Leaving or cancelling ends the press away from the mic: no mic click follows, so nothing is left to swallow.
-  for (const ev of ['pointerleave', 'pointercancel']) mic.addEventListener(ev, () => { clearTimeout(holdT); held = false; });
-  mic.addEventListener('click', e => { if (held) { held = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-  voiceMenu.addEventListener('pointerdown', e => { if (e.target.closest('[data-voice-go="dictateBtn"]')) { fields().refresh(); e.preventDefault(); } });
-  voiceMenu.addEventListener('click', e => { const b = e.target.closest('[data-voice-go]'); if (!b) return; closeVoiceMenu(); document.getElementById(b.dataset.voiceGo)?.click(); });
-  voiceMenu.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeVoiceMenu(); mic.focus(); } if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); const bs = [...voiceMenu.querySelectorAll('button')], i = bs.indexOf(document.activeElement); bs[(i + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length].focus(); } });
-  document.addEventListener('pointerdown', e => { if (!voiceMenu.hidden && !voiceMenu.contains(e.target) && e.target !== mic && !mic.contains(e.target)) closeVoiceMenu(); }, true);
   async function loadVoiceModels() {
     let timer; toast('◷', 'Loading voice model…', 1800);
     try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
@@ -1821,7 +1768,7 @@
   function fields() { return dictationFields ||= C.focusedField.create({
     frames: () => $$('iframe',stage).filter(f => !!APP[W[f.closest('[data-win]')?.dataset.win]?.appId]),
     admit: (c,el) => { const w=c.frame?.closest('[data-win]')||el.closest('[data-win]');return (!w||w.dataset.win===ws[cur].focus)&&!!el.getClientRects().length; },
-    controls: el => !!el?.closest('#voicePill,#micBtn,#dictateBtn,.voice-menu')  // the one-mic menu keeps the field Dictate will write into
+    controls: el => !!el?.closest('#voicePill,#micBtn,#dictateBtn')
   }); }
   // Recovery is a view of the existing outbox, not a second recorder/store/native pipeline.
   const recovery = document.createElement('section');
@@ -1959,9 +1906,7 @@
   // Esc peels one layer: palette → keys → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
-    window.WosSettings?.cancelWait?.(); // every Back path drops a System link still waiting
     if (window.WosContextMenu?.back()) return 'context-menu';
-    if (voiceMenuBack()) return 'voice-menu'; // the one-mic menu sits above the bar
     if (window.WizShareWizard?.back()) return 'share-wizard';
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
     if (window.WosSelMenu?.back()) return 'selection';
@@ -2602,12 +2547,9 @@
     openList: () => { const w = skinChatsWin(); if (w) { CHATS.openChat(w.id, null); syncChatsPane(w.id); } },
     openThread: id => openThread(id),
     goDesk: i => goWs(i),
-    sessions: () => { const G = LIVE?.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
-    openSessions: kind => { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (kind === 'working') CHATS.setFilter(w, 'working'); else { if (w.thread) { CHATS.chatsBack(w); syncChatsPane(w.id); } CHATS.setFilter(w, ''); } } },  // Ready = the whole list, out of any open thread
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
-    openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
-    contextDraft: (key, item, words, draft) => { let w = homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; focusWin(w.id); CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
+    contextDraft: (key, item, words) => { const w = skinChatsWin(); if (!w) return false; focusWin(w.id); CHATS.openContextDraft(w.id, key, item); CHATS.renderChats(w); syncChatsPane(w.id); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => ws.length,
