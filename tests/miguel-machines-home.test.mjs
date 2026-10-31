@@ -298,14 +298,12 @@ test('seventh review: one switch per Home map group; desktop Ready leaves the op
   assert.match(desk, /if \(w\.thread\) \{ CHATS\.chatsBack\(w\); syncChatsPane\(w\.id\); \} CHATS\.setFilter\(w, ''\);/);
 });
 
-test('eighth review: only stamped assets are immutable; a child sign-out survives a stale group', () => {
+test('eighth review (live shell): packaging stays as live had it; a child sign-out survives a stale group', () => {
+  // James's live shell keeps its own packaging: #668's immutable caching of stamped assets is held for staging
+  // (31 Oct 2026); only its Home/Settings parts land, under James's decisions. Main keeps the caching contract.
   const ng = read('packaging/nginx.conf.template'), usage = read('web/core/usage.js');
-  assert.match(ng, /map "\$arg_v:\$uri" \$wizard_cache \{\n    default "no-cache";\n    "~\^\[0-9a-f\]\{12\}:\.\*\/sw\\\.js\$" "no-cache";/, 'pages and sw.js stay no-cache even with ?v=');
-  assert.doesNotMatch(ng, /map \$arg_v \$wizard_cache/, 'no blanket ?v= rule');
-  assert.match(ng, /map \$status \$wizard_cache_ok \{ 200 \$wizard_cache; 304 \$wizard_cache; default "no-store"; \}/, 'errors are never kept');
-  assert.match(read('packaging/static.conf'), /add_header Cache-Control \$wizard_cache_ok always;/);
-  assert.match(ng, /add_header Cache-Control \$wizard_attach_cache always;/); assert.match(ng, /add_header Cache-Control \$wizard_file_cache always;/);
-  assert.doesNotMatch(ng, /add_header Cache-Control "private/, 'no fixed long cache on proxied errors');
+  assert.match(read('packaging/static.conf'), /add_header Cache-Control "no-cache" always;/);
+  assert.doesNotMatch(ng, /\$wizard_cache|immutable/, 'nothing kept for a year on the live shell');
   assert.match(usage, /const childOut = \['signed_out', 'auth', 'reauth'\]\.includes\(a\.status\); return \{\.\.\.a, providerId:p\.id, providerName:p\.name, status:childOut \? a\.status :/);
 });
 
