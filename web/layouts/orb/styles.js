@@ -105,28 +105,28 @@ function plasma(mk) {
     o.globalCompositeOperation = 'source-over'; o.clearRect(0, 0, S, S); o.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 8; i++) {
       const a = t * .22 * sp * (i % 2 ? 1 : -1) + i * .9;
-      const rr = S * (.1 + .07 * Math.sin(t * .5 + i * 1.7) + lv * .05);
+      const rr = S * (.13 + .08 * Math.sin(t * .5 + i * 1.7) + lv * .05);
       const x = S / 2 + Math.cos(a) * rr + Math.sin(t * .31 + i) * S * .04, y = S / 2 + Math.sin(a * 1.21) * rr;
-      const br = S * (.19 + .05 * Math.sin(t * .8 + i * 2) + lv * .1);
-      const g = o.createRadialGradient(x, y, 0, x, y, br); g.addColorStop(0, A(c[i % 4], .42)); g.addColorStop(1, A(c[i % 4], 0));
+      const br = S * (.22 + .05 * Math.sin(t * .8 + i * 2) + lv * .1);
+      const g = o.createRadialGradient(x, y, 0, x, y, br); g.addColorStop(0, A(c[i % 4], .3)); g.addColorStop(.6, A(c[i % 4], .1)); g.addColorStop(1, A(c[i % 4], 0));
       o.fillStyle = g; o.fillRect(0, 0, S, S);
     }
     // fade to nothing at the edge: a cloud, not a ball
     o.globalCompositeOperation = 'destination-in';
     const m = o.createRadialGradient(S / 2, S / 2, S * .1, S / 2, S / 2, S * .5);
-    m.addColorStop(0, A(P.white, 1)); m.addColorStop(.62, A(P.white, .7)); m.addColorStop(1, A(P.white, 0));
+    m.addColorStop(0, A(P.white, 1)); m.addColorStop(.55, A(P.white, .9)); m.addColorStop(.8, A(P.white, .4)); m.addColorStop(1, A(P.white, 0));
     o.fillStyle = m; o.fillRect(0, 0, S, S);
     ctx.clearRect(0, 0, px, px);
     halo(ctx, px, R, P, lv, .55);
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    const D = px * (.86 + lv * .12) * (1 + Math.sin(t * 1.3) * .02);
+    const D = px * (.98 + lv * .1) * (1 + Math.sin(t * 1.3) * .02);
     ctx.drawImage(off, (px - D) / 2, (px - D) / 2, D, D);
-    ctx.translate(px / 2, px / 2); ctx.rotate(t * .12 * sp); ctx.globalAlpha = .55; const D2 = D * .58;
+    ctx.translate(px / 2, px / 2); ctx.rotate(t * .12 * sp); ctx.globalAlpha = .45; const D2 = D * .7;
     ctx.drawImage(off, -D2 / 2, -D2 / 2, D2, D2);
     ctx.restore();
     // a faint bright heart
-    const h = ctx.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, R * (.32 + lv * .2));
-    h.addColorStop(0, A(P.white, .35 + lv * .3)); h.addColorStop(1, A(P.white, 0)); ctx.fillStyle = h; ctx.fillRect(0, 0, px, px);
+    const h = ctx.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, R * (.3 + lv * .2));
+    h.addColorStop(0, A(P.white, .16 + lv * .3)); h.addColorStop(1, A(P.white, 0)); ctx.fillStyle = h; ctx.fillRect(0, 0, px, px);
     waves(ctx, px, R, f, c[2]); flashRing(ctx, px, R, f);
   };
 }
@@ -262,7 +262,6 @@ function glitch(mk) {
     o.putImageData(img, 0, 0);
     // 3. big and crisp, with torn slices and a colour ghost now and then
     ctx.clearRect(0, 0, px, px);
-    halo(ctx, px, px * .3, P, lv, .35);
     ctx.imageSmoothingEnabled = false;
     const D = px * .82, X = (px - D) / 2, sc = D / G;
     const r = rng(1 + Math.floor(t * (state === 'thinking' ? 18 : 9)));
@@ -278,9 +277,11 @@ function glitch(mk) {
       }
     }
     ctx.imageSmoothingEnabled = true;
-    // scanlines over the entity
-    ctx.fillStyle = A(P.core, .28);
-    for (let y = 0; y < G; y += 2) ctx.fillRect(X, X + y * sc + sc * .7, D, Math.max(1, sc * .3));
+    // scanlines on the entity only, then the glow behind it
+    ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = A(P.core, .3);
+    for (let y = 0; y < G; y += 2) ctx.fillRect(X - D * .2, X + y * sc + sc * .7, D * 1.4, Math.max(1, sc * .3));
+    ctx.globalCompositeOperation = 'destination-over'; halo(ctx, px, px * .3, P, lv, .35);
+    ctx.globalCompositeOperation = 'source-over';
     waves(ctx, px, px * .3, f, c[2]); flashRing(ctx, px, px * .3, f);
   };
 }
@@ -296,7 +297,7 @@ function chrome() {
     const pts = [];
     for (let i = 0; i < N; i++) {
       const a = i / N * TAU;
-      const r = R * (1 + .045 * Math.sin(3 * a + t * .9 * sp) + .03 * Math.sin(5 * a - t * 1.3 * sp) + lv * .1 * Math.sin(8 * a + t * 7) + (state === 'listening' ? .02 * Math.sin(11 * a - t * 4) : 0));
+      const r = R * (1 + .03 * Math.sin(3 * a + t * .9 * sp) + .018 * Math.sin(5 * a - t * 1.3 * sp) + lv * .1 * Math.sin(8 * a + t * 7) + (state === 'listening' ? .02 * Math.sin(11 * a - t * 4) : 0));
       pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
     }
     const path = new Path2D(), mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
@@ -313,6 +314,12 @@ function chrome() {
     // depth: dark at the rim
     const rim = ctx.createRadialGradient(cx - R * .2, cy - R * .25, R * .3, cx, cy, R * 1.12);
     rim.addColorStop(0, A(P.core, 0)); rim.addColorStop(1, A(P.core, .7)); ctx.fillStyle = rim; ctx.fillRect(0, 0, px, px);
+    // a bright window reflection top left and a coloured bounce light at the bottom, like polished metal
+    const sp1 = ctx.createRadialGradient(cx - R * .38, cy - R * .5, 0, cx - R * .38, cy - R * .5, R * .5);
+    sp1.addColorStop(0, A(P.white, .85)); sp1.addColorStop(.35, A(P.white, .25)); sp1.addColorStop(1, A(P.white, 0));
+    ctx.fillStyle = sp1; ctx.fillRect(0, 0, px, px);
+    const bounce = ctx.createRadialGradient(cx, cy + R * 1.05, 0, cx, cy + R * 1.05, R * .9);
+    bounce.addColorStop(0, A(c[2], .7)); bounce.addColorStop(1, A(c[2], 0)); ctx.fillStyle = bounce; ctx.fillRect(0, 0, px, px);
     // moving reflections
     ctx.globalCompositeOperation = 'screen';
     for (let k = 0; k < 3; k++) {
