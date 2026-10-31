@@ -165,6 +165,10 @@
         state.mix = mix; state.preset = 'none'; Store.write(state); owner = null; set = null;
       }
       if (who) profileReads.set(who, Promise.resolve(next));
+      // A renamed or merged tweak keeps the device's own switch: an old id's saved on/off moves to its new id once.
+      for (const [old, current] of Object.entries(catalog.aliases || {})) if (state.mix && Object.hasOwn(state.mix, old)) {
+        const mix = { ...state.mix }; if (!Object.hasOwn(mix, current)) mix[current] = mix[old]; delete mix[old]; state.mix = mix; Store.write(state);
+      }
       // 31 Oct 2026 (James): the network Home left the release-wide defaults and is now Miguel's tweak. A device that ran it
       // and already wears Miguel's tweaks keeps it, once; everyone else starts without it and can still switch it on.
       // A device flattening its preset in this same pass takes it from the published profile instead.
