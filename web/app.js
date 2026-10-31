@@ -60,16 +60,19 @@
     }
     return true;
   }
+  // A fresh layout must not persist auto-open desks from compatibility defaults or a stale cache: the shell
+  // may paint before synced preferences arrive (waitForShell), so seed only once the first load has settled.
+  const launcherSettled = () => window.WizLauncher?.settled !== false;
   function seedApps() {
     for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId }; desks.push(blank({ wins: [id], focus: id })); }
   }
   function freshLayout() {
     W = {}; desks = [blank({ id: 'home', home: true })];
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks.push(blank({ wins: [c.id], focus: c.id }));
-    seedApps();
+    if (launcherSettled()) seedApps();
   }
   const okStrip = () => W && typeof W === 'object' && Array.isArray(desks) && desks.length > 0 && desks[0] && desks[0].home && desks.every(d => d && d.id && Array.isArray(d.wins));
-  if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', !!window.WizLauncher?.get('autoOpen').some(id => APP[id])); } }
+  if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', launcherSettled() && !!window.WizLauncher?.get('autoOpen').some(id => APP[id])); } }
   window.WosFeatures.pruneWindows(W);
   desks = window.WizCore.migrateChatsFocus(W, desks);
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
@@ -84,10 +87,11 @@
       winEl(id)?.remove(); return true; })) { try { renderDesk(i); } catch (e) {} } });
   };
   const lateLayout = () => {
-    if (store.get('stripSeeded', false) || !window.WizLauncher?.get('autoOpen').some(id => APP[id])) return;
+    if (!launcherSettled() || store.get('stripSeeded', false) || !window.WizLauncher?.get('autoOpen').some(id => APP[id])) return;
     seedApps(); store.set('stripSeeded', true); try { save(); syncDesks(); } catch (e) {}
   };
   window.addEventListener('wizard:apps', () => { lateLayout(); reframe(); });
+  window.WizLauncher?.ready?.then?.(() => lateLayout());
   setTimeout(reframe, 0); setTimeout(reframe, 1500);
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);

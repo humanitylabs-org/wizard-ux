@@ -57,3 +57,19 @@ test('shell recovery does not dismiss an explicit runtime fatal card', () => {
   const h=fixture();h.ctx.WizCore.status.attach({});h.ctx.WizCore.status.fatal('Runtime failure');h.ctx.WizCore.status.attach({});
   assert.equal(h.ctx.WizCore.status.state.fatal,'Runtime failure');
 });
+test('a fresh layout waits for settled launcher preferences before persisting auto-open desks', async () => {
+  let release; const ctx = {console, Event, AbortSignal, addEventListener() {}, dispatchEvent() {}};
+  ctx.window = ctx;
+  ctx.WizConfig = {ready: new Promise(resolve => { release = resolve; })};
+  ctx.fetch = async () => ({ok: true, json: async () => ({migrations: {'launcher-seed-v1': 'done'}, launcher: {autoOpen: []}})});
+  const policy = launcherFixture(ctx);
+  assert.equal(policy.settled, false, 'compatibility defaults are not authoritative before the first load');
+  release(); await policy.ready;
+  assert.equal(policy.settled, true);
+  assert.deepEqual([...policy.get('autoOpen')], [], 'the synced empty list replaces the defaults');
+  const app = read('app.js');
+  assert.match(app, /if \(launcherSettled\(\)\) seedApps\(\);/);
+  assert.match(app, /store\.set\('stripSeeded', launcherSettled\(\) &&/);
+  assert.match(app, /if \(!launcherSettled\(\) \|\| store\.get\('stripSeeded'/);
+  assert.match(app, /WizLauncher\?\.ready\?\.then\?\.\(\(\) => lateLayout\(\)\)/);
+});
