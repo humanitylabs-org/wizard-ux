@@ -79,7 +79,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'list', 'logo', 'open']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'state']); assert.ok(Object.isFrozen(api.panel));
@@ -95,6 +95,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.equal(api.sessions.act('r1', 'snooze'), true); assert.equal(api.sessions.act('r1', 'done'), true);
   assert.equal(api.sessions.act('r1', 'restore'), false, 'only Snooze and Done'); assert.equal(api.sessions.act('', 'done'), false);
   api.sessions.open('r1'); api.sessions.openList('ready'); api.sessions.openList('archive');
+  assert.deepEqual({ ...api.apps.badges() }, {}, 'no counts without the shell nav'); assert.ok(Object.isFrozen(api.apps.badges()));
   assert.equal(api.apps.list()[0].id, 'files'); api.apps.open('files'); api.apps.all(); api.desk.home(); api.desk.look();
   assert.equal(api.voice.command(), 'voice'); api.voice.talk();
   assert.equal(D.host.emptyHome, false); api.desk.emptyHome(); assert.equal(D.host.emptyHome, true, 'closing a desk\'s last window goes Home');
@@ -196,12 +197,12 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   // The approved concept's scene: its sky drawn in canvas; the orb is a Style × a Colour (seven styles drawn in-house in
   // styles.js, nine colours), kept per device, reactive to the take and the level; live previews in the picker.
   assert.match(js, /import \{ STYLES, renderer, mix \} from '\.\/styles\.js';/);
-  const ids = [...styles.match(/export const STYLES = Object\.freeze\(\[([\s\S]*?)\]\);/)[1].matchAll(/\['([a-z]+)', '[A-Za-z]+'\]/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['glass', 'oracle', 'plasma', 'swarm', 'holo', 'glitch', 'chrome']);
+  const ids = [...styles.match(/export const STYLES = Object\.freeze\(\[([\s\S]*?)\]\);/)[1].matchAll(/\['([a-z]+)', '[A-Za-z ]+'\]/g)].map(m => m[1]);
+  assert.deepEqual(ids, ['glass', 'oracle', 'plasma', 'swarm', 'holo', 'glitch', 'chrome', 'marble', 'sun', 'blackhole', 'crystal', 'aurora', 'planet']);
   for (const id of ids) assert.match(styles, new RegExp(`function ${id}\\(`), `${id} has its own drawing`);
-  assert.match(js, /const COLOURS = \[\['nebula', 'Nebula'\], \['ember', 'Ember'\], \['tide', 'Tide'\], \['gold', 'Gold'\], \['mono', 'Mono'\], \['emerald', 'Emerald'\], \['rose', 'Rose'\], \['arctic', 'Arctic'\], \['skin', 'Skin accent'\]\];/);
+  assert.match(js, /const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n    \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);
   const tcss = read('web/tweaks/miguel/orb-shell/tweak.css');
-  for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));
+  for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic', 'marble', 'obsidian', 'bronze', 'royal', 'crimson', 'cyber', 'sunset', 'ocean']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));
   assert.match(js, /function drawSky\(/); assert.match(js, /api\.storage\.set\('style', styleId\); api\.storage\.set\('colour', colourId\);/);
   assert.match(js, /if \(!has\(STYLES, styleId\)\) styleId = legacy === 'oracle' \? 'oracle' : 'glass';/, 'the v3 look carries over');
   assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
@@ -228,7 +229,13 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored code');
   // Apps: round satellites on two tilted orbits with depth; their own logo, else a designed glyph; never a letter tile.
   assert.match(js, /ring: i % 2 \? 1 : 1\.32/); assert.match(js, /const depth = Math\.sin\(s\.a\)/);
-  assert.match(js, /api\.apps\.logo\(a\.id\)/); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');
+  assert.match(js, /api\.apps\.logo\(a\.id\)/);
+  // Clean marks: no glass plate behind an app (logo or glyph alone); the shell's own count badge on each, live; no
+  // name label under the orb.
+  const sl = read('web/layouts/orb/layout.css'), satRule = sl.match(/\] \.ob-sat \{([^}]*)\}/)[1];
+  assert.match(satRule, /background: none;/); assert.ok(!/backdrop-filter|border: 1px|box-shadow/.test(satRule), 'no container behind the app');
+  assert.match(js, /let badgeMap = api\.apps\.badges\(m => \{ badgeMap = m; for \(const s of sats\) paintBadge\(s\.el, s\.id\); \}\);/);
+  assert.ok(!js.includes("'ob-name'") && !sl.includes('.ob-name'), 'no agent name label in orb mode'); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');
   // Conversations: the stock Chats list docked (no pills of its own any more); it folds to a strip with the Ready count,
   // kept per device, and ⌥\ toggles it.
   assert.ok(!js.includes('ob-th') && !js.includes('MAX_ROWS'), 'no second list under the orb');

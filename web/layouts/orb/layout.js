@@ -47,7 +47,6 @@ export default function setup(api) {
   const orbCv = el('canvas', 'ob-orbc', { 'aria-hidden': 'true' });
   const orbBtn = el('button', 'ob-orb', { type: 'button', 'aria-label': 'Talk · hold for a command', title: 'Click to talk · hold for a command' });
   orbWrap.append(orbCv, orbBtn);
-  const name = el('div', 'ob-name');
   const caption = el('div', 'ob-caption', { role: 'status' });
   // The docked Chats list's fold handle (on its right edge) and, folded, the slim strip with the Ready count.
   const foldBtn = el('button', 'ob-fold', { type: 'button', title: 'Hide conversations (' + (/Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '') ? '⌥' : 'Alt+') + '\\)', 'aria-label': 'Hide conversations', 'aria-keyshortcuts': 'Alt+Backslash' });
@@ -72,15 +71,16 @@ export default function setup(api) {
   const h1 = el('div', 'ob-pop-h', { text: 'Style' }), h2 = el('div', 'ob-pop-h'); h2.append(el('span', '', { text: 'Colour' }), colourName);
   pop.append(h1, styleRow, h2, colourRow);
   picker.append(pop, pickBtn);
-  scene.append(sky, field, orbWrap, name, caption, hint, picker, foldBtn, strip);
+  scene.append(sky, field, orbWrap, caption, hint, picker, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
   /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended ---------- */
   const probe = el('canvas').getContext('2d');
   const norm = c => { if (!c || !probe) return ''; probe.fillStyle = 'black'; probe.fillStyle = c; const v = probe.fillStyle; return /^#[0-9a-f]{6}$/i.test(v) ? v : ''; };
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
-  // Nine colours: eight from the tweak's tokens (--ob-look-<id>: four colours each) and the skin's own accent.
-  const COLOURS = [['nebula', 'Nebula'], ['ember', 'Ember'], ['tide', 'Tide'], ['gold', 'Gold'], ['mono', 'Mono'], ['emerald', 'Emerald'], ['rose', 'Rose'], ['arctic', 'Arctic'], ['skin', 'Skin accent']];
+  // Seventeen colours: sixteen from the tweak's tokens (--ob-look-<id>: four colours each) and the skin's own accent.
+  const COLOURS = [['nebula', 'Nebula'], ['ember', 'Ember'], ['tide', 'Tide'], ['gold', 'Gold'], ['mono', 'Mono'], ['emerald', 'Emerald'], ['rose', 'Rose'], ['arctic', 'Arctic'],
+    ['marble', 'Marble'], ['obsidian', 'Obsidian'], ['bronze', 'Bronze'], ['royal', 'Royal'], ['crimson', 'Crimson'], ['cyber', 'Cyber'], ['sunset', 'Sunset'], ['ocean', 'Ocean'], ['skin', 'Skin accent']];
   const pals = new Map();
   function palette(id) {
     const now = performance.now(), hit = pals.get(id);
@@ -216,7 +216,7 @@ export default function setup(api) {
   // Live previews while the popover is open: each style in the chosen colour.
   function previews(t) {
     if (pop.hidden) return;
-    const n = Math.round(64 * DPR);
+    const n = Math.round(52 * DPR);
     for (const s of styleTiles) { if (s.cv.width !== n) s.cv.width = s.cv.height = n; s.draw(s.ctx, n, frameOf(t, s.id === styleId ? level : 0, s.id === styleId ? modeOf(voice) : 'idle', 0, false)); }
   }
   let popOff = null;
@@ -242,20 +242,36 @@ export default function setup(api) {
   const glyphOf = a => { const m = /sg-([a-z-]+)/.exec(a.icon || ''); return m && !/\bsgl\b/.test(a.icon || '') ? m[1] : (GUESS.find(([re]) => re.test(a.id + ' ' + a.name)) || [0, 'spark'])[1]; };
   const colourOf = a => (/--c:\s*([^;"]+)/.exec(a.icon || '') || [0, 'var(--wz-accent)'])[1].trim();
   let appSig = '', sats = [];
+  // Each app is just its own mark, clean-cut on the sky: its logo (a tile logo stays a tile, a free-form logo stays
+  // free-form) or its glyph in its own colour. No plate, ring or bubble behind it; only a soft shadow for legibility.
+  const tileProbe = el('canvas'); tileProbe.width = tileProbe.height = 16;
+  const isTile = im => { try { const x = tileProbe.getContext('2d', { willReadFrequently: true }); x.clearRect(0, 0, 16, 16); x.drawImage(im, 0, 0, 16, 16); const d = x.getImageData(0, 0, 16, 16).data, at = (i, j) => d[(j * 16 + i) * 4 + 3];
+    return [at(3, 8), at(12, 8), at(8, 3), at(8, 12)].every(v => v > 200) && [at(0, 0), at(15, 0), at(0, 15), at(15, 15)].some(v => v > 200 || v < 60); } catch (_) { return true; } };
   function sat(a) {
-    const b = el('button', 'ob-sat', { type: 'button', 'aria-label': 'Open ' + a.name });
+    const b = el('button', 'ob-sat', { type: 'button', 'aria-label': 'Open ' + a.name, 'data-app': a.id });
     b.style.setProperty('--c', colourOf(a));
     const face = el('span', 'ob-sat-face');
     if (/\bsglogo\b/.test(a.icon || '')) { const tpl = doc.createElement('template'); tpl.innerHTML = a.icon; face.append(tpl.content); b.classList.add('is-logo'); } // shell-made logo markup (WizSigil)
     else face.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
-    b.append(face, el('b', 'ob-sat-n', { text: a.name }));
+    const count = el('b', 'ob-sat-badge', { 'aria-hidden': 'true' }); count.hidden = true;
+    b.append(face, count, el('b', 'ob-sat-n', { text: a.name }));
     api.listen(b, 'click', () => api.apps.open(a.id));
     api.apps.logo(a.id).then(url => {
       if (!url) return;
       const im = el('img', 'ob-logo', { alt: '', src: url, draggable: 'false' });
-      im.decode().then(() => { face.replaceChildren(im); b.classList.add('is-logo'); }, () => {});
+      im.decode().then(() => { face.replaceChildren(im); b.classList.add('is-logo'); b.classList.toggle('is-tile', isTile(im)); }, () => {});
     });
+    badgeOf.set(b, { node: count, name: a.name }); paintBadge(b, a.id);
     return b;
+  }
+  /* ---------- badges: the shell's own app counts (desk marks, dock), live ---------- */
+  const badgeOf = new WeakMap();
+  let badgeMap = api.apps.badges(m => { badgeMap = m; for (const s of sats) paintBadge(s.el, s.id); });
+  function paintBadge(b, id) {
+    const n = badgeMap[id] || 0, rec = badgeOf.get(b); if (!rec) return;
+    const { node, name } = rec;
+    node.textContent = n > 99 ? '99+' : n ? String(n) : ''; node.hidden = !n;
+    b.setAttribute('aria-label', 'Open ' + name + (n ? ` · ${n} new` : ''));
   }
   function paintApps() {
     const apps = api.apps.list().slice(0, MAX_APPS), sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|');
@@ -425,7 +441,7 @@ export default function setup(api) {
     sx.save(); sx.globalCompositeOperation = 'lighter';
     if (bolts.chat) bolt(cx - R, cy, G.chatR, cy, t, bolts.chat * .62 * flick, seed + 11, P);
     if (bolts.app) {
-      const s = sats.find(x => x.id === G.app?.id), half = 27 * (s?.sc || 1.1);
+      const s = sats.find(x => x.id === G.app?.id), half = 24 * (s?.sc || 1.1);
       if (s && s.pk > .6) {
         const pin = smooth(Math.min(1, (s.pk - .6) / .4)) * bolts.app * flick;
         bolt(cx + R, cy, s.x - half, s.y, t, pin, seed + 23, P);
@@ -485,7 +501,6 @@ export default function setup(api) {
   function paint() {
     paintVisible(); paintPanel();
     if (!home) return;
-    name.textContent = api.agents.here()?.label || 'Wizard';
     paintReady(); paintApps();
   }
   api.panel.claim();        // no desks: the Chats list docked on the left; a thread or an app opens in the panel on the right

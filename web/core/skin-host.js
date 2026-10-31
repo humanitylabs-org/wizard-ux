@@ -355,6 +355,18 @@
         all: () => { if (live()) shell.openPicker?.(); },
         // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.
         logo: id => live() ? appLogo(id) : Promise.resolve(null),
+        /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:
+         * Chats' Ready, Notifications, and what each running app reports through WizardApp badge). Read-only
+         * { id: n } (n > 0 only); watch(fn) is called again whenever one changes and is released on teardown. */
+        badges(watch) {
+          const read = () => { const c = isDoc ? window.WizCore?.workspaceNav?.counts : null, o = {}; if (c) for (const [k, v] of Object.entries(c)) if (v > 0) o[k] = v | 0; return Object.freeze(o); };
+          if (live() && typeof watch === 'function' && isDoc) {
+            const g = guard(a, 'badges', watch), h = () => { if (live()) g(read()); };
+            window.addEventListener('wizard:app-counts', h);
+            const off = () => { window.removeEventListener('wizard:app-counts', h); a.offs.delete(off); }; a.offs.add(off);
+          }
+          return live() ? read() : Object.freeze({});
+        },
       }),
       desk: Object.freeze({
         home: () => { if (live()) shell.home?.(); },

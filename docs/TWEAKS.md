@@ -94,7 +94,7 @@ tweaks load. Layouts also get the shell's own thread rows, Snooze / Done (Chats'
 Settings › Look (`shellApi` in `core/skin-host.js`): see `docs/orb-layout.md`. A layout without desks holds the
 **panel** (`api.panel.claim()`): every window then opens in a panel over Home (outside the desks, never synced): a
 Chats window in the chat panel, anything else in the app panel on the right, one each, both can be open;
-`api.panel.close()` / `back()` / `state()` (`chat`, `app` parts), `api.route().panel` / `panelApp`; releasing it gives
+`api.panel.close()` / `back()` / `state()` (`chat`, `app` parts), `api.apps.badges(watch)` (the shell's app counts), `api.route().panel` / `panelApp`; releasing it gives
 the desks back untouched. `api.panel.dock(on)` docks the stock Chats list in its own panel on the left for good; a
 thread picked in it opens in a column beside it, which closes when the thread is finished (Done, Snooze, a send).
 `api.back.push(close)` puts the layout's own popover in the Esc order.

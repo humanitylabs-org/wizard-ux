@@ -20,5 +20,13 @@ html[data-shell="desktop"][data-layout="orb"] {
   --ob-look-emerald: #19c37d, #7cf2b4, #0e8f6e, #c6ff8a;
   --ob-look-rose: #ff5c8a, #ffb3c7, #c2357a, #ffd1a8;
   --ob-look-arctic: #7fd4ff, #e4f7ff, #4a7dff, #b8fff4;
+  --ob-look-marble: #d8d2c6, #fbf8f2, #8f8a82, #f2e6c4;
+  --ob-look-obsidian: #4b4560, #8a83a6, #16141f, #c9c2e6;
+  --ob-look-bronze: #b0703a, #e3ad72, #5e3818, #ffd9a0;
+  --ob-look-royal: #6a2bd9, #a77bff, #2e1270, #ffcc4d;
+  --ob-look-crimson: #d61f3c, #ff6b6b, #6e0c1e, #ffb199;
+  --ob-look-cyber: #19f0a4, #00d5ff, #0a7a62, #d4ff3a;
+  --ob-look-sunset: #ff6a3d, #ffb347, #c2357a, #ffe29a;
+  --ob-look-ocean: #1366c9, #2ec4d6, #0a2a6e, #8de4ff;
   --ob-v1: #7c5cff; --ob-v2: #c26bff; --ob-v3: #4cc9ff;
 }
