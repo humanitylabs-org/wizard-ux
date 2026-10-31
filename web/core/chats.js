@@ -593,10 +593,15 @@ window.WizCore.chats = function createChats(H) {
     return noteRank(it) < r || (noteRank(it) === r && noteAt(it) >= sesAt(s));
   }
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
+  // An app's item wears that app's own mark (its sigil) in the yellow tile; Notifications items keep the bell.
+  function noteIcon(it) {
+    if (!it.app || !window.WizSigil) return window.WosBell?.icon || '';
+    try { const meta = window.WizCore?.appMetadata?.(it.app) || { id: it.app, name: it.appName || it.app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
+  }
   function noteRow(it) {
     const later = !!it.read, title = notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
-    const pv = (it.source === 'cron' ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
-    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" title="Open notification"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
+    const pv = (it.source === 'cron' ? 'Scheduled job · ' : it.app ? (it.appName || it.app) + ' · ' : '') + clip(notePlain(it.message), 160);
+    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}${it.app ? ' ch-notif-app' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''} title="Open notification"><span class="emo ch-notif-ic" aria-hidden="true">${noteIcon(it)}</span>
       <span class="bd"><span class="tp"><b>${esc(clip(title, 120))}</b><time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
@@ -785,18 +790,42 @@ window.WizCore.chats = function createChats(H) {
     if (!w || w.thread !== '__new__' || winAgent(w) || !window.WosSkinHost?.inboxThreads) return null;
     const r = KIT.drafts.get('new').reply, m = r && NOTIF_KEY.exec(r.key || ''); if (!m) return null;
     const it = window.WosBell?.item?.(m[1]) || null;
-    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'] };
+    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : [...noteAppActs(it), ...(it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'])] };
+  }
+  /* An app item's own buttons (inbox feed): Open (`app`: the app itself, at the item when it says where), each declared action as `x:<id>`, except the
+   * one that types (the composer is its box) and the one that finishes it (`done`, else `read`: that is the Done
+   * button, wearing the app's label). */
+  const noteDoneAct = it => it?.app ? (it.actions.find(a => a.id === 'done' && !a.ask && !a.input) || it.actions.find(a => a.id === 'read' && !a.ask && !a.input) || null) : null;
+  const noteInput = it => it?.app ? it.actions.find(a => a.input && !a.ask) || null : null;
+  function noteAppActs(it) {
+    if (!it?.app || it.archived) return [];
+    const fin = noteDoneAct(it);
+    return [...(window.WizCanOpen?.(it.app) ? ['app'] : []), ...it.actions.filter(a => !a.input && a !== fin).map(a => 'x:' + a.id)];
+  }
+  const NOTE_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
+  const NOTE_ASK = '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
+  const NOTE_DO = '<svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>';
+  function noteActBtn(NV, a) {
+    const it = NV.item;
+    if (a === 'app') return { label: 'Open', icon: NOTE_OPEN, hint: `Open in ${it?.appName || 'the app'}` };
+    if (a.startsWith('x:')) { const d = it?.actions.find(x => x.id === a.slice(2)); return d ? { label: d.label, icon: d.ask ? NOTE_ASK : NOTE_DO, hint: d.ask ? `Ask Wizard: ${d.label}` : `${d.label} in ${it.appName || 'the app'}` } : null; }
+    const fin = a === 'done' ? noteDoneAct(it) : null;
+    const A = NACT[a] || ACT[a];
+    return fin ? { ...A, label: fin.label, hint: `${fin.label} in ${it.appName || 'the app'}` } : A;
   }
   function notifAct(wid, a) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || !n.acts.includes(a)) return false;
     vib(8);
     window.WosSkinHost.inboxAct(a, n.id);
     if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
+    if (a === 'app') return true; // the app opens on top; the item stays until the app says it is handled
+    if (a.startsWith('x:') && n.item?.actions.find(x => x.id === a.slice(2))?.ask) return true; // an ask: sent like Resolve this
     // The notification leaves the chat window; an untouched draft goes with it (typed words stay as a draft).
     const d = KIT.drafts.get('new');
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
     ch(w.id).draft = ''; chatsBack(w);
-    toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
+    const xa = a.startsWith('x:') ? n.item?.actions.find(x => x.id === a.slice(2)) : null, fin = a === 'done' ? noteDoneAct(n.item) : null;
+    toast({ done: '✓', snooze: '◷', restore: '↺' }[a] || '✓', xa ? xa.label : fin ? fin.label : { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
   }
@@ -1912,7 +1941,7 @@ window.WizCore.chats = function createChats(H) {
     const NV = isNew && !pend.length ? notifOf(w) : null;
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
     const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
-    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
+    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.app ? esc(NV.item.appName || NV.item.app) : 'Notification'}</span></div></div>`;
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
     else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
@@ -1974,7 +2003,7 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = NACT[a] || ACT[a]; return `<button type="button" data-chact="${a}" aria-label="${A.hint}" title="${A.hint}">${A.icon}<span>${A.label}</span></button>`; }).join('')}</div>`
+    const tacts = NV ? `<div class="ch-tacts${NV.item?.app ? ' ch-notif-tacts' : ''}" data-part="thread-actions">${NV.acts.map(a => { const A = noteActBtn(NV, a); return A ? `<button type="button" data-chact="${esc(a)}" aria-label="${esc(A.hint)}" title="${esc(A.hint)}">${A.icon}<span>${esc(A.label)}</span></button>` : ''; }).join('')}</div>`
       : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
@@ -1984,7 +2013,7 @@ window.WizCore.chats = function createChats(H) {
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
-      ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${NV && noteInput(NV.item) ? `${esc(noteInput(NV.item).label)} to ${esc(clip(notePlain(NV.item.title) || NV.item.appName || '', 40))} in ${esc(NV.item.appName || 'the app')}` : working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
     // moment a focused field is detached and will not reopen it from script, so the owner saw a caret and no
@@ -2619,6 +2648,20 @@ window.WizCore.chats = function createChats(H) {
     // A Notifications Reply: the item rides with the message (framed at delivery), never in his words.
     const rdkey = isNew ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : 'direct:' + sid;
     const reply = voice ? (sealed?.reply || null) : here ? KIT.drafts.get(rdkey).reply : null;
+    // An app item's typing action (inbox feed, e.g. Messenger's Reply): words typed in the box go to that app, never
+    // to Wizard. Only typing: Resolve this and an app's ask buttons send their ask to Wizard through here too.
+    // The window steps back at once; the words stay as this item's draft until the app takes them.
+    const NVin = isNew && here && !voice && !audio && how === 'typing in the Chats window' && !winAgent(w) ? notifOf(w) : null, inA = NVin ? noteInput(NVin.item) : null;
+    if (inA && text && !files.length && reply && reply.key === 'notifications:' + NVin.id) {
+      const item = NVin.item, to = notePlain(item.title) || item.appName || 'the app';
+      KIT.drafts.set('new', text); c.draft = ''; c.files = []; chatsBack(w); KIT.drafts.set('new', text);
+      toast('…', `Sending to ${clip(to, 40)}…`, 1200);
+      const ok = await window.WosBell.act(item.id, inA.id, text);
+      if (ok) { const d = KIT.drafts.get('new'); if (d.reply?.key === 'notifications:' + item.id) KIT.drafts.clear('new'); }
+      toast(ok ? '✓' : '!', ok ? `Sent to ${clip(to, 40)} in ${item.appName || 'the app'}` : `Couldn’t send in ${item.appName || 'the app'}. Your words are kept on the item`, ok ? 1800 : 3600);
+      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+      return;
+    }
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = isWorking(s) && s.runId ? s.runId : '';
     const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)

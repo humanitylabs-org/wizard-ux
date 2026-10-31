@@ -709,7 +709,21 @@
       reply(id, words = '') {
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
-        return !!shell.contextDraft('notifications:' + it.id, { title: it.title, message: it.message }, String(words || ''));
+        // An app's item rides with its app name, so the agent knows where it came from (and which app tools to use).
+        const title = it.app ? `${it.appName || it.app}: ${it.title || 'Item'}` : it.title;
+        const message = it.app ? `${it.message}\n\n(From the ${it.appName || it.app} app, ${it.app}; item ${it.key})` : it.message;
+        return !!shell.contextDraft('notifications:' + it.id, { title, message }, String(words || ''));
+      },
+      // App inbox feed items (WosBell): run one of the app's own buttons (POST /<app>/api/inbox/act), or open the
+      // app at the item. Only for an item the app itself listed; the shell checks the action is one it declared.
+      act: (id, action, text = '') => a.dead || !window.WosBell?.act ? Promise.resolve(false) : window.WosBell.act(String(id), String(action), String(text || '')),
+      open(id) {
+        if (a.dead) return false;
+        const it = window.WosBell?.item?.(id); if (!it?.app || typeof window.WizOpenApp !== 'function') return false;
+        if (!it.open) return !!window.WizOpenApp(it.app);
+        let base = ''; try { base = (window.WizCore?.apps?.('mobile')?.APPS || []).find(x => x.id === it.app)?.url || ''; } catch (_) {}
+        try { const u = new URL(it.open, new URL(base || `/${it.app}/`, location.origin)); if (u.origin === location.origin && window.WizOpenApp(it.app, u.pathname + u.search + u.hash)) return true; } catch (_) {}
+        return !!window.WizOpenApp(it.app);
       },
     });
     if (caps.has('parts')) api.parts = partsApi(a);
@@ -780,7 +794,7 @@
     /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
     get inboxThreads() { return inboxThreads.size > 0; },
     get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
-    inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; },
+    inboxAct(action, id, text) { for (const h of inboxThreads.values()) { h.act(String(action), String(id), text == null ? undefined : String(text)); return true; } return false; },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },

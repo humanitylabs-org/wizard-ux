@@ -59,8 +59,20 @@ export default function setup(api) {
 
   api.inbox.watch(next => { items = next; paint(); });
   // Done / Snooze / Restore / Resolve this in the chat window (buttons and keys) land here.
+  // An app's item (inbox feed): its own buttons. Asks go to Wizard with the item attached (like Resolve this); the
+  // rest are the app's own actions; Done is the app's finishing action when it has one (else the inbox's mark).
+  const appItem = id => items.find(i => i.id === id && i.app) || null;
+  const finOf = it => it.actions.find(a => a.id === 'done' && !a.ask && !a.input) || it.actions.find(a => a.id === 'read' && !a.ask && !a.input) || null;
+  const appAct = (it, d) => api.inbox.act(it.id, d.id).then(ok => { if (!ok) api.toast(`Couldn’t do “${d.label}” in ${it.appName || 'the app'}`); });
   api.inbox.threads({ list: true, act(action, id) {
+    const it = appItem(id);
     if (action === 'open') open(id);
+    else if (action === 'app' && it) { if (!api.inbox.open(id)) api.toast(`Couldn’t open ${it.appName || 'the app'} here`); }
+    else if (action.startsWith('x:') && it) {
+      const d = it.actions.find(a => a.id === action.slice(2)); if (!d) return;
+      if (d.ask) { if (!api.inbox.reply(id, d.ask)) api.toast('Couldn’t start that chat here'); } else appAct(it, d);
+    }
+    else if (action === 'done' && it && finOf(it)) appAct(it, finOf(it));
     else if (action === 'done') api.inbox.done(id);
     else if (action === 'snooze') api.inbox.set(id, { read: true });
     else if (action === 'restore') api.inbox.set(id, { archived: false, read: false });
