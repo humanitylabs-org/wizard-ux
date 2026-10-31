@@ -651,10 +651,23 @@ window.WizCore.chats = function createChats(H) {
    * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
    * older unsent work stays reopenable from here. ---- */
   const SAVED_NEW = /^new(:[a-z0-9]{4,40})?$/;
+  // Is Notifications shown as threads? Known from the package, else from the last answer this phone saw; a phone
+  // that never learned it waits for the package for 15 s of page life rather than flash reply drafts and drop them.
+  const BOOT_AT = Date.now();
+  let inboxWait = 0;
+  function inboxLikely() {
+    const h = KIT.inboxHint?.get?.();
+    if (h !== null && h !== undefined) return h;
+    if (Date.now() - BOOT_AT < 15000) {
+      if (!inboxWait) inboxWait = setTimeout(() => window.dispatchEvent?.(new Event('wos:prefs')), 15100 - (Date.now() - BOOT_AT));
+      return true;
+    }
+    return false;
+  }
   function newDrafts() {
     const all = KIT.drafts.all();
     return Object.keys(all).filter(k => SAVED_NEW.test(k)).map(k => ({ key: k, ...KIT.drafts.get(k), at: all[k].at || 0 }))
-      .filter(d => d.text.trim() || d.files.length || (d.reply && !((window.WosSkinHost?.inboxThreads || KIT.inboxHint?.get()) && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
+      .filter(d => d.text.trim() || d.files.length || (d.reply && !((window.WosSkinHost?.inboxThreads || inboxLikely()) && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
   }
   function draftRow(d, cur) {
     const t = d.text.trim().replace(/\s+/g, ' ');

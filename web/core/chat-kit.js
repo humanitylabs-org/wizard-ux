@@ -476,8 +476,8 @@
    * answer is kept here so the first paint already agrees with the settled one. */
   const INBOX_HINT = 'wos.inbox-threads.v1';
   const inboxHint = {
-    get() { try { return localStorage.getItem(INBOX_HINT) === '1'; } catch (e) { return false; } },
-    set(on) { try { on ? localStorage.setItem(INBOX_HINT, '1') : localStorage.removeItem(INBOX_HINT); } catch (e) {} },
+    get() { try { const v = localStorage.getItem(INBOX_HINT); return v === '1' ? true : v === '0' ? false : null; } catch (e) { return null; } }, // null = never learned
+    set(on) { try { localStorage.setItem(INBOX_HINT, on ? '1' : '0'); } catch (e) {} },
   };
 
   /* ================= copy / share / save ================= */

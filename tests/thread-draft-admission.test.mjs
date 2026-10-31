@@ -16,7 +16,7 @@ for(const mode of ['throw','drop'])test(mode+' storage cannot acknowledge lost o
 for(const text of [123,null,'x'.repeat(8001)])test('bounded draft refuses '+typeof text,()=>{assert.equal(fixture().drafts.admit('direct:sid',text,rp),false);});
 test('inbox hint survives reload so notification-reply drafts do not flash before the package registers',()=>{
  const a=fixture();
- assert.equal(a.ctx.WosChat.inboxHint.get(),false);
+ assert.equal(a.ctx.WosChat.inboxHint.get(),null,'never learned');
  a.ctx.WosChat.inboxHint.set(true);
  const b=fixture();for(const [k,v] of a.store)b.store.set(k,v);
  assert.equal(b.ctx.WosChat.inboxHint.get(),true,'a fresh page reads the last answer before the package loads');
