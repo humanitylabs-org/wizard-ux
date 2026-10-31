@@ -381,6 +381,11 @@
         },
         capabilities(opts) {check();return window.WizAppCapture?.capabilities?.(opts) || {};},
         current() {check();return window.WizAppCapture?.current?.(st.appId) || null;},
+        async settle(keepId) {
+          check(); if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority');
+          if (!window.WizAppCapture?.settle) throw fault('Stop-only capture recovery unavailable');
+          const takes = await window.WizAppCapture.settle(st.appId, keepId); check(); return takes;
+        },
         pending() { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.pending(st.appId); },
         ack(id) { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.ack(st.appId, id); } }),
       vault: Object.freeze({
