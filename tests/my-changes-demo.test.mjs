@@ -42,6 +42,7 @@ test('Settings › My Changes has Mine / Testers / Everyone and lives on its own
   const { regs } = boot();
   const f = regs.find(r => r.id === 'my-changes-demo');
   assert.equal(f.page, 'my-changes');
+  assert.equal(f.aliases.includes('my-changes'), true, 'the review deep link must be discoverable by both shells');
   assert.match(f.html(), /data-cc-tab="mine"[^]*data-cc-tab="testers"[^]*data-cc-tab="everyone"/);
   assert.match(read('core/settings.js'), /\{ id: 'my-changes', title: 'My Changes', available: filled\('my-changes'\) \}/);
 });
