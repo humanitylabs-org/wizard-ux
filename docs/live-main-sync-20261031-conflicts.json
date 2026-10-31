@@ -1159,5 +1159,49 @@
    "choice": "combined",
    "reason": "auto-merged live assertions referenced live-only `banner` local; define it so live (banner cleared) and main assertions both run"
   }
+ ],
+ "holdReverts": [
+  {
+   "pr": "#764",
+   "merge": "7991db03",
+   "revert": "clean"
+  },
+  {
+   "pr": "#755",
+   "merge": "96f111f0",
+   "revert": "scoped",
+   "kept": [
+    "web/core/welcome.js",
+    "web/core/welcome.css",
+    "tests/welcome.test.mjs",
+    "tests/american-color-copy.test.mjs"
+   ],
+   "reason": "#761 (Welcome never switches skin) was rebased on #755; Welcome only reaches first-run owners, so its flat skin grid stays with #761"
+  },
+  {
+   "pr": "#668",
+   "merge": "53d209c5",
+   "revert": "conflict packaging/static.conf",
+   "resolution": "Cache-Control back to no-cache (pre-#668); keep later frame-src from #496"
+  },
+  {
+   "pr": "#719",
+   "merge": "31f6f5b1",
+   "revert": "conflict web/core/chats.js",
+   "resolution": "restore live dfd43a82 lines exactly (no savedFor/saved copy; live error text)"
+  },
+  {
+   "pr": "#536",
+   "merge": "d053b038",
+   "revert": "conflict docs/COMPONENTS.md",
+   "resolution": "drop offline-kit row, keep compact update-hold row"
+  },
+  {
+   "pr": "#727",
+   "merge": "7c92caef",
+   "dependentOf": "#719",
+   "revert": "conflicts docs/COMPONENTS.md, packaging/static.conf, server.py",
+   "resolution": "pop-up promised \"Chats saved on this device still open\", which only #719 provides; status.js/reach.js return byte-identical to live dfd43a82; CSP drops the derp connectivity probe, keeps #496 frame-src; COMPONENTS keeps TailscaleGuide/WizReach row"
+  }
  ]
 }
