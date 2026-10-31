@@ -4,12 +4,13 @@ Every app shows one mark (its sigil) in the same box everywhere: launcher tiles,
 
 ## The standard
 
-1. **Every app that ships in the Wizard App Store gets a designed sigil before it ships.** That means a glyph in `glyphs.py` plus a `HOUSE` entry in `build.py` keyed by its app id. CI enforces this: `tests/sigils-every-app.test.mjs` lists the known store apps (`STORE_APPS`) and fails when one has no `HOUSE` entry. When you publish a new app, add its id there in the same PR.
+1. **Every app that ships in the Wizard App Store gets a real mark before it ships, without waiting for a shell release.** Either the app ships its own one-colour silhouette as `web/icon.svg` (served at `/<app>/icon.svg`; no full-bleed background, since it is drawn as a mask), which the App Manager finds in the running app and puts in the registry as `icon` on install or update, or it gets a designed sigil here: a glyph in `glyphs.py` plus a `HOUSE` entry in `build.py` keyed by its app id. A `HOUSE` sigil overrides the packaged silhouette. `tests/sigils-every-app.test.mjs` lists the store apps that have a designed sigil (`STORE_APPS`) and fails when one loses its `HOUSE` entry.
 2. **Fallbacks never look broken.** An app the shell doesn't know yet (a third-party app installed today) is resolved in this order:
    1. the app's launcher entry names an existing glyph (`"icon": "<glyph>"`, optional `"colors": ["#hex"]`)
-   2. the `HOUSE` entry for its id
-   3. the app's own same-origin icon file (`"icon": "/<app>/icon.svg"`, also `.png` or `.webp`), used as the silhouette at 78% of the box
-   4. a disc with the app's initial cut out, on a stable hue picked from its id
+   2. a launcher.json link's own same-origin icon file (`"icon": "/<path>.svg"`)
+   3. the `HOUSE` entry for its id
+   4. an installed app's packaged silhouette from the registry (`"icon": "/<app>/icon.svg"`, also `.png` or `.webp`), used as the silhouette at 78% of the box
+   5. a disc with the app's initial cut out, on a stable hue picked from its id
 
    Every one of these is a mask in the same box, so a fallback can't come out bigger, square, opaque or outside the selected ring. Never render a fallback as painted text or an `<img>`. Skins must never set `mask: none` on `.sgl`; the test checks every `skin.css`.
 3. **Never hand-edit `web/core/sigils.css` or `web/core/sigils.js`.** They are generated. Edit `glyphs.py`, `build.py`, `style.css` or `sigils.template.js`, then rebuild. The test fails when the generated files are stale.
@@ -31,6 +32,8 @@ npm test
 
 4. Look at it before shipping. Render the launcher and the dock with the app selected, at phone width (390 px) and desktop, in a dark skin and a light skin. Check that it reads at both 58 px (tile) and 21-36 px (dock).
 5. Add the app id to `STORE_APPS` in `tests/sigils-every-app.test.mjs`.
+
+An app with only a packaged silhouette needs nothing here.
 
 ## Files
 

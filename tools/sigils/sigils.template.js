@@ -6,8 +6,9 @@
  *   WizSigil.named(glyph, color) → the same for a sigil that isn't an app (search, command rows)
  *
  * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
- * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
- * silhouette, then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
+ * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`; a
+ * launcher.json link's file beats the house set, an installed app's packaged file does not) as a silhouette,
+ * then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
  * in the same box, so a fallback is never bigger, squarer or more opaque than a designed sigil.
  * Every app in the Wizard App Store gets a HOUSE entry: see tools/sigils/README.md.
  * Shapes and the tile style live in core/sigils.css.
@@ -31,8 +32,9 @@
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
-    // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
-    if (!img && HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
+    // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE. An installed app's packaged
+    // silhouette (registry icon, `packaged`) is the fallback for apps without a designed sigil: HOUSE still wins.
+    if ((!img || a.packaged === true) && HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     return { glyph: '', color: col || pick(a.id || a.name), letter: String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?', ...(img ? { img } : {}) };
   }
   // Fallback marks are masks too, never painted text or an <img>: whatever a skin paints into `.sgi` (a gradient,

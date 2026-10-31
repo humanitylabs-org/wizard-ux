@@ -72,6 +72,21 @@ test('an app\'s own same-origin icon file is used as its silhouette; anything el
     assert.doesNotMatch(S.html({ id: 'own', name: 'Own', icon: bad }), /sgimg/, bad);
 });
 
+test('an installed app\'s packaged silhouette is the fallback below a designed sigil; a launcher link\'s file still wins', () => {
+  const S = sigil();
+  // No designed sigil yet (a new store app): its packaged /<app>/icon.svg shows, no shell release needed.
+  assert.match(S.html({ id: 'wizard-health', name: 'Health', icon: '/wizard-health/icon.svg', packaged: true }),
+    /class="sgi sgl sgimg"[^>]*--sg:url\('\/wizard-health\/icon\.svg'\)/);
+  // A designed HOUSE sigil overrides the package's own file.
+  assert.equal(S.of({ id: 'files', name: 'Files', icon: '/files/icon.svg', packaged: true }).glyph, S.house.files[0]);
+  assert.doesNotMatch(S.html({ id: 'money', name: 'Money', icon: '/money/icon.svg', packaged: true }), /sgimg/);
+  // An owner launcher.json link that names its own file keeps beating HOUSE, as before.
+  assert.match(S.html({ id: 'files', name: 'Files', icon: '/mine/files.svg' }), /sgimg/);
+  // apps.js marks only registry apps as packaged.
+  const apps = read('web/core/apps.js');
+  assert.match(apps, /sigil: \{[^}]*\.\.\.\(a\.source === 'apps\.json' \? \{ packaged: true \} : \{\}\)/);
+});
+
 test('the fallback CSS keeps the mask: no rule turns a letter mark back into a painted box', () => {
   const css = read('web/core/sigils.css');
   const rule = css.match(/\.sgi\.sgl\s*\{([^}]*)\}/);
