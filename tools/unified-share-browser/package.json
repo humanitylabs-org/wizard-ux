@@ -1,0 +1,9 @@
+{
+  "name": "wizard-unified-share-browser-gates",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Job-local pinned dependencies for the sealed forum share/opacity gates",
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}
