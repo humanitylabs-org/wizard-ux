@@ -28,6 +28,17 @@ test('every moon count leaves a 90-degree gap around the bottom handle', () => {
   }
 });
 
+test('every moon count leaves a 60-degree gap around the top-right badge', () => {
+  const moonAngle = productionMoonAngle();
+  for (const count of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const angles = Array.from({ length: count }, (_, k) => moonAngle(k, count));
+    assert.ok(
+      angles.every(angle => distance(angle, Math.PI * 7 / 4) >= Math.PI / 6 - 1e-9),
+      `${count} moons must stay outside the badge's top-right arc`,
+    );
+  }
+});
+
 test('five Ready and three Working moons all get distinct visible positions', () => {
   const moonAngle = productionMoonAngle();
   const angles = Array.from({ length: 8 }, (_, k) => moonAngle(k, 8));

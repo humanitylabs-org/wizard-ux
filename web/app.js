@@ -2032,12 +2032,19 @@
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
-  // Leave a 90° gap around six o'clock so the scrub handle never covers a moon.
+  // Leave gaps around six o'clock for the scrub handle and around two o'clock for the count badge.
   function moonAngle(k, count) {
     if (count <= 1) return -Math.PI / 2;
-    const step = (Math.PI * 3 / 2) / (count - 1);
+    const start = Math.PI * 3 / 4;
+    const badgeStart = Math.PI * 19 / 12;
+    const badgeEnd = Math.PI * 23 / 12;
+    const end = Math.PI * 9 / 4;
+    const firstArc = badgeStart - start;
+    const safeSpan = firstArc + end - badgeEnd;
+    const step = safeSpan / (count - 1);
     const slot = (k + Math.floor((count - 1) / 2)) % count;
-    return Math.PI * 3 / 4 + slot * step;
+    const offset = slot * step;
+    return offset <= firstArc ? start + offset : badgeEnd + offset - firstArc;
   }
   function renderMoons() {
     const L = live();
