@@ -84,19 +84,22 @@
    * Home instead of on a desk. The panel window lives outside the desks (never tiled, never synced, not restored after
    * a reload); opening another thing replaces it (a short Back list keeps the ones before). The desks are left exactly
    * as they were, so when the layout lets go they come straight back. Desk keys and desk moves do nothing meanwhile. */
-  let panel = null;   // { id, back: [window objects], swap }: the panel on the right (a thread or an app, one at a time)
+  let panel = null;   // { id, back: [window objects], swap }: the chat panel (a thread; docked: a column beside the list)
+  let panelApp = null;   // the same for an app: its own panel on the right, one app at a time (open beside a chat)
   /* Docked (a layout called api.panel.dock): the stock Chats list sits in its own panel on the LEFT for good (folded:
    * gone until unfolded); a thread picked in it opens in the panel on the right, which every finishing action closes. */
   let panelList = null, panelDocked = false, panelFrontId = null;   // panelList: { id }
-    const panelChat = () => panel && W[panel.id] ? W[panel.id] : null;   // the right-hand panel's window (any app)
+    const panelChat = () => panel && W[panel.id] ? W[panel.id] : null;   // the chat panel's window (a Chats window)
+    const panelAppW = () => panelApp && W[panelApp.id] ? W[panelApp.id] : null;   // the app panel's window
     const panelListW = () => panelList && W[panelList.id] ? W[panelList.id] : null;
-    const panelWins = () => [panelListW(), panelChat()].filter(Boolean);
-    const panelHas = id => !!id && (panel?.id === id || panelList?.id === id);
-    // The panel in front: the one holding the keyboard, else the one opened or clicked last.
+    const panelWins = () => [panelListW(), panelChat(), panelAppW()].filter(Boolean);
+    const panelHas = id => !!id && (panel?.id === id || panelApp?.id === id || panelList?.id === id);
+    const panelSlot = id => !id ? null : panel?.id === id ? panel : panelApp?.id === id ? panelApp : null;
+    // The panel in front: the one holding the keyboard, else the one opened or clicked last, else the chat, the app.
     const panelWin = () => {
-      const l = panelListW(), c = panelChat(); if (!l || !c) return c || l;
-      const ae = document.activeElement, cel = stage.querySelector(`.win[data-win="${c.id}"]`), lel = stage.querySelector(`.win[data-win="${l.id}"]`);
-      return cel?.contains(ae) ? c : lel?.contains(ae) ? l : panelFrontId === l.id ? l : c;
+      const all = [panelChat(), panelAppW(), panelListW()].filter(Boolean); if (all.length < 2) return all[0] || null;
+      const ae = document.activeElement;
+      return all.find(w => stage.querySelector(`.win[data-win="${w.id}"]`)?.contains(ae)) || all.find(w => w.id === panelFrontId) || all[0];
     };
 
   let homeOpen = store.get('homeOpen', false) === true;
@@ -577,8 +580,9 @@
   // them): new ones before the Ready chats, so ⌥↓ from elsewhere lands on the top notification; snoozed ones after.
   const byTop = (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top;
   const readyRows = id => {
-    // A narrow Chats window showing a thread hides its list: its rows still count, in list order.
-    const folded = !!winEl(id)?.querySelector('.dchats:not([data-thread=""]) .pane-list') && !winEl(id).querySelector('.pane-list').getClientRects().length;
+    // A Chats window whose list is hidden (narrow and showing a thread, or a chat panel beside a docked list): its rows
+    // still count, in list order.
+    const folded = !!winEl(id)?.querySelector('.pane-list') && !winEl(id).querySelector('.pane-list').getClientRects().length;
     const threads = $$('.pane-list .ch-sec[data-sec="ready"] .ch-row[data-chopen]', winEl(id) || document.createElement('div')).filter(r => folded || r.getClientRects().length).sort(byTop);
     // Listed among the chats (inbox list mode): the list's own rows, in on-screen order with everything else.
     const own = $$('.pane-list .ch-sec[data-sec="ready"] .ch-notif-row[data-chnotif]', winEl(id) || document.createElement('div')).filter(r => r.getClientRects().length);
@@ -921,24 +925,25 @@
   // The docked Chats list has none: it never closes (the layout folds it).
   function panelBar(w, a) {
     if (panelDockList(w)) return '<div class="wbar panel-dockbar"></div>';
-    const back = panel?.id === w.id ? panel.back : [];
+    const back = panelSlot(w.id)?.back || [];
     return `<div class="wbar">${back.length ? `<button data-wact="panel-back" class="panel-back" title="Back" aria-label="Back to what was open before"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>` : ''}${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${w.app === 'frame' && a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}${w.app === 'frame' ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
       <button data-wact="close" title="Close (Esc)" aria-label="Close">✕</button></div>`;
   }
   function panelMount() {
     let layer = document.getElementById('panelLayer');
-    if (!layer) { if (!panel && !panelList) return; layer = Object.assign(document.createElement('div'), { id: 'panelLayer', className: 'panel-layer' }); stage.appendChild(layer); }
+    if (!layer) { if (!panel && !panelApp && !panelList) return; layer = Object.assign(document.createElement('div'), { id: 'panelLayer', className: 'panel-layer' }); stage.appendChild(layer); }
     if (!panelChat()) panel = null;
+    if (!panelAppW()) panelApp = null;
     if (!panelListW()) panelList = null;
-    layer.classList.toggle('on', !!(panel || panelList));
-    for (const [slot, w] of [[panelList, panelListW()], [panel, panelChat()]]) {
+    layer.classList.toggle('on', !!(panel || panelApp || panelList));
+    for (const [slot, w] of [[panelList, panelListW()], [panel, panelChat()], [panelApp, panelAppW()]]) {
       if (!w) continue;
       let el = winEl(w.id);
       if (!el) { el = mountWin(w, layer); el.classList.add('panel'); if (slot.swap) el.classList.add('panel-swap'); }
       else if (el.parentNode !== layer) layer.appendChild(el);
       el.dataset.panel = panelKind(w) === 'app' ? 'app' : 'chat';
-      el.dataset.side = panelDockList(w) ? 'left' : 'right';
+      el.dataset.side = panelDockList(w) ? 'left' : slot === panel && panelDocked ? 'beside' : 'right';   // docked: a chat opens beside the list
       el.toggleAttribute('data-dock', panelDockList(w));
     }
   }
@@ -954,28 +959,36 @@
     if (swap || matchMedia('(prefers-reduced-motion: reduce)').matches) { el.remove(); return; }
     el.classList.add('panel-out'); el.inert = true; setTimeout(() => el.remove(), 420);
   }
+  // Two content panels: a Chats window opens in the chat panel, anything else in the app panel; each holds one thing
+  // at a time (the one before is kept for a quiet Back) and both can be open together.
   function panelOpen(obj, { fromBack = false } = {}) {
     window.WosResources?.back(); closePalette({ restore: false });
-    const prev = panelChat(); let back = panel?.back || [];
+    const isApp = obj?.app !== 'chats', slot = isApp ? panelApp : panel;
+    const prev = isApp ? panelAppW() : panelChat(); let back = slot?.back || [];
     if (prev) { if (!fromBack) { const keep = panelSnap(prev); if (keep) back = [...back, keep].slice(-PANEL_BACK); } panelDrop(prev.id, { swap: true }); }
     const id = uid(); W[id] = { id, ...obj };
-    panel = { id, back, swap: !!prev }; panelFrontId = id;
+    const next = { id, back, swap: !!prev }; if (isApp) panelApp = next; else panel = next; panelFrontId = id;
     save(); render(); log('panel:' + panelKind(W[id]));
     return W[id];
   }
-  // Closing: the panel on the right (Esc, ✕, a finished thread), or the window asked for. The docked list never closes.
+  // Closing: the content panel in front (Esc, ✕, a finished thread: the chat first, then the app), or the window asked
+  // for. The docked list never closes.
   function panelClose({ paint = true, id = '' } = {}) {
-    const w = id ? (panel?.id === id ? W[id] : null) : panelChat();
-    if (!w) { if (!panelChat()) panel = null; return false; }
+    const f = panelWin(), front = f && panelSlot(f.id) ? f : panelChat() || panelAppW();
+    const w = id ? (panelSlot(id) ? W[id] : null) : front;
+    if (!w) { if (!panelChat()) panel = null; if (!panelAppW()) panelApp = null; return false; }
     if (!canLeave(w.id)) return false;
-    panelDrop(w.id); panel = null;
-    if (paint) { save(); render(); const l = panelListW(); if (l) { panelFrontId = l.id; winEl(l.id)?.focus({ preventScroll: true }); } else $('#desktopHome')?.focus({ preventScroll: true }); } // the keyboard goes back to the list (⌥↓ goes on from there)
+    const wasApp = panelApp?.id === w.id;
+    panelDrop(w.id); if (wasApp) panelApp = null; else panel = null;
+    const c = wasApp && panelChat();   // an app closed beside an open chat: the keyboard goes back to the chat
+    if (paint) { save(); render(); const l = panelListW(); if (c) { panelFrontId = c.id; focusInside(c.id); } else if (l) { panelFrontId = l.id; winEl(l.id)?.focus({ preventScroll: true }); } else $('#desktopHome')?.focus({ preventScroll: true }); } // the keyboard goes back to the list (⌥↓ goes on from there)
     log('panel:close'); return true;
   }
-  // The quiet Back in the panel's title bar: the thing shown before this one.
-  function panelBack() {
-    const b = panel?.back; if (!b?.length) return false;
-    const obj = b[b.length - 1]; panel.back = b.slice(0, -1);
+  // The quiet Back in a panel's title bar: the thing shown there before this one.
+  function panelBack(id = '') {
+    const slot = panelSlot(id) || panelSlot(panelWin()?.id) || panel;
+    const b = slot?.back; if (!b?.length) return false;
+    const obj = b[b.length - 1]; slot.back = b.slice(0, -1);
     const thread = obj.app === 'chats' ? obj.thread : null;
     const w = panelOpen(thread ? { ...obj, thread: null } : obj, { fromBack: true });
     if (thread) { CHATS.openChat(w.id, thread); syncChatsPane(w.id); }
@@ -1022,7 +1035,7 @@
       render(); return;
     }
     for (const w of panelWins()) panelDrop(w.id, { swap: true });
-    panel = null; panelList = null; panelDocked = false;
+    panel = null; panelApp = null; panelList = null; panelDocked = false;
     const was = store.get('panelPrevHome', null); store.set('panelPrevHome', null);
     if (was === false && ws[cur].wins.length) { homeOpen = false; store.set('homeOpen', false); }
     save(); render();
@@ -1275,7 +1288,7 @@
     window.WizWebUpdate?.back(); // Preserve the accepted shared banner; fold its navigation list.
     LINKS?.close();
     for (let i = 0; i < 20 && CHATS.closeOverlay(); i++) { /* Close navigation sheets, never the recorder. */ }
-    if (globalThis.WosSkinHost?.panelMode && panel) panelClose({ paint: false }); // Home (⌥`) with no desks: the panel slides away (a docked list stays)
+    if (globalThis.WosSkinHost?.panelMode && (panel || panelApp)) { panelClose({ paint: false }); panelClose({ paint: false }); } // Home (⌥`) with no desks: the chat and the app slide away (a docked list stays)
     homeOpen = true; store.set('homeOpen', true); render();
     $('#desktopHome').focus({ preventScroll: true });
   }
@@ -1340,7 +1353,7 @@
     const act = e.target.closest('[data-wact]')?.dataset.wact;
     if (act === 'hud-min') return hudOn(id);
     if (act === 'hud-home') return hudDock({ to: 0 });
-    if (act === 'panel-back') return panelBack();
+    if (act === 'panel-back') return panelBack(id);
     if (act === 'close' && hud?.id === id) return hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
@@ -2807,15 +2820,18 @@
    * declared when: 'always' runs its script here too. James's skins declare no package and load nothing. */
   const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : ((globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(x => x && x.app === 'chats') || null); };
   window.WosSkinHost?.attach({
-    route() { const w = homeOpen && !panelWin() ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur, home: homeOpen || !ws[cur].wins.length, panel: panelKind(panelChat()), panelList: !!panelListW() }; },
+    route() { const w = homeOpen && !panelWin() ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur, home: homeOpen || !ws[cur].wins.length, panel: panelKind(panelChat() || panelAppW()), panelList: !!panelListW(), panelApp: panelAppW()?.appId || (panelAppW() ? panelAppW().app : null) }; },
     // No desks (core/skin-host.js api.panel): everything opens in one panel on the right over Home.
     panelMode: on => panelMode(!!on),
     panelClose: () => panelClose(),
     panelDock: on => panelDock(!!on),
     panelBack: () => panelBack(),
-    panelState: () => { const w = panelChat(), l = panelListW(); if (!w && !l) return null; const el = w && winEl(w.id), le = l && winEl(l.id);
-      return { kind: panelKind(w) || null, title: w ? winTitle(w) : '', width: el ? Math.max(0, Math.round(stage.clientWidth - el.offsetLeft)) : 0, back: panel?.back.length || 0,
-        list: l ? { width: le ? Math.max(0, Math.round(le.offsetLeft + le.offsetWidth)) : 0 } : null }; },
+    // Geometry is the panels' resting place (offsets ignore their slide-in transform), in stage pixels.
+    panelState: () => { const c = panelChat(), p = panelAppW(), l = panelListW(), w = c || p; if (!w && !l) return null; const el = w && winEl(w.id), le = l && winEl(l.id), ce = c && winEl(c.id), pe = p && winEl(p.id);
+      return { kind: panelKind(w) || null, title: w ? winTitle(w) : '', width: el ? Math.max(0, Math.round(stage.clientWidth - el.offsetLeft)) : 0, back: panelSlot(w?.id)?.back.length || 0,
+        list: l ? { width: le ? Math.max(0, Math.round(le.offsetLeft + le.offsetWidth)) : 0 } : null,
+        chat: c ? { kind: panelKind(c), left: ce ? Math.round(ce.offsetLeft) : 0, right: ce ? Math.round(ce.offsetLeft + ce.offsetWidth) : 0 } : null,
+        app: p ? { id: p.appId || p.app, title: winTitle(p), left: pe ? Math.round(pe.offsetLeft) : 0, right: pe ? Math.round(pe.offsetLeft + pe.offsetWidth) : 0 } : null }; },
     // Layouts (core/skin-host.js shellApi): mount on the stage, the orb's voice, Working / Ready rows with Chats' own
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
@@ -2859,7 +2875,7 @@
     toastAct: (text, act) => toast('◇', text, 5000, act),
   });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
-  window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
+  window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : []), ...(panelApp ? [panelApp.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {
     const did = escStep(); log('back:' + (did || 'root'));
     if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);

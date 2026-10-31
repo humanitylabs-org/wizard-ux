@@ -144,8 +144,19 @@ test('no desks: while a layout holds the panel everything opens in panels over H
   assert.match(fn('panelOpen'), /panelDrop\(prev\.id, \{ swap: true \}\)/); assert.match(fn('panelOpen'), /back = \[\.\.\.back, keep\]\.slice\(-PANEL_BACK\)/);
   assert.ok(!fn('panelOpen').includes('ws[') && !fn('panelOpen').includes('.wins'), 'no desk is touched');
   assert.match(fn('panelMode'), /store\.set\('panelPrevHome', homeOpen\)/); assert.match(fn('panelMode'), /if \(was === false && ws\[cur\]\.wins\.length\) \{ homeOpen = false;/);
-  assert.match(src, /panelMode: on => panelMode\(!!on\),/); assert.match(src, /panelState: \(\) => \{ const w = panelChat\(\), l = panelListW\(\);/); assert.match(src, /panelDock: on => panelDock\(!!on\),/);
-  assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length, panel: panelKind\(panelChat\(\)\), panelList: !!panelListW\(\) \}/);
+  assert.match(src, /panelMode: on => panelMode\(!!on\),/); assert.match(src, /panelState: \(\) => \{ const c = panelChat\(\), p = panelAppW\(\), l = panelListW\(\), w = c \|\| p;/); assert.match(src, /panelDock: on => panelDock\(!!on\),/);
+  assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length, panel: panelKind\(panelChat\(\) \|\| panelAppW\(\)\), panelList: !!panelListW\(\), panelApp: panelAppW\(\)\?\.appId/);
+  // v6: two content panels that can be open together: a Chats window in the chat panel (docked: a column BESIDE the
+  // list), anything else in the app panel on the right; each one at a time with its own Back; Esc / ✕ close the one in
+  // front (the chat first), and closing an app beside an open chat gives the keyboard back to the chat.
+  assert.match(fn('panelOpen'), /const isApp = obj\?\.app !== 'chats', slot = isApp \? panelApp : panel;/);
+  assert.match(fn('panelOpen'), /if \(isApp\) panelApp = next; else panel = next;/);
+  assert.match(fn('panelClose'), /if \(wasApp\) panelApp = null; else panel = null;/);
+  assert.match(fn('panelBack'), /const slot = panelSlot\(id\) \|\| panelSlot\(panelWin\(\)\?\.id\) \|\| panel;/);
+  assert.match(fn('panelMount'), /el\.dataset\.side = panelDockList\(w\) \? 'left' : slot === panel && panelDocked \? 'beside' : 'right';/);
+  assert.match(src, /const panelWins = \(\) => \[panelListW\(\), panelChat\(\), panelAppW\(\)\]\.filter\(Boolean\);/);
+  assert.match(src, /const folded = !!winEl\(id\)\?\.querySelector\('\.pane-list'\) && !winEl\(id\)\.querySelector\('\.pane-list'\)\.getClientRects\(\)\.length;/, '⌥↓ counts the rows of a hidden list (the chat column beside a folded list)');
+  assert.match(css, /@keyframes panel-in-beside \{ from \{ opacity: 0; transform: translateX\(-100%\); \}/, 'the chat column grows out of the list');
   // v5 in thirds: docked, the stock Chats list keeps its own panel on the LEFT (never closes; dock(false) folds it);
   // a thread picked in it (click, key, new chat) is forwarded to the content panel on the right, one thing at a time
   // with a quiet Back, and that panel closes when its thread is finished (Done, Snooze, ‹, a send that leaves like the
@@ -196,10 +207,22 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
   assert.match(js, /popOff = api\.back\.push\(\(\) => openPop\(false\)\)/, 'Esc folds the picker first');
   assert.match(js, /if \(!pop\.hidden && \(frameN\+\+ & 1\)\) previews\(t\);/, 'previews only while the picker is open');
-  // No desks: the layout holds the panel and docks the stock Chats list; a click on the bare sky puts the app away;
-  // the scene moves to the space left free between the app and the list.
+  // No desks: the layout holds the panel and docks the stock Chats list. v6: THE ORB NEVER MOVES: its centre is the
+  // screen's centre whatever is open (never recentred into the free space, never dimmed behind a panel); an open chat
+  // only lets it step down in size where it stands so the column fits beside it.
   assert.match(js, /api\.panel\.claim\(\);/); assert.match(js, /api\.panel\.dock\(!folded\);/);
+  assert.match(js, /cx = W \/ 2;\n/); assert.ok(!/cx \+?= \(?cxTarget/.test(js) && !js.includes('cxTarget'), 'the orb is never eased to another spot');
   assert.match(js, /scene\.style\.setProperty\('--ob-cx', Math\.round\(cx\) \+ 'px'\)/);
+  assert.match(js, /const k = chat \? clamp\(\(W \/ 2 - chatR - GAP\) \/ r, \.45, 1\) : 1;/);
+  assert.ok(!/:is\(\.ob-orbwrap, \.ob-field\) \{ opacity/.test(read('web/layouts/orb/layout.css')), 'the orb is never dimmed behind a panel');
+  // The interconnection: an open app's satellite pins between the orb and its panel; electric bolts in the orb's colour
+  // run orb → app → panel edge (and orb → chat column), drawn on the sky canvas in the same ~30 fps loop; reduced
+  // motion = one still line (fixed seed, no spark).
+  assert.match(js, /const want = pinId && s\.id === pinId \? 1 : 0;/); assert.match(js, /s\.el\.classList\.toggle\('is-pinned', k > \.5\);/);
+  assert.match(js, /bolt\(cx \+ R, cy, s\.x - half, s\.y, t, pin, seed \+ 23, P\);/); assert.match(js, /bolt\(s\.x \+ half, s\.y, G\.appL, cy, t, pin, seed \+ 41, P\);/);
+  assert.match(js, /if \(bolts\.chat\) bolt\(cx - R, cy, G\.chatR, cy,/);
+  assert.match(js, /const seed = reduced \? 977 : boltSeed/); assert.match(js, /if \(!reduced\) \{ const u = /, 'the running spark only with motion');
+  assert.match(js, /placeSats\(dt\);\n    drawBolts\(t, dt\);/);
   assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
   assert.match(js, /prefers-reduced-motion: reduce/);
   assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored code');
@@ -213,7 +236,8 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(js, /badge\.textContent = n \? String\(n\) : '';/);
   const lcss = read('web/layouts/orb/layout.css');
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-dock\] \{\n  top: 0; left: 0; bottom: 0; width: var\(--ob-col-w\);/, 'full height, flush left');
-  assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="right"\] \{ width: calc\(100% - var\(--ob-col-w\) - 24px\);/, 'the content panel covers the orb area');
+  assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="beside"\] \{\n  z-index: 2; top: 0; bottom: 0; left: var\(--ob-beside-left, var\(--ob-col-w\)\); right: auto; width: var\(--ob-chat-w\);/, 'a chat: a column right beside the list');
+  assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="right"\] \{ z-index: 2; width: var\(--ob-app-w\);/, 'an app: the right third');
   assert.match(lcss, /\.ob-picker \{ position: absolute; left: calc\(var\(--ob-left, 0px\) \+ 16px\);/, 'the look picker at the bottom of the orb area, beside the list');
   // The hint names the shell's real keys (⌥V new voice chat, ⌥N new chat; Right ⌘ in the Mac app).
   assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /mod \+ 'N'/);

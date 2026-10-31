@@ -271,7 +271,7 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home, panel: ['thread', 'list', 'app'].includes(r.panel) ? r.panel : null, panelList: !!r.panelList });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home, panel: ['thread', 'list', 'app'].includes(r.panel) ? r.panel : null, panelList: !!r.panelList, panelApp: typeof r.panelApp === 'string' && r.panelApp ? r.panelApp : null });
   }
   /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
    * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
@@ -284,7 +284,7 @@
   if (isDoc) window.addEventListener?.('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
-    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}|${r.panelList ? 1 : 0}`;
+    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}|${r.panelList ? 1 : 0}|${r.panelApp || ''}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
   }
@@ -362,12 +362,13 @@
         // Closing the last window of a desk goes Home instead of to another desk (desks are out of sight). Released on teardown.
         emptyHome() { if (!live()) return () => {}; emptyHomes.add(a); const off = () => { emptyHomes.delete(a); a.offs.delete(off); }; a.offs.add(off); return off; },
       }),
-      /* No desks: while a layout holds the panel, whatever opens (a thread, a list, an app) shows in ONE panel on the
-       * right over Home instead of on a desk (desktop.js, outside the desks: never tiled, never synced). Opening another
-       * thing replaces it; back() reopens the one before. The desks underneath stay exactly as they were, and release
-       * (or teardown) gives them back. state() → { kind: 'thread' | 'list' | 'app' | null, title, width, back, list } or null.
+      /* No desks: while a layout holds the panel, whatever opens shows in a panel over Home instead of on a desk
+       * (desktop.js, outside the desks: never tiled, never synced): a Chats window in the chat panel, anything else in
+       * the app panel on the right; each holds one thing at a time (back() reopens the one before) and both can be open.
+       * The desks underneath stay exactly as they were, and release (or teardown) gives them back. state() → { kind,
+       * title, width, back, list: { width }, chat: { kind, left, right }, app: { id, title, left, right } } or null.
        * dock(true) keeps the stock Chats list docked in its own panel on the LEFT for good; a thread picked in it opens
-       * in the panel on the right, which closes when the thread is finished. dock(false) folds the list away. */
+       * in a column beside it, which closes when the thread is finished. dock(false) folds the list away. */
       panel: Object.freeze({
         claim() {
           if (!live()) return () => {};
@@ -377,7 +378,7 @@
         close: () => live() ? !!shell.panelClose?.() : false,
         dock: on => live() && panelHolders.has(a) ? !!shell.panelDock?.(!!on) : false,
         back: () => live() ? !!shell.panelBack?.() : false,
-        state: () => { const s = live() ? shell.panelState?.() : null; return s ? Object.freeze({ ...s, ...(s.list ? { list: Object.freeze({ ...s.list }) } : {}) }) : null; },
+        state: () => { const s = live() ? shell.panelState?.() : null; if (!s) return null; const o = { ...s }; for (const k of ['list', 'chat', 'app']) if (o[k]) o[k] = Object.freeze({ ...o[k] }); return Object.freeze(o); },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
