@@ -595,7 +595,7 @@ window.WizCore.chats = function createChats(H) {
   function noteRow(it) {
     const later = !!it.read, title = notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
     const pv = (it.source === 'cron' ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
-    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" title="Open notification"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
+    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open alert · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
       <span class="bd"><span class="tp"><b>${esc(clip(title, 120))}</b><time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
@@ -1501,27 +1501,38 @@ window.WizCore.chats = function createChats(H) {
     if (!ok) toast('!', { done: 'Couldn’t mark done · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
   }
-  /* Long-press (or swipe left on) a thread in the list: the same actions in a small sheet. */
-  let rowSheet = null; // { wid, sid }
+  /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
+  const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif]';
+  const NOTE_ACT = { done: ACT.done, archive: { ...ACT.file, label: 'Archive' }, unread: ACT.unread };
+  async function noteRowAct(nid, a) {
+    const it = window.WosBell?.item?.(nid);
+    if (!it || it.archived || !NOTE_ACT[a]) return;
+    vib(8);
+    // The Notifications app has read / archived, not a separate done or flag state.
+    // Both completion labels use its existing Done semantics: read and out of Ready.
+    const ok = await window.WosBell.mark([nid], a === 'unread' ? { read: false } : { read: true, archived: true });
+    toast(ok ? '✓' : '!', ok ? (a === 'unread' ? 'Marked unread' : a === 'archive' ? 'Archived' : 'Marked done') : 'Couldn’t save · alert restored', ok ? 1600 : 3200);
+  }
+  let rowSheet = null; // { wid, sid?, nid?, trigger }
   function rowActions(s) {
     const acts = threadActions(s, null);
     return LIVE.workGroups([s]).ready.length > 0 && !LIVE.isNew(s) ? ['unread', ...acts] : acts;
   }
-  function openRowSheet(wid, sid) {
-    const s = rowOf(wid, sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
+  function openRowSheet(wid, sid, nid = '') {
+    const s = nid ? window.WosBell?.item?.(nid) : rowOf(wid, sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el || (nid && s.archived)) return;
     closeRowSheet();
-    const trigger = el.querySelector(`[data-chopen="${sid}"]`);
-    const acts = rowActions(s);
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
+    const trigger = el.querySelector(nid ? `[data-chnotif="${nid}"]` : `[data-chopen="${sid}"]`);
+    const acts = nid ? ['done', 'archive', ...(s.read ? ['unread'] : [])] : rowActions(s);
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? notePlain(s.title) || 'Alert' : s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
-      <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
+      ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-part="pin-button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
       <button type="button" data-rsspacepicker>${PIN_SVG}${spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
       ${spacesOf(sid).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="false">${PIN_SVG}Remove from ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
-      ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
-      ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${actionLabel(s, a)}</button>`).join('')}
+      ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}`}
+      ${acts.map(a => `<button type="button" data-rsact="${a}">${(nid ? NOTE_ACT : ACT)[a].icon}${nid ? NOTE_ACT[a].label : actionLabel(s, a)}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
-    rowSheet = { wid, sid, trigger };
+    rowSheet = { wid, sid, nid, trigger };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
     vib(10);
   }
@@ -2100,7 +2111,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('touchcancel', () => { if (ptr) ptr.d = 0; endPull(); }, { capture: true, passive: true });
   }
   /* Long-press or swipe left on a thread row → thread actions (listeners in bind()). */
-  let lp = null, lpUntil = 0;
+  let lp = null, lpUntil = 0, lpHeld = null;
   /* Gmail-style swipe (Novaire, 23 Oct 2026): in the Novairecito phone skin family, swipe a row left and it stays
    * open over two explicit buttons: Recall (🪄, schedule a return) and Done (Archive, restorable). Swiping never
    * performs an action. Tapping elsewhere, scrolling or swiping back closes it; list repaints wait while open. */
@@ -2172,15 +2183,15 @@ window.WizCore.chats = function createChats(H) {
     // Speed: pointing at (desktop) or touching a row starts its history read; the open joins that request.
     root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const row = e.target.closest?.('.ch-list [data-chopen]'); if (row && row !== root._warmRow) { root._warmRow = row; clearTimeout(root._warmT); root._warmT = setTimeout(() => LIVE.warm?.(row.dataset.chopen), 90); } });
     root.addEventListener('pointerdown', e => {
-      const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
-      LIVE.warm?.(row.dataset.chopen);
+      const row = e.target.closest(ROW_MENU); if (!row || e.button > 0) return;
+      if (row.dataset.chopen) LIVE.warm?.(row.dataset.chopen);
       const wid = idOf(row);
       const wrap = row.closest('.ch-row-wrap');
       // A touch on another row (or the open one) first closes an open swipe, like Gmail.
       const wasOpen = swipeOpen && swipeOpen.wrap === wrap;
       if (swipeOpen && !wasOpen) closeSwipe();
-      const swipe = e.pointerType !== 'mouse' && ownerSwipe();
-      lp = { row, wrap, wid, sid: row.dataset.chopen, swipe, base: swipe && wasOpen ? -SWIPE_W : 0, pid: e.pointerId, pointerId: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: false, t: setTimeout(() => { if (!lp || lp.moved || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; if (swipeOpen) closeSwipe(true); openRowSheet(lp.wid, lp.sid); lp = null; }, 480) };
+      const swipe = !!row.dataset.chopen && e.pointerType !== 'mouse' && ownerSwipe();
+      lp = { row, wrap, wid, sid: row.dataset.chopen, nid: row.dataset.chnotif, swipe, base: swipe && wasOpen ? -SWIPE_W : 0, pid: e.pointerId, pointerId: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: false, t: setTimeout(() => { if (!lp || lp.moved || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; if (swipeOpen) closeSwipe(true); lpHeld = lp.pid; openRowSheet(lp.wid, lp.sid, lp.nid); lp = null; }, 480) };
     });
     root.addEventListener('pointermove', e => {
       if (!lp) return;
@@ -2200,12 +2211,13 @@ window.WizCore.chats = function createChats(H) {
       lp.wrap.classList.toggle('commit', off < -w * 0.5);
     });
     const lpEnd = () => {
+      if (lpHeld !== null) { lpHeld = null; lpUntil = Date.now() + 700; }
       if (!lp) return; const q = lp; lp = null; clearTimeout(q.t);
       if (!q.swipe) {
         q.row.style.transform = '';
         // Preserve the stock gesture outside Novairecito phone skins and on desktop.
         if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(rowOf(q.wid, q.sid), null).includes('done')) { lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
-        else if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid); }
+        else if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid, q.nid); }
         return;
       }
       if (!q.moved) return;
@@ -2215,6 +2227,7 @@ window.WizCore.chats = function createChats(H) {
       swipeOpen = { wid: q.wid, sid: q.sid, wrap: q.wrap }; closeSwipe();
     };
     const lpCancel = () => {
+      if (lpHeld !== null) { lpHeld = null; lpUntil = Date.now() + 700; }
       if (!lp) return; const q = lp; lp = null; clearTimeout(q.t);
       try { q.row.releasePointerCapture?.(q.pointerId); } catch (_) {}
       q.row.style.transition = ''; q.row.style.transform = q.base ? `translateX(${-SWIPE_W}px)` : '';
@@ -2223,7 +2236,7 @@ window.WizCore.chats = function createChats(H) {
     };
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpCancel);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
-    root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
+    root.addEventListener('contextmenu', e => { const row = e.target.closest(ROW_MENU); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen, row.dataset.chnotif); } });
     // Paste, drag/drop and the Enter policy come from the shared WizComposerInput (web/core/composer-input.js), the
     // same implementation apps get as WizardApp.composer: files go to addFiles (the paperclip upload path), text
     // pastes insert from the event snapshot (dictation-app safe), an empty paste explains how to get the take back.
@@ -2790,7 +2803,7 @@ window.WizCore.chats = function createChats(H) {
     if (sw && swipeOpen) { const { wid: rw, sid } = swipeOpen, k = sw.dataset.chswipe; closeSwipe(true);
       if (k === 'recall') { const s = LIVE.session(sid); BOOM()?.open({ sessionId: sid, targetKind: 'thread', context: s?.title || 'This thread', note: s?.attention?.ask || '' }); }
       else threadAct(rw, sid, k); return true; }
-    if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
+    if (justPressed() && e.target.closest('[data-chopen], [data-chnotif]')) return true; // a long-press/swipe just opened the actions sheet
     if (swipeOpen) { closeSwipe(); if (e.target.closest('.ch-list')) return true; } // a tap anywhere closes an open swipe first
     const pick = topicOn() && e.target.closest('[data-chpick]'); if (pick) { const key = pick.dataset.chpick, sid = key.startsWith('thread:') ? key.slice(7) : '', s = sid && LIVE.session(sid); openEmojiSheet(id, key, s?.title || 'Draft emoji'); return true; }
     const pn = e.target.closest('[data-chpin]'); if (pn) { const on = PIN.toggle(pn.dataset.chpin); vib(8); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
@@ -2835,7 +2848,7 @@ window.WizCore.chats = function createChats(H) {
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
-    const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
+    const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid, nid } = rowSheet; closeRowSheet(); if (nid) void noteRowAct(nid, rsa.dataset.rsact); else threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
     const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
@@ -2849,7 +2862,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
     if (e.target.closest('[data-chrename]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openRenameSheet(id, w.thread); return true; }
-    if (e.target.closest('[data-rsopen]') && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); openChat(owner(rw), sid); return true; }
+    if (e.target.closest('[data-rsopen]') && rowSheet) { const { wid: rw, sid, nid } = rowSheet; closeRowSheet(); if (nid) window.WosSkinHost?.inboxAct?.('open', nid); else openChat(owner(rw), sid); return true; }
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (e.detail === 0 || rowSheet.outsidePress) closeRowSheet(); return true; }
     if (e.target.closest('[data-boom-id]') && w.thread) { const el = elOf(id); void BOOM()?.handle(e.target, r => { if (!showBoomMessage(el, r.anchor_at)) toast('!', 'That message is no longer in this thread', 2200); }); return true; }
@@ -2935,8 +2948,8 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }
       if (rowSheet && e.key === 'Escape') { e.preventDefault(); closeRowSheet(); return; }
       if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
-        const row = e.target.closest('.ch-list [data-chopen]');
-        if (row) { e.preventDefault(); openRowSheet(idOf(row), row.dataset.chopen); return; }
+        const row = e.target.closest(ROW_MENU);
+        if (row) { e.preventDefault(); openRowSheet(idOf(row), row.dataset.chopen, row.dataset.chnotif); return; }
       }
       // Enter / Shift+Enter / Ctrl+Enter in the composer: WizComposerInput (bound with the paste and drop handlers).
     });
@@ -2952,7 +2965,7 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   const forget = id => { if (CH[id]) closeStream(CH[id]); closeHosted(id); clearReading(id); delete CH[id]; };
-  function justPressed() { return Date.now() < lpUntil; }
+  function justPressed() { return lpHeld !== null || Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
     const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || (!!swipeOpen && swipeOpen.wid === id && swipeOpen.wrap.isConnected) || !!PW?.holds(id) || (!!el && readingIn(el));
