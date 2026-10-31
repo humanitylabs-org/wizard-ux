@@ -72,7 +72,8 @@
       localStorage.setItem('wos.app-borders.migrated.v1', 'true');
     }
   } catch (_) {}
-  const recipe = () => window.WosMySkin?.active;
+  // Own-skin recipes are retired (31 Oct 2026): this device's choices are the only tweak state.
+  const recipe = () => null;
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
   const canonical = id => catalog?.aliases?.[id] || id;
   const globalIds = () => catalog?.defaults || [];
@@ -103,10 +104,8 @@
     if (globalIds().includes(id)) {
       const off = new Set(state.defaultsOff || []); on ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; Store.write(state);
-      if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
       return;
     }
-    if (recipe()) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
     if (!catalog?.tweaks.includes(id)) return;
     const mix = { ...(state.mix || {}) }; if (on === presetOn(id)) delete mix[id]; else mix[id] = on;
     state.mix = mix; Store.write(state);
@@ -205,6 +204,16 @@
       for (const id of ids) await setOne(id, on);
       return apply();
     },
+    // Select all: every tweak shown in Settings on (one per replacement group); tapped again when all are on = all off.
+    async setAll(on) {
+      const shown = experience.state.tweaks.filter(t => !t.builtin); if (!shown.length) return;
+      if (typeof on !== 'boolean') on = !shown.every(t => t.on);
+      for (const t of shown) {
+        if (on) { for (const m of groupOf(t.id) || [t.id]) if (m === t.id || explicitOff(m)) await setOne(m, true); }
+        else await setOne(t.id, false);
+      }
+      return apply();
+    },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
@@ -214,8 +223,19 @@
     },
   };
   window.WosExperience = experience;
+  // Own skins keep working (James approved them, 23 Oct): wearing one copies its tweaks onto this device once. After
+  // that the device's switches are the truth, so changing a tweak never writes into the recipe and never reverts.
+  const WORN = 'wos.own-skin.tweaks-applied';
+  async function wearTweaks() {
+    const a = window.WosMySkin?.active, had = localStorage.getItem(WORN) || '';
+    if (!a) { if (had) localStorage.removeItem(WORN); return; }
+    if (had === a.id) return;
+    localStorage.setItem(WORN, a.id);
+    for (const [id, on] of Object.entries(a.tweaks || {})) await setOne(canonical(id), !!on);
+    await apply();
+  }
+  window.addEventListener('wos:own-skin', () => { void wearTweaks().catch(() => {}); });
   window.addEventListener('wos:skin-host-ready', apply);
-  window.addEventListener('wos:own-skin', apply);
   window.addEventListener('wos:skin', () => { void experience.chooseSkin(); });
   if (window.WosSkinHost?.personalState.ready) void apply();
   // Pick up the author's newly published tweaks on reopen, keeping the owner's offs by id.
