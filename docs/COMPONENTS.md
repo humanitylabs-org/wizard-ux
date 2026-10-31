@@ -106,7 +106,7 @@ Visual: <side-by-side screenshot, or "none">
 | Module | Contract |
 |---|---|
 | `web/core/app-voice.js` (`WosAppVoice`) | Registry names/claims. |
-| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music/device schema until APK A; Food grammar; ids via WizCore.appIdAliases. |
+| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music/device schema to APK A; Food grammar; ids: `appIdAliases`. |
 | `web/core/background-audio-legacy.js` (`WizBackgroundAudioLegacy`) | Pilot grant/token until APK A. |
 
 ## Plumbing (single owner; files in `web/core/` unless noted)
