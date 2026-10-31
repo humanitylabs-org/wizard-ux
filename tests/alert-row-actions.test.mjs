@@ -9,13 +9,15 @@ const cut = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a);
 const plain = x => JSON.parse(JSON.stringify(x));
 const flush = () => new Promise(r => setImmediate(r));
 
-async function harness({ read = false, fail = false } = {}) {
-  let items = [{ id: 'sample-alert', title: 'Sample alert', message: 'Nothing needed from you', read, archived: false }];
+async function harness({ read = false, fail = false, nid = 'sample-alert', kind = 'main' } = {}) {
+  let items = [{ id: nid, title: 'Sample alert', message: 'Nothing needed from you', read, archived: false }];
   const calls = [], opened = [], sheets = [], listeners = {}, timers = new Map(); let now = 1000, seq = 0;
-  const row = { dataset: { chnotif: 'sample-alert' }, style: {}, focus() {}, isConnected: true };
+  const row = { dataset: { chnotif: nid }, style: {}, focus() {}, isConnected: true };
   const wrap = { style: { setProperty() {} }, classList: { add() {}, remove() {} }, querySelector: () => null };
   row.closest = s => s === '.ch-row-wrap' ? wrap : (s.includes('[data-chnotif]') ? row : null);
-  const el = { insertAdjacentHTML: (_, h) => sheets.push(h), querySelector: () => null };
+  const scopedReads = [], agent = kind === 'main' ? '' : 'qa-' + kind;
+  const session = { id: 'thread', title: kind + ' thread', agent };
+  const el = { insertAdjacentHTML: (_, h) => sheets.push(h), querySelector: () => null, querySelectorAll: selector => { assert.ok(['[data-chnotif]', '[data-chopen]'].includes(selector)); return [row]; } };
   const ctx = { console, document: { addEventListener() {}, querySelectorAll: () => [] }, location: { origin: 'https://example.invalid' },
     Date: { now: () => now }, CustomEvent: class { constructor(type) { this.type = type; } },
     setTimeout(fn, ms) { const n = ++seq; timers.set(n, { fn, ms }); return n; }, clearTimeout(n) { timers.delete(n); }, setInterval() {},
@@ -25,11 +27,11 @@ async function harness({ read = false, fail = false } = {}) {
       return { ok: true, json: async () => url.includes('/items') ? { items } : { unread: items.filter(i => !i.read && !i.archived).length, needs: 0 } };
     },
     WizCore: { backendApps: () => [{ id: 'notifications' }] }, WosSkinHost: { inboxList: true, inboxAct: (...a) => opened.push(a), claimed: () => false },
-    LIVE: { warm() {}, workGroups: () => ({ ready: [] }), isNew: () => false }, root: { addEventListener(k, fn) { (listeners[k] ||= []).push(fn); } },
-    track: { querySelector: () => el }, CH: {}, W: {}, rowOf: () => ({ title: 'Thread' }), threadActions: () => ['done'],
+    LIVE: { warm() {}, workGroups: () => ({ ready: [] }), isNew: () => false, session: () => session, sessionFor: (sid, a) => { scopedReads.push([sid, a]); return a === agent ? session : null; } }, root: { addEventListener(k, fn) { (listeners[k] ||= []).push(fn); } },
+    track: { querySelector: () => el }, CH: {}, W: { w: { id: 'w', agent, runtime_kind: kind } }, AGS: () => ({ isOther: a => !!a }), focusOf: () => null, focusedAgent: () => '', threadActions: () => ['done'],
     PIN: new Set(), PIN_SVG: '', RENAME_SVG: '', spacesOf: () => [], SPACE: { one: 'Space' },
     esc: String, notePlain: String, vib() {}, toast() {}, idOf: () => 'w', ownerSwipe: () => true,
-    closeSwipe() {}, swipeTray() {}, swipeA11y() {}, topicOn: () => false, followUpActive: () => false, actionLabel: () => 'unused', owner: x => x, openChat: () => assert.fail('not a chat thread'),
+    closeSwipe() {}, swipeTray() {}, swipeA11y() {}, topicOn: () => false, followUpActive: () => false, owner: x => x, openChat: () => assert.fail('not a chat thread'),
   };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8'), ctx);
   ctx.WosBell.watch(() => {}); await flush();
@@ -37,12 +39,12 @@ async function harness({ read = false, fail = false } = {}) {
   const pointerEnd = src.indexOf('    // Paste, drag/drop', pointerStart);
   const actionClick = src.match(/    const rsa = e.target.closest\('\[data-rsact\]'\);[^\n]+/)[0];
   const tapClick = cut("    if (justPressed() &&", "    const o = e.target.closest('[data-chopen]');");
-  vm.runInContext(cut('  const ACT = {', '  // Notification-thread only:') + cut('  const actionLabel =', '  const owner =') + cut('  const ROW_MENU =', '  const emojiCategoryHtml')
+  vm.runInContext(cut('  const ACT = {', '  // Notification-thread only:') + cut('  const actionLabel =', '  const owner =') + cut('  function winAgent(w) {', '  function agentRec(id) {') + cut('  const ROW_MENU =', '  const emojiCategoryHtml')
     + '\nfunction closeRowSheet() { rowSheet = null; sheets.length = 0; }\n'
     + cut('  let notesOff =', '  const noteAt =') + cut('  let lp =', '  /* Gmail-style swipe') + '\nlet swipeOpen = null;\n'
     + src.slice(pointerStart, pointerEnd) + cut('  function justPressed()', '  // A list must not re-render')
     + `\nthis.tap = e => { ${tapClick} }; this.action = e => { ${actionClick} }; this.api = { notes, openRowSheet, justPressed, closeRowSheet, noteRowAct };`, Object.assign(ctx, { sheets }));
-  return { ctx, calls, opened, sheets, row,
+  return { ctx, calls, opened, sheets, row, scopedReads, agent,
     event(type, extra = {}) { const e = { target: row, button: 0, pointerType: 'touch', pointerId: 1, clientX: 20, clientY: 40, preventDefault() {}, ...extra }; for (const fn of listeners[type] || []) fn(e); },
     hold() { for (const [id, t] of timers) if (t.ms === 480) { timers.delete(id); t.fn(); } },
     advance(ms) { now += ms; },
@@ -79,9 +81,29 @@ test('failed Archive restores the Ready row; unread uses only the supported read
 test('thread row sheet uses the same single Archive action, not Done', async () => {
   const h = await harness(); h.ctx.api.openRowSheet('w', 'thread');
   assert.match(h.sheets[0], /aria-label="Thread actions"/);
+  assert.doesNotMatch(h.sheets[0], /data-rsopen/, 'preserve the merged pin-menu removal of redundant thread Open');
   assert.equal((h.sheets[0].match(/data-rsact="done"/g) || []).length, 1);
   assert.match(h.sheets[0], />Archive<\/button>/);
   assert.doesNotMatch(h.sheets[0], />Done<\/button>/);
+});
+for (const kind of ['main', 'host-profile', 'container', 'restricted']) test(`${kind}: own thread sheet and global alert gesture/mark path keep Archive semantics`, async () => {
+  const h = await harness({ kind });
+  h.ctx.api.openRowSheet('w', 'thread');
+  assert.match(h.sheets[0], new RegExp(kind + ' thread'));
+  assert.match(h.sheets[0], />Archive<\/button>/); assert.doesNotMatch(h.sheets[0], />Done<\/button>/);
+  assert.deepEqual(h.scopedReads, kind === 'main' ? [] : [['thread', h.agent]], 'real winAgent/rowOf resolves the focused runtime');
+  h.ctx.api.closeRowSheet(); h.event('pointerdown'); h.hold(); h.event('pointerup');
+  assert.match(h.sheets[0], /aria-label="Alert actions"/);
+  assert.equal((h.sheets[0].match(/data-rsact="done"/g) || []).length, 1);
+  h.choose('done'); await flush();
+  assert.deepEqual(plain(h.calls), [{ url: '/notifications/api/mark', body: { ids: ['sample-alert'], read: true, archived: true } }]);
+  assert.equal(h.ctx.api.notes().awake.length, 0); assert.deepEqual(h.opened, []);
+});
+test('selector-significant alert IDs open the sheet and keep the exact mark ID', async () => {
+  const nid = 'alert"\\[odd]'; const h = await harness({ nid });
+  h.event('pointerdown'); h.hold(); h.event('pointerup');
+  assert.match(h.sheets[0], /aria-label="Alert actions"/); h.choose('done'); await flush();
+  assert.deepEqual(plain(h.calls[0].body), { ids: [nid], read: true, archived: true });
 });
 test('a scrolling/cancelled touch does not open the actions sheet', async () => {
   const h = await harness(); h.event('pointerdown'); h.event('pointermove', { clientY: 80 }); h.hold(); assert.equal(h.sheets.length, 0);

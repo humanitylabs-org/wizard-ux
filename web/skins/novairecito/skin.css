@@ -1,4 +1,9 @@
 /* Novairecito: Novaire's noir-violet skin. Visual only; shell structure and behaviour stay stock. */
+/* Pins are part of Novaire's look. Keep the device's independent tweak choices untouched. */
+html[data-skin="novairecito"] .ch-pin-toggle { display: grid; }
+html[data-skin="novairecito"] .ch-row-wrap > .ch-row { padding-right: 42px; }
+html[data-skin="novairecito"] .ch-row-wrap.diagnosed .ch-row { padding-right: 122px; }
+html[data-skin="novairecito"] .ch-row-signin { right: 44px; }
 html[data-skin="novairecito"] .home-time {
   letter-spacing: -.05em;
   text-shadow: 0 2px 24px rgba(148, 108, 255, .2);
