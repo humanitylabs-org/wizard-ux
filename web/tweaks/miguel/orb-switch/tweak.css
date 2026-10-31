@@ -1,0 +1,28 @@
+/* Desks | Orbs switch: a segmented control in the middle of the desktop bar, where the date and time were (core hides
+ * the clock while the bar-center slot holds anything). Styled like the bar's own controls (neutral glass, the skin's
+ * ink), so it reads on dark, light and photo skins; over the Orb scene the layout hands the bar the scene's ink. */
+html[data-shell="desktop"] .os-switch {
+  display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 2px; border-radius: 9px; flex: none; box-sizing: border-box;
+  background: color-mix(in srgb, var(--wz-text) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text) 10%, transparent);
+  pointer-events: auto; -webkit-app-region: no-drag;
+}
+html[data-shell="desktop"] .os-side {
+  min-width: 64px; height: 22px; padding: 0 12px; border: 0; border-radius: 7px; background: none; cursor: pointer;
+  font: 600 calc(var(--wz-text-sm) * 0.885)/1 var(--wz-font-ui); letter-spacing: .01em; color: var(--wz-text-secondary);
+  transition: background 140ms, color 140ms, box-shadow 140ms;
+}
+html[data-shell="desktop"] .os-side:hover { color: var(--wz-text); }
+html[data-shell="desktop"] .os-side:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 1px; }
+/* The side the desktop really wears: Classic unless the Orb layout is on. */
+html[data-shell="desktop"]:not([data-layout="orb"]) .os-side.is-classic,
+html[data-shell="desktop"][data-layout="orb"] .os-side.is-orb {
+  color: var(--wz-text); background: color-mix(in srgb, var(--wz-text) 13%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--wz-base) 35%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--wz-text) 10%, transparent);
+}
+html[data-shell="desktop"] .os-switch.is-busy { opacity: .6; pointer-events: none; }
+/* The AI fuel gauge sits with the switch in the top centre (switch, then gauge); the gear stays top right. */
+html[data-shell="desktop"] #bar:has(.os-switch) .mh-glance.is-bar { position: fixed; left: calc(50% + 80px); top: calc(var(--bar-h, 34px) / 2); transform: translateY(-50%); margin: 0; z-index: 1; }
+/* Orb desktop with windows open: the bar is bare over the wallpaper, so the switch carries its own glass. */
+html[data-shell="desktop"][data-layout="orb"]:not([data-orb-scene="home"]) .os-switch {
+  background: color-mix(in srgb, var(--wz-base) 64%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}

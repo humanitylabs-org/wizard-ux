@@ -2517,7 +2517,7 @@ window.WizCore.chats = function createChats(H) {
       const nav = ch(wid).readNav;
       return { restore() { if (W[wid] === w && ch(wid).readNav === nav && !hosted.has(wid) && entry.frame.isConnected) openHosted(wid, entry.frame, sid); } };
     }
-    if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
+    if (!w || !sid || w.thread !== sid || !(isNew || PHONE() || H.leaveOnSend?.(wid))) return false; // a host's docked list (desktop Orb) leaves like the phone
     const c = ch(wid), trail = [...(c.trail || [])];
     if (!isNew && trail.length) threadBack(w);
     else { c.readNav = (c.readNav || 0) + 1; c.trail = []; w.thread = null; save(); c.loadedFor = ''; c.draftFor = ''; }
@@ -3000,5 +3000,5 @@ window.WizCore.chats = function createChats(H) {
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
   return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
-    KIT, threadAct, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
+    KIT, threadAct, threadActions, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

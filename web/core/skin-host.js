@@ -24,10 +24,12 @@
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
+    // Desktop only (Miguel's miguel/orb-shell tweak wears it): the orb in the middle, apps around it, threads under it.
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'Desktop: the orb in the middle, apps around it, your threads under it', css: true, js: true }),
   ]);
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
-  let layoutId = 'classic', layoutRec = null, layoutSeq = 0;
+  let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
   const isDoc = typeof document !== 'undefined';
@@ -52,6 +54,26 @@
   const releaseToken = () => { try { const v = isDoc && document.querySelector('meta[name="wos-release"]')?.content; return v && /^[0-9a-f]{6,40}$/.test(v) ? v : ''; } catch (_) { return ''; } };
   const stamp = h => { const v = releaseToken(); return v ? h + (h.includes('?') ? '&' : '?') + 'v=' + v : h; };
   const url = (dir, file) => isDoc ? stamp(new URL(`skins/${dir}/${file}`, document.baseURI).href) : `skins/${dir}/${file}`;
+  /* orb.js draws its main orb on #orb as it loads. A page without one (desktop) gets a hidden stand-in that is put
+   * to sleep at once, so only the orbs a layout creates ever draw. Loaded once per page, never on Classic. */
+  let orbLoad = null;
+  function loadOrb() {
+    if (typeof window === 'undefined' || typeof window.Orb?.create === 'function') return Promise.resolve(typeof window !== 'undefined');
+    if (!isDoc) return Promise.resolve(false);
+    return orbLoad ||= new Promise(done => {
+      const standIn = !document.getElementById('orb');
+      if (standIn) {
+        const c = document.createElement('canvas'); c.id = 'orb'; c.hidden = true; c.width = c.height = 1;
+        const f = document.createElement('img'); f.id = 'orbFallback'; f.alt = ''; f.hidden = true;
+        // Own wrapper: orb.js watches the canvas's parent for icon changes; never let that be <body>.
+        const box = document.createElement('div'); box.hidden = true; box.dataset.orbStandIn = ''; box.append(c, f); document.body.append(box);
+      }
+      const s = document.createElement('script'); s.src = stamp(new URL('orb.js', document.baseURI).href);
+      s.onload = () => { if (standIn) try { window.Orb?.sleep?.(true); } catch (_) {} done(typeof window.Orb?.create === 'function'); };
+      s.onerror = () => { orbLoad = null; done(false); };
+      document.head.appendChild(s); requested.push(s.src);
+    });
+  }
 
   function env() {
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
@@ -150,7 +172,8 @@
       },
       /* Own controls: a node appended to the device, removed on teardown. */
       mount(node) {
-        const host = isDoc && document.getElementById('device'); if (!host || !node || node.nodeType !== 1) return () => {};
+        // The phone's #device; the desktop hands over its stage (no #device there).
+        const host = isDoc && (document.getElementById('device') || shell?.mountHost?.()); if (!host || !node || node.nodeType !== 1) return () => {};
         host.appendChild(node); a.mounts.add(node);
         return () => { node.remove(); a.mounts.delete(node); };
       },
@@ -186,6 +209,8 @@
           a.orbs.add(o); return o;
         },
         onLevel(fn) { const g = guard(a, 'orb.onLevel', fn); a.levels.add(g); levels.add(g); return () => { a.levels.delete(g); levels.delete(g); }; },
+        /* Resolves true once window.Orb exists. The desktop page doesn't load orb.js; this loads it once, on demand. */
+        ready: () => loadOrb(),
       }),
       storage: Object.freeze({
         get(key) { try { const v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
@@ -246,7 +271,7 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0) });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home, panel: ['thread', 'list', 'app'].includes(r.panel) ? r.panel : null, panelList: !!r.panelList, panelApp: typeof r.panelApp === 'string' && r.panelApp ? r.panelApp : null });
   }
   /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
    * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
@@ -259,7 +284,7 @@
   if (isDoc) window.addEventListener?.('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
-    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}`;
+    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}|${r.panelList ? 1 : 0}|${r.panelApp || ''}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
   }
@@ -277,7 +302,12 @@
       l.setAttribute('blocking', 'render'); document.head.appendChild(l); layoutCss = l; requested.push(l.href);
     }
   }
+  // Loading a layout holds the panel too (a tweak reload re-wears it a moment after the tweaks settle).
   async function loadLayout(id) {
+    panelHold++;
+    try { return await loadLayoutNow(id); } finally { panelHold--; panelSync(); }
+  }
+  async function loadLayoutNow(id) {
     const seq = ++layoutSeq;
     dispose(layoutRec, 'switch');
     const L = layoutOf(id); const key = 'layout:' + id;
@@ -287,9 +317,141 @@
     try { mod = await importer(href); } catch (e) { try { console.warn(`[layout ${id}] import failed:`, e); } catch (_) {} return false; }
     if (seq !== layoutSeq || layoutId !== id || typeof mod?.default !== 'function') return false;
     const a = record(key, L.name + ' layout'); layoutRec = a;
-    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
+    try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
     lastRoute = ''; emitRoute();
     return layoutRec === a;
+  }
+  /* Layouts are built-in shell code, so they also get the shell's own lists and actions (no DOM crosses):
+   * the Working / Ready threads with the actions Chats offers on each, Snooze / Done through Chats' own threadAct
+   * (so a snooze tweak's interception applies), the owner's quick apps, Home and Settings › Look. */
+  const emptyHomes = new Set();   // layouts that asked for desktop.js closeWin to go Home when a desk empties
+  /* An installed app's own logo, from the Store-data adapter's read-only route (store-data/logo/<id>: the logo the
+   * App Index lists for that app). The template / Runtipi placeholder pictures mean "no logo" (by sha256, the same
+   * list as tools/store-app-logos.mjs), so those apps keep their sigil. One read per app per page; a local blob URL. */
+  const LOGO_PLACEHOLDERS = new Set(['59b4d70aa80ab18cd3bcfa0e998d2f1b570bd86c2edac5be588f4a64626675c6', '41191af41f7a8e159a11abde437db1ad1f8776fd5388ef806cde74dbef1b9a7e']);
+  const logos = new Map();
+  function appLogo(id) {
+    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id) || !isDoc || typeof fetch !== 'function') return Promise.resolve(null);
+    if (!logos.has(id)) logos.set(id, (async () => {
+      try {
+        const r = await fetch(new URL(`store-data/logo/${id}`, document.baseURI), { signal: AbortSignal.timeout(8000) });
+        if (!r.ok || !/^image\/(png|jpeg|gif|webp|svg\+xml)$/.test((r.headers.get('content-type') || '').split(';')[0].trim())) return null;
+        const blob = await r.blob(); if (!blob.size || blob.size > 1024 * 1024) return null;
+        const sum = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))].map(b => b.toString(16).padStart(2, '0')).join('');
+        return LOGO_PLACEHOLDERS.has(sum) ? null : URL.createObjectURL(blob);
+      } catch (_) { logos.delete(id); return null; }
+    })());
+    return logos.get(id);
+  }
+  function shellApi(a, base) {
+    const live = () => !a.dead && !!shell;
+    return {
+      // The orb's recorder plus a local command take (the held orb / ⌥C); call command() again to finish it.
+      voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined,
+        /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
+         * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
+         * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */
+        onCommand(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'voice.onCommand', fn); commandUis.add(g);
+          const off = () => { commandUis.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        // Words sent on to the agent as a new chat (the launcher's own ask path), e.g. a command with no match.
+        ask: text => live() && typeof text === 'string' && text.trim() ? !!shell.askAgent?.(text.trim().slice(0, 4000)) : false,
+      }),
+      /* Keys: down(e) sees every key the desktop gets (app frames included) before its own bindings and returns true
+       * when it used it; up(e) sees releases. hold: true = the layout draws its own hold-⌥ overlay (the shell's hold
+       * chips stay off; ⌥/ still pins the guide). guide(fn): fn() → [{ el, key, word }] chips the ⌥/ guide adds. */
+      keys: Object.freeze({
+        on({ down, up, hold = false } = {}) {
+          if (!live()) return () => {};
+          const h = { a, hold: !!hold, down: typeof down === 'function' ? guard(a, 'keys.down', down) : null, up: typeof up === 'function' ? guard(a, 'keys.up', up) : null };
+          keyHandlers.add(h); const off = () => { keyHandlers.delete(h); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        guide(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'keys.guide', fn); keyGuides.add(g);
+          const off = () => { keyGuides.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+      }),
+      sessions: Object.freeze({
+        list: () => { const l = live() ? shell.sessionList?.() : null; return l ? structuredClone(l) : null; },
+        open: id => { if (live() && typeof id === 'string' && id) shell.openThread(id); },
+        act: (id, action) => live() && typeof id === 'string' && id && ['snooze', 'done'].includes(action) ? !!shell.sessionAct?.(id, action) : false,
+        openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
+      }),
+      apps: Object.freeze({
+        list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
+        open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
+        all: () => { if (live()) shell.openPicker?.(); },
+        // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
+        search: () => { if (live()) shell.openPalette?.(); },
+        // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.
+        logo: id => live() ? appLogo(id) : Promise.resolve(null),
+        /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:
+         * Chats' Ready, Notifications, and what each running app reports through WizardApp badge). Read-only
+         * { id: n } (n > 0 only); watch(fn) is called again whenever one changes and is released on teardown. */
+        badges(watch) {
+          const read = () => { const c = isDoc ? window.WizCore?.workspaceNav?.counts : null, o = {}; if (c) for (const [k, v] of Object.entries(c)) if (v > 0) o[k] = v | 0; return Object.freeze(o); };
+          if (live() && typeof watch === 'function' && isDoc) {
+            const g = guard(a, 'badges', watch), h = () => { if (live()) g(read()); };
+            window.addEventListener('wizard:app-counts', h);
+            const off = () => { window.removeEventListener('wizard:app-counts', h); a.offs.delete(off); }; a.offs.add(off);
+          }
+          return live() ? read() : Object.freeze({});
+        },
+      }),
+      desk: Object.freeze({
+        home: () => { if (live()) shell.home?.(); },
+        look: () => { if (live()) shell.openSettings?.('look'); },
+        /* Back to the Desks view for this device: switches off the tweak wearing this layout, the same way as its
+         * Settings › Look switch (WosExperience mix, no reload), so the layout itself always offers a way back. */
+        classic: () => { if (live() && layoutHolder && layoutRec === a) return Promise.resolve(window.WosExperience?.toggle?.(layoutHolder)).then(() => true, () => false); return Promise.resolve(false); },
+        // Closing the last window of a desk goes Home instead of to another desk (desks are out of sight). Released on teardown.
+        emptyHome() { if (!live()) return () => {}; emptyHomes.add(a); const off = () => { emptyHomes.delete(a); a.offs.delete(off); }; a.offs.add(off); return off; },
+      }),
+      /* No desks: while a layout holds the panel, whatever opens shows in a panel over Home instead of on a desk
+       * (desktop.js, outside the desks: never tiled, never synced): a Chats window in the chat panel, anything else in
+       * the app panel on the right; each holds one thing at a time (back() reopens the one before) and both can be open.
+       * The desks underneath stay exactly as they were, and release (or teardown) gives them back. state() → { kind,
+       * title, width, back, list: { width }, chat: { kind, left, right }, app: { id, title, left, right } } or null.
+       * dock(true) keeps the stock Chats list docked in its own panel on the LEFT for good; a thread picked in it opens
+       * in a column beside it, which closes when the thread is finished. dock(false) folds the list away. */
+      panel: Object.freeze({
+        claim() {
+          if (!live()) return () => {};
+          panelHolders.add(a); panelSync();
+          const off = () => { panelHolders.delete(a); a.offs.delete(off); panelSync(); }; a.offs.add(off); return off;
+        },
+        // close() the panel in front; close('chat') the chat column; close('app') the app panel (hidden if parked).
+        close: kind => !live() ? false : kind === 'chat' || kind === 'app' ? !!shell.panelCloseKind?.(kind) : !!shell.panelClose?.(),
+        /* park(true): an app's panel only hides when closed (its frame stays alive, e.g. music keeps playing) and
+         * opening that app again brings it back as it was; quit(id) really closes it; running() → [{ id, open,
+         * playing }] (the app shown and the ones kept out of sight). */
+        park: on => live() && panelHolders.has(a) ? !!shell.panelPark?.(!!on) : false,
+        quit: id => live() && typeof id === 'string' && id ? !!shell.panelQuit?.(id) : false,
+        running: () => { const l = live() ? shell.panelRunning?.() : null; return Array.isArray(l) ? l.map(r => Object.freeze({ id: String(r.id), open: !!r.open, playing: !!r.playing })) : []; },
+        dock: on => live() && panelHolders.has(a) ? !!shell.panelDock?.(!!on) : false,
+        back: () => live() ? !!shell.panelBack?.() : false,
+        state: () => { const s = live() ? shell.panelState?.() : null; if (!s) return null; const o = { ...s }; for (const k of ['list', 'chat', 'app']) if (o[k]) o[k] = Object.freeze({ ...o[k] }); return Object.freeze(o); },
+      }),
+      // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
+      back: Object.freeze({ push(close) {
+        if (a.dead || typeof close !== 'function') return () => {};
+        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
+        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        a.offs.add(off); return off;
+      } }),
+    };
+  }
+  const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
+  const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
+  let panelOn = false, panelHold = 0;
+  function panelSync() {
+    const on = [...panelHolders].some(l => !l.dead);
+    if (!on && panelOn && panelHold) return;   // a tweak reload in flight: decide once it settles (see loadTweaks)
+    if (on === panelOn) return; panelOn = on;
+    try { shell?.panelMode?.(on); } catch (e) { try { console.warn('[layout] panel mode:', e); } catch (_) {} }
   }
   function setLayout(id) {
     const next = layoutOf(id) ? id : 'classic';
@@ -416,9 +578,11 @@
         a.offs.add(release); return release;
       }, use(id) {
         if (a.dead || !layoutOf(id)) return () => {};
-        setLayout(id);
+        // Already worn since boot (stored choice): keep the running layout instead of remounting it.
+        if (layoutId !== id || (!layoutRec && !layoutSeq)) setLayout(id);
+        layoutHolder = a.id;
         let released = false;
-        const release = () => { if (!released) { released = true; if (layoutId === id) setLayout('classic'); } };
+        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id) setLayout('classic'); } };
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
@@ -559,6 +723,14 @@
         a.offs.add(release); return release;
       },
       open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage'].includes(page)) shell?.openSettings?.(page); },
+      // One of the author's own tweaks, switched for this device the same way as Settings › Look (WosExperience
+      // mix, no reload). Own author only: a package can never switch someone else's tweak.
+      tweakOn: id => typeof id === 'string' && id.startsWith(a.id.split('/')[0] + '/') && tweaks.has(id) && !tweaks.get(id).dead,
+      toggleTweak(id) {
+        if (!trusted || a.dead) throw new Error('Trusted settings required');
+        if (typeof id !== 'string' || !safeTweakId(id) || id === a.id || !id.startsWith(a.id.split('/')[0] + '/')) return Promise.resolve(false);
+        return Promise.resolve(window.WosExperience?.toggle?.(id)).then(() => true, () => false);
+      },
       refresh: () => { if (!a.dead) window.WosSettings?.refresh?.(); },
     });
     if (caps.has('inbox')) api.inbox = Object.freeze({
@@ -592,7 +764,14 @@
     });
     return Object.freeze(api);
   }
-  async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
+  /* A tweak reload (Settings, a skin pick, coming back to the tab) disposes and re-runs every tweak. A layout's panel
+   * must not drop for that blink (Miguel lost every running Orbs app to it): the panel turns off only once the load
+   * has settled and no layout claims it again. */
+  async function loadTweaks(...args) {
+    panelHold++;
+    try { return await loadTweaksNow(...args); } finally { panelHold--; panelSync(); }
+  }
+  async function loadTweaksNow(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
     const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
     const want = entries.filter(safeTweakId);
     for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
@@ -640,6 +819,8 @@
     // A run cut short by the network keeps the full list for next time, so the next load still paints them at once.
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
+    // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
+    if (layoutId === 'orb' && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
@@ -663,7 +844,19 @@
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     get layout() { return layoutId; },
+    /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
+    get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
+    /* desktop.js: a layout without desks holds the right-side panel (everything opens there, desks stay put). */
+    get panelMode() { return panelOn && (panelHold > 0 || [...panelHolders].some(l => !l.dead)); },
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
+    /* desktop.js: a layout draws the command take (api.voice.onCommand); its result goes there, not to a toast. */
+    get commandUi() { return commandUis.size > 0; },
+    commandResult(ev) { for (const fn of [...commandUis]) fn(Object.freeze({ ...ev })); },
+    /* desktop.js onKey / keyup: a layout's keys first (api.keys.on); true = used. holdKeys: it draws its own hold-⌥. */
+    key(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.down && h.down(e) === true) return true; return false; },
+    keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },
+    get holdKeys() { return [...keyHandlers].some(h => h.hold && !h.a.dead); },
+    keyChips() { const out = []; for (const fn of [...keyGuides]) { const l = fn(); if (Array.isArray(l)) for (const c of l.slice(0, 20)) if (c && c.el && typeof c.key === 'string') out.push({ el: c.el, key: c.key.slice(0, 6), word: typeof c.word === 'string' ? c.word.slice(0, 24) : '', at: c.at }); } return out; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
     orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },
     level(v) { if (levels.size) for (const fn of [...levels]) fn(v); },

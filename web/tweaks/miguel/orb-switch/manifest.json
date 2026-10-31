@@ -1,0 +1,12 @@
+{
+  "id": "miguel/orb-switch",
+  "name": "Desks | Orbs switch",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "settings"
+  ],
+  "description": "Desktop: a small Desks | Orbs switch in the middle of the top bar, in place of the date and time; one click changes the view for this device, no reload"
+}

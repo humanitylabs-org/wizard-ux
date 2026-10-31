@@ -1,0 +1,335 @@
+/* Orb layout (desktop only; layout.js). Everything is scoped to html[data-shell="desktop"][data-layout="orb"], so the
+ * phone and the classic desktop never see a rule of it. The Home scene is the approved concept's night scene on every
+ * skin (its colours are the wearing tweak's --ob-* tokens). There are no desks: whatever opens shows in the shell's
+ * panels (desktop.css .panel-layer) around an orb that never moves: the stock Chats list docked on the left in a soft
+ * glass, a chat in a column beside it, an app in the right third with the concept's round glass. Motion is driven by
+ * layout.js (paused off Home, hidden tabs and reduced motion); CSS only adds hover/press touches. */
+
+/* ---------- the bar: only the switch / clock slot, the fuel gauge, updates and Settings stay ---------- */
+html[data-shell="desktop"][data-layout="orb"] #bar {
+  background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; pointer-events: none;
+}
+html[data-shell="desktop"][data-layout="orb"] #bar::before, html[data-shell="desktop"][data-layout="orb"] #bar::after { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] #bar :is(button, a, input, [role="button"], [role="meter"], .mh-root, .dv-update) { pointer-events: auto; }
+html[data-shell="desktop"][data-layout="orb"] #bar :is(#logo, #wsList, #searchBtn, #micBtn, #generalVoice, #commandBtn, #dictateBtn, #status, #keysBtn, .mh-root.is-wiz, .mh-bi, .mh-bar-sep) { display: none !important; }
+/* Over the night scene the bar reads in the scene's ink on every skin (light skins included). */
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"] #bar {
+  --wz-text: var(--ob-ink); --wz-text-secondary: var(--ob-ink2); --sk-win: var(--ob-glass-hi); --wz-surface-raised: var(--ob-glass-hi);
+  color: var(--ob-ink); color-scheme: dark;
+}
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"] #bar #settingsBtn { color: var(--ob-ink2); }
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"] #bar #settingsBtn:hover { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"] #bar .mh-root { --mh-track: var(--ob-line) !important; }
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"] #bar :is(.mh-g-ef, .mh-g-label) { color: var(--ob-ink3) !important; }
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"] #bar .mh-gauge { background: transparent !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+/* With windows open the bar floats on the wallpaper: a soft glass chip behind the gear and the gauge. */
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="desk"] #bar #settingsBtn {
+  border-radius: 13px; background: color-mix(in srgb, var(--wz-base) 64%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text) 10%, transparent); color: var(--wz-text);
+}
+
+/* ---------- the stock Home stays mounted (keys, tweaks) but out of sight under the scene ---------- */
+html[data-shell="desktop"][data-layout="orb"] #stage .home > * { visibility: hidden !important; }
+
+/* ---------- the scene: the whole window, under the (transparent) bar ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene {
+  --orb: 300px;
+  position: absolute; inset: calc(-1 * var(--bar-h, 34px)) 0 0 0; z-index: 100; overflow: hidden;
+  background: var(--ob-sky); color: var(--ob-ink); font-family: var(--wz-font-ui); user-select: none; -webkit-font-smoothing: antialiased;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 260ms ease, visibility 0s linear 260ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .desktop-fullscreen .ob-scene { inset: 0; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene.is-on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 260ms ease, visibility 0s; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-field { position: absolute; inset: 0; pointer-events: none; }
+
+/* ---------- the orb ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap {
+  position: absolute; left: var(--ob-cx, 50%); top: 46%; width: var(--orb); height: var(--orb); transform: translate(-50%, -50%) scale(var(--ob-k, 1)); z-index: 5;
+  transition: transform 380ms var(--wz-ease); pointer-events: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap.is-pressed { transform: translate(-50%, -50%) scale(calc(var(--ob-k, 1) * .96)); transition-duration: 180ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-orbc { width: 100%; height: 100%; display: block; }
+/* The hit area is the glass sphere itself (about 60% of the canvas), not its halo. */
+html[data-shell="desktop"][data-layout="orb"] .ob-orb {
+  position: absolute; left: 50%; top: 50%; width: 62%; height: 62%; transform: translate(-50%, -50%); padding: 0; border: 0; border-radius: 50%;
+  background: none; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-orb:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption {
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) * var(--ob-k, 1) / 2 + 16px); transform: translateX(-50%); z-index: 6; width: min(640px, 90vw, calc(var(--ob-free, 100vw) - 48px));
+  text-align: center; pointer-events: none; font: 500 calc(var(--wz-text-sm) * 1.15) / 1.35 var(--wz-font-ui); color: var(--ob-ink2);
+  opacity: 0; transition: opacity 300ms ease;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-caption.is-on { opacity: 1; }
+
+/* ---------- apps: each app's own mark floating on two orbits (positions, depth and drift from layout.js) ----------
+ * Clean-cut: the logo or glyph alone, no plate, ring or bubble behind it; only a soft shadow for legibility on the
+ * sky. A tile logo keeps its tile (rounded like an app icon), a free-form logo and a glyph stand on their own. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat {
+  position: absolute; left: 0; top: 0; width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 0; border: 0; border-radius: 12px;
+  display: grid; place-items: center; z-index: 4; will-change: transform; cursor: pointer; pointer-events: auto; background: none; color: inherit;
+  animation: ob-born 1.1s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes ob-born { from { filter: blur(8px); } to { filter: none; } }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 4px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-face {
+  width: 40px; height: 40px; display: grid; place-items: center; pointer-events: none;
+  filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 10px color-mix(in srgb, var(--c) 35%, transparent)); transition: transform 220ms var(--wz-ease), filter 300ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-face { transform: scale(1.12); filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 16px var(--c)); }
+/* No logo: the app's glyph in its own colour. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat .sgi { width: 48px; height: 48px; flex: none; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 82%, var(--ob-white)) !important; }
+/* The app's own logo: a tile stays a tile; a free-form logo has no frame at all. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat .ob-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-tile .ob-logo { border-radius: 22%; object-fit: cover; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-logo .sglogo { width: 100%; height: 100%; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-n {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; white-space: nowrap; pointer-events: none;
+  font: 600 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui); letter-spacing: .04em; color: var(--ob-ink2); opacity: 0; transition: opacity 250ms;
+  text-shadow: 0 1px 4px var(--ob-core);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; }
+/* The app's count (the shell's own badge: desk marks, dock), a small clean count dot top right: no ring, no glow. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-badge {
+  position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 99px;
+  display: grid; place-items: center; pointer-events: none; z-index: 1;
+  background: var(--ob-badge, var(--ob-amber)); color: var(--ob-core); font: 700 calc(var(--wz-text-sm) * .66) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ob-core) 45%, transparent);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-badge[hidden] { display: none !important; }
+
+/* ---------- around a fixed orb: the stock Chats list docked on the left (desktop.js panel, api.panel.dock), a chat in
+ * a column beside it, an app in the right third; the orb stays at the screen's centre. layout.js sets the widths
+ * (--ob-col-w, --ob-chat-w, --ob-beside-left, --ob-app-w: they depend on the orb's size); these are first-frame values. ---------- */
+html[data-shell="desktop"][data-layout="orb"] { --ob-col-w: clamp(280px, 22vw, 400px); --ob-chat-w: 340px; --ob-app-w: calc(33.333vw - 12px); }
+/* Softer than a window: the skin's own window glass, a little clearer and blurred into the scene, no frame or shadow,
+ * full height under the bar. Its own text and controls stay the skin's (legible on light skins too). */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] {
+  top: 0; left: 0; bottom: 0; width: var(--ob-col-w); border-radius: 0; border: 0; box-shadow: none;
+  border-right: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 84%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15); backdrop-filter: blur(24px) saturate(1.15);
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock].focus { border-color: var(--ob-dock-line); box-shadow: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] .dchats { background: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] { z-index: 3; }
+/* A chat: a column right beside the list, the same soft glass, full height; it grows out of the list's edge and folds
+ * back into it. The thread shows alone (its window's own list pane stays hidden: the list is the docked one). */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="beside"] {
+  z-index: 2; top: 0; bottom: 0; left: var(--ob-beside-left, var(--ob-col-w)); right: auto; width: var(--ob-chat-w); border-radius: 0; border: 0; box-shadow: none;
+  border-right: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 84%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15); backdrop-filter: blur(24px) saturate(1.15);
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="beside"].focus { border-color: var(--ob-dock-line); box-shadow: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:is([data-side="beside"], [data-side="right"])[data-panel="chat"] .dchats :is(.pane-list, .pane-split) { display: none; }
+/* An app: the right third, one at a time. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"] { z-index: 2; width: var(--ob-app-w); background: var(--sk-win, var(--wz-base)); }
+/* The fold handle, on the list's right edge; folded: a slim strip on the left with the Ready count. */
+html[data-shell="desktop"][data-layout="orb"] .ob-fold {
+  position: absolute; z-index: 9; left: var(--ob-left, 0px); top: 50%; width: 22px; height: 58px; margin-top: -29px; padding: 0;
+  display: grid; place-items: center; cursor: pointer; border-radius: 0 11px 11px 0; border: 1px solid var(--ob-line); border-left: 0;
+  background: var(--ob-glass); color: var(--ob-ink2); opacity: .55; transition: opacity 200ms, color 200ms, left 380ms var(--wz-ease);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-fold:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-fold, .ob-strip):focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-fold, .ob-strip) svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-shell="desktop"][data-layout="orb"] .ob-strip {
+  position: absolute; z-index: 9; left: 0; top: var(--bar-h, 34px); bottom: 0; width: 46px; padding: 14px 0 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; border: 0; border-right: 1px solid var(--ob-dock-line);
+  background: var(--ob-glass); color: var(--ob-ink2); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  animation: ob-strip-in 300ms cubic-bezier(.2, .8, .2, 1) both;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-strip:hover { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-strip, .ob-fold)[hidden] { display: none !important; }
+@keyframes ob-strip-in { from { transform: translateX(-100%); } to { transform: none; } }
+html[data-shell="desktop"][data-layout="orb"] .ob-badge {
+  min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box; border-radius: 99px; display: grid; place-items: center;
+  background: var(--ob-amber); color: var(--ob-core); font: 700 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui); box-shadow: 0 0 14px var(--ob-amber);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-badge[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-strip-l { writing-mode: vertical-rl; font: 600 calc(var(--wz-text-sm) * .82) / 1 var(--wz-font-ui); letter-spacing: .18em; text-transform: uppercase; color: var(--ob-ink3); }
+
+/* ---------- the hint line and the quiet look swatches ---------- */
+/* The bottom of the scene, on the orb's axis: one quiet search pill (the shell's own ⌥Space search; its key hints
+ * inside) and the Look button beside it. Narrow (panels close in on both sides): both fold to round icons. */
+html[data-shell="desktop"][data-layout="orb"] .ob-dock {
+  position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 9; display: flex; align-items: flex-end; gap: 8px;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-search {
+  display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px 0 14px; border-radius: 99px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: var(--ob-ink3); font: 500 calc(var(--wz-text-sm) * .95) / 1 var(--wz-font-ui); opacity: .72; transition: opacity 200ms, border-color 200ms, color 200ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-search:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink2); border-color: var(--ob-line2); }
+html[data-shell="desktop"][data-layout="orb"] .ob-search:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search-l { min-width: 9em; text-align: left; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search i { font-style: normal; opacity: .5; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search kbd {
+  display: inline-grid; place-items: center; height: 22px; padding: 0 7px; border-radius: 6px; box-sizing: border-box;
+  border: 1px solid var(--ob-line); color: var(--ob-ink3); background: var(--ob-key); font: 600 calc(var(--wz-text-sm) * .78) / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-search { width: 36px; padding: 0; justify-content: center; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-search > :not(svg) { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-pick-l { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-pick-btn { padding: 0 3px; }
+/* The look picker: one quiet button beside the pill; it opens Style (live previews) and Colour above. */
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop { position: absolute; bottom: calc(100% + 10px); left: 50%; translate: -50% 0; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 3px; border-radius: 99px; cursor: pointer;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .92) / 1 var(--wz-font-ui); letter-spacing: .02em;
+  opacity: .55; transition: opacity 200ms, border-color 200ms, color 200ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn:is(:hover, :focus-visible), html[data-shell="desktop"][data-layout="orb"] .ob-picker.is-open .ob-pick-btn { opacity: 1; border-color: var(--ob-line2); color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-cv { width: 30px; height: 30px; border-radius: 50%; display: block; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop {
+  width: 380px; padding: 14px 14px 16px; border-radius: 18px; box-sizing: border-box;
+  border: 1px solid var(--ob-line); background: var(--ob-glass-solid); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  box-shadow: var(--ob-shadow); transform-origin: 0 100%; animation: ob-pop-in 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-pop[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-desks {
+  display: block; width: 100%; margin-top: 14px; padding: 9px 0 0; border: 0; border-top: 1px solid var(--ob-line); background: none;
+  cursor: pointer; text-align: left; color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .86) / 1.2 var(--wz-font-ui); transition: color 140ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-desks:is(:hover, :focus-visible) { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-desks:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+@keyframes ob-pop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop-h {
+  display: flex; align-items: baseline; justify-content: space-between; margin: 2px 2px 10px;
+  font: 600 calc(var(--wz-text-sm) * .78) / 1 var(--wz-font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--ob-ink3);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-pop-h em { font-style: normal; letter-spacing: .02em; text-transform: none; font-weight: 500; color: var(--ob-ink2); }
+html[data-shell="desktop"][data-layout="orb"] .ob-styles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-st {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px 8px; border-radius: 12px; cursor: pointer;
+  border: 1px solid transparent; background: var(--ob-btn); color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .8) / 1 var(--wz-font-ui);
+  transition: background 140ms, border-color 140ms, color 140ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-st:hover { background: var(--ob-btn-hi); color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-st[aria-checked="true"] { border-color: var(--ob-line2); background: var(--ob-btn-hi); color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-st:focus-visible, html[data-shell="desktop"][data-layout="orb"] .ob-co:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-st-cv { width: 52px; height: 52px; display: block; }
+html[data-shell="desktop"][data-layout="orb"] .ob-colours { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 1px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-co { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; display: grid; place-items: center; }
+html[data-shell="desktop"][data-layout="orb"] .ob-co i { width: 22px; height: 22px; border-radius: 50%; background: var(--sw); box-shadow: 0 0 0 1px var(--ob-line); transition: transform 140ms, box-shadow 140ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-co:hover i { transform: scale(1.12); }
+html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { box-shadow: 0 0 0 2px var(--ob-glass-solid), 0 0 0 3.5px var(--ob-ink2), 0 0 12px var(--sw-glow); }
+
+/* ---------- the panels (no desks): the docked list (above) and an app from the left, holding the real windows ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-caption { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([data-dock], [data-side="beside"]) { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
+/* the panel's ‹ and ✕ show on every skin frame (borderless hides title-bar buttons) */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar > :is(.panel-back, [data-wact="close"]) { display: grid; position: static; flex: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button[data-wact="close"] { background: color-mix(in srgb, var(--wz-text) 7%, transparent); }
+/* A Chats window that is not the docked list (another agent's): one header, ✕ floating on the thread's own. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar {
+  position: absolute; top: 0; right: 0; z-index: 5; height: 54px; flex: none; padding: 0 10px 0 0; gap: 4px; border: 0; background: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar > :not(button) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]):has(.panel-back) .ch-head { padding-right: 88px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transform 380ms var(--wz-ease), opacity 300ms ease; }
+
+/* Something open beside the orb: the orb stays exactly where it is, fully lit and clickable. */
+/* the list's fold handle steps aside while a chat column stands against it (⌥\ still folds) */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-chat="open"] .ob-fold { display: none; }
+/* The app's satellite, pinned between the orb and its panel while it is open: lit, in the orb's bolt. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 60%, transparent)); }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opacity: 1; }
+
+/* ---------- smaller windows: the same scene, packed tighter ---------- */
+@media (max-height: 800px) {
+  html[data-shell="desktop"][data-layout="orb"] .ob-dock { bottom: 16px; }
+}
+
+/* Hold ⌥: each app shows its key (⌥ + that letter opens it), a bare letter under the mark, no keycap. */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-key {
+  position: absolute; left: 50%; top: 100%; translate: -50% 0; margin-top: 4px; padding: 0; height: auto; border: 0; background: none; box-sizing: border-box;
+  display: none; place-items: center; white-space: nowrap; pointer-events: none; z-index: 2; color: var(--ob-ink);
+  font: 700 calc(var(--wz-text-sm) * .9) / 1 var(--wz-font-ui); letter-spacing: .04em; text-shadow: 0 1px 4px var(--ob-core);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-key:not([hidden]) { display: grid; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-n { opacity: 0; }
+
+/* ---------- resizable panels: thin grips on the inner edges (layout.js), above the panels ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-grips { position: absolute; inset: 0; z-index: 160; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grips[hidden], html[data-shell="desktop"][data-layout="orb"] .ob-grip[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grip {
+  position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize; pointer-events: auto; touch-action: none; outline: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-grip[data-grip="app"] { top: 24px; bottom: 24px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grip::after {
+  content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--wz-accent); opacity: 0; transition: opacity 160ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-grip:is(:hover, .is-drag)::after { opacity: .55; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grip:focus-visible::after { opacity: .9; }
+/* while a panel is being resized: no text selection, and app pages don't swallow the pointer */
+html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-resizing]) { cursor: col-resize; user-select: none; }
+html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-resizing]) .panel-layer iframe { pointer-events: none !important; }
+
+/* ---------- v7: the orb's own command take (⌥C / a held orb): caption results, no bar pill or toast for it ---------- */
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"].voice-cmd :is(#voicePill, #voiceGlow) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="cmd"] { color: var(--ob-ink); letter-spacing: .01em; }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="ok"], html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="music"] { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="music"] .ob-cap-t { font-weight: 500; opacity: .85; }
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px 3px 4px; border-radius: 999px;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); color: var(--ob-ink); font: inherit; font-size: .92em; cursor: pointer;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: border-color 200ms, background 200ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask:is(:hover, :focus-visible) { border-color: var(--ob-line2); background: var(--ob-glass-hi); outline: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 999px; background: var(--ob-glass-solid); color: var(--ob-ink); font: inherit; font-size: .9em; }
+
+/* ---------- v7/v8: satellites are status: running out of sight (a soft halo on the mark + a tiny dot under it, never a
+ * ring or plate around it), playing (tiny bars in the dot's place), new (the count dot) ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-run {
+  position: absolute; left: 50%; top: calc(100% - 1px); width: 4px; height: 4px; translate: -50% 0; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: color-mix(in srgb, var(--c) 45%, var(--ob-white)); box-shadow: 0 0 6px color-mix(in srgb, var(--c) 70%, transparent); transition: opacity 400ms ease;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-sat[data-run="hidden"] .ob-sat-run { opacity: .9; animation: ob-run-glow 3.2s ease-in-out infinite; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat[data-run="hidden"]:not(:hover, :focus-visible) .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 55%, transparent)); }
+@keyframes ob-run-glow { 0% { opacity: .5; } 50% { opacity: .95; } 100% { opacity: .5; } }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-sat.is-playing, .ob-scene[data-keys="on"] .ob-sat) .ob-sat-run { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq { position: absolute; left: 50%; top: calc(100% - 4px); translate: -50% 0; display: none; gap: 2px; align-items: flex-end; height: 10px; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i { width: 2px; height: 100%; border-radius: 1px; background: color-mix(in srgb, var(--c) 50%, var(--ob-white)); transform-origin: bottom; animation: ob-eq 900ms ease-in-out infinite; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i:nth-child(2) { animation-delay: -300ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i:nth-child(3) { animation-delay: -600ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-playing .ob-sat-eq { display: flex; }
+@keyframes ob-eq { 0% { transform: scaleY(.3); } 50% { transform: scaleY(1); } 100% { transform: scaleY(.3); } }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-eq { display: none; }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="orb"] :is(.ob-sat-run, .ob-sat-eq > i) { animation: none !important; } }
+
+/* Right-click a satellite: a small quiet menu (Open / Close). */
+html[data-shell="desktop"][data-layout="orb"] .ob-menu {
+  position: fixed; z-index: 170; min-width: 150px; padding: 5px; border-radius: 12px; display: flex; flex-direction: column; gap: 1px;
+  border: 1px solid var(--ob-line); background: var(--ob-glass-solid); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--ob-core) 60%, transparent);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-menu[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-menu-h { padding: 5px 10px 4px; color: var(--ob-ink3); font: 600 calc(var(--wz-text-sm) * .8) / 1.2 var(--wz-font-ui); letter-spacing: .06em; text-transform: uppercase; }
+html[data-shell="desktop"][data-layout="orb"] .ob-menu-i { text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: none; color: var(--ob-ink); font: 500 var(--wz-text-sm) / 1.2 var(--wz-font-ui); cursor: pointer; }
+html[data-shell="desktop"][data-layout="orb"] .ob-menu-i:is(:hover, :focus-visible) { background: var(--ob-glass-hi); outline: none; }
+
+/* Hold left ⌥: the letters of apps that aren't floating, as one quiet row under the orb (only while held). */
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow {
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) * var(--ob-k, 1) / 2 + 52px); transform: translateX(-50%); z-index: 6;
+  width: min(720px, calc(var(--ob-free, 100vw) - 48px)); display: none; flex-wrap: wrap; justify-content: center; gap: 6px 12px; pointer-events: none;
+  color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .9) / 1.2 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-keyrow { display: flex; }
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i { display: inline-flex; align-items: baseline; gap: 5px; text-shadow: 0 1px 4px var(--ob-core); }
+/* the letter bare and bright, the name quiet: no keycap boxes */
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i b { color: var(--ob-ink); font-weight: 700; }
+/* The list wide (⌥⇧\): its column reaches to the orb's edge (widths from layout.js). */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-fold="wide"] ~ .ob-grips .ob-grip[data-grip="list"] { display: none; }

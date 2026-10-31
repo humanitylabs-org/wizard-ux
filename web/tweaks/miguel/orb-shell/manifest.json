@@ -1,0 +1,11 @@
+{
+  "id": "miguel/orb-shell",
+  "name": "Orbs view",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Desktop: the orb in the middle with your apps around it, your chats beside it and what you open on the side, instead of desks. Off = the Desks view"
+}

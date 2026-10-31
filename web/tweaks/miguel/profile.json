@@ -11,7 +11,12 @@
     "miguel/snooze-someday",
     "miguel/machines-home",
     "miguel/arrange-download",
-    "miguel/refresh-button"
+    "miguel/refresh-button",
+    "miguel/orb-shell",
+    "miguel/orb-switch"
   ],
-  "flags": {}
+  "flags": {},
+  "off": [
+    "miguel/orb-shell"
+  ]
 }
