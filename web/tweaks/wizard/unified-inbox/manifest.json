@@ -9,5 +9,5 @@
     "nav",
     "inbox"
   ],
-  "description": "Notifications are yellow threads in Chats: listed in Ready like any chat (by time, priority or as their own subject), open in the chat window with Done, Snooze and Resolve this; done ones under Archive. No Chats bell."
+  "description": "Notifications are yellow threads in Chats: listed in Ready like any chat (by time, priority or as their own subject), open in the chat window with Archive, Snooze and Resolve this; done ones under Archive. No Chats bell."
 }
