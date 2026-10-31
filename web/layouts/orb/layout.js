@@ -23,11 +23,19 @@
  *   closes it; Done, Snooze, a send or ‹ close the chat column and put the keyboard back in the list. The desks are
  *   untouched underneath: turning the Orb off brings them back exactly.
  *
+ *   v7 (Miguel, 31 Oct 2026): eight shader-drawn styles (styles.js). ⌥C or a held orb is the orb's own command take:
+ *   it tightens into a bright core inside a turning ring, a caption under it says what it is doing, and the result
+ *   lands there too (the app's satellite pins and the bolt runs to it; music says what plays; no match offers ↵ to ask
+ *   the agent instead). No toasts and no bar pill for it here. Satellites are ambient status, not a launcher: only apps
+ *   running in the panel (a closed app panel only hides, its app keeps running with a soft glow ring) and apps with
+ *   an unread count float; nothing else. Right-click one: Open / Close (really quits it). Keys: hold LEFT ⌥ for bare
+ *   app letters, ⌥\\ list open / folded, ⌥⇧\\ list wide, ⌥⇧C close the chat column, ⌥⇧A hide the app panel.
+ *
  * Motion runs only while the page is visible, at about 30 fps; reduced motion = still frames. Colours are skin-layer
  * tokens (--ob-*, the wearing tweak's tweak.css), read lazily. Everything goes through the layout API
  * (core/skin-host.js); no shell internals, no second composer. */
-import { STYLES, renderer, mix } from './styles.js';
-import { assignKeys, keyOf } from './keys.js';
+import { STYLES, RETIRED, renderer, mix } from './styles.js';
+import { assignKeys, keyOf, isLeftAlt, HOLD_MS } from './keys.js';
 
 export default function setup(api) {
   if (api.env.shell !== 'desktop') return () => {};
@@ -46,13 +54,20 @@ export default function setup(api) {
   const field = el('div', 'ob-field', { role: 'toolbar', 'aria-label': 'Apps' });
   const orbWrap = el('div', 'ob-orbwrap');
   const orbCv = el('canvas', 'ob-orbc', { 'aria-hidden': 'true' });
-  const orbBtn = el('button', 'ob-orb', { type: 'button', 'aria-label': 'Talk · hold for a command', title: 'Click to talk · hold for a command' });
+  const orbBtn = el('button', 'ob-orb', { type: 'button', 'aria-label': 'Talk · hold for a command', title: 'Click to talk · hold (or ⌥C) for a command' });
   orbWrap.append(orbCv, orbBtn);
   const caption = el('div', 'ob-caption', { role: 'status' });
+  const capText = el('span', 'ob-cap-t'), capAsk = el('button', 'ob-cap-ask', { type: 'button' }); capAsk.hidden = true;
+  caption.append(capText, capAsk);
+  // The hold-⌥ letters of apps that aren't floating right now: a quiet row under the orb, only while ⌥ is held.
+  const keyRow = el('div', 'ob-keyrow', { 'aria-hidden': 'true' });
+  // Right-click a satellite: Open / Close.
+  const menu = el('div', 'ob-menu', { role: 'menu' }); menu.hidden = true;
   // The docked Chats list's fold handle (on its right edge) and, folded, the slim strip with the Ready count.
-  const foldBtn = el('button', 'ob-fold', { type: 'button', title: 'Hide conversations (' + (/Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '') ? '⌥' : 'Alt+') + '\\)', 'aria-label': 'Hide conversations', 'aria-keyshortcuts': 'Alt+Backslash' });
+  const MK = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '') ? '⌥' : 'Alt+';
+  const foldBtn = el('button', 'ob-fold', { type: 'button', title: 'Hide conversations (' + MK + '\\) · wide list: ' + MK + '⇧\\', 'aria-label': 'Hide conversations', 'aria-keyshortcuts': 'Alt+Backslash Alt+Shift+Backslash' });
   foldBtn.append(icon(I.unfold));
-  const strip = el('button', 'ob-strip', { type: 'button', title: 'Show conversations', 'aria-keyshortcuts': 'Alt+Backslash' });
+  const strip = el('button', 'ob-strip', { type: 'button', title: 'Show conversations (' + MK + '\\)', 'aria-keyshortcuts': 'Alt+Backslash' });
   const badge = el('b', 'ob-badge');
   strip.append(icon(I.fold), badge, el('span', 'ob-strip-l', { text: 'Chats' }));
   const mac = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
@@ -77,7 +92,7 @@ export default function setup(api) {
   pop.append(h1, styleRow, h2, colourRow);
   picker.append(pop, pickBtn);
   dock.append(hint, picker);
-  scene.append(sky, field, orbWrap, caption, dock, foldBtn, strip);   // no name label: the orb is the entity
+  scene.append(sky, field, orbWrap, caption, keyRow, dock, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
   /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended ---------- */
@@ -104,20 +119,53 @@ export default function setup(api) {
 
   /* ---------- voice ---------- */
   const modeOf = v => !v || v.state === 'idle' ? 'idle' : v.state === 'think' ? 'thinking' : v.state === 'paused' ? 'paused' : 'listening';
-  let voice = api.voice.state(), level = 0, lvlTarget = 0, flash = 0, lastMode = 'idle', wasCommand = false;
+  let voice = api.voice.state(), level = 0, lvlTarget = 0, flash = 0, lastMode = 'idle', wasCommand = false, cmdOn = false, cmdK = 0, cmdSafe = null;
   api.orb.onLevel(v => { lvlTarget = Math.max(0, Math.min(1, +v || 0)); });
+  /* The caption under the orb: what the take is doing, then (a command) what came of it. A result stays a few seconds;
+   * a miss offers to ask the agent instead (↵ or a click), until Esc, a click elsewhere or the next take. */
+  let capOff = null, capBack = null, pendingAsk = '';
+  const agentName = () => api.agents.here()?.label || 'your agent';
+  function say(text, { hold = 0, ask = '', tone = '' } = {}) {
+    capOff?.(); capOff = null; capBack?.(); capBack = null; pendingAsk = ask;
+    capText.textContent = text; caption.dataset.tone = tone;
+    capAsk.hidden = !ask; if (ask) { capAsk.replaceChildren(el('kbd', '', { text: '↵' }), doc.createTextNode(' ask ' + agentName() + ' instead')); capBack = api.back.push(() => say('')); }
+    caption.classList.toggle('is-on', !!text);
+    if (hold) capOff = api.after(hold, () => { if (modeOf(voice) === 'idle') say(''); });
+  }
+  function askNow() {
+    const words = pendingAsk; if (!words) return;
+    say(''); if (api.voice.ask(words)) { flash = Math.max(flash, .7); say('Sent to ' + agentName() + ' · a new chat', { hold: 2600 }); }
+  }
+  api.listen(capAsk, 'click', askNow);
   const onVoice = v => {
     voice = v; const m = modeOf(v);
     scene.dataset.voice = m;
     if (m === 'idle') lvlTarget = 0;
+    // a command take stays in command state while its words are worked out (the recorder is already idle then)
+    const working = m === 'idle' && !!v.command;
+    cmdOn = !!v.command && (m !== 'idle' || working); scene.dataset.cmd = cmdOn ? 'on' : '';
+    cmdSafe?.(); cmdSafe = working ? api.after(15000, () => { cmdOn = false; scene.dataset.cmd = ''; if (capText.textContent === 'Working it out…') say(''); }) : null;
     // a command take that finishes: one sharp ring ("doing it")
     if (lastMode === 'listening' && m !== 'listening' && wasCommand) flash = 1;
     lastMode = m; if (m === 'listening') wasCommand = !!v.command; else if (m === 'idle') wasCommand = false;
-    caption.textContent = m === 'idle' ? '' : m === 'thinking' ? 'Sending…' : m === 'paused' ? 'Paused' : v.command ? 'Listening for a command · let go to run it' : 'Listening… click me to send';
-    caption.classList.toggle('is-on', m !== 'idle');
+    if (working) say('Working it out…', { tone: 'cmd' });
+    else if (m !== 'idle') say(m === 'thinking' ? (v.command ? 'Working it out…' : 'Sending…') : m === 'paused' ? 'Paused' : v.command ? 'Say a command · let go or ⌥C to run it' : 'Listening… click me to send', { tone: v.command ? 'cmd' : '' });
+    else if (!pendingAsk && !capOff) say('');
     wake(); if (reduced) still();
   };
   api.on('voice', onVoice);
+  // The command take's result, here instead of a toast: done = what happened, miss = ↵ asks the agent instead.
+  api.voice.onCommand(r => {
+    cmdOn = false; scene.dataset.cmd = ''; cmdSafe?.(); cmdSafe = null;
+    const q = r.text ? '“' + String(r.text).trim().replace(/[.!?]+$/, '') + '”' : '';
+    if (r.result === 'done') {
+      flash = 1;
+      const app = r.app ? api.apps.list().find(a => a.id === r.app) : null;
+      say(r.music ? '♪ Now playing · ' + q : app ? 'Opening ' + app.name : 'Done · ' + q, { hold: r.music ? 4200 : 2400, tone: r.music ? 'music' : 'ok' });
+    } else if (r.result === 'miss') say('No command for ' + (q || 'that'), { ask: String(r.text || '').trim(), hold: 9000, tone: 'miss' });
+    else if (r.result === 'silent') say('Didn’t hear anything', { hold: 1800 });
+    else if (r.result === 'kept') say('Couldn’t make that out · the recording is kept', { hold: 3200 });
+  });
   // Click = talk / send; hold = a command take that runs on release.
   let press = null;
   api.listen(orbBtn, 'pointerdown', e => {
@@ -143,7 +191,7 @@ export default function setup(api) {
   const has = (L, id) => L.some(l => l[0] === id);
   const legacy = api.storage.get('look');
   let styleId = api.storage.get('style'), colourId = api.storage.get('colour');
-  if (!has(STYLES, styleId)) styleId = legacy === 'oracle' ? 'oracle' : 'glass';
+  if (!has(STYLES, styleId)) styleId = legacy === 'oracle' ? 'oracle' : RETIRED.includes(styleId) ? 'plasma' : 'glass';   // v7 retired five styles
   if (!has(COLOURS, colourId)) colourId = legacy === 'oracle' ? 'gold' : has(COLOURS, legacy) ? legacy : 'nebula';
   const sx = sky.getContext('2d'), ox = orbCv.getContext('2d');
   const mk = n => { const c = el('canvas'); c.width = c.height = n; return c; };
@@ -173,7 +221,7 @@ export default function setup(api) {
     for (const s of stars) { sx.globalAlpha = .25 + .45 * (.5 + .5 * Math.sin(t * s.s + s.p)); sx.beginPath(); sx.arc(s.x, s.y, s.r, 0, 7); sx.fill(); }
     sx.globalAlpha = 1;
   }
-  const frameOf = (t, lv, state, fl, blink, col = colourId) => ({ t, lv, state, fl, blink, P: palette(col) });
+  const frameOf = (t, lv, state, fl, blink, col = colourId, cmd = 0) => ({ t, lv, state, fl, blink, cmd, P: palette(col) });
 
   /* ---------- the look picker: Style × Colour ---------- */
   const styleTiles = STYLES.map(([id, label]) => {
@@ -254,16 +302,19 @@ export default function setup(api) {
   const isTile = im => { try { const x = tileProbe.getContext('2d', { willReadFrequently: true }); x.clearRect(0, 0, 16, 16); x.drawImage(im, 0, 0, 16, 16); const d = x.getImageData(0, 0, 16, 16).data, at = (i, j) => d[(j * 16 + i) * 4 + 3];
     return [at(3, 8), at(12, 8), at(8, 3), at(8, 12)].every(v => v > 200) && [at(0, 0), at(15, 0), at(0, 15), at(15, 15)].some(v => v > 200 || v < 60); } catch (_) { return true; } };
   function sat(a) {
-    const b = el('button', 'ob-sat', { type: 'button', 'aria-label': 'Open ' + a.name, 'data-app': a.id });
+    const b = el('button', 'ob-sat', { type: 'button', 'aria-label': 'Open ' + a.name, 'data-app': a.id, 'aria-haspopup': 'menu' });
     b.style.setProperty('--c', colourOf(a));
     const face = el('span', 'ob-sat-face');
     if (/\bsglogo\b/.test(a.icon || '')) { const tpl = doc.createElement('template'); tpl.innerHTML = a.icon; face.append(tpl.content); b.classList.add('is-logo'); } // shell-made logo markup (WizSigil)
     else face.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
     const count = el('b', 'ob-sat-badge', { 'aria-hidden': 'true' }); count.hidden = true;
     const kc = el('kbd', 'ob-sat-key', { 'aria-hidden': 'true' });
-    b.append(face, count, kc, el('b', 'ob-sat-n', { text: a.name }));
+    // running out of sight: a soft glow ring; playing: three tiny bars
+    const eq = el('i', 'ob-sat-eq', { 'aria-hidden': 'true' }); eq.append(el('i', ''), el('i', ''), el('i', ''));
+    b.append(el('i', 'ob-sat-ring', { 'aria-hidden': 'true' }), face, count, eq, kc, el('b', 'ob-sat-n', { text: a.name }));
     keyEls.set(a.id, kc);
-    api.listen(b, 'click', () => api.apps.open(a.id));
+    api.listen(b, 'click', () => { openMenu(null); api.apps.open(a.id); });
+    api.listen(b, 'contextmenu', e => { e.preventDefault(); const r = b.getBoundingClientRect(); openMenu(a, Number.isFinite(e.clientX) && e.clientX ? e.clientX : r.x + r.width / 2, Number.isFinite(e.clientY) && e.clientY ? e.clientY : r.y + r.height / 2); });
     api.apps.logo(a.id).then(url => {
       if (!url) return;
       const im = el('img', 'ob-logo', { alt: '', src: url, draggable: 'false' });
@@ -274,16 +325,22 @@ export default function setup(api) {
   }
   /* ---------- badges: the shell's own app counts (desk marks, dock), live ---------- */
   const badgeOf = new WeakMap();
-  let badgeMap = api.apps.badges(m => { badgeMap = m; for (const s of sats) paintBadge(s.el, s.id); });
+  let badgeMap = api.apps.badges(m => { badgeMap = m; paintApps(); for (const s of sats) paintBadge(s.el, s.id); });
   function paintBadge(b, id) {
     const n = badgeMap[id] || 0, rec = badgeOf.get(b); if (!rec) return;
     const { node, name } = rec;
     node.textContent = n > 99 ? '99+' : n ? String(n) : ''; node.hidden = !n;
-    b.setAttribute('aria-label', 'Open ' + name + (n ? ` · ${n} new` : ''));
+    b.setAttribute('aria-label', 'Open ' + name + (n ? ` · ${n} new` : '') + (b.dataset.run === 'hidden' ? ' · running' : ''));
   }
-  // Every installed app with a screen floats here (the shell's own kinds: no agent apps, connectors or agents; no
-  // cap). When the two orbits can't hold them all at a readable size the marks shrink, and only past that the last
-  // ones fold into an All apps mark.
+  /* Satellites are ambient status, not a launcher (Miguel, v7): only (a) apps running in the panel (shown, or hidden
+   * and still running) and (b) regular apps with an unread count float. Agents, connectors, agent apps, system and
+   * in-development apps never float for a count (the shell's own kinds: core/app-kinds.js); everything stays one
+   * search away (the pill, ⌥Space, All apps, a command). Nothing running and nothing new: just the orb. */
+  const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
+  function orbitApps() {
+    const all = api.apps.list(), run = new Map(api.panel.running().map(r => [r.id, r]));
+    return all.filter(a => run.has(a.id) ? !a.agent && !a.connector : regular(a) && (badgeMap[a.id] || 0) > 0).map(a => ({ ...a, run: run.get(a.id) || null }));
+  }
   let satScale = 1;
   function fits(n) {
     if (!W) return { cap: n, scale: 1 };
@@ -291,10 +348,14 @@ export default function setup(api) {
     for (const sc of [1, .86, .74]) if (n <= cap(sc)) return { cap: n, scale: sc };
     return { cap: Math.max(1, cap(.74) - 1), scale: .74 };
   }
+  const runOf = a => a.run ? (a.run.open ? 'open' : 'hidden') : '';
   function paintApps() {
-    const every = api.apps.list(), fit = fits(every.length), apps = every.slice(0, fit.cap), more = every.length > apps.length;
+    const every = orbitApps(), fit = fits(every.length), apps = every.slice(0, fit.cap), more = every.length > apps.length;
     const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|') + (more ? '|+' : '') + '|' + fit.scale;
-    if (sig === appSig) return; appSig = sig; satScale = fit.scale;
+    // state only (running, playing, badge-only): repaint in place, the orbit keeps turning
+    const paintState = () => { for (const s of sats) { const a = apps.find(x => x.id === s.id); if (!a) continue; s.el.dataset.run = runOf(a); s.el.classList.toggle('is-playing', !!a.run?.playing); s.el.classList.toggle('is-new', !a.run); paintBadge(s.el, s.id); } };
+    if (sig === appSig) { paintState(); return; }
+    appSig = sig; satScale = fit.scale;
     keyEls.clear();
     const items = apps.map(a => ({ id: a.id, el: sat(a) }));
     if (more) {
@@ -306,31 +367,76 @@ export default function setup(api) {
     field.replaceChildren(...items.map(i => i.el));
     // the concept's two rings, apps alternating between them at even steps round the orb, all drifting the same slow
     // way: neighbours always sit on different rings and two apps never slide onto each other
-    sats = items.map((it, i) => ({ ...it, a: i / items.length * Math.PI * 2 + .4, ring: i % 2 ? 1 : 1.32, speed: .035 }));
-    extra = null; pinExtra(); paintKeys();
+    const was = new Map(sats.map(s => [s.id, s]));
+    sats = items.map((it, i) => ({ ...it, a: i / items.length * Math.PI * 2 + .4, ring: i % 2 ? 1 : 1.32, speed: .035, pk: was.get(it.id)?.pk || 0 }));
+    extra = null; paintState(); paintKeys();
     placeSats(0);
   }
-  /* ---------- hold ⌥ for app letters: ⌥ + the letter shown opens that app (keys.js: never a key the desktop uses) ---------- */
-  const keyEls = new Map();
-  let keyMap = {}, byKey = new Map(), altDown = false, altCancel = null;
-  function paintKeys() {
-    keyMap = assignKeys(api.apps.list().map(a => ({ id: a.id, name: a.name })), api.storage.get('keys') || {});
-    api.storage.set('keys', keyMap);
-    byKey = new Map(Object.entries(keyMap).map(([id, k]) => [k, id]));
-    for (const [id, kc] of keyEls) { const k = keyMap[id] || ''; kc.textContent = k ? (mac ? '⌥' : 'Alt ') + (k.startsWith('⇧') ? '⇧' : '') + k.slice(-1) : ''; kc.hidden = !k; }
+  /* ---------- right-click a satellite: Open / Close (Close really quits it; a badge-only app has only Open) ---------- */
+  let menuOff = null;
+  function openMenu(a, x = 0, y = 0) {
+    menuOff?.(); menuOff = null;
+    if (!a) { menu.hidden = true; return; }
+    const running = api.panel.running().some(r => r.id === a.id);
+    const item = (label, fn) => { const b = el('button', 'ob-menu-i', { type: 'button', role: 'menuitem', text: label }); api.listen(b, 'click', () => { openMenu(null); fn(); }); return b; };
+    menu.replaceChildren(el('div', 'ob-menu-h', { text: a.name }), item('Open', () => api.apps.open(a.id)), ...(running ? [item('Close', () => { api.panel.quit(a.id); api.after(30, paintApps); })] : []));
+    menu.hidden = false;   // fixed: at the pointer, kept on screen
+    menu.style.left = Math.round(Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8))) + 'px'; menu.style.top = Math.round(Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8))) + 'px';
+    menuOff = api.back.push(() => openMenu(null));
+    menu.children[1]?.focus({ preventScroll: true });
   }
-  const showKeys = on => { scene.dataset.keys = on ? 'on' : ''; };
-  api.listen(doc, 'keydown', e => {
-    if (!home) return;
-    if (e.key === 'Alt' && !e.metaKey && !e.ctrlKey && !e.repeat) { altDown = true; altCancel?.(); altCancel = api.after(350, () => { if (altDown) showKeys(true); }); return; }
-    if (!e.altKey || e.metaKey || e.ctrlKey || e.defaultPrevented) { if (e.key !== 'Shift') { altDown = false; altCancel?.(); showKeys(false); } return; }
-    const k = keyOf(e), id = k && byKey.get(k);
-    if (!id) return;
-    e.preventDefault(); e.stopPropagation(); altDown = false; altCancel?.(); showKeys(false);
-    if (!e.repeat) api.apps.open(id);
+  api.listen(menu, 'keydown', e => { const k = { ArrowDown: 1, ArrowUp: -1 }[e.key]; if (!k) return; e.preventDefault(); const bs = [...menu.children].filter(n => n.tagName === 'BUTTON'), i = bs.indexOf(doc.activeElement); bs[(i + k + bs.length) % bs.length]?.focus(); });
+  /* ---------- hold the LEFT ⌥ for app letters (keys.js): bare letters, only while it is held ----------
+   * After HOLD_MS with no other key, every floating app shows its letter and the apps that aren't floating show theirs
+   * in a quiet row under the orb; a letter then opens that app (over the desktop's own ⌥ keys, only while shown).
+   * Released, or any other key, or the window losing focus: gone at once. Right ⌥ never shows them. */
+  const keyEls = new Map();
+  let keyMap = {}, byKey = new Map(), altHeld = false, altCancel = null, keysOn = false;
+  const keyApps = () => api.apps.list().filter(a => regular(a) || api.panel.running().some(r => r.id === a.id));
+  function paintKeys() {
+    const list = keyApps();
+    keyMap = assignKeys(list.map(a => ({ id: a.id, name: a.name })), api.storage.get('keys') || {});
+    api.storage.set('keys', { ...(api.storage.get('keys') || {}), ...keyMap });
+    byKey = new Map(Object.entries(keyMap).map(([id, k]) => [k, id]));
+    for (const [id, kc] of keyEls) { const k = keyMap[id] || ''; kc.textContent = k; kc.hidden = !k; }
+    const floating = new Set(sats.map(s => s.id));
+    keyRow.replaceChildren(...list.filter(a => keyMap[a.id] && !floating.has(a.id)).slice(0, 18).map(a => { const c = el('span', 'ob-keyrow-i'); c.append(el('kbd', '', { text: keyMap[a.id] }), el('span', '', { text: a.name })); return c; }));
+  }
+  const showKeys = on => { keysOn = !!on; scene.dataset.keys = on ? 'on' : ''; };
+  const dropHold = () => { altHeld = false; altCancel?.(); altCancel = null; showKeys(false); };
+  const typingIn = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''));
+  let maxed = api.storage.get('listMax') === true;
+  api.keys.on({
+    hold: true,
+    down(e) {
+      if (!home) return false;
+      if (e.key === 'Alt' || e.code === 'AltLeft' || e.code === 'AltRight') {
+        if (isLeftAlt(e) && !e.repeat && !e.metaKey && !e.ctrlKey && !e.shiftKey) { altHeld = true; altCancel?.(); altCancel = api.after(HOLD_MS, () => { if (altHeld) { paintKeys(); showKeys(true); } }); }
+        return false;
+      }
+      if (keysOn && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        const k = keyOf(e), id = k && byKey.get(k);
+        if (id) { dropHold(); if (!e.repeat) api.apps.open(id); return true; }
+      }
+      dropHold();
+      const alt = e.altKey && !e.metaKey && !e.ctrlKey;
+      // ⌥\ the list open ⇄ folded (from wide: back to open); ⌥⇧\ the list wide ⇄ open
+      if (alt && e.code === 'Backslash') { if (!e.repeat) { if (e.shiftKey) widen(!maxed); else if (maxed) widen(false); else fold(!folded); } return true; }
+      // ⌥⇧C closes the chat column, ⌥⇧A hides the app panel (it keeps running; its satellite glows)
+      if (alt && e.shiftKey && (e.code === 'KeyC' || e.code === 'KeyA')) { if (!e.repeat) api.panel.close(e.code === 'KeyC' ? 'chat' : 'app'); return true; }
+      if (pendingAsk && e.key === 'Enter' && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !typingIn(e.target)) { askNow(); return true; }
+      return false;
+    },
+    up(e) { if (isLeftAlt(e) || e.key === 'Alt') dropHold(); },
   });
-  api.listen(doc, 'keyup', e => { if (e.key === 'Alt') { altDown = false; altCancel?.(); showKeys(false); } });
-  api.listen(globalThis, 'blur', () => { altDown = false; altCancel?.(); showKeys(false); });
+  api.listen(globalThis, 'blur', dropHold);
+  // The ⌥/ guide: these keys on the things they act on.
+  api.keys.guide(() => [
+    { el: folded ? strip : foldBtn, key: '\\', word: folded ? 'Show list' : 'Fold list' },
+    ...(folded ? [] : [{ el: grip.list, key: '⇧\\', word: maxed ? 'Narrower' : 'Wide list', at: 'inside-l' }]),
+    { el: grip.chat, key: '⇧C', word: 'Close chat', at: 'inside-l' }, { el: grip.app, key: '⇧A', word: 'Hide app', at: 'inside-l' },
+    { el: orbBtn, key: 'C', word: 'Command', at: 'below' },
+  ]);
   // An app opened that has no satellite (All apps, beyond the first ten): a satellite of its own while it is open.
   let extra = null;
   function pinExtra() {
@@ -377,14 +483,18 @@ export default function setup(api) {
     strip.setAttribute('aria-label', n ? `Show conversations · ${n} ready` : 'Show conversations');
   }
   function fold(on) {
-    folded = !!on; api.storage.set('folded', folded);
+    folded = !!on; api.storage.set('folded', folded); if (folded && maxed) { maxed = false; api.storage.set('listMax', false); }
     api.panel.dock(!folded);
     paintFold();
   }
-  function paintFold() { scene.dataset.fold = folded ? 'folded' : 'open'; strip.hidden = !folded; foldBtn.hidden = folded; }
+  function paintFold() { scene.dataset.fold = folded ? 'folded' : maxed ? 'wide' : 'open'; strip.hidden = !folded; foldBtn.hidden = folded; }
   api.listen(foldBtn, 'click', () => fold(true));
   api.listen(strip, 'click', () => fold(false));
-  api.listen(doc, 'keydown', e => { if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && e.code === 'Backslash' && !e.repeat) { e.preventDefault(); fold(!folded); } });
+  // Wide: the list stretches to the orb's edge (the orb stays where it is); a chat opened meanwhile uses the usual width.
+  function widen(on) {
+    maxed = !!on; api.storage.set('listMax', maxed);
+    if (maxed && folded) fold(false); else { paintFold(); if (W) aim(); }
+  }
 
   /* ---------- motion: one ~30 fps loop, only while the scene is in front and the page is visible ---------- */
   let running = false, lastT = 0, cancel = null, home = null, blinkAt = 3;
@@ -401,7 +511,8 @@ export default function setup(api) {
     if (!W) return;
     const st = api.panel.state(), r = O * .3;
     const D = defaults(), lim = limits();
-    const listW = Math.round(sized.list ? clamp(sized.list, lim.list[0], lim.list[1]) : D.list), L = folded ? STRIP : listW;
+    const chatNow = !!st?.chat, wide = maxed && !folded && !chatNow;
+    const listW = wide ? Math.round(Math.max(D.list, W / 2 - r - GAP)) : Math.round(sized.list ? clamp(sized.list, lim.list[0], lim.list[1]) : D.list), L = folded ? STRIP : listW;
     let C = Math.round(sized.chat ? clamp(sized.chat, lim.chat[0], lim.chat[1]) : D.chat);
     let A = Math.round(sized.app ? clamp(sized.app, lim.app[0], lim.app[1]) : D.app);
     // never overlapping: the chat column gives way first, then the app panel
@@ -460,7 +571,7 @@ export default function setup(api) {
   function placeGrips(listW, L, C, A, chatOpen, appOpen) {
     const lim = limits(), show = (id, on, x, now) => { const g = grip[id]; g.hidden = !on; if (!on) return;
       g.style.left = Math.round(x) + 'px'; g.setAttribute('aria-valuenow', String(Math.round(now))); g.setAttribute('aria-valuemin', String(Math.round(lim[id][0]))); g.setAttribute('aria-valuemax', String(Math.round(lim[id][1]))); };
-    show('list', !folded, L, listW); show('chat', chatOpen, L + C, C); show('app', appOpen, W - 12 - A, A);
+    show('list', !folded && !(maxed && !chatOpen), L, listW); show('chat', chatOpen, L + C, C); show('app', appOpen, W - 12 - A, A);
   }
   function paintPanel() {
     const st = api.panel.state(), k = st?.kind || null;
@@ -552,13 +663,15 @@ export default function setup(api) {
     if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
     const blink = t > blinkAt && t < blinkAt + .14; if (t > blinkAt + .14) blinkAt = t + 2.5 + ((hash(Math.floor(t)) % 300) / 100);
     drawSky(t, level);
-    drawOrb(ox, orbCv.width, frameOf(t, level, modeOf(voice), flash, blink));
+    cmdK = reduced ? (cmdOn ? 1 : 0) : cmdK + ((cmdOn ? 1 : 0) - cmdK) * Math.min(1, dt * 7);
+    drawOrb(ox, orbCv.width, frameOf(t, level, modeOf(voice), flash, blink, colourId, cmdK));
+    if (++runN > 45) { runN = 0; paintApps(); }   // running / playing apps change without an event now and then
     placeSats(dt);
     drawBolts(t, dt);
     if (!pop.hidden && (frameN++ & 1)) previews(t);
     if (++pickN > 90) { pickN = 0; paintPick(t); }
   }
-  let frameN = 0, pickN = 0;
+  let frameN = 0, pickN = 0, runN = 0;
   function loop(now) {
     cancel = null; if (!running) return;
     if (now - lastT >= 30) draw(now);
@@ -580,6 +693,7 @@ export default function setup(api) {
     if (h !== home) {
       home = h; root.dataset.orbScene = h ? 'home' : 'desk';
       scene.classList.toggle('is-on', h); scene.inert = !h; grips.hidden = !h;
+      if (!h) openMenu(null);
       wake();
       if (h) api.frame(() => { size(); aim(); });
     }
@@ -590,7 +704,10 @@ export default function setup(api) {
     paintReady(); paintApps();
   }
   api.mount(grips);        // above the panels: the grips sit on their edges
+  api.mount(menu);         // the right-click menu too (a satellite can sit beside a panel)
+  api.listen(doc, 'pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) openMenu(null); }, true);
   api.panel.claim();        // no desks: the Chats list docked on the left; a thread or an app opens in the panel on the right
+  api.panel.park(true);     // closing an app's panel only hides it; it keeps running (its satellite glows) until Close
   api.panel.dock(!folded);
   paintFold();
   api.desk.emptyHome();
