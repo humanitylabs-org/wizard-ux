@@ -1,7 +1,8 @@
 /* Orb layout (desktop only; layout.js). Everything is scoped to html[data-shell="desktop"][data-layout="orb"], so the
  * phone and the classic desktop never see a rule of it. The Home scene is the approved concept's night scene on every
  * skin (its colours are the wearing tweak's --ob-* tokens). There are no desks: whatever opens shows in the shell's one
- * panel on the right (desktop.css .panel-layer), which keeps the skin's own window look with the concept's round glass. Motion is driven by
+ * pair of panels (desktop.css .panel-layer): the stock Chats list docked on the right in a soft glass, an app from the left
+ * with the concept's round glass. Motion is driven by
  * layout.js (paused off Home, hidden tabs and reduced motion); CSS only adds hover/press touches. */
 
 /* ---------- the bar: only the switch / clock slot, the fuel gauge, updates and Settings stay ---------- */
@@ -95,53 +96,45 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat-n {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; }
 
-/* ---------- conversations: the concept's pills ---------- */
-html[data-shell="desktop"][data-layout="orb"] .ob-threads {
-  position: absolute; left: var(--ob-cx, 50%); bottom: 140px; transform: translateX(-50%); z-index: 8; width: min(1160px, 92vw, calc(var(--ob-free, 100vw) - 64px));
-  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px;
+/* ---------- conversations: the stock Chats list docked on the right (desktop.js panel, api.panel.dock) ---------- */
+html[data-shell="desktop"][data-layout="orb"] { --ob-col-w: min(440px, max(372px, 30vw)); }
+/* Softer than a window: the skin's own window glass, a little clearer and blurred into the scene, no frame or shadow,
+ * full height under the bar. Its own text and controls stay the skin's (legible on light skins too). */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] {
+  top: 0; right: 0; bottom: 0; width: var(--ob-col-w); border-radius: 0; border: 0; box-shadow: none;
+  border-left: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 84%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15); backdrop-filter: blur(24px) saturate(1.15);
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-th {
-  position: relative; display: inline-flex; align-items: center; height: 38px; max-width: 100%; border-radius: 99px;
-  border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  color: var(--ob-ink); font: 500 calc(var(--wz-text-sm) * 1) / 1 var(--wz-font-ui); transition: border-color 300ms, background 300ms, opacity 200ms, transform 200ms var(--wz-ease);
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock].focus { border-color: var(--ob-dock-line); box-shadow: none; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] .dchats { background: none; }
+/* The fold handle, on the column's left edge; folded: a slim strip with the Ready count. */
+html[data-shell="desktop"][data-layout="orb"] .ob-fold {
+  position: absolute; z-index: 9; right: var(--ob-right, 0px); top: 50%; width: 22px; height: 58px; margin-top: -29px; padding: 0;
+  display: grid; place-items: center; cursor: pointer; border-radius: 11px 0 0 11px; border: 1px solid var(--ob-line); border-right: 0;
+  background: var(--ob-glass); color: var(--ob-ink2); opacity: .55; transition: opacity 200ms, color 200ms, right 380ms var(--wz-ease);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-th[hidden] { display: none !important; }
-html[data-shell="desktop"][data-layout="orb"] .ob-th:hover { border-color: var(--ob-line2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-ready { border-color: color-mix(in srgb, var(--ob-amber) 55%, transparent); }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-ready:hover { border-color: color-mix(in srgb, var(--ob-amber) 80%, transparent); }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-leaving { opacity: 0; transform: scale(.96); pointer-events: none; }
-html[data-shell="desktop"][data-layout="orb"] :is(.ob-th-open, .ob-th.is-working, .ob-th.is-more) {
-  display: inline-flex; align-items: center; gap: 9px; min-width: 0; padding: 0 14px 0 10px; border-radius: 99px;
-  color: inherit; font: inherit; cursor: pointer;
+html[data-shell="desktop"][data-layout="orb"] .ob-fold:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-fold, .ob-strip):focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-fold, .ob-strip) svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-shell="desktop"][data-layout="orb"] .ob-strip {
+  position: absolute; z-index: 9; right: 0; top: var(--bar-h, 34px); bottom: 0; width: 46px; padding: 14px 0 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; border: 0; border-left: 1px solid var(--ob-dock-line);
+  background: var(--ob-glass); color: var(--ob-ink2); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  animation: ob-strip-in 300ms cubic-bezier(.2, .8, .2, 1) both;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-th-open { height: 100%; border: 0; background: none; }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-more { padding: 0 14px; color: var(--ob-ink3); font-size: calc(var(--wz-text-sm) * .92); }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-more:hover { color: var(--ob-ink2); }
-html[data-shell="desktop"][data-layout="orb"] :is(.ob-th-open, .ob-th.is-working, .ob-th.is-more, .ob-act):focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
-html[data-shell="desktop"][data-layout="orb"] .ob-th-t { min-width: 0; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-html[data-shell="desktop"][data-layout="orb"] .ob-th em { font-style: normal; color: var(--ob-ink3); font-size: calc(var(--wz-text-sm) * .92); white-space: nowrap; transition: opacity 160ms; }
-html[data-shell="desktop"][data-layout="orb"] .ob-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ob-v1); box-shadow: 0 0 10px var(--ob-v1); }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-ready .ob-dot { background: var(--ob-amber); box-shadow: 0 0 12px var(--ob-amber); }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-working .ob-dot { background: none; box-shadow: none; border: 2px solid var(--ob-v1); border-right-color: transparent; animation: ob-turn 900ms linear infinite; }
-html[data-shell="desktop"][data-layout="orb"] .ob-scene:not(.is-on) .ob-th.is-working .ob-dot { animation-play-state: paused; }
-@keyframes ob-turn { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="orb"] .ob-th.is-working .ob-dot { animation-duration: 3s; } }
-/* Snooze and Done: on hover (or keyboard focus) they take the place of the "ready" word, at the pill's right end. */
-html[data-shell="desktop"][data-layout="orb"] .ob-acts {
-  position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: inline-flex; gap: 3px; padding-left: 10px;
-  opacity: 0; pointer-events: none; transition: opacity 160ms;
-  background: linear-gradient(90deg, transparent, var(--ob-glass-solid) 10px);
+html[data-shell="desktop"][data-layout="orb"] .ob-strip:hover { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-strip, .ob-fold)[hidden] { display: none !important; }
+@keyframes ob-strip-in { from { transform: translateX(100%); } to { transform: none; } }
+html[data-shell="desktop"][data-layout="orb"] .ob-badge {
+  min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box; border-radius: 99px; display: grid; place-items: center;
+  background: var(--ob-amber); color: var(--ob-core); font: 700 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui); box-shadow: 0 0 14px var(--ob-amber);
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-th:is(:hover, :focus-within) .ob-acts { opacity: 1; pointer-events: auto; }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-ready:is(:hover, :focus-within) .ob-th-open em { opacity: 0; }
-html[data-shell="desktop"][data-layout="orb"] .ob-th.is-ready .ob-th-open { padding-right: 18px; }
-html[data-shell="desktop"][data-layout="orb"] .ob-act {
-  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
-  color: var(--ob-ink2); background: var(--ob-btn); transition: background 140ms, color 140ms;
-}
-html[data-shell="desktop"][data-layout="orb"] .ob-act:hover { color: var(--ob-ink); background: var(--ob-btn-hi); }
-html[data-shell="desktop"][data-layout="orb"] .ob-act svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-html[data-shell="desktop"][data-layout="orb"] .ob-act.is-done:hover { color: var(--ob-ok); }
+html[data-shell="desktop"][data-layout="orb"] .ob-badge[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-strip-l { writing-mode: vertical-rl; font: 600 calc(var(--wz-text-sm) * .82) / 1 var(--wz-font-ui); letter-spacing: .18em; text-transform: uppercase; color: var(--ob-ink3); }
+/* The app panel from the left: as wide as leaves the orb a clear gap before the list. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="left"] { background: var(--sk-win, var(--wz-base)); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="left"] { width: min(1080px, max(520px, calc(100% - var(--ob-col-w) - 300px)), calc(100% - var(--ob-col-w) - 36px)); }
 
 /* ---------- the hint line and the quiet look swatches ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-hint {
@@ -156,7 +149,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd.is-short { min-width: 40px; }
 /* The look picker: one quiet button bottom right; it opens Style (live previews) and Colour. */
-html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: absolute; right: 20px; bottom: 18px; z-index: 9; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: absolute; right: calc(var(--ob-right, 0px) + 16px); bottom: 18px; z-index: 9; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 3px; border-radius: 99px; cursor: pointer;
   border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -194,30 +187,30 @@ html[data-shell="desktop"][data-layout="orb"] .ob-co i { width: 22px; height: 22
 html[data-shell="desktop"][data-layout="orb"] .ob-co:hover i { transform: scale(1.12); }
 html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { box-shadow: 0 0 0 2px var(--ob-glass-solid), 0 0 0 3.5px var(--ob-ink2), 0 0 12px var(--sw-glow); }
 
-/* ---------- the panel (no desks): the concept's conversation panel, holding the real window ---------- */
+/* ---------- the panels (no desks): the docked list (above) and an app from the left, holding the real windows ---------- */
 html[data-shell="desktop"][data-layout="orb"] :is(.ob-name, .ob-caption) { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([data-dock]) { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button[data-wact="close"] { background: color-mix(in srgb, var(--wz-text) 7%, transparent); }
-/* A thread or list: one header, the thread's own (title, Back to the list, Snooze / Done below); the panel's Back and ✕
- * float at its right end instead of a second title bar. Apps keep a slim title bar with their name. */
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"] > .wbar {
+/* A Chats window that is not the docked list (another agent's): one header, ✕ floating on the thread's own. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar {
   position: absolute; top: 0; right: 0; z-index: 5; height: 54px; flex: none; padding: 0 10px 0 0; gap: 4px; border: 0; background: none;
 }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"] > .wbar > :not(button) { display: none !important; }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"] .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:has(.panel-back) .ch-head { padding-right: 88px; }
-/* with a panel open the hint steps back and the look picker gives way (it would sit under the panel) */
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-hint { opacity: .5; }
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel="app"] .ob-name { opacity: 0; } /* beside a wide app the orbits pass over it */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar > :not(button) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]):has(.panel-back) .ch-head { padding-right: 88px; }
+/* a narrow free space (an app open beside the list): the orb steps back, its name and the hint give way */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel="app"] .ob-hint { opacity: .5; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-tight="tight"] :is(.ob-name, .ob-hint) { opacity: 0; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-tight="tight"] .ob-orbwrap { opacity: .7; }
 html[data-shell="desktop"][data-layout="orb"] .ob-name { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
-html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms; }
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-picker { opacity: 0; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-hint { transition: opacity 300ms ease; }
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms, right 380ms var(--wz-ease); }
+html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transform 380ms var(--wz-ease), opacity 300ms ease; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
-  html[data-shell="desktop"][data-layout="orb"] .ob-threads { bottom: 74px; }
   html[data-shell="desktop"][data-layout="orb"] .ob-hint { bottom: 30px; }
 }

@@ -39,7 +39,8 @@ function desk({ layout = null } = {}) {
     sessionList: () => rows, sessionAct: (id, act) => { calls.push([act, id]); return true; }, openSessions: kind => calls.push(['list', kind]),
     apps: () => [{ id: 'files', name: 'Files', icon: '<span class="ic sgt"></span>' }], openApp: id => { calls.push(['app', id]); return true; }, openPicker: () => calls.push(['picker']),
     home: () => calls.push(['home']), openSettings: page => calls.push(['settings', page]),
-    panelMode: on => calls.push(['panelMode', on]), panelClose: () => { calls.push(['panelClose']); return true; }, panelBack: () => { calls.push(['panelBack']); return true; },
+    panelMode: on => calls.push(['panelMode', on]), panelClose: (...w) => { calls.push(['panelClose', ...w]); return true; }, panelBack: () => { calls.push(['panelBack']); return true; },
+    panelDock: on => { calls.push(['panelDock', on]); return true; },
     panelState: () => ({ kind: 'thread', title: 'Ready one', width: 484, back: 0 }),
   };
   return { host, ctx, mounted, links, calls, adapter, ls, get api() { return api; } };
@@ -81,11 +82,14 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'list', 'logo', 'open']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
-  assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'state']); assert.ok(Object.isFrozen(api.panel));
+  assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'state']); assert.ok(Object.isFrozen(api.panel));
   assert.equal(D.host.panelMode, false);
+  assert.equal(api.panel.dock(true), false, 'docking needs the panel first');
   api.panel.claim(); assert.equal(D.host.panelMode, true, 'no desks while the layout holds the panel');
   assert.equal(JSON.stringify(api.panel.state()), JSON.stringify({ kind: 'thread', title: 'Ready one', width: 484, back: 0 })); assert.equal(api.panel.close(), true); assert.equal(api.panel.back(), true);
-  assert.deepEqual(D.calls.splice(0), [['panelMode', true], ['panelClose'], ['panelBack']]);
+  assert.equal(api.panel.close('app'), true); assert.equal(api.panel.close('desk'), true, 'an unknown side means the one in front');
+  assert.equal(api.panel.dock(true), true); assert.equal(api.panel.dock(0), true);
+  assert.deepEqual(D.calls.splice(0), [['panelMode', true], ['panelClose'], ['panelBack'], ['panelClose', 'app'], ['panelClose'], ['panelDock', true], ['panelDock', false]]);
   assert.equal(typeof api.orb.ready, 'function');
   const L = api.sessions.list(); assert.equal(L.ready[0].id, 'r1'); L.ready[0].title = 'changed';
   assert.equal(api.sessions.list().ready[0].title, 'Ready one', 'a copy, never the shell\'s rows');
@@ -126,7 +130,7 @@ test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions,/);
 });
 
-test('no desks: while a layout holds the panel everything opens in one right-side panel over Home; desks stay put', () => {
+test('no desks: while a layout holds the panel everything opens in panels over Home; desks stay put', () => {
   const src = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
   const ND = 'globalThis.WosSkinHost?.panelMode';
   const fn = name => src.slice(src.indexOf(`  function ${name}(`), src.indexOf('\n  }', src.indexOf(`  function ${name}(`)) + 4);
@@ -134,15 +138,27 @@ test('no desks: while a layout holds the panel everything opens in one right-sid
   for (const f of ['goWs', 'reopenClosed', 'jumpBack', 'resizeFocused', 'moveWin', 'swapWin', 'stepDesk', 'stepWin', 'moveDesk', 'closeDesktop', 'hudKey'])
     assert.ok(fn(f).includes(`if (${ND}) return`), `${f} does nothing without desks`);
   assert.ok(fn('leaveHome').includes(`if (!homeOpen || ${ND}) return;`), 'Home stays in front');
-  assert.ok(fn('findWin').includes(`if (${ND}) { const p = panelWin(); return p && fn(p) ? p : null; }`), 'never a hidden desk window');
-  assert.ok(fn('escStep').includes(`if (${ND} && panelWin()) return panelClose() ? 'panel' : 'panel-stay';`), 'Esc slides it away');
-  assert.ok(fn('closeWin').includes(`if (${ND} && panel?.id === id) { panelClose(); return; }`));
+  assert.ok(fn('findWin').includes(`if (${ND}) return panelWins().find(fn) || null;`), 'never a hidden desk window');
+  assert.ok(fn('escStep').includes(`if (${ND} && panelWin()) return panelEsc();`), 'Esc: the panels first');
+  assert.ok(fn('closeWin').includes(`if (${ND} && panelHas(id)) { panelClose({ id }); return; }`));
   // one at a time: the one before is kept for a quiet Back; the panel lives outside the desks (never synced)
   assert.match(fn('panelOpen'), /panelDrop\(prev\.id, \{ swap: true \}\)/); assert.match(fn('panelOpen'), /back = \[\.\.\.back, keep\]\.slice\(-PANEL_BACK\)/);
   assert.ok(!fn('panelOpen').includes('ws[') && !fn('panelOpen').includes('.wins'), 'no desk is touched');
   assert.match(fn('panelMode'), /store\.set\('panelPrevHome', homeOpen\)/); assert.match(fn('panelMode'), /if \(was === false && ws\[cur\]\.wins\.length\) \{ homeOpen = false;/);
-  assert.match(src, /panelMode: on => panelMode\(!!on\),/); assert.match(src, /panelState: \(\) => \{ const w = panelWin\(\);/);
-  assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length, panel: panelKind\(\) \}/);
+  assert.match(src, /panelMode: on => panelMode\(!!on\),/); assert.match(src, /panelState: \(\) => \{ const w = panelWin\(\);/); assert.match(src, /panelDock: on => panelDock\(!!on\),/);
+  assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length, panel: panelKind\(\), panelApp: !!panelAppW\(\) \}/);
+  // v5 two sides: docked, Chats keeps the right (its list never closes: a thread goes back to it, Esc too), one app on
+  // the left (opening another replaces it), and a send from the docked thread goes back to the list like the phone.
+  assert.match(fn('panelOpen'), /if \(panelSides && obj\.app !== 'chats'\) \{/); assert.match(fn('panelOpen'), /const prevApp = panelAppW\(\); if \(prevApp\) panelDrop\(prevApp\.id, \{ swap: true \}\);/);
+  assert.match(fn('panelClose'), /if \(panelDockList\(w\)\) \{ if \(!w\.thread\) return false; CHATS\.chatsBack\(w\);/);
+  assert.match(fn('panelEsc'), /if \(w\.thread\) \{ const r = CHATS\.threadBack\(w\);/);
+  assert.match(fn('panelDock'), /if \(on && !panelChat\(\)\) panelDockList0\(\);/);
+  assert.match(src, /leaveOnSend: id => !!\(globalThis\.WosSkinHost\?\.panelMode && panelDocked && panel\?\.id === id\),/);
+  assert.match(read('web/core/chats.js'), /!\(isNew \|\| PHONE\(\) \|\| H\.leaveOnSend\?\.\(wid\)\)\) return false;/);
+  // the keys reach the docked Chats over Home: ⌥↓/⌥↑ (also with its list folded behind a thread), ⌥→/⌥← on its thread
+  assert.match(fn('stepReady'), /const atHome = homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelChat\(\)\);/);
+  assert.match(src, /const chatOpen = \(\) => \{ const f = focused\(\); return \(!homeOpen \|\| !!\(globalThis\.WosSkinHost\?\.panelMode && panelHas\(f\?\.id\)\)\) && f\?\.app/);
+  assert.match(css, /@keyframes panel-in-left \{ from \{ transform: translateX\(calc\(-100% - 24px\)\); \}/);
   // it slides in from the right, a replacement settles in place, closing slides it away; reduced motion: none
   assert.match(css, /\.panel-layer \{ position: absolute; inset: 0; z-index: 140; pointer-events: none; \}/);
   assert.match(css, /@keyframes panel-in \{ from \{ transform: translateX\(calc\(100% \+ 24px\)\); \}/);
@@ -163,7 +179,7 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   for (const [file, src] of [['layout.js', js], ['styles.js', styles]])
     for (const banned of ['localStorage', 'sessionStorage', 'fetch(', 'XMLHttpRequest', '__wux', '__wos', 'setTimeout', 'setInterval', 'textarea', 'contenteditable', 'querySelector', 'getElementById', 'Math.random'])
       assert.ok(!src.includes(banned), `${file} uses ${banned}`);
-  assert.match(js, /api\.sessions\.act\(s\.id, act\)/); assert.match(js, /api\.env\.shell !== 'desktop'/);
+  assert.match(js, /api\.env\.shell !== 'desktop'/);
   // The approved concept's scene: its sky drawn in canvas; the orb is a Style × a Colour (seven styles drawn in-house in
   // styles.js, nine colours), kept per device, reactive to the take and the level; live previews in the picker.
   assert.match(js, /import \{ STYLES, renderer, mix \} from '\.\/styles\.js';/);
@@ -178,8 +194,9 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
   assert.match(js, /popOff = api\.back\.push\(\(\) => openPop\(false\)\)/, 'Esc folds the picker first');
   assert.match(js, /if \(!pop\.hidden && \(frameN\+\+ & 1\)\) previews\(t\);/, 'previews only while the picker is open');
-  // No desks: the layout holds the panel; a click on the bare sky puts it away; the scene moves to what is left free.
-  assert.match(js, /api\.panel\.claim\(\);/); assert.match(js, /if \(bare && panelKind\) api\.panel\.close\(\);/);
+  // No desks: the layout holds the panel and docks the stock Chats list; a click on the bare sky puts the app away;
+  // the scene moves to the space left free between the app and the list.
+  assert.match(js, /api\.panel\.claim\(\);/); assert.match(js, /api\.panel\.dock\(!folded\);/); assert.match(js, /if \(bare && panelKind === 'app'\) api\.panel\.close\('app'\);/);
   assert.match(js, /scene\.style\.setProperty\('--ob-cx', Math\.round\(cx\) \+ 'px'\)/);
   assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
   assert.match(js, /prefers-reduced-motion: reduce/);
@@ -187,9 +204,14 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   // Apps: round satellites on two tilted orbits with depth; their own logo, else a designed glyph; never a letter tile.
   assert.match(js, /ring: i % 2 \? 1 : 1\.32/); assert.match(js, /const depth = Math\.sin\(s\.a\)/);
   assert.match(js, /api\.apps\.logo\(a\.id\)/); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');
-  // Threads: every Ready thread is a pill with Snooze / Done; two rows, then "+N more" opens the Ready list; Working is one pill.
-  assert.match(js, /MAX_ROWS = 2/); assert.match(js, /`\+\$\{hidden\} more`/); assert.match(js, /api\.sessions\.openList\('ready'\)/);
-  assert.match(js, /`\$\{working\.length\} working`/);
+  // Conversations: the stock Chats list docked (no pills of its own any more); it folds to a strip with the Ready count,
+  // kept per device, and ⌥\ toggles it.
+  assert.ok(!js.includes('ob-th') && !js.includes('MAX_ROWS'), 'no second list under the orb');
+  assert.match(js, /api\.storage\.set\('folded', folded\);/); assert.match(js, /e\.code === 'Backslash'/);
+  assert.match(js, /badge\.textContent = n \? String\(n\) : '';/);
+  const lcss = read('web/layouts/orb/layout.css');
+  assert.match(lcss, /\.panel-layer > \.win\.panel\[data-dock\] \{\n  top: 0; right: 0; bottom: 0; width: var\(--ob-col-w\);/, 'full height, flush right');
+  assert.match(lcss, /\.ob-picker \{ position: absolute; right: calc\(var\(--ob-right, 0px\) \+ 16px\);/, 'the look picker just left of the list');
   // The hint names the shell's real keys (⌥V new voice chat, ⌥N new chat; Right ⌘ in the Mac app).
   assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /mod \+ 'N'/);
   const m = JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json'));

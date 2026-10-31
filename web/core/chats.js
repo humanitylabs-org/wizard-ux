@@ -2504,7 +2504,7 @@ window.WizCore.chats = function createChats(H) {
       const nav = ch(wid).readNav;
       return { restore() { if (W[wid] === w && ch(wid).readNav === nav && !hosted.has(wid) && entry.frame.isConnected) openHosted(wid, entry.frame, sid); } };
     }
-    if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
+    if (!w || !sid || w.thread !== sid || !(isNew || PHONE() || H.leaveOnSend?.(wid))) return false; // a host's docked list (desktop Orb) leaves like the phone
     const c = ch(wid), trail = [...(c.trail || [])];
     if (!isNew && trail.length) threadBack(w);
     else { c.readNav = (c.readNav || 0) + 1; c.trail = []; w.thread = null; save(); c.loadedFor = ''; c.draftFor = ''; }
