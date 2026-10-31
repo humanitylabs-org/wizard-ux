@@ -1,5 +1,4 @@
-/* Retired id (now wizard/machines-home): kept only so a device upgrading from it paints its first frame without a flash of stock Home. Not in the catalog. */
-/* The owner's network on Home and in Settings. Pearl discs and sky wires, every word on a frosted chip so it
+/* Miguel's network map on Home. Pearl discs and sky wires (no purple, no black), every word on a frosted chip so it
  * reads the same on Dark, Light and Landscapes. No icons, no cards; everything expands in place.
  * Motion plays once: entry animations hang off .mh-new, which only the first paint (and a workspace switch) carries. */
 html[data-tweaks~="miguel/machines-home"] {
