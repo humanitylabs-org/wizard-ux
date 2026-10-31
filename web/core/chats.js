@@ -2943,6 +2943,23 @@ window.WizCore.chats = function createChats(H) {
     bindGestures(root); bindPull(root);
     PW?.bind(root);
   }
+  /* Selected words in a chat use Wizard's one selection menu (core/sel-menu.js). Chats adds its own item there:
+   * Quote, into this thread's reply box. The menu also offers Select all for the whole message (the bubble). */
+  const regSel = () => window.WosSelMenu?.register('chats', {
+    match(a, f) {
+      const box = a.closest('[data-chats]'); if (!box || !f.closest('[data-chats]')) return null;
+      const thread = a.closest('.ch-thread') && box;
+      return { wid: thread ? thread.dataset.chats : '', mine: !!a.closest('.msg.u') && !!f.closest('.msg.u'), block: a.closest('.msg .bub') || a.closest('.cx-text, p, li') || a };
+    },
+    items: ctx => ctx.wid ? ['quote'] : [],
+    run(id, ctx, c) {
+      if (id !== 'quote') return;
+      const q = c.text.split('\n').map(l => '> ' + l).join('\n') + '\n\n';
+      window.getSelection()?.removeAllRanges();
+      if (!insertText(ctx.wid, q)) window.__wos?.toast?.('!', 'Open the thread to quote', 1600);
+    },
+  });
+  if (window.WosSelMenu) regSel(); else document.addEventListener('DOMContentLoaded', regSel, { once: true });
   /* Words from outside (dictation, a native shell) go in at the composer's cursor. */
   function insertText(id, text) {
     const ta = elOf(id)?.querySelector('.ch-compose textarea'); if (!ta || !text) return false;

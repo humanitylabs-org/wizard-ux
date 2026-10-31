@@ -25,6 +25,7 @@ Visual: <side-by-side screenshot, or "none">
 | Home-screen identity + app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
+| Selected words in an app | Nothing for Reply in chat/Copy/Share; own items `WizardApp.selection.items(list, pick)`; own-drawn selection `selection.show({text, rects, items}, pick, dismissed)` → `WosSelMenu` | own selection pop-up when hosted | `selection-menu-unified.test.mjs` + two-skin browser pass |
 | Full-screen photo/video | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
 | Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back |
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → source chat |
@@ -77,7 +78,7 @@ Visual: <side-by-side screenshot, or "none">
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |
 | Links: sheet/window (`asWindow`), images, long-press browser/Download/Copy | `WizLinks` (`links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
-| Text-selection actions | `WosSelMenu` (`sel-menu.js`) | own context menu |
+| Text-selection actions (shell, Chats, every hosted app) | `WosSelMenu` (`sel-menu.js`): shell owns the pop-up, Back, tap outside; Chats `register()`s Quote | own context menu, per-app floating Reply |
 | Share sheet (text/url/image/file), receivers, pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` | a second share picker, sending for an app |
 | Agent screen context | `WizScreen` (`screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); voice `WizCore` (`voice.js`); mic choice `WosMic` (`mic.js`) | own recorder/transcriber |

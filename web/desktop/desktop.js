@@ -977,6 +977,14 @@
     window.WosUsage?.load?.(true)?.then?.(() => { if (!usageEl.hidden) paintUsage(); });
     render(); toast('↻', 'Refreshed Home', 900); return true;
   }
+  // ⌥A Reply about this (Oscar, wizard-ux #751): Chats opens beside the app in front with its selected words, or what
+  // is on screen when nothing is selected, as the draft's quoted reply. Nothing is sent. The one selection menu runs it.
+  function replyAbout() {
+    const f = focused(), fr = f && f.app === 'frame' && !homeOpen ? winEl(f.id)?.querySelector('iframe') : null;
+    if (!fr) return toast('A', `Open an app, then ${MOD}A = Reply about it`, 1800);
+    try { if (!window.WosSelMenu?.replyAbout?.(fr, () => window.WizScreen?.read(winEl(f.id)?.querySelector('.wbody') || fr) || '')) toast('A', 'Nothing on screen to reply about', 1800); }
+    catch (_) { toast('!', 'Couldn’t open Chats · nothing sent', 2200); }
+  }
   function reloadCurrent() { if (homeOpen || !ws[cur].wins.length) return refreshHome(); const f = focused(); return f ? reloadWin(f.id) : refreshHome(); }
   function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } if (homeOpen) return 'root'; return closeDesktop() ? 'desktop' : 'root'; }
 
@@ -1246,6 +1254,7 @@
       { kind: 'cmd', name: hud ? 'Chat back to desktop 1' : 'Float chat over every desk', icon: hud ? '1' : '◉', keys: `${MOD}P`, run: () => hudKey() },
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
+      { kind: 'cmd', name: 'Reply about this app', icon: '↩', keys: `${MOD}A`, run: () => replyAbout() },
       { kind: 'cmd', name: 'Keys guide', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -2036,7 +2045,7 @@
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['L', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
+    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['L', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], ['A', 'Reply about this', 'Chats opens beside the app with the selected words, or what is on screen'], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
@@ -2129,6 +2138,7 @@
       if (f) {
         const wel = winEl(f.id);
         for (const [q, l] of [['[data-wact="mono"]', 'F'], ['[data-wact="close"]', 'W'], ['[data-wact="reload"]', 'R']]) { const n = wel?.querySelector(`.wbar ${q}`); if (vis(n)) chip(n, l); }
+        if (f.app === 'frame') { const n = wel?.querySelector('.wbar .t'); if (vis(n)) chip(n, 'A'); }
         // ⇧W under W once something was closed; = − on the edge the window shares with its neighbour.
         if (closedWins.some(c => !W[c.w.id])) { const n = wel?.querySelector('.wbar [data-wact="close"]'); if (vis(n)) chip(n, '⇧W', 'below', 'Reopen'); }
         if (hud?.id !== f.id && resizable(d)) { const b = wel?.querySelector('.wbody'), side = d.wins[0] === f.id ? 'inside' : 'inside-l'; if (vis(b)) { chip(b, '=', side, 'Wider'); chip(b, '−', side, 'Narrower'); } }
@@ -2331,6 +2341,7 @@
       code === 'KeyS' ? speakScreen() : commandVoice();
     });
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
+    if (alt && !shift && code === 'KeyA') return hit(() => { if (!e.repeat) replyAbout(); });
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
     // ⌥P float the chat over every desk; again, put it back on desktop 1. Even while typing.
@@ -2345,7 +2356,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFLNTVPZ]|Slash|Comma|Minus|Equal|Bracket(Left|Right))$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[AGIWFLNTVPZ]|Slash|Comma|Minus|Equal|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
