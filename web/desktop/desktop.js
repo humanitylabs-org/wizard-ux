@@ -20,7 +20,7 @@
  */
 (async () => {
   'use strict';
-  if (window.WizLauncher?.ready) await window.WizLauncher.ready;
+  await window.WizLauncher?.waitForShell?.();
   if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const C = window.WizCore;
   const { esc, clip, norm, ago, emoOf } = C;

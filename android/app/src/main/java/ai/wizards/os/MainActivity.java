@@ -58,8 +58,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
     public static final String ACTION_ACCESSIBILITY = "ai.wizards.os.action.ACCESSIBILITY";
     public static final String EXTRA_THREAD = "ai.wizards.os.extra.THREAD";
-    /** Usuals (re-ordering Grab food) hands back to Wizard OS on its panel after teaching or cancelling. */
-    public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS";
+    /** Food hands back to its canonical app id; the former intent action remains accepted. */
+    public static final String ACTION_FOOD = "ai.wizards.os.action.FOOD";
+    public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS"; // migration alias for installed callers
     private static final int REQ_EVERYWHERE = 44;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
@@ -383,7 +384,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
                 : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
-                : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
+                : (ACTION_FOOD.equals(act) || ACTION_USUALS.equals(act)) ? "{\"action\":\"food\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
                     ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
                 : Handoff.json(act, intent.getStringExtra(Intent.EXTRA_TEXT));
