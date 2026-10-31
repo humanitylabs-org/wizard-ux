@@ -19,6 +19,10 @@ replaces them.
 Tweaks never edit Wizard's files. They plug into named slots, events and parts that keep their names and rules
 across updates, so an update can't wipe them and they never need a rebase.
 
+Slots are listed in `web/core/slots.json` (removing or renaming one needs an API bump). The desktop bar has two:
+`bar-start` (before the Home button) and `bar-center` (the middle of the bar; while it holds anything the date and
+time step aside, and it hides under the voice pill like the clock did). Mount with `api.slot.mount(name, node, order)`.
+
 ## Parts: replacing a whole piece of the front end
 
 A part is a named front-end piece a tweak can swap out whole (`web/core/parts.js`). Core code calls the part, so
