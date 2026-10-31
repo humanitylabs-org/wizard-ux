@@ -335,7 +335,6 @@ test('Orbs view: hold the LEFT ⌥ for bare app letters — only while held, one
   assert.match(desk, /if \(globalThis\.WosSkinHost\?\.key\?\.\(e\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); return; \}/);
   assert.match(desk, /e\.code !== 'AltLeft' \|\| e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| window\.WosSkinHost\?\.holdKeys\) return;/);
   assert.equal((desk.match(/keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\);/g) || []).length, 2, 'releases from the page and from app frames');
-  assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.search\(\)\);/, 'the pill opens the shell\'s own search');
   assert.match(desk, /openPalette: \(\) => palToggle\('all'\),/);
 });
 
@@ -401,4 +400,17 @@ test('Orbs view: the list, chat and app panels resize from thin grips, kept per 
   assert.match(js, /function save\(\) \{ api\.storage\.set\('widths', sized\); \}/); assert.match(js, /api\.listen\(g, 'dblclick', \(\) => \{ delete sized\[id\]; save\(\); aim\(\); \}\);/);
   assert.match(js, /cx = W \/ 2;\n/, 'the orb stays at the centre');
   assert.match(css, /\.ob-grip \{\n  position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize;/);
+});
+
+test('Orbs view satellites stay minimal (Miguel, v8): just the mark, a dot not a ring, a clean count dot, bare letters; the search pill opens any app', () => {
+  const js = read('web/layouts/orb/layout.js'), css = read('web/layouts/orb/layout.css');
+  assert.doesNotMatch(js + css, /ob-sat-ring|is-all/, 'no ring around a running app and no All apps satellite');
+  assert.match(css, /\.ob-sat\[data-run="hidden"\] \.ob-sat-run \{/, 'running out of sight = a tiny dot under the mark');
+  assert.match(css, /\.ob-sat-run \{[^}]*width: 4px; height: 4px;/);
+  const badge = /\.ob-sat-badge \{([^}]*)\}/.exec(css)[1];
+  assert.doesNotMatch(badge, /0 0 0 \dpx/, 'the count dot has no ring');
+  for (const sel of ['.ob-sat-key {', '.ob-keyrow-i b {']) { const i = css.indexOf(sel); assert.ok(i > 0, sel); assert.doesNotMatch(css.slice(i, css.indexOf('}', i)), /background: var\(--ob-glass|border: 1px/, sel + ' is a bare letter, no keycap'); }
+  assert.match(js, /el\('span', 'ob-search-l', \{ text: 'Search apps or ask…' \}\)/);
+  assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.all\(\)\);/, 'the pill opens the launcher in its apps-first mode');
+  assert.match(js, /all apps: ' \+ MK \+ 'O'/, 'its tooltip names ⌥O');
 });

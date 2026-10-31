@@ -73,12 +73,14 @@ export default function setup(api) {
   const mac = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
   const native = !!globalThis.webkit?.messageHandlers?.wizardNative;
   const mod = mac ? '⌥' : 'Alt+';
-  // The bottom of the scene: one quiet search pill (opens the shell's own ⌥Space / ⌘K search & launch; the key hint
+  // The bottom of the scene: one quiet search pill, the always-there way to open any app: it opens the shell's own
+  // launcher in its apps-first mode (⌥O: installed apps, type a name, ↵ opens it; no app by that name widens to ⌘K /
+  // ⌥Space to find a thread or ask). The key hint
   // lives in it) with the Look button beside it.
   const dock = el('div', 'ob-dock');
-  const hint = el('button', 'ob-search', { type: 'button', title: 'Search apps and chats, or ask (' + mod + 'Space)', 'aria-label': 'Search or ask', 'aria-keyshortcuts': 'Alt+Space' });
-  hint.append(icon(['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5 20 20']), el('span', 'ob-search-l', { text: 'Search or ask…' }), el('kbd', '', { text: mod + 'Space' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-talk', { text: native ? 'Right ⌘' : mod + 'V', title: 'to talk' }));
-  api.listen(hint, 'click', () => api.apps.search());
+  const hint = el('button', 'ob-search', { type: 'button', title: 'Search apps or ask (' + mod + 'Space) · all apps: ' + MK + 'O', 'aria-label': 'Search apps or ask', 'aria-keyshortcuts': 'Alt+O Alt+Space' });
+  hint.append(icon(['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5 20 20']), el('span', 'ob-search-l', { text: 'Search apps or ask…' }), el('kbd', '', { text: mod + 'Space' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-talk', { text: native ? 'Right ⌘' : mod + 'V', title: 'to talk' }));
+  api.listen(hint, 'click', () => api.apps.all());
   // The look picker, bottom right: a quiet button that opens Style (live previews) and Colour.
   const picker = el('div', 'ob-picker');
   const pickBtn = el('button', 'ob-pick-btn', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'dialog', title: 'Orb style and colour', 'aria-label': 'Orb style and colour' });
@@ -309,9 +311,10 @@ export default function setup(api) {
     else face.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
     const count = el('b', 'ob-sat-badge', { 'aria-hidden': 'true' }); count.hidden = true;
     const kc = el('kbd', 'ob-sat-key', { 'aria-hidden': 'true' });
-    // running out of sight: a soft glow ring; playing: three tiny bars
+    // running out of sight: a soft halo on the mark itself and a tiny dot under it (never a ring around it);
+    // playing: three tiny bars in the dot's place
     const eq = el('i', 'ob-sat-eq', { 'aria-hidden': 'true' }); eq.append(el('i', ''), el('i', ''), el('i', ''));
-    b.append(el('i', 'ob-sat-ring', { 'aria-hidden': 'true' }), face, count, eq, kc, el('b', 'ob-sat-n', { text: a.name }));
+    b.append(face, count, el('i', 'ob-sat-run', { 'aria-hidden': 'true' }), eq, kc, el('b', 'ob-sat-n', { text: a.name }));
     keyEls.set(a.id, kc);
     api.listen(b, 'click', () => { openMenu(null); api.apps.open(a.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); const r = b.getBoundingClientRect(); openMenu(a, Number.isFinite(e.clientX) && e.clientX ? e.clientX : r.x + r.width / 2, Number.isFinite(e.clientY) && e.clientY ? e.clientY : r.y + r.height / 2); });
@@ -335,7 +338,7 @@ export default function setup(api) {
   /* Satellites are ambient status, not a launcher (Miguel, v7): only (a) apps running in the panel (shown, or hidden
    * and still running) and (b) regular apps with an unread count float. Agents, connectors, agent apps, system and
    * in-development apps never float for a count (the shell's own kinds: core/app-kinds.js); everything stays one
-   * search away (the pill, ⌥Space, All apps, a command). Nothing running and nothing new: just the orb. */
+   * search away (the search pill / ⌥O, ⌥Space, a command, the ⌥ letters); no All apps satellite. Nothing running and nothing new: just the orb. */
   const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
   function orbitApps() {
     const all = api.apps.list(), run = new Map(api.panel.running().map(r => [r.id, r]));
@@ -350,20 +353,15 @@ export default function setup(api) {
   }
   const runOf = a => a.run ? (a.run.open ? 'open' : 'hidden') : '';
   function paintApps() {
-    const every = orbitApps(), fit = fits(every.length), apps = every.slice(0, fit.cap), more = every.length > apps.length;
-    const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|') + (more ? '|+' : '') + '|' + fit.scale;
+    const every = orbitApps(), fit = fits(every.length), apps = every.slice(0, fit.cap);
+    const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|') + '|' + fit.scale;
     // state only (running, playing, badge-only): repaint in place, the orbit keeps turning
     const paintState = () => { for (const s of sats) { const a = apps.find(x => x.id === s.id); if (!a) continue; s.el.dataset.run = runOf(a); s.el.classList.toggle('is-playing', !!a.run?.playing); s.el.classList.toggle('is-new', !a.run); paintBadge(s.el, s.id); } };
     if (sig === appSig) { paintState(); return; }
     appSig = sig; satScale = fit.scale;
     keyEls.clear();
+    // more than fit: the rest stay one search away (the pill), never an All apps satellite
     const items = apps.map(a => ({ id: a.id, el: sat(a) }));
-    if (more) {
-      const all = el('button', 'ob-sat is-all', { type: 'button', 'aria-label': 'All apps (⌥O)' });
-      const f = el('span', 'ob-sat-face'); f.append(icon(I.apps)); all.append(f, el('b', 'ob-sat-n', { text: 'All apps' }));
-      api.listen(all, 'click', () => api.apps.all());
-      items.push({ id: '~all', el: all });
-    }
     field.replaceChildren(...items.map(i => i.el));
     // the concept's two rings, apps alternating between them at even steps round the orb, all drifting the same slow
     // way: neighbours always sit on different rings and two apps never slide onto each other
@@ -400,7 +398,7 @@ export default function setup(api) {
     byKey = new Map(Object.entries(keyMap).map(([id, k]) => [k, id]));
     for (const [id, kc] of keyEls) { const k = keyMap[id] || ''; kc.textContent = k; kc.hidden = !k; }
     const floating = new Set(sats.map(s => s.id));
-    keyRow.replaceChildren(...list.filter(a => keyMap[a.id] && !floating.has(a.id)).slice(0, 18).map(a => { const c = el('span', 'ob-keyrow-i'); c.append(el('kbd', '', { text: keyMap[a.id] }), el('span', '', { text: a.name })); return c; }));
+    keyRow.replaceChildren(...list.filter(a => keyMap[a.id] && !floating.has(a.id)).slice(0, 18).map(a => { const c = el('span', 'ob-keyrow-i'); c.append(el('b', '', { text: keyMap[a.id] }), el('span', '', { text: a.name })); return c; }));
   }
   const showKeys = on => { keysOn = !!on; scene.dataset.keys = on ? 'on' : ''; };
   const dropHold = () => { altHeld = false; altCancel?.(); altCancel = null; showKeys(false); };
@@ -437,7 +435,7 @@ export default function setup(api) {
     { el: grip.chat, key: '⇧C', word: 'Close chat', at: 'inside-l' }, { el: grip.app, key: '⇧A', word: 'Hide app', at: 'inside-l' },
     { el: orbBtn, key: 'C', word: 'Command', at: 'below' },
   ]);
-  // An app opened that has no satellite (All apps, beyond the first ten): a satellite of its own while it is open.
+  // An app opened that has no satellite (from the search pill, beyond the ones that fit): a satellite of its own while it is open.
   let extra = null;
   function pinExtra() {
     const id = G.app?.id || null;

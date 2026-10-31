@@ -40,14 +40,17 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   running) and **regular apps with an unread count** float; nothing else. Regular = the shell's kinds
   (`WosAppKinds`): never agents, connectors, agent apps, system apps (`isSystem`: Files, Notifications, Transcriber,
   Browser, Secret Drop, ChatGPT, Claude…) or in-development apps (`inDev`). Nothing running and nothing new: just the
-  orb. Everything stays one step away: the search pill (⌥Space), All apps (⌥O), a command, the ⌥ letters.
+  orb. Every app stays one step away through the **search pill** at the bottom ("Search apps or ask…"): it opens the
+  shell's launcher in its apps-first mode (⌥O; installed apps listed, type a name, ↵ opens it in the right third; no
+  app by that name widens to ⌥Space to find a thread or ask). Also a command and the ⌥ letters.
   Each is **just its own mark** (no plate; a tile logo stays a tile, else its glyph in its own colour; never a letter),
   with the shell's own **count badge** (`api.apps.badges(watch)`; bigger on a badge-only app). On two tilted orbits,
-  alternating rings at even steps, drifting slowly the same way; past what fits at 74% size the rest fold into **All
-  apps**. A click opens (or brings back) the app.
+  alternating rings at even steps, drifting slowly the same way; past what fits at 74% size the rest stay in the search
+  pill (no All apps satellite). A click opens (or brings back) the app.
 - **Closing an app only hides it** (`api.panel.park(true)`): ✕, Esc or ⌥⇧A slide its panel away but its window stays
   mounted out of sight (`panel-parked`: frame alive, music keeps playing, still counted as open for its mic), and its
-  satellite keeps a soft glowing ring (three tiny bars while a same-origin audio/video element plays). Its satellite, a
+  satellite keeps a soft halo on its own mark and a tiny dot under it, never a ring or plate around it (three tiny
+  bars in the dot's place while a same-origin audio/video element plays). Its satellite, a
   command or opening it again brings it back exactly as it was. **Right-click a satellite**: Open, Close (Close really
   quits it: `api.panel.quit(id)`; the satellite leaves). Turning the Orbs view off closes them all.
 - **Commands (⌥C, or hold the orb)** are the orb's own (v7): the same on-device grammar as everywhere
@@ -71,7 +74,7 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   beside a full-size orb (laptop screens) the orb steps down in size where it stands (never below 45%), so it stays
   visible and clickable. Send, Done, Snooze (also ⌥→ / ⌥←), ‹, ✕ or Esc close it and give the keyboard back to the
   list, so ⌥↓ goes straight on to the next one. Another thread replaces it, with a quiet ‹ back.
-- **An app opens in the right third** (a satellite, All apps, a link), one at a time (another replaces it, with ‹);
+- **An app opens in the right third** (a satellite, the search pill, a link), one at a time (another replaces it, with ‹);
   ✕, Esc or ⌥⇧A hide it (it keeps running, see below). A chat and an app can be open together.
 - **The orb powers what is open.** The open app's satellite stops drifting and pins between the orb and its panel
   (an app with no satellite gets one while it is open); an electric bolt in the orb's colour runs orb → that icon →

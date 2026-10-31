@@ -86,20 +86,18 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat .sgi { width: 48px; height
 html[data-shell="desktop"][data-layout="orb"] .ob-sat .ob-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-tile .ob-logo { border-radius: 22%; object-fit: cover; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-logo .sglogo { width: 100%; height: 100%; }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-all { --c: var(--ob-ink3); }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-all svg { width: 26px; height: 26px; fill: none; stroke: var(--ob-ink2); stroke-width: 1.7; stroke-linejoin: round; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-n {
   position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; white-space: nowrap; pointer-events: none;
   font: 600 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui); letter-spacing: .04em; color: var(--ob-ink2); opacity: 0; transition: opacity 250ms;
   text-shadow: 0 1px 4px var(--ob-core);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; }
-/* The app's count (the shell's own badge: desk marks, dock), a small clean dot top right. */
+/* The app's count (the shell's own badge: desk marks, dock), a small clean count dot top right: no ring, no glow. */
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-badge {
-  position: absolute; top: -5px; right: -7px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 99px;
+  position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 99px;
   display: grid; place-items: center; pointer-events: none; z-index: 1;
-  background: var(--ob-badge, var(--ob-amber)); color: var(--ob-core); font: 700 calc(var(--wz-text-sm) * .72) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 2px var(--ob-sky), 0 0 10px color-mix(in srgb, var(--ob-badge, var(--ob-amber)) 60%, transparent);
+  background: var(--ob-badge, var(--ob-amber)); color: var(--ob-core); font: 700 calc(var(--wz-text-sm) * .66) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ob-core) 45%, transparent);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-badge[hidden] { display: none !important; }
 
@@ -240,7 +238,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transfor
 /* the list's fold handle steps aside while a chat column stands against it (⌥\ still folds) */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-chat="open"] .ob-fold { display: none; }
 /* The app's satellite, pinned between the orb and its panel while it is open: lit, in the orb's bolt. */
-html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 18px var(--c)); }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 60%, transparent)); }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opacity: 1; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
@@ -248,12 +246,11 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opac
   html[data-shell="desktop"][data-layout="orb"] .ob-dock { bottom: 16px; }
 }
 
-/* Hold ⌥: each app shows its key (⌥ + that letter opens it). */
+/* Hold ⌥: each app shows its key (⌥ + that letter opens it), a bare letter under the mark, no keycap. */
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-key {
-  position: absolute; left: 50%; top: 100%; translate: -50% 0; margin-top: 4px; padding: 0 6px; height: 20px; border-radius: 6px; box-sizing: border-box;
-  display: none; place-items: center; white-space: nowrap; pointer-events: none; z-index: 2;
-  border: 1px solid var(--ob-line2); border-bottom-width: 2px; background: var(--ob-glass-solid); color: var(--ob-ink);
-  font: 700 calc(var(--wz-text-sm) * .78) / 1 var(--wz-font-ui); letter-spacing: .04em; box-shadow: 0 2px 10px var(--ob-core);
+  position: absolute; left: 50%; top: 100%; translate: -50% 0; margin-top: 4px; padding: 0; height: auto; border: 0; background: none; box-sizing: border-box;
+  display: none; place-items: center; white-space: nowrap; pointer-events: none; z-index: 2; color: var(--ob-ink);
+  font: 700 calc(var(--wz-text-sm) * .9) / 1 var(--wz-font-ui); letter-spacing: .04em; text-shadow: 0 1px 4px var(--ob-core);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-key:not([hidden]) { display: grid; }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-n { opacity: 0; }
@@ -288,23 +285,24 @@ html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask:is(:hover, :focus-visi
 html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask[hidden] { display: none !important; }
 html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 999px; background: var(--ob-glass-solid); color: var(--ob-ink); font: inherit; font-size: .9em; }
 
-/* ---------- v7: satellites are status: running (shown or hidden, a soft glow ring), playing (tiny bars), new (badge) ---------- */
-html[data-shell="desktop"][data-layout="orb"] .ob-sat-ring {
-  position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; translate: -50% -50%; border-radius: 50%; pointer-events: none; opacity: 0;
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, var(--ob-white)), 0 0 18px 2px color-mix(in srgb, var(--c) 45%, transparent), inset 0 0 12px color-mix(in srgb, var(--c) 30%, transparent);
-  transition: opacity 400ms ease;
+/* ---------- v7/v8: satellites are status: running out of sight (a soft halo on the mark + a tiny dot under it, never a
+ * ring or plate around it), playing (tiny bars in the dot's place), new (the count dot) ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-run {
+  position: absolute; left: 50%; top: calc(100% - 1px); width: 4px; height: 4px; translate: -50% 0; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: color-mix(in srgb, var(--c) 45%, var(--ob-white)); box-shadow: 0 0 6px color-mix(in srgb, var(--c) 70%, transparent); transition: opacity 400ms ease;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat[data-run="hidden"] .ob-sat-ring { opacity: .85; animation: ob-run-glow 3.2s ease-in-out infinite; }
-@keyframes ob-run-glow { 0% { opacity: .55; } 50% { opacity: .95; } 100% { opacity: .55; } }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq { position: absolute; left: 50%; top: calc(100% - 6px); translate: -50% 0; display: none; gap: 2px; align-items: flex-end; height: 10px; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat[data-run="hidden"] .ob-sat-run { opacity: .9; animation: ob-run-glow 3.2s ease-in-out infinite; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat[data-run="hidden"]:not(:hover, :focus-visible) .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 55%, transparent)); }
+@keyframes ob-run-glow { 0% { opacity: .5; } 50% { opacity: .95; } 100% { opacity: .5; } }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-sat.is-playing, .ob-scene[data-keys="on"] .ob-sat) .ob-sat-run { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq { position: absolute; left: 50%; top: calc(100% - 4px); translate: -50% 0; display: none; gap: 2px; align-items: flex-end; height: 10px; pointer-events: none; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i { width: 2px; height: 100%; border-radius: 1px; background: color-mix(in srgb, var(--c) 50%, var(--ob-white)); transform-origin: bottom; animation: ob-eq 900ms ease-in-out infinite; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i:nth-child(2) { animation-delay: -300ms; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i:nth-child(3) { animation-delay: -600ms; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-playing .ob-sat-eq { display: flex; }
 @keyframes ob-eq { 0% { transform: scaleY(.3); } 50% { transform: scaleY(1); } 100% { transform: scaleY(.3); } }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-new .ob-sat-badge { transform: scale(1.25); }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-eq { display: none; }
-@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="orb"] :is(.ob-sat-ring, .ob-sat-eq > i) { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="orb"] :is(.ob-sat-run, .ob-sat-eq > i) { animation: none !important; } }
 
 /* Right-click a satellite: a small quiet menu (Open / Close). */
 html[data-shell="desktop"][data-layout="orb"] .ob-menu {
@@ -324,10 +322,8 @@ html[data-shell="desktop"][data-layout="orb"] .ob-keyrow {
   color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .9) / 1.2 var(--wz-font-ui);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-keyrow { display: flex; }
-html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i { display: inline-flex; align-items: center; gap: 6px; }
-html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i kbd {
-  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 6px;
-  border: 1px solid var(--ob-line2); border-bottom-width: 2px; background: var(--ob-glass-solid); color: var(--ob-ink); font: 600 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui);
-}
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i { display: inline-flex; align-items: baseline; gap: 5px; text-shadow: 0 1px 4px var(--ob-core); }
+/* the letter bare and bright, the name quiet: no keycap boxes */
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i b { color: var(--ob-ink); font-weight: 700; }
 /* The list wide (⌥⇧\): its column reaches to the orb's edge (widths from layout.js). */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-fold="wide"] ~ .ob-grips .ob-grip[data-grip="list"] { display: none; }
