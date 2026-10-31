@@ -1,2 +1,4 @@
 # Verified SHA256 of qa-new-chat-keys.cjs at this commit; not a credential.
 b47ccc766a9814270426fe7e7a88befcb3229db0:docs/responsive-remainder-verification.json:generic-api-key:99
+# localStorage key name wux.applogos.v1 in core/apps.js; not a credential.
+e32928e9e1f56029aee37a4c88e6e7f550d3e22f:web/core/apps.js:generic-api-key:85
