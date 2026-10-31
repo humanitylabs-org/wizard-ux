@@ -97,7 +97,12 @@
     has(cap) { return B.bootstrap ? !!B.capabilities?.[cap] : (cap === 'voice' || cap === 'router' || cap === 'files' || cap === 'approvals' || cap === 'steer'); },
     /* One audio take → text, through whichever transcription endpoint this box has. */
     async transcribe(blob, { prompt = '', language = '', signal } = {}) {
-      const url = C.endpoint('transcribe');
+      let url = C.endpoint('transcribe');
+      // A cached bootstrap may have caught a busy voice service. Recheck once before rejecting the take.
+      if (!url) {
+        await load(signal);
+        url = C.endpoint('transcribe');
+      }
       if (!url) throw Object.assign(new Error('Voice is not set up on this Wizard'), { code: 'no_voice' });
       const t0 = performance.now();
       let r;
@@ -175,9 +180,9 @@
     ready: null,
   };
 
-  async function load() {
+  async function load(signal) {
     try {
-      const r = await fetch('/wizard/v1/bootstrap', { credentials: 'same-origin', cache: 'no-store' });
+      const r = await fetch('/wizard/v1/bootstrap', { credentials: 'same-origin', cache: 'no-store', signal });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const next = await r.json();
       if (!next || typeof next.bootstrap !== 'number') throw new Error('bad bootstrap');
@@ -186,6 +191,7 @@
       try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (e) {}
       if (changed) window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
     } catch (e) {
+      if (signal?.aborted) throw e;
       // 404 = an Agent Service without bootstrap yet: keep sidecar fallbacks, forget any stale cache.
       if (String(e.message).includes('404') && B.bootstrap) {
         B = DEFAULTS; try { localStorage.removeItem(KEY); } catch (e2) {}
