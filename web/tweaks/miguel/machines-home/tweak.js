@@ -1,4 +1,4 @@
-/* Home = the owner's network: a glance on Home (desktop: top bar; phone: widget) and the full views in Settings › System. Read-only, real data.
+/* Miguel's Home = his network map, read-only and on real data. One map, the same on every workspace, everything inline
  * (no cards, no sheets): simple at rest, tap a thing to see more of it in place, tap again to fold it.
  *   - top: the workspace switcher (this Wizard by its name, then the Wizards he manages), then one AI fuel tag for the
  *     default model's service (all its subscriptions combined). Tap it: every account with its nickname, what is left,
@@ -259,14 +259,21 @@ export default function setup(api) {
   // and a tap explains what switching will mean instead of pretending to switch.
   // While the workspace menu is open it is the top layer for Back (phone Back, browser Back, desktop Esc).
   let wsmBack = null;
+  const WS_ICON = ['M12 3 3 7.5l9 4.5 9-4.5L12 3Z', 'm3 12 9 4.5 9-4.5', 'm3 16.5 9 4.5 9-4.5'];  // stacked layers = workspaces
   const syncWsmBack = () => { const open = S.open.has('wsm');
     if (open && !wsmBack) wsmBack = api.back?.push?.(() => { wsmBack = null; S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); wizBtn.focus?.(); }) || null;
     else if (!open && wsmBack) { const off = wsmBack; wsmBack = null; off(); } };
   function renderWiz() {
     syncWsmBack();
+    // James, 31 Oct 2026: with one workspace there is nothing to switch, so no control at all; with two or more it is a
+    // small icon (the name lives in its label and the menu), never the long workspace name in the bar.
+    // A second workspace is added from Settings › Your network (its + tab).
+    const multi = managedList().length > 0;
+    if (!multi) { S.open.delete('wsm'); S.open.delete('wsm-why'); }
+    wizBox.hidden = !multi;
     const own = thisName(), open = S.open.has('wsm'), why = S.open.has('wsm-why') ? S.whyWs : '';
-    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`);
-    wizBtn.replaceChildren(h('b', { text: own }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
+    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`); wizBtn.title = `Workspace: ${own}`;
+    wizBtn.replaceChildren((() => { const v = sv('svg', { class: 'mh-wiz-ic', viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const d of WS_ICON) sv('path', { d }, v); return v; })(), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
     wizMenu.hidden = !open;
     const g = why ? managedOf(why) : null;
     wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Workspaces' }),

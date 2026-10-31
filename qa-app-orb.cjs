@@ -10,7 +10,8 @@ const MIZEL = Number(process.env.MIZEL || 8996), SHOTS = process.env.QA_SHOTS ||
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('PASS', m); } else { fail++; console.log('FAIL', m); } };
 (async () => {
-  const b = await chromium.launch({ ...(process.env.CH ? { executablePath: process.env.CH } : {}), args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  const exe = process.env.QA_CHROMIUM || process.env.CH || process.env.CHROMIUM_PATH;
+  const b = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: 'dark', permissions: ['microphone'] });
   const runs = [], mizelWrites = [];
   await ctx.route('**/mizel-live/**', async r => {

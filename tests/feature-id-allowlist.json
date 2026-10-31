@@ -136,6 +136,7 @@
   "web/core/launcher-defaults.js:wisdom": 3,
   "web/core/launcher-defaults.js:wizard-manager": 1,
   "web/core/launcher-defaults.js:wizard-signal": 3,
+  "web/core/offline-shell-manifest.js:photos": 1,
   "web/core/orb-handoff.js:mizel": 1,
   "web/core/photos-relay.js:Photos": 13,
   "web/core/photos-relay.js:photos": 10,
@@ -167,10 +168,12 @@
   "web/desktop/desktop.js:photos": 1,
   "web/device.js:Mizel": 1,
   "web/index.html:photos": 1,
+  "web/layouts/two-orb/layout.js:Mizel": 1,
   "web/live.js:photos": 1,
   "web/store/store-status.js:android-apps": 4,
   "web/store/store-status.js:wizard-music": 4,
   "web/styles.css:Mizel": 2,
-  "web/styles.css:mizel": 3
+  "web/styles.css:mizel": 3,
+  "web/sw.js:wisdom": 2,
+  "web/ux-changes.json:Photos": 1
 }
-

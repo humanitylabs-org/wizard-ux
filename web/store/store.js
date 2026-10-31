@@ -10,6 +10,9 @@ await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
 import {sourceLabel, installedOnlyApps} from './store-source.js';
 import {parseInstallLink, installShareLink} from './install-link.js';
+import {installRelease} from './store-install.js';
+await window.WosAppSetup.ready;
+const Setup = window.WosAppSetup;
 import {adoptAppearance} from './store-appearance.js';
 import {renderInstallResult, successMessage} from './store-install-result.js';
 (() => {
@@ -105,6 +108,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
     else if(top()==='search') search(S.q);
     else if(top()==='sheet') showSheet(S.stack.at(-1).arg);
+    // Explicit setup search wins over a launcher's optional category hint.
+    const initialQuery = new URLSearchParams(location.search).get('q');
+    if (initialQuery && !S.stack.length) { $('q').value = initialQuery; search(initialQuery); }
     // ?kind=apps|agent-apps|agents|connections: the launcher's "+ Get ..." tiles open that section.
     const reqKind = new URLSearchParams(location.search).get('kind');
     if (reqKind && !S.stack.length && KINDS.some(k => k.id === reqKind)) openKind(reqKind);

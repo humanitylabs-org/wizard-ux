@@ -56,6 +56,20 @@ time updates the binding, and open-video focuses/replies to the bound owner. Del
 
 Hosted apps have no independent root guard. Phone retains its host guard; desktop now guards browser/native Back as well. Shared standalone fallback uses CloseWatcher/history, stays at installed root, and offers the browser-tab two-press exit floor. Desktop Back no longer cancels a recording: its voice pill has an explicit Cancel button.
 
+## Hosted thread owner drafts
+
+REUSE `WizardApp.nav.openThread` and native Chats; EXTEND only its optional payload.
+When `WizardApp.nav.threadDrafts === true`, an already-admitted hosted app may pass
+`{reply, agent, draft:{text}}` (text ≤8000 characters). The existing live-document,
+visible-frame, installed-path, app-keyed reply and running non-main-agent checks all
+apply unchanged. Text is trusted owner input, not quoted context, and is never sent.
+A true return confirms exact durable draft readback before opening native Chats.
+A nonempty incoming draft conflicts with different native text, attachments or reply
+context: return false without changing those bytes. Empty incoming text opens the
+existing native draft intact. Storage failure returns false. Callers keep their own
+question until true; old clients advertise no draft capability. No generic RPC,
+serialized remote admission, new session route or model/privacy bypass is added.
+
 ## Modal backdrop = Back
 
 Every hosted app loading `core/app-client.js` gets native modal-dialog dismissal automatically. For an open `dialog.showModal()`, both `pointerdown` and `click` must target the dialog outside its bounding rectangle. The SDK dispatches a cancelable `cancel` event (the Escape path), then calls `close()` only if it was not prevented. A domain-specific `oncancel` may prevent the default and close/clean up itself; a genuine veto leaves it open. Release Back tokens on the dialog's `close` event. Do not add another backdrop handler in an app.

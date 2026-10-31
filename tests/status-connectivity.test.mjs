@@ -108,7 +108,9 @@ test('a retryable saved message never turns healthy chat reads into a connection
   assert.equal(O.waiting, true, 'the saved message is not dismissed, sent or otherwise changed');
   assert.equal(O.retries, 0, 'rendering never replays a saved message');
   O.waiting = false; O.listeners.forEach(fn => fn());
-  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  const banner = h.ctx.document.getElementById('wxBanners');
+  assert.equal(banner.hidden, true); assert.equal(banner.innerHTML, '');
+  assert.equal(h.ctx.WizReach.calls, 0);
 });
 test('connection failure still warns with a saved message, until fresh recovery evidence', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;

@@ -74,6 +74,8 @@ html[data-layout="two-orb"] #device.orb-corner .to-orb { display: none; }
 /* Full-screen apps hide the dock: the agent orb stays, a little lower. */
 html[data-layout="two-orb"] #device.immersive:not(.orb-corner) .to-orb { bottom: calc(var(--safe-b) + 16px); }
 html[data-layout="two-orb"] #device.capturing-screen .to-orb { display: none; }
+/* A thread's Defer / Done row stops short of the agent orb (orb: right 16px + 56px; messages pad 12px). */
+html[data-layout="two-orb"] #device:not(.orb-corner) .ch-tacts { padding-right: 68px; }
 /* Chats' new-chat button moves left of the agent orb. */
 html[data-layout="two-orb"] #device:not(.orb-corner) .ch-fab { right: 84px; width: 46px; height: 46px; bottom: 20px; border-radius: 15px; }
 
@@ -114,12 +116,17 @@ html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .arc {
   background: rgba(22, 14, 40, .92); color: #fff;
 }
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .arc svg { stroke: #fff; color: #fff; }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-left   { transform: translate(-64px, 0) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-mid    { transform: translate(-118px, 0) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-screen { transform: translate(-172px, 0) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-right  { transform: translate(-226px, 0) scale(1); }
+/* Right to left: orb · Pause · Screenshot · Attach · Cancel. Cancel sits furthest from the orb so a stray tap never throws a take away. */
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-mid    { transform: translate(-64px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-screen { transform: translate(-118px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-right  { transform: translate(-172px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-left   { transform: translate(-226px, 0) scale(1); }
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .transcript.brief.tip { display: none; }
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .transcript { left: 16px; right: 16px; bottom: calc(var(--safe-b) + var(--dock-h) + 118px + var(--to-lift, 0px)); }
+/* The one-line "Sending…" pill sits just above the agent orb, right edge aligned with it (like the other pop-ups). */
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .transcript.brief:not(.tip) { left: auto; right: 12px; bottom: calc(var(--safe-b) + var(--dock-h) + 78px + var(--to-lift, 0px)); transform: translateY(4px) scale(.96); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.tx .transcript.brief:not(.tip) { transform: none; }
+html[data-layout="two-orb"][data-to-take] #device.immersive:not(.orb-corner) .voice .transcript.brief:not(.tip) { bottom: calc(var(--safe-b) + 78px); }
 html[data-layout="two-orb"][data-to-take] #device.immersive:not(.orb-corner) .voice .arc { bottom: calc(var(--safe-b) + 43px); visibility: visible; }
 html[data-layout="two-orb"][data-to-take] .to-name { display: none; }
 /* Pop-ups sit right over the agent orb, right edge aligned with it. */

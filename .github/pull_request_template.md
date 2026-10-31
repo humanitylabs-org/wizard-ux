@@ -11,7 +11,7 @@ Reuse:
 - orb: EXTEND Orb.create (row updated)
 - streak card: NEW (no row; lands in web/core with a row)
 "Reuse: n/a (<reason>)" only when nothing under web/ or android/ changes. -->
-- 
+-
 
 Visual: <!-- anything drawn or animated: side-by-side screenshot of the existing element and yours -->
 

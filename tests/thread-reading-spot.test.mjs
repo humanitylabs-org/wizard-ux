@@ -9,7 +9,7 @@ function harness(doc = false) {
   const sc = { scrollHeight: 2000, clientHeight: 500, get scrollTop() { return top; }, set scrollTop(n) { writes++; top = n; } };
   const host = { dataset: { chats: 'win' }, querySelector: () => ({ hidden: true }) };
   const row = { dataset: { morphKey: 'row' }, getBoundingClientRect: () => ({ top: 440 - top, height: 150 }) };
-  const nb = { ...(!doc ? sc : {}), isConnected: true, querySelectorAll: () => [row], closest: s => s === '[data-chats]' ? host : { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 100 }) }) }, getBoundingClientRect: () => ({ top: 100 }) };
+  const nb = { ...(!doc ? sc : {}), isConnected: true, querySelectorAll: () => [row], closest: s => s === '[data-incog-thread]' ? null : s === '[data-chats]' ? host : { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 100 }) }) }, getBoundingClientRect: () => ({ top: 100 }) };
   if (!doc) Object.defineProperty(nb, 'scrollTop', { get: () => sc.scrollTop, set: n => { sc.scrollTop = n; } });
   const ctx = { console, Date, setTimeout: () => 1, clearTimeout() {}, addEventListener: (n, f) => { hooks[n] = f; }, document: { addEventListener() {} }, localStorage: { getItem: k => storage[k], setItem: (k, v) => { storage[k] = v; } }, WizCore: { esc: String }, WosModels: {}, WizLive: { session: () => ({ status: 'completed' }) } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(source, ctx);

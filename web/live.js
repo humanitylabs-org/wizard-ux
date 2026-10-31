@@ -187,6 +187,12 @@
   /* ---- network ---- */
   const J = { 'Content-Type': 'application/json' };
   async function req(path, init = {}) {
+    // Transcript/detail reads must eventually release Chats' loading lock. The
+    // signal also bounds response-body reads; writes and long-lived streams are
+    // deliberately outside this policy.
+    if (!init.signal && (!init.method || init.method === 'GET') && /^\/wizard\/hermes\/api\/sessions\/[^/?]+(?:\/messages\?|\?view=detail)/.test(path)) {
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init = { ...init, signal: AbortSignal.timeout(12000) };
+    }
     const r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', ...init });
     if (!r.ok) { let detail; try { detail = (await r.json()).error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; throw e; }
     return r;
@@ -824,6 +830,9 @@
           if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
             putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
+          // Warm current Ready answers as soon as main-list truth lands, not
+          // after unrelated runtimes finish refreshing.
+          setTimeout(preload, 0);
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
           // A stored snapshot counts as on screen: painting page 1 over it, then the full walk, then other agents'
@@ -1047,10 +1056,14 @@
     },
     /* Full message history of one thread (oldest first), paged like Wizard. */
     async messages(id) {
-      if (!this.session(id) || this.session(id).detailNeeded) await this.sessionInfo(id);
-      const rows = [];
+      // A live scoped row (or an explicit agent pin) already establishes the
+      // destination. Detail supplies retry/rename metadata, not history authority.
+      // Unknown cold links still discover authoritative ownership before history.
+      const knownScope = this.agentOf(id) || (this.listTrusted?.() && this.sessions.some(s => s.id === id && !s.optimistic));
+      if (!knownScope && (!this.session(id) || this.session(id).detailNeeded)) await this.sessionInfo(id);
+      const rows = [], signal = globalThis.AbortSignal?.timeout?.(12000);
       for (let offset = 0; offset < 5000; offset += 500) {
-        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`)).json();
+        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`, { signal })).json();
         const page = p.data || p.messages || p.items || [];
         rows.push(...page);
         const n = Number(p.pagination?.returned ?? page.length);
@@ -1139,11 +1152,12 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
-      // empty status there must not settle the row: a Working thread used to flash into Ready whenever its history
-      // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
-      const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
+      // Detail hydrates content, not list lifecycle: Hermes normally omits status here.
+      // Erasing the projected helper wait makes a finished parent turn flash into Ready
+      // on every open/preload, then back to Working on the next list poll. Explicit
+      // retry failures still carry a status and must remain actionable.
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
+        ...(s.status ? { status: s.status } : {}),
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
@@ -1268,22 +1282,30 @@
   /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
    * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
   const RUN_STREAMS = new Map();
-  L.openRunStream = function (sid, agent, runId, paint) {
+  L.openRunStream = function (sid, agent, runId, paint, target = null) {
+    // Explicit ephemeral target: reuse SSE/progress/Stop, never ordinary catalogs/outbox.
+    const base = target?.base;
+    if (target && !/^\/wizard\/v1\/agents\/[a-z][a-z0-9-]*\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
+    const read = target?.read || req;
     const registry = window.WosAgents;
     const rec = registry?.get(agent || registry.defaultId());
-    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
-    const key = JSON.stringify([agent, sid, runId]);
+    if ((!target && ((agent && !rec) || rec?.privacy === 'private')) || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId, base]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
       r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
-      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const url = base ? `${base}/v1/runs/${encodeURIComponent(runId)}` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
         if (r.frame != null || r.stopped) return;
         r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
       };
       const close = () => { r.source?.close(); r.source = null; };
-      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      const terminal = async status => { if (r.terminal) return; r.terminal = true; r.status = status; close();
+        // One final read releases the ephemeral service busy latch and recovers non-delta output.
+        if (target) { try { r.result = await (await read(url)).json(); r.status = r.result.status || status; } catch (_) { r.status = 'failed'; } }
+        notify();
+      };
       // Resume across drops (spotty wifi, a phone waking up): Hermes and the Agent Service number every frame (SSE id
       // and data.seq) and replay the run on each new read, so a reconnect skips every frame this stream already showed.
       // Unnumbered streams keep the old rule: reconnect only before any answer bytes, never duplicate text.
@@ -1312,7 +1334,7 @@
           if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
         }
         // reasoning.available is deliberately not answer text.
-        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
       };
       const canResume = () => !r.stopped && !r.terminal && (numbered || !r.text);
       const connect = () => {
@@ -1321,7 +1343,7 @@
         if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
         try {
           r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
-          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source = new window.EventSource(base ? `${url}/events` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
           for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
           r.source.onopen = () => { r.live = true; r.seenAt = Date.now(); };
@@ -1346,9 +1368,9 @@
       const poll = async () => {
         if (r.stopped || r.terminal) return;
         try {
-          const d = await (await req(url)).json();
+          const d = await (await read(url)).json();
           if (r.stopped) return;
-          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) void terminal(d.status);
           // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
           else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
           // Some systems never fire 'online': a status read that worked is proof enough.
@@ -1478,7 +1500,7 @@
    * 3. Warm: pointing at (desktop) or touching a row starts its read; the open joins that same request. */
   const TC_DB = 'wos-thread-cache', TC_MAX = 40, TC_BYTES = 2.5e6;
   const TC = new Map(), INFLIGHT = new Map();
-  const revOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt, s.activityAt, s.status].join('|') : '';
+  const revOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt].join('|') : '';
   const keepable = id => !!id && !L.agentOf(id) && !(L.isPrivate && L.isPrivate(id));
   let tcDb = null;
   const tcOpen = () => tcDb || (tcDb = new Promise(res => {
@@ -1543,7 +1565,7 @@
   };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
-    const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;
+    const s = L.session(id); if (!s || s.archived || s.optimistic || document.hidden || saving() || INFLIGHT.size >= 2 || INFLIGHT.has(id) || !keepable(id)) return;
     const c = TC.get(id); if (c && c.rev === revOf(s) && !WORKING.has(s.status)) return;
     bgRead(id).catch(() => {});
   };
@@ -1554,9 +1576,10 @@
     try {
       await tcReady;
       const g = groupWork(L.sessions);
-      const want = [...(g.errors || []), ...(g.working || []), ...(g.ready || [])].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic && keepable(s.id)).slice(0, 16);
+      const want = [...(g.ready || []), ...(g.errors || []), ...(g.working || [])].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic && keepable(s.id)).slice(0, 16);
       for (const s of want) {
-        if (document.hidden || !L.session(s.id)) continue;
+        if (document.hidden || saving() || !L.session(s.id)) break;
+        if (INFLIGHT.size >= 2 && !INFLIGHT.has(s.id)) continue;
         const c = TC.get(s.id);
         if (c && c.rev === revOf(s)) continue;
         if (c && WORKING.has(s.status) && Date.now() - c.at < 60000) continue;
@@ -1565,8 +1588,7 @@
       }
     } finally { pfBusy = false; }
   }
-  const baseRefresh = L.refresh;
-  L.refresh = function (...a) { const p = baseRefresh.apply(this, a); Promise.resolve(p).then(() => setTimeout(preload, 400), () => {}); return p; };
+
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };
 })();

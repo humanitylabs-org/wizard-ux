@@ -154,6 +154,7 @@
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     dictationField: () => FIELDS && V.kind === 'dictation' && V.state !== 'idle' ? V.field?.el : null,
+    captureBusy: () => V.state !== 'idle' || !!V.admitting || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (V.state === 'listen' || V.state === 'paused' ? sealTarget()?.sid || '' : ''),
@@ -367,6 +368,7 @@
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
+    if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to;
     if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
@@ -773,8 +775,9 @@
     if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return;
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    if (!CHATS.beforeLeave(id)) return;
     if (!preservePlayback) closeAppPlayback(w);
-    CHATS.closeHosted(id);
+    CHATS.closeHosted(id); CHATS.forget(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
     if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
@@ -908,15 +911,34 @@
    * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
    * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
   let liftRO = null, liftMO = null, liftEl = null;
+  /* Orb in the composer (James, 23 Oct 2026: "the orb keeps overlapping UX features"): in a full-screen thread the
+   * orb sits in the composer row's last seat (.ch-orbslot), where the mic used to be, so nothing floats over the
+   * conversation. Typed words swap it for Send in that same seat, exactly like the old mic; a live take keeps it. */
   function paintCornerLift() {
     const c = device.querySelector('.win.full .ch-thread .ch-compose');
     if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
     const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
     device.style.setProperty('--comp-h', h + 'px');
     device.classList.toggle('orb-lift', h > 0);
+    const slot = h > 0 ? c.querySelector('.ch-orbslot') : null;
+    device.classList.toggle('orb-typed', !!slot && c.classList.contains('has-text') && V.state === 'idle');
+    device.classList.toggle('orb-slotted', !!slot);
+    if (!slot) return;
+    // Measure the row, not the slot: the slot is hidden while Send holds the seat and on the first paint.
+    // Skins differ in dock size and insets, so centre the orb itself on the row by its measured offset.
+    const dock = device.querySelector('.dock'), row = slot.parentElement.getBoundingClientRect();
+    if (!row.height || !dock) return;
+    // Centres, so a mid-transition scale (Send swap) cannot skew the measurement.
+    const cs = getComputedStyle(dock), orbEl = $('#orbWrap'), d = orbEl.getBoundingClientRect(), half = orbEl.offsetWidth / 2;
+    const b = parseFloat(cs.bottom) + ((d.top + d.bottom) / 2 - (row.top + row.bottom) / 2), r = parseFloat(cs.right) + ((d.left + d.right) / 2 - (row.right - half));
+    device.style.setProperty('--slot-b', Math.round(b) + 'px');
+    device.style.setProperty('--slot-r', Math.round(r) + 'px');
   }
+  window.addEventListener('wos:composer', () => { if (liftRO) paintCornerLift(); });
+  window.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
+  window.visualViewport?.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
   function trackCornerLift(on) {
-    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift', 'orb-slotted', 'orb-typed'); device.style.removeProperty('--comp-h'); return; }
     if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
     paintCornerLift();
   }
@@ -1584,7 +1606,7 @@
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), isFront: () => desks[idx].focus === w.id && desks[idx].wins.includes(w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) && !device.classList.contains('st-parked'), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.remove('loading'); wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -2293,7 +2315,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
+    V.state = s; device.dataset.voice = s; if (liftRO) queueMicrotask(paintCornerLift); tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -2509,6 +2531,7 @@
     return 'recording';
   }
   async function startVoice(kind, opt = {}) {
+    if (CHATS.incognitoActive(opt.replyTo?.wid || focusedWin()?.id) || document.activeElement?.closest?.('[data-incog-thread]')) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -3758,7 +3781,7 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
-      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); delete W[id]; delete CH[id]; });
+      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
       syncDesks(); desks.forEach((_, i) => renderDesk(i));
       idx = posOf(here); if (idx < 0) idx = Math.max(0, Math.min(at, desks.length - 1));

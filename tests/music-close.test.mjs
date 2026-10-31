@@ -57,7 +57,7 @@ function functionSource(name) {const start=shell.indexOf('  function '+name+'(')
 function shellFixture() {
   const calls=[],W={music:{id:'music',appId:'wizard-music'},chat:{id:'chat',appId:'chats'}},desks=[{wins:['music','chat'],focus:'music',full:false}];
   const c={window:{WizBackgroundAudio:{closeApp:id=>{calls.push({id,present:!!W.music});return Promise.resolve();}}},W,desks,CH:{},idx:0,
-    deskOf:id=>desks.findIndex(d=>d.wins.includes(id)),winTitle:w=>w.id,CHATS:{closeHosted:()=>{}},renderDesk:()=>{},pruneDesks:()=>{},toast:()=>{},esc:x=>x,vib:()=>{},deskName:()=> 'Music',ovLog:()=>{}};
+    deskOf:id=>desks.findIndex(d=>d.wins.includes(id)),winTitle:w=>w.id,CHATS:{beforeLeave:()=>true,closeHosted:()=>{},forget:()=>{}},renderDesk:()=>{},pruneDesks:()=>{},toast:()=>{},esc:x=>x,vib:()=>{},deskName:()=> 'Music',ovLog:()=>{}};
   vm.createContext(c);
   vm.runInContext(['closeAppPlayback','closeWin','closeDesk'].map(functionSource).join('\n'),c);
   return {c,calls,W,desks};

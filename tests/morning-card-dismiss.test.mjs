@@ -42,7 +42,7 @@ test('apps can return to the previous screen after a finishing action, through t
   const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
   assert.match(client, /back: \(\) => \{ try \{ return service\?\.nav\?\.back\?\.\(\) === true/)
   assert.match(svc, /back\(\) \{ check\(\); if \(st\.isVisible\?\.\(\) !== true/, 'hidden apps cannot navigate the owner')
-  assert.match(svc, /isVisible, back, readingStorage \}/)
+  assert.match(svc, /isVisible, (?:isFront, )?back, readingStorage \}/)
   assert.match(app, /back: \(\) => \{ if \(desks\[idx\]\.focus !== w\.id\) return false; const did = backStep\(w\.id\)/)
   assert.match(src, /H\.openApp\?\.\('morning', e\.target\)/, 'the Morning card opens Morning with Chats as where it came from')
 })

@@ -98,7 +98,7 @@ window.WosChatPower = function chatPower(A) {
     return true;
   }
   function capture(nb) {
-    if (!onScreen(nb)) return;
+    if (!onScreen(nb) || nb.closest('[data-incog-thread]')) return;
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
     if (c?.placeOptions?.notification) { c.placeOptions.notificationScroll = scrollBox(nb).scrollTop; return; }
     if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;

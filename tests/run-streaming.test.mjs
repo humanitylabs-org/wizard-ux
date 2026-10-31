@@ -20,6 +20,20 @@ function harness() {
   vm.runInNewContext(live.slice(live.indexOf('  const RUN_STREAMS ='), live.indexOf('  function attachOutbox() {')), c);
   return { c, L, sources, frames, timers, calls, paint: () => { for (const fn of frames.splice(0)) fn(); } };
 }
+test('Incognito reuses the shared stream with a scoped ephemeral target and no normal read route', async () => {
+  const h = harness(), sid = 'incog_' + 'a'.repeat(32), base = '/wizard/v1/agents/private/incognito/' + sid, reads = [];
+  let snapshot;
+  const handle = h.L.openRunStream(sid, 'private', 'rid', s => snapshot = s, { base, read: async url => { reads.push(url); return { json: async () => ({ run_id: 'rid', session_id: sid, status: 'completed', output: 'final' }) }; } });
+  assert.equal(h.sources[0].url, base + '/v1/runs/rid/events');
+  h.sources[0].emit({ event: 'message.delta', delta: 'RAM-only answer' });
+  h.sources[0].emit({ event: 'tool.started', tool: 'memory', tool_call_id: 'one' }); h.paint();
+  assert.equal(snapshot.steps[0].tool, 'memory'); assert.equal(snapshot.text, 'RAM-only answer');
+  h.sources[0].emit({ event: 'run.completed' }); await settle(); h.paint();
+  assert.equal(snapshot.terminal, true); assert.equal(snapshot.status, 'completed');
+  assert.deepEqual(reads, [base + '/v1/runs/rid']); assert.deepEqual(h.calls, []);
+  handle.close(); assert.equal(h.sources[0].closed, true);
+  assert.equal(h.L.openRunStream(sid, 'private', 'rid', () => {}, { base: '/wizard/hermes' }), null);
+});
 test('hidden main thread retains its accepted outbox run when absent from session lists', () => {
   const h = harness(), now = Date.now();
   h.c.window.WosOutbox = { forThread: sid => sid === 'sid' ? [

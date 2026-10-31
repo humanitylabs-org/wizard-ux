@@ -1,4 +1,15 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+.ch-incognito { border: 2px dashed var(--wz-accent, #a59bff); border-radius: 12px; overflow: hidden; }
+.ch-incog-note { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--wz-surface, var(--glass, #242432)); color: var(--wz-text, #ededf2); font-size: 12px; line-height: 1.5; border-bottom: 1px solid var(--wz-border, #414151); }
+.ch-incog-note b { font-size: 13px; }
+.ch-incog-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; color: var(--wz-text); background: var(--wz-surface); border-radius: 12px; flex: 0 0 auto; }
+.ch-incog-toggle:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+.ch-incognito .ch-head .pbtn { flex: 0 0 auto; }
+.ch-incognito .ch-head .ti { flex-direction: column; align-items: flex-start; gap: 2px; }
+.ch-incognito .ch-incog-toggle > span:first-child { display: none; }
+.ch-incognito .ch-compose { flex: 0 0 auto; }
+.ch-incognito .ch-msgs { min-height: 0; overflow-y: auto; }
+
 /* Native app only: a real root-scrolling WebView for Android's built-in capture.
  * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
 html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }
