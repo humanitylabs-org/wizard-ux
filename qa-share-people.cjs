@@ -28,6 +28,8 @@ fs.mkdirSync(OUT,{recursive:true});
     await receiver.locator('#recipient').filter({hasText:'Test Person B'}).waitFor();
     assert.match(await receiver.locator('#draft').inputValue(),/Synthetic item/);
     assert.equal(await receiver.getByRole('button',{name:'Send disabled in preview'}).isDisabled(),true);
+    // The receiver can stage before the closing sheet's 160ms fade removes its DOM node.
+    await p.waitForSelector('.wos-share',{state:'detached'});
     assert.equal(await p.locator('.wos-share').count(),0);
     assert.deepEqual(errors,[]); console.log('PASS real shell: cached recent shares + lastActivity order, cold Messenger, two skins, outside, Back, direct target staged with SDK, no sends');
     await ctx.close();
