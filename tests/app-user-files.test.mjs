@@ -13,6 +13,7 @@ const read = name => readFileSync(new URL(`../web/core/${name}`, import.meta.url
 
 function serviceFixture(uploadImpl) {
   const uploads = [];
+  let reconcile = null;
   const location = new URL('https://wizard.example/wizard-os-home/');
   const listeners = new Map();
   const child = { location: new URL('/sasquatch/', location), document: {}, addEventListener(type, fn) { listeners.set(type, fn); }, postMessage() {}, emit(type) { listeners.get(type)?.(); } };
@@ -26,9 +27,9 @@ function serviceFixture(uploadImpl) {
     }) },
     dispatchEvent() {}, WizConfig: {}
   };
-  vm.runInNewContext(read('app-services.js'), { window, location, URL, AbortController, Blob, File, Uint8Array, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout, document: { hidden: false, readyState: 'loading', addEventListener() {} }, CustomEvent: class {}, navigator: {} });
+  vm.runInNewContext(read('app-services.js'), { window, location, URL, AbortController, Blob, File, Uint8Array, addEventListener() {}, setInterval(fn) { reconcile = fn; }, setTimeout, clearTimeout, document: { hidden: false, readyState: 'loading', addEventListener() {} }, CustomEvent: class {}, navigator: {} });
   window.WizAppServices.attach(frame, { appId: 'sasquatch', path: '/sasquatch/', isVisible: () => true });
-  return { service: window.WizAppServices.connect(child, {}), frame, child, uploads };
+  return { service: window.WizAppServices.connect(child, {}), frame, child, uploads, reconcile: () => reconcile?.() };
 }
 
 const freePort = () => new Promise(resolve => { const server = createServer(); server.listen(0, '127.0.0.1', () => { const port = server.address().port; server.close(() => resolve(port)); }); });
@@ -65,6 +66,15 @@ test('image saves reject files over 8 MiB before upload', async () => {
   assert.equal(f.uploads.length, 0);
 });
 
+test('an image of exactly 8 MiB is accepted', async () => {
+  const f = serviceFixture();
+  const header = Uint8Array.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,0]);
+  const exact = new File([header, new Uint8Array(8 * 1024 * 1024 - header.length)], 'exact.png', { type: 'image/png' });
+  const receipt = await f.service.files.saveImage(exact, { filename: 'exact.png' });
+  assert.equal(receipt.bytes, 8 * 1024 * 1024);
+  assert.equal(f.uploads.length, 1);
+});
+
 test('image saves reject spoofed Files, unsafe receipt extensions and overlong names', async () => {
   const f = serviceFixture();
   const spoof = {
@@ -72,7 +82,9 @@ test('image saves reject spoofed Files, unsafe receipt extensions and overlong n
     slice() { return new Blob([Uint8Array.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,0])], { type: 'image/png' }); }
   };
   await assert.rejects(f.service.files.saveImage(spoof, { filename: 'spoof.png' }), /Use a PNG/);
-  await assert.rejects(f.service.files.saveImage(png('long.png'), { filename: 'a'.repeat(237) + '.png' }), /filename and type/);
+  for (const length of [241, 255]) {
+    await assert.rejects(f.service.files.saveImage(png('long.png'), { filename: 'a'.repeat(length - 4) + '.png' }), /filename and type/);
+  }
   const badReceipt = serviceFixture(async (file, opts) => ({ path: `Inbox/2026-10-31/${opts.filename}.bin`, filename: opts.filename, mime: file.type, bytes: file.size, sha256: 'b'.repeat(64), location: 'files_root' }));
   await assert.rejects(badReceipt.service.files.saveImage(png('receipt.png'), { filename: 'receipt.png' }), /invalid image receipt/);
   assert.equal(f.uploads.length, 0);
@@ -106,6 +118,17 @@ test('document replacement, wrong-origin navigation and pagehide cancel file acc
   await start;
   inflight.child.emit('pagehide');
   await assert.rejects(saving, /aborted/);
+  let replacedStarted;
+  const replacedStart = new Promise(resolve => { replacedStarted = resolve; });
+  const replacedInflight = serviceFixture((file, opts) => new Promise((resolve, reject) => {
+    replacedStarted();
+    opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('replaced'), { name: 'AbortError' })), { once: true });
+  }));
+  const replacedSaving = replacedInflight.service.files.saveImage(png('replacement.png'), { filename: 'replacement.png' });
+  await replacedStart;
+  replacedInflight.child.document = {};
+  replacedInflight.reconcile();
+  await assert.rejects(replacedSaving, /replaced/);
 });
 
 test('resumable user-files upload sends an empty-folder destination and accepts a path receipt', async () => {
