@@ -36,7 +36,7 @@
  * (core/skin-host.js); no shell internals, no second composer. */
 import { STYLES, RETIRED, renderer, mix } from './styles.js';
 import { assignKeys, keyOf, isLeftAlt, HOLD_MS } from './keys.js';
-import { COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList } from './shared.js';
+import { COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList, glyphOf, colourOf } from './shared.js';
 import phone from './phone.js';
 
 export default function setup(api) {
@@ -264,10 +264,7 @@ export default function setup(api) {
 
   /* ---------- apps: round glass satellites on two tilted orbits ---------- */
   // The app's own logo first (the Store's picture of it); its designed glyph otherwise; never a bare letter.
-  const GUESS = [[/crm|contact|people|profile/i, 'profile'], [/command|console|terminal/i, 'console'], [/board|\bpr\b|project|kanban/i, 'projects'], [/money|bank|finance|monarch|simplefin|teller/i, 'dollar'],
-    [/health|whoop|fit/i, 'gauge'], [/music|tube|audio|podcast/i, 'music'], [/mail|google/i, 'mail'], [/home|house/i, 'home'], [/backup|cloud/i, 'cloud'], [/twitter|social|\bx\b/i, 'social'], [/data|web|bright/i, 'globe']];
-  const glyphOf = a => { const m = /sg-([a-z-]+)/.exec(a.icon || ''); return m && !/\bsgl\b/.test(a.icon || '') ? m[1] : (GUESS.find(([re]) => re.test(a.id + ' ' + a.name)) || [0, 'spark'])[1]; };
-  const colourOf = a => (/--c:\s*([^;"]+)/.exec(a.icon || '') || [0, 'var(--wz-accent)'])[1].trim();
+  // glyphOf / colourOf: shared.js (the phone draws its satellites with the same marks)
   let appSig = '', sats = [];
   // Each app is just its own mark, clean-cut on the sky: its logo (a tile logo stays a tile, a free-form logo stays
   // free-form) or its glyph in its own colour. No plate, ring or bubble behind it; only a soft shadow for legibility.

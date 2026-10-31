@@ -209,7 +209,7 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(styles, /const CAP = 640;/, 'frame cost capped'); assert.match(styles, /if \(cost > 12 && q > \.4\) \{ q = Math\.max\(\.4, q \* \.8\);/, 'a slow GPU renders fewer pixels');
   assert.deepEqual([...styles.match(/export const RETIRED = Object\.freeze\(\[([^\]]*)\]\)/)[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]), ['swarm', 'holo', 'glitch', 'crystal', 'aurora']);
   assert.ok(!/function (swarm|holo|glitch|crystal|aurora|bust|headSDF)\(/.test(styles), 'retired styles are gone');
-  assert.match(js, /import \{ COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList \} from '\.\/shared\.js';/, 'one look, sky and satellite list for both shells');
+  assert.match(js, /import \{ COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList, glyphOf, colourOf \} from '\.\/shared\.js';/, 'one look, sky and satellite list for both shells');
   assert.match(shared, /export const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n  \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);
   const tcss = read('web/tweaks/miguel/orb-shell/tweak.css');
   for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic', 'marble', 'obsidian', 'bronze', 'royal', 'crimson', 'cyber', 'sunset', 'ocean']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));

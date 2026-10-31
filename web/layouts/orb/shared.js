@@ -72,3 +72,10 @@ export function orbitApps(api, badgeMap) {
   const all = api.apps.list(), run = new Map(api.panel.running().map(r => [r.id, r]));
   return all.filter(a => run.has(a.id) ? !a.agent && !a.connector : regular(a) && (badgeMap[a.id] || 0) > 0).map(a => ({ ...a, run: run.get(a.id) || null }));
 }
+
+/* An app's mark when it has no logo: its designed glyph (the sigil in its icon), else one guessed from its name, in its
+ * own colour; never a bare letter. Both shells draw satellites with these. */
+const GUESS = [[/crm|contact|people|profile/i, 'profile'], [/command|console|terminal/i, 'console'], [/board|\bpr\b|project|kanban/i, 'projects'], [/money|bank|finance|monarch|simplefin|teller/i, 'dollar'],
+  [/health|whoop|fit/i, 'gauge'], [/music|tube|audio|podcast/i, 'music'], [/mail|google/i, 'mail'], [/home|house/i, 'home'], [/backup|cloud/i, 'cloud'], [/twitter|social|\bx\b/i, 'social'], [/data|web|bright/i, 'globe']];
+export const glyphOf = a => { const m = /sg-([a-z-]+)/.exec(a.icon || ''); return m && !/\bsgl\b/.test(a.icon || '') ? m[1] : (GUESS.find(([re]) => re.test(a.id + ' ' + a.name)) || [0, 'spark'])[1]; };
+export const colourOf = a => (/--c:\s*([^;"]+)/.exec(a.icon || '') || [0, 'var(--wz-accent)'])[1].trim();

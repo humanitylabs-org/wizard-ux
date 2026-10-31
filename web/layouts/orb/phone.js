@@ -19,7 +19,7 @@
  * Motion: one loop, only while the page is visible; the sky and satellites only on Home; about 30 fps; reduced motion
  * = still frames and no flight. Colours are the tweak's skin-layer tokens (--ob-*). Everything through the layout API. */
 import { renderer } from './styles.js';
-import { lookOf, palettes, starsFor, paintSky, orbitApps } from './shared.js';
+import { lookOf, palettes, starsFor, paintSky, orbitApps, glyphOf, colourOf } from './shared.js';
 
 export default function phone(api) {
   const doc = document, root = doc.documentElement;
@@ -86,8 +86,6 @@ export default function phone(api) {
   /* ---------- satellites: the shared list (shared.js orbitApps), each app's own mark on two tilted orbits ---------- */
   let badgeMap = api.apps.badges(m => { badgeMap = m; paintApps(); });
   let appSig = '', sats = [];
-  const glyphOf = a => { const m = /sg-([a-z-]+)/.exec(a.icon || ''); return m && !/\bsgl\b/.test(a.icon || '') ? m[1] : 'spark'; };
-  const colourOf = a => (/--c:\s*([^;"]+)/.exec(a.icon || '') || [0, 'var(--wz-accent)'])[1].trim();
   function sat(a) {
     const b = el('button', 'ob-sat obp-sat', { type: 'button', 'aria-label': 'Open ' + a.name, 'data-app': a.id });
     b.style.setProperty('--c', colourOf(a));

@@ -97,7 +97,7 @@ test('phone, Orbs, on Home: the desktop orb scene (shared sky, look and satellit
 test('phone: the same stored Style × Colour and drawing code as the desktop, never a second copy', () => {
   const strip = f => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   const ph = strip('web/layouts/orb/phone.js'), lay = read('web/layouts/orb/layout.js');
-  assert.match(ph, /import \{ renderer \} from '\.\/styles\.js';/); assert.match(ph, /import \{ lookOf, palettes, starsFor, paintSky, orbitApps \} from '\.\/shared\.js';/);
+  assert.match(ph, /import \{ renderer \} from '\.\/styles\.js';/); assert.match(ph, /import \{ lookOf, palettes, starsFor, paintSky, orbitApps, glyphOf, colourOf \} from '\.\/shared\.js';/);
   assert.match(ph, /const look = lookOf\(api\);/); assert.match(ph, /orbitApps\(api, badgeMap\)/);
   assert.ok(!/--ob-look-|createRadialGradient|16807/.test(ph), 'no colours or sky of its own');
   assert.match(lay, /if \(api\.env\.shell === 'phone'\) return phone\(api\);\n  if \(api\.env\.shell !== 'desktop'\) return \(\) => \{\};/, 'the desktop path is unchanged below the phone hand-off');
