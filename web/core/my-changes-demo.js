@@ -98,6 +98,6 @@
     return false;
   }
   window.WosChangeCard = { banner, act, page, get state() { return JSON.parse(JSON.stringify(S)); } };
-  const reg = () => { try { window.WosSettings?.register({ id: 'my-changes-demo', page: 'my-changes', html: page, act: pageAct, subtitle: () => 'Demo' }); } catch (e) {} };
+  const reg = () => { try { window.WosSettings?.register({ id: 'my-changes-demo', aliases: ['my-changes'], page: 'my-changes', html: page, act: pageAct, subtitle: () => 'Demo' }); } catch (e) {} };
   if (window.WosSettings) reg(); else document.addEventListener('DOMContentLoaded', reg, { once: true });
 })();
