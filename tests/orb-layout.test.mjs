@@ -81,8 +81,9 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open', 'search']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
-  assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
-  assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'state']); assert.ok(Object.isFrozen(api.panel));
+  assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
+  assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
+  assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
   assert.equal(D.host.panelMode, false);
   assert.equal(api.panel.dock(true), false, 'docking needs the panel first');
   api.panel.claim(); assert.equal(D.host.panelMode, true, 'no desks while the layout holds the panel');
@@ -116,7 +117,7 @@ test('skins and tweaks never get the layout-only lists or the command take', asy
   const f = fixture({ shell: 'desktop' }); let api;
   f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
   await f.host.loadTweaks(['miguel/orb-shell'], f.slots, { teamAuthors: ['miguel'] });
-  for (const k of ['sessions', 'apps', 'desk', 'voice', 'mount', 'panel']) assert.equal(api[k], undefined, k);
+  for (const k of ['sessions', 'apps', 'desk', 'voice', 'mount', 'panel', 'keys']) assert.equal(api[k], undefined, k);
   await f.clear();
 });
 
@@ -196,15 +197,21 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(js, /api\.env\.shell !== 'desktop'/);
   // The approved concept's scene: its sky drawn in canvas; the orb is a Style × a Colour (seven styles drawn in-house in
   // styles.js, nine colours), kept per device, reactive to the take and the level; live previews in the picker.
-  assert.match(js, /import \{ STYLES, renderer, mix \} from '\.\/styles\.js';/);
+  assert.match(js, /import \{ STYLES, RETIRED, renderer, mix \} from '\.\/styles\.js';/);
+  // v7: eight shader styles at Plasma's quality bar (Miguel: "better 8 excellent than 13 mediocre"); each its own
+  // fragment shader, one shared WebGL context, canvas-2D Plasma / Glass / Oracle when WebGL is missing.
   const ids = [...styles.match(/export const STYLES = Object\.freeze\(\[([\s\S]*?)\]\);/)[1].matchAll(/\['([a-z]+)', '[A-Za-z ]+'\]/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['glass', 'oracle', 'plasma', 'swarm', 'holo', 'glitch', 'chrome', 'marble', 'sun', 'blackhole', 'crystal', 'aurora', 'planet']);
-  for (const id of ids) assert.match(styles, new RegExp(`function ${id}\\(`), `${id} has its own drawing`);
+  assert.deepEqual(ids, ['plasma', 'glass', 'oracle', 'chrome', 'marble', 'sun', 'planet', 'blackhole']);
+  for (const id of ids.filter(i => i !== 'oracle')) assert.match(styles, new RegExp(`\\n  ${id}: \``), `${id} has its own shader`);
+  assert.match(styles, /FRAG\.oracle = FRAG\.glass;/); assert.match(styles, /getContext\('webgl', \{/); assert.match(styles, /function plasma2d\(/); assert.match(styles, /function glass2d\(/);
+  assert.match(styles, /const CAP = 640;/, 'frame cost capped');
+  assert.deepEqual([...styles.match(/export const RETIRED = Object\.freeze\(\[([^\]]*)\]\)/)[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]), ['swarm', 'holo', 'glitch', 'crystal', 'aurora']);
+  assert.ok(!/function (swarm|holo|glitch|crystal|aurora|bust|headSDF)\(/.test(styles), 'retired styles are gone');
   assert.match(js, /const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n    \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);
   const tcss = read('web/tweaks/miguel/orb-shell/tweak.css');
   for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic', 'marble', 'obsidian', 'bronze', 'royal', 'crimson', 'cyber', 'sunset', 'ocean']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));
   assert.match(js, /function drawSky\(/); assert.match(js, /api\.storage\.set\('style', styleId\); api\.storage\.set\('colour', colourId\);/);
-  assert.match(js, /if \(!has\(STYLES, styleId\)\) styleId = legacy === 'oracle' \? 'oracle' : 'glass';/, 'the v3 look carries over');
+  assert.match(js, /if \(!has\(STYLES, styleId\)\) styleId = legacy === 'oracle' \? 'oracle' : RETIRED\.includes\(styleId\) \? 'plasma' : 'glass';/, 'the v3 look carries over; a retired style becomes Plasma');
   assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
   assert.match(js, /popOff = api\.back\.push\(\(\) => openPop\(false\)\)/, 'Esc folds the picker first');
   assert.match(js, /if \(!pop\.hidden && \(frameN\+\+ & 1\)\) previews\(t\);/, 'previews only while the picker is open');
@@ -234,7 +241,7 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   // name label under the orb.
   const sl = read('web/layouts/orb/layout.css'), satRule = sl.match(/\] \.ob-sat \{([^}]*)\}/)[1];
   assert.match(satRule, /background: none;/); assert.ok(!/backdrop-filter|border: 1px|box-shadow/.test(satRule), 'no container behind the app');
-  assert.match(js, /let badgeMap = api\.apps\.badges\(m => \{ badgeMap = m; for \(const s of sats\) paintBadge\(s\.el, s\.id\); \}\);/);
+  assert.match(js, /let badgeMap = api\.apps\.badges\(m => \{ badgeMap = m; paintApps\(\); for \(const s of sats\) paintBadge\(s\.el, s\.id\); \}\);/);
   assert.ok(!js.includes("'ob-name'") && !sl.includes('.ob-name'), 'no agent name label in orb mode'); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');
   // Conversations: the stock Chats list docked (no pills of its own any more); it folds to a strip with the Ready count,
   // kept per device, and ⌥\ toggles it.
@@ -303,29 +310,87 @@ test('the Orb desktop opens threads in the stock window (no card override)', () 
   assert.ok(!read('web/layouts/orb/layout.css').includes('--desktop-window-max'));
 });
 
-test('Orbs view: hold ⌥ for app letters — never a key the desktop binds, stable per app, every app gets one', async () => {
-  const { ALT_TAKEN, SHIFT_TAKEN, assignKeys, keyOf } = await import(new URL('web/layouts/orb/keys.js', root));
-  // every ⌥ letter in the desktop's key table is reserved; a binding that ignores ⇧ reserves ⌥⇧ too
-  const desk = read('web/desktop/desktop.js'), on = desk.slice(desk.indexOf('  function onKey('), desk.indexOf("  addEventListener('keydown', e => onKey(e), true);"));
-  for (const line of on.split('\n')) for (const m of line.matchAll(/code === 'Key([A-Z])'/g)) {
-    assert.ok(ALT_TAKEN.includes(m[1]), `⌥${m[1]} is the desktop's`);
-    const shiftToo = !/!shift/.test(line) && (/alt && shift/.test(line) || /^    if \((alt && )?code === 'Key/.test(line));   // top-level ⌥ bindings with no ⇧ guard
-    if (shiftToo) assert.ok(SHIFT_TAKEN.includes(m[1]), `⌥⇧${m[1]} is the desktop's`);
-  }
+test('Orbs view: hold the LEFT ⌥ for bare app letters — only while held, one plain letter each, stable, collision-free', async () => {
+  const { assignKeys, keyOf, isLeftAlt, HOLD_MS } = await import(new URL('web/layouts/orb/keys.js', root));
   const apps = ['Files', 'Messenger', 'Mail', 'Music', 'Money', 'Movies', 'Health', 'Home Assistant', 'Backup', 'Calendar', 'Contacts', 'Podcasts', 'Profiles', 'Wisdom', 'YouTube Music', 'Shopping', 'Sniper', 'Search', 'Setup', 'Pages', 'Troubleshooter', 'Morning Report', 'Card Benefits', 'Carlos CRM (demo)', 'Maverick Command', 'Zzz']
     .map((name, i) => ({ id: 'a' + i, name }));
   const k = assignKeys(apps);
-  assert.equal(Object.keys(k).length, apps.length, 'every app has a key');
+  assert.equal(Object.keys(k).length, apps.length, 'every app has a letter (26 apps, 26 letters)');
   assert.equal(new Set(Object.values(k)).size, apps.length, 'no two apps share one');
-  for (const v of Object.values(k)) { const shift = v.startsWith('⇧'), l = v.slice(-1); assert.ok(shift ? !SHIFT_TAKEN.includes(l) : !ALT_TAKEN.includes(l), v); }
-  assert.equal(assignKeys([{ id: 'm', name: 'Messenger' }]).m, 'E', 'Messenger: the first free letter of its name'); assert.equal(k.a0, 'E', 'Files: F, I, L are the desktop\'s, so E');
+  for (const v of Object.values(k)) assert.match(v, /^[A-Z]$/, 'a bare letter, never ⇧ or ⌥');
+  assert.equal(k.a0, 'F', 'Files: its first letter'); assert.equal(k.a2, 'A', 'Mail: M is taken, so the next letter of its name');
   const again = assignKeys([{ id: 'new', name: 'Echo' }, ...apps], k);
   for (const a of apps) assert.equal(again[a.id], k[a.id], 'an app keeps its letter when another arrives');
-  assert.equal(keyOf({ code: 'KeyE', shiftKey: false }), 'E'); assert.equal(keyOf({ code: 'KeyB', shiftKey: true }), '⇧B'); assert.equal(keyOf({ code: 'Digit1' }), null);
-  const js = read('web/layouts/orb/layout.js');
-  assert.match(js, /api\.after\(350, \(\) => \{ if \(altDown\) showKeys\(true\); \}\)/); assert.match(js, /api\.storage\.set\('keys', keyMap\);/);
+  assert.equal(Object.keys(assignKeys([...apps, { id: 'x', name: 'Extra' }])).length, 26, 'past 26 apps the rest get none');
+  assert.equal(keyOf({ code: 'KeyE' }), 'E'); assert.equal(keyOf({ code: 'Digit1' }), null);
+  assert.equal(isLeftAlt({ code: 'AltLeft', key: 'Alt' }), true); assert.equal(isLeftAlt({ code: 'AltRight', key: 'Alt' }), false, 'Right ⌥ never shows them');
+  assert.equal(HOLD_MS, 300);
+  const js = read('web/layouts/orb/layout.js'), desk = read('web/desktop/desktop.js');
+  // armed only by the physical left ⌥ with no other key; any other key, the release or a blur drops it at once
+  assert.match(js, /if \(isLeftAlt\(e\) && !e\.repeat && !e\.metaKey && !e\.ctrlKey && !e\.shiftKey\) \{ altHeld = true; altCancel\?\.\(\); altCancel = api\.after\(HOLD_MS,/);
+  assert.match(js, /if \(keysOn && e\.altKey && !e\.metaKey && !e\.ctrlKey && !e\.shiftKey\) \{\n        const k = keyOf\(e\), id = k && byKey\.get\(k\);\n        if \(id\) \{ dropHold\(\); if \(!e\.repeat\) api\.apps\.open\(id\); return true; \}/, 'a letter wins only while they show');
+  assert.match(js, /up\(e\) \{ if \(isLeftAlt\(e\) \|\| e\.key === 'Alt'\) dropHold\(\); \}/); assert.match(js, /api\.listen\(globalThis, 'blur', dropHold\);/);
+  assert.match(js, /kc\.textContent = k; kc\.hidden = !k;/, 'bare letters on the satellites'); assert.match(js, /api\.storage\.set\('keys',/);
+  // the layout sees keys before the desktop's own ⌥ bindings (app frames too), and owns the hold overlay
+  assert.match(desk, /if \(globalThis\.WosSkinHost\?\.key\?\.\(e\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); return; \}/);
+  assert.match(desk, /e\.code !== 'AltLeft' \|\| e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| window\.WosSkinHost\?\.holdKeys\) return;/);
+  assert.equal((desk.match(/keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\);/g) || []).length, 2, 'releases from the page and from app frames');
   assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.search\(\)\);/, 'the pill opens the shell\'s own search');
   assert.match(desk, /openPalette: \(\) => palToggle\('all'\),/);
+});
+
+test('Orbs view keys: ⌥\\ list open/folded, ⌥⇧\\ wide, ⌥⇧C chat column, ⌥⇧A app panel; never a desktop binding; in the ⌥/ guide', () => {
+  const js = read('web/layouts/orb/layout.js'), desk = read('web/desktop/desktop.js');
+  const on = desk.slice(desk.indexOf('  function onKey('), desk.indexOf("  addEventListener('keydown', e => onKey(e), true);"));
+  assert.ok(!/Backslash/.test(on), '⌥\\ is free on the desktop');
+  for (const line of on.split('\n')) for (const m of line.matchAll(/code === 'Key([CA])'/g)) assert.match(line, /!shift/, `⌥⇧${m[1]} is free on the desktop`);
+  assert.match(js, /if \(alt && e\.code === 'Backslash'\) \{ if \(!e\.repeat\) \{ if \(e\.shiftKey\) widen\(!maxed\); else if \(maxed\) widen\(false\); else fold\(!folded\); \} return true; \}/);
+  assert.match(js, /api\.panel\.close\(e\.code === 'KeyC' \? 'chat' : 'app'\)/);
+  assert.match(js, /api\.storage\.set\('listMax', maxed\)/); assert.match(js, /const listW = wide \? Math\.round\(Math\.max\(D\.list, W \/ 2 - r - GAP\)\)/, 'wide = up to the orb\'s edge; the orb stays put');
+  assert.match(js, /api\.keys\.guide\(\(\) => \[/); assert.match(desk, /for \(const h of window\.WosSkinHost\?\.keyChips\?\.\(\) \|\| \[\]\) if \(vis\(h\.el\)\) chip\(/);
+  assert.match(desk, /panelCloseKind: kind => \{ const w = kind === 'app' \? panelAppW\(\) : kind === 'chat' \? panelChat\(\) : null; return w \? panelClose\(\{ id: w\.id \}\) : false; \},/);
+});
+
+test('Orbs view command take: the orb\'s own state and caption; results instead of toasts; a miss offers ↵ ask the agent', async () => {
+  const D = desk(); const seen = [];
+  D.adapter.askAgent = text => { D.calls.push(['ask', text]); return true; };
+  D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
+  const api = D.api;
+  assert.equal(D.host.commandUi, false);
+  const off = api.voice.onCommand(r => seen.push(r)); assert.equal(D.host.commandUi, true, 'the shell skips its toast while a layout draws it');
+  D.host.commandResult({ result: 'miss', text: 'make me a sandwich' }); assert.equal(seen[0].result, 'miss'); assert.ok(Object.isFrozen(seen[0]));
+  assert.equal(api.voice.ask('  make me a sandwich '), true); assert.equal(api.voice.ask(''), false);
+  assert.deepEqual(D.calls.filter(c => c[0] === 'ask'), [['ask', 'make me a sandwich']]);
+  off(); assert.equal(D.host.commandUi, false);
+  const keys = []; api.keys.on({ down: e => { keys.push(e.code); return e.code === 'KeyQ'; }, hold: true });
+  assert.equal(D.host.holdKeys, true); assert.equal(D.host.key({ code: 'KeyQ' }), true); assert.equal(D.host.key({ code: 'KeyZ' }), false);
+  D.host.setLayout('classic'); await settle();
+  assert.equal(D.host.holdKeys, false, 'released with the layout'); assert.equal(D.host.key({ code: 'KeyQ' }), false); assert.equal(D.host.commandUi, false);
+  const src = read('web/desktop/desktop.js'), js = read('web/layouts/orb/layout.js'), css = read('web/layouts/orb/layout.css');
+  assert.match(src, /const owned=!!window\.WosSkinHost\?\.commandUi, said=ev=>window\.WosSkinHost\?\.commandResult\?\.\(ev\);/);
+  assert.match(src, /if\(window\.WosSkinHost\?\.commandUi\)\{const app=ok&&\/open\|launch\|app\/\.test\(cmd\.action\)\?findApp\(cmd\.app\|\|cmd\.target\)\?\.id\|\|'':'';window\.WosSkinHost\.commandResult\(\{result:ok\?'done':'miss'/);
+  assert.match(src, /commandSaid\(ok,cmd,it\.text,music\);return ok\?'local':'none';/, 'the real take and the QA seam share one result path');
+  assert.match(src, /else toast\(ok\?'⚡':'!',ok\?'Command handled on-device':'No command matched · nothing sent',2600\);/, 'other layouts keep the toast');
+  assert.match(src, /rootCls\.toggle\('voice-cmd', commandTake && st !== 'idle'\)/); assert.match(css, /\.voice-cmd :is\(#voicePill, #voiceGlow\) \{ display: none !important; \}/);
+  assert.match(src, /askAgent: text => \{ void ask\(text, 'an orb command with no local match, sent on as a message', null, null, true\); return true; \},/);
+  assert.match(js, /else if \(r\.result === 'miss'\) say\('No command for ' \+ \(q \|\| 'that'\), \{ ask: String\(r\.text \|\| ''\)\.trim\(\)/);
+  assert.match(js, /if \(pendingAsk && e\.key === 'Enter' && !e\.altKey && !e\.metaKey && !e\.ctrlKey && !e\.shiftKey && !typingIn\(e\.target\)\) \{ askNow\(\); return true; \}/);
+  assert.match(js, /drawOrb\(ox, orbCv\.width, frameOf\(t, level, modeOf\(voice\), flash, blink, colourId, cmdK\)\);/, 'the orb draws the command state');
+  assert.match(js, /p\.started = Promise\.resolve\(api\.voice\.command\(\)\)/, 'holding the orb is the same command take');
+  assert.match(read('web/core/commands.js'), /const isMessageTake = \(kind, typed = false\) => !typed && kind !== 'command';/, 'a tap is still a message');
+});
+
+test('Orbs view satellites are status: running apps (closing only hides; Close quits) and regular apps with a count', () => {
+  const js = read('web/layouts/orb/layout.js'), desk = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
+  assert.match(js, /const regular = a => !a\.system && !a\.dev && !a\.connector && !a\.agent;/);
+  assert.match(js, /return all\.filter\(a => run\.has\(a\.id\) \? !a\.agent && !a\.connector : regular\(a\) && \(badgeMap\[a\.id\] \|\| 0\) > 0\)/);
+  assert.match(desk, /system: !!AK\?\.isSystem\?\.\(a\), dev: !!AK\?\.inDev\?\.\(a\), connector: !!AK\?\.isConnector\?\.\(a\), agent: !!a\.agent \|\| a\.kind === 'chats'/, 'the shell\'s own kinds, no list of ids');
+  assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close', \(\) => \{ api\.panel\.quit\(a\.id\);/);
+  assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && panelParks && !quit;/);
+  assert.match(desk, /if \(park\) panelPark\(w\.id\); else \{ panelDrop\(w\.id\);/);
+  assert.match(desk, /\.\.\.panelParked\.map\(p => p\.id\)\]\.map\(id => W\[id\]\)/, 'a hidden app still counts as open (its mic and audio keep going)');
+  assert.match(desk, /for \(const w of \[\.\.\.panelWins\(\), \.\.\.panelParkedW\(\)\]\) panelDrop\(w\.id, \{ swap: true \}\);/, 'turning the layout off closes them');
+  assert.match(css, /\.panel-layer > \.win\.panel\.panel-parked \{ animation: panel-park 380ms cubic-bezier\(\.4, 0, \.7, \.2\) both; pointer-events: none; visibility: hidden; \}/);
 });
 
 test('Orbs view: the list, chat and app panels resize from thin grips, kept per device, never overlapping', () => {

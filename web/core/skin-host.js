@@ -342,7 +342,33 @@
     const live = () => !a.dead && !!shell;
     return {
       // The orb's recorder plus a local command take (the held orb / ⌥C); call command() again to finish it.
-      voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined }),
+      voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined,
+        /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
+         * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
+         * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */
+        onCommand(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'voice.onCommand', fn); commandUis.add(g);
+          const off = () => { commandUis.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        // Words sent on to the agent as a new chat (the launcher's own ask path), e.g. a command with no match.
+        ask: text => live() && typeof text === 'string' && text.trim() ? !!shell.askAgent?.(text.trim().slice(0, 4000)) : false,
+      }),
+      /* Keys: down(e) sees every key the desktop gets (app frames included) before its own bindings and returns true
+       * when it used it; up(e) sees releases. hold: true = the layout draws its own hold-⌥ overlay (the shell's hold
+       * chips stay off; ⌥/ still pins the guide). guide(fn): fn() → [{ el, key, word }] chips the ⌥/ guide adds. */
+      keys: Object.freeze({
+        on({ down, up, hold = false } = {}) {
+          if (!live()) return () => {};
+          const h = { a, hold: !!hold, down: typeof down === 'function' ? guard(a, 'keys.down', down) : null, up: typeof up === 'function' ? guard(a, 'keys.up', up) : null };
+          keyHandlers.add(h); const off = () => { keyHandlers.delete(h); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        guide(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'keys.guide', fn); keyGuides.add(g);
+          const off = () => { keyGuides.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+      }),
       sessions: Object.freeze({
         list: () => { const l = live() ? shell.sessionList?.() : null; return l ? structuredClone(l) : null; },
         open: id => { if (live() && typeof id === 'string' && id) shell.openThread(id); },
@@ -389,7 +415,14 @@
           panelHolders.add(a); panelSync();
           const off = () => { panelHolders.delete(a); a.offs.delete(off); panelSync(); }; a.offs.add(off); return off;
         },
-        close: () => live() ? !!shell.panelClose?.() : false,
+        // close() the panel in front; close('chat') the chat column; close('app') the app panel (hidden if parked).
+        close: kind => !live() ? false : kind === 'chat' || kind === 'app' ? !!shell.panelCloseKind?.(kind) : !!shell.panelClose?.(),
+        /* park(true): an app's panel only hides when closed (its frame stays alive, e.g. music keeps playing) and
+         * opening that app again brings it back as it was; quit(id) really closes it; running() → [{ id, open,
+         * playing }] (the app shown and the ones kept out of sight). */
+        park: on => live() && panelHolders.has(a) ? !!shell.panelPark?.(!!on) : false,
+        quit: id => live() && typeof id === 'string' && id ? !!shell.panelQuit?.(id) : false,
+        running: () => { const l = live() ? shell.panelRunning?.() : null; return Array.isArray(l) ? l.map(r => Object.freeze({ id: String(r.id), open: !!r.open, playing: !!r.playing })) : []; },
         dock: on => live() && panelHolders.has(a) ? !!shell.panelDock?.(!!on) : false,
         back: () => live() ? !!shell.panelBack?.() : false,
         state: () => { const s = live() ? shell.panelState?.() : null; if (!s) return null; const o = { ...s }; for (const k of ['list', 'chat', 'app']) if (o[k]) o[k] = Object.freeze({ ...o[k] }); return Object.freeze(o); },
@@ -404,6 +437,7 @@
     };
   }
   const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
+  const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
   let panelOn = false;
   function panelSync() {
     const on = [...panelHolders].some(l => !l.dead);
@@ -904,6 +938,14 @@
     /* desktop.js: a layout without desks holds the right-side panel (everything opens there, desks stay put). */
     get panelMode() { return panelOn && [...panelHolders].some(l => !l.dead); },
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
+    /* desktop.js: a layout draws the command take (api.voice.onCommand); its result goes there, not to a toast. */
+    get commandUi() { return commandUis.size > 0; },
+    commandResult(ev) { for (const fn of [...commandUis]) fn(Object.freeze({ ...ev })); },
+    /* desktop.js onKey / keyup: a layout's keys first (api.keys.on); true = used. holdKeys: it draws its own hold-⌥. */
+    key(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.down && h.down(e) === true) return true; return false; },
+    keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },
+    get holdKeys() { return [...keyHandlers].some(h => h.hold && !h.a.dead); },
+    keyChips() { const out = []; for (const fn of [...keyGuides]) { const l = fn(); if (Array.isArray(l)) for (const c of l.slice(0, 20)) if (c && c.el && typeof c.key === 'string') out.push({ el: c.el, key: c.key.slice(0, 6), word: typeof c.word === 'string' ? c.word.slice(0, 24) : '', at: c.at }); } return out; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
     orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },
     level(v) { if (levels.size) for (const fn of [...levels]) fn(v); },

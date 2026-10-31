@@ -1,24 +1,23 @@
-/* Hold ⌥ for app letters (Orbs view, Miguel, 31 Oct 2026). Each floating app gets a key: ⌥ + a letter of its name
- * that the desktop doesn't already use with ⌥; when those run out, ⌥⇧ + a letter of its name. Assignments are
- * stable: an app keeps the key it had (kept per device) as long as it is still free, new apps take what is left. */
-// Every ⌥ letter the desktop binds (desktop/desktop.js onKey; tests/orb-layout.test.mjs keeps this in step), and the
-// ⌥⇧ letters it binds too (⌥⇧W reopens a closed window; ⌥V, ⌥I, ⌥F, ⌥W also fire with ⇧ held).
-export const ALT_TAKEN = Object.freeze([...'ACDFGILMNOPRSTVWXZ']);
-export const SHIFT_TAKEN = Object.freeze([...'FIVW']);
+/* App letters in the Orbs view (Miguel, 31 Oct 2026, v7). Hold the LEFT ⌥ (Option / Alt) for a moment with no other
+ * key and every floating app shows one bare letter; while it is held, that letter opens the app (it wins over the
+ * desktop's ⌥ keys only then; a quick ⌥V / ⌥C keeps its usual meaning). One plain letter per app, never ⇧: the first
+ * free letter of its name, else any free letter. Stable: an app keeps the letter it had (kept per device) while it is
+ * still free; new apps take what is left. Past 26 apps the rest get none. */
 const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
-/** apps: [{ id, name }], saved: { id: key }. Returns { id: key } where key is 'B' (⌥B) or '⇧B' (⌥⇧B). */
+/** apps: [{ id, name }], saved: { id: letter }. Returns { id: letter }. */
 export function assignKeys(apps, saved = {}) {
-  const free = new Set([...LETTERS.filter(l => !ALT_TAKEN.includes(l)), ...LETTERS.filter(l => !SHIFT_TAKEN.includes(l)).map(l => '⇧' + l)]);
-  const out = {};
+  const free = new Set(LETTERS), out = {};
   for (const a of apps) { const k = saved?.[a.id]; if (typeof k === 'string' && free.has(k)) { out[a.id] = k; free.delete(k); } }
-  for (const shiftOk of [false, true]) for (const a of apps) {
+  for (const a of apps) {
     if (out[a.id]) continue;
-    const letters = [...String(a.name || a.id).toUpperCase()].filter(c => c >= 'A' && c <= 'Z');
-    const pick = letters.map(l => (shiftOk ? '⇧' : '') + l).find(k => free.has(k));
+    const pick = [...String(a.name || a.id).toUpperCase()].find(c => free.has(c));
     if (pick) { out[a.id] = pick; free.delete(pick); }
   }
-  for (const a of apps) if (!out[a.id]) { const k = [...free][0]; if (k) { out[a.id] = k; free.delete(k); } }   // a name with no free letter
+  for (const a of apps) if (!out[a.id]) { const k = [...free][0]; if (k) { out[a.id] = k; free.delete(k); } }
   return out;
 }
-/** The key a keydown means ('B' / '⇧B'), or null. */
-export const keyOf = e => /^Key[A-Z]$/.test(e.code || '') ? (e.shiftKey ? '⇧' : '') + e.code.slice(3) : null;
+/** The letter a keydown means ('B'), or null. */
+export const keyOf = e => /^Key[A-Z]$/.test(e.code || '') ? e.code.slice(3) : null;
+/** Only the physical LEFT ⌥ arms the letters (Right ⌥ is the Mac app's dictation key). */
+export const isLeftAlt = e => e.code === 'AltLeft';
+export const HOLD_MS = 300;

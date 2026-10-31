@@ -446,6 +446,10 @@ html.key-hints-on #clock { visibility: hidden; }
 .panel-layer > .win.panel.panel-swap { animation: panel-swap 240ms ease-out both; }
 .panel-layer > .win.panel.panel-out { animation: panel-out 380ms cubic-bezier(.4, 0, .7, .2) both; pointer-events: none; }
 .panel-layer > .win.panel .wbody iframe { pointer-events: auto; }
+/* Kept running (api.panel.park): slid away out of sight, its frame alive (music keeps playing); opening it again slides it back. */
+.panel-layer > .win.panel.panel-parked { animation: panel-park 380ms cubic-bezier(.4, 0, .7, .2) both; pointer-events: none; visibility: hidden; }
+.panel-layer > .win.panel.panel-parked .wbody iframe { pointer-events: none; }
+@keyframes panel-park { from { transform: none; visibility: visible; } to { transform: translateX(calc(100% + 24px)); visibility: hidden; } }
 .wbar .panel-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes panel-in { from { transform: translateX(calc(100% + 24px)); } to { transform: none; } }
 @keyframes panel-out { from { transform: none; } to { transform: translateX(calc(100% + 24px)); } }

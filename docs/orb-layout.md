@@ -21,26 +21,42 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   sharp ring when a command take ends or a new thread turns Ready) and the mic level (`api.orb.onLevel`). Click = talk
   (a new chat; click again to send). Hold = a local command (release runs it).
 - Its look is a **Style × a Colour**, picked in a quiet **Look** button (live previews of every style in the chosen
-  colour; Esc or a click outside folds it), kept per device (`api.storage` `style`, `colour`). Thirteen styles, each
-  its own canvas-2D drawing in `web/layouts/orb/styles.js`: **Glass** (default), **Oracle** (a calm face), **Plasma**,
-  **Swarm**, **Hologram**, **Glitch**, **Chrome**, and (v6) **Marble** (a classical Greek head in veined white stone:
-  a small signed-distance sculpture ray-marched once on the CPU into a lit image with ambient occlusion and a 3D vein
-  mask; the veins and the closed eyes light up with the voice and the lips part while it listens), **Sun** (granules,
-  a darker limb, a corona of flares that leap with the voice), **Black hole** (shadow, photon ring, a Doppler-bright
-  accretion disc bent over the top), **Crystal** (a turning cut icosahedron lit per facet), **Aurora** (curtains
-  rippling in a dark glass sphere) and **Planet** (a banded world under a tilted ring). Seventeen colours: Nebula
-  (default), Ember, Tide, Gold, Mono, Emerald, Rose, Arctic, Marble, Obsidian, Bronze, Royal, Crimson, Cyber,
-  Sunset, Ocean (four stops each, skin-layer tokens `--ob-look-*` in the tweak's `tweak.css`) and Skin accent. All
-  drawn in-house: no image assets, no vendored code. Ideas (not code) from Teknium's Uncommon Web for the v4 styles.
-- Every installed app with a screen (the shell's own kinds, `WosAppKinds.kinds().apps`: no agent apps, connectors or
-  agents; picker order; no cap) floats on two tilted orbits as **just their own mark** (v6: no
-  glass plate, ring or bubble behind them; a tile logo stays a tile, a free-form logo or a glyph stands alone, with a
-  soft shadow for legibility), each with the shell's own **count badge** (`api.apps.badges(watch)`: the counts on desk
-  marks and the dock, live; a running app reports its own through WizardApp badge). When the orbits can't hold them all at a readable size the marks shrink (to 74%),
-  and only past that the last ones fold into an **All apps** mark (shown only when something is hidden); alternating rings at even steps, drifting slowly the same way (never sliding onto each other); in front of
-  the orb they are bigger and brighter, behind it smaller and dimmer. Label on hover; a click opens the app. Each wears
-  its **own logo** (`api.apps.logo(id)` → `store-data/logo/<id>`; template / Runtipi placeholders count as none) in a
-  round frame, else its designed glyph in its own colour. Never a letter.
+  colour; Esc or a click outside folds it), kept per device (`api.storage` `style`, `colour`). v7 (Miguel: "Plasma is
+  my favourite; that quality or higher"): **eight styles**, each a small WebGL fragment shader in
+  `web/layouts/orb/styles.js` on one shared offscreen GL context (copied onto each 2D canvas): **Plasma** (the v6 cloud,
+  now drawn per pixel with a fine warped-noise texture), **Glass** (a lit glass sphere: a refracted warped nebula, a
+  Fresnel rim, two highlights), **Oracle** (the glass with the concept's calm face), **Chrome** (liquid metal: a
+  wobbling blob reflecting a banded studio sky with chromatic fringes), **Marble** (polished stone: ridged-noise veins,
+  a cloudy body, gloss and light glowing through it), **Sun** (boiling granules, limb darkening, a streaming corona),
+  **Planet** (a lit banded gas giant with a storm, an atmosphere and a ring passing in front) and **Black hole** (a
+  horizon, photon ring, Doppler-bright disc in front and its far side lensed over the top). Swarm, Hologram, Glitch,
+  Crystal and Aurora were retired (below that bar); a device that wore one gets Plasma. No WebGL: canvas-2D Plasma /
+  Glass / Oracle stand in. Cost: at most 640² shader pixels a frame (Plasma at half resolution), only in the one ~30 fps
+  loop. Seventeen colours: Nebula (default), Ember, Tide, Gold, Mono, Emerald, Rose, Arctic, Marble, Obsidian, Bronze,
+  Royal, Crimson, Cyber, Sunset, Ocean (four stops each, skin-layer tokens `--ob-look-*` in the tweak's `tweak.css`)
+  and Skin accent. All drawn in-house (our own value noise / fBm, no vendored code); ideas from Teknium's Uncommon Web
+  (Paper Shaders' Warp and LiquidMetal).
+- **Satellites are status, not a launcher** (v7). Only apps **running** in the panel (shown, or closed and still
+  running) and **regular apps with an unread count** float; nothing else. Regular = the shell's kinds
+  (`WosAppKinds`): never agents, connectors, agent apps, system apps (`isSystem`: Files, Notifications, Transcriber,
+  Browser, Secret Drop, ChatGPT, Claude…) or in-development apps (`inDev`). Nothing running and nothing new: just the
+  orb. Everything stays one step away: the search pill (⌥Space), All apps (⌥O), a command, the ⌥ letters.
+  Each is **just its own mark** (no plate; a tile logo stays a tile, else its glyph in its own colour; never a letter),
+  with the shell's own **count badge** (`api.apps.badges(watch)`; bigger on a badge-only app). On two tilted orbits,
+  alternating rings at even steps, drifting slowly the same way; past what fits at 74% size the rest fold into **All
+  apps**. A click opens (or brings back) the app.
+- **Closing an app only hides it** (`api.panel.park(true)`): ✕, Esc or ⌥⇧A slide its panel away but its window stays
+  mounted out of sight (`panel-parked`: frame alive, music keeps playing, still counted as open for its mic), and its
+  satellite keeps a soft glowing ring (three tiny bars while a same-origin audio/video element plays). Its satellite, a
+  command or opening it again brings it back exactly as it was. **Right-click a satellite**: Open, Close (Close really
+  quits it: `api.panel.quit(id)`; the satellite leaves). Turning the Orbs view off closes them all.
+- **Commands (⌥C, or hold the orb)** are the orb's own (v7): the same on-device grammar as everywhere
+  (`core/commands.js`, never sent to the agent; a tap is still a message). The orb tightens into a brighter core inside
+  a turning ring, the caption under it says what it is doing ("Say a command · let go or ⌥C to run it", then "Working
+  it out…"; the words appear once transcribed: there is no live interim transcript), and the result lands there:
+  an opened app's satellite pins and the bolt runs to its panel ("Opening Music"), music says "♪ Now playing · …", no
+  match says "No command for “…”" with **↵ ask <agent> instead** (Enter or a click sends the same words as a new chat,
+  `api.voice.ask`). No toast and no bar voice pill for it here (`api.voice.onCommand`; `html.voice-cmd`).
 - Under the orb: only a caption line while a take runs (no name label: the orb is the entity). The real keys are the hint line near the
   bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to type (new chat). The fuel gauge and the
   gear stay top right; the Desks | Orbs switch sits in the bar's centre.
@@ -56,7 +72,7 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   visible and clickable. Send, Done, Snooze (also ⌥→ / ⌥←), ‹, ✕ or Esc close it and give the keyboard back to the
   list, so ⌥↓ goes straight on to the next one. Another thread replaces it, with a quiet ‹ back.
 - **An app opens in the right third** (a satellite, All apps, a link), one at a time (another replaces it, with ‹);
-  ✕ or Esc closes it. A chat and an app can be open together; Esc closes the chat first.
+  ✕, Esc or ⌥⇧A hide it (it keeps running, see below). A chat and an app can be open together.
 - **The orb powers what is open.** The open app's satellite stops drifting and pins between the orb and its panel
   (an app with no satellite gets one while it is open); an electric bolt in the orb's colour runs orb → that icon →
   the panel's edge, and a quieter one orb → the chat column. Jagged arcs with a glow, a second and third strand,
@@ -66,8 +82,17 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   focused grip; double-click or Enter = back to the default; kept per device in `widths`; list 260-520 px, chat
   360 px-45vw, app 360 px-60vw; never overlapping; the orb stays put).
 - The **Look** picker sits at the bottom of the orb area, right of whatever is open on the left.
-- **⌥\\** (or the handle on the list's edge) folds the list to a slim strip with the Ready count; a chat column then
-  opens beside the strip. Kept per device.
+- **Keys** (v7; none of them a desktop binding; on their things in the ⌥/ guide via `api.keys.guide`):
+  | Key | Does |
+  | --- | --- |
+  | ⌥\\ (or the handle on the list's edge) | list open ⇄ folded to a slim strip with the Ready count (from wide: back to open) |
+  | ⌥⇧\\ | list wide (to the orb's edge; the orb stays put) ⇄ open; a chat opened meanwhile uses the usual width |
+  | ⌥⇧C | close the chat column |
+  | ⌥⇧A | hide the app panel (it keeps running) |
+  | Esc | the top thing: the menu / Look popover / caption, then the panel holding the keyboard (else the chat, then the app) |
+  | hold **left** ⌥ (~300 ms, no other key) | every floating app shows a bare letter and the others show theirs in a quiet row under the orb; that letter (⌥ still held) opens the app, over the desktop's own ⌥ keys only then. Released, any other key or a blur: gone at once. Right ⌥ never shows them; a quick ⌥V / ⌥C keeps its meaning. One plain letter per app (its name's first free letter), kept per device (`keys`), collision-free (`keys.js`) |
+  | ↵ | after a command with no match: ask the agent instead |
+  Fold, wide and widths are kept per device.
 - **No desks.** The workspace numbers are gone and desk keys do nothing (⌥1…9, ⌥[ ⌥], moving windows, full screen,
   ⌥P); ⌥T just offers the apps. The desks underneath are never touched: turning the Orb off brings them back exactly
   (and the desk you were on).
@@ -106,7 +131,16 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
   and `panelApp` the open app's id (a `route` event fires when any changes). The layout sets the panels' widths
   (`--ob-col-w`, `--ob-chat-w`, `--ob-beside-left`, `--ob-app-w` on `<html>`): they depend on the orb's size.
 - `api.back.push(close)`: the layout's own overlay (the look popover) joins the shell's Esc order.
-- `api.voice.command()`: a local command take (⌥C); call again to run it.
+- `api.voice.command()`: a local command take (⌥C); call again to run it. `api.voice.onCommand(fn)`: the layout draws
+  the take; its result comes to `fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music })` instead
+  of the shell's toast (`WosSkinHost.commandUi` / `commandResult`). `api.voice.ask(text)`: those words as a new chat
+  (the launcher's `ask`, quiet). QA seam: `__wux.commandText(text)` runs a finished take's words (no microphone).
+- `api.keys.on({ down, up, hold })`: every key the desktop gets (app frames too) before its own bindings (`down`
+  returns true when used; `WosSkinHost.key` / `keyUp` from `onKey`); `hold: true` keeps the shell's own hold-⌥ chips off
+  (`WosSkinHost.holdKeys`). `api.keys.guide(fn)` → `[{ el, key, word }]` chips added to the ⌥/ guide (`keyChips`).
+- `api.panel.close('chat' | 'app')` closes that one (`panelCloseKind`). `api.panel.park(on)`: a closed app only hides
+  (`panelPark`; opening it again unparks the same window); `quit(id)` really closes it (`panelQuit`); `running()` →
+  `[{ id, open, playing }]`. `api.apps.list()` rows also carry `system`, `dev`, `connector`, `agent` (the shell's kinds).
 - `api.orb.ready()` loads `orb.js` on a page without it (desktop), so `api.orb.create` works there;
   `api.route().home` is true while Home is in front.
 

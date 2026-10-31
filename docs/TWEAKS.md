@@ -97,7 +97,10 @@ Chats window in the chat panel, anything else in the app panel on the right, one
 `api.panel.close()` / `back()` / `state()` (`chat`, `app` parts), `api.apps.badges(watch)` (the shell's app counts), `api.route().panel` / `panelApp`; releasing it gives
 the desks back untouched. `api.panel.dock(on)` docks the stock Chats list in its own panel on the left for good; a
 thread picked in it opens in a column beside it, which closes when the thread is finished (Done, Snooze, a send).
-`api.back.push(close)` puts the layout's own popover in the Esc order.
+`api.back.push(close)` puts the layout's own popover in the Esc order. Layout-only too: `api.voice.onCommand(fn)` / `ask(text)` (the layout draws the ⌥C command take
+and its result instead of the toast and voice pill), `api.keys.on({ down, up, hold })` / `guide(fn)` (its keys first,
+its own hold-⌥ overlay, chips in the ⌥/ guide), and `api.panel.close('chat' | 'app')`, `park(on)` (a closed app only
+hides and keeps running), `quit(id)`, `running()`.
 
 ## App inbox feeds (trusted `inbox` capability)
 

@@ -23,8 +23,8 @@ test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () =>
 test('holding left ⌥ alone shows key hints; any other key or release hides them', () => {
   assert.match(js, /if \(pinned \|\| e\.repeat \|\| e\.code !== 'AltLeft'/);
   assert.match(js, /keyHints\.down\(e\)/);
-  assert.match(js, /addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
-  assert.match(js, /doc\.addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
+  assert.match(js, /addEventListener\('keyup', e => \{ keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\); \}, true\)/);
+  assert.match(js, /doc\.addEventListener\('keyup', e => \{ keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\); \}, true\)/);
 });
 
 test('⌥S only sends its own kind of take', () => {

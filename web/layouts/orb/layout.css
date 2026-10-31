@@ -273,3 +273,61 @@ html[data-shell="desktop"][data-layout="orb"] .ob-grip:focus-visible::after { op
 /* while a panel is being resized: no text selection, and app pages don't swallow the pointer */
 html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-resizing]) { cursor: col-resize; user-select: none; }
 html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-resizing]) .panel-layer iframe { pointer-events: none !important; }
+
+/* ---------- v7: the orb's own command take (⌥C / a held orb): caption results, no bar pill or toast for it ---------- */
+html[data-shell="desktop"][data-layout="orb"][data-orb-scene="home"].voice-cmd :is(#voicePill, #voiceGlow) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="cmd"] { color: var(--ob-ink); letter-spacing: .01em; }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="ok"], html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="music"] { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-caption[data-tone="music"] .ob-cap-t { font-weight: 500; opacity: .85; }
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px 3px 4px; border-radius: 999px;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); color: var(--ob-ink); font: inherit; font-size: .92em; cursor: pointer;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: border-color 200ms, background 200ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask:is(:hover, :focus-visible) { border-color: var(--ob-line2); background: var(--ob-glass-hi); outline: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-cap-ask kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 999px; background: var(--ob-glass-solid); color: var(--ob-ink); font: inherit; font-size: .9em; }
+
+/* ---------- v7: satellites are status: running (shown or hidden, a soft glow ring), playing (tiny bars), new (badge) ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-ring {
+  position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; translate: -50% -50%; border-radius: 50%; pointer-events: none; opacity: 0;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, var(--ob-white)), 0 0 18px 2px color-mix(in srgb, var(--c) 45%, transparent), inset 0 0 12px color-mix(in srgb, var(--c) 30%, transparent);
+  transition: opacity 400ms ease;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-sat[data-run="hidden"] .ob-sat-ring { opacity: .85; animation: ob-run-glow 3.2s ease-in-out infinite; }
+@keyframes ob-run-glow { 0% { opacity: .55; } 50% { opacity: .95; } 100% { opacity: .55; } }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq { position: absolute; left: 50%; top: calc(100% - 6px); translate: -50% 0; display: none; gap: 2px; align-items: flex-end; height: 10px; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i { width: 2px; height: 100%; border-radius: 1px; background: color-mix(in srgb, var(--c) 50%, var(--ob-white)); transform-origin: bottom; animation: ob-eq 900ms ease-in-out infinite; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i:nth-child(2) { animation-delay: -300ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-eq > i:nth-child(3) { animation-delay: -600ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-playing .ob-sat-eq { display: flex; }
+@keyframes ob-eq { 0% { transform: scaleY(.3); } 50% { transform: scaleY(1); } 100% { transform: scaleY(.3); } }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-new .ob-sat-badge { transform: scale(1.25); }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-eq { display: none; }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="orb"] :is(.ob-sat-ring, .ob-sat-eq > i) { animation: none !important; } }
+
+/* Right-click a satellite: a small quiet menu (Open / Close). */
+html[data-shell="desktop"][data-layout="orb"] .ob-menu {
+  position: fixed; z-index: 170; min-width: 150px; padding: 5px; border-radius: 12px; display: flex; flex-direction: column; gap: 1px;
+  border: 1px solid var(--ob-line); background: var(--ob-glass-solid); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--ob-core) 60%, transparent);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-menu[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-menu-h { padding: 5px 10px 4px; color: var(--ob-ink3); font: 600 calc(var(--wz-text-sm) * .8) / 1.2 var(--wz-font-ui); letter-spacing: .06em; text-transform: uppercase; }
+html[data-shell="desktop"][data-layout="orb"] .ob-menu-i { text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: none; color: var(--ob-ink); font: 500 var(--wz-text-sm) / 1.2 var(--wz-font-ui); cursor: pointer; }
+html[data-shell="desktop"][data-layout="orb"] .ob-menu-i:is(:hover, :focus-visible) { background: var(--ob-glass-hi); outline: none; }
+
+/* Hold left ⌥: the letters of apps that aren't floating, as one quiet row under the orb (only while held). */
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow {
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) * var(--ob-k, 1) / 2 + 52px); transform: translateX(-50%); z-index: 6;
+  width: min(720px, calc(var(--ob-free, 100vw) - 48px)); display: none; flex-wrap: wrap; justify-content: center; gap: 6px 12px; pointer-events: none;
+  color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .9) / 1.2 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-keyrow { display: flex; }
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i { display: inline-flex; align-items: center; gap: 6px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i kbd {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 6px;
+  border: 1px solid var(--ob-line2); border-bottom-width: 2px; background: var(--ob-glass-solid); color: var(--ob-ink); font: 600 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui);
+}
+/* The list wide (⌥⇧\): its column reaches to the orb's edge (widths from layout.js). */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-fold="wide"] ~ .ob-grips .ob-grip[data-grip="list"] { display: none; }
