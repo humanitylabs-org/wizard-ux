@@ -4,7 +4,8 @@
  * contract, and its parser lacks open-and-play. Do not grow this grammar. */
 (() => {
   'use strict';
-  const legacyAliases = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel' };
+  // Retired id aliases are owned by the app registry (apps.js), not a second voice registry.
+  const legacyAliases = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'movies', cinequeue: 'movies', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel' };
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const MUSIC = '(?: the)?(?: music| song| track| tune| playback| it| this)?';
   const MUSIC_WORD = /\b(music|song|songs|track|tune|tunes|playlist|radio|spotify)\b/;
@@ -110,14 +111,21 @@
   }
 
   // DELETE with APK A: installed legacy bridge method names, never UI or grammar.
-  window.WizDeviceLegacy = [{appId:'usuals', path:'/usuals/', probe:'usuals', phoneOnly:true, methods:[
+  // Food was id `usuals` at /usuals/ before app ids followed app names; both stay admitted while boxes move.
+  const FOOD_METHODS = [
     'usuals', 'usualsTeach', 'usualsCancel', 'usualsKeepName', 'usualsRun', 'usualsDelete', 'usualsSave', 'usualsMatch', 'voiceTypingSettings'
-  ]}];
+  ];
+  window.WizDeviceLegacy = [{appId:'food', path:'/food/', probe:'usuals', phoneOnly:true, methods:FOOD_METHODS},
+    {appId:'usuals', path:'/usuals/', probe:'usuals', phoneOnly:true, methods:FOOD_METHODS}];
   window.__wosUsuals = () => window.WizAndroidRelay?.resume();
   window.WosVoiceLegacy = {
     alias(q, APP) {
       if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
-      return APP[legacyAliases[q]] || null;
+      const aliases = window.WizCore?.appIdAliases || {};
+      const old = Object.keys(aliases).find(id => norm(id) === q);
+      const id = legacyAliases[q] || aliases[old];
+      const previous = Object.keys(aliases).find(key => aliases[key] === id);
+      return APP[id] || APP[previous] || APP[q.replace(/ /g, '')] || null; // unrenamed boxes keep working
     },
     parse(stage, text, ctx) {
       const music = window.WosMusic;

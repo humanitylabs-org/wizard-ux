@@ -11,12 +11,11 @@ Reuse:
 - chat: REUSE WizardApp.nav.openThread
 - orb: EXTEND Orb.create (row updated)
 - streak: NEW web/core/streaks.js + row
-Visual: <side-by-side screenshot, or "none">
 ```
 
 `Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
-## Apps (`WizardApp` via `/wizard-os-home/core/app-client.js` only)
+## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
@@ -31,36 +30,36 @@ Visual: <side-by-side screenshot, or "none">
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + live change keep state |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback | literal colours in native screens |
 | Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings`; web `WizReach` | duplicate offline/address UI |
-| Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` | app transcriber | stale/foreign denied; unavailable explicit |
+| Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) | app transcriber | stale/foreign denied; unavailable explicit |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / current / settle / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
-| Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated title header | tools (icons, dot) in the shell bar |
+| Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable failures |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
 | Offline shell | `web/sw.js` | API cache | offline reload |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
-| Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
+| Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own springs/haptics | — |
 | Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | per-app lint forks | legacy warns; changed lines fail |
-| App kit: rows, sections, empty/add field | `WizardApp`: live `web/kit/wizard-ui.css` + `--wz-*`, then active skin (core/package/My skin) | kit forks; `.wz-field-row` chat; literal colours | two skins + My skin restyle `.wz-*` rows |
+| App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | kit forks; `.wz-field-row` chat; literals | two skins + My skin restyle `.wz-*` |
 
-## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.
+## Shell (`web/core/`): both shells/all agents; per-kind EXTEND.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Done | `WizCore` (`chats.js`, `.css`); Ready/Home alerts; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Models, retry, composer mic, receipts, reading place; model label clear of draft text | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
+| Models/retry, composer mic, receipts, reading place; label clear of draft text | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
-| Pinned threads (synced) | `WosChatPins` (`chat-pins.js`) | device-local pin lists |
+| Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) | device-local pin lists |
 | Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
@@ -72,8 +71,8 @@ Visual: <side-by-side screenshot, or "none">
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
-| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + legacy defaults | lists |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases | PNG/emoji icons |
+| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs+defaults, 1s boot cap | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |
 | Links: sheet/window (`asWindow`), images, long-press browser/Download/Copy | `WizLinks` (`links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
@@ -106,7 +105,7 @@ Visual: <side-by-side screenshot, or "none">
 | Module | Contract |
 |---|---|
 | `web/core/app-voice.js` (`WosAppVoice`) | Registry names/claims. |
-| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music grammar and legacy device schema until APK A; Food owns its grammar. |
+| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music/device schema to APK A; Food grammar; ids: `appIdAliases`. |
 | `web/core/background-audio-legacy.js` (`WizBackgroundAudioLegacy`) | Pilot grant/token until APK A. |
 
 ## Plumbing (single owner; files in `web/core/` unless noted)

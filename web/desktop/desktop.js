@@ -20,7 +20,7 @@
  */
 (async () => {
   'use strict';
-  if (window.WizLauncher?.ready) await window.WizLauncher.ready;
+  await window.WizLauncher?.waitForShell?.();
   if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const C = window.WizCore;
   const { esc, clip, norm, ago, emoOf } = C;
@@ -2034,7 +2034,7 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
+    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Archive / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['L', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
@@ -2105,7 +2105,7 @@
         }
         if (cw === f) {
           // → ← on the Done / Snooze buttons; scrolled out of sight, they sit on the chat's header with their word.
-          if (f.thread && (f.thread !== '__new__' || CHATS.notifOpen?.(f.id))) for (const [q, l, word] of [['[data-chact="done"]', '→', 'Done'], ['[data-chact="snooze"]', '←', 'Snooze'], ['[data-chact="resolve"]', 'X', 'Resolve']]) {
+          if (f.thread && (f.thread !== '__new__' || CHATS.notifOpen?.(f.id))) for (const [q, l, word] of [['[data-chact="done"]', '→', 'Archive'], ['[data-chact="snooze"]', '←', 'Snooze'], ['[data-chact="resolve"]', 'X', 'Resolve']]) {
             const on = [...wel.querySelectorAll(q)].filter(vis).map(n => chip(n, l, 'above')).some(Boolean);
             const head = wel.querySelector('.pane-main .ch-head');
             if (!on && wel.querySelector(q) && vis(head)) chip(head, l, l === '→' ? 'inside' : 'inside-2', word);
@@ -2313,7 +2313,7 @@
     if (alt && !shift && code === 'KeyX') return hit(() => { if (!e.repeat) chatAct('resolve', 'X'); });
     function chatAct(act, keyName) {
       const f0 = focused(), f = f0?.app === 'chats' ? f0 : ws[cur].wins.map(x => W[x]).find(mainChats);
-      const name = act === 'done' ? 'Done' : act === 'resolve' ? 'Resolve this' : 'Snooze';
+      const name = act === 'done' ? 'Archive' : act === 'resolve' ? 'Resolve this' : 'Snooze';
       if (homeOpen || !f?.thread || (f.thread === '__new__' && !CHATS.notifOpen?.(f.id))) return toast('✓', `Open a chat first, then ${MOD}${keyName} = ${name}`, 1800);
       if (!winEl(f.id)?.querySelector(`[data-chact="${act}"]`)) return toast('◷', act === 'resolve' ? 'Resolve this is for an open notification' : `${name} appears once the reply is in`, 1800);
       CHATS.threadAct(f.id, f.thread, act);

@@ -422,11 +422,11 @@
       return { list, html: `<div class="ch-sheet ch-mpop" role="dialog" aria-label="${mode === 'new' ? 'Model for this new chat' : 'Model for this thread'}"><div class="ch-sheet-b"><div class="msheet-list">${body}</div></div></div>` };
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
-    failureHtml({ s, busy, canRetry }) {
+    failureHtml({ s, busy, retryLabel, canRetry }) {
       const model = s.model ? M.name(s.model, s.provider) : '';
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
       const rc = s.reconnect;
-      if (rc && s.queueReason !== 'provider_access') {
+      if (rc && s.queueReason !== 'provider_access' && busy !== 'retry') {
         const target = M.short(s.model, s.provider) || model || rc.name;
         return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>
         <p>This message is saved. Sign in to ${esc(rc.name)} and it will send to ${esc(target)} on its own.</p>
@@ -434,9 +434,9 @@
       }
       const waiting = s.status === 'queued' && s.queueReason === 'provider_access';
       const what = waiting ? s.safeError || 'The selected AI provider could not start this request.' : s.status === 'interrupted' ? 'The last request was interrupted before it finished.' : 'The last request didn’t finish.';
-      return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${s.status === 'interrupted' ? 'Interrupted' : 'Needs retry'}${model ? ` · ${esc(model)}` : ''}</span>
-        <p>${esc(what)} ${waiting ? 'Your original message and files are saved. You can choose another model and retry now, or wait: it will retry automatically on the same provider when access returns. ' : ''}Retry sends it again${model ? ' on the same model' : ''}, or pick another model. Dismiss clears the error and keeps the thread.</p>
-        <div class="ch-fail-b">${waiting && rc ? `<button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}">Sign in to ${esc(rc.name)}</button>` : ''}<button type="button" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
+      return `<section class="ch-fail" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}"><span class="lb">${s.status === 'interrupted' ? 'Interrupted' : 'Needs retry'}${model ? ` · ${esc(model)}` : ''}</span>
+        <p${busy === 'retry' ? ' role="status"' : ''}>${busy === 'retry' ? esc(retryLabel || 'Retrying…') : `${esc(what)} ${waiting ? 'Your original message and files are saved. You can choose another model and retry now, or wait: it will retry automatically on the same provider when access returns. ' : ''}Retry sends it again${model ? ' on the same model' : ''}, or pick another model. Dismiss clears the error and keeps the thread.`}</p>
+        <div class="ch-fail-b">${waiting && rc ? `<button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}" ${busy ? 'disabled' : ''}>Sign in to ${esc(rc.name)}</button>` : ''}<button type="button" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
     },
   };
   window.WosModels = M;
