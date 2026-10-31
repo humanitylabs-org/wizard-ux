@@ -233,7 +233,7 @@
     const d = ws[t];
     if (!internal) rememberClosed(id, t);
     removeWin(id, internal);
-    if (!internal && !d.wins.length && ws.length > 1) removeDesktop(d);
+    if (!internal && !d.wins.length && ws.length > 1) { removeDesktop(d); if (window.WosSkinHost?.emptyHome) goHome(); } // a layout without desk numbers: back to Home
     else { save(); render(); }
   }
   /* ⌥⇧W reopens the last closed window (Omarchy-style safety net for ⌥W): same desk, same spot, same chat or screen. */
@@ -2653,7 +2653,9 @@
     },
     // The thread's own Snooze / Done (Chats threadAct: the snooze tweak's interception, toasts, optimistic list).
     sessionAct: (sid, act) => { const w = findWin(mainChats); CHATS.threadAct(w?.id || '', sid, act); return true; },
-    apps: () => (window.WizLauncher?.get('desktopQuick') || []).map(id => APP[id]).filter(a => a && !a.agent).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a) })),
+    // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
+    apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
+      return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a) })); },
     openApp: id => !!APP[id] && openApp(APP[id]) !== false,
     openPicker: () => openPicker(),
     home: () => goHome(),
