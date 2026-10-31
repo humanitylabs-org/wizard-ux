@@ -316,6 +316,28 @@ test('James: notifications are on for every skin, with one persistent owner off-
   assert.ok(!f.all().some(id => INBOX.includes(id)), 'changing skin keeps owner off');
   await f.E.toggle('wizard/unified-inbox'); assert.ok(inboxOn(f.all()) && f.all().includes(INBOX[0]), 'and back on');
 });
+test('flattened devices (preset none, own mix) load the first inbox member whatever member the mix names (Miguel\'s Mac, 31 Oct 2026)', async () => {
+  const base = { version: 1, off: {}, preset: 'none', defaultsMigrated: true, machinesHomeMoved: true, orbSwitchMoved: true };
+  const states = {
+    'mix names the stock member on': { mix: { 'wizard/unified-inbox': true, 'miguel/hidden-pin': true } },
+    'mix names both members on': { mix: { 'wizard/unified-inbox': true, 'miguel/inbox': true } },
+    'leftover retired miguel/app-inbox off': { mix: { 'miguel/app-inbox': false, 'miguel/swipe-strip': true } },
+    'leftover retired miguel/app-inbox on': { mix: { 'miguel/app-inbox': true } },
+    'empty defaultsOff list': { mix: {}, defaultsOff: [] },
+    'defaultsOff of unrelated packages': { mix: {}, defaultsOff: ['wizard/app-borders'] },
+  };
+  for (const [name, st] of Object.entries(states)) {
+    const f = wizardExperience(new Map([['wos.skin-tweaks.v1', JSON.stringify({ ...base, ...st })]])); await f.E.refresh();
+    assert.ok(inboxOn(f.all()) && f.all().includes(INBOX[0]), `${name}: ${INBOX[0]} loads`);
+    assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').on, true, `${name}: the switch reads on`);
+    if (st.mix['miguel/hidden-pin']) assert.ok(f.all().includes('miguel/hidden-pin'), `${name}: his other choices stay`);
+  }
+  // The one switch still turns the whole inbox off on such a device, and back on.
+  const f = wizardExperience(new Map([['wos.skin-tweaks.v1', JSON.stringify({ ...base, ...states['mix names the stock member on'] })]])); await f.E.refresh();
+  await f.E.toggle('wizard/unified-inbox'); assert.ok(!f.all().some(id => INBOX.includes(id)), 'off: no member loads');
+  assert.ok(f.all().includes('miguel/hidden-pin'), 'his other choices are untouched');
+  await f.E.toggle('wizard/unified-inbox'); assert.ok(f.all().includes(INBOX[0]) && inboxOn(f.all()), 'on again: the first member');
+});
 test('notifications preserve existing Miguel off choices and old custom-skin ids after promotion', async () => {
   const saved = new Map([['wos.skin-tweaks.v1', JSON.stringify({version:1, off:{miguel:['miguel/unified-inbox']}})]]);
   let f = wizardExperience(saved); await f.E.refresh();

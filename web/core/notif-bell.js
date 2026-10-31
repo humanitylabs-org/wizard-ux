@@ -41,10 +41,17 @@
    * OFF unless a trusted package holds it (skin-host api.inbox.feeds → feeds(true)): until then no app is ever
    * asked for a feed and everything below is the stock Notifications-only path. Per app, the owner can keep its
    * items in the app instead (Notifications /api/sources, chats: false, the same on every device): no rows, no
-   * count here; the app keeps its own badge. */
-  const FEED_KEY = 'wos.inbox.feeds.v1', MARK_KEY = 'wos.inbox.appmarks.v1';
+   * count here; the app keeps its own badge.
+   * Only a definite answer (404/405/410, or a 200 that is not a feed) counts as "no feed", and a "no" is asked again
+   * after 30 min: an app that was restarting (502/503, timeout) or gained its feed later shows up by itself. (v1 kept
+   * any first failure as "no" for 6 h, so a device that first asked while Messenger restarted showed no rows.)
+   * Instant (contract v1.1): a feed that also carries `watch` (a path under the app) and `version` gets ONE long
+   * poll, GET /<app>/<watch>?v=<version>, that the app answers as soon as its feed changes (with the new feed) or
+   * after ~25 s. Only for apps that declare it, only while this page is visible and a package watches the feeds;
+   * errors back off 5 s, 30 s, then 2 min. Every other app stays on the shared cadence. */
+  const FEED_KEY = 'wos.inbox.feeds.v2', MARK_KEY = 'wos.inbox.appmarks.v1', NO_AGAIN = 30 * 60e3, RETRY = 2 * 60e3;
   const FEED_SKIP = new Set(['notifications', 'wizard', 'wizard-agent-service', 'wizard-ux', 'setup', 'side-button', 'pages']);
-  const FD = { on: false, known: null, last: {}, marks: null, sources: null };
+  const FD = { on: false, known: null, last: {}, marks: null, sources: null, watch: {}, fresh: {}, retry: {} };
   const known = () => FD.known || (FD.known = (() => { try { return JSON.parse(localStorage.getItem(FEED_KEY) || '{}') || {}; } catch (e) { return {}; } })());
   const saveKnown = () => { try { localStorage.setItem(FEED_KEY, JSON.stringify(known())); } catch (e) {} };
   const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/, ACTID = /^[a-z0-9_-]{1,32}$/;
@@ -58,11 +65,20 @@
     return [...ids].filter(id => APPID.test(String(id)) && !FEED_SKIP.has(id));
   }
   const appName = id => { try { return window.WizCore?.appMetadata?.(id)?.name || [...(window.WizCore?.apps?.('mobile')?.APPS || [])].find(a => a.id === id)?.name || id; } catch (e) { return id; } };
+  // A feed, null when the app definitely has none, or a throw when it could not answer now (restarting, offline).
   async function getFeed(id) {
     const r = await timed(fetch(`/${id}/api/inbox`, { cache: 'no-store', credentials: 'same-origin', redirect: 'error' }));
-    if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) return null;
+    if (!r.ok) { if ([404, 405, 410].includes(r.status)) return null; throw new Error('feed ' + r.status); }
+    if (!/json/.test(r.headers.get('content-type') || '')) return null;
     const d = await r.json();
-    return d && d.inbox === 1 && Array.isArray(d.items) ? d.items : null;
+    if (!(d && d.inbox === 1 && Array.isArray(d.items))) return null;
+    noteWatch(id, d);
+    return d.items;
+  }
+  const WATCH_PATH = /^[a-z0-9][a-z0-9_-]{0,31}(?:\/[a-z0-9][a-z0-9_-]{0,31}){0,3}$/;
+  function noteWatch(id, d) {
+    const ok = typeof d.watch === 'string' && WATCH_PATH.test(d.watch) && typeof d.version === 'string' && d.version.length <= 64;
+    if (ok) FD.watch[id] = { path: d.watch, v: d.version }; else delete FD.watch[id];
   }
   const cleanActions = acts => Object.freeze((Array.isArray(acts) ? acts : []).filter(a => a && ACTID.test(String(a.id)) && String(a.label || '').trim()).slice(0, 4)
     .map(a => Object.freeze({ id: String(a.id), label: str(String(a.label).trim(), 40), ...(a.input === true ? { input: true } : {}), ...(typeof a.ask === 'string' && a.ask.trim() ? { ask: str(a.ask.trim(), 1000) } : {}) })));
@@ -84,27 +100,78 @@
     return FD.sources || {};
   }
   const shown = (app, src = FD.sources || {}) => !(src[app] && src[app].chats === false);
+  const withMarks = list => { const M = FD.marks || {}; return list.map(it => { const m = M[it.id]; const covers = m && Number(m.at) >= it.time; return { ...it, read: !!(covers && (m.read || m.archived)), archived: !!(covers && m.archived) }; }); };
   async function loadFeeds() {
     const now = Date.now(), apps = feedApps(), out = [];
     const [src] = await Promise.all([loadSources(), ...apps.map(async id => {
       const k = known()[id];
-      if (k && k.s === 'no' && now - k.at < 6 * 3600e3) return;
+      if (k && k.s === 'no' && now - k.at < NO_AGAIN) return;
+      if (!(k && k.s === 'yes') && FD.retry[id] && now < FD.retry[id]) return;
       try {
         const items = await getFeed(id);
         if (!items) { if (!k || k.s !== 'yes') { known()[id] = { s: 'no', at: now }; saveKnown(); } else if (FD.last[id]) out.push(...FD.last[id].items); return; }
+        delete FD.retry[id];
         if (!k || k.s !== 'yes') { known()[id] = { s: 'yes', at: now }; saveKnown(); }
+        // The app's long poll delivered a newer feed while this read was on its way: keep that one.
+        if ((FD.fresh[id] || 0) > now && FD.last[id]) { out.push(...FD.last[id].items); return; }
         const list = items.slice(0, 50).map(it => fromFeed(id, it)).filter(Boolean);
         FD.last[id] = { at: now, items: list }; out.push(...list);
       } catch (e) {
-        // A feed that stops answering keeps its last items a few minutes (no flicker), then they go.
+        // A feed that stops answering keeps its last items a few minutes (no flicker), then they go. It is never
+        // written off for it: asked again in 2 min (or on the next read once it has answered before).
         if (FD.last[id] && now - FD.last[id].at < 5 * 60e3) out.push(...FD.last[id].items);
-        else if (!k) { known()[id] = { s: 'no', at: now }; saveKnown(); }
+        if (!(k && k.s === 'yes')) FD.retry[id] = now + RETRY;
       }
     })]);
     const kept = out.filter(it => shown(it.app, src));
     if (kept.length) await loadMarks();
-    const M = FD.marks || {};
-    return kept.map(it => { const m = M[it.id]; const covers = m && Number(m.at) >= it.time; return { ...it, read: !!(covers && (m.read || m.archived)), archived: !!(covers && m.archived) }; });
+    syncWatches();
+    return withMarks(kept);
+  }
+  /* One long poll per app that declared `watch`. It replaces only that app's items when the feed changed. */
+  const WT = new Map(), BACKOFF = [5e3, 30e3, 120e3];
+  const watching = () => FD.on && IN.subs.size > 0 && !document.hidden;
+  function syncWatches() {
+    const want = watching() ? new Set(Object.keys(FD.watch).filter(id => known()[id]?.s === 'yes')) : new Set();
+    for (const [id, w] of WT) if (!want.has(id)) { w.stop = true; try { w.ctl?.abort(); } catch (e) {} clearTimeout(w.timer); w.wake?.(); WT.delete(id); }
+    for (const id of want) if (!WT.has(id)) { const w = { fails: 0, stop: false }; WT.set(id, w); void runWatch(id, w); }
+  }
+  const pause = (w, ms) => new Promise(res => { w.wake = res; w.timer = setTimeout(res, ms); });
+  async function runWatch(id, w) {
+    while (!w.stop) {
+      const spec = FD.watch[id]; if (!spec) break;
+      const ctl = new AbortController(), t0 = Date.now(); w.ctl = ctl;
+      const limit = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 40000);
+      let d = null;
+      try {
+        const r = await fetch(`/${id}/${spec.path}?v=${encodeURIComponent(spec.v)}`, { cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal: ctl.signal });
+        if (!r.ok || !/json/.test(r.headers.get('content-type') || '')) throw new Error('watch ' + r.status);
+        d = await r.json();
+        if (!d || d.inbox !== 1 || typeof d.version !== 'string') throw new Error('watch shape');
+      } catch (e) {
+        clearTimeout(limit); if (w.stop) break;
+        await pause(w, BACKOFF[Math.min(w.fails++, BACKOFF.length - 1)]); continue;
+      }
+      clearTimeout(limit); if (w.stop) break;
+      w.fails = 0;
+      if (d.changed === true && Array.isArray(d.items)) await fromWatch(id, d);
+      else if (FD.watch[id] === spec) FD.watch[id] = { ...spec, v: d.version };
+      // An app that answers at once without news would spin: never ask again sooner than 1 s after a quiet answer.
+      if (d.changed !== true && Date.now() - t0 < 1000) await pause(w, 5000);
+    }
+    if (WT.get(id) === w) WT.delete(id);
+  }
+  async function fromWatch(id, d) {
+    noteWatch(id, d);
+    if (!FD.on) return;
+    const now = Date.now(), list = d.items.slice(0, 50).map(it => fromFeed(id, it)).filter(Boolean);
+    FD.last[id] = { at: now, items: list }; FD.fresh[id] = now + 1;
+    const src = FD.sources || {};
+    const kept = list.filter(it => shown(it.app, src));
+    if (kept.length && !FD.marks) await loadMarks();
+    const next = Object.freeze([...IN.items.filter(i => i.app !== id), ...withMarks(kept)].filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
+    if (JSON.stringify(next) === JSON.stringify(IN.items)) return;
+    IN.items = next; emit();
   }
   // Stock: the Notifications app's items only.
   async function loadNotes() {
@@ -156,7 +223,7 @@
   function feeds(on) {
     on = on === true; if (on === FD.on) return;
     FD.on = on;
-    if (!on) { FD.last = {}; IN.seq++; if (IN.items.some(i => i.app)) { IN.items = Object.freeze(IN.items.filter(i => !i.app)); emit(); } }
+    if (!on) { FD.last = {}; FD.watch = {}; syncWatches(); IN.seq++; if (IN.items.some(i => i.app)) { IN.items = Object.freeze(IN.items.filter(i => !i.app)); emit(); } }
     loadItems();
   }
   /* The per-app choice, for a Settings page (skin-host api.inbox.sources, while feeds are on): every installed app
@@ -182,7 +249,7 @@
     if (typeof fn !== 'function') return () => {};
     IN.subs.add(fn); if (IN.items.length) { try { fn(IN.items); } catch (e) {} }
     loadItems();
-    return () => { IN.subs.delete(fn); };
+    return () => { IN.subs.delete(fn); syncWatches(); };
   }
   function inboxChanged() { window.dispatchEvent(new CustomEvent('wizard:notifications')); }
   // Same rows as Chats Ready, including quiet/snoozed ones, never completed ones.
@@ -234,7 +301,7 @@
     e.preventDefault(); e.stopPropagation();
     if (typeof window.WizOpenApp === 'function') window.WizOpenApp('notifications');
   }, true);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  document.addEventListener('visibilitychange', () => { syncWatches(); if (!document.hidden) refresh(); });
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
