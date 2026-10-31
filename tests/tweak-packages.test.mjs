@@ -17,7 +17,7 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
   }
 });
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
-  const id = 'miguel/hidden-pin'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
+  const id = 'wizard/pin-buttons'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
   await f.host.loadTweaks([id, 'miguel/home-bars'], f.slots, { teamAuthors: ['miguel'] });
   assert.deepEqual(Array.from(f.host.tweakState), ['miguel/home-bars']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
@@ -36,15 +36,15 @@ test('multiple ordered packages clean listeners, CSS, mounts and action intercep
   await f.clear(); assert.equal(f.doc.head.children.length, 0); assert.equal(f.thread.handlers.get('touchend').size, 0); assert.equal(f.host.action('snooze', {sessionId:'s1'}), false);
 });
 test('a skin brings its tweaks; offs are remembered per skin; another skin drops them; new published tweaks arrive', async () => {
-  const storage = new Map(); let skin = 'grove', published = { id: 'miguel', version: 1, skin: 'obsidian', tweaks: ['miguel/hidden-pin'], flags: {} }, active;
+  const storage = new Map(); let skin = 'grove', published = { id: 'miguel', version: 1, skin: 'obsidian', tweaks: ['wizard/pin-buttons'], flags: {} }, active;
   const fams = [{ id: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
   const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids.filter(id => !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => url.pathname.endsWith('profile.json') ? published : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])) }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
   await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
-  skin = 'obsidian'; await E.chooseSkin(); assert.equal(E.state.owner, 'miguel'); assert.deepEqual(Array.from(active), ['miguel/hidden-pin']);
-  await E.toggle('miguel/hidden-pin'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
-  published = { ...published, version:2, tweaks: ['miguel/home-bars','miguel/hidden-pin'] }; await E.refresh();
+  skin = 'obsidian'; await E.chooseSkin(); assert.equal(E.state.owner, 'miguel'); assert.deepEqual(Array.from(active), ['wizard/pin-buttons']);
+  await E.toggle('wizard/pin-buttons'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
+  published = { ...published, version:2, tweaks: ['miguel/home-bars','wizard/pin-buttons'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['miguel/home-bars']);
   skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => !['wizard/unified-inbox', 'wizard/machines-home'].includes(t.id)).length, 0);
   skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
@@ -81,7 +81,7 @@ function wizardExperience(storage = new Map()) {
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders']);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders', 'wizard/pin-buttons']);
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
   f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -97,7 +97,7 @@ test('legacy two-orb migration opts in exactly once, preserving a later owner of
 test('overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture(); let api;
   f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
-  await f.mount('miguel/hidden-pin'); assert.equal(api.overview,undefined);
+  await f.mount('wizard/pin-buttons'); assert.equal(api.overview,undefined);
   await f.mount('miguel/arrange-download');
   assert.throws(()=>api.overview.use({hold:'exit',appHold:false}),/Invalid overview mode/);
   const release=api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false});
@@ -107,7 +107,7 @@ test('overview mode is capability gated, revoked on teardown, and stale handles 
 test('window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture(); let api;
   f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
-  await f.mount('miguel/hidden-pin'); assert.equal(api.windowRefresh,undefined);
+  await f.mount('wizard/pin-buttons'); assert.equal(api.windowRefresh,undefined);
   await f.mount('miguel/refresh-button'); assert.equal(f.windowRefresh,null);
   assert.throws(()=>api.windowRefresh.use({}),/Invalid window refresh mode/);
   const release=api.windowRefresh.use({pull:false,extra:1}); assert.deepEqual({...f.windowRefresh},{pull:false});

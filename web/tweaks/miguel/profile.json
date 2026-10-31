@@ -7,7 +7,7 @@
     "miguel/swipe-strip",
     "miguel/send-and-go",
     "miguel/model-pills",
-    "miguel/hidden-pin",
+    "wizard/pin-buttons",
     "miguel/snooze-someday",
     "miguel/home-bars",
     "miguel/machines-home",
@@ -15,5 +15,8 @@
     "miguel/refresh-button",
     "wizard/unified-inbox"
   ],
-  "flags": {}
+  "flags": {},
+  "off": [
+    "wizard/pin-buttons"
+  ]
 }
