@@ -9,6 +9,12 @@ const read = p => fs.readFileSync(new URL('../web/' + p, import.meta.url), 'utf8
 const sel = read('core/sel-menu.js'), services = read('core/app-services.js'), client = read('core/app-client.js');
 const chats = read('core/chats.js'), desk = read('desktop/desktop.js'), css = read('core/sel-menu.css');
 
+test('floating menu pairs skin text with an opaque skin base, never a fixed dark tint', () => {
+  assert.match(css, /var\(--wz-base, var\(--bg, #05030c\)\)/);
+  assert.match(css, /color: var\(--wz-text, var\(--ink, #efeaff\)\)/);
+  assert.doesNotMatch(css, /rgba\(24, 16, 48/);
+});
+
 test('one implementation: no per-app floating Reply button, the shell menu serves apps', () => {
   for (const [name, src] of [['app-services', services], ['desktop', desk], ['css', css]]) assert.doesNotMatch(src, /app-sel-reply/, name);
   assert.match(services, /window\.WosSelMenu\?\.watch\?\.\(\{ doc, frame: st\.frame/);
