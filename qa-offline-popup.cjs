@@ -96,7 +96,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         assert.ok(geometry.orbHit, `${shell} ${skin} orb/mic remains the hit target: ${JSON.stringify(geometry)}`);
         assert.equal(geometry.dialogModal, 'false');
         if (phone) { assert.ok(geometry.card.y < 60); assert.ok(geometry.card.bottom < geometry.orb.top); }
-        assert.match(geometry.bg, /^rgb\(/, 'opaque kit panel');
+        assert.ok(/^(rgb\([^/]*\)|color\(srgb [^/]*\))$/.test(geometry.bg), `opaque kit panel (no alpha channel): ${geometry.bg}`);
         // Pixel opacity proof: the same interior panel pixels over a loud backdrop and a blank one.
         const clip = { x: geometry.card.x + 20, y: geometry.card.y + 20, width: 8, height: 8 };
         const plain = await page.screenshot({ clip });
