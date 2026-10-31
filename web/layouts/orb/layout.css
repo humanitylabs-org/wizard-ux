@@ -211,6 +211,8 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-pan
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:has(.panel-back) .ch-head { padding-right: 88px; }
 /* with a panel open the hint steps back and the look picker gives way (it would sit under the panel) */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-hint { opacity: .5; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel="app"] .ob-name { opacity: 0; } /* beside a wide app the orbits pass over it */
+html[data-shell="desktop"][data-layout="orb"] .ob-name { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms; }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-picker { opacity: 0; pointer-events: none; }
 
