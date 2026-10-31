@@ -177,6 +177,12 @@
         if (ran && mixOf('miguel/machines-home') === undefined && Object.entries(state.mix || {}).some(([id, on]) => on === true && id.startsWith('miguel/'))) state.mix = { ...state.mix, 'miguel/machines-home': true };
         state.machinesHomeMoved = true; Store.write(state);
       }
+      // 31 Oct 2026 (Miguel): the Classic | Orb switch left the release-wide defaults and is one of Miguel's tweaks. A device
+      // that already wears Miguel's tweaks gets it on, once; everyone else never sees it unless they switch it on.
+      if (!state.orbSwitchMoved) {
+        if (!who && mixOf('miguel/orb-switch') === undefined && !globalOff('miguel/orb-switch') && Object.entries(state.mix || {}).some(([id, on]) => on === true && id.startsWith('miguel/'))) state.mix = { ...state.mix, 'miguel/orb-switch': true };
+        state.orbSwitchMoved = true; Store.write(state);
+      }
       const own = recipe();
       // Every installed tweak is offered, whoever wrote it; the preset only sets which start on.
       const all = [...new Set([...catalog.tweaks, ...globalIds()])];

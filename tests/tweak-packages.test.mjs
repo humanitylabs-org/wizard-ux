@@ -324,13 +324,33 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
 
 
 test('a merged tweak keeps the device\'s switch: Defer and Done on means the model switch (with them) is on', async () => {
-  const storage = new Map([['wos.skin', 'landscapes'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: { 'miguel/switch-row-actions': true }, defaultsMigrated: true, machinesHomeMoved: true })]]);
+  const storage = new Map([['wos.skin', 'landscapes'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: { 'miguel/switch-row-actions': true }, defaultsMigrated: true, machinesHomeMoved: true, orbSwitchMoved: true })]]);
   let active = [];
   const window = { WosSkin: { current: 'landscapes', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   await window.WosExperience.refresh();
   assert.ok(active.includes('miguel/model-pills'));
   assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/model-pills': true }, 'moved once, old id gone');
+});
+
+test('the Classic | Orb switch is one of Miguel\'s tweaks: on once for a device wearing his tweaks, never for anyone else (31 Oct 2026)', async () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
+  assert.ok(cat.tweaks.includes('miguel/orb-switch') && !cat.defaults.includes('miguel/orb-switch'), 'listed as a tweak, not a release-wide default');
+  assert.ok(prof.tweaks.includes('miguel/orb-switch') && !(prof.off || []).includes('miguel/orb-switch'), 'Miguel\'s All switch includes it');
+  const run = async mix => {
+    const storage = new Map([['wos.skin', 'landscapes'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, defaultsMigrated: true, machinesHomeMoved: true })]]);
+    let active = [];
+    const window = { WosSkin: { current: 'landscapes', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
+    vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
+    await window.WosExperience.refresh();
+    return { active, mix: JSON.parse(storage.get('wos.skin-tweaks.v1')).mix };
+  };
+  const mine = await run({ 'miguel/send-and-go': true });
+  assert.ok(mine.active.includes('miguel/orb-switch') && mine.mix['miguel/orb-switch'] === true, 'Miguel\'s device gets the switch');
+  const theirs = await run({});
+  assert.ok(!theirs.active.includes('miguel/orb-switch'), 'everyone else never notices it');
+  const declined = await run({ 'miguel/send-and-go': true, 'miguel/orb-switch': false });
+  assert.ok(!declined.active.includes('miguel/orb-switch'), 'a device that switched it off keeps it off');
 });
 
 test('Settings › Look: tweaks grouped by author, each with an "All of theirs" switch, in every skin (Miguel, 31 Oct 2026)', () => {

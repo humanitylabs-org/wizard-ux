@@ -25,8 +25,7 @@
   ],
   "defaults": [
     "miguel/inbox",
-    "wizard/unified-inbox",
-    "miguel/orb-switch"
+    "wizard/unified-inbox"
   ],
   "oneOf": [
     [
