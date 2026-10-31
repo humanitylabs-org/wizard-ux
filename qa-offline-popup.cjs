@@ -109,7 +109,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         { const b = await page.locator(phone ? '#orb' : '#micBtn').boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); } // real pointer at the orb centre: #orbWrap legitimately owns the hit
         await page.waitForFunction(() => (window.__wos || window.__wux).voice !== 'idle');
         await pillOnly();
-        await navigate(); await pillOnly(); // navigating during capture must never reopen
+        await page.evaluate(phone => document.querySelector(phone ? '#dock [data-goto]' : '#logo').click(), phone); await page.waitForTimeout(400); await pillOnly(); // the capture overlay covers the dock, so dispatch the navigation click directly: it must never reopen
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-capture-pill.png`) });
         if (phone) await page.evaluate(() => __wos.cancelVoice());
         else await page.locator('#voiceCancel').click();
