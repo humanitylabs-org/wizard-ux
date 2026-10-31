@@ -72,7 +72,7 @@ Visual: <side-by-side screenshot, or "none">
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); canonical app-name aliases reuse the approved house glyph/colour | PNG/emoji icons |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + legacy defaults | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |
@@ -106,7 +106,7 @@ Visual: <side-by-side screenshot, or "none">
 | Module | Contract |
 |---|---|
 | `web/core/app-voice.js` (`WosAppVoice`) | Registry names/claims. |
-| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music grammar and legacy device schema until APK A; Food owns its grammar. Retired app ids resolve through `WizCore.appIdAliases`; Food native handoffs accept the old intent action but emit the current id. |
+| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music/device schema until APK A; Food grammar. IDs: WizCore.appIdAliases. |
 | `web/core/background-audio-legacy.js` (`WizBackgroundAudioLegacy`) | Pilot grant/token until APK A. |
 
 ## Plumbing (single owner; files in `web/core/` unless noted)
