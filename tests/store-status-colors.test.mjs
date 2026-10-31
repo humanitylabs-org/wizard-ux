@@ -26,6 +26,19 @@ test('Store semantics preserve action precedence, hooks and compatibility while 
   assert.doesNotMatch(conflict, /class="get|data-get|data-open|<button/);
   assert.doesNotMatch(conflict, /Resolve/);
 });
+test('Open replaces Installed once the installed app is openable', () => {
+  const html = render('installed', {installed:true, open:true});
+  assert.match(html, /class="get open big"[^>]*data-open="fixture"[^>]*>Open<\/button>/);
+  assert.doesNotMatch(html, /Installed|install-actions/);
+  assert.match(src, /\$\{action\(a, 'big'\)\}/, 'the detail renderer uses the same exclusive action');
+});
+test('a fresh installed-app snapshot exposes Open before the parent registry finishes refreshing', () => {
+  const declaration = src.match(/^  const canOpen = a => .*;$/m)?.[0];
+  assert.ok(declaration, 'canOpen declaration');
+  const result = Function('S', 'framed', 'parent', 'openId', 'a', `${declaration}; return canOpen(a);`)(
+    {snapshot:{shell:[{id:'fixture',url:'/fixture/'}]}}, true, {WizCanOpen:() => false}, () => 'fixture', {id:'fixture'});
+  assert.equal(result, true);
+});
 test('new status colour rules use tokens, not literal white or fixed washes', () => {
   const css = read('web/store/store.css');
   const rules = css.slice(css.indexOf('/* One colour per meaning:'), css.indexOf('/* list layer */'));

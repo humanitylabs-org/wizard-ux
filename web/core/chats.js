@@ -1299,6 +1299,7 @@ window.WizCore.chats = function createChats(H) {
   const MIC_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
   const CLIP_SVG = '<svg viewBox="0 0 24 24"><path d="m9.5 17.5 7.7-7.7a3 3 0 0 0-4.2-4.2l-8 8a5 5 0 0 0 7.1 7.1l8-8"/></svg>';
   const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></svg>';
+  const DL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
   /* ---- voice notes: mic + "Voice note" + length, tap to play (Telegram-style) ---- */
   const DUR_KEY = 'wos.voice-durations.v1';
   let DUR = (() => { try { return JSON.parse(localStorage.getItem(DUR_KEY) || '{}'); } catch (e) { return {}; } })();
@@ -1346,7 +1347,10 @@ window.WizCore.chats = function createChats(H) {
     // shrink-to-fit bubble at zero width, so only network images remain lazy.
     if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="${esc(m.name || 'Photo')}" loading="${/^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
     if (m.kind === 'audio') return `<div class="mcard aud"><span class="mic">♪</span><span class="mn"><b>${esc(m.name)}</b><audio controls preload="none" src="${esc(m.url)}"></audio>${m.transcript ? `<small>${esc(m.transcript)}</small>` : ''}</span></div>`;
-    return `<button type="button" class="mcard" data-mi="${k}"><span class="mic">${m.kind === 'video' ? PLAY_SVG : CLIP_SVG}</span><span class="mn"><b>${esc(m.name)}</b><small>${esc(m.kind === 'video' ? 'Video' : (m.mime.split('/')[1] || 'File').toUpperCase())}${m.bytes ? ' · ' + esc(fsize(m.bytes)) : ''}</small></span></button>`;
+    // A file or video card: tap it to view it in Wizard; the ⤓ beside the name downloads it in one tap.
+    const card = `<button type="button" class="mcard" data-mi="${k}"><span class="mic">${m.kind === 'video' ? PLAY_SVG : CLIP_SVG}</span><span class="mn"><b>${esc(m.name)}</b><small>${esc(m.kind === 'video' ? 'Video' : (m.mime.split('/')[1] || 'File').toUpperCase())}${m.bytes ? ' · ' + esc(fsize(m.bytes)) : ''}</small></span></button>`;
+    if (!m.url) return card;
+    return `<div class="mfile">${card}<button type="button" class="mdl" data-mdl="${k}" title="Download" aria-label="Download ${esc(m.name || 'file')}">${DL_SVG}</button></div>`;
   }
   function mediaBlock(c, list) {
     if (!list.length) return '';
@@ -1810,11 +1814,20 @@ window.WizCore.chats = function createChats(H) {
       const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
       for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
     }
-    return s.trimEnd();
+    // A `MEDIA:/abs/path` line is the agent sending a picture. The Agent Service turns it into the thumbnail when the
+    // transcript lands; the live stream still carries the raw line, so leave it out (also while it is half typed).
+    s = s.replace(STREAM_MEDIA, '');
+    const tail = s.slice(s.lastIndexOf('\n') + 1).trimStart();
+    if (tail && (tail.startsWith('MEDIA:') || 'MEDIA:'.startsWith(tail))) s = s.slice(0, s.lastIndexOf('\n') + 1);
+    return s.replace(/\n{3,}/g, '\n\n').trimEnd();
   };
+  const STREAM_MEDIA = /^[ \t]*MEDIA:[ \t]*\/[^\r\n]*$/gm;
+  // The same picture as the transcript shows it: a positioned thumbnail, or the line saying it could not be shown.
+  const SHOWN_MEDIA = /!\[[^\]\n]*\]\(\/wizard\/attachments\/[0-9a-f]{32}(?: "[^"\n]*")?\)|\[file: [^\]\n]* unavailable\]/g;
   // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
-  const bare = v => streamAnswer(v).replace(/\s+/g, '');
+  // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
+  const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
   const streamShown = (st, turns) => {
     const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
     if (!ans || !got.endsWith(ans)) return false;
@@ -2844,6 +2857,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, true); return true; }
+    const mdl = e.target.closest('[data-mdl]'); if (mdl) { e.preventDefault(); const m = ch(id).media?.[+mdl.dataset.mdl]; if (m) KIT.download(m); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }
     const ml = e.target.closest('a[data-mlink]'); if (ml) { e.preventDefault(); const u = ml.dataset.mlink; KIT.viewer.open([{ url: u, name: ml.textContent.trim() || 'File', kind: 'file', mime: '' }]); return true; }
     const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session, { via: 'link' }); return true; }
