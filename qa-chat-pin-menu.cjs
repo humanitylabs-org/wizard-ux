@@ -47,6 +47,7 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
     await settle(page);
   };
   const pinShown = (page, root) => page.evaluate(root => [...document.querySelectorAll(`${root} .ch-pin-toggle`)].filter(b => getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().width > 0).length, root);
+  const rowCount = (page, root) => page.evaluate(root => document.querySelectorAll(`${root} .ch-row[data-chopen]`).length, root);
   const menu = (page, root, sid) => page.evaluate(({ root, sid }) => {
     const row = document.querySelector(`${root} .ch-row[data-chopen="${sid}"]`), b = row.getBoundingClientRect();
     row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 40, clientY: b.y + 10, button: 2 }));
@@ -101,13 +102,13 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
   await sleep(400);
   ok(writes.slice(before).some(w => w.method === 'PUT' && w.path === '/wizard/v1/ui-preferences') && prefs.pinnedChats.includes('qa_pin_b'), 'pin write intercepted and read back (never reached a real Wizard)');
   await page.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(page);
-  ok(await pinShown(page, root) === sessions.length, 'Show pin buttons on: every row gets its pin button', await pinShown(page, root));
+  ok(await pinShown(page, root) === await rowCount(page, root) && await rowCount(page, root) >= sessions.length, 'Show pin buttons on: every row gets its pin button', [await pinShown(page, root), await rowCount(page, root)]);
   await page.screenshot({ path: path.join(OUT, 'phone-nebula-tweak-on.png') });
   await page.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(page);
   ok(await pinShown(page, root) === 0, 'Show pin buttons off again: buttons gone');
   for (const skin of ['novairecito', 'sepia']) {
     await setSkin(page, skin);
-    ok(await pinShown(page, root) === sessions.length, `${skin} keeps pin buttons as its look`, await pinShown(page, root));
+    ok(await pinShown(page, root) === await rowCount(page, root) && await rowCount(page, root) >= sessions.length, `${skin} keeps pin buttons as its look`, [await pinShown(page, root), await rowCount(page, root)]);
     const nm = await menu(page, root, 'qa_pin_a');
     ok(nm && nm.labels.some(l => /^(Pin|Unpin)$/.test(l)) && !nm.labels.includes('Open'), `${skin} menu: Pin, no Open`, nm);
     await closeMenu(page);
@@ -115,10 +116,9 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
   }
   await setSkin(page, 'nebula');
   ok(await pinShown(page, root) === 0, 'leaving Novairecito family restores the unchanged device tweak choice');
-  // Routed agent: its own Chats window uses the same row menu and pin store.
-  await page.evaluate(ag => window.WizOpenAgentChats(ag), ROUTED);
-  const rwid = await page.waitForFunction(ag => Object.values(__wos.wins).find(w => w.app === 'chats' && w.agent === ag)?.id || '', ROUTED, { timeout: 10000 }).then(h => h.jsonValue());
-  const rroot = `[data-chats="${rwid}"]`;
+  // Routed agent: openAgentChats focuses the same Chats window on that agent; same row menu and pin store.
+  ok(await page.evaluate(ag => window.WizOpenAgentChats(ag), ROUTED), 'routed agent: its chats open');
+  const rroot = root;
   await page.waitForSelector(`${rroot} .ch-row[data-chopen="qa_pin_r1"]`, { timeout: 15000 }); await sleep(300);
   ok(await pinShown(page, rroot) === 0, 'routed agent: no pin button on its rows by default');
   const rm = await menu(page, rroot, 'qa_pin_r1');
