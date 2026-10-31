@@ -36,6 +36,9 @@
     },
     "bar-start": {
       "since": 1
+    },
+    "bar-center": {
+      "since": 1
     }
   }
 }

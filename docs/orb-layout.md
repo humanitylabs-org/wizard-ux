@@ -3,38 +3,40 @@
 Opt-in, desktop only, off by default: Settings › Look › Tweaks › **Orb desktop**. Switching it off brings the
 classic desktop straight back (no reload). The phone is untouched: the tweak does nothing there.
 
-**Classic | Orb switch** (`miguel/orb-switch`, its own tweak): a small two-way chip at the start of the desktop bar,
-visible in both modes. One click switches `miguel/orb-shell` for this device through the same tweak mix as Settings
-(`WosExperience.toggle`, via the trusted `api.settings.toggleTweak`, own author only), no reload. The lit side follows
-what the desktop really wears (`html[data-layout]`), so a half-loaded Orb shows Classic and one click mends it. Off by
-default on main like every tweak; Miguel's release turns it on with a catalog `defaults` entry.
+**Classic | Orb switch** (`miguel/orb-switch`, its own tweak): a segmented control in the middle of the desktop bar,
+in place of the date and time, visible in both modes. It mounts in the core `bar-center` slot (`web/desktop.html`,
+`core/slots.json`): while that slot holds anything the clock steps aside (`desktop.css`), and the slot hides under the
+voice pill like the clock did. One click switches `miguel/orb-shell` for this device through the same tweak mix as
+Settings (`WosExperience.toggle`, via the trusted `api.settings.toggleTweak`, own author only), no reload. The lit side
+follows what the desktop really wears (`html[data-layout]`), so a half-loaded Orb shows Classic and one click mends it.
+Off by default on main like every tweak; Miguel's release turns it on with a catalog `defaults` entry.
 
-What the Orb desktop changes (all in `web/layouts/orb/`, CSS scoped to `html[data-shell="desktop"][data-layout="orb"]`):
+What the Orb desktop changes (all in `web/layouts/orb/`, CSS scoped to `html[data-shell="desktop"][data-layout="orb"]`).
+It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
 
-- Home (an empty desk or ⌥` Home) is one scene over the skin's own wallpaper with a **living entity** in the middle:
-  an irregular shape that drifts gently round the centre and follows the take (`voice` events) and the mic level
-  (`api.orb.onLevel`). Click = talk (a new chat; click again to send). Hold = a local command (release runs it).
-  Three looks, picked bottom right and kept per device (`api.storage` `look`):
-  - **Nebula** (default): Paper Shaders' `metaballs` fragment shader on its vanilla `ShaderMount`
-    (`vendor/paper-shaders/`, Apache-2.0, LICENSE + NOTICE beside it; loaded only when picked). Balls kept in the
-    middle two thirds so it stays one body; louder speech = more balls and faster.
-  - **Glitch**: a dithered pixel entity (4×4 Bayer) with an RGB split, scanlines and sliced tears that fire more often
-    while listening; in the spirit of Archimedes' glitch look (PowerGlitch's slice / shake idea, drawn in a canvas).
-  - **Swarm**: ~190 motes circling an irregular breathing centre, faint constellation links.
-  The entity's colours are skin-layer tokens `--ob-v1…5` in the tweak's `tweak.css` (Wizard violet on every skin).
-- The owner's apps (picker order, up to 12 + All apps) float at loose spots round it: best-of-N random candidates
-  seeded by app id, never on the entity's whole drift area or its name, never on each other or the edges, each with a
-  slow wander. Each wears its **own logo** from the Store's logo route (`api.apps.logo(id)` → `store-data/logo/<id>`;
-  the template / Runtipi placeholder pictures count as no logo) or, without one, its designed glyph in white on a
-  lit tile of its own colour. Never a letter tile.
-- **Ready** threads under it, all of them (wrapped, scrolls past ~30% of the height), each with Snooze and Done
-  (Chats' own `threadAct`). **Working** is one quiet chip (`1 working`); a click shows them compactly with a link to
-  the Working list.
-- Any window takes over; closing the last one brings the scene back. A lone window opens as a centred card
-  (`--desktop-window-max-height`, read by `desktop.js` layout for one window). With windows open a small blob top left
-  goes Home.
-- Motion: one 30 fps loop, only while the scene is in front and the page is visible; Nebula's own loop sleeps with it.
-  Reduced motion: no drift or wander, one still frame.
+- Home (an empty desk or ⌥` Home) is the concept's night scene over the whole window (the bar goes transparent over
+  it and takes the scene's ink, so light skins look the same): a starfield sky with a soft glow behind the orb, drawn
+  in a canvas like the concept's `drawSky`.
+- The concept's **glassy orb** at 46% height (canvas: halo, swirling colour inside, glass highlight, rim), following
+  the take (`voice` events: listening rings, a faster swirl while sending, one sharp ring when a command take ends or
+  a new thread turns Ready) and the mic level (`api.orb.onLevel`). Click = talk (a new chat; click again to send).
+  Hold = a local command (release runs it). Four looks from the concept, chosen by four quiet swatches bottom right and
+  kept per device (`api.storage` `look`): **Nebula** (default), **Ember**, **Tide**, **Oracle** (a calm face whose
+  mouth follows the voice). Colours are skin-layer tokens in the tweak's `tweak.css` (`--ob-look-*`, `--ob-*`).
+- The owner's apps (picker order, up to 10 + All apps) are the concept's **round glass satellites** on two tilted
+  orbits, alternating rings at even steps, drifting slowly the same way (never sliding onto each other); in front of
+  the orb they are bigger and brighter, behind it smaller and dimmer. Label on hover; a click opens the app. Each wears
+  its **own logo** (`api.apps.logo(id)` → `store-data/logo/<id>`; template / Runtipi placeholders count as none) in a
+  round frame, else its designed glyph in its own colour. Never a letter.
+- Under the orb: the agent's name, a caption line while a take runs, then the concept's **pills**: every Ready thread
+  glows amber, with Snooze and Done appearing on hover (Chats' own `threadAct`); at most two rows, the rest fold into
+  a quiet `+N more` that opens the Ready list. **Working** is one quiet spinner pill (`1 working`; a click opens it, or
+  the Working list when there are several).
+- The real keys as the hint line near the bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to
+  type (new chat). The fuel gauge and the gear stay top right.
+- Any window takes over (stock windows); closing the last one brings the scene back. With windows open a small orb top
+  left goes Home.
+- Motion: one ~30 fps loop, only while the scene is in front and the page is visible. Reduced motion: still frames.
 
 ## Layouts a tweak can wear
 

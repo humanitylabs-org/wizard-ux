@@ -42,6 +42,13 @@ html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scroll
 .ws.hot::before { content: ''; position: absolute; top: 2px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--violet-2); }
 .clock { font: 600 12.5px/1 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink-2); padding: 5px 10px; border-radius: 7px; font-variant-numeric: tabular-nums; }
 .clock:hover { background: rgba(205, 190, 255, .08); }
+/* bar-center slot: a tweak control in the middle of the bar takes the clock's place (the clock steps aside while the
+ * slot holds anything); hidden under the voice pill like the clock. */
+.bar-c { display: flex; align-items: center; justify-content: center; }
+.bar-center { display: flex; align-items: center; }
+.bar-center:empty { display: none; }
+.bar-center:not(:empty) ~ #clock { display: none; }
+html.voice-on .bar-center { visibility: hidden; }
 #micBtn[hidden], .recording-recovery[hidden] { display: none; }
 .recording-recovery { position: fixed; right: 16px; bottom: 16px; z-index: 120; width: min(440px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px; border: 1px solid var(--line, #555); border-radius: 12px; background: var(--bg, #17191f); color: var(--text, #eee); box-shadow: 0 8px 32px #0008; }
 .recording-recovery article + article { margin-top: 16px; padding-top: 12px; border-top: 1px solid #666; }

@@ -1,7 +1,20 @@
 /* Orb desktop: the layout's rules live in web/layouts/orb/layout.css (scoped to the desktop shell and the Orb layout).
- * Only the entity's own colours sit here (a skin layer): Wizard violet on every skin, with a cool and a warm companion,
- * plus the white / ink used on app glyph tiles. layout.js reads --ob-v1…5 for the looks it draws in canvas. */
+ * Only the scene's own colours sit here (a skin layer), taken from the approved concept: the night sky and its ink, the
+ * glass, the amber "ready" glow and the four orb looks (Nebula, Ember, Tide, Oracle). layout.js reads them for the
+ * canvas (sky, orb); --ob-v1…3 colour the small orb shown while windows are open. */
 html[data-shell="desktop"][data-layout="orb"] {
-  --ob-v1: #8b5cf6; --ob-v2: #c4b5fd; --ob-v3: #6d28d9; --ob-v4: #e879f9; --ob-v5: #60a5fa;
-  --ob-white: #fff; --ob-ink: #1a1030;
+  --ob-sky: #05040a; --ob-core: #07060f; --ob-white: #ffffff; --ob-face: #fff1c9;
+  --ob-ink: #eceaf6; --ob-ink2: rgba(236, 234, 246, .62); --ob-ink3: rgba(236, 234, 246, .38);
+  --ob-amber: #ffbf5a; --ob-ok: #6ee7a8;
+  --ob-glass: rgba(14, 12, 26, .6); --ob-glass-solid: rgba(14, 12, 26, .92); --ob-glass-hi: rgba(255, 255, 255, .1);
+  --ob-sat: rgba(12, 10, 22, .55); --ob-sheen: rgba(255, 255, 255, .16); --ob-sheen-lo: rgba(255, 255, 255, .03);
+  --ob-line: rgba(255, 255, 255, .12); --ob-line2: rgba(255, 255, 255, .3);
+  --ob-btn: rgba(255, 255, 255, .07); --ob-btn-hi: rgba(255, 255, 255, .16); --ob-key: rgba(255, 255, 255, .04);
+  --ob-look-nebula: #7c5cff, #c26bff, #4cc9ff, #ff6bd6;
+  --ob-look-ember: #ff7a1a, #ffb347, #ff3d5a, #ffd27a;
+  --ob-look-tide: #18d6c4, #3aa0ff, #7cf5ff, #2b5cff;
+  --ob-look-oracle: #e8c37a, #fff1c9, #b98a3e, #ffd98a;
+  --ob-nebula-1: #7c5cff; --ob-nebula-2: #c26bff; --ob-nebula-3: #4cc9ff;
+  --ob-ember-1: #ff7a1a; --ob-ember-2: #ffd27a; --ob-tide-1: #18d6c4; --ob-tide-2: #7cf5ff; --ob-oracle-1: #b98a3e; --ob-oracle-2: #fff1c9;
+  --ob-v1: #7c5cff; --ob-v2: #c26bff; --ob-v3: #4cc9ff;
 }
