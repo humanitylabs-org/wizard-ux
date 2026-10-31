@@ -47,4 +47,4 @@ html[data-shell="desktop"] .wos-share .shs-b { border-radius: 18px; border: 1px 
 .wos-share .shs-oi { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--wz-surface-raised, rgba(255, 255, 255, .06)); }
 .wos-share .shs-oi svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 /* People: initials read in the skin's own text role on its raised surface (a fixed violet vanished on light skins). */
-.wos-share .shs-person .shs-ic { background: var(--wz-surface-raised); color: var(--wz-text); font-size: 17px; font-weight: 700; }
+.wos-share .shs-person .shs-ic { background: var(--wz-surface-raised); color: var(--wz-text); font-size: var(--wz-text-md, 1.0625rem); font-weight: 700; }
