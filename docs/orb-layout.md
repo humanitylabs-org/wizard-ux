@@ -37,20 +37,27 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   the orb they are bigger and brighter, behind it smaller and dimmer. Label on hover; a click opens the app. Each wears
   its **own logo** (`api.apps.logo(id)` → `store-data/logo/<id>`; template / Runtipi placeholders count as none) in a
   round frame, else its designed glyph in its own colour. Never a letter.
-- Under the orb: the agent's name, a caption line while a take runs, then the concept's **pills**: every Ready thread
-  glows amber, with Snooze and Done appearing on hover (Chats' own `threadAct`); at most two rows, the rest fold into
-  a quiet `+N more` that opens the Ready list. **Working** is one quiet spinner pill (`1 working`; a click opens it, or
-  the Working list when there are several).
-- The real keys as the hint line near the bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to
-  type (new chat). The fuel gauge and the gear stay top right.
+- Under the orb: the agent's name and a caption line while a take runs. The real keys are the hint line near the
+  bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to type (new chat). The fuel gauge and the
+  gear stay top right; the Classic | Orb switch sits in the bar's centre.
+- **Conversations = the stock Chats list, docked on the right** (v5, Miguel: "don't redesign it, bake the stock session
+  list permanently on the right"). The same Chats window as everywhere (Archive / Working / Ready, the Ready sort
+  Newest / Priority / By subject, search, pins, snooze-someday and every tweak on it), full height from under the bar
+  to the bottom, about 30% of the width (372-440 px), in a softer glass: the skin's own window glass a little clearer
+  and blurred into the scene, no frame or shadow. A thread opens **in that same column** (list → thread, like the phone
+  and a narrow Chats window). Done, Snooze, its ‹, Esc and a **send** all go back to the list (a send leaves like the
+  phone's: `leaveAfterSend`). Every Chats key works on it over the scene: ⌥↓ / ⌥↑ the next / previous Ready thread,
+  ⌥→ Done, ⌥← Snooze, ⌥N a new chat in the column, Esc back to the list (then clears its search / chips).
+- A handle on the column's left edge (or **⌥\\**) folds it to a slim strip on the right edge with the Ready count; a click
+  (or ⌥\\) unfolds it. Kept per device. A thread that opens while folded (a key, the voice, a notification) unfolds it.
+  Folded, the orb centres in the whole width; open, in what the column leaves. The **Look** picker sits just left of
+  the column (or the strip) at the bottom.
 - **No desks.** The workspace numbers are gone and desk keys do nothing (⌥1…9, ⌥[ ⌥], moving windows, full screen,
-  ⌥P); ⌥T just offers the apps. Whatever opens (a pill, `+N more`, the Working pill, a satellite, All apps, a new or
-  voice chat, a link) shows in **one panel** that slides in from the right over the scene, like the concept's
-  conversation panel: the real Chats thread (its own header, Snooze / Done, composer) at 460 px, an app wider
-  (62%). The scene moves to the middle of what is left (the orb steps down a little next to a wide app). ✕, Esc or a
-  click on the bare sky slides it away; opening another thing replaces it, and a quiet ‹ in the panel goes back to the
-  one before. The desks underneath are never touched: turning the Orb off brings them back exactly (and the desk you
-  were on).
+  ⌥P); ⌥T just offers the apps. An **app** (a satellite, All apps, a link) opens in its own panel that slides in from
+  the **left**, one at a time (another app replaces it); the docked list stays on the right. The orb sits in the gap
+  between (it steps down, its name and the hint give way when the gap gets narrow). ✕, Esc or a click on the bare sky
+  slides the app away. The desks underneath are never touched: turning the Orb off brings them back exactly (and the
+  desk you were on).
 - Motion: one ~30 fps loop, only while the scene is in front and the page is visible. Reduced motion: still frames.
 
 ## Layouts a tweak can wear
@@ -69,11 +76,18 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
 - `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look), `api.desk.emptyHome()`: closing the last window of
   a desk goes Home instead of to another desk (`WosSkinHost.emptyHome`, read by `closeWin`); released on teardown.
 - `api.panel.claim()`: no desks while held (`WosSkinHost.panelMode`; the adapter's `panelMode(on)`). desktop.js then
-  sends every new window to one panel window outside the desks (`panelOpen`: never tiled, never synced, not restored
-  after a reload; `findWin` sees only it; desk keys return early); Home stays in front. Released on teardown: the panel
-  goes and the desk in front before comes back. `api.panel.close()`, `api.panel.back()`, `api.panel.state()` →
-  `{ kind: 'thread' | 'list' | 'app', title, width, back }` or null; `api.route().panel` is the same kind (a `route`
-  event fires when it changes).
+  sends every new window to a panel window outside the desks (`panelOpen`: never tiled, never synced, not restored
+  after a reload; `findWin` sees only the panels; desk keys return early); Home stays in front. Released on teardown:
+  the panels go and the desk in front before comes back.
+- `api.panel.dock(on)` (after `claim`): **two sides**. Chats keeps the right-hand panel and the stock Chats list stays
+  docked there (`panelDockList0`; its bar is hidden, it never closes: `panelClose` / `panelEsc` step a thread back to
+  the list, and the host's `leaveOnSend` makes a send leave like the phone); apps open in a second panel from the left
+  (`panelApp`, one at a time). `dock(false)` folds the list away (apps stay on the left). The panel in front (keys,
+  Esc) is the one holding focus, else the one opened or clicked last.
+- `api.panel.close('app' | 'chat')` closes that side (`close()` the one in front), `api.panel.back()`,
+  `api.panel.state()` → `{ kind: 'thread' | 'list' | 'app', title, width, back, chat: { kind, width, docked } | null,
+  app: { title, width } | null }` or null (widths measured from their own edge); `api.route().panel` is the front
+  kind and `api.route().panelApp` whether an app panel is open (a `route` event fires when either changes).
 - `api.back.push(close)`: the layout's own overlay (the look popover) joins the shell's Esc order.
 - `api.voice.command()`: a local command take (⌥C); call again to run it.
 - `api.orb.ready()` loads `orb.js` on a page without it (desktop), so `api.orb.create` works there;

@@ -447,6 +447,14 @@ html.key-hints-on #clock { visibility: hidden; }
 @keyframes panel-in { from { transform: translateX(calc(100% + 24px)); } to { transform: none; } }
 @keyframes panel-out { from { transform: none; } to { transform: translateX(calc(100% + 24px)); } }
 @keyframes panel-swap { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+/* Two sides (api.panel.dock): Chats keeps the right; the one app opens from the left and slides back out to the left. */
+.panel-layer > .win.panel[data-side="left"] { left: 12px; right: auto; animation-name: panel-in-left; }
+.panel-layer > .win.panel[data-side="left"].panel-swap { animation-name: panel-swap-left; }
+.panel-layer > .win.panel[data-side="left"].panel-out { animation-name: panel-out-left; }
+.panel-layer > .win.panel > .wbar.panel-dockbar { display: none; }
+@keyframes panel-in-left { from { transform: translateX(calc(-100% - 24px)); } to { transform: none; } }
+@keyframes panel-out-left { from { transform: none; } to { transform: translateX(calc(-100% - 24px)); } }
+@keyframes panel-swap-left { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .panel-layer > .win.panel { animation: none !important; } }
 .hud-layer { position: absolute; inset: 0; z-index: 150; pointer-events: none; } /* above Home sheets (Resources is 120); the bar, palette and toasts sit outside the stage, above it */
 .hud-layer[hidden] { display: none; }
