@@ -1,4 +1,9 @@
 /* Sepia: Novaire's warm e-reader paper with soft dark ink. Visual only; geometry and behaviour stay stock. */
+/* Pins are part of Novaire's look. Keep the device's independent tweak choices untouched. */
+html[data-skin="sepia"] .ch-pin-toggle { display: grid; }
+html[data-skin="sepia"] .ch-row-wrap > .ch-row { padding-right: 42px; }
+html[data-skin="sepia"] .ch-row-wrap.diagnosed .ch-row { padding-right: 122px; }
+html[data-skin="sepia"] .ch-row-signin { right: 44px; }
 html[data-skin="sepia"] {
   color-scheme: light;
   --sepia-status-needs: #80580e;
