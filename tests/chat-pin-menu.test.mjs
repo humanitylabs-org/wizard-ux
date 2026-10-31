@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const json = p => JSON.parse(read(p));
 const PIN = 'wizard/pin-buttons';
@@ -31,11 +31,12 @@ test('right-click, long-press and swipe share the row menu: Pin/Unpin, never Ope
   assert.match(src, /contextmenu/); assert.match(src, /openRowSheet\(/);
 });
 
-test('the old Hide pin buttons tweak is retired, not aliased to the inverse action', () => {
+test('Miguel keeps his pin-free chats: his tweak hides the menu Pin and row pins; Show pin buttons stays opt-in', () => {
   const cat = json('web/tweaks/catalog.json');
-  assert.ok(cat.tweaks.includes(PIN)); assert.ok(!cat.tweaks.includes('miguel/hidden-pin'));
-  assert.ok(!cat.aliases?.['miguel/hidden-pin']);
-  assert.ok(!existsSync(new URL('../web/tweaks/miguel/hidden-pin/manifest.json', import.meta.url)));
+  assert.ok(cat.tweaks.includes(PIN)); assert.ok(cat.tweaks.includes('miguel/hidden-pin'));
+  assert.ok(json('web/tweaks/miguel/profile.json').tweaks.includes('miguel/hidden-pin'));
+  const css = read('web/tweaks/miguel/hidden-pin/tweak.css');
+  assert.match(css, /html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-sheet \[data-part="pin-action"\], html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-row-wrap \.ch-pin-toggle \{ display:none; \}/, 'outranks Show pin buttons');
   assert.ok(!(cat.defaults || []).includes(PIN));
   for (const who of cat.profiles) assert.ok(!json(`web/tweaks/${who}/profile.json`).tweaks.includes(PIN), 'new features are not legacy preset defaults');
 });

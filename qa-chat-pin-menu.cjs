@@ -147,6 +147,15 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
     await dp.screenshot({ path: path.join(OUT, `desktop-${skin}-menu.png`) });
     await closeMenu(dp);
   }
+  // Miguel's own tweak keeps his chats pin-free: no Pin in the menu, no row pins, even with Show pin buttons on.
+  await dp.evaluate(() => WosExperience.toggle('miguel/hidden-pin')); await settle(dp);
+  await dp.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(dp);
+  ok(await pinShown(dp, droot) === 0, 'desktop landscapes + No chat pins: no row pins even with Show pin buttons on');
+  await dp.locator(`${droot} .ch-row[data-chopen="qa_pin_a"]`).click({ button: 'right' }); await sleep(300);
+  const mlabels = await dp.evaluate(() => [...document.querySelectorAll('.ch-sheet button')].filter(x => getComputedStyle(x).display !== 'none').map(x => x.innerText.trim()));
+  ok(!mlabels.some(l => /^(Pin|Unpin)$/.test(l)) && !mlabels.includes('Open') && mlabels.includes('Rename'), 'desktop landscapes + No chat pins: menu has no Pin', mlabels);
+  await dp.screenshot({ path: path.join(OUT, 'desktop-landscapes-miguel-menu.png') });
+  await closeMenu(dp);
   await desktop.close();
   ok(errors.length === 0, 'no page errors', errors);
   console.log(`${pass}/${pass + fail} passed`);

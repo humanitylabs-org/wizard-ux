@@ -1,0 +1,3 @@
+/* Miguel keeps chats pin-free: no Pin in the row menu and no row pin button, even with Show pin buttons on. */
+html[data-tweaks~="miguel/hidden-pin"] .ch-sheet [data-part="pin-action"], html[data-tweaks~="miguel/hidden-pin"] .ch-row-wrap .ch-pin-toggle { display:none; }
+html[data-tweaks~="miguel/hidden-pin"] .ch-row-wrap > .ch-row.ch-row { padding-right:12px; }
