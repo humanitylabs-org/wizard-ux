@@ -2,7 +2,7 @@
 // All writes are refused. QA_WEB_DIR overlays candidate assets; omit for served-live proof.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
-const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const BASE = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-offline-results');
 const delay = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
