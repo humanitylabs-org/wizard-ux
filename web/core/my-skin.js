@@ -162,14 +162,18 @@
   function receive(list) {
     if (!list || !Array.isArray(list.skins)) throw new Error('Invalid skins response');
     const oldActive = recipes.active;
-    const skins = list.skins.filter(s => s && typeof s.id === 'string' && !(s.id === 'My skin' && s.empty && !s.has_script && !s.has_recipe)).map(s => ({ ...s, tweaks: s.tweaks || {} }));
+    // Empty, uncustomized "My skin" folders (and the "My skin 2/3" a repeated migration made) are not skins to choose.
+    const blank = s => /^My skin( \d+)?$/.test(s.id) && s.empty && !s.has_script && !s.has_recipe && s.id !== list.active;
+    const skins = list.skins.filter(s => s && typeof s.id === 'string' && !blank(s)).map(s => ({ ...s, tweaks: s.tweaks || {} }));
     const next = { version: 1, skins, active: list.active, migrated: true };
     const changed = JSON.stringify(recipes) !== JSON.stringify(next); recipes = next;
     // A storage quota failure must not turn a successful box write into a false failure.
     try { localStorage.setItem(BOX_CACHE, JSON.stringify(recipes)); } catch (_) {}
     if (oldActive !== recipes.active) { verified = null; stopScript(); apply(''); cache(''); }
+    // Only a newly worn skin (here or on another device) brings its base. On load the device's own skin choice stands:
+    // forcing the recipe's base every load is what made a picked skin revert (wizard-ux #768).
     selecting = true;
-    try { if (own() && window.WosSkin?.current !== own().base && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base); }
+    try { if (oldActive !== recipes.active && own() && window.WosSkin?.current !== own().base && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base); }
     finally { selecting = false; }
     if (changed) recipeChanged();
   }
@@ -188,7 +192,8 @@
           const active = legacy.active;
           for (const s of [...legacy.skins]) {
             if (!s || typeof s.name !== 'string' || !s.base || !s.tweaks) continue;
-            let found = list.skins.find(k => k.name === s.name && (s.legacy || (k.base === s.base && JSON.stringify(k.tweaks || {}) === JSON.stringify(s.tweaks))));
+            // Same name = the same skin, whatever its base or tweaks: each device migrating its own copy made "My skin 2", "My skin 3".
+            let found = list.skins.find(k => k.name === s.name || (s.legacy && /^My skin( \d+)?$/.test(k.name)));
             if (!found) { const made = await request('', 'POST', { name: s.name, base: s.base, tweaks: s.tweaks, migration_key: s.id, activate: s.id === active }); found = { id: made.id }; }
             else if (s.id === active) await request('/active', 'PUT', { id: found.id });
             legacy.skins = legacy.skins.filter(k => k.id !== s.id);

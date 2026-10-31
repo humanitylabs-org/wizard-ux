@@ -270,7 +270,10 @@
       const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
       return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
     }).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${groups}</div>`;
+    // Select all on top (Oscar, wizard-ux #768): every tweak from everyone, all on → all off.
+    const onAll = exp.filter(t => t.on).length, allOn = !!exp.length && onAll === exp.length;
+    const selectAll = exp.length ? `<button type="button" class="st-row tw-row tw-all" data-tweak-all role="switch" aria-checked="${allOn}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>Select all</b><small>${onAll} of ${exp.length} on</small></span><span class="sw ${allOn ? 'on' : ''}" aria-hidden="true"><i></i></span></button>` : '';
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${selectAll}${groups}</div>`;
   }
   let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -366,12 +369,14 @@
     if (own) { skinAction(() => M.active?.id === own.dataset.ownskin ? M.leave() : M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
+    if (el.closest('[data-tweak-all]')) { void window.WosExperience?.setAll?.().catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const quick = el.closest('[data-tweakauthor]');
     if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
+    // A picked skin is this device's skin and survives reload; wearing an own skin over it ends (it never forces its base back).
+    skinAction(() => { S.set(b.dataset.skinpick); return M?.active ? M.leave() : null; }, () => {
       void window.WosExperience?.chooseSkin?.();
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
