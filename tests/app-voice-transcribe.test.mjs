@@ -22,8 +22,12 @@ test('installed frame uses the one configured transcriber, optional language, an
   assert.equal(f.calls[0].opts.language, 'es'); assert.equal(f.calls[0].opts.prompt, 'Names: Wizard.');
 });
 test('missing endpoint is explicitly unavailable without an upstream request', async () => {
-  const f = fixture({endpoint: () => ''}); assert.equal((await f.service.voice.transcribe(audio())).unavailable, true); assert.equal(f.calls.length, 0);
+  const f = fixture({endpoint: () => '', transcribe: async () => {throw Object.assign(new Error('none'), {code: 'no_voice'});}}); assert.equal((await f.service.voice.transcribe(audio())).unavailable, true); assert.equal(f.calls.length, 0);
   assert.equal((await fixture(false).service.voice.transcribe(audio())).unavailable, true);
+});
+test('a stale bootstrap without an endpoint still reaches the transcriber, which refreshes before giving up', async () => {
+  const f = fixture({endpoint: () => '', transcribe: async (file, opts) => {f.calls.push({file, opts}); return {text: 'recovered'};}});
+  assert.equal((await f.service.voice.transcribe(audio())).text, 'recovered'); assert.equal(f.calls.length, 1);
 });
 test('rejects non-Blob, empty, oversized and invalid language before calling the provider', async () => {
   const f = fixture();
