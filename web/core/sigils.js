@@ -5,7 +5,9 @@
  *   WizSigil.html(app)  → '<i class="sgi sg-…">' to drop inside any icon box; the box takes --c
  *   WizSigil.named(glyph, color) → the same for a sigil that isn't an app (search, command rows)
  *
- * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
+ * An installed app that ships its own logo (Runtipi metadata/logo.jpg, served by the box and listed by core/apps.js)
+ * shows that picture as a rounded tile (`<i class="sglogo">`) in every one of these places instead of a sigil.
+ * Which sigil an app gets otherwise: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
  * silhouette, then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
  * in the same box, so a fallback is never bigger, squarer or more opaque than a designed sigil.
@@ -16,17 +18,29 @@
   'use strict';
   const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "card", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "dollar", "eye", "files", "gauge", "globe", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "notes", "pages", "pin", "profile", "projects", "recall", "scope", "search", "secret", "shield", "side", "signal", "social", "spark", "track", "usuals", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents']);
   const HOUSE = {"calendar":["calendar","#FE98AB"],"mizel":["mic","#FE9C8C"],"shopping":["bag","#FFA15C"],"wisdom":["wisdom","#FEC25D"],"cinequeue":["cine","#E9CF06"],"trackhunt":["track","#ABE355"],"android-apps":["android","#50DA79"],"topics":["eye","#0ED8BB"],"messenger":["chats","#00D6CF"],"wizard-signal":["signal","#0AD3E3"],"meditation":["meditate","#12CFF6"],"files":["files","#56C8FE"],"wizard-search":["search","#81B7FF"],"projects":["projects","#A0AEFE"],"wizard":["hat","#C1AAFF"],"social":["social","#EF90FE"],"wizard-music":["music","#FF8FD3"],"iching":["iching","#E5C9A3"],"console":["console","#A9B6C4"],"legacy-wizard":["wizard","#BDB5D8"],"v-day":["day","#FF9F6D"],"v-week":["week","#D6A0FE"],"v-month":["month","#99B5E8"],"v-inbox":["inbox","#11DBA2"],"usuals":["usuals","#FE9E79"],"side-button":["side","#C1B1E1"],"maps":["pin","#CDDA2D"],"app-store":["apps","#ABA9FE"],"system":["gauge","#83C9CC"],"notifications":["bell","#FEC076"],"morning-report":["coffee","#FF9F71"],"wizard-calendar":["calendar","#FE98AB"],"secret-drop":["secret","#05D6CE"],"browser":["globe","#11CFF9"],"transcriber":["wave","#F98CF1"],"wizard-chatgpt":["spark","#06DC92"],"wizard-claude":["burst","#FF9C89"],"wizard-agent-service":["hub","#88B9EC"],"wizard-tinfoil":["shield","#A1C0CF"],"wizard-cloudflare":["cloud","#FFA245"],"wizard-shopping":["bag","#FFA15C"],"sniper":["scope","#FB99B2"],"card-benefits":["card","#65D86D"],"money":["dollar","#75D291"],"profiles":["profile","#C1AAFF"],"defleur-video":["clip","#94B1FF"],"notes":["notes","#FF94BD"],"wizard-notes":["notes","#FF94BD"],"morning":["coffee","#FF9F71"],"wizard-files":["files","#56C8FE"],"photos":["image","#68BCFF"],"troubleshooter":["wrench","#7CCCC2"],"wizard-ux":["wizard","#A9AEED"],"agents":["agents","#9BB1F5"]};
+  // Canonical app names keep the approved palette through compatibility aliases, not new colours.
+  for (const [id, old] of Object.entries({"movies":"cinequeue","food":"usuals","meditate":"meditation"})) HOUSE[id] = HOUSE[old];
   const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
   const FALLBACK = ["#FE9A9A", "#FFA332", "#D2D826", "#1DDC8D", "#07D4D6", "#4CCAFF", "#94B1FF", "#C7A8FE", "#FE8AEA"];
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
   // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).
   const ICON = /^\/(?!\/)[A-Za-z0-9._~\/-]+\.(?:svg|png|webp)$/;
+  // An installed app's own logo, served by the box (tools/store-app-logos.mjs, read by core/apps.js): a fixed
+  // same-origin path whose ?v= is the image's hash.
+  const LOGO = /^\/wizard-os-home\/store-data\/app-logo\/[a-z0-9][a-z0-9-]{0,63}\?v=[0-9a-f]{16}$/;
+  const logoOf = a => { const u = a.id && window.WizCore?.appLogo?.(a.id); return typeof u === 'string' && LOGO.test(u) ? u : ''; };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pick = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return FALLBACK[h % FALLBACK.length]; };
 
+  // `logo`: the app ships its own picture; every surface shows it as a rounded tile (html below). glyph/colour/letter
+  // stay filled in for anything that still needs the sigil (a colour for glows, the home-screen icon fallback).
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
+    const s = sigilOf(a), logo = logoOf(a);
+    return logo ? { ...s, logo } : s;
+  }
+  function sigilOf(a) {
     const own = typeof a.icon === 'string' && NAMES.has(a.icon) ? a.icon : '';
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
@@ -51,6 +65,7 @@
   function html(a) {
     a = a || {};
     const s = of(a), b = brand(a);
+    if (s.logo) return `<i class="sglogo" aria-hidden="true" style="--logo:url('${esc(s.logo)}')"></i>`;
     if (b) return (s.glyph ? named(s.glyph) : named(s.letter)).replace('class="sgi', `class="sgi${b}`);
     if (s.glyph) return named(s.glyph);
     if (s.img) return `<i class="sgi sgl sgimg" aria-hidden="true" style="--sg:url('${esc(s.img)}')">${esc(s.letter)}</i>`;

@@ -18,7 +18,7 @@
     if (opts.language != null && (typeof opts.language !== 'string' || !/^[a-zA-Z-]{0,35}$/.test(opts.language))) throw fault('Invalid transcription language');
     const config = window.WizConfig;
     await config?.ready;
-    if (!config?.transcribe || !config.endpoint('transcribe')) return { unavailable: true };
+    if (!config?.transcribe) return { unavailable: true };
     try { const result = await config.transcribe(file, { language: opts.language || '', prompt: config.voicePrompt?.() || '' }); return { text: String(result.text || '').trim() }; }
     catch (e) { if (e.code === 'no_voice') return { unavailable: true }; throw e; }
   }

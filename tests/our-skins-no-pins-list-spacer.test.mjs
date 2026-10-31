@@ -5,15 +5,16 @@ import { readFileSync } from 'node:fs'
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin^="landscapes"]']]) {
   const css = read(file)
-  test(`${file}: pin button and Pin action hidden`, () => {
+  test(`${file}: row pins are opt-in and the menu Pin stays available`, () => {
     assert.doesNotMatch(css, /ch-pin-toggle[^}]*display: none/)
-    assert.match(read('web/tweaks/miguel/hidden-pin/tweak.css'), /data-part="pin-button".*display:none/)
+    assert.doesNotMatch(css, /pin-action[^}]*display:\s*none/)
+    assert.match(read('web/core/chats.js'), /data-part="pin-action" data-rspin/)
   })
   test(`${file}: list bottom room is a flex spacer, not scroll padding`, () => {
     assert.match(css, /\.win\.solo\.app-chats \.ch-list \.ch-scroll::after \{ content: ""; display: block; order: 99; flex: 0 0 calc\(var\(--pill-top\) \+ 66px\); \}/)
     assert.doesNotMatch(css, /\.win\.solo\.app-chats \.ch-list \.ch-scroll \{ padding-bottom: calc\(var\(--pill-top\)/)
   })
 }
-test('core keeps pins for every other skin', () => {
+test('core keeps the row pin available to opt-in skins and tweaks', () => {
   assert.match(read('web/core/chats.css'), /\.ch-pin-toggle \{ position: absolute;/)
 })

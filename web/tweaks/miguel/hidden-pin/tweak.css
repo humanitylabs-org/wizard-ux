@@ -1,2 +1,5 @@
-html[data-tweaks~="miguel/hidden-pin"] [data-part="pin-button"] { display:none; }
-html[data-tweaks~="miguel/hidden-pin"] [data-part="thread-row"] { padding-right:8px; }
+/* Miguel keeps chats pin-free: no Pin in the row menu and no row pin button, even with Show pin buttons on. */
+html[data-tweaks~="miguel/hidden-pin"] .ch-sheet [data-part="pin-action"], html[data-tweaks~="miguel/hidden-pin"] .ch-row-wrap .ch-pin-toggle { display:none; }
+html[data-tweaks~="miguel/hidden-pin"] .ch-row-wrap > .ch-row.ch-row { padding-right:12px; }
+html[data-tweaks~="miguel/hidden-pin"] .ch-row-wrap.diagnosed > .ch-row.ch-row { padding-right:90px; }
+html[data-tweaks~="miguel/hidden-pin"] .ch-row-wrap .ch-row-signin { right:10px; }

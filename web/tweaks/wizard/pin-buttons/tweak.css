@@ -1,0 +1,5 @@
+/* Show pin buttons: the pin button on every chat row (off by default; Pin is always in the row menu). */
+html[data-tweaks~="wizard/pin-buttons"] .ch-pin-toggle { display: grid; }
+html[data-tweaks~="wizard/pin-buttons"] .ch-row-wrap > .ch-row { padding-right: 42px; }
+html[data-tweaks~="wizard/pin-buttons"] .ch-row-wrap.diagnosed .ch-row { padding-right: 122px; }
+html[data-tweaks~="wizard/pin-buttons"] .ch-row-signin { right: 44px; }

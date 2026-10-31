@@ -4,7 +4,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { homedir, machine } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createIndexProxy, readCapped, readWizardApps } from './store-index-views.mjs';
@@ -12,6 +12,7 @@ import { buildOverview, gatherSources } from './system-overview.mjs';
 import { withPrivateCatalog } from './store-private-catalog.mjs';
 import { createRouterOwnerRoutes } from './store-router-owner.mjs';
 import { linkPreview } from './store-link-preview.mjs';
+import { createAppLogos, LOGO_VERSION } from './store-app-logos.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
@@ -63,7 +64,7 @@ export function shellMetadata(doc) {
     status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
   }));
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes() } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes(), appLogos } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();
@@ -75,10 +76,12 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
   const getOverview = overview || (async () => buildOverview(await gatherSources({ fetchJson: serviceJson, readInstalled: installedList })));
   let ovCache = null;
   const logos = new Map();
+  // Installed apps' own logos for the shell's app icons (store-app-logos.mjs).
+  const own = appLogos || createAppLogos({ readWam, runtipiRoot: dirname(ENV) });
   return async (req,res) => {
-    const send = (status, data, type='application/json') => {
+    const send = (status, data, type='application/json', cache) => {
       const body = Buffer.isBuffer(data) ? data : Buffer.from(JSON.stringify(data));
-      res.writeHead(status, {'Content-Type':type,'Content-Length':body.length,'Cache-Control':type.startsWith('image/')?'private, max-age=3600':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}); res.end(req.method === 'HEAD' ? undefined : body);
+      res.writeHead(status, {'Content-Type':type,'Content-Length':body.length,'Cache-Control':cache || (type.startsWith('image/')?'private, max-age=3600':'no-store'),'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}); res.end(req.method === 'HEAD' ? undefined : body);
     };
     const routerWrite = req.method === 'POST' && req.url.split('?')[0] === PREFIX + 'router/v1/approve';
     if (!['GET','HEAD'].includes(req.method) && !routerWrite) { send(405,{error:'read_only'}); return; }
@@ -107,6 +110,19 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
         if (u.search) { send(400,{error:'invalid_query'}); return; }
         if (!ovCache || Date.now()-ovCache.at > 30000) ovCache = { at: Date.now(), body: await getOverview() };
         send(200, ovCache.body); return;
+      }
+      if (path === 'wizard/v1/app-logos') {
+        if (u.search) { send(400,{error:'invalid_query'}); return; }
+        send(200,{logos:own.list()}); return;
+      }
+      const ownLogo = path.match(/^app-logo\/([a-z0-9][a-z0-9-]{0,63})$/)?.[1];
+      if (ownLogo) {
+        const v = u.searchParams.get('v');
+        if ([...u.searchParams.keys()].some(k => k !== 'v') || (v !== null && !LOGO_VERSION.test(v))) { send(400,{error:'invalid_query'}); return; }
+        const l = own.get(ownLogo);
+        if (!l) { send(404,{error:'no_logo'}); return; }
+        // The URL names the image's hash: the exact version may be kept for good; anything else is checked each time.
+        send(200, l.body, l.type, v === l.v ? 'private, max-age=31536000, immutable' : 'private, no-cache'); return;
       }
       const logoId = path.match(/^logo\/([a-z0-9][a-z0-9-]{0,63})$/)?.[1];
       if (logoId) {
