@@ -106,7 +106,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         await page.evaluate(() => document.getElementById('qaLoudBackdrop').remove());
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-navigation-open.png`) });
         // Actual pointer delivery to the exposed orb/mic starts capture and tucks away the open checks.
-        await page.locator(phone ? '#orb' : '#micBtn').click();
+        { const b = await page.locator(phone ? '#orb' : '#micBtn').boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); } // real pointer at the orb centre: #orbWrap legitimately owns the hit
         await page.waitForFunction(() => (window.__wos || window.__wux).voice !== 'idle');
         await pillOnly();
         await navigate(); await pillOnly(); // navigating during capture must never reopen
