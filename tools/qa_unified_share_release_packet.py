@@ -20,7 +20,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 RESERVE = 214748364800
-FOOTPRINT = 32 * 1024**3 + 256 * 1024**2
+# Two Gradle working sets (12 GiB), two fresh unretained AVDs (6 GiB), APK/logs/screens (1 GiB),
+# job-local Playwright package + baseline + staging (1 GiB). Browser binaries are the shared pinned cache.
+FOOTPRINT = 20 * 1024**3
 SIGNER = '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
 BASELINE = '5e8be00bd7161e07786e7d716698d4c12cc8450f12c8ab7f3906a97009d3161d'
 

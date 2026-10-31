@@ -23,7 +23,7 @@ The coordinator refuses to start on:
 - seal drift: archives, manifests, job configs, workers, the coordinator, owner config or pinned browser dependency files
 - reused job directories
 - a signing env that is missing, not mode 600, or lacks the `WOS_*` names (only the names are checked; values are never printed)
-- less than 200 GiB free plus the 32.25 GiB footprint
+- less than 200 GiB free plus the 20 GiB peak footprint (two Gradle working sets, two unretained AVDs, logs, browser package)
 
 It never submits, publishes, changes a feed or deploys web source.
 
