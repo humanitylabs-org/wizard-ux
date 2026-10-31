@@ -4,13 +4,22 @@ Opt-in, off by default: Settings › Look › Tweaks › **Orbs view**. The desk
 **Desks** and **Orbs**; switching it off brings the Desks view straight back (no reload). On the phone (experimental) it
 changes Home only; see **Phone** below.
 
+**Try it:** desktop › Settings (the gear) › Look › Tweaks › **Miguel** › switch on **Orbs view**. Optionally also
+**Desks | Orbs switch** for a one-click switch in the middle of the bar. (Miguel's one-tap author button turns all of his
+tweaks on, these two included.) Ways back to Desks,
+with or without the switch: the scene's **Look** button › **Back to the Desks view** (`api.desk.classic()`), or the
+gear › Look › Tweaks › Orbs view off.
+
 **Desks | Orbs switch** (`miguel/orb-switch`, its own tweak; tweak ids unchanged so devices keep their choice): a segmented control in the middle of the desktop bar,
 in place of the date and time, visible in both modes. It mounts in the core `bar-center` slot (`web/desktop.html`,
 `core/slots.json`): while that slot holds anything the clock steps aside (`desktop.css`), and the slot hides under the
 voice pill like the clock did. One click switches `miguel/orb-shell` for this device through the same tweak mix as
 Settings (`WosExperience.toggle`, via the trusted `api.settings.toggleTweak`, own author only), no reload. The lit side
-follows what the desktop really wears (`html[data-layout]`), so a half-loaded Orb shows Classic and one click mends it.
-Off by default on main like every tweak; Miguel's release turns it on with a catalog `defaults` entry.
+follows what the desktop really wears (`html[data-layout]`), so a half-loaded Orb shows Desks and one click mends it.
+Off by default like every tweak; with the Orbs view off it only shows the switch (the Desks view is otherwise unchanged).
+
+With both tweaks off the desktop is the stock Desks view: every core hook added for this layout (`panelMode`,
+`bar-center`, `leaveOnSend`, `WosSkinHost.key`, `commandUi`) is a no-op until a layout claims it.
 
 What the Orbs view changes (all in `web/layouts/orb/`, CSS scoped to `html[data-shell="desktop"][data-layout="orb"]`).
 It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
@@ -145,7 +154,8 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
   (`actions`: what Chats offers on that thread, `snooze` / `done` only); `null` while connecting.
 - `api.sessions.act(id, 'snooze' | 'done')`, `open(id)`, `openList('ready' | 'working')`.
 - `api.apps.list()` → `{ id, name, icon }`; `open(id)`; `all()` (⌥O); `logo(id)` → a local URL or null.
-- `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look), `api.desk.emptyHome()`: closing the last window of
+- `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look), `api.desk.classic()` (back to the Desks view: switches
+  off the tweak wearing the layout for this device, like its Settings switch; resolves false once the layout is gone), `api.desk.emptyHome()`: closing the last window of
   a desk goes Home instead of to another desk (`WosSkinHost.emptyHome`, read by `closeWin`); released on teardown.
 - `api.panel.claim()`: no desks while held (`WosSkinHost.panelMode`; the adapter's `panelMode(on)`). desktop.js then
   sends every new window to a panel (`panelOpen`): an app (a frame or a page) to its own desk shown in the app panel

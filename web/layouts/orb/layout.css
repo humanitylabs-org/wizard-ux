@@ -194,6 +194,12 @@ html[data-shell="desktop"][data-layout="orb"] .ob-pop {
   box-shadow: var(--ob-shadow); transform-origin: 0 100%; animation: ob-pop-in 200ms cubic-bezier(.2, .8, .2, 1) both;
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-pop[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-desks {
+  display: block; width: 100%; margin-top: 14px; padding: 9px 0 0; border: 0; border-top: 1px solid var(--ob-line); background: none;
+  cursor: pointer; text-align: left; color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .86) / 1.2 var(--wz-font-ui); transition: color 140ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-desks:is(:hover, :focus-visible) { color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-desks:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
 @keyframes ob-pop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
 html[data-shell="desktop"][data-layout="orb"] .ob-pop-h {
   display: flex; align-items: baseline; justify-content: space-between; margin: 2px 2px 10px;
