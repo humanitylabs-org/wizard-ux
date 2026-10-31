@@ -327,3 +327,13 @@ test('Orbs view: hold ⌥ for app letters — never a key the desktop binds, sta
   assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.search\(\)\);/, 'the pill opens the shell\'s own search');
   assert.match(desk, /openPalette: \(\) => palToggle\('all'\),/);
 });
+
+test('Orbs view: the list, chat and app panels resize from thin grips, kept per device, never overlapping', () => {
+  const js = read('web/layouts/orb/layout.js'), css = read('web/layouts/orb/layout.css');
+  assert.match(js, /const limits = \(\) => \(\{ list: \[260, 520\], chat: \[Math\.min\(360, W \* \.45\), Math\.max\(360, W \* \.45\)\], app: \[Math\.min\(360, W \* \.6\), Math\.max\(360, W \* \.6\)\] \}\);/);
+  assert.match(js, /if \(C \+ A > room\) \{ C = Math\.max\(lim\.chat\[0\], room - A\);/, 'never overlapping');
+  assert.match(js, /el\('div', 'ob-grip', \{ role: 'separator', 'aria-orientation': 'vertical', tabindex: '0'/, 'keyboard-reachable separators');
+  assert.match(js, /function save\(\) \{ api\.storage\.set\('widths', sized\); \}/); assert.match(js, /api\.listen\(g, 'dblclick', \(\) => \{ delete sized\[id\]; save\(\); aim\(\); \}\);/);
+  assert.match(js, /cx = W \/ 2;\n/, 'the orb stays at the centre');
+  assert.match(css, /\.ob-grip \{\n  position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize;/);
+});
