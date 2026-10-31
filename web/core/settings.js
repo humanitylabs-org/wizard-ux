@@ -19,6 +19,8 @@
     { id: 'network', title: 'Network & security', group: 'System', available: filled('network') },
     { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
     { id: 'appearance', title: 'Appearance', group: 'Preferences' },
+    // My Changes (wizard-os #316): filled only by a package; today the clickable demo (core/my-changes-demo.js).
+    { id: 'my-changes', title: 'My Changes', available: filled('my-changes') },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
     // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
