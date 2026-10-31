@@ -114,7 +114,7 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-doc
  * back into it. The thread shows alone (its window's own list pane stays hidden: the list is the docked one). */
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="beside"] {
   z-index: 2; top: 0; bottom: 0; left: var(--ob-beside-left, var(--ob-col-w)); right: auto; width: var(--ob-chat-w); border-radius: 0; border: 0; box-shadow: none;
-  border-right: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 92%, transparent);
+  border-right: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 84%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(1.15); backdrop-filter: blur(24px) saturate(1.15);
 }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="beside"].focus { border-color: var(--ob-dock-line); box-shadow: none; }
