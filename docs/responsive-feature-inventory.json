@@ -522,6 +522,13 @@
       ],
       "note": "Extracted native/app internal share sheet"
     },
+    "core/sheetback.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Double-Back guard policy for sheets holding content (ported from live Android SheetBack)"
+    },
     "core/shell.js": {
       "loadedBy": [
         "phone",
@@ -883,6 +890,7 @@
     "core/share-sheet.js",
     "core/share-wizard.css",
     "core/share-wizard.js",
+    "core/sheetback.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",

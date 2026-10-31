@@ -1,5 +1,5 @@
 /* One Send to <agent> sheet for Android imports and installed apps, on both shells.
- * REUSE: WizAttachChip, WosAgents, Chats/outbox and Android ShareService. EXTEND: share-wizard.js. */
+ * REUSE: WizAttachChip, WosAgents, Chats/outbox, Android ShareService and WizSheetBack (double-Back guard). EXTEND: share-wizard.js. */
 (() => {
   'use strict';
   if (window.WizShareWizard) return;
@@ -27,14 +27,23 @@
   }
   function finish(result, pending) {
     const a = active; if (!a) return;
-    active = null; a.abort.abort(); a.el.remove(); a.mount.classList.remove('dv-share-open');
+    active = null; clearTimeout(a.hintTimer); a.abort.abort(); a.el.remove(); a.mount.classList.remove('dv-share-open');
     a.urls.forEach(u => URL.revokeObjectURL(u)); if (result === 'cancelled') a.onCancelled?.(); if (!pending) a.resolve(result); a.focus?.focus?.();
     const next = retries.shift(); if (next) setTimeout(() => open(...next.args).then(next.resolve), 0); // a failed send waiting its turn
   }
+  // Hardware/system Back and Escape only (core/sheetback.js, ported from the live Android SheetBack): a chooser closes
+  // first; a sheet holding a comment or shared items warns once and cancels on a second Back inside the window.
+  // Cancel, the X and the scrim call finish() directly: explicit closes stay immediate.
+  const clock = () => window.performance?.now?.() ?? Date.now();
   function back() {
     if (!active) return false;
-    if (active.picker) { active.closePicker(); return true; }
-    finish('cancelled'); return true;
+    const a = active, SB = window.WizSheetBack;
+    if (!a.sb || !SB) { if (a.picker) a.closePicker(); else finish('cancelled'); return true; } // policy module absent: plain Back
+    const act = a.sb.back(clock(), a.hasContent());
+    if (act === SB.Action.CLOSE_CHOOSER) a.closePicker();
+    else if (act === SB.Action.WARN) a.warn();
+    else finish('cancelled');
+    return true;
   }
   // durable (native shares sent by the web upload): resolve 'sent' only once the message has a receipt, so the caller
   // keeps its staged copy until then; a failed send resolves with whatever the owner does with the retry sheet.
@@ -61,14 +70,18 @@
         <button type="button" class="dv-row dv-chat" aria-haspopup="listbox" aria-expanded="false"><span>Chat</span><strong>New chat</strong><span aria-hidden="true">⌄</span></button>
       </div>
       <button class="dv-btn primary wide dv-send" data-sharesend disabled><span>Send</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
-      <div class="dv-status" aria-live="polite">${esc(error)}</div></section>`;
+      <div class="dv-status" aria-live="polite">${esc(error)}</div>
+      <div class="dv-backhint" role="status" aria-live="polite"></div></section>`;
     return new Promise(resolve => {
-      const a = active = {el, mount, resolve, urls, focus: document.activeElement, abort: new AbortController(), picker: '', onCancelled};
+      const a = active = {el, mount, resolve, urls, focus: document.activeElement, abort: new AbortController(), picker: '', onCancelled, sb: window.WizSheetBack?.create(), hintTimer: 0};
       const $ = q => el.querySelector(q), status = $('.dv-status');
       let agents = [], chosenAgent = null, target = '__new__', threads = [], loadSeq = 0, loading = true;
       const route = () => chosenAgent && !chosenAgent.is_default ? chosenAgent.id : '';
       const label = () => chosenAgent?.label || window.WizConfig?.agent?.() || 'Wizard';
-      a.closePicker = () => { const was = a.picker; a.picker = ''; if (was) $(`.dv-${was}`)?.focus({preventScroll:true}); $('.dv-picker-wrap')?.remove(); el.querySelectorAll('[aria-expanded]').forEach(b => b.setAttribute('aria-expanded', 'false')); };
+      a.hasContent = () => !!$('.dv-text').value.trim() || !!text.trim() || kept.some(Boolean); // anything the owner could lose
+      a.clearHint = () => { clearTimeout(a.hintTimer); const h = $('.dv-backhint'); if (h) h.textContent = ''; };
+      a.warn = () => { clearTimeout(a.hintTimer); $('.dv-backhint').textContent = window.WizSheetBack.HINT; a.hintTimer = setTimeout(a.clearHint, window.WizSheetBack.WINDOW_MS); };
+      a.closePicker = () => { const was = a.picker; a.picker = ''; if (was) { a.sb?.closeChooser(); $(`.dv-${was}`)?.focus({preventScroll:true}); } $('.dv-picker-wrap')?.remove(); el.querySelectorAll('[aria-expanded]').forEach(b => b.setAttribute('aria-expanded', 'false')); };
       const paint = () => {
         $('.dv-title').textContent = `Send to ${label()}`; $('[role=dialog]').setAttribute('aria-label', `Send to ${label()}`);
         $('.dv-agent strong').textContent = chosenAgent ? label() : 'Unavailable';
@@ -76,7 +89,7 @@
         $('[data-sharesend]').disabled = !chosenAgent || chosenAgent.status !== 'running' || loading;
       };
       const showPicker = which => {
-        a.closePicker(); a.picker = which;
+        a.closePicker(); a.picker = which; a.sb?.openChooser(); a.clearHint();
         const wrap = document.createElement('div'); wrap.className = 'dv-picker-wrap';
         const rows = which === 'agent' ? agents.map(g => ({id:g.id, title:g.label, disabled:g.status !== 'running', on:g.id === chosenAgent?.id}))
           : [{id:'__new__', title:'+ New chat', on:target === '__new__'}, ...threads.map(s => ({id:s.id, title:s.title || 'Untitled chat', on:s.id === target}))];
@@ -125,7 +138,7 @@
           } else { target = opt.dataset.dvpick; a.closePicker(); paint(); }
           return;
         }
-        if (e.target.closest('[data-dvclose]')) return back();
+        if (e.target.closest('[data-dvclose]')) return a.picker ? a.closePicker() : finish('cancelled'); // explicit close: immediate
         if (e.target.closest('.dv-agent')) return showPicker('agent');
         if (e.target.closest('.dv-chat')) return showPicker('chat');
         const rm = e.target.closest('[data-attrm]');
@@ -187,7 +200,7 @@
   }
   document.addEventListener('keydown', e => {
     if (!active) return;
-    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); back(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); if (!e.repeat) back(); return; } // a held key is one press
     if (active.picker && ['ArrowDown','ArrowUp','Home','End'].includes(e.key)) {
       const opts = [...active.el.querySelectorAll('.dv-picker button:not(:disabled)')];
       const at = opts.indexOf(document.activeElement), next = e.key === 'Home' ? 0 : e.key === 'End' ? opts.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length;

@@ -22,7 +22,7 @@ function fixture({solo=false,delayedMain=false}={}){
    return response;
  };
  w.__wos={wins:{c:{app:'chats'}},openThread(){},toast(){},chats:{async uploadFile(f){uploads.push(f);return {id:'f'+uploads.length,name:f.name,bytes:f.size};},async sendChat(wid,text,how,audio,opts){sends.push({wid,text,opts});return {durable:true};}}};
- w.eval(fs.readFileSync(path.join(root,'web/core/attach-chip.js'),'utf8'));w.eval(source);
+ w.eval(fs.readFileSync(path.join(root,'web/core/attach-chip.js'),'utf8'));w.eval(fs.readFileSync(path.join(root,'web/core/sheetback.js'),'utf8'));w.eval(source);
  const q=s=>d.querySelector(s), click=s=>{const el=typeof s==='string'?q(s):s;assert.ok(el,s);el.click();};
  const ready=()=>until(()=>q('[data-sharesend]')&&!q('[data-sharesend]').disabled);
  const choose=(which,id)=>{click('.dv-'+which);click('[data-dvpick="'+id+'"]');};
@@ -54,6 +54,36 @@ function fixture({solo=false,delayedMain=false}={}){
  }
  {
   const f=fixture();let cancel=0;f.w.WizShareWizard.open({text:'quote',agent:'synthetic-private',dest:'private-existing',items:[{n:2,name:'keep.pdf',bytes:4,mime:'application/pdf',read(){throw Error('must stay native');}}],nativeQueue:async()=>{throw Error('synthetic queue failure');},onCancelled:()=>cancel++});await f.ready();f.q('.dv-text').value='Keep note';f.click('[data-sharesend]');await until(()=>f.q('.dv-status')?.textContent.includes('Couldn’t send'));await f.ready();assert.equal(f.q('.dv-text').value,'Keep note');assert.equal(f.q('.dv-agent strong').textContent,'Synthetic Private');assert.equal(f.q('.dv-chat strong').textContent,'Private existing');f.click('.dv-scrim');assert.equal(cancel,1);assert.deepEqual(f.errors,[]);mark('native failure reopens with comment + agent + chat and retains cancellation callback');f.dom.window.close();
+ }
+ // Live Android SheetBack parity (81fc98c0): system Back / Escape never discards on one press; explicit closes stay immediate.
+ {
+  const f=fixture({solo:true});let t=1000,cancelled=0;f.w.performance.now=()=>t;
+  const result=f.w.WizShareWizard.open({text:'quote',onCancelled:()=>cancelled++});await f.ready();
+  const esc=(o={})=>f.d.dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,...o}));
+  assert.equal(f.w.WizShareWizard.back(),true);assert.ok(f.q('.wz-share'));assert.equal(f.q('.dv-backhint').textContent,'Press back again to cancel');
+  t+=2500;esc();assert.ok(f.q('.wz-share'),'a late second Back warns again');assert.equal(cancelled,0);
+  t+=500;esc({repeat:true});assert.ok(f.q('.wz-share'),'a held Escape is one press');
+  t+=100;esc();assert.equal(await result,'cancelled');assert.equal(cancelled,1);assert.equal(f.q('.wz-share'),null);
+  f.dom.window.close();mark('Back/Escape warn once, late second warns again, held key ignored, second within window cancels');
+ }
+ {
+  const f=fixture({solo:true});let t=0;f.w.performance.now=()=>t;
+  const r1=f.w.WizShareWizard.open({text:'quote'});await f.ready();
+  f.w.WizShareWizard.back();assert.ok(f.q('.dv-backhint').textContent);f.click('.dv-chat');assert.equal(f.q('.dv-backhint').textContent,'','opening a chooser clears the warning');
+  assert.equal(f.w.WizShareWizard.back(),true);assert.equal(f.q('.dv-picker'),null);assert.ok(f.q('.wz-share'));assert.equal(f.q('.dv-backhint').textContent,'','closing a chooser never warns or counts');
+  f.click('.dv-cancel');assert.equal(await r1,'cancelled');
+  const r2=f.w.WizShareWizard.open({text:'quote'});await f.ready();f.click('.dv-scrim');assert.equal(await r2,'cancelled');
+  const r3=f.w.WizShareWizard.open({text:'quote'});await f.ready();f.click('.dv-chat');f.click('.dv-picker-scrim');assert.equal(f.q('.dv-picker'),null);assert.ok(f.q('.wz-share'));f.click('.dv-cancel');assert.equal(await r3,'cancelled');
+  f.dom.window.close();mark('chooser closes first and resets the warning; Cancel, X and scrim close immediately');
+ }
+ {
+  const f=fixture({solo:true});f.w.performance.now=()=>0;
+  const item=n=>({n,name:'f'+n+'.pdf',mime:'application/pdf',bytes:3,blob:new f.w.Blob(['x'])});
+  const r1=f.w.WizShareWizard.open({items:[item(0)]});await f.ready();f.click('[data-attrm="0"]');
+  assert.equal(f.w.WizShareWizard.back(),true);assert.equal(await r1,'cancelled');
+  const r2=f.w.WizShareWizard.open({items:[item(0)]});await f.ready();f.click('[data-attrm="0"]');f.q('.dv-text').value='my words';
+  f.w.WizShareWizard.back();assert.ok(f.q('.wz-share'),'a typed comment is worth a warning');assert.ok(f.q('.dv-backhint').textContent);f.click('.dv-cancel');assert.equal(await r2,'cancelled');
+  f.dom.window.close();mark('nothing to lose cancels on the first Back; a comment alone still warns');
  }
  console.log(JSON.stringify({passed:pass,failed:0,checks,scope:'jsdom integration only; no rendered-browser/Android proof'}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

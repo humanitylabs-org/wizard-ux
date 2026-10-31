@@ -67,6 +67,7 @@ Visual: <side-by-side screenshot, or "none">
 | Durable send, saved Retry, failed Dismiss; >6h held Send/Discard | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) | — |
 | Share to Wizard | `WizShareWizard` (`share-wizard.js`) | one opaque sheet; `share.wizard`; `durable` |
+| Back on a sheet holding content (comment/items) | `WizSheetBack` (`sheetback.js`): chooser closes first, first Back warns, 2nd within 2000 ms cancels; X/Cancel/scrim stay immediate | own double-Back timers | `tests/SheetBackTest.mjs`, share DOM gate |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings in both shells | `WosSettings.register` (`settings.js`; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |

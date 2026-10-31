@@ -33,8 +33,8 @@ test('James: changing agent resets Chat before a scoped fetch and guards stale r
   assert.match(shared,/seq !== loadSeq/); assert.match(shared,/chosenAgent = g; status.textContent = ''; loadThreads\(\)/);
 });
 test('James: outside tap closes the top layer like Back; picker is opaque and skin-driven', () => {
-  assert.match(shared,/data-dvclose/); assert.match(shared,/closest\('\[data-dvclose\]'\)\) return back\(\)/);
-  assert.match(shared,/if \(active.picker\) \{ active.closePicker\(\); return true; \}/);
+  assert.match(shared,/data-dvclose/); assert.match(shared,/closest\('\[data-dvclose\]'\)\) return a\.picker \? a\.closePicker\(\) : finish\('cancelled'\)/); // explicit close is immediate
+  assert.match(shared,/act === SB\.Action\.CLOSE_CHOOSER\) a\.closePicker\(\)/); // system Back/Escape: chooser first, then the double-Back guard
   const css = read('web/core/share-wizard.css');
   assert.match(css,/\.dv-picker \{[^}]*linear-gradient\(var\(--dv-raised\),var\(--dv-raised\)\), linear-gradient\(var\(--dv-base\),var\(--dv-base\)\) black/s); // opaque backstop without literal colours (style ratchet)
   assert.match(css,/var\(--wz-base/); assert.match(css,/var\(--wz-accent/);
@@ -46,7 +46,7 @@ test('James: every share panel uses opaque panel tokens; pixel guard includes ro
     const block=css.slice(css.indexOf('.wz-share .'+cls+' {')).split('}')[0];
     assert.doesNotMatch(block,/background:transparent|backdrop-filter/);
   }
-  for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option']) assert.ok(guard.includes(name));
+  for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option','share-backhint']) assert.ok(guard.includes(name));
 });
 test('James: real Chats outbox receives explicit second-agent id for NEW and EXISTING chats, without inheriting another window route/model', async () => {
   const src = read('web/core/chats.js'), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);

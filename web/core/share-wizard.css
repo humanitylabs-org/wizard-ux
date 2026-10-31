@@ -53,3 +53,6 @@ html[data-skin=signal] .wz-share :is(h4,.dv-row) { font-family:var(--wz-font-mon
 /* Keep the existing focused-field/orb dictation affordance on the phone, above the shared sheet. */
 .device.dv-share-open .wz-share .dv-sheet { bottom:calc(var(--safe-b, 0px) + var(--dock-h, 0px) + 4px); max-height:calc(100% - var(--safe-b, 0px) - var(--dock-h, 0px) - 40px); }
 @media (min-width:700px) { body > .wz-share .dv-sheet { bottom:24px; border-radius:28px; } }
+/* Back-again hint: in-sheet, opaque (never glass), Appearance tokens only. */
+.wz-share .dv-backhint { position:sticky; bottom:4px; margin-top:8px; padding:11px 16px; border:1px solid var(--dv-line); border-radius:14px; text-align:center; pointer-events:none; font-size:var(--wz-text-sm); color:var(--dv-ink); background:linear-gradient(var(--dv-raised),var(--dv-raised)), linear-gradient(var(--dv-base),var(--dv-base)) black; }
+.wz-share .dv-backhint:empty { display:none; }

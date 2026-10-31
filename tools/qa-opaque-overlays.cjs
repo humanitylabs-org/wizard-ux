@@ -33,7 +33,7 @@ const cases = [
  ...[
   ['share-wizard','dv-sheet'],['share-compose','dv-compose'],['share-destination','dv-dest'],
   ['share-agent-row','dv-row dv-agent'],['share-chat-row','dv-row dv-chat'],
-  ['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],
+  ['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],['share-backhint','dv-backhint'],
  ].map(([name,cls])=>({group:'phone',name,cls,wrap:'wz-share dv-wrap'})),
  {group:'phone',name:'share-option',tag:'button',wrap:'wz-share dv-wrap',middle:'dv-picker'},
  {group:'phone',name:'message-popover',cls:'ch-sheet-b',wrap:'ch-mpop'},
