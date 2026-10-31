@@ -2823,9 +2823,11 @@
   /* Quick command (James, 25 Oct 2026): a tap take shorter than QUICK_MS is a command; longer goes to the agent.
    * Only a plain tap take qualifies: replies pinned to a thread composer, app voice input, general takes, review
    * feedback, captures and takes carrying files or composer text stay messages. A quick take with no command match
-   * still goes where a tap take always went (so a short "ship it" in a thread still reaches that thread). */
+   * still goes where a tap take always went (so a short "ship it" in a thread still reaches that thread).
+   * Opt-in (Orb switcher settings, default off): the live rule stays "a tap on the orb is a message to the agent". */
   const QUICK_MS = 3000;
   function quickTake(kind, snap, replyTo, target, ms) {
+    if (!window.WosOrbSwitcher?.get().quickTakes) return false; // Orb switcher › "Short takes run as commands" (off: a tap is always a message)
     if (kind !== 'auto' || replyTo || target != null || !snap || snap.general || snap.conversation || snap.meetingEventId || V.meetingLoan) return false;
     if (snap.seal || V.seal || V.files?.length || snap.view?.review || snap.view?.mode === 'capture') return false;
     return (ms || 0) < QUICK_MS;
@@ -3487,7 +3489,7 @@
     return !focused || !!(capture?.recording && capture?.meetingId);
   }
   // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
-  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); }
+  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); window.WosOrbSwitcher?.level(v); }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
@@ -3496,25 +3498,51 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
-    // Hold = desk fan (James, 25 Oct 2026): commands moved to short taps (under QUICK_MS), so a held orb fans out
-    // every open desk in an arc; slide onto one and release to jump there. Works in any voice state, like swipes.
-    if (!sheet && desks.length > 1) G.hold = setTimeout(() => { if (G && G.mode === 'pending') openDeskFan(G); }, 380);
+    // Hold = Orb switcher radial (James, 31 Oct 2026): a semicircle of wedges above the thumb. Slide onto one, release to
+    // choose; the voice command lives in one wedge and needs a dwell. The corner orb (full-screen Chats) only talks:
+    // there a hold stays the plain hold-command it always was.
+    if (window.WosOrbSwitcher && !G.corner && !sheet && !G.ovWas) G.hold = setTimeout(() => { if (G && G.mode === 'pending') openRadial(G); }, window.WosOrbSwitcher.HOLD_OPEN_MS);
+    else if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
-  function openDeskFan(g) {
-    g.mode = 'fan'; vib(18);
-    const r = orbWrap.getBoundingClientRect(), from = idx, w = track.getBoundingClientRect().width || innerWidth;
-    window.WosDeskFan.open({ x: r.left + r.width / 2, y: r.top + r.height / 2, current: idx,
-      items: desks.map((_, i) => ({ html: deskSigil(i), label: deskName(i) + (i === from ? ' · here' : '') })),
-      // The hovered desk slides in behind the fan, so James sees where he will land before releasing.
-      // Parked desks (two+ away) render nothing, so the hovered one is woken first; release re-parks via goDesk.
-      onHover: i => { if (i != null) secOf(i)?.classList.remove('parked'); placeTrack(i == null ? 0 : (from - i) * w, false); } });
+  function openRadial(g) {
+    g.mode = 'radial'; vib(18); closeMenu();
+    const r = orbWrap.getBoundingClientRect();
+    window.WosOrbSwitcher.open({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
   }
+  /* Orb switcher host: what the radial needs from the shell, and nothing else. App placement stays the shell's
+   * (openApp -> placeApp), the voice command is the ordinary startVoice('command') / finishVoice(). */
+  const appGlyph = a => window.WizCore.workspaceNav.icon({ wins: ['_'], focus: '_' }, { _: {} }, () => a);
+  window.WosOrbSwitcher?.attach({
+    apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && !window.WizCore.isMaintenanceApp(a) && !['app-store', 'agents'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'))
+      .map(a => ({ id: a.id, name: a.name, html: appGlyph(a) }))),
+    // Open apps in desk-strip order, one per desk (its focused window); an app on a desk beside others still answers by id.
+    openItems: () => { const seen = new Set(), out = [], add = (id, name, html, i) => { if (id && !seen.has(id)) { seen.add(id); out.push({ id, name, html, desk: i, cur: i === idx }); } };
+      desks.forEach((d, i) => {
+        if (d.home) return add('home', 'Home', deskSigil(i), i);
+        const fw = W[d.focus] || W[d.wins[0]]; if (!fw) return;
+        add(winApp(fw).id || 'desk:' + d.id, deskName(i), deskSigil(i), i);
+        for (const w of d.wins) { const a = winApp(W[w]); if (a.id && a.id !== winApp(fw).id) add(a.id, a.name, appGlyph(a), i); } // an app beside others on its desk
+      });
+      return out; },
+    // The hovered desk slides in behind the radial so James sees where he will land. Parked desks (two+ away) render
+    // nothing, so the hovered one is woken first; release re-parks via goDesk / parkDesks.
+    hover: desk => { const w = track.getBoundingClientRect().width || innerWidth; if (desk != null && desk !== idx) secOf(desk)?.classList.remove('parked'); placeTrack(desk == null ? 0 : (idx - desk) * w, false); },
+    vib, armBack: () => armBack(), cancelGesture: () => endGesture(null, true),
+    voice: {
+      enabled: () => (V.state === 'idle' || (V.state === 'paused' && !!V.replyTo)) && mayHoldCommand(),
+      start: () => startVoice('command'),
+      active: () => V.kind === 'command' && V.state === 'command',
+      finish: () => finishVoice(),
+      cancel: () => cancelVoice(true),
+      pause: () => { V.stopAsked = true; pauseCommandCapture(); }, // capture lost: keep the take paused with controls, never discard
+    },
+  });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
   const aimFor = () => null;
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
-    if (G.mode === 'fan') { window.WosDeskFan.move(e.clientX, e.clientY); return; }
+    if (G.mode === 'radial') { window.WosOrbSwitcher.move(e.clientX, e.clientY); return; }
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
     if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && (Math.hypot(G.dx, G.dy) > 34 || (G.dy > 16 && G.dy > Math.abs(G.dx) * 1.4)) && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
@@ -3591,10 +3619,12 @@
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
       if (V.state === 'idle') return window.WosSkinHost?.orbTap?.() ? undefined : startOrbVoice();
       return orbTapBusy();
-    } else if (g.mode === 'fan') {
-      const to = window.WosDeskFan.release();
-      if (cancelled || to == null || to === idx) { placeTrack(0, true); parkDesks(false); return; }
-      goDesk(to);
+    } else if (g.mode === 'radial') {
+      const out = window.WosOrbSwitcher.release(cancelled);
+      if (out.kind === 'desk' && out.desk !== idx) return goDesk(out.desk);
+      placeTrack(0, true); parkDesks(false);
+      if (out.kind === 'open') { const a = APP[out.id]; if (a) openApp(a); } // a pinned app that is not open: the shared opener decides where it goes
+      else if (out.kind === 'customize') window.WosOrbSwitcher.openSettings();
     } else if (g.mode === 'hold') {
 
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply
@@ -3705,6 +3735,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // the Orb switcher's radial and sheet sit above everything: one layer per Back
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
     if (window.WizShareWizard?.back()) return 'share-wizard';

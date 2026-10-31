@@ -1,0 +1,91 @@
+/* Orb switcher (core/orb-switcher.js): the radial opened by holding the orb, and its settings sheet.
+ * Appearance v1 only: --wz-* tokens, never a literal colour that matters. Wedge fills may be see-through over the
+ * veil; the label pill and the sheet carry text, so they sit on the opaque --wz-panel. */
+.wor { position: fixed; inset: 0; z-index: 400; pointer-events: none; --lvl: 0; font-family: var(--wz-font, system-ui, sans-serif); }
+.wor-veil { position: absolute; inset: 0; opacity: 0; transition: opacity 160ms;
+  background: radial-gradient(95% 52% at var(--ox, 50%) var(--oy, 100%), color-mix(in oklab, var(--wz-base, var(--bg, #07060f)) 82%, transparent) 30%, transparent 78%); }
+.wor.on .wor-veil { opacity: 1; }
+.wor-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.wor-w { opacity: 0; transform: scale(.7); transition: transform 230ms var(--spring, cubic-bezier(.3, 1.3, .5, 1)) var(--d, 0ms), opacity 150ms var(--d, 0ms); }
+.wor.on .wor-w { opacity: 1; transform: none; }
+.wor.off .wor-w { opacity: 0; transform: scale(.85); transition-delay: 0ms; }
+.wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 93%, transparent); stroke: color-mix(in oklab, var(--wz-border, rgba(205, 190, 255, .22)) 100%, transparent); stroke-width: 1; transition: fill 110ms, stroke 110ms; }
+.wor-w.cur .wor-p { stroke: color-mix(in oklab, var(--wz-accent, #a78bfa) 75%, transparent); }
+.wor-w.custom .wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 78%, transparent); }
+.wor.on .wor-w.sel { transform: scale(1.07); }
+.wor-w.sel .wor-p { fill: color-mix(in oklab, var(--wz-accent, #a78bfa) 38%, var(--wz-surface, #171427)); stroke: var(--wz-accent, #a78bfa); stroke-width: 1.5; }
+.wor-w.dis .wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 45%, transparent); stroke-dasharray: 3 4; }
+.wor.on .wor-w.dis.sel { transform: none; }
+.wor-w.dis.sel .wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 45%, transparent); stroke: var(--wz-border, rgba(205, 190, 255, .22)); stroke-width: 1; }
+/* Voice wedge: the arming ring sweeps while the finger rests, then the whole wedge breathes with the voice level. */
+.wor-arm { fill: none; stroke: var(--wz-accent, #a78bfa); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; opacity: 0; transform-box: fill-box; transform-origin: center; transform: rotate(-90deg); pointer-events: none; }
+.wor-arm.on { opacity: 1; }
+.wor-w.voice.rec { transform: scale(calc(1.07 + var(--lvl, 0) * .07)); transition: none; }
+.wor.on .wor-w.voice.rec { transform: scale(calc(1.07 + var(--lvl, 0) * .07)); }
+.wor-w.voice.rec .wor-p { fill: color-mix(in oklab, var(--wz-accent, #a78bfa) calc(40% + var(--lvl, 0) * 50%), var(--wz-surface, #171427)); stroke: var(--wz-accent, #a78bfa); transition: none; }
+.wor-w.voice.rec .wor-arm { stroke-dashoffset: 0 !important; opacity: .55; }
+/* Icons are plain HTML over the wedges (the shell's own sigils), centred in each. */
+.wor-ic { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; display: grid; place-items: center; opacity: 0; transform: scale(.5); color: var(--wz-text, var(--ink, #ece8ff));
+  transition: transform 230ms var(--spring, cubic-bezier(.3, 1.3, .5, 1)) var(--d, 0ms), opacity 150ms var(--d, 0ms); }
+.wor.on .wor-ic { opacity: 1; transform: none; }
+.wor.off .wor-ic { opacity: 0; transition-delay: 0ms; }
+.wor.on .wor-ic.sel { transform: translate(var(--mx, 0), var(--my, 0)) scale(1.22); transition-delay: 0ms; }
+.wor-ic.dis { opacity: .4 !important; }
+.wor-ic .dsg { width: 28px; height: 28px; opacity: .95; }
+.wor-ic .dsg .sgi { filter: none; }
+.wor-ic .dsg .dn, .wor-ic .dsg .dbg { display: none; }
+.wor-ic .wor-gear { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; opacity: .85; }
+.wor-ic.voice.rec { transform: scale(calc(1.2 + var(--lvl, 0) * .12)); }
+.wor-dot { position: absolute; left: 50%; bottom: -3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--wz-accent, #a78bfa); box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--wz-panel, #07060f) 85%, transparent); }
+.wor-ic.cur .wor-dot { width: 7px; height: 7px; margin-left: -3.5px; }
+/* The label: opaque, it names what a release will do. */
+.wor-label { position: absolute; transform: translateX(-50%); padding: 7px 14px; border-radius: 14px; white-space: nowrap; max-width: calc(100vw - 20px); overflow: hidden; text-overflow: ellipsis;
+  background: var(--wz-panel, #171427); border: 1px solid var(--wz-border, rgba(205, 190, 255, .22)); color: var(--wz-text, var(--ink, #ece8ff)); font: 650 13.5px/1.25 var(--wz-font, system-ui, sans-serif);
+  opacity: 0; transition: opacity 160ms; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
+.wor.on .wor-label { opacity: 1; }
+.wor-label.hint { color: var(--wz-text-secondary, var(--ink-2, #bdb6d8)); font-weight: 550; }
+body.wor-open #device { -webkit-user-select: none; user-select: none; }
+
+/* ---- Orb switcher sheet ---- */
+.wor-scrim { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-end; justify-content: center; background: color-mix(in oklab, var(--wz-scrim, #000) 55%, transparent); opacity: 0; transition: opacity 160ms; }
+.wor-scrim.on { opacity: 1; }
+.wor-sheet { width: min(520px, 100%); max-height: min(88dvh, 100%); box-sizing: border-box; display: flex; flex-direction: column; border-radius: 20px 20px 0 0; border: 1px solid var(--wz-border, rgba(205, 190, 255, .22)); border-bottom: 0;
+  background: linear-gradient(var(--wz-overlay, var(--wz-panel, #120c26)), var(--wz-overlay, var(--wz-panel, #120c26))), var(--wz-panel, #120c26); color: var(--wz-text, var(--ink, #ece8ff)); font-family: var(--wz-font, system-ui, sans-serif);
+  transform: translateY(24px); transition: transform 220ms var(--ease, ease); }
+.wor-scrim.on .wor-sheet { transform: none; }
+.wor-sheet > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 6px 20px; }
+.wor-sheet h3 { margin: 0; font-size: var(--wz-text-title, 18px); font-weight: 700; letter-spacing: -.01em; }
+.wor-x { width: 44px; height: 44px; border: 0; background: transparent; color: var(--wz-text-secondary, inherit); font-size: 26px; line-height: 1; border-radius: 12px; }
+.wor-sb { overflow-y: auto; overscroll-behavior: contain; padding: 0 20px calc(18px + var(--safe-b, 0px)); }
+.wor-g { margin: 6px 0 18px; }
+.wor-g h4 { margin: 8px 0 2px; font-size: var(--wz-text-sm, 12.5px); font-weight: 650; letter-spacing: .02em; color: var(--wz-text-muted, var(--ink-3, #9a93b8)); }
+.wor-note { margin: 0 0 6px; font-size: var(--wz-text-sm, 12.5px); color: var(--wz-text-muted, var(--ink-3, #9a93b8)); line-height: 1.4; }
+.wor-empty { padding: 12px 0; font-size: var(--wz-text-md, 14px); color: var(--wz-text-secondary, inherit); }
+.wor-row { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 0; border-bottom: 1px solid var(--wz-border, rgba(205, 190, 255, .15)); }
+.wor-rico { flex: 0 0 30px; display: grid; place-items: center; }
+.wor-rico .dsg { width: 26px; height: 26px; opacity: 1; }
+.wor-rico .dsg .dn, .wor-rico .dsg .dbg { display: none; }
+.wor-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--wz-font-size, 15px); font-weight: 550; }
+.wor-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.wor-tx b { font-size: var(--wz-font-size, 15px); font-weight: 550; line-height: 1.3; }
+.wor-tx small { font-size: var(--wz-text-sm, 12.5px); line-height: 1.4; color: var(--wz-text-muted, var(--ink-3, #9a93b8)); margin-top: 2px; }
+.wor-mv { display: flex; gap: 2px; flex: none; }
+.wor-mv button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--wz-text-secondary, inherit); font-size: 16px; font-weight: 700; line-height: 1; }
+.wor-mv button:active { background: var(--wz-accent-soft, rgba(143, 99, 255, .18)); color: var(--wz-text, inherit); }
+.wor-mv button:disabled { opacity: .22; }
+.wor-2up { display: inline-flex; }
+.wor-2up i { font-style: normal; }
+.wor-2up i + i { margin-left: -4px; }
+.wor-sw { flex: 0 0 44px; height: 26px; padding: 0; border: 0; border-radius: 99px; background: var(--wz-surface-raised, rgba(255, 255, 255, .14)); position: relative; transition: background 200ms; }
+.wor-sw i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--wz-text, #fff); transition: transform 220ms var(--ease, ease); }
+.wor-sw.on { background: var(--wz-accent, #a78bfa); }
+.wor-sw.on i { transform: translateX(18px); background: var(--wz-on-accent, var(--wz-text, #fff)); }
+.wor-seg { display: flex; gap: 6px; margin-top: 4px; }
+.wor-seg button { flex: 1; min-height: 44px; padding: 8px 6px; border: 1px solid var(--wz-border, rgba(205, 190, 255, .22)); border-radius: var(--wz-radius, 12px); background: var(--wz-surface, transparent); color: var(--wz-text-secondary, inherit); font: 600 var(--wz-text-md, 14px)/1.2 var(--wz-font, system-ui, sans-serif); }
+.wor-seg button[aria-checked="true"] { color: var(--wz-text, inherit); background: var(--wz-accent-soft, rgba(143, 99, 255, .2)); border-color: var(--wz-accent, #a78bfa); }
+.wor-sheet :is(button):focus-visible { outline: 2px solid var(--wz-accent, #a78bfa); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .wor-veil, .wor-w, .wor-ic, .wor-label, .wor-scrim, .wor-sheet, .wor-sw, .wor-sw i, .wor-p { transition: none !important; }
+  .wor-w, .wor-ic { transform: none; }
+  .wor.on .wor-w.sel, .wor.on .wor-ic.sel { transform: none; }
+}

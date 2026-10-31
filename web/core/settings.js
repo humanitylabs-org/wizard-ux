@@ -497,6 +497,10 @@
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   // Desktop bar: one mic by default; the other three voice buttons live in its menu and on their keys, and this puts
   // them back in the bar (James, 31 Oct 2026: fewer icons on the right, nothing new in their place).
+  // Phone shell only (core/orb-switcher.js is not loaded on the desktop): the row opens the Orb switcher sheet.
+  register({ id: 'orb-switcher', page: 'phone', aliases: ['orb-switcher', 'orb-radial'], available: () => !!window.WosOrbSwitcher?.available,
+    html: () => window.WosOrbSwitcher.settingsRow(),
+    act: (ctx, el) => { if (!el.closest('[data-orbsw-open]')) return false; window.WosOrbSwitcher.openSettings(); return true; } });
   register({ id: 'bar-voice-buttons', page: 'voice', available: ctx => !!ctx?.barMics?.(),
     html: ctx => { const on = !!ctx.barMics().get(), k = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt+';
       return `<div class="st-group" data-bar-mics><h4>Top bar</h4><button class="st-row" data-bar-mics-set role="switch" aria-checked="${on}"><span class="st-tx"><b>Show every voice button</b><small>${esc(`New voice chat, Dictate and Tell the computer beside the mic. Off, they are in the mic’s menu (right-click or hold) and on ${k}V, ${k}D and ${k}C.`)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`; },
