@@ -79,7 +79,33 @@
     return a;
   });
   const listeners = new Set();
-  let remoteLoad = null, remoteAfter = null;
+  /* Installed apps' own logos (tools/store-app-logos.mjs on the box): { id: '<url>?v=<image hash>' }. Read with the app
+   * list, cached on the device; a URL is used only after the browser decoded it, so a logo never shows as a blank
+   * tile. Changing an app's logo changes its hash, so the new picture shows on the next refresh, with no release. */
+  const LOGO_KEY = 'wux.applogos.v1', LOGO_BASE = '/wizard-os-home/store-data/';
+  let LOGOS = (() => { try { const o = JSON.parse(localStorage.getItem(LOGO_KEY) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (_) { return {}; } })();
+  window.WizCore.appLogo = id => (Object.prototype.hasOwnProperty.call(LOGOS, id) ? LOGOS[id] : '');
+  const decodes = url => new Promise(ok => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = url; });
+  async function readLogos() {
+    try {
+      const r = await fetch(LOGO_BASE + 'wizard/v1/app-logos', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) return;
+      const body = await r.json(), list = body && typeof body.logos === 'object' && body.logos ? body.logos : {};
+      const next = {};
+      await Promise.all(Object.entries(list).map(async ([id, v]) => {
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id) || !/^[0-9a-f]{16}$/.test(String(v))) return;
+        const url = `${LOGO_BASE}app-logo/${id}?v=${v}`;
+        if (LOGOS[id] === url || await decodes(url)) next[id] = url;
+      }));
+      if (JSON.stringify(next) === JSON.stringify(LOGOS)) return;
+      LOGOS = next;
+      try { localStorage.setItem(LOGO_KEY, JSON.stringify(next)); } catch (_) {}
+      // Every tile works its mark out again (registry rebuild fills sgh/sgc only where they are missing).
+      for (const a of [...ALL, ...REMOTE, ...BACK]) { delete a.sgh; delete a.sgc; }
+      listeners.forEach(fn => fn());
+    } catch (_) {}
+  }
+  let remoteLoad = null, remoteAfter = null, logoLoad = null;
   // Focus and visibility share a read. A newly opened picker must also see a
   // snapshot taken after that opening, even when an older read is still pending.
   function loadRemote(options = {}) {
@@ -87,6 +113,7 @@
       if (!remoteAfter) remoteAfter = remoteLoad.then(() => { remoteAfter = null; return loadRemote(); });
       return remoteAfter;
     }
+    if (!logoLoad) logoLoad = readLogos().finally(() => { logoLoad = null; });   // beside the list, never holding it up
     if (!remoteLoad) remoteLoad = readRemote().finally(() => { remoteLoad = null; });
     return remoteLoad;
   }

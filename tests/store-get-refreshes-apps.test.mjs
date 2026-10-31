@@ -10,7 +10,7 @@ test('a same-origin wizard:apps-changed message re-reads the box app list; other
  const storage=new Map();
  const window={WizCore:{norm:s=>String(s).toLowerCase()},WizConfig:{endpoint:()=>'/apps'},dispatchEvent(){},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)}};
  const ctx={window,CustomEvent:class{},URL,location:new URL('https://wizard.example/'),
-  fetch:async()=>{calls++;return {ok:true,json:async()=>({apps:apps.slice()})};},AbortSignal,setTimeout,clearTimeout,setInterval(){},
+  fetch:async(url)=>{if(String(url).includes('/app-logos'))return {ok:false};calls++;return {ok:true,json:async()=>({apps:apps.slice()})};},AbortSignal,setTimeout,clearTimeout,setInterval(){},
   addEventListener:(type,fn)=>listeners.push([type,fn]),document:{addEventListener(){},visibilityState:'visible'},localStorage:window.localStorage};
  vm.runInNewContext(source,ctx);await window.WizCore.appsLoaded();
  const R=window.WizCore.apps('desktop');

@@ -30,6 +30,9 @@
     const c = document.createElement('canvas'); c.width = c.height = 192;
     const ctx = c.getContext('2d'), sigil = window.WizSigil.of(a.sigil || a);
     ctx.fillStyle = '#110d1b'; ctx.fillRect(0,0,192,192);
+    if (sigil.logo) {   // the app's own logo: the home-screen icon is that picture
+      try { const image = new Image(); image.src = sigil.logo; await image.decode(); const k = Math.max(192 / image.naturalWidth, 192 / image.naturalHeight), w = image.naturalWidth * k, h = image.naturalHeight * k; ctx.drawImage(image, (192 - w) / 2, (192 - h) / 2, w, h); return c.toDataURL('image/png'); } catch (_) {}
+    }
     const glyph = header.querySelector('.sgi');
     const mask = glyph && getComputedStyle(glyph).getPropertyValue('--sg').trim();
     const match = mask?.match(/^url\(["']?(data:image\/svg\+xml[^"')]+)["']?\)$/);
