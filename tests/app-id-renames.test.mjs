@@ -51,3 +51,10 @@ test('canonical app ids retain their old brand sigil and colour',()=>{
     assert.deepEqual(JSON.parse(JSON.stringify(window.WizSigil.of({id}))),JSON.parse(JSON.stringify(window.WizSigil.of({id:old}))));
   }
 });
+test('a legacy-only installation answers canonical handoffs (Android emits food on unrenamed boxes)',async()=>{
+  const w=await fixture(['usuals','cinequeue']),r=w.WizCore.apps('mobile');
+  assert.equal(r.APP.food,r.APP.usuals,'APP.food resolves to the installed usuals app');
+  assert.equal(r.APP.movies,r.APP.cinequeue);
+  assert.equal(r.APP.food.id,'usuals');
+  assert(!r.APPS.some(a=>a.id==='food'||a.id==='movies'),'no duplicate tiles');
+});

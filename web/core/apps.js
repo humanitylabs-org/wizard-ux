@@ -194,7 +194,11 @@
       APPS.splice(0, APPS.length, ...list);
       for (const k of Object.keys(APP)) delete APP[k];
       for (const a of APPS) APP[a.id] = a;
-      for (const [old, id] of Object.entries(APP_ID_ALIASES)) if (!APP[old] && APP[id]) APP[old] = APP[id];
+      for (const [old, id] of Object.entries(APP_ID_ALIASES)) {
+        if (!APP[old] && APP[id]) APP[old] = APP[id];
+        // Unrenamed box (only the retired id installed): canonical handoffs such as Android's `food` still resolve.
+        else if (APP[old] && !APP[id]) APP[id] = APP[old];
+      }
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
 
