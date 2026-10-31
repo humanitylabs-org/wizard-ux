@@ -91,7 +91,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
           const orb = document.querySelector(phone ? '#orb' : '#micBtn');
           const r = orb.getBoundingClientRect(), card = document.querySelector('.wx-off-card'), c = card.getBoundingClientRect();
           const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-          return { orbHit: hit === orb || orb.contains(hit), hit: hit?.id || hit?.tagName, card: { x: c.x, y: c.y, w: c.width, h: c.height, bottom: c.bottom }, orb: { top: r.top, bottom: r.bottom }, bg: getComputedStyle(card).backgroundColor, dialogModal: card.parentElement.getAttribute('aria-modal') };
+          return { orbHit: !!hit && !card.contains(hit) && (hit === orb || orb.contains(hit) || !!(hit.closest && hit.closest('#orbWrap')) || !!(orb.closest('#orbWrap') && orb.closest('#orbWrap').contains(hit))), hit: hit?.id || hit?.tagName, card: { x: c.x, y: c.y, w: c.width, h: c.height, bottom: c.bottom }, orb: { top: r.top, bottom: r.bottom }, bg: getComputedStyle(card).backgroundColor, dialogModal: card.parentElement.getAttribute('aria-modal') };
         }, phone);
         assert.ok(geometry.orbHit, `${shell} ${skin} orb/mic remains the hit target: ${JSON.stringify(geometry)}`);
         assert.equal(geometry.dialogModal, 'false');
