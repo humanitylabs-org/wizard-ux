@@ -64,13 +64,16 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         await page.waitForSelector('[data-wxoffopen]');
       }
       async function navigate() {
+        await page.evaluate(() => { if (window.__qaLog) { window.__qaLog.length = 0; return; } window.__qaLog = []; const L = (k, v) => window.__qaLog.push(Math.round(performance.now()) + ' ' + k + ' ' + v);
+          addEventListener('click', e => L('click', `${e.target?.id || e.target?.tagName}.${e.target?.className} trusted=${e.isTrusted} btn=${e.button}`), true);
+          new MutationObserver(m => m.forEach(r => L('mut', `${r.target.id || r.target.tagName} ${r.attributeName}=${r.target.getAttribute?.(r.attributeName)}`))).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['hidden'] }); });
         // Real owner navigation: desktop Home, phone a dock desk (not the orb).
         await page.locator(phone ? '#dock [data-goto]' : '#logo').first().click();
       }
       async function modal() {
         try { await page.waitForSelector('#wxOffline:not([hidden])', { timeout: 8000 }); }
         catch (e) {
-          const d = await page.evaluate(() => ({ net: WizCore.status.state.net, voice: (window.__wos || window.__wux)?.voice, capture: window.WizAppCapture?.getState?.(), off: document.querySelector('#wxOffline')?.outerHTML.slice(0, 200), pill: document.querySelector('#wxBanners')?.textContent.slice(0, 120), active: document.activeElement?.id || document.activeElement?.tagName }));
+          const d = await page.evaluate(() => ({ net: WizCore.status.state.net, voice: (window.__wos || window.__wux)?.voice, capture: window.WizAppCapture?.getState?.(), off: document.querySelector('#wxOffline')?.outerHTML.slice(0, 200), pill: document.querySelector('#wxBanners')?.textContent.slice(0, 120), active: document.activeElement?.id || document.activeElement?.tagName, log: (window.__qaLog || []).slice(-25) }));
           console.error('MODAL-DIAG', JSON.stringify(d)); throw e;
         }
       }
