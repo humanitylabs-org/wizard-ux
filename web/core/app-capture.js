@@ -365,7 +365,9 @@
     const nativeOwner = [...ownedRows.values()].find(r => recoveryLive.has(r.id) || (r.native && !r.nativeId && r.status === 'recoverable'));
     if (nativeActive?.id || nativeOwner || unknownMeetingActive) throw fail('busy', 'An existing native recorder is held.', { appId: nativeOwner?.appId || 'native-recording' });
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
+    s.stage = 'microphone permission';
     s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    s.stage = 'audio engine';
     // On the Android app the browser recorder skips the native phone-mic guard; ask Android where it really listens.
     if (await externalMic()) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('external_mic', EXTERNAL_MIC); }
     s.stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => { if (s.phase === 'starting') s.interrupted = true; else if (!s.inputStopped && !s.discard && active === s) void finish(s, true).catch(() => {}); }));
@@ -568,7 +570,9 @@
         if (a?.id && a.id !== previous?.nativeId) throw fail('busy', 'Microphone held by Wizard voice', { appId: 'wizard-voice' });
         let id = previous?.nativeId || d.recStart(opts.kind || 'app');
         if (!id) {
+          hooks.stage?.('microphone permission');
           const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop());
+          hooks.stage?.('native recorder');
           id = d.recStart(opts.kind || 'app');
         }
         if (!id) throw fail('native_start_failed', 'Native recording could not start.');
@@ -611,7 +615,7 @@
           if (previous && current?.recording) st = current;
           else {
             try { st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
-            catch (e) { if (e.code !== 'mic_permission') throw e; const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop()); st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
+            catch (e) { if (e.code !== 'mic_permission') throw e; hooks.stage?.('microphone permission'); const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop()); hooks.stage?.('native recorder'); st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
           }
           safeCall(opts.onNativeState, st);
           if (b.pcm && st?.livePcm) { await b.pcm(meetingId, true); pcm = true; }
@@ -755,6 +759,34 @@
       const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
     finally { unlock?.(); }
   }
+  // Start budget per attempt. Messenger hands its composer back at 8 s; the shared bound frees the mic just after.
+  const START_BOUND_MS = 10000, PROMPT_BOUND_MS = 60000;
+  async function micPromptOpen() {
+    try { return await Promise.race([navigator.permissions.query({ name: 'microphone' }).then(p => p.state === 'prompt'), new Promise(r => setTimeout(() => r(false), 500))]); }
+    catch (_) { return false; }
+  }
+  // The bound fired: free the microphone now and tell the app which stage hung. A native reservation stays
+  // recoverable (recoverLocked claims or clears it); a reservation that never reached a recorder is dropped.
+  function abandonStart(s, resuming) {
+    s.timedOut = true;
+    const stage = s.stage || 'start';
+    const e = fail('start_timeout', 'The microphone did not start (stuck at ' + stage + '). Try again.', { stage, id: s.row.id, appId: s.row.appId });
+    const saved = s.row.native ? put({ ...s.row, status: 'recoverable', partial: true, recoveryError: 'start_timeout' })
+      : resuming ? Promise.resolve() : remove(s.row.id);
+    release(s); s.readyResolve();
+    // With no native recorder running, the recovery pass turns an ID-less reservation into pending custody, so it
+    // stops holding updates; a recorder that really started keeps it recoverable until it is claimed.
+    void saved.catch(() => {}).then(() => active ? null : recover()).catch(() => {});
+    return e;
+  }
+  // The abandoned start settled after all. It never touches `active` (a newer take may own the mic): it returns
+  // a lock it acquired late, cancels a fresh native take nobody is waiting for, and leaves a resumed take recoverable.
+  function lateStart(s, resuming) {
+    cleanup(s); s.unlock?.(); s.unlock = null;
+    if (!s.engine) return;
+    if (resuming) { safeCall(s.engine.detach); return; }
+    Promise.resolve().then(() => s.engine.cancel?.()).then(() => remove(s.row.id)).catch(() => {});
+  }
   async function start(appId, opts = {}) {
     const meta = validate(appId, opts);
     const prepared = opts.preparedId ? preparations.get(opts.preparedId) : null;
@@ -767,6 +799,27 @@
     if (prepared) { preparations.delete(prepared.id); s.ctx = prepared.ctx; s.displayPromise = prepared.display?.catch(e => { emit(s,'warn','Computer audio was not captured: ' + e.message); return null; }); }
     s.readyPromise = new Promise(resolve => { s.readyResolve = resolve; });
     active = s; changed();
+    // Bounded start (James's phone, 31 Oct 2026): a start that never settles must not hold the microphone. Before
+    // this bound a hung store/recovery/permission/native await kept `active` set, so every app read the mic as busy
+    // until Wizard reloaded, and the app's update hold never ended.
+    let timer;
+    const bound = new Promise((_, reject) => {
+      const arm = ms => { timer = setTimeout(async () => {
+        if (s.phase !== 'starting' || s.engine || s.settled) return;
+        // The owner may still be reading Android's microphone prompt: give that one stage a longer budget.
+        if (!s.promptExtended && s.stage === 'microphone permission' && await micPromptOpen()) { s.promptExtended = true; arm(PROMPT_BOUND_MS - START_BOUND_MS); return; }
+        if (s.phase !== 'starting' || s.engine || s.settled) return;
+        reject(abandonStart(s, !!opts.resumeId));
+      }, ms); };
+      arm(START_BOUND_MS);
+    });
+    const run = startRun(s, appId, opts, meta, prepared);
+    run.catch(() => {}); // after a timeout nobody awaits the late outcome; startRun cleans it up itself
+    try { return await Promise.race([run, bound]); } finally { clearTimeout(timer); }
+  }
+  async function startRun(s, appId, opts, meta, prepared) {
+    // Every await re-checks the bound: a start that resolves after it gave up must not write rows or claim the mic.
+    const live = v => { if (s.timedOut) throw fail('start_abandoned', 'Capture start was abandoned.'); return v; };
     // WebAudio activation happens synchronously in the gesture, before IDB awaits.
     try {
       let native = adapter(opts);
@@ -777,39 +830,46 @@
           s.displayPromise = navigator.mediaDevices.getDisplayMedia({ audio: true, video: true }).catch(e => { safeCall(opts.onWarn, 'Computer audio was not captured: ' + e.message); return null; });
         }
       }
-      await ready; s.unlock = await acquire(true); await recoverLocked();
-      const recoverable = (await rows()).find(r => r.appId === appId && r.status === 'recoverable');
+      s.stage = 'shared capture store'; live(await ready);
+      s.stage = 'microphone lock'; s.unlock = await acquire(true); live();
+      s.stage = 'recovery check'; live(await recoverLocked());
+      const recoverable = live(await rows()).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
-        const row = (await rows()).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
+        const row = live(await rows()).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
         if (!row) throw fail('not_recoverable', 'No native recording is available to resume.');
         s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row);
         if (!native) throw fail('native_unavailable', 'Restore the native bridge before resuming this take.');
       }
       // The persistence request is advisory; the IDB write itself is mandatory.
       try { void navigator.storage?.persist?.().catch(() => {}); } catch (_) {}
-      await put(s.row);
+      s.stage = 'saving the take'; live(await put(s.row));
       if (native) {
         s.row.native = native.name || 'configured';
         if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
-        await put(s.row);
+        live(await put(s.row));
         s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
+        s.stage = 'native recorder';
         s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
           if(st.recording && ['recording','paused'].includes(s.phase)) {
             if(st.paused && s.phase!=='paused'){s.pausedAt=Date.now();s.phase='paused';}
             else if(!st.paused && s.phase==='paused'){s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt;s.pausedAt=0;s.phase='recording';}
           }
-          emit(s,'state',st); if(st.recording===false && active===s && ['recording','paused'].includes(s.phase) && !s.finishPromise) void finish(s).catch(()=>{}); }, onWarn: msg => emit(s,'warn',msg) }, { level: value => level(s, value), chunk: (blob, source, startMs) => enqueue(s, blob, source, startMs) }, opts.resumeId ? s.row : null);
+          emit(s,'state',st); if(st.recording===false && active===s && ['recording','paused'].includes(s.phase) && !s.finishPromise) void finish(s).catch(()=>{}); }, onWarn: msg => emit(s,'warn',msg) }, { level: value => level(s, value), chunk: (blob, source, startMs) => enqueue(s, blob, source, startMs), stage: name => { s.stage = name; } }, opts.resumeId ? s.row : null);
+        live();
         s.row.nativeId = s.engine.nativeId; s.row.mime = s.engine.mime || 'audio/wav'; s.row.pcm = !!s.engine.pcm;
         if (s.engine.detach) s.offs.push(s.engine.detach);
-      } else await browserEngine(s);
-      s.row.status = 'recording'; s.row.startedAt = opts.resumeId ? s.row.startedAt : Date.now(); await put(s.row);
+      } else { s.stage = 'browser microphone'; await browserEngine(s); live(); }
+      s.row.status = 'recording'; s.row.startedAt = opts.resumeId ? s.row.startedAt : Date.now(); s.stage = 'saving the take'; await put(s.row);
+      s.settled = true; live();
       s.phase = s.nativeState?.paused ? 'paused' : 'recording';if(s.nativeState?.paused)s.pausedAt=Date.now(); s.writes = s.writes.then(() => drain(s)); changed();
       if (s.interrupted) void finish(s, true).catch(() => {});
       else if (s.closeRequested) void finish(s).catch(() => {}); // its app closed while the mic was starting
       if (opts.maxMs) s.maxTimer = setTimeout(() => { void finish(s).catch(() => {}); }, Math.min(opts.maxMs, 2147483647));
       return session(s);
     } catch (e) {
+      if (s.timedOut) { lateStart(s, !!opts.resumeId); throw e; }
+      s.settled = true;
       // An established recorder must not be deleted on a storage failure. Preserve
       // its owner and expose retryable Stop instead of starting another physical mic.
       if (s.engine) { e.id = s.row.id; e.appId = s.row.appId; s.error = e; s.partial = true; s.phase = 'error'; changed(); void finish(s, true).catch(() => {}); }
