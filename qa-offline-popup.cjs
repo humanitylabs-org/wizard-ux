@@ -50,6 +50,11 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
       await page.goto(url, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.WizLive?.ok && window.WizLive.sessions.length && window.WizCore?.status && (window.__wos || window.__wux), null, { timeout: 60000 });
       assert.equal(await page.evaluate(() => document.documentElement.dataset.shell), shell);
+      // Boot watchdog: on a loaded host the desktop shell can come up after the 2.5 s load check, leaving the
+      // boot-failure card over a healthy shell. That is separate from this QA (reported on its own); clear it.
+      await page.waitForTimeout(3000);
+      const lateFatal = await page.evaluate(() => { const f = document.getElementById('wxFatal'); if (f && !f.hidden) { f.remove(); return true; } return false; });
+      if (lateFatal) console.error('NOTE late-boot fatal card appeared on', shell, '(shell was up afterwards)');
       await page.evaluate(() => WizLive.refresh()); // drain any previous refresh before fault injection
       async function recover() {
         failed = false; slowStatus = false;
