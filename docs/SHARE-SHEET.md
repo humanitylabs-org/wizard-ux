@@ -1,12 +1,13 @@
 # Wizard share sheet
 
-Share opens **Agents → Apps → Other apps…**. A normal tap stays inside Wizard; holding a Share control for 500 ms goes straight to the Android/system tray. Nothing sends without a final tap by the owner: in the agent's chat or in the receiving app.
+Share opens **People → Agents → Apps → Other apps…**. A normal tap stays inside Wizard; holding a Share control for 500 ms goes straight to the Android/system tray. Nothing sends without a final tap by the owner: in the agent's chat or in the receiving app.
 
 ## Owner experience
 
 - Tap Share in a reply, quote, code block, selection menu, media viewer, or an app's `WizardApp.share.text / file`.
 - **Agents** (James, 31 Oct 2026: "share things to you instead of copying and pasting or screenshotting"): one tile per agent he can chat with, using each agent's own label and sigil from `WosAgents` (hidden agents left out). Main agent first by default, then most recently shared-to first. Tapping one opens a **new chat** with that agent: text and links are staged in the composer as a Markdown quote under the unchanged attribution line (`From Archimedes:` then `> …`), with an empty line for his note; an image or file is staged in the composer tray through the Chats paperclip path (`addFiles`). Unsent words already in that agent's new-chat draft stay, the quote goes after them. Nothing is sent: he adds his note and taps Send. A stopped agent shows dimmed and cannot be picked; an agent whose file access is off (`permissions.files: 'none'`) is not offered images or files.
-- **Apps**: apps accepting this kind. Messenger with no target opens its own **Send to…** picker, so the person is chosen inside Messenger. That replaced the separate People row (31 Oct 2026): People + Agents + Apps was too long. `targets` remain in the receiver API (and `deliver(app, item, target)` still honours one) but the sheet no longer lists them.
+- **People** (James’s latest correction, 31 Oct 2026): up to eight Messenger contacts from its cached receiver metadata, with most recently shared-to first (`messenger|<id>`), then most recently chatted (`lastActivity` when published, otherwise Messenger’s published order). Tapping a person opens Messenger directly with that target and the item pending for its composer; the sheet never sends. No app frame or directory fetch is needed to paint this row, including before Messenger has opened this session. No cache: the row is omitted, with the Messenger tile under Apps as the immediate fallback. No installed Messenger (or no receiver accepting the item kind): no People row.
+- **Apps**: apps accepting this kind. Messenger without a target still opens its **Send to…** picker, retained for choosing someone outside the recent tiles. This reverses the earlier same-day removal of People; Agents, Apps and Other apps… remain unchanged.
 - **Other apps…**: the existing Android tray, browser share or text-copy fallback.
 - Back, Escape or tapping outside closes the sheet and reports `cancelled`; Back never exits.
 - With no agent and no installed receiver for this kind, sharing goes straight to the existing native/browser path.
@@ -21,7 +22,7 @@ Shell: `WosShareSheet` (`web/core/share-sheet.js`, `web/core/share-sheet.css`), 
 ```js
 WizardApp.share.receive({
   accepts: ['text', 'url', 'image'],                 // also 'file' for apps able to receive generic files
-  targets: [{ id, name, detail }],                  // optional, up to 24, most recent first
+  targets: [{ id, name, detail, lastActivity }],     // optional numeric activity; up to 24, most recent first
   receive: async item => true,                     // only after visibly placed
 });
 WizardApp.share.targets(list);
@@ -34,7 +35,7 @@ WizardApp.share.check();                           // pull again after unlock; a
 - `WizAppServices` claims per-app operations once before frames exist. Only a verified same-origin app frame can register, pull or ack its own items. The first live pulling frame claims each item until it closes; two windows cannot stage the same share. Synchronous connections preserve Blob objects; the existing request/response `postMessage` transport structured-clones them without JSON encoding.
 - The receiver registry (`localStorage wos.share.receivers.v1`) caches declared kinds and published target names/ids, never shared content. Reviewed Messenger defaults offer text and URL before first open; images are offered once a Messenger that stages photos registers `image` itself. A runtime registration replaces the default, including older versions that only accept text/URL.
 - Messenger accepts **images, not generic files**: its existing Telegram-only multi-photo tray supports up to 10 photos, with the existing 25 MB input-photo cap and resizing. A shared photo uses that exact staging function, waits while locked, opens the selected chat, and acks only once a tray chip is painted. Unsupported chat networks, full trays, decode/size failures, navigation during preparation, or cancelling the image recipient picker leave it pending. Retrying is through `WizardApp.share.check()`; undelivered shares are not durable across a shell reload.
-- Apps keep their own auth, CSRF and final send paths. Ranking uses local recency (`wos.share.recent.v1`; agents as `agent:<id>`), then the main agent / the app's own order.
+- Apps keep their own auth, CSRF and final send paths. Ranking uses local recency (`wos.share.recent.v1`; agents as `agent:<id>`), then the main agent / Messenger’s last-activity timestamps and published order. The optional numeric `lastActivity` is cached receiver metadata, not a message body.
 
 ## Not included
 
@@ -42,4 +43,4 @@ A manifest share declaration; generic-file sending in Messenger; Android inbound
 
 ## Tests
 
-`tests/share-sheet.test.mjs` (registry, Agents order/privacy/file permission, quote format) and `qa-share-agents.cjs` (fully fixtured phone + desktop: Agents row names/sigils, new Philosopher chat with the quote staged and nothing sent, image staged, Messenger with no person, Other apps… to the fake Android bridge, Back / tap outside / Esc close, private-agent chat offers only that agent, two skins with a live skin change).
+`tests/share-sheet-people.test.mjs` (cached People order, empty/missing Messenger, direct text/url/file pending handoff, outside/Back and 30-minute TTL), `qa-share-people.cjs` (synthetic in-shell two-skin DOM proof) and `tests/share-sheet.test.mjs` (registry, Agents order/privacy/file permission, quote format) and `qa-share-agents.cjs` (fully fixtured phone + desktop: Agents row names/sigils, new Philosopher chat with the quote staged and nothing sent, image staged, Messenger with no person, Other apps… to the fake Android bridge, Back / tap outside / Esc close, private-agent chat offers only that agent, two skins with a live skin change).

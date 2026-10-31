@@ -1,14 +1,14 @@
-/* Wizard share sheet v2 (docs/SHARE-SHEET.md). Share opens Wizard's own sheet first: Agents → Apps →
+/* Wizard share sheet v3 (docs/SHARE-SHEET.md). Share opens Wizard's own sheet first: People → Agents → Apps →
  * Other apps… (the Android tray / browser share). Entered only from WosChat.sharePayload. Apps receive through
  * WizardApp.share.receive (app-client.js → app-services.js → here). The sheet never sends: an agent opens a new chat
  * with the item staged in its composer (WizOpenAgentChats + the Chats composer's own insertText/addFiles), an app
  * opens with the item pending and places it in its own composer; the owner makes the final tap either way.
- * James, 31 Oct 2026: no People row. Messenger with no target asks who in its own picker (Send to…). */
+ * James's latest correction, 31 Oct 2026: People first, recent shares/chats first, without loading Messenger. */
 (() => {
   'use strict';
   if (window.WosShareSheet) return;
   const RECV = 'wos.share.receivers.v1', RECENT = 'wos.share.recent.v1';
-  const KINDS = new Set(['text', 'url', 'image', 'file']), TTL = 30 * 60 * 1000;
+  const KINDS = new Set(['text', 'url', 'image', 'file']), TTL = 30 * 60 * 1000, MAX_PEOPLE = 8;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const read = (store, key, dflt) => { try { const v = JSON.parse(store.getItem(key) || 'null'); return v ?? dflt; } catch (_) { return dflt; } };
   const write = (store, key, v) => { try { store.setItem(key, JSON.stringify(v)); } catch (_) {} };
@@ -32,7 +32,7 @@
       if (out.length >= 24) break;
       if (!t || !okId(t.id) || seen.has(t.id)) continue;
       const name = clean(t.name, 80); if (!name) continue;
-      seen.add(t.id); out.push({ id: t.id, name, detail: clean(t.detail, 60) });
+      seen.add(t.id); out.push({ id: t.id, name, detail: clean(t.detail, 60), ...(Number.isFinite(t.lastActivity) && t.lastActivity > 0 ? { lastActivity: t.lastActivity } : {}) });
     }
     return out;
   }
@@ -66,6 +66,14 @@
   const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]) }) });
   const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
+  function people(kind) {
+    // Cached receiver metadata only: no frame, unlock, directory fetch or loading spinner.
+    const receiver = live(kind).find(([id]) => id === 'messenger')?.[1];
+    if (!receiver) return [];
+    return cleanTargets(receiver.targets).map((t, order) => ({ ...t, order }))
+      .sort((a, b) => (rank('messenger|' + a.id) - rank('messenger|' + b.id)) ||
+        ((b.lastActivity || 0) - (a.lastActivity || 0)) || (a.order - b.order)).slice(0, MAX_PEOPLE);
+  }
   const apps = kind => live(kind).map(([appId]) => appId).sort((a, b) => rank(a) - rank(b));
   const wants = kind => live(kind).length > 0;
 
@@ -190,13 +198,14 @@
     return `<button type="button" class="shs-agent${AG?.isPrivate?.(a) ? ' private' : ''}" data-shs-agent="${esc(a.id)}"${off ? ' disabled' : ''} aria-label="${esc(`New chat with ${a.label}${off ? ' (stopped)' : ''}`)}">${icon}<span class="shs-nm">${esc(a.label)}</span></button>`;
   }
   function render(payload, kind, thumbnail, agents) {
-    const list = apps(kind);
+    const list = apps(kind), ppl = people(kind);
     const preview = clean([payload.name, payload.title, payload.text, payload.url].filter(Boolean).join(' · '), 160);
     const el = document.createElement('div');
     el.className = 'wos-share'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Share');
     el.innerHTML = `<div class="shs-b">
       <div class="shs-t">Share</div>
       ${preview ? `<div class="shs-preview">${thumbnail ? `<img class="shs-thumb" src="${esc(thumbnail)}" alt="Image to share">` : ''}<div class="shs-prev">${esc(preview)}</div></div>` : ''}
+      ${ppl.length ? `<div class="shs-sub">People</div><div class="shs-row" data-shs-people>${ppl.map(p => `<button type="button" class="shs-app shs-person" data-shs-app="messenger" data-shs-target="${esc(p.id)}" aria-label="${esc(p.name)} in Messenger"><span class="shs-ic">${esc(initials(p.name))}</span><span class="shs-nm">${esc(p.name)}</span></button>`).join('')}</div>` : ''}
       ${agents.length ? `<div class="shs-sub">Agents</div><div class="shs-row" data-shs-agents>${agents.map(agentTile).join('')}</div>` : ''}
       ${list.length ? `<div class="shs-sub">Apps</div><div class="shs-row" data-shs-apps>${list.map(id => { const t = appTile(id); return `<button type="button" class="shs-app" data-shs-app="${esc(id)}">${t.icon}<span class="shs-nm">${esc(t.name)}</span></button>`; }).join('')}</div>` : ''}
       <button type="button" class="shs-other" data-shs-other><span class="shs-oi" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>Other apps…</button>
@@ -248,5 +257,6 @@
   if (!claimed) console.warn('WosShareSheet: app services already claimed; apps cannot receive shares');
   window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), back, isOpen: () => !!open,
     _state: () => ({ receivers, recent, pending: pendingItems.map(x => ({ id: x.id, appId: x.appId, target: x.target })) }),
+    _people: kind => people(kind).map(p => p.id),
     _agents: (kind, from) => agentsFor(kind, { chat: false, agent: '', private: false, incognito: false, ...(from || {}) }).map(a => a.id), _quote: p => quoteOf(p) });
 })();
