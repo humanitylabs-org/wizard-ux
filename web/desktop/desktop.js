@@ -1541,9 +1541,9 @@
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
-    // A package that fills Settings' System pages (Miguel's Home) opens Settings as a centred panel over Home; the
-    // classic Home opens it as a window, as before (James, 31 Oct 2026).
-    if (homeOpen && (settingsModal || window.WosSettings.hasSystem?.())) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
+    // From Home (every skin, classic or Miguel's) Settings opens as a centred panel over Home and never moves to a desk
+    // beside Chats (James, 31 Oct 2026: "I just want settings to open on the home screen").
+    if (homeOpen) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
       if (!settingsModal) settingsFocus = document.activeElement;
       settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
       if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
