@@ -1,9 +1,9 @@
-# Orb desktop (layout `orb`, tweaks `miguel/orb-shell` + `miguel/orb-switch`)
+# Orbs view (layout `orb`, tweaks `miguel/orb-shell` + `miguel/orb-switch`)
 
-Opt-in, desktop only, off by default: Settings › Look › Tweaks › **Orb desktop**. Switching it off brings the
-classic desktop straight back (no reload). The phone is untouched: the tweak does nothing there.
+Opt-in, desktop only, off by default: Settings › Look › Tweaks › **Orbs view**. The desktop has two equal views,
+**Desks** and **Orbs**; switching it off brings the Desks view straight back (no reload). The phone is untouched: the tweak does nothing there.
 
-**Classic | Orb switch** (`miguel/orb-switch`, its own tweak): a segmented control in the middle of the desktop bar,
+**Desks | Orbs switch** (`miguel/orb-switch`, its own tweak; tweak ids unchanged so devices keep their choice): a segmented control in the middle of the desktop bar,
 in place of the date and time, visible in both modes. It mounts in the core `bar-center` slot (`web/desktop.html`,
 `core/slots.json`): while that slot holds anything the clock steps aside (`desktop.css`), and the slot hides under the
 voice pill like the clock did. One click switches `miguel/orb-shell` for this device through the same tweak mix as
@@ -11,7 +11,7 @@ Settings (`WosExperience.toggle`, via the trusted `api.settings.toggleTweak`, ow
 follows what the desktop really wears (`html[data-layout]`), so a half-loaded Orb shows Classic and one click mends it.
 Off by default on main like every tweak; Miguel's release turns it on with a catalog `defaults` entry.
 
-What the Orb desktop changes (all in `web/layouts/orb/`, CSS scoped to `html[data-shell="desktop"][data-layout="orb"]`).
+What the Orbs view changes (all in `web/layouts/orb/`, CSS scoped to `html[data-shell="desktop"][data-layout="orb"]`).
 It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
 
 - Home (an empty desk or ⌥` Home) is the concept's night scene over the whole window (the bar goes transparent over
@@ -32,16 +32,18 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   (default), Ember, Tide, Gold, Mono, Emerald, Rose, Arctic, Marble, Obsidian, Bronze, Royal, Crimson, Cyber,
   Sunset, Ocean (four stops each, skin-layer tokens `--ob-look-*` in the tweak's `tweak.css`) and Skin accent. All
   drawn in-house: no image assets, no vendored code. Ideas (not code) from Teknium's Uncommon Web for the v4 styles.
-- The owner's apps (picker order, up to 10 + All apps) float on two tilted orbits as **just their own mark** (v6: no
+- Every installed app with a screen (the shell's own kinds, `WosAppKinds.kinds().apps`: no agent apps, connectors or
+  agents; picker order; no cap) floats on two tilted orbits as **just their own mark** (v6: no
   glass plate, ring or bubble behind them; a tile logo stays a tile, a free-form logo or a glyph stands alone, with a
   soft shadow for legibility), each with the shell's own **count badge** (`api.apps.badges(watch)`: the counts on desk
-  marks and the dock, live; a running app reports its own through WizardApp badge), alternating rings at even steps, drifting slowly the same way (never sliding onto each other); in front of
+  marks and the dock, live; a running app reports its own through WizardApp badge). When the orbits can't hold them all at a readable size the marks shrink (to 74%),
+  and only past that the last ones fold into an **All apps** mark (shown only when something is hidden); alternating rings at even steps, drifting slowly the same way (never sliding onto each other); in front of
   the orb they are bigger and brighter, behind it smaller and dimmer. Label on hover; a click opens the app. Each wears
   its **own logo** (`api.apps.logo(id)` → `store-data/logo/<id>`; template / Runtipi placeholders count as none) in a
   round frame, else its designed glyph in its own colour. Never a letter.
 - Under the orb: only a caption line while a take runs (no name label: the orb is the entity). The real keys are the hint line near the
   bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to type (new chat). The fuel gauge and the
-  gear stay top right; the Classic | Orb switch sits in the bar's centre.
+  gear stay top right; the Desks | Orbs switch sits in the bar's centre.
 - **Around a fixed orb** (v6, Miguel: "the orb never moves"). The orb stays at the screen's centre whatever is open;
   panels only cover the sides (satellites under them are simply covered). **Left: the stock Chats list, docked** for
   good (v5, "bake the stock session list in"): the same Chats window as everywhere (Archive / Working / Ready, the
