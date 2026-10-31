@@ -28,7 +28,7 @@ html[data-shell="desktop"] .wos-share .shs-b { border-radius: 18px; border: 1px 
 .wos-share .shs-row::-webkit-scrollbar { display: none; }
 .wos-share button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .wos-share .shs-agent, .wos-share .shs-app {
-  flex: 0 0 auto; width: 88px; min-height: 84px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex: 0 0 auto; min-width: 80px; max-width: 112px; min-height: 84px; /* a one-word name (Philosopher) never splits */ display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 8px 2px; border-radius: 14px;
 }
 .wos-share .shs-agent:active, .wos-share .shs-app:active, .wos-share .shs-other:active,
