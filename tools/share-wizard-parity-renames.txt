@@ -1,0 +1,14 @@
+# Unified share-sheet wording, relative to the exact live 81fc98c0 release.
+# The invalid radio/dropdown destination state is replaced by New chat as a valid default;
+# existing destinations remain selectable in the same Chat picker (New chat first).
+label:Choose a chat, or pick New chat => New chat | test=tests/app-share-wizard.test.mjs | token=target = '__new__'
+label:Existing chat… => Chat | test=tests/app-share-wizard.test.mjs | token=dv-row dv-chat
+# The dropdown affordance survives as a decorative glyph on the picker button.
+label:M7 10l5 5 5-5 => ⌄ | test=tests/app-share-wizard.test.mjs | token=⌄
+# Destination heading and dialog title now name the actual selected agent.
+label:Send to => Send to ${label()} | test=tests/app-share-wizard.test.mjs | token=Send to ${label()}
+label:Share to Wizard => Send to ${label()} | test=tests/app-share-wizard.test.mjs | token=Send to ${label()}
+# Successful delivery retains the receipt toast, now addressed to the actual agent.
+label:Sent to Wizard => Sent to ${job.agentLabel} | test=tests/app-share-wizard.test.mjs | token=agentLabel
+# Text-only shares retain the read-only content block rather than a count-header type label.
+label:Text => Shared content (not editable) | test=tests/app-share-wizard.test.mjs | token=dv-quote
