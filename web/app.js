@@ -2657,11 +2657,33 @@
     }
     return false;
   }
-  async function openRec(epoch = V.captureEpoch) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
+  async function openMic() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     // The phone's own mic only (18 Oct 2026): a take Android puts on a Bluetooth or external mic is refused.
     if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone."); e.code = 'external_mic'; throw e; }
+    micGranted = true;
+    return stream;
+  }
+  /* Pre-warmed microphone (Miguel, 31 Oct 2026: hold-for-command was slow to really listen). A press held still on the
+   * orb for MIC_WARM_MS opens the browser mic while the hold is still deciding, so by the time a hold becomes a command
+   * (or a slow tap becomes a message) the stream is already open and recording starts at once: the iPhone's
+   * getUserMedia (often 300-800 ms) leaves the critical path. Tap and hold mean exactly what they did; only the mic
+   * opens sooner. Never a permission prompt (only once the mic is known to be allowed), never with the native
+   * recorder, and released as the press ends unless that press started a take. */
+  const MIC_WARM_MS = 90;
+  let micGranted = false, MW = null;
+  try { navigator.permissions?.query?.({ name: 'microphone' })?.then(p => { micGranted = micGranted || p.state === 'granted'; p.onchange = () => { micGranted = p.state === 'granted'; }; }, () => {}); } catch (_) {}
+  function warmMic() {
+    if (MW || V.state !== 'idle' || !micGranted || DEV() || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+    const w = MW = { p: openMic() };
+    w.p.catch(() => { if (MW === w) MW = null; });
+  }
+  // The take opening now takes the warm stream (synchronously, before its first await); a press that ends any other way drops it.
+  function takeWarm() { const w = MW; MW = null; return w ? w.p : null; }
+  function dropWarm() { const w = MW; MW = null; if (w) w.p.then(s => s.getTracks().forEach(t => t.stop()), () => {}); }
+  async function openRec(epoch = V.captureEpoch) {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
+    const stream = await (takeWarm() || openMic());
     if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
     V.stream = stream;
     const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
@@ -3436,6 +3458,7 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
+    if (V.state === 'idle') G.warm = setTimeout(() => { if (G && G.mode === 'pending') warmMic(); }, MIC_WARM_MS);
     if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
@@ -3507,7 +3530,7 @@
   }
   function endGesture(e, cancelled) {
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
-    clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
+    clearTimeout(g.hold); clearTimeout(g.warm); queueMicrotask(dropWarm);   // a take this press starts has taken the warm mic by then Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
     // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
     if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
@@ -4054,6 +4077,8 @@
     panelRunning: () => { const run = new Map(); desks.forEach((d, i) => { if (d.home || !d.wins.length) return; const w = W[d.focus] || W[d.wins[0]], id = w && (w.appId || winApp(w).id); if (id && !run.get(id)?.open) run.set(id, { id, open: i === idx, playing: false }); }); return [...run.values()]; },
     homeHost: () => secOf(HOME),
     orbHost: () => orbWrap,
+    // An app's mark exactly as the dock draws it (its logo or sigil, its colour, its live count): the Orbs bottom bar.
+    phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });
