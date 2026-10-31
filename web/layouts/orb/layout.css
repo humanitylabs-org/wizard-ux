@@ -257,3 +257,19 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat-key {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-key:not([hidden]) { display: grid; }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-n { opacity: 0; }
+
+/* ---------- resizable panels: thin grips on the inner edges (layout.js), above the panels ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-grips { position: absolute; inset: 0; z-index: 160; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grips[hidden], html[data-shell="desktop"][data-layout="orb"] .ob-grip[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grip {
+  position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize; pointer-events: auto; touch-action: none; outline: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-grip[data-grip="app"] { top: 24px; bottom: 24px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grip::after {
+  content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--wz-accent); opacity: 0; transition: opacity 160ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-grip:is(:hover, .is-drag)::after { opacity: .55; }
+html[data-shell="desktop"][data-layout="orb"] .ob-grip:focus-visible::after { opacity: .9; }
+/* while a panel is being resized: no text selection, and app pages don't swallow the pointer */
+html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-resizing]) { cursor: col-resize; user-select: none; }
+html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-resizing]) .panel-layer iframe { pointer-events: none !important; }

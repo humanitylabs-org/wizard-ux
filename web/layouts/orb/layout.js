@@ -400,14 +400,17 @@ export default function setup(api) {
   function aim() {
     if (!W) return;
     const st = api.panel.state(), r = O * .3;
-    const listW = Math.round(clamp(W * .22, 280, 400)), L = folded ? STRIP : listW;
-    let C = W / 2 - L - r - GAP;   // the chat column, up to the orb with room for its bolt
-    C = Math.round(C >= 360 ? Math.min(C, W / 3, 520) : clamp(W / 2 - L - r * .7 - GAP, 300, 360));
+    const D = defaults(), lim = limits();
+    const listW = Math.round(sized.list ? clamp(sized.list, lim.list[0], lim.list[1]) : D.list), L = folded ? STRIP : listW;
+    let C = Math.round(sized.chat ? clamp(sized.chat, lim.chat[0], lim.chat[1]) : D.chat);
+    let A = Math.round(sized.app ? clamp(sized.app, lim.app[0], lim.app[1]) : D.app);
+    // never overlapping: the chat column gives way first, then the app panel
+    const room = W - 12 - L - 8;
+    if (C + A > room) { C = Math.max(lim.chat[0], room - A); if (C + A > room) A = Math.max(240, room - C); }
     const chat = st?.chat || null, app = st?.app || null;
-    const chatR = chat?.right > 0 ? chat.right : L + C;
+    const chatR = L + C;
     const k = chat ? clamp((W / 2 - chatR - GAP) / r, .45, 1) : 1;   // the orb fits beside an open chat, in place
-    const A = Math.round(Math.max(360, Math.min(W / 3 - 12, W / 2 - r - 120)));
-    const appL = app?.left > 0 ? app.left : W - 12 - A;
+    const appL = W - 12 - A;
     const orbR = W / 2 + r * k;
     G = { L, chatR, appL, k, r, chat, app, pinX: Math.round((orbR + appL) / 2) };
     cx = W / 2;
@@ -419,7 +422,45 @@ export default function setup(api) {
     scene.style.setProperty('--ob-free', Math.round(Math.max(160, (app ? appL : W) - left)) + 'px');
     const half = Math.min(W / 2 - left, (app ? appL : W) - W / 2) - 16;   // room either side of the orb's axis
     scene.dataset.dock = half < 190 ? 'compact' : '';
+    placeGrips(listW, L, C, A, !!chat, !!app);
     pinExtra();
+  }
+  /* ---------- resizable panels: a thin grip on the inner edge of the list, the chat column and the app panel ----------
+   * Drag (or ←/→, ⇧ for bigger steps) to resize live; kept per device; a double click (or Enter) goes back to the
+   * default. Limits keep each readable and the three never overlap; the orb stays where it is. */
+  let sized = { ...(api.storage.get('widths') || {}) };
+  const defaults = () => { const r = O * .3, L = folded ? STRIP : Math.round(clamp(W * .22, 280, 400));
+    let C = W / 2 - L - r - GAP; C = C >= 360 ? Math.min(C, W / 3, 520) : clamp(W / 2 - L - r * .7 - GAP, 300, 360);
+    return { list: Math.round(clamp(W * .22, 280, 400)), chat: Math.round(C), app: Math.round(Math.max(360, Math.min(W / 3 - 12, W / 2 - r - 120))) }; };
+  const limits = () => ({ list: [260, 520], chat: [Math.min(360, W * .45), Math.max(360, W * .45)], app: [Math.min(360, W * .6), Math.max(360, W * .6)] });
+  const grips = el('div', 'ob-grips');
+  const NAMES = { list: 'Resize the conversations list', chat: 'Resize the chat', app: 'Resize the app' };
+  const grip = {};
+  for (const id of ['list', 'chat', 'app']) {
+    const g = el('div', 'ob-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': NAMES[id], title: NAMES[id] + ' · double-click: back to default', 'data-grip': id });
+    g.hidden = true; grips.append(g); grip[id] = g;
+    // a drag: the pointer's x against the panel's fixed edge (the list and chat grow right, the app grows left)
+    let drag = null;
+    const widthAt = x => id === 'list' ? x : id === 'chat' ? x - G.L : (W - 12) - x;
+    api.listen(g, 'pointerdown', e => { if (e.button) return; e.preventDefault(); try { g.setPointerCapture(e.pointerId); } catch (_) {} drag = { left: grips.getBoundingClientRect().left }; g.classList.add('is-drag'); scene.dataset.resizing = id; });
+    api.listen(g, 'pointermove', e => { if (!drag) return; set(id, widthAt(e.clientX - drag.left), false); });
+    const end = () => { if (!drag) return; drag = null; g.classList.remove('is-drag'); delete scene.dataset.resizing; save(); };
+    api.listen(g, 'pointerup', end); api.listen(g, 'pointercancel', end);
+    api.listen(g, 'dblclick', () => { delete sized[id]; save(); aim(); });
+    api.listen(g, 'keydown', e => {
+      const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (e.key === 'Enter') { e.preventDefault(); delete sized[id]; save(); aim(); return; }
+      if (!dir) return; e.preventDefault();
+      const cur = id === 'list' ? G.L : id === 'chat' ? G.chatR - G.L : W - 12 - G.appL;
+      set(id, cur + dir * (id === 'app' ? -1 : 1) * (e.shiftKey ? 48 : 16), true);
+    });
+  }
+  function set(id, w, keep) { const [lo, hi] = limits()[id]; sized = { ...sized, [id]: Math.round(clamp(w, lo, hi)) }; aim(); if (keep) save(); }
+  function save() { api.storage.set('widths', sized); }
+  function placeGrips(listW, L, C, A, chatOpen, appOpen) {
+    const lim = limits(), show = (id, on, x, now) => { const g = grip[id]; g.hidden = !on; if (!on) return;
+      g.style.left = Math.round(x) + 'px'; g.setAttribute('aria-valuenow', String(Math.round(now))); g.setAttribute('aria-valuemin', String(Math.round(lim[id][0]))); g.setAttribute('aria-valuemax', String(Math.round(lim[id][1]))); };
+    show('list', !folded, L, listW); show('chat', chatOpen, L + C, C); show('app', appOpen, W - 12 - A, A);
   }
   function paintPanel() {
     const st = api.panel.state(), k = st?.kind || null;
@@ -538,7 +579,7 @@ export default function setup(api) {
     const h = !!api.route().home;
     if (h !== home) {
       home = h; root.dataset.orbScene = h ? 'home' : 'desk';
-      scene.classList.toggle('is-on', h); scene.inert = !h;
+      scene.classList.toggle('is-on', h); scene.inert = !h; grips.hidden = !h;
       wake();
       if (h) api.frame(() => { size(); aim(); });
     }
@@ -548,6 +589,7 @@ export default function setup(api) {
     if (!home) return;
     paintReady(); paintApps();
   }
+  api.mount(grips);        // above the panels: the grips sit on their edges
   api.panel.claim();        // no desks: the Chats list docked on the left; a thread or an app opens in the panel on the right
   api.panel.dock(!folded);
   paintFold();
