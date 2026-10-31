@@ -31,17 +31,26 @@
   const bootErrors = [];
   addEventListener('error', e => { if (!shellUp()) bootErrors.push(String(e.message || e.error || 'Script error')); }, true);
   addEventListener('unhandledrejection', e => { if (!shellUp()) bootErrors.push(String(e.reason?.message || e.reason || 'Promise rejected')); });
-  function shellUp() { return !!(window.__wos || window.__wux); }
-  addEventListener('load', () => setTimeout(() => {
+  let bootAttached = false, bootFatal = false, bootTimer = 0, bootLimit = 0;
+  function shellUp() { return bootAttached || !!(window.__wos || window.__wux); }
+  function checkBoot(expired = false) {
     if (shellUp() || document.documentElement.dataset.leaving) return;
+    // Slow bootstrap/preferences are not a device failure. Only a real script
+    // error uses the short watchdog; a missing shell gets a full 15 seconds.
+    if (!expired && !bootErrors.length) return;
     // A boot error is most often a phone mixing cached files from two releases: reload once to fetch one matching
     // set before showing the card (Robert's iPhone, 24 Oct 2026). Once per minute per tab, so a real bug can't loop.
     if (bootErrors.length) try {
       const k = 'wos.bootReloadAt', t = +sessionStorage.getItem(k) || 0;
       if (Date.now() - t > 60e3) { sessionStorage.setItem(k, String(Date.now())); log('fatal:auto-reload'); location.reload(); return; }
     } catch (e) {}
-    fatal(bootErrors.length ? `${agent()} couldn’t start on this device: ${bootErrors[0].replace(/^Uncaught\s+/, '').slice(0, 160)}` : `${agent()} couldn’t start on this device.`);
-  }, 2500));
+    bootFatal = true;
+    fatal(bootErrors.length ? `${agent()} couldn’t start on this device: ${bootErrors[0].replace(/^Uncaught\s+/, '').slice(0, 160)}` : `${agent()} is taking longer to open. Reload if it stays here.`);
+  }
+  addEventListener('load', () => {
+    bootTimer = setTimeout(() => checkBoot(), 2500);
+    bootLimit = setTimeout(() => checkBoot(true), 15000);
+  });
 
   /* ---------- DOM ---------- */
   function host() { return document.getElementById('device') || document.body; }
@@ -283,7 +292,7 @@
   function closeFatal() { const el = document.getElementById('wxFatal'); if (!el || el.hidden) return false; el.hidden = true; fatalOpen = false; log('fatal:close'); return true; }
 
   C.status = {
-    attach(h) { H = Object.assign({}, H, h || {}); fromLive(); render(); if (net === 'offline' || net === 'reconnecting') verifyWizard(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } const O = window.WosOutbox; if (O && !O.__wxStatus) { O.__wxStatus = true; O.onChange(render); } },
+    attach(h) { bootAttached = true; clearTimeout(bootTimer); clearTimeout(bootLimit); if (bootFatal) { closeFatal(); bootFatal = false; } H = Object.assign({}, H, h || {}); fromLive(); render(); if (net === 'offline' || net === 'reconnecting') verifyWizard(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } const O = window.WosOutbox; if (O && !O.__wxStatus) { O.__wxStatus = true; O.onChange(render); } },
     refresh() { fromLive(); render(); },
     fatal, back: () => (closeFatal() ? 'fatal' : dismissOffline() ? 'offline' : ''),
     get state() { return { net, offline: offOpen ? 'open' : offDismissed ? 'pill' : '', critical: criticals().map(s => s.id), fatal: fatalOpen ? fatalMsg : '' }; },

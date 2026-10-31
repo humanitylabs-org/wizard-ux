@@ -18,7 +18,7 @@ const start = () => [space('a', ['t1', 'keep']), space('b', ['other']), space('p
 // Chats' real Space code and row sheet, on one device running the real live.js preferences code.
 function device(box, agents = { t1: 'hermes', fresh: 'hermes' }) {
   const dev = liveDevice(box, { [SPACES]: JSON.stringify(box.state.spaces) }), toasts = [], sheets = []
-  const el = { insertAdjacentHTML: (_, html) => sheets.push(html), querySelector: () => null }
+  const el = { insertAdjacentHTML: (_, html) => sheets.push(html), querySelector: () => null, querySelectorAll: () => [] }
   const env = { LIVE: { ...dev, agentOf: sid => agents[sid] || '', workGroups: () => ({ ready: [] }), isNew: () => false }, localStorage: dev.ctx.localStorage,
     window: dev.ctx.window, Event: dev.ctx.Event, AGS: () => ({ defaultId: () => 'hermes' }), focusAgents: () => [{ id: 'hermes' }, { id: 'philosopher' }],
     toast: (...a) => toasts.push(a[1]), W: {}, esc: s => String(s), PIN_SVG: '', RENAME_SVG: '', PIN: { has: () => false }, topicOn: () => false,

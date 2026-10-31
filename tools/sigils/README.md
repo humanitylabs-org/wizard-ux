@@ -5,14 +5,15 @@ Every app shows one mark (its sigil) in the same box everywhere: launcher tiles,
 ## The standard
 
 1. **Every app that ships in the Wizard App Store gets a designed sigil before it ships.** That means a glyph in `glyphs.py` plus a `HOUSE` entry in `build.py` keyed by its app id. CI enforces this: `tests/sigils-every-app.test.mjs` lists the known store apps (`STORE_APPS`) and fails when one has no `HOUSE` entry. When you publish a new app, add its id there in the same PR.
-2. **Fallbacks never look broken.** An app the shell doesn't know yet (a third-party app installed today) is resolved in this order:
+2. **An app that ships its own logo wears it.** The box lists each installed app's Runtipi logo (`metadata/logo.jpg`, which also carries a wizard.md `icon:`) at `/wizard-os-home/store-data/wizard/v1/app-logos` (`tools/store-app-logos.mjs`); `core/apps.js` reads it with the app list and `WizSigil.html` then returns `<i class="sglogo">`: the picture as a rounded tile in the same box, on every surface and skin. The template/Runtipi placeholder logo does not count. The URL carries the image's hash, so a new logo shows on the next reload without a Wizard OS release. Everything below applies to apps without one.
+3. **Fallbacks never look broken.** An app the shell doesn't know yet (a third-party app installed today) is resolved in this order:
    1. the app's launcher entry names an existing glyph (`"icon": "<glyph>"`, optional `"colors": ["#hex"]`)
    2. the `HOUSE` entry for its id
    3. the app's own same-origin icon file (`"icon": "/<app>/icon.svg"`, also `.png` or `.webp`), used as the silhouette at 78% of the box
    4. a disc with the app's initial cut out, on a stable hue picked from its id
 
    Every one of these is a mask in the same box, so a fallback can't come out bigger, square, opaque or outside the selected ring. Never render a fallback as painted text or an `<img>`. Skins must never set `mask: none` on `.sgl`; the test checks every `skin.css`.
-3. **Never hand-edit `web/core/sigils.css` or `web/core/sigils.js`.** They are generated. Edit `glyphs.py`, `build.py`, `style.css` or `sigils.template.js`, then rebuild. The test fails when the generated files are stale.
+4. **Never hand-edit `web/core/sigils.css` or `web/core/sigils.js`.** They are generated. Edit `glyphs.py`, `build.py`, `style.css` or `sigils.template.js`, then rebuild. The test fails when the generated files are stale.
 
 ## Adding a sigil for a new app
 

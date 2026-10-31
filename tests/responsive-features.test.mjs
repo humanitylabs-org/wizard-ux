@@ -148,9 +148,9 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
 test('nested Look / skin tweaks Back returns to Settings before shell root Back, in both mounts', () => {
   const { sandbox, roots } = harness();
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
-  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',description:'No pin button on chats',on:true}],active:['miguel/hidden-pin']} };
+  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/swipe-strip',name:'Swipe strip',description:'Swipe left to reopen the last chat',author:'miguel',on:true}],active:['miguel/swipe-strip']} };
   for (const { root, view } of roots) {
-    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*All tweaks/); assert.match(root.innerHTML,/1 of 1 on/);
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*data-tweakauthor="miguel"[^]*1 of 1 on[^]*data-tweak-toggle="miguel\/swipe-strip"/);
     assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
     assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
   }

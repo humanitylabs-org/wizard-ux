@@ -81,7 +81,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open', 'search']);
-  assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
+  assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
   assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
@@ -447,4 +447,27 @@ test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced 
   assert.match(host, /panelHold\+\+;\n    try \{ return await loadTweaksNow\(\.\.\.args\); \} finally \{ panelHold--; panelSync\(\); \}/);
   assert.match(host, /panelHold\+\+;\n    try \{ return await loadLayoutNow\(id\); \} finally \{ panelHold--; panelSync\(\); \}/, 'and while the layout itself loads again');
   assert.match(host, /get panelMode\(\) \{ return panelOn && \(panelHold > 0 \|\| \[\.\.\.panelHolders\]\.some\(l => !l\.dead\)\); \},/);
+});
+
+test('opt-in for everyone: both Orbs tweaks are listed under Miguel, never catalog defaults; no migration turns them on', async () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  for (const id of ['miguel/orb-shell', 'miguel/orb-switch']) {
+    assert.ok(cat.tweaks.includes(id), id + ' is in the catalog (Settings › Look › Tweaks › Miguel)');
+    assert.ok(!cat.defaults.includes(id), id + ' is not a catalog default: nobody\'s desktop changes until they turn it on');
+  }
+  const exp = read('web/core/experience.js');
+  assert.ok(!/orb-shell|orb-switch/.test(exp), 'no migration on main turns either on for anyone');
+});
+
+test('Orbs view alone is never a dead end: the scene offers Back to the Desks view (turns off the tweak wearing it)', async () => {
+  const src = read('web/layouts/orb/layout.js');
+  assert.match(src, /'Back to the Desks view'/); assert.match(src, /api\.desk\.classic\(\)/);
+  const f = fixture({ shell: 'desktop' }); let L = null;
+  f.host._test.setImporter(async url => url.includes('/layouts/') ? { default: a => { L = a; return () => {}; } } : { default: api => api.layout.use('orb') });
+  await f.mount('miguel/orb-shell'); await settle();
+  assert.equal(f.host.layout, 'orb'); assert.ok(L, 'layout set up');
+  const asked = []; f.ctx.window.WosExperience = { toggle: async id => { asked.push(id); } };
+  assert.equal(await L.desk.classic(), true); assert.deepEqual(asked, ['miguel/orb-shell'], 'the same device switch as Settings › Look');
+  await f.clear();
+  assert.equal(await L.desk.classic(), false, 'inert once the layout is gone'); assert.deepEqual(asked, ['miguel/orb-shell']);
 });

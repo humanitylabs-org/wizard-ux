@@ -405,6 +405,9 @@
       desk: Object.freeze({
         home: () => { if (live()) shell.home?.(); },
         look: () => { if (live()) shell.openSettings?.('look'); },
+        /* Back to the Desks view for this device: switches off the tweak wearing this layout, the same way as its
+         * Settings › Look switch (WosExperience mix, no reload), so the layout itself always offers a way back. */
+        classic: () => { if (live() && layoutHolder && layoutRec === a) return Promise.resolve(window.WosExperience?.toggle?.(layoutHolder)).then(() => true, () => false); return Promise.resolve(false); },
         // Closing the last window of a desk goes Home instead of to another desk (desks are out of sight). Released on teardown.
         emptyHome() { if (!live()) return () => {}; emptyHomes.add(a); const off = () => { emptyHomes.delete(a); a.offs.delete(off); }; a.offs.add(off); return off; },
       }),
