@@ -14,10 +14,16 @@
  *
  * Optional skin.js uses the package hook host, but only after a trusted Settings click approves its exact
  * SHA-256 on this device. Hash the response bytes and import those same bytes, never the URL again.
+ *
+ * Own skins are retired (Miguel, 31 Oct 2026): no "Your skins" tiles, no New skin, no base switching and no tweak
+ * recipes. Settings › Look is only the skin and the tweaks, both saved on this device. This file is now a quiet
+ * overlay the owner's agent edits; it never changes which skin or tweaks are worn.
  * API: WosMySkin.state → { css, empty, info, off, script }, .refresh() → Promise, .reset() → Promise,
  *      .on(fn) (state changed), .FILE (the path inside Files). */
 (function () {
   'use strict';
+  // Retired own-skin recipe caches: they used to force a base skin and replace the tweak choices on load.
+  try { localStorage.removeItem('wos.own-skins.v1'); localStorage.removeItem('wos.own-skins.cache.v1'); } catch (_) {}
   const URL_CSS = '/wizard/v1/my-skin', CACHE = 'wos.myskin.v1', MAX = 64 * 1024;
   const FILE = 'Skins/My skin/skin.css', OK = 'wos.myskin.js.ok';
   const isDoc = typeof document !== 'undefined';
@@ -35,15 +41,15 @@
   }
   async function startScript() {
     const v = verified, host = window.WosSkinHost;
-    if (off || !own() || !v || approval() !== v.sha256 || !host?.personalState.ready || started === v.sha256) return;
+    if (off || !v || approval() !== v.sha256 || !host?.personalState.ready || started === v.sha256) return;
     started = v.sha256;
-    await host.loadPersonal(v.bytes, () => !off && !!own() && verified === v && approval() === v.sha256, scriptFile());
+    await host.loadPersonal(v.bytes, () => !off && verified === v && approval() === v.sha256, scriptFile());
     emit();
   }
   function turnOn(event) {
     // No agent/API approval, synthetic clicks or stale buttons. The trusted event must hit this exact version.
     const b = event?.target?.closest?.('button[data-myskin="on"]');
-    if (off || !own() || !verified || verified.sha256 !== state.script.sha256 || typeof MouseEvent === 'undefined' || !(event instanceof MouseEvent) || !event.isTrusted || event.type !== 'click' || !b?.isConnected || b.disabled || b.dataset.myskinHash !== state.script.sha256 || !state.script.sha256) return false;
+    if (off || !verified || verified.sha256 !== state.script.sha256 || typeof MouseEvent === 'undefined' || !(event instanceof MouseEvent) || !event.isTrusted || event.type !== 'click' || !b?.isConnected || b.disabled || b.dataset.myskinHash !== state.script.sha256 || !state.script.sha256) return false;
     try { localStorage.setItem(OK, state.script.sha256); } catch (_) { return false; }
     state.script.approved = true; startScript(); emit(); return true;
   }
@@ -59,7 +65,6 @@
   async function refreshScript(seq) {
     const info = state.info?.script;
     const lastError = state.script.error?.sha256 && state.script.error.sha256 === info?.sha256 ? state.script.error : null;
-    if (info?.exists) { migrate('skin.js'); apply(state.css); }
     if (!info?.exists || verified?.sha256 !== info.sha256) { verified = null; stopScript(); }
     state.script = { exists: !!info?.exists, sha256: info?.sha256 || null, bytes: info?.bytes || 0, approved: false, file: scriptFile(), error: lastError };
     if (!info?.exists || approval() !== info.sha256) { turnOff(); }
@@ -81,174 +86,6 @@
       else await startScript();
     } catch (_) { if (seq === refreshSeq) { verified = null; turnOff(); } }
   }
-  // The box owns recipes; this device caches first paint and migrates preview-only recipes once.
-  const RECIPES = 'wos.own-skins.v1', BOX_CACHE = 'wos.own-skins.cache.v1', URL_SKINS = '/wizard/v1/skins';
-  let serverMode = null, loadingRecipes = null, writing = Promise.resolve(), selecting = false;
-  const clone = value => JSON.parse(JSON.stringify(value));
-  let recipes = { version: 1, skins: [], active: null, migrated: false };
-  try {
-    const saved = JSON.parse(localStorage.getItem(BOX_CACHE) || localStorage.getItem(RECIPES));
-    if (saved?.version === 1 && Array.isArray(saved.skins)) {
-      recipes = { version: 1, skins: saved.skins.filter(s => s && typeof s.id === 'string' && s.id.length <= 64 && typeof s.name === 'string' && s.name.trim() && s.name.length <= 60 && typeof s.base === 'string' && s.tweaks && typeof s.tweaks === 'object' && !Array.isArray(s.tweaks)), active: saved.active, migrated: !!saved.migrated };
-      if (!recipes.skins.some(s => s.id === recipes.active)) recipes.active = null;
-    }
-  } catch (_) {}
-  const own = () => recipes.skins.find(s => s.id === recipes.active) || null;
-  function persist(next) {
-    localStorage.setItem(RECIPES, JSON.stringify(next));
-    if (serverMode === false) { try { localStorage.removeItem(BOX_CACHE); } catch (_) {} }
-    recipes = next;
-  }
-  function migrate(css) {
-    if (serverMode === true) return;
-    if (recipes.migrated || emptyCss(css)) return;
-    const skin = { id: 'my-skin', name: 'My skin', base: window.WosSkin?.current || 'nebula', tweaks: {}, legacy: true };
-    try {
-      persist({ version: 1, skins: [skin], active: skin.id, migrated: true });
-      if (typeof Event !== 'undefined') window.dispatchEvent?.(new Event('wos:own-skin'));
-    } catch (_) {}
-  }
-  function recipeChanged() {
-    apply(state.css);
-    if (!own()) stopScript(); else void startScript();
-    emit();
-    if (typeof Event !== 'undefined') window.dispatchEvent?.(new Event('wos:own-skin'));
-  }
-  function wear(id) {
-    const skin = recipes.skins.find(s => s.id === id); if (!skin) throw new Error('Skin not found');
-    persist({ ...recipes, active: id }); window.WosSkin?.set(skin.base); recipeChanged(); return clone(skin);
-  }
-  function leave() { if (!own()) return; persist({ ...recipes, active: null }); recipeChanged(); }
-  function create({ name, base, tweaks }) {
-    name = String(name || '').trim();
-    if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
-    if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
-    const map = Object.fromEntries(Object.entries(tweaks || {}).filter(([id,v]) => /^[a-z0-9-]+\/[a-z0-9-]+$/.test(id) && typeof v === 'boolean'));
-    const skin = { id: 'skin-' + crypto.randomUUID(), name, base, tweaks: map };
-    persist({ ...recipes, skins: [...recipes.skins, skin], active: skin.id, migrated: true });
-    window.WosSkin.set(base); recipeChanged(); return clone(skin);
-  }
-  function update(values) {
-    const skin = own(); if (!skin) return;
-    const base = values.base || skin.base;
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
-    const next = { ...skin, base, tweaks: { ...skin.tweaks, ...(values.tweaks || {}) } };
-    persist({ ...recipes, skins: recipes.skins.map(s => s.id === skin.id ? next : s) });
-    if (window.WosSkin.current !== base) window.WosSkin.set(base); recipeChanged();
-  }
-  function remove(id) {
-    const index = recipes.skins.findIndex(s => s.id === id); if (index < 0) return null;
-    const snapshot = { skin: clone(recipes.skins[index]), index, worn: recipes.active === id };
-    persist({ ...recipes, skins: recipes.skins.filter(s => s.id !== id), active: snapshot.worn ? null : recipes.active, migrated: true });
-    if (snapshot.worn) window.WosSkin?.set(snapshot.skin.base); recipeChanged(); return snapshot;
-  }
-  function restore(snapshot) {
-    if (!snapshot || recipes.skins.some(s => s.id === snapshot.skin.id)) return;
-    const skins = [...recipes.skins]; skins.splice(snapshot.index, 0, snapshot.skin);
-    persist({ ...recipes, skins, active: snapshot.worn ? snapshot.skin.id : recipes.active });
-    if (snapshot.worn) window.WosSkin?.set(snapshot.skin.base); recipeChanged();
-  }
-  async function request(path, method = 'GET', body) {
-    const r = await fetch(URL_SKINS + path, { method, credentials: 'same-origin', cache: 'no-store',
-      ...(method === 'GET' ? {} : { headers: { 'X-Requested-With': 'wizard', 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }) });
-    if (r.status === 404 || r.status === 405) {
-      let code; try { code = (await r.json()).error; } catch (_) {}
-      const e = new Error(code || 'Older Wizard'); e.older = r.status === 405 || !code || code === 'not_found'; throw e;
-    }
-    if (!r.ok) throw new Error(`Could not save skin on your Wizard (${r.status})`);
-    return r.json();
-  }
-  function receive(list) {
-    if (!list || !Array.isArray(list.skins)) throw new Error('Invalid skins response');
-    const oldActive = recipes.active;
-    const skins = list.skins.filter(s => s && typeof s.id === 'string' && !(s.id === 'My skin' && s.empty && !s.has_script && !s.has_recipe)).map(s => ({ ...s, tweaks: s.tweaks || {} }));
-    const next = { version: 1, skins, active: list.active, migrated: true };
-    const changed = JSON.stringify(recipes) !== JSON.stringify(next); recipes = next;
-    // A storage quota failure must not turn a successful box write into a false failure.
-    try { localStorage.setItem(BOX_CACHE, JSON.stringify(recipes)); } catch (_) {}
-    if (oldActive !== recipes.active) { verified = null; stopScript(); apply(''); cache(''); }
-    selecting = true;
-    try { if (own() && window.WosSkin?.current !== own().base && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base); }
-    finally { selecting = false; }
-    if (changed) recipeChanged();
-  }
-  async function loadRecipes() {
-    if (serverMode === false) return;
-    if (loadingRecipes) return loadingRecipes;
-    loadingRecipes = (async () => {
-      try {
-        let list = await request('');
-        if (!Array.isArray(list.skins)) throw new Error('Invalid skins response');
-        serverMode = true;
-        // Checkpoint each preview recipe only after the box confirms it. Failed uploads retry next refresh.
-        let legacy;
-        try { legacy = JSON.parse(localStorage.getItem(RECIPES)); } catch (_) {}
-        if (legacy?.version === 1 && Array.isArray(legacy.skins)) {
-          const active = legacy.active;
-          for (const s of [...legacy.skins]) {
-            if (!s || typeof s.name !== 'string' || !s.base || !s.tweaks) continue;
-            let found = list.skins.find(k => k.name === s.name && (s.legacy || (k.base === s.base && JSON.stringify(k.tweaks || {}) === JSON.stringify(s.tweaks))));
-            if (!found) { const made = await request('', 'POST', { name: s.name, base: s.base, tweaks: s.tweaks, migration_key: s.id, activate: s.id === active }); found = { id: made.id }; }
-            else if (s.id === active) await request('/active', 'PUT', { id: found.id });
-            legacy.skins = legacy.skins.filter(k => k.id !== s.id);
-            localStorage.setItem(RECIPES, JSON.stringify(legacy));
-          }
-          localStorage.removeItem(RECIPES);
-          list = await request('');
-        }
-        receive(list);
-      } catch (e) {
-        if (e.older) { serverMode = false; migrate(state.css); }
-        // Offline / denied: keep the last box cache, never invent a successful write.
-      } finally { loadingRecipes = null; }
-    })();
-    return loadingRecipes;
-  }
-  function boxAction(local, remote) {
-    return (...args) => {
-      if (serverMode === false) return local(...args);
-      const action = writing.then(async () => {
-        await loadRecipes();
-        if (serverMode === false) return local(...args);
-        if (serverMode !== true) throw new Error('Connect to your Wizard to save this skin');
-        try { return await remote(...args); }
-        catch (e) { if (!e.older) throw e; serverMode = false; return local(...args); }
-      });
-      writing = action.catch(() => {}); return action;
-    };
-  }
-  async function syncBox() { receive(await request('')); await refresh(); }
-  async function createOnBox({ name, base, tweaks }) {
-    name = String(name || '').trim();
-    if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
-    if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
-    const made = await request('', 'POST', { name, base, tweaks: tweaks || {}, activate: true });
-    await syncBox(); return clone(recipes.skins.find(s => s.id === made.id));
-  }
-  async function wearOnBox(id) {
-    if (!recipes.skins.some(s => s.id === id)) throw new Error('Skin not found');
-    receive(await request('/active', 'PUT', { id })); await refresh(); return clone(own());
-  }
-  async function leaveOnBox() { receive(await request('/active', 'PUT', { id: null })); await refresh(); }
-  async function updateOnBox(values) {
-    const s = own(); if (!s) return;
-    receive(await request('/' + encodeURIComponent(s.id), 'PATCH', values));
-    await refresh();
-  }
-  async function removeOnBox(id) {
-    const skin = recipes.skins.find(s => s.id === id); if (!skin) return null;
-    const snapshot = { skin: clone(skin), worn: recipes.active === id };
-    const result = await request('/' + encodeURIComponent(id), 'DELETE', {});
-    snapshot.trash = result.trash; receive(result.list); await refresh().catch(() => {}); return snapshot;
-  }
-  async function restoreOnBox(snapshot) {
-    if (!snapshot?.trash || recipes.skins.some(s => s.id === snapshot.skin.id)) return;
-    const result = await request('/restore', 'POST', { trash: snapshot.trash }); receive(result.list);
-    if (snapshot.worn) receive(await request('/active', 'PUT', { id: result.id }));
-    await refresh();
-  }
   const emptyCss = css => !String(css || '').replace(/\/\*[\s\S]*?(?:\*\/|$)/g, '').trim();
   let el = null;
 
@@ -262,18 +99,17 @@
   }
   function apply(css) {
     css = typeof css === 'string' && css.length <= MAX ? css : '';
-    state.css = css; state.empty = emptyCss(css); migrate(css);
+    state.css = css; state.empty = emptyCss(css);
     if (!isDoc) return;
-    if (off || !own() || state.empty) { if (el) { el.textContent = ''; el.remove(); } }
+    if (off || state.empty) { if (el) { el.textContent = ''; el.remove(); } }
     else { const s = styleEl(); if (s.textContent !== css) s.textContent = css; }
-    if (document.documentElement) document.documentElement.toggleAttribute('data-my-skin', !off && !!own() && !state.empty);
+    if (document.documentElement) document.documentElement.toggleAttribute('data-my-skin', !off && !state.empty);
   }
   const emit = () => { for (const fn of [...subs]) { try { fn(state); } catch (_) {} } };
   const cache = css => { try { if (css && !emptyCss(css)) localStorage.setItem(CACHE, css); else localStorage.removeItem(CACHE); } catch (_) {} };
 
   async function refresh() {
     if (off) return state;
-    await loadRecipes();
     const seq = ++refreshSeq;
     let r;
     try { r = await fetch(URL_CSS, { cache: 'no-cache', credentials: 'same-origin' }); }
@@ -304,23 +140,14 @@
   // First paint: the cached copy, synchronously, then the box's current file.
   if (!off) { try { const c = localStorage.getItem(CACHE); if (c) apply(c); } catch (_) {} }
   const api = {
-    get FILE() { return own() ? 'Skins/' + own().id + '/skin.css' : FILE; },
-    get recipes() { return clone(recipes.skins); },
-    get active() { return own() ? clone(own()) : null; },
-    create: boxAction(create, createOnBox), wear: boxAction(wear, wearOnBox), leave: boxAction(leave, leaveOnBox), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
-    get storage() { return serverMode === true ? 'box' : serverMode === false ? 'local' : 'offline'; },
+    FILE,
     get state() { return state; },
-    // The owner overlay stays above the skin and the tweaks it brings; changing skin never clears it.
-    // Per-skin tweak offs live in experience.js until Agent Service offers an owner profile route.
-    get experience() { return window.WosExperience || null; },
     refresh, reset, turnOn, turnOff, startScript,
     on(fn) { if (typeof fn === 'function') subs.add(fn); return () => subs.delete(fn); },
     _test: { apply, emptyCss },
   };
   if (typeof window !== 'undefined') {
     window.WosMySkin = api;
-    if (own() && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base);
-    window.addEventListener?.('wos:skin', () => { if (!selecting && own() && own().base !== window.WosSkin.current) { const pending = api.leave(); pending?.catch?.(() => {}); } });
     if (isDoc && !off) {
       window.addEventListener?.('storage', e => { if (e.key === OK) { stopScript(); refresh(); } });
       window.addEventListener?.('wos:personal-error', e => failed(e.detail));
