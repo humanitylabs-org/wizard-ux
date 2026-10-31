@@ -17,6 +17,8 @@ http.createServer((req,res) => {
   if (u.pathname==='/__preview/bootstrap.js') return send(fs.readFileSync(path.join(ROOT,'bootstrap.js')),'application/javascript');
   if (u.pathname.startsWith('/messenger/')) return send(fs.readFileSync(path.join(ROOT,u.pathname.endsWith('receiver.js')?'receiver.js':'index.html')),u.pathname.endsWith('receiver.js')?'application/javascript':'text/html');
   if (u.pathname==='/wizard/v1/bootstrap') return send({bootstrap:1,settings:{owner:{name:'Test Owner'},agent:{name:'Test Agent'},clock:{timezone:'UTC',day_starts_at:'00:00'},voice:{language:'',vocabulary:[]}},capabilities:{files:true},endpoints:{apps:'/wizard/v1/apps',sessions:'/wizard/hermes/api/sessions',runs:'/wizard/hermes/v1/runs'}});
+  if (u.pathname==='/wizard/v1/setup') return send({first_run:false});
+  if (u.pathname==='/wizard/hermes/api/model/options') return send({provider:'fixture',model:'synthetic',providers:[{slug:'fixture',name:'Synthetic (no inference)',authenticated:true}]});
   if (u.pathname==='/wizard/v1/apps') return send({schema:1,apps:[app],in_development:[],slots:{},parking:[]});
   if (u.pathname==='/wizard/v1/agents') return send({agents});
   if (u.pathname==='/wizard/hermes/api/sessions') return send({object:'list',data:[],has_more:false});
