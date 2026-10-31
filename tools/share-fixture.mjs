@@ -14,7 +14,7 @@
 //
 // Contract (Agent Service v1):
 //   GET  /wizard/v1/bootstrap                → capabilities.resumable_uploads, endpoints.uploads/shares
-//   POST /wizard/v1/uploads {client_upload_id, filename, mime, bytes, sha256?} → 201 {upload_id, offset, bytes, chunk_bytes, status, file?}
+//   POST /wizard/v1/uploads {client_upload_id, filename, mime, bytes, sha256?, destination?} → 201 {upload_id, offset, bytes, chunk_bytes, status, file?}
 //   GET  /wizard/v1/uploads/<id>             → {upload_id, offset, bytes, status, file?}
 //   PATCH /wizard/v1/uploads/<id>  raw bytes, Content-Type application/offset+octet-stream, Upload-Offset: n
 //                                            → 204 Upload-Offset: <new> | 409 {error:'offset_mismatch', offset}
@@ -97,16 +97,27 @@ const cleanName = s => String(s || 'upload').replace(/[\\/\u0000-\u001f"]/g, '_'
 const cleanMime = s => (/^[\w.+-]+\/[\w.+-]+$/.test(String(s || '')) ? String(s) : 'application/octet-stream').slice(0, 160);
 
 /* ---------------- uploads ---------------- */
-const pubUpload = u => ({ upload_id: u.id, offset: u.offset, bytes: u.bytes, chunk_bytes: CHUNK, status: u.status, ...(u.file ? { file: S.files[u.file] } : {}) });
-function createUpload({ client_upload_id, filename, mime, bytes, sha256 }, share = '') {
+const publicFile = u => {
+  const file = S.files[u.file];
+  if (!file || !u.destination) return file;
+  const { id, ...receipt } = file;
+  return { ...receipt, location: 'files_root' };
+};
+const pubUpload = u => ({ upload_id: u.id, offset: u.offset, bytes: u.bytes, chunk_bytes: CHUNK, status: u.status, ...(u.file ? { file: publicFile(u) } : {}) });
+function createUpload({ client_upload_id, filename, mime, bytes, sha256, destination }, share = '') {
   const key = String(client_upload_id || '');
   if (!/^[\w.:-]{6,160}$/.test(key)) return [400, { error: 'client_upload_id_required' }];
   const n = Number(bytes);
   if (!Number.isSafeInteger(n) || n < 0) return [400, { error: 'bytes_required' }];
+  if (destination !== undefined && (!destination || typeof destination !== 'object' || Array.isArray(destination)
+    || Object.keys(destination).some(key => key !== 'folder') || typeof destination.folder !== 'string'
+    || destination.folder.includes('..') || destination.folder.startsWith('/') || /[\\\u0000-\u001f]/.test(destination.folder))) {
+    return [400, { error: 'invalid_request', field: 'destination.folder' }];
+  }
   if (S.byClient[key]) return [201, pubUpload(S.uploads[S.byClient[key]])];
   if ((MAX && n > MAX) || n > freeBytes() - RESERVE) return [507, { error: 'insufficient_storage' }];
   const id = 'up_' + hex(16);
-  S.uploads[id] = { id, client: key, filename: cleanName(filename), mime: cleanMime(mime), bytes: n, sha256: /^[0-9a-f]{64}$/.test(String(sha256 || '')) ? sha256 : '', offset: 0, status: 'uploading', share, created: now(), patches: 0, conflicts: 0 };
+  S.uploads[id] = { id, client: key, filename: cleanName(filename), mime: cleanMime(mime), bytes: n, sha256: /^[0-9a-f]{64}$/.test(String(sha256 || '')) ? sha256 : '', destination: destination === undefined ? null : { folder: destination.folder }, offset: 0, status: 'uploading', share, created: now(), patches: 0, conflicts: 0 };
   S.byClient[key] = id;
   fs.closeSync(fs.openSync(path.join(DIRS.up, id + '.part'), 'w'));
   save();
@@ -146,19 +157,20 @@ async function sha256File(p) {
   return h.digest('hex');
 }
 async function completeUpload(u) {
-  if (u.status === 'complete') return [200, { file: S.files[u.file] }];
+  if (u.status === 'complete') return [200, { file: publicFile(u) }];
   if (u.offset !== u.bytes) return [409, { error: 'incomplete', offset: u.offset, bytes: u.bytes }];
   const part = path.join(DIRS.up, u.id + '.part');
   const digest = await sha256File(part);
   if (u.sha256 && digest !== u.sha256) return [422, { error: 'sha256_mismatch' }];
-  if (u.status === 'complete') return [200, { file: S.files[u.file] }]; // a concurrent complete won the race
+  if (u.status === 'complete') return [200, { file: publicFile(u) }]; // a concurrent complete won the race
   const id = 'wf_' + hex(16);
   fs.renameSync(part, path.join(DIRS.files, id));
-  S.files[id] = { id, filename: u.filename, mime: u.mime, bytes: u.bytes, sha256: digest, note: '', duplicate_of: null, created_at: new Date().toISOString(), source: 'Wizard app', status: 'ready', path: `Inbox/${new Date().toISOString().slice(0, 10)}/${u.filename}` };
+  const folder = u.destination?.folder || `Inbox/${new Date().toISOString().slice(0, 10)}`;
+  S.files[id] = { id, filename: u.filename, mime: u.mime, bytes: u.bytes, sha256: digest, note: '', duplicate_of: null, created_at: new Date().toISOString(), source: 'Wizard app', status: 'ready', path: `${folder}/${u.filename}` };
   u.status = 'complete'; u.file = id; save();
   log('upload:complete', u.id, '→', id, u.bytes);
   if (u.share) maybeDeliver(S.shares[u.share]);
-  return [200, { file: S.files[id] }];
+  return [200, { file: publicFile(u) }];
 }
 
 /* ---------------- shares ---------------- */

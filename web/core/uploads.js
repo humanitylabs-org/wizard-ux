@@ -102,8 +102,10 @@
     return `Upload failed (${s}).`;
   };
 
-  async function upload(file, { signal, onProgress } = {}) {
-    const total = file.size, name = file.name || 'upload', mime = file.type || 'application/octet-stream';
+  async function uploadCore(file, { signal, onProgress, destination, filename } = {}) {
+    const total = file.size, name = filename || file.name || 'upload', mime = file.type || 'application/octet-stream';
+    const userFile = destination !== undefined;
+    const complete = receipt => !!(receipt && (userFile ? receipt.path : receipt.id));
     const report = (sent, state) => { try { onProgress && onProgress(Math.min(sent, total), total, state); } catch (e) {} };
     const clientId = newId();
     let fails = 0, lastMove = Date.now();
@@ -117,7 +119,7 @@
     // 1) Create (idempotent on client_upload_id, so a retried POST returns the same upload).
     let up;
     for (;;) {
-      const r = await call('POST', base(), { client_upload_id: clientId, filename: name, mime, bytes: total }, signal);
+      const r = await call('POST', base(), { client_upload_id: clientId, filename: name, mime, bytes: total, ...(userFile ? { destination } : {}) }, signal);
       space(r.status);
       if (r.status >= 200 && r.status < 300 && r.j && r.j.upload_id) { up = r.j; break; }
       if (!transient(r.status)) throw userErr(r.status === 404 || r.status === 405 ? `Wizard Files is unavailable (${r.status}).` : words(r.status, r.j), { status: r.status });
@@ -167,10 +169,10 @@
         try { if (await reconcile()) report(offset, 'uploading'); } catch (e) { throw e; }
       }
       // 3) Complete (idempotent): verifies the size and files it in Wizard Files.
-      if (receipt && receipt.id) break;
+      if (complete(receipt)) break;
       report(total, 'finishing');
       const r = await call('POST', `${url}/complete`, null, signal);
-      if (r.status === 200 || r.status === 201) { receipt = r.j.file || r.j; if (receipt && receipt.id) break; throw new Error('Wizard Files returned an invalid upload receipt.'); }
+      if (r.status === 200 || r.status === 201) { receipt = r.j.file || r.j; if (complete(receipt)) break; throw new Error('Wizard Files returned an invalid upload receipt.'); }
       if (r.status === 409) { if (!(await reconcile())) await wait(); continue; } // not all bytes there: send the rest
       space(r.status);
       if (!transient(r.status)) throw userErr(words(r.status, r.j), { status: r.status, code: r.j.error || 'refused' });
@@ -178,8 +180,14 @@
       await wait();
     }
     report(total, 'finishing');
+    if (userFile) return {
+      path: String(receipt.path), name: String(receipt.filename || name), mime: String(receipt.mime || mime),
+      bytes: Number(receipt.bytes) || total, sha256: String(receipt.sha256 || ''), location: String(receipt.location || '')
+    };
     return { id: String(receipt.id), name: String(receipt.filename || name), mime: String(receipt.mime || mime), bytes: Number(receipt.bytes) || total };
   }
+  const upload = (file, opts) => uploadCore(file, opts);
+  const uploadToUserFiles = (file, { folder = '', ...opts } = {}) => uploadCore(file, { ...opts, destination: { folder } });
 
   /* Send now, upload behind (James, 19 Oct 2026: "Don't block the user from being able to send their message
    * because an attachment is still uploading. Send the message and process it in the background.")
@@ -251,5 +259,5 @@
   const forget = id => PENDING.delete(String(id).slice(PFX.length));
   const pending = { PFX, isPending, track, ref, blobOf, rowOf, settle, forget, _map: PENDING };
 
-  window.WizUploads = { supported, upload, NO_SPACE, pending };
+  window.WizUploads = { supported, upload, uploadToUserFiles, NO_SPACE, pending };
 })();

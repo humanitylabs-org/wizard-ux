@@ -435,6 +435,12 @@
       const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
       if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;
     } }),
+    // Save a validated raster image in the owner's shared Files Inbox. File objects stay on the verified,
+    // same-origin synchronous host connection; message transport and standalone pages deliberately cannot call it.
+    files: Object.freeze({ saveImage: (file, opts = {}) => {
+      if (!service?.files?.saveImage) return Promise.reject(new Error('Screenshot saving needs the verified Wizard host'));
+      return service.files.saveImage(file, opts);
+    } }),
     device: Object.freeze({ legacy: Object.freeze({
       available(method) { return !!service?.device?.legacy?.available(method); },
       call(method, args = []) { if (!service?.device?.legacy) throw new Error('Legacy device unavailable'); return service.device.legacy.call(method, args); },

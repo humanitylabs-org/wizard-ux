@@ -49,7 +49,8 @@
   }
 
   // Delegated on a stable root, so composers that re-render keep working. field/zone are selectors matched with
-  // closest() (or elements). Returns unbind().
+  // closest() (or elements). `enter: 'native'` leaves multiline form fields' Enter behaviour untouched while still
+  // sharing the paste/drop path. Returns unbind().
   function bind(root, opts = {}) {
     if (!root?.addEventListener) throw new TypeError('WizComposerInput.bind needs a root element');
     const match = (t, sel) => !t || !sel ? null : typeof sel === 'string' ? t.closest?.(sel) || null : sel.contains?.(t) ? sel : null;
@@ -88,7 +89,7 @@
       const got = files(e.dataTransfer); if (got.length) give(got, fieldOf(e.target) || fieldIn(zone));
     };
     const onKey = e => {
-      if (e.defaultPrevented || !isSendKey(e)) return;
+      if (opts.enter === 'native' || e.defaultPrevented || !isSendKey(e)) return;
       const field = fieldOf(e.target); if (!field || field.tagName === 'INPUT') return;
       e.preventDefault(); submit(field, e);
     };

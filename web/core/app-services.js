@@ -54,7 +54,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); for (const abort of st.fileAborts || []) { try { abort(); } catch (_) {} } st.fileAborts?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -254,6 +254,47 @@
     };
     // Recheck the exact requesting document after the biometric prompt as well as before it.
     const vault = async (method, extra) => { check(); const result = await vaultCall(st.appId, method, extra); check(); return result; };
+    const saveImage = async (file, opts = {}) => {
+      check();
+      let source
+      try {
+        Blob.prototype.slice.call(file, 0, 0)
+        const mime = String(file.type || '').toLowerCase()
+        source = new Blob([file], { type: mime })
+      } catch (_) { throw fault('Use a PNG, JPEG or WebP image up to 8 MB') }
+      if (!source.size || source.size > 8 * 1024 * 1024) throw fault('Use a PNG, JPEG or WebP image up to 8 MB');
+      const mime = source.type;
+      const extensions = mime === 'image/png' ? ['png'] : mime === 'image/jpeg' ? ['jpg', 'jpeg'] : mime === 'image/webp' ? ['webp'] : [];
+      const filename = String(opts?.filename || file.name || '');
+      const ext = filename.toLowerCase().split('.').pop();
+      if (!extensions.includes(ext) || !filename || filename.length > 240 || /[\x00-\x1f\x7f/\\]/.test(filename)) throw fault('Image filename and type must match');
+      const head = new Uint8Array(await source.slice(0, 12).arrayBuffer());
+      check();
+      const png = mime === 'image/png' && [0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((v, i) => head[i] === v);
+      const jpeg = mime === 'image/jpeg' && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+      const webp = mime === 'image/webp' && [0x52,0x49,0x46,0x46].every((v, i) => head[i] === v) && [0x57,0x45,0x42,0x50].every((v, i) => head[i + 8] === v);
+      if (!png && !jpeg && !webp) throw fault('Image contents do not match the selected file type');
+      if (!window.WizUploads?.uploadToUserFiles) throw fault('Wizard Files is unavailable');
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      st.fileAborts ||= new Set(); st.fileAborts.add(abort);
+      try {
+        const receipt = await window.WizUploads.uploadToUserFiles(source, {
+          folder: '', filename, signal: controller.signal,
+          onProgress: (sent, total, state) => {
+            try { check(); } catch (_) { controller.abort(); return; }
+            if (typeof opts.onProgress === 'function') opts.onProgress(sent, total, state);
+          }
+        });
+        check();
+        const receiptPath = typeof receipt?.path === 'string' ? receipt.path : '';
+        const receiptExt = receiptPath.toLowerCase().split('/').pop().split('.').pop();
+        if (!receipt || receipt.location !== 'files_root' || receipt.mime !== mime || receipt.bytes !== source.size
+          || !/^[0-9a-f]{64}$/.test(receipt.sha256 || '') || !receiptPath || receiptPath.startsWith('/')
+          || receiptPath.split('/').includes('..') || !extensions.includes(receiptExt)) throw fault('Wizard Files returned an invalid image receipt');
+        return Object.freeze({ path: receiptPath, name: receipt.filename || receipt.name || filename, mime: receipt.mime, bytes: receipt.bytes, sha256: receipt.sha256, location: receipt.location });
+      } finally { st.fileAborts.delete(abort); }
+    };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); window.WizCompanionPane?.ready(st.frame); return { version: VERSION, hosted: true, appId: st.appId }; },
@@ -303,6 +344,7 @@
         }
         return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
       } }),
+      files: Object.freeze({ saveImage }),
       nav: Object.freeze({ threadAgents: true,
       /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
        * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */
