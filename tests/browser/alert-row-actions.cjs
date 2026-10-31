@@ -40,7 +40,7 @@ const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, detai
       await hold('preview-alert-archive', skin === 'obsidian' ? 1700 : 650);
       const data = await page.locator(panel).evaluate(el => ({ bg: getComputedStyle(el).backgroundColor, text: getComputedStyle(el).color,
         buttons: [...el.querySelectorAll('button')].map(b => b.textContent.trim()), rect: { x: el.getBoundingClientRect().x, y: el.getBoundingClientRect().y, width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height } }));
-      check(skin + ': Done and Archive, no thread-only actions', data.buttons.includes('Done') && data.buttons.includes('Archive') && !data.buttons.some(x => /Rename|Pin|Space|Flag/.test(x)), data);
+      check(skin + ': exactly one Archive, no Done or thread-only actions', data.buttons.filter(x => x === 'Archive').length === 1 && !data.buttons.includes('Done') && !data.buttons.some(x => /Rename|Pin|Space|Flag/.test(x)), data);
       check(skin + ': floating panel opaque', /^rgb\(/.test(data.bg) || /,\s*1\)$/.test(data.bg), data.bg);
       const filename = path.join(out, `alert-actions-${skin}.png`); await page.screenshot({ path: filename }); report.screenshots.push(filename);
       // A real new touch on the shared backdrop closes it; the originating lift did not.
@@ -48,14 +48,14 @@ const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, detai
       await page.waitForSelector('.ch-sheet', { state: 'detached' }); check(skin + ': outside touch closes the sheet', true);
     }
     await hold(); const beforeArchive = marks.length;
-    await page.locator('[data-rsact="archive"]').tap();
+    await page.locator('[data-rsact="done"]').tap();
     await page.waitForSelector('.ch-list .ch-notif-row[data-chnotif="preview-alert-archive"]', { state: 'detached' });
     check('Archive posts archived:true and read:true through Notifications mark', marks.length === beforeArchive + 1 && marks.at(-1).archived === true && marks.at(-1).read === true && marks.at(-1).ids[0] === 'preview-alert-archive', marks.at(-1));
     const readback = await (await context.request.get(new URL('/notifications/api/items', target).href)).json();
     check('archive state read back from exact preview API', readback.items.find(i => i.id === 'preview-alert-archive')?.archived === true);
     await hold('preview-alert-done'); await page.locator('[data-rsact="done"]').tap();
     await page.waitForSelector('.ch-list .ch-notif-row[data-chnotif="preview-alert-done"]', { state: 'detached' });
-    check('Done removes its alert and marks read+archived', marks.at(-1).ids[0] === 'preview-alert-done' && marks.at(-1).read && marks.at(-1).archived);
+    check('Archive removes its alert and marks read+archived', marks.at(-1).ids[0] === 'preview-alert-done' && marks.at(-1).read && marks.at(-1).archived);
     await hold('preview-alert-unread'); await page.locator('[data-rsact="unread"]').tap();
     check('Mark unread uses supported read:false', marks.at(-1).read === false && !('flagged' in marks.at(-1)), marks.at(-1));
     await load(); await hold(); await page.evaluate(() => history.back());

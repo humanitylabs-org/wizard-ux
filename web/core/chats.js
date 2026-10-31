@@ -795,7 +795,7 @@ window.WizCore.chats = function createChats(H) {
     const d = KIT.drafts.get('new');
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
     ch(w.id).draft = ''; chatsBack(w);
-    toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
+    toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Archived', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
   }
@@ -1425,8 +1425,8 @@ window.WizCore.chats = function createChats(H) {
     return h;
   }
   const turnAt = tn => [tn.u?.at, tn.a?.at, tn.mediaAt].find(v => isFinite(v));
-  /* Thread actions: Snooze / Done on a settled thread with an answer (Close & file retired with Helm).
-   * A durable follow-up adds an explicit Stop action; Done becomes "Done for now" and never cancels it. */
+  /* Thread actions: Snooze / Archive on a settled thread with an answer (Close & file retired with Helm).
+   * A durable follow-up adds an explicit Stop action; Archive becomes "Archive for now" and never cancels it. */
   const followUpActive = s => s?.followUp?.active === true && Number(s.followUp.count) > 0;
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
@@ -1443,7 +1443,7 @@ window.WizCore.chats = function createChats(H) {
   }
   const ACT = {
     unread: { label: 'Mark unread', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m5 7 7 5 7-5"/></svg>', hint: 'Mark unread' },
-    done: { label: 'Done', icon: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>', hint: 'Mark done' },
+    done: { label: 'Archive', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="4" rx="1.2"/><path d="M5.5 9v9a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>', hint: 'Archive' },
     file: { label: 'Close & file', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="4" rx="1.2"/><path d="M5.5 9v9a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>', hint: 'Close and file thread' },
     snooze: { label: 'Snooze', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg>', hint: 'Snooze: bring this thread back later' },
     stop_watch: { label: 'Stop watching', icon: '<svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg>', hint: 'Stop watching this follow-up' },
@@ -1451,7 +1451,7 @@ window.WizCore.chats = function createChats(H) {
   };
   // Notification-thread only: hand it to the agent to stop or fix (the package sends the ask).
   const NACT = { resolve: { label: 'Resolve this', icon: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L12 19l-3 1 1-3 7.7-7.7M5 5l3 3"/></svg>', hint: 'Ask Wizard to stop these or fix the cause' }, restore: { ...ACT.restore, label: 'Restore', hint: 'Move back to your inbox' } };
-  const actionLabel = (s, a, compact = false) => a === 'done' && followUpActive(s) ? 'Done for now'
+  const actionLabel = (s, a, compact = false) => a === 'done' && followUpActive(s) ? 'Archive for now'
     : a === 'stop_watch' && compact ? 'Stop' : ACT[a].label;
   const owner = id => (H.owner ? H.owner(id) : id);
   /* ---- Agents MVP: per-agent Chats. A window pinned to a non-default agent (w.agent) lists only that agent's
@@ -1494,24 +1494,24 @@ window.WizCore.chats = function createChats(H) {
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
-    const msg = { done: ['✓', followUpActive(s) ? 'Done for now · still watching' : 'Marked done'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
+    const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
-    if (!ok) toast('!', { done: 'Couldn’t mark done · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
+    if (!ok) toast('!', { done: 'Couldn’t archive · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
   }
   /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
   const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif]';
-  const NOTE_ACT = { done: ACT.done, archive: { ...ACT.file, label: 'Archive' }, unread: ACT.unread };
+  const NOTE_ACT = { done: ACT.done, unread: ACT.unread };
   async function noteRowAct(nid, a) {
     const it = window.WosBell?.item?.(nid);
     if (!it || it.archived || !NOTE_ACT[a]) return;
     vib(8);
     // The Notifications app has read / archived, not a separate done or flag state.
-    // Both completion labels use its existing Done semantics: read and out of Ready.
+    // Archive marks the alert read and takes it out of Ready.
     const ok = await window.WosBell.mark([nid], a === 'unread' ? { read: false } : { read: true, archived: true });
-    toast(ok ? '✓' : '!', ok ? (a === 'unread' ? 'Marked unread' : a === 'archive' ? 'Archived' : 'Marked done') : 'Couldn’t save · alert restored', ok ? 1600 : 3200);
+    toast(ok ? '✓' : '!', ok ? (a === 'unread' ? 'Marked unread' : 'Archived') : 'Couldn’t save · alert restored', ok ? 1600 : 3200);
   }
   let rowSheet = null; // { wid, sid?, nid?, trigger }
   function rowActions(s) {
@@ -1522,7 +1522,7 @@ window.WizCore.chats = function createChats(H) {
     const s = nid ? window.WosBell?.item?.(nid) : rowOf(wid, sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el || (nid && s.archived)) return;
     closeRowSheet();
     const trigger = el.querySelector(nid ? `[data-chnotif="${nid}"]` : `[data-chopen="${sid}"]`);
-    const acts = nid ? ['done', 'archive', ...(s.read ? ['unread'] : [])] : rowActions(s);
+    const acts = nid ? ['done', ...(s.read ? ['unread'] : [])] : rowActions(s);
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? notePlain(s.title) || 'Alert' : s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>

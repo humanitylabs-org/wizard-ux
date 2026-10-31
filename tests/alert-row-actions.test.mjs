@@ -27,8 +27,9 @@ async function harness({ read = false, fail = false } = {}) {
     WizCore: { backendApps: () => [{ id: 'notifications' }] }, WosSkinHost: { inboxList: true, inboxAct: (...a) => opened.push(a), claimed: () => false },
     LIVE: { warm() {}, workGroups: () => ({ ready: [] }), isNew: () => false }, root: { addEventListener(k, fn) { (listeners[k] ||= []).push(fn); } },
     track: { querySelector: () => el }, CH: {}, W: {}, rowOf: () => ({ title: 'Thread' }), threadActions: () => ['done'],
+    PIN: new Set(), PIN_SVG: '', RENAME_SVG: '', spacesOf: () => [], SPACE: { one: 'Space' },
     esc: String, notePlain: String, vib() {}, toast() {}, idOf: () => 'w', ownerSwipe: () => true,
-    closeSwipe() {}, swipeTray() {}, swipeA11y() {}, topicOn: () => false, owner: x => x, openChat: () => assert.fail('not a chat thread'),
+    closeSwipe() {}, swipeTray() {}, swipeA11y() {}, topicOn: () => false, followUpActive: () => false, actionLabel: () => 'unused', owner: x => x, openChat: () => assert.fail('not a chat thread'),
   };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8'), ctx);
   ctx.WosBell.watch(() => {}); await flush();
@@ -36,7 +37,7 @@ async function harness({ read = false, fail = false } = {}) {
   const pointerEnd = src.indexOf('    // Paste, drag/drop', pointerStart);
   const actionClick = src.match(/    const rsa = e.target.closest\('\[data-rsact\]'\);[^\n]+/)[0];
   const tapClick = cut("    if (justPressed() &&", "    const o = e.target.closest('[data-chopen]');");
-  vm.runInContext(cut('  const ACT = {', '  // Notification-thread only:') + cut('  const ROW_MENU =', '  const emojiCategoryHtml')
+  vm.runInContext(cut('  const ACT = {', '  // Notification-thread only:') + cut('  const actionLabel =', '  const owner =') + cut('  const ROW_MENU =', '  const emojiCategoryHtml')
     + '\nfunction closeRowSheet() { rowSheet = null; sheets.length = 0; }\n'
     + cut('  let notesOff =', '  const noteAt =') + cut('  let lp =', '  /* Gmail-style swipe') + '\nlet swipeOpen = null;\n'
     + src.slice(pointerStart, pointerEnd) + cut('  function justPressed()', '  // A list must not re-render')
@@ -49,15 +50,16 @@ async function harness({ read = false, fail = false } = {}) {
   };
 }
 
-test('touch hold on an alert uses the shared sheet with Done / Archive, no thread-only controls and no open', async () => {
+test('touch hold on an alert uses the shared sheet with exactly one Archive action, no thread-only controls and no open', async () => {
   const h = await harness(); h.event('pointerdown'); h.hold();
   assert.equal(h.sheets.length, 1); assert.match(h.sheets[0], /aria-label="Alert actions"/);
-  assert.match(h.sheets[0], /data-rsact="done"/); assert.match(h.sheets[0], /data-rsact="archive"/);
+  assert.equal((h.sheets[0].match(/data-rsact="done"/g) || []).length, 1);
+  assert.match(h.sheets[0], />Archive<\/button>/); assert.doesNotMatch(h.sheets[0], /data-rsact="archive"|>Done<\/button>/);
   assert.doesNotMatch(h.sheets[0], /data-rspin|data-rsrename|data-rsspace|Flag/);
   h.advance(3000); assert.equal(h.ctx.api.justPressed(), true, 'long holds remain guarded until lift');
   h.event('pointerup'); h.ctx.tap({ target: h.row }); assert.deepEqual(h.opened, []);
 });
-for (const action of ['archive', 'done']) test(`${action} uses the real Notifications mark path and removes the alert from Ready`, async () => {
+for (const action of ['done']) test(`${action} uses the real Notifications mark path and removes the alert from Ready`, async () => {
   const h = await harness(); h.event('pointerdown'); h.hold(); h.event('pointerup'); h.choose(action); await flush();
   assert.deepEqual(plain(h.calls), [{ url: '/notifications/api/mark', body: { ids: ['sample-alert'], read: true, archived: true } }]);
   assert.deepEqual(plain(h.ctx.api.notes()), { awake: [], later: [] }); assert.equal(h.sheets.length, 0); assert.deepEqual(h.opened, []);
@@ -67,12 +69,19 @@ test('ordinary tap still opens the alert and right-click opens the same sheet', 
   assert.deepEqual(h.opened, [['open', 'sample-alert']]); assert.equal(h.calls.length, 0);
   h.event('contextmenu'); assert.match(h.sheets[0], /aria-label="Alert actions"/);
 });
-test('failed archive restores the Ready row; unread uses only the supported read mark', async () => {
-  const h = await harness({ fail: true }); await h.ctx.api.noteRowAct('sample-alert', 'archive');
+test('failed Archive restores the Ready row; unread uses only the supported read mark', async () => {
+  const h = await harness({ fail: true }); await h.ctx.api.noteRowAct('sample-alert', 'done');
   assert.equal(h.ctx.api.notes().awake.length, 1);
   const r = await harness({ read: true }); r.ctx.api.openRowSheet('w', '', 'sample-alert');
   assert.match(r.sheets[0], /data-rsact="unread"/); await r.ctx.api.noteRowAct('sample-alert', 'unread');
   assert.deepEqual(plain(r.calls[0].body), { ids: ['sample-alert'], read: false }); assert.equal(r.ctx.api.notes().awake.length, 1);
+});
+test('thread row sheet uses the same single Archive action, not Done', async () => {
+  const h = await harness(); h.ctx.api.openRowSheet('w', 'thread');
+  assert.match(h.sheets[0], /aria-label="Thread actions"/);
+  assert.equal((h.sheets[0].match(/data-rsact="done"/g) || []).length, 1);
+  assert.match(h.sheets[0], />Archive<\/button>/);
+  assert.doesNotMatch(h.sheets[0], />Done<\/button>/);
 });
 test('a scrolling/cancelled touch does not open the actions sheet', async () => {
   const h = await harness(); h.event('pointerdown'); h.event('pointermove', { clientY: 80 }); h.hold(); assert.equal(h.sheets.length, 0);
