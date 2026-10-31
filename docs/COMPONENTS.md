@@ -32,7 +32,7 @@ Visual: <side-by-side screenshot, or "none">
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback | literal colours in native screens |
 | Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings`; web `WizReach` | duplicate offline/address UI |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` | app transcriber | stale/foreign denied; unavailable explicit |
-| Share out (people → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
+| Share out (agents → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
@@ -79,7 +79,7 @@ Visual: <side-by-side screenshot, or "none">
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |
 | Links: sheet/window (`asWindow`), images, long-press browser/Download/Copy | `WizLinks` (`links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) | own context menu |
-| Share sheet (text/url/image/file), receivers, pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` | a second share picker, sending for an app |
+| Share sheet, receivers, Agents | `WosShareSheet` (`share-sheet.js`) via `WosChat.sharePayload`/`shareFile`; hold: `bindSharePress`; agents: `WizOpenAgentChats` + `insertText`/`addFiles` | 2nd picker, sending for them |
 | Agent screen context | `WizScreen` (`screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); voice `WizCore` (`voice.js`); mic choice `WosMic` (`mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`commands.js`) | a second command parser |

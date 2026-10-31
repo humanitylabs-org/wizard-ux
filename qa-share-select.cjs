@@ -1,5 +1,5 @@
 // QA for Share + the text selection menu (feature/share-select, Wizard OS 0.9.7), phone shell with a fake Android bridge.
-//  1 Share under a response calls Android's share sheet (WizardOSNative.shareText) with "From Archimedes:" + the text
+//  1 Share → Other apps calls Android's share sheet (WizardOSNative.shareText) with "From Archimedes:" + the text
 //  2 Selecting words in a chat shows Wizard's own menu (Copy · Share · Quote · Search · Select all) and tells the
 //    native view the selection is ours (selection(3)); Android's toolbar stays quiet for it
 //  3 Copy · Share (selected words only, header only on his words) · Quote (into this thread's reply box) · Search ·
@@ -38,6 +38,8 @@ async function fence(ctx) {
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (m !== 'GET' && m !== 'HEAD') { writes.push(u.pathname); return json(200, {}); }
     if (!u.pathname.startsWith('/wizard/')) return r.continue();
+    // Search is an installed app, not a shell builtin. Own this fixture rather than the machine registry.
+    if (u.pathname === '/wizard/v1/apps') return json(200, { schema: 1, apps: [{ id: 'wizard-search', name: 'Search', url: '/wizard-search/', source: 'apps.json' }], in_development: [], slots: {}, parking: [] });
     if (u.pathname === '/wizard/hermes/api/sessions' && (u.searchParams.get('offset') || '0') === '0') { const res = await r.fetch(); const p = await res.json(); p.data = [session()].concat(p.data || []); return json(200, p); }
     if (u.pathname === `/wizard/hermes/api/sessions/${SID}/messages`) { const all = rows(); return json(200, { object: 'list', data: all, pagination: { limit: 500, offset: 0, returned: all.length } }); }
     if (u.pathname === `/wizard/hermes/api/sessions/${SID}`) return json(200, { session: session() });
@@ -52,7 +54,7 @@ const NATIVE = withSel => `(() => { window.__qaN = []; const c = (k, ...a) => wi
 async function open(ctx, withSel = true) {
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.addInitScript(NATIVE(withSel));
-  const url = new URL(URL_); url.searchParams.set('open', 'chats');
+  const url = new URL(URL_); url.searchParams.set('open', 'chats'); url.searchParams.set('shell', 'phone');
   await p.goto(url.href); await p.waitForTimeout(4000);
   await p.waitForFunction(() => !!window.__wos);
   await p.evaluate(sid => window.__wos.openWizardThread(sid), SID);
@@ -64,6 +66,14 @@ const select = (p, sel, from = 0, to = 22) => p.evaluate(([sel, from, to]) => { 
 const N = p => p.evaluate(() => window.__qaN.splice(0));
 const menu = p => until(() => p.evaluate(() => window.WosSelMenu?.state.open ? window.WosSelMenu.state : null), 2500);
 const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-sm="${id}"]`).click(), id);
+// The shell's shared sheet precedes native sharing. Explicitly choose its native escape hatch;
+// baseline builds with no eligible receivers still go directly to native. Never disable the shared sheet.
+async function otherApps(p) {
+  await sleep(300);
+  const other = p.locator('.wos-share.on [data-shs-other]');
+  if (await other.count()) await other.click();
+  await sleep(300);
+}
 
 (async () => {
   const b = await chromium.launch({ executablePath: EXEC, args: ['--no-sandbox'] });
@@ -75,7 +85,7 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   // 1 Share button under the response
   await N(p);
   await p.evaluate(() => { const t = eval(window.__T); t.querySelector('[data-mshare]').click(); });
-  await sleep(300);
+  await otherApps(p);
   const sh = (await N(p)).filter(c => c[0] === 'shareText');
   ok(sh.length === 1 && sh[0][1] === 'From Archimedes:\n\n' + ANSWER, '1 Share under a response opens Android share with "From Archimedes:" over the message', sh);
   // 2 selection → our menu
@@ -97,12 +107,12 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   ok((await N(p)).some(c => c[0] === 'selection' && c[1] === 0), '3 the native view hears the selection is gone');
   // 3b Share selected words (his) → header
   await select(p, '.msg.a .bub p', 0, 22); await menu(p); await N(p);
-  await tap(p, 'share'); await sleep(300);
+  await tap(p, 'share'); await otherApps(p);
   const s2 = (await N(p)).filter(c => c[0] === 'shareText');
   ok(s2.length === 1 && s2[0][1] === 'From Archimedes:\n\n' + picked.trim(), '3 Share sends only the selected words, with "From Archimedes:" on top', s2);
   // 3c Share my own words → no header
   const mine = await select(p, '.msg.u .bub p', 0, 15); await menu(p); await N(p);
-  await tap(p, 'share'); await sleep(300);
+  await tap(p, 'share'); await otherApps(p);
   const s3 = (await N(p)).filter(c => c[0] === 'shareText');
   ok(s3.length === 1 && s3[0][1] === mine.trim(), '3 Share of my own words sends them as they are (no "From Archimedes")', s3);
   // 3d Quote
