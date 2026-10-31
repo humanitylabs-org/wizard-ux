@@ -21,7 +21,7 @@
    * navigation (including a failure starting within 8 s of it), never during voice/capture. Explicitly tapping
    * the pill or Troubleshoot reopens the checks. Recovery turns them green and closes them. */
   const INTENT_MS = 8000;
-  let navigationAt = 0, outageIntent = false, offAutoOpened = false;
+  let navigationAt = 0, outageIntent = false, offAutoOpened = false, intentT = 0;
   function captureBusy() {
     const shared = window.WizAppCapture?.getState?.();
     const voice = window.__wos?.voice || window.__wux?.voice;
@@ -41,7 +41,10 @@
     if (e.isTrusted === false || e.button > 0 || !e.target?.closest) return;
     if (e.target.closest(NOT_NAV) || !e.target.closest(NAV_TARGET) || captureBusy()) return;
     navigationAt = Date.now();
-    if (net === 'offline' || net === 'reconnecting') { outageIntent = true; render(); }
+    if (net === 'offline' || net === 'reconnecting') {
+      // Open after the navigation has run: the desktop Home action (and Back) fold open overlays, including this one.
+      outageIntent = true; clearTimeout(intentT); intentT = setTimeout(() => { intentT = 0; render(); }, 150);
+    }
   }
   addEventListener('click', e => {
     if (offOpen && !e.target?.closest?.('#wxOffline .wx-off-card')) dismissOffline();

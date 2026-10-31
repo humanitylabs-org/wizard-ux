@@ -19,7 +19,7 @@ function setup(online = true, fetch = failedProbe) {
     async checks() { this.checked++; return { tailnet: true, internet: { state: 'ok', detail: 'Working · 80 ms' }, tailscale: { state: 'bad', detail: 'Can’t reach your Wizard' }, wizard: { state: 'wait', detail: 'Waiting for the connection' } }; } };
   ctx.WosOutbox = { waiting: false, retries: 0, listeners: [], unsent() { return this.waiting ? [{ state: 'waiting' }] : []; }, onChange(fn) { this.listeners.push(fn); }, retryAll() { this.retries++; } };
   vm.runInNewContext(source, ctx); ctx.WizCore.status.attach({});
-  return { ctx, L, state: () => ctx.WizCore.status.state.net, event(name, event = {}) { (events[name] || []).forEach(fn => fn(event)); }, advance(ms) { clock += ms; }, intent(selector = '[data-chopen]', type = 'click') { (events[type] || []).forEach(fn => fn({ type, key: 'Enter', isTrusted: true, button: 0, target: { closest: sel => sel.split(',').includes(selector) ? {} : null } })); }, success() { L.at++; L.ok = true; L.error = ''; L.emit(); }, settle() { const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); },
+  return { ctx, L, state: () => ctx.WizCore.status.state.net, event(name, event = {}) { (events[name] || []).forEach(fn => fn(event)); }, advance(ms) { clock += ms; }, intent(selector = '[data-chopen]', type = 'click') { const before = tid; this.dispatchIntent(selector, type, events); for (const [id, fn] of [...timers]) if (id > before) { timers.delete(id); fn(); } }, dispatchIntent(selector, type, events) { (events[type] || []).forEach(fn => fn({ type, key: 'Enter', isTrusted: true, button: 0, target: { closest: sel => sel.split(',').includes(selector) ? {} : null } })); }, success() { L.at++; L.ok = true; L.error = ''; L.emit(); }, settle() { const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); },
     // The pop-up's grace: a failure must last this long before anything covers the screen.
     grace() { clock += 3100; const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); ctx.WizCore.status.refresh(); },
     pop: () => nodes.get('wxOffline'), banner: () => nodes.get('wxBanners'), clickPop(attr) { nodes.get('wxOffline').handlers.click({ target: { closest: sel => sel === attr } }); } };
@@ -239,4 +239,11 @@ test('the probe works without AbortSignal.timeout (iOS 16.0-16.3)', async () => 
   h.success(); h.ctx.navigator.onLine = false; h.event('offline');
   await turn(); await turn();
   assert.ok(opts); assert.equal(h.state(), 'online');
+});
+
+test('a navigation action that folds open overlays (desktop Home) does not close the checks it triggered', () => {
+  const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace();
+  // The click's own handler runs first and calls back() (CHATS.closeOverlay in goHome); the checks open after it.
+  h.ctx.WizCore.status.back(); h.intent('#logo');
+  assert.equal(h.pop().hidden, false, 'checks stay open after the navigation has run');
 });
