@@ -1,7 +1,7 @@
 /* Orb switcher (James, 31 Oct 2026 prototype): hold the orb and a radial semicircle opens above the thumb, two
  * rings of annular wedges. Slide onto one without lifting, release to choose. One slot is the voice command (it
- * needs a short, slow dwell so sliding past it never records); the rest are the owner's pinned apps, then the apps
- * that are open. Slots are fixed so the thumb learns them. The shell owns apps, desks and voice and hands them in
+ * needs a deliberate slide and slow dwell so holding or sliding past never records); open desktops fill the inner
+ * ring in strip order, and unopened pinned apps fill the outer ring. Slots are fixed so the thumb learns them. The shell owns apps, desks and voice and hands them in
  * through attach(); this module owns the layout, hit-testing, paint, the settings and the sheet that edits them.
  *
  *   WosOrbSwitcher.attach(host)       host: { apps(), openItems(), openApp(id), goDesk(i), hover(i|null), vib(ms),
@@ -15,8 +15,13 @@
   const KEY = 'wos.orbSwitcher.v1', EVT = 'wos:orb-switcher';
   const HOLDS = [200, 300, 450];
   const DEFAULTS = Object.freeze({ pins: [], voiceSlot: 'near', holdMs: 300, quickTakes: false, showOpen: true });
-  // Geometry at a 412 px wide phone; everything scales down together on narrower ones (outer edge = width/2 - 8).
-  const IN0 = 70, IN1 = 125, OUT0 = 130, OUT1 = 190, HIT_IN0 = 50, SWEEP = 200, N_IN = 6, N_OUT = 9, CANCEL_R = 42;
+  // Condensed for the thumb (James, 31 Oct): the inner ring starts right at the orb's edge, the outer ring is directly
+  // beside it (2 px hairline gap). Six inner and nine outer slots over a 210° sweep keep every wedge >= 40 px of arc at
+  // its mid-radius (inner 41, outer 47). Everything is within 138 px of the orb centre, so it fits a 360 px phone unscaled.
+  const IN0 = 44, IN1 = 90, OUT0 = 92, OUT1 = 138, N_IN = 6, N_OUT = 9, MOVE_ARM = 16;
+  // Per-ring sweep: the inner ring spans -17.5°..192.5° (35° slots), the outer -10°..190° (22.2° slots), so the far-left
+  // outer wedge does not dip below a dock-height orb. Angles run anticlockwise from straight right; k=0 is rightmost.
+  const RING = [{ n: N_IN, a: -17.5, sec: 35 }, { n: N_OUT, a: -10, sec: 200 / N_OUT }]; // MOVE_ARM: px the finger must travel from where it pressed before the voice wedge may arm
   const ARM_SLOW = 0.6; // px/ms: a faster finger is passing through the voice wedge, not stopping on it
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const reduced = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -36,34 +41,38 @@
   const H = () => host || { apps: () => [], openItems: () => [], openApp() {}, goDesk() {}, hover() {}, vib() {}, cancelGesture() {}, armBack() {}, voice: { enabled: () => false, start() {}, active: () => false, finish() {}, cancel() {}, pause() {} } };
 
   /* ---------------- layout ---------------- */
-  // Wedges, in slot order: voice, Customize, then apps inner ring first (rightmost to leftmost), then the outer ring.
+  // k increases right-to-left. Assign strip/pin order left-to-right, without repacking
+  // empty slots. Voice is always rightmost; Customize always far left on the outer ring.
   function assign(items, voiceSlot) {
     const out = [], vRing = voiceSlot === 'far' ? 1 : 0;
     out.push({ kind: 'voice', ring: vRing, k: 0 });
     out.push({ kind: 'custom', ring: 1, k: N_OUT - 1 });
-    const free = [];
-    for (let k = 0; k < N_IN; k++) if (!(vRing === 0 && k === 0)) free.push({ ring: 0, k });
-    for (let k = 0; k < N_OUT - 1; k++) if (!(vRing === 1 && k === 0)) free.push({ ring: 1, k });
-    items.forEach((it, i) => { if (free[i]) out.push({ kind: 'app', ring: free[i].ring, k: free[i].k, item: it }); });
-    if (items.length > free.length) console.info('[orb-switcher] ' + (items.length - free.length) + ' app(s) did not fit and were left out');
+    const desks = items.filter(it => it.open), pins = items.filter(it => !it.open);
+    const inner = Array.from({ length: N_IN - (vRing === 0 ? 1 : 0) }, (_, i) => N_IN - 1 - i);
+    const outer = Array.from({ length: N_OUT - 1 - (vRing === 1 ? 1 : 0) }, (_, i) => N_OUT - 2 - i);
+    const add = (item, ring, k) => out.push({ kind: 'app', ring, k, item });
+    desks.slice(0, inner.length).forEach((it, i) => add(it, 0, inner[i]));
+    const rest = pins.concat(desks.slice(inner.length)); // pins own their slots; overflow uses only room left after them
+    rest.slice(0, outer.length).forEach((it, i) => add(it, 1, outer[i]));
+    if (rest.length > outer.length) console.info('[orb-switcher] ' + (rest.length - outer.length) + ' app(s) did not fit and were left out');
     return out;
   }
   function geometry(wedges, cx, cy, s) {
     return wedges.map(w => {
-      const n = w.ring ? N_OUT : N_IN, sec = SWEEP / n, a0 = -sec / 2 + w.k * sec, a1 = a0 + sec;
+      const R = RING[w.ring], sec = R.sec, a0 = R.a + w.k * sec, a1 = a0 + sec;
       const r0 = (w.ring ? OUT0 : IN0) * s, r1 = (w.ring ? OUT1 : IN1) * s, am = (a0 + a1) / 2, rm = (r0 + r1) / 2;
       return { ...w, a0, a1, r0, r1, am, rm, x: cx + rm * Math.cos(am * Math.PI / 180), y: cy - rm * Math.sin(am * Math.PI / 180) };
     });
   }
   function sector(cx, cy, r0, r1, a0, a1) {
-    const gap = 3.5, rad = Math.PI / 180, P = (r, a) => [cx + r * Math.cos(a * rad), cy - r * Math.sin(a * rad)].map(v => +v.toFixed(2));
+    const gap = 1.5, rad = Math.PI / 180, P = (r, a) => [cx + r * Math.cos(a * rad), cy - r * Math.sin(a * rad)].map(v => +v.toFixed(2));
     const t1 = gap / 2 / r1 / rad, t0 = gap / 2 / r0 / rad;
     const [ox0, oy0] = P(r1, a0 + t1), [ox1, oy1] = P(r1, a1 - t1), [ix1, iy1] = P(r0, a1 - t0), [ix0, iy0] = P(r0, a0 + t0);
     return `M${ox0} ${oy0}A${r1} ${r1} 0 0 0 ${ox1} ${oy1}L${ix1} ${iy1}A${r0} ${r0} 0 0 1 ${ix0} ${iy0}Z`;
   }
   // The fan's geometry for a viewport and orb, exported so a test can check it fits 360 px phones.
   function frame(x, y, vw, vh) {
-    const s = Math.max(.6, Math.min(1, (vw / 2 - 8) / OUT1, (y - 78) / OUT1));
+    const s = Math.max(.6, Math.min(1, (vw / 2 - 8) / OUT1, (y - 64) / OUT1));
     const R = OUT1 * s, cx = Math.max(R + 8, Math.min(vw - R - 8, x));
     return { s, cx, cy: y };
   }
@@ -71,20 +80,21 @@
   /* ---------------- items ---------------- */
   function buildItems() {
     const h = H(), catalog = new Map(h.apps().map(a => [a.id, a])), open = h.openItems(), byId = new Map(open.map(o => [o.id, o]));
-    const list = [];
+    const list = [], openIds = new Set(open.flatMap(o => o.appIds || [o.id]));
+    if (cfg.showOpen) for (const o of open) list.push({ id: o.id, label: o.name, html: o.html, desk: o.desk, open: true, cur: !!o.cur, pinned: cfg.pins.includes(o.id) });
     for (const id of cfg.pins) {
-      const a = catalog.get(id) || byId.get(id); if (!a) continue;
-      const o = byId.get(id);
-      list.push({ id, label: a.name, html: a.html, desk: o ? o.desk : null, open: !!o, cur: !!o?.cur, pinned: true });
+      const a = catalog.get(id) || byId.get(id); if (!a || (cfg.showOpen && openIds.has(id))) continue;
+      // With Show open apps off, pins remain launch shortcuts even when their app is open.
+      list.push({ id, label: a.name, html: a.html, desk: null, open: false, cur: false, pinned: true });
     }
-    if (cfg.showOpen) for (const o of open) if (!cfg.pins.includes(o.id)) list.push({ id: o.id, label: o.name, html: o.html, desk: o.desk, open: true, cur: !!o.cur, pinned: false });
     return list;
   }
 
   /* ---------------- the radial ---------------- */
   const MIC = '<span class="dsg" style="--c:var(--wz-accent,#a78bfa)"><i class="sgi sg-mic" aria-hidden="true"></i></span>';
   const GEAR = '<svg class="wor-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>';
-  function open({ x, y }) {
+  const isVoice = i => i != null && st?.wedges[i]?.kind === 'voice';
+  function open({ x, y, fromX = x, fromY = y }) {
     close(true);
     const h = H(), vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
     const f = frame(x, y, vw, vh), items = buildItems(), wedges = geometry(assign(items, cfg.voiceSlot), f.cx, f.cy, f.s);
@@ -99,12 +109,15 @@
     }).join('')}</svg>`;
     const icons = wedges.map((w, i) => {
       const dx = Math.cos(w.am * Math.PI / 180) * 5, dy = -Math.sin(w.am * Math.PI / 180) * 5;
-      return `<div class="wor-ic ${w.kind}${w.item?.cur ? ' cur' : ''}${w.kind === 'voice' && !voiceOk ? ' dis' : ''}" data-i="${i}" style="left:${w.x.toFixed(1)}px;top:${w.y.toFixed(1)}px;--mx:${dx.toFixed(1)}px;--my:${dy.toFixed(1)}px;--d:${Math.round((w.ring * 90 + w.k * 22))}ms">${w.kind === 'voice' ? MIC : w.kind === 'custom' ? GEAR : w.item.html}${w.item?.open ? '<i class="wor-dot"></i>' : ''}</div>`;
+      return `<div class="wor-ic ${w.kind}${w.item?.cur ? ' cur' : ''}${w.kind === 'voice' && !voiceOk ? ' dis' : ''}" data-i="${i}" style="left:${w.x.toFixed(1)}px;top:${w.y.toFixed(1)}px;--mx:${dx.toFixed(1)}px;--my:${dy.toFixed(1)}px;--d:${Math.round((w.ring * 90 + w.k * 22))}ms">${w.kind === 'voice' ? MIC : w.kind === 'custom' ? GEAR : w.item.html}${w.item?.cur ? '<i class="wor-dot"></i>' : ''}</div>`;
     }).join('');
     el.innerHTML = `<div class="wor-veil"></div>${svg}${icons}<div class="wor-label" role="status" aria-live="polite"></div>`;
     document.body.appendChild(el); document.body.classList.add('wor-open');
-    st = { el, f, x, y, wedges, items, sel: null, voice: 'idle', after: null, last: null, speed: 0, armT: 0, tick: 0, voiceOk, from: null };
-    st.labelY = Math.max(58, f.cy - OUT1 * f.s - 52);
+    st = { el, f, x, y, wedges, items, sel: null, voice: 'idle', after: null, last: null, speed: 0, armT: 0, tick: 0, voiceOk, from: { x: fromX, y: fromY }, moved: false, startInVoice: false };
+    st.startInVoice = st.wedges[pick(fromX, fromY)]?.kind === 'voice'; // pressed down already inside the voice wedge: it only arms after the finger leaves it and returns
+    // The pill sits just above the highest painted edge of the fan, not above an imaginary full ring.
+    const topY = Math.min(...wedges.map(w => Math.min(...[w.a0, w.a1, w.am].map(a => f.cy - w.r1 * Math.sin(a * Math.PI / 180)))));
+    st.labelY = Math.max(58, topY - 36);
     const L = el.querySelector('.wor-label'); L.style.top = st.labelY + 'px'; L.style.left = Math.max(110, Math.min(vw - 110, f.cx)) + 'px';
     requestAnimationFrame(() => st && st.el === el && el.classList.add('on'));
     paintLabel();
@@ -113,29 +126,29 @@
   function pick(px, py) {
     if (!st) return null;
     const { f } = st, dx = px - f.cx, dy = f.cy - py, r = Math.hypot(dx, dy);
-    if (Math.hypot(px - st.x, py - st.y) < CANCEL_R) return null;
-    if (r < HIT_IN0 * f.s) return null;
+    if (r < IN0 * f.s) return null; // the cancel zone is the orb itself and never overlaps the first ring
     const mid = (IN1 + OUT0) / 2 * f.s;
     const ring = r < mid ? 0 : 1;
-    if (ring === 1 && r > (OUT1 + 38) * f.s) return null;
+    if (ring === 1 && r > (OUT1 + 22) * f.s) return null;
     let a = Math.atan2(dy, dx) * 180 / Math.PI; if (a < -90) a += 360;
-    const n = ring ? N_OUT : N_IN, sec = SWEEP / n;
-    if (a < -sec / 2 - 18 || a > SWEEP - sec / 2 + 18) return null;
-    const k = Math.max(0, Math.min(n - 1, Math.floor((a + sec / 2) / sec)));
+    const R = RING[ring], n = R.n, sec = R.sec;
+    if (a < R.a - 12 || a > R.a + n * sec + 12) return null;
+    const k = Math.max(0, Math.min(n - 1, Math.floor((a - R.a) / sec)));
     const i = st.wedges.findIndex(w => w.ring === ring && w.k === k);
     return i < 0 ? null : i;
   }
   function move(px, py) {
     if (!st) return;
     const now = performance.now();
+    if (!st.moved && Math.hypot(px - st.from.x, py - st.from.y) >= MOVE_ARM) st.moved = true;
     if (st.last) { const dt = Math.max(1, now - st.last.t), d = Math.hypot(px - st.last.x, py - st.last.y); st.speed = st.speed * .4 + (d / dt) * .6; }
     st.last = { x: px, y: py, t: now };
     setSel(pick(px, py));
   }
-  const isVoice = i => i != null && st?.wedges[i]?.kind === 'voice';
-  function setSel(i) {
+    function setSel(i) {
     if (!st || i === st.sel) return;
     const was = st.sel; st.sel = i;
+    if (st.startInVoice && !isVoice(i)) st.startInVoice = false;
     if (isVoice(was)) voiceLeave();
     st.el.querySelectorAll('.wor-w.sel, .wor-ic.sel').forEach(n => n.classList.remove('sel'));
     if (i != null) {
@@ -163,7 +176,7 @@
 
   /* ---------------- voice slot: dwell, then record ---------------- */
   function voiceEnter() {
-    if (!st.voiceOk) return;
+    if (!st.voiceOk || !st.moved || st.startInVoice) return;
     st.voice = 'arming'; st.armT = performance.now();
     clearInterval(st.tick); st.tick = setInterval(armTick, 40); armPaint(0);
   }
@@ -233,16 +246,16 @@
     const catalog = new Map(H().apps().map(a => [a.id, a])), pinned = cfg.pins.filter(id => catalog.has(id));
     const row = (a, on, i, n) => `<div class="wor-row" data-app="${esc(a.id)}"><span class="wor-rico">${a.html}</span><span class="wor-nm">${esc(a.name)}</span>${on ? `<span class="wor-mv" role="group" aria-label="Move ${esc(a.name)}"><button type="button" data-mv="top" aria-label="Move ${esc(a.name)} to top"${i === 0 ? ' disabled' : ''}>${UP2}</button><button type="button" data-mv="up" aria-label="Move ${esc(a.name)} up"${i === 0 ? ' disabled' : ''}>↑</button><button type="button" data-mv="down" aria-label="Move ${esc(a.name)} down"${i === n - 1 ? ' disabled' : ''}>↓</button></span>` : ''}<button type="button" class="wor-sw${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="Pin ${esc(a.name)}" data-pin><i></i></button></div>`;
     const rest = H().apps().filter(a => !cfg.pins.includes(a.id));
-    return `<div class="wor-g"><h4>Pinned apps</h4><p class="wor-note">Always in the same slots, in this order.</p>${pinned.length ? pinned.map((id, i) => row(catalog.get(id), true, i, pinned.length)).join('') : '<div class="wor-empty">Nothing pinned yet. Pin an app below.</div>'}</div>
+    return `<div class="wor-g"><h4>Pinned apps</h4><p class="wor-note">Inner ring: open desktops. Outer ring: pinned apps. Both run left to right; already-open pins appear only as desktops.</p>${pinned.length ? pinned.map((id, i) => row(catalog.get(id), true, i, pinned.length)).join('') : '<div class="wor-empty">Nothing pinned yet. Pin an app below.</div>'}</div>
       <div class="wor-g"><h4>Add an app</h4>${rest.length ? rest.map(a => row(a, false)).join('') : '<div class="wor-empty">Every app is pinned.</div>'}</div>`;
   }
   const seg = (name, opts, cur) => `<div class="wor-seg" role="radiogroup" aria-label="${esc(name)}">${opts.map(([v, t]) => `<button type="button" role="radio" aria-checked="${v === cur}" data-set="${esc(name)}" data-v="${esc(v)}">${esc(t)}</button>`).join('')}</div>`;
   const toggle = (key, title, sub, on) => `<div class="wor-row tog"><span class="wor-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><button type="button" class="wor-sw${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(title)}" data-toggle="${key}"><i></i></button></div>`;
   function sheetBody() {
     return `${pinRows()}
-      <div class="wor-g"><h4>Voice command slot</h4><p class="wor-note">Where the microphone sits. Hold still on it to start; sliding past never records.</p>${seg('voiceSlot', [['near', 'Near the orb'], ['far', 'Outer ring']], cfg.voiceSlot)}</div>
+      <div class="wor-g"><h4>Voice command slot</h4><p class="wor-note">Near: directly right of the orb on the inner ring. Far: rightmost outer slot. Slide onto it, then hold still to start; holding the orb never records.</p>${seg('voiceSlot', [['near', 'Near the orb'], ['far', 'Outer ring']], cfg.voiceSlot)}</div>
       <div class="wor-g"><h4>Voice hold time</h4><p class="wor-note">How long to stay on the microphone before it starts.</p>${seg('holdMs', HOLDS.map(v => [String(v), v + ' ms']), String(cfg.holdMs))}</div>
-      <div class="wor-g">${toggle('showOpen', 'Show open apps', 'Open apps fill the slots after your pinned ones.', cfg.showOpen)}${toggle('quickTakes', 'Short takes (under 3 s) run as commands', 'Off: a tap on the orb always sends a message to your agent, however short.', cfg.quickTakes)}</div>`;
+      <div class="wor-g">${toggle('showOpen', 'Show open apps', 'Show desktops on the inner ring. Off: only voice inside, pins outside.', cfg.showOpen)}${toggle('quickTakes', 'Short takes (under 3 s) run as commands', 'Off: a tap on the orb always sends a message to your agent, however short.', cfg.quickTakes)}</div>`;
   }
   function openSettings() {
     if (sheet) return;
@@ -299,6 +312,6 @@
     get isOpen() { return !!st; }, get sheetOpen() { return !!sheet; },
     get selected() { return st ? st.sel : null; }, get voice() { return st ? st.voice : 'idle'; },
     holdMs: () => cfg.holdMs, HOLD_OPEN_MS: 380,
-    _frame: frame, _assign: (items, vs) => geometry(assign(items, vs), 206, 800, 1), _norm: norm, DEFAULTS,
+    _frame: frame, _buildItems: buildItems, _pick: pick, _wedges: () => st?.wedges || [], _assign: (items, vs) => geometry(assign(items, vs), 206, 800, 1), _norm: norm, DEFAULTS,
   };
 })();

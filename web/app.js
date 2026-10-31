@@ -3507,7 +3507,7 @@
   function openRadial(g) {
     g.mode = 'radial'; vib(18); closeMenu();
     const r = orbWrap.getBoundingClientRect();
-    window.WosOrbSwitcher.open({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    window.WosOrbSwitcher.open({ x: r.left + r.width / 2, y: r.top + r.height / 2, fromX: g.x, fromY: g.y });
   }
   /* Orb switcher host: what the radial needs from the shell, and nothing else. App placement stays the shell's
    * (openApp -> placeApp), the voice command is the ordinary startVoice('command') / finishVoice(). */
@@ -3515,15 +3515,14 @@
   window.WosOrbSwitcher?.attach({
     apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && !window.WizCore.isMaintenanceApp(a) && !['app-store', 'agents'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'))
       .map(a => ({ id: a.id, name: a.name, html: appGlyph(a) }))),
-    // Open apps in desk-strip order, one per desk (its focused window); an app on a desk beside others still answers by id.
-    openItems: () => { const seen = new Set(), out = [], add = (id, name, html, i) => { if (id && !seen.has(id)) { seen.add(id); out.push({ id, name, html, desk: i, cur: i === idx }); } };
-      desks.forEach((d, i) => {
-        if (d.home) return add('home', 'Home', deskSigil(i), i);
-        const fw = W[d.focus] || W[d.wins[0]]; if (!fw) return;
-        add(winApp(fw).id || 'desk:' + d.id, deskName(i), deskSigil(i), i);
-        for (const w of d.wins) { const a = winApp(W[w]); if (a.id && a.id !== winApp(fw).id) add(a.id, a.name, appGlyph(a), i); } // an app beside others on its desk
-      });
-      return out; },
+    // Exactly one entry per desktop, in strip order (including empty desktops). All app ids
+    // on a split desktop suppress duplicate outer pins, not just its focused window's id.
+    openItems: () => desks.map((d, i) => {
+      const fw = W[d.focus] || W[d.wins[0]];
+      return { id: d.home ? 'home' : fw ? winApp(fw).id || 'desk:' + d.id : 'desk:' + d.id,
+        name: d.home ? 'Home' : deskName(i), html: deskSigil(i), desk: i, cur: i === idx,
+        appIds: d.home ? ['home'] : d.wins.map(w => winApp(W[w]).id).filter(Boolean) };
+    }),
     // The hovered desk slides in behind the radial so James sees where he will land. Parked desks (two+ away) render
     // nothing, so the hovered one is woken first; release re-parks via goDesk / parkDesks.
     hover: desk => { const w = track.getBoundingClientRect().width || innerWidth; if (desk != null && desk !== idx) secOf(desk)?.classList.remove('parked'); placeTrack(desk == null ? 0 : (idx - desk) * w, false); },

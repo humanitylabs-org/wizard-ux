@@ -12,7 +12,7 @@
 .wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 93%, transparent); stroke: color-mix(in oklab, var(--wz-border, rgba(205, 190, 255, .22)) 100%, transparent); stroke-width: 1; transition: fill 110ms, stroke 110ms; }
 .wor-w.cur .wor-p { stroke: color-mix(in oklab, var(--wz-accent, #a78bfa) 75%, transparent); }
 .wor-w.custom .wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 78%, transparent); }
-.wor.on .wor-w.sel { transform: scale(1.07); }
+.wor.on .wor-w.sel { transform: scale(1.025); }
 .wor-w.sel .wor-p { fill: color-mix(in oklab, var(--wz-accent, #a78bfa) 38%, var(--wz-surface, #171427)); stroke: var(--wz-accent, #a78bfa); stroke-width: 1.5; }
 .wor-w.dis .wor-p { fill: color-mix(in oklab, var(--wz-surface, #171427) 45%, transparent); stroke-dasharray: 3 4; }
 .wor.on .wor-w.dis.sel { transform: none; }
@@ -25,22 +25,22 @@
 .wor-w.voice.rec .wor-p { fill: color-mix(in oklab, var(--wz-accent, #a78bfa) calc(40% + var(--lvl, 0) * 50%), var(--wz-surface, #171427)); stroke: var(--wz-accent, #a78bfa); transition: none; }
 .wor-w.voice.rec .wor-arm { stroke-dashoffset: 0 !important; opacity: .55; }
 /* Icons are plain HTML over the wedges (the shell's own sigils), centred in each. */
-.wor-ic { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; display: grid; place-items: center; opacity: 0; transform: scale(.5); color: var(--wz-text, var(--ink, #ece8ff));
+.wor-ic { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; display: grid; place-items: center; opacity: 0; transform: scale(.5); color: var(--wz-text, var(--ink, #ece8ff));
   transition: transform 230ms var(--spring, cubic-bezier(.3, 1.3, .5, 1)) var(--d, 0ms), opacity 150ms var(--d, 0ms); }
 .wor.on .wor-ic { opacity: 1; transform: none; }
 .wor.off .wor-ic { opacity: 0; transition-delay: 0ms; }
-.wor.on .wor-ic.sel { transform: translate(var(--mx, 0), var(--my, 0)) scale(1.22); transition-delay: 0ms; }
+.wor.on .wor-ic.sel { transform: translate(var(--mx, 0), var(--my, 0)) scale(1.12); transition-delay: 0ms; }
 .wor-ic.dis { opacity: .4 !important; }
-.wor-ic .dsg { width: 28px; height: 28px; opacity: .95; }
+.wor-ic .dsg { width: 22px; height: 22px; opacity: .95; }
 .wor-ic .dsg .sgi { filter: none; }
 .wor-ic .dsg .dn, .wor-ic .dsg .dbg { display: none; }
-.wor-ic .wor-gear { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; opacity: .85; }
+.wor-ic .wor-gear { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; opacity: .85; }
 .wor-ic.voice.rec { transform: scale(calc(1.2 + var(--lvl, 0) * .12)); }
 .wor-dot { position: absolute; left: 50%; bottom: -3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--wz-accent, #a78bfa); box-shadow: 0 0 0 1.5px color-mix(in oklab, var(--wz-panel, #07060f) 85%, transparent); }
 .wor-ic.cur .wor-dot { width: 7px; height: 7px; margin-left: -3.5px; }
 /* The label: opaque, it names what a release will do. */
-.wor-label { position: absolute; transform: translateX(-50%); padding: 7px 14px; border-radius: 14px; white-space: nowrap; max-width: calc(100vw - 20px); overflow: hidden; text-overflow: ellipsis;
-  background: var(--wz-panel, #171427); border: 1px solid var(--wz-border, rgba(205, 190, 255, .22)); color: var(--wz-text, var(--ink, #ece8ff)); font: 650 13.5px/1.25 var(--wz-font, system-ui, sans-serif);
+.wor-label { position: absolute; transform: translateX(-50%); padding: 6px 12px; border-radius: 14px; white-space: nowrap; max-width: calc(100vw - 20px); overflow: hidden; text-overflow: ellipsis;
+  background: var(--wz-panel, #171427); border: 1px solid var(--wz-border, rgba(205, 190, 255, .22)); color: var(--wz-text, var(--ink, #ece8ff)); font: 650 12.5px/1.25 var(--wz-font, system-ui, sans-serif);
   opacity: 0; transition: opacity 160ms; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
 .wor.on .wor-label { opacity: 1; }
 .wor-label.hint { color: var(--wz-text-secondary, var(--ink-2, #bdb6d8)); font-weight: 550; }

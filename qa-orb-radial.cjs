@@ -1,4 +1,5 @@
-// QA (Orb switcher, James 31 Oct 2026 prototype): hold the orb = a radial of wedges (voice command + pinned and open apps).
+// QA (Orb switcher, James 31 Oct 2026 prototype v2): hold the orb = a compact two-ring radial. Inner ring = the open desktops
+// (strip order, left to right; voice is its rightmost slot when 'near'); outer ring = pinned apps that are NOT open, plus Customize.
 // Usage: node qa-orb-radial.cjs   (QA_WEB_DIR=<tree with web/>, QA_SHOTS=<dir> for screenshots, QA_CHROME=<chrome>)
 // Self-contained: every Wizard request is answered by this file (shell served from the tree, everything else stubbed);
 // every non-GET Wizard write is recorded and refused, and the suite asserts nothing reached the agent (/v1/runs).
@@ -75,6 +76,15 @@ async function slide(p, from, to, steps = 10, dt = 16) { for (let i = 1; i <= st
 async function orbXY(p) { const r = await p.locator('#orbWrap').boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }
 const wedges = p => p.evaluate(() => [...document.querySelectorAll('.wor-ic')].map(e => { const r = e.getBoundingClientRect(), w = document.querySelector(`.wor-w[data-i="${e.dataset.i}"]`); return { i: +e.dataset.i, kind: [...e.classList].find(c => ['voice', 'custom', 'app'].includes(c)) || 'app', label: w.getAttribute('aria-label'), x: r.x + r.width / 2, y: r.y + r.height / 2, dis: e.classList.contains('dis') }; }));
 const byLabel = (ws, re) => ws.find(w => re.test(w.label));
+// The radial's own geometry (viewport px, centre = the orb): ring, slot, radii, sweep, desk index, label.
+const geo = p => p.evaluate(() => WosOrbSwitcher._wedges().map((w, i) => ({ i, kind: w.kind, ring: w.ring, k: w.k, r0: w.r0, r1: w.r1, rm: w.rm, a0: w.a0, a1: w.a1, x: w.x, y: w.y, desk: w.item ? w.item.desk : null, open: !!w.item?.open, cur: !!w.item?.cur, label: w.kind === 'voice' ? 'Voice command' : w.kind === 'custom' ? 'Customize' : w.item.label })));
+const arcAtMid = w => w.rm * (w.a1 - w.a0) * Math.PI / 180;
+const dist = (w, o) => Math.hypot(w.x - o.x, w.y - o.y);
+// Close any desk that is not Home, Chats or one of the three fixture apps, so the ring contents are predictable.
+async function resetDesks(p) {
+  await p.evaluate(() => { const keep = ['notes', 'wizard-calendar', 'stories']; for (let i = __wos.desks.length - 1; i > 0; i--) { const d = __wos.desks[i]; if (d.home) continue; const ids = d.wins.map(w => __wos.wins[w].appId || __wos.wins[w].app); if (!ids.some(id => keep.includes(id) || id === 'chats' || id === 'wizard')) __wos.closeDesk(i); } __wos.goDesk(0); });
+  await sleep(900);
+}
 const radialOpen = p => p.evaluate(() => !!document.querySelector('.wor.on') || !!document.querySelector('.wor:not(.off)'));
 const st = p => p.evaluate(() => ({ idx: __wos.idx, n: __wos.desks.length, voice: __wos.voice, kind: __wos.V.kind, sheet: __wos.sheet, zen: document.getElementById('device').classList.contains('zen'), sw: { open: WosOrbSwitcher.isOpen, sel: WosOrbSwitcher.selected, v: WosOrbSwitcher.voice } }));
 // The desk whose section sits nearest the viewport's left edge (the one actually in view), not the label.
@@ -91,10 +101,10 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const { ctx, p } = await boot(b);
-  await openDeskFor(p, ['Notes', 'Calendar', 'Stories', 'Wisdom', 'Topics', 'Wizard Music']);
-  await p.evaluate(() => window.__wos.goDesk(0)); await sleep(2500); // let six app frames settle: the box is loaded
+  await openDeskFor(p, ['Notes', 'Calendar', 'Stories']);
+  await resetDesks(p); await sleep(1500); // the default Topics desk is closed: exactly Home, Notes, Calendar, Stories, Chats are open (five desks = the five inner desk slots when voice is near)
   let s = await st(p);
-  ok(s.n >= 6 && s.idx === 0, 'fixture: Home plus five or more open desks', JSON.stringify(s));
+  ok(s.n === 5 && s.idx === 0, 'fixture: Home plus four open desks (five desks)', JSON.stringify(s));
   const NAMES = await p.evaluate(() => __wos.desks.map((d, i) => d.home ? 'Home' : [d.wins.map(w => __wos.wins[w].appId || __wos.wins[w].app).join('+')][0]));
   console.log('desks', JSON.stringify(NAMES));
   ok(await p.evaluate(() => JSON.stringify(WosOrbSwitcher.get().pins)) === '[]' && await p.evaluate(() => WosOrbSwitcher.get().quickTakes === false && WosOrbSwitcher.get().voiceSlot === 'near' && WosOrbSwitcher.get().holdMs === 300 && WosOrbSwitcher.get().showOpen === true), 'real defaults: no pins, voice near, 300 ms, quick takes OFF, open apps shown');
@@ -107,30 +117,65 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   ok(!(await radialOpen(p)) && s.voice === 'listen' && s.kind === 'auto', 'short press (under 380 ms) does not open the radial; tap starts agent voice', JSON.stringify(s));
   await cancelTake(p);
 
-  // ---- 2. Hold opens; layout; release on the orb closes with nothing ----
-  await setPins(p, ['wizard-calendar', 'notes', 'stories', 'wisdom']);
+  // ---- 2. Hold opens; ring assignment and compact geometry; release on the orb closes with nothing ----
+  await setPins(p, ['wizard-calendar', 'notes', 'stories', 'wisdom', 'wizard-music', 'wizard-search']); // three of the pins are already open desks
   await T(p, 'touchStart', o.x, o.y); await sleep(300);
   ok(!(await radialOpen(p)), 'at 300 ms the radial is not open yet (opens at 380 ms)');
   await sleep(180);
   ok(await radialOpen(p), 'hold ≥380 ms opens the radial');
-  let ws = await wedges(p);
+  let ws = await wedges(p), g = await geo(p);
   const kinds = ws.map(w => w.kind), nVoice = kinds.filter(k => k === 'voice').length, nCustom = kinds.filter(k => k === 'custom').length;
   console.log('wedges', ws.map(w => w.label).join(' | '));
-  ok(nVoice === 1 && nCustom === 1 && ws.length >= 8, 'one voice wedge, one Customize wedge, apps beside them', JSON.stringify(kinds));
+  ok(nVoice === 1 && nCustom === 1, 'one voice wedge, one Customize wedge', JSON.stringify(kinds));
   const attr = await p.evaluate(() => ({ role: document.querySelector('.wor').getAttribute('role'), label: document.querySelector('.wor').getAttribute('aria-label'), items: [...document.querySelectorAll('.wor-w')].every(g => g.getAttribute('role') === 'menuitem' && g.getAttribute('aria-label')) }));
   ok(attr.role === 'menu' && attr.label && attr.items, 'radial is role=menu with labelled menuitems', JSON.stringify(attr));
-  const voiceW = ws.find(w => w.kind === 'voice');
-  const apps = ws.filter(w => w.kind === 'app');
-  ok(Math.abs(voiceW.y - o.y) < 40 && voiceW.x > o.x + 60 && voiceW.x < o.x + 130, 'voice wedge is the rightmost inner slot (directly right of the orb)', JSON.stringify({ voiceW, o }));
-  ok(/^Calendar/.test(apps[0].label) && /^Notes/.test(apps[1].label) && /^Stories/.test(apps[2].label) && /^Wisdom/.test(apps[3].label), 'pinned apps come first in the user order', apps.slice(0, 5).map(a => a.label).join(','));
-  ok(!apps.slice(4).some(a => /Calendar|Notes|Stories|Wisdom/.test(a.label)), 'an app that is pinned and open appears once');
-  const cust = ws.find(w => w.kind === 'custom');
-  ok(cust.x < o.x - 100 && Math.abs(cust.x - o.x) > Math.max(...ws.filter(w => w.kind !== 'custom').map(w => Math.abs(w.x - o.x))) - 40, 'Customize sits at the far left end', JSON.stringify(cust));
+  const inner = g.filter(w => w.ring === 0), outer = g.filter(w => w.ring === 1);
+  const deskCount = await p.evaluate(() => __wos.desks.length);
+  const innerDesks = inner.filter(w => w.kind === 'app').sort((a, b) => a.x - b.x);
+  ok(innerDesks.length === deskCount && innerDesks.every((w, i) => w.desk === i) && innerDesks.every(w => w.open), 'inner ring wedges are exactly the open desktops, left to right in strip order', JSON.stringify(innerDesks.map(w => [w.label, w.desk])));
+  ok(/^Home/.test(innerDesks[0].label) && innerDesks[0].x === Math.min(...inner.map(w => w.x)), 'Home is the leftmost inner wedge');
+  const voiceW = g.find(w => w.kind === 'voice');
+  ok(voiceW.ring === 0 && voiceW.x === Math.max(...inner.map(w => w.x)) && Math.abs(voiceW.y - o.y) < 30 && voiceW.x > o.x + 40 && dist(voiceW, o) < 90, 'voice (near) is the rightmost inner slot, directly right of the orb', JSON.stringify({ voiceW, o }));
+  ok(g.filter(w => w.cur).length === 1 && g.find(w => w.cur).desk === 0 && (await p.evaluate(() => document.querySelectorAll('.wor-dot').length)) === 1, 'the current desk (Home) alone carries the dot', JSON.stringify(g.filter(w => w.cur).map(w => w.label)));
+  const outerApps = outer.filter(w => w.kind === 'app').sort((a, b) => a.x - b.x), cust = outer.find(w => w.kind === 'custom');
+  ok(outer.length === outerApps.length + 1 && !!cust && cust.x === Math.min(...outer.map(w => w.x)), 'outer ring is pinned apps plus Customize at the far left', JSON.stringify(outer.map(w => w.label)));
+  ok(JSON.stringify(outerApps.map(w => w.label)) === JSON.stringify(['Wisdom', 'Wizard Music', 'Search']) && outerApps.every(w => w.desk == null && !w.open), 'outer ring holds only pinned apps that are NOT open, in pin order left to right', JSON.stringify(outerApps.map(w => w.label)));
+  ok(!outerApps.some(w => /Calendar|Notes|Stories/.test(w.label)) && g.filter(w => /^Notes/.test(w.label)).length === 1 && g.filter(w => /^Calendar/.test(w.label)).length === 1, 'a pinned app that is open appears once (as its desk), never twice');
+  // compact geometry
+  const innerD = inner.map(w => dist(w, o)), allR1 = Math.max(...g.map(w => dist({ x: w.x, y: w.y }, o) + 0)), outerEdge = Math.max(...g.map(w => w.r1));
+  console.log('geometry', JSON.stringify({ r0: [Math.min(...inner.map(w => w.r0)), Math.max(...inner.map(w => w.r1))], outer: [Math.min(...outer.map(w => w.r0)), outerEdge], midArcInner: +Math.min(...inner.map(arcAtMid)).toFixed(1), midArcOuter: +Math.min(...outer.map(arcAtMid)).toFixed(1), slots: [inner.length, outer.length] }));
+  ok(Math.min(...innerD) < 90 && Math.min(...inner.map(w => w.r0)) <= 46, 'first inner wedge centre is within 90 px of the orb centre and its inner edge starts at the orb', JSON.stringify({ nearest: Math.min(...innerD), r0: Math.min(...inner.map(w => w.r0)) }));
+  ok(outerEdge <= 150 && outerEdge >= 130, 'outermost wedge outer edge within 150 px of the orb centre', String(outerEdge));
+  ok(Math.min(...outer.map(w => w.r0)) - Math.max(...inner.map(w => w.r1)) <= 4 && Math.min(...outer.map(w => w.r0)) - Math.max(...inner.map(w => w.r1)) > 0, 'rings are adjacent with only a hairline gap', JSON.stringify([Math.max(...inner.map(w => w.r1)), Math.min(...outer.map(w => w.r0))]));
+  ok(g.every(w => arcAtMid(w) >= 40), 'every wedge is >= 40 px of arc at its mid-radius (thumb target)', JSON.stringify(g.map(w => Math.round(arcAtMid(w)))));
+  await sleep(450); // the staggered open animation has finished
+  const icons = await p.evaluate(() => [...document.querySelectorAll('.wor-ic')].map(e => { const r = (e.querySelector('.dsg') || e.querySelector('svg') || e).getBoundingClientRect(); return Math.round(r.width); }));
+  ok(icons.every(w => w >= 20 && w <= 23), 'icons are 20–22 px (±1 px glyph rounding)', JSON.stringify(icons));
+  ok(await p.evaluate(() => { const c = document.querySelector('.wor-label'); return c && getComputedStyle(c).backgroundColor !== 'rgba(0, 0, 0, 0)' && !/^rgba?\(.*,\s*0?\.\d+\)$/.test(getComputedStyle(c).backgroundColor); }), 'label pill is opaque');
+  const lp = await p.evaluate(() => { const r = document.querySelector('.wor-label').getBoundingClientRect(); return { bottom: r.bottom }; });
+  ok(o.y - Math.max(...g.map(w => w.r1)) - lp.bottom < 20 && o.y - Math.max(...g.map(w => w.r1)) - lp.bottom > -4, 'label pill sits just above the arc (close, not far)', JSON.stringify({ lp, top: o.y - outerEdge }));
   await shot(p, 'radial-open-411');
   // release on the orb: cancel, nothing happens
   await release(p); await sleep(500);
   s = await st(p);
   ok(!(await radialOpen(p)) && s.voice === 'idle' && s.idx === 0 && s.sheet == null, 'release on the orb closes the radial and does nothing', JSON.stringify(s));
+  // a plain hold-and-release (and a hold with finger jitter) must never start voice, even though the voice wedge is next to the thumb
+  log.stt = 0;
+  await T(p, 'touchStart', o.x, o.y); await sleep(1600); await release(p); await sleep(500);
+  s = await st(p); ok(s.voice === 'idle' && log.stt === 0 && !(await radialOpen(p)), 'plain hold (1.6 s) and release without movement never starts voice', JSON.stringify({ s, stt: log.stt }));
+  await T(p, 'touchStart', o.x + 6, o.y - 3); await sleep(480);
+  for (let i = 0; i < 12; i++) { await T(p, 'touchMove', o.x + 6 + (i % 3) * 3, o.y - 3 - (i % 2) * 4); await sleep(100); }
+  s = await st(p); ok(s.sw.v === 'idle' && s.voice === 'idle' && s.sw.sel == null, 'hold with finger jitter (≤ 12 px) arms nothing and selects nothing', JSON.stringify(s));
+  await release(p); await sleep(500);
+  s = await st(p); ok(s.voice === 'idle' && log.stt === 0 && s.idx === 0, 'jittered hold-release starts no voice and changes no desk', JSON.stringify({ s, stt: log.stt }));
+  // pressed down already INSIDE the voice wedge (cannot happen with a thumb on the orb, but the guard must hold): no arming until it leaves and returns
+  await p.evaluate(() => { const a = document.querySelector('#orbWrap').getBoundingClientRect(), o = { x: a.left + a.width / 2, y: a.top + a.height / 2 }; WosOrbSwitcher.open({ x: o.x, y: o.y, fromX: o.x + 67, fromY: o.y }); window.__o = o; });
+  await sleep(150);
+  await p.evaluate(() => { for (let i = 0; i < 3; i++) WosOrbSwitcher.move(window.__o.x + 67 + i * 5, window.__o.y); }); await sleep(900);
+  ok(await p.evaluate(() => WosOrbSwitcher.voice) === 'idle' && log.stt === 0, 'a press that starts inside the voice wedge does not arm it by dwelling', await p.evaluate(() => WosOrbSwitcher.voice));
+  await p.evaluate(() => { WosOrbSwitcher.move(window.__o.x - 60, window.__o.y - 50); WosOrbSwitcher.move(window.__o.x + 67, window.__o.y); }); await sleep(120);
+  ok(await p.evaluate(() => WosOrbSwitcher.voice) === 'arming', 'after leaving and returning it arms (dwell starts)');
+  await p.evaluate(() => WosOrbSwitcher.close(true)); await sleep(300); await cancelTake(p);
 
   // ---- 3. Swipes are as before ----
   const swipe = async (dx, dy) => { await T(p, 'touchStart', o.x, o.y); await slide(p, o, { x: o.x + dx, y: o.y + dy }, 8, 14); await T(p, 'touchEnd'); await sleep(1100); };
@@ -146,33 +191,34 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   ok(await p.evaluate(() => __wos.onBack() && 1) && true, 'Back handled');
   await p.evaluate(() => __wos.goDesk(0)); await sleep(600);
 
-  // ---- 4. Dwell guard: sliding right PAST the voice wedge to an outer app wedge selects the app, records nothing ----
-  await setPins(p, ['wizard-calendar', 'notes', 'stories', 'wisdom']);
+  // ---- 4. Dwell guard: sliding right PAST the (now adjacent) voice wedge to an outer-ring wedge selects the app, records nothing ----
+  // Show open apps off: the inner ring is only voice, and eight pins fill the whole outer ring, so its rightmost wedge lies straight beyond voice.
+  await setPins(p, ['wizard-search', 'notes', 'wizard-calendar', 'stories', 'wisdom', 'wizard-music', 'topics', 'files-qa'], { showOpen: false });
   log.stt = 0;
   await T(p, 'touchStart', o.x, o.y); await sleep(480);
-  ws = await wedges(p);
-  const outerApp = ws.filter(w => w.kind === 'app').find(w => Math.hypot(w.x - o.x, w.y - o.y) > 135 && Math.abs(w.y - o.y) < 40 && w.x > o.x);
-  ok(!!outerApp, 'an outer-ring app wedge sits straight right of the orb (past the voice wedge)', JSON.stringify(ws.map(w => [w.label, Math.round(w.x - o.x), Math.round(o.y - w.y)])));
+  ws = await wedges(p); g = await geo(p);
+  ok(g.filter(w => w.ring === 0).length === 1 && g.filter(w => w.ring === 1 && w.kind === 'app').length === 8, 'show open apps off: inner ring is only voice, outer ring shows all eight pins (open or not)', JSON.stringify(g.map(w => [w.ring, w.kind])));
+  const outerApp = g.filter(w => w.kind === 'app').sort((a, b) => b.x - a.x)[0];
+  ok(!!outerApp && Math.abs(outerApp.y - o.y) < 40 && outerApp.x > o.x + 92 && /Files/.test(outerApp.label), 'an outer-ring wedge sits straight right of the orb beyond the voice wedge', JSON.stringify([outerApp.label, Math.round(outerApp.x - o.x), Math.round(o.y - outerApp.y)]));
   await slide(p, o, { x: outerApp.x, y: o.y }, 14, 20);
   await sleep(250);
   s = await st(p);
   const vstate = await p.evaluate(() => WosOrbSwitcher.voice);
   ok(s.voice === 'idle' && vstate === 'idle', 'passing through the voice wedge did not arm or start a recording', JSON.stringify({ s, vstate }));
   const hovered = await p.evaluate(() => document.querySelector('.wor-label')?.textContent);
-  ok(new RegExp(outerApp.label.split(' (')[0].replace(/ \+\d+$/, '')).test(hovered), 'the outer app wedge is selected and named in the label pill', hovered);
-  const trackTx = await p.evaluate(() => document.querySelector('.track').style.transform);
-  ok(/translate3d\(-?[1-9]/.test(trackTx) || /px/.test(trackTx), 'the hovered desk slides in behind the radial', trackTx);
+  ok(/Files/.test(hovered), 'the outer wedge is selected and named in the label pill', hovered);
   await shot(p, 'radial-hover-outer');
-  await release(p); await sleep(900);
+  await release(p); await sleep(1500);
   s = await st(p); const vis = await visibleDesk(p);
-  ok(s.voice === 'idle' && log.stt === 0 && s.idx !== 0 && vis === s.idx, 'release on an outer app wedge lands on that desk; no voice take started', JSON.stringify({ s, vis, stt: log.stt }));
+  ok(s.voice === 'idle' && log.stt === 0 && s.idx !== 0 && vis === s.idx, 'release on an outer pin wedge lands on that app (opened or moved beside); no voice take started', JSON.stringify({ s, vis, stt: log.stt }));
   ok(runs().length === 0, 'nothing reached the agent', JSON.stringify(log.writes));
-  await p.evaluate(() => __wos.goDesk(0)); await sleep(700);
+  await resetDesks(p); await setPins(p, ['wizard-calendar', 'notes', 'stories', 'wisdom'], { showOpen: true });
 
   // ---- 5. Voice wedge: dwell arms, then records; release runs the command; slide out discards ----
   log.writes.length = 0; log.stt = 0; log.routes.length = 0;
   await T(p, 'touchStart', o.x, o.y); await sleep(480);
   ws = await wedges(p); const V0 = ws.find(w => w.kind === 'voice');
+  ok(Math.hypot(V0.x - o.x, V0.y - o.y) < 90, 'voice wedge is close: its centre is under 90 px from the orb', String(Math.hypot(V0.x - o.x, V0.y - o.y)));
   await p.evaluate(() => { WosOrbSwitcher.set({ holdMs: 450 }); window.__samples = []; const f = () => { window.__samples.push([WosOrbSwitcher.voice, +document.querySelector('.wor-arm').style.strokeDashoffset, +getComputedStyle(document.querySelector('.wor-arm')).opacity]); window.__raf = requestAnimationFrame(f); }; f(); });
   await T(p, 'touchMove', V0.x, V0.y); // one jump onto the wedge: a fast finger keeps restarting the dwell...
   const fast = await p.evaluate(() => ({ v: WosOrbSwitcher.voice, off: document.querySelector('.wor-arm').style.strokeDashoffset }));
@@ -189,7 +235,7 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   ok(await p.evaluate(() => !!document.querySelector('.wor-w.voice.rec') && WosOrbSwitcher.voice === 'rec'), 'wedge shows the recording state');
   await shot(p, 'radial-voice-recording');
   // slide out of the wedge: take is discarded, back to selection
-  const away = ws.filter(w => w.kind === 'app')[1];
+  const away = ws.filter(w => w.kind === 'app').find(w => /^Notes/.test(w.label));
   await slide(p, V0, away, 8, 25); await sleep(500);
   s = await st(p);
   ok(s.voice === 'idle' && log.stt === 0, 'sliding out of the voice wedge discards the take (nothing transcribed)', JSON.stringify({ s, stt: log.stt }));
@@ -230,7 +276,7 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   await T(p, 'touchStart', o.x, o.y); await sleep(480);
   ws = await wedges(p);
   const pm = byLabel(ws, /^Wizard Music/);
-  ok(!!pm && /opens/.test(await p.evaluate(() => 'x') || '') === false, 'pinned closed app has a wedge', JSON.stringify(ws.map(w => w.label)));
+  ok(!!pm && (await geo(p))[pm.i].ring === 1, 'pinned closed app has a wedge on the outer ring', JSON.stringify(ws.map(w => w.label)));
   await slide(p, o, pm, 12, 20); await sleep(300);
   const lab = await p.evaluate(() => document.querySelector('.wor-label').textContent);
   ok(/opens/.test(lab), 'label says a closed pinned app opens', lab);
@@ -239,7 +285,7 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   const where = await p.evaluate(() => { const i = __wos.desks.findIndex(d => d.wins.some(w => __wos.wins[w].appId === 'wizard-music')); return { i, idx: __wos.idx, n: __wos.desks.length }; });
   ok(where.i >= 0 && where.i === where.idx && where.n === before.n + 1, 'release on a pinned closed app opened it (one new desk) and it is in front', JSON.stringify({ where, before }));
   ok(Math.abs(where.i - before.idx) <= 1 || where.i >= 1, 'it was placed by the shell\'s opener, not by the radial', JSON.stringify({ where, before }));
-  await p.evaluate(() => __wos.goDesk(0)); await sleep(600);
+  await resetDesks(p);
 
   // ---- 8. Customize wedge, sheet, Back, outside tap ----
   await T(p, 'touchStart', o.x, o.y); await sleep(480);
@@ -299,11 +345,17 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   const o2 = await orbXY(p);
   await T(p, 'touchStart', o2.x, o2.y); await sleep(480);
   ws = await wedges(p);
-  const vw2 = ws.find(w => w.kind === 'voice'), firstApp = ws.find(w => w.kind === 'app');
-  ok(Math.hypot(vw2.x - o2.x, vw2.y - o2.y) > 135 && Math.abs(vw2.y - o2.y) < 40, 'voice slot far: the voice wedge is the rightmost outer slot', JSON.stringify(vw2));
-  ok(Math.hypot(firstApp.x - o2.x, firstApp.y - o2.y) < 135 && Math.abs(firstApp.y - o2.y) < 40 && firstApp.x > o2.x, 'and the rightmost inner slot is an ordinary app slot', JSON.stringify(firstApp));
-  const first3 = ws.filter(w => w.kind === 'app').slice(0, 3).map(w => w.label.split(' ')[0]);
-  ok(JSON.stringify(first3) === JSON.stringify(pinsNow.map(id => ({ notes: 'Notes', stories: 'Stories', 'wizard-calendar': 'Calendar' }[id]))), 'wedge order follows the pinned order', JSON.stringify(first3));
+  g = await geo(p);
+  const vw2 = ws.find(w => w.kind === 'voice'), gv = g.find(w => w.kind === 'voice');
+  ok(gv.ring === 1 && dist(vw2, o2) > 92 && Math.abs(vw2.y - o2.y) < 40 && gv.x === Math.max(...g.filter(w => w.ring === 1).map(w => w.x)), 'voice slot far: the voice wedge is the rightmost outer slot', JSON.stringify(gv));
+  const innerFar = g.filter(w => w.ring === 0).sort((a, b) => b.x - a.x);
+  ok(innerFar.every(w => w.kind === 'app' && w.open) && innerFar[0].x > o2.x && Math.abs(innerFar[0].y - o2.y) < 40 && dist(innerFar[0], o2) < 90, 'and the rightmost inner slot is an ordinary open desk (all six inner slots are desks)', JSON.stringify(innerFar.map(w => w.label)));
+  const deskOrder = await p.evaluate(() => __wos.desks.length);
+  ok(innerFar.slice().sort((a, b) => a.x - b.x).every((w, i) => w.desk === i) && innerFar.length === Math.min(6, deskOrder), 'inner desks run left to right in strip order', JSON.stringify(innerFar.map(w => [w.label, w.desk])));
+  const outerFar = g.filter(w => w.ring === 1 && w.kind === 'app' && !w.open).sort((a, b) => a.x - b.x).map(w => w.label.split(' ')[0]);
+  const openIds = await p.evaluate(() => __wos.desks.flatMap(d => d.wins.map(w => __wos.wins[w].appId || __wos.wins[w].app)));
+  const expOuter = pinsNow.filter(id => !openIds.includes(id)).map(id => ({ notes: 'Notes', stories: 'Stories', 'wizard-calendar': 'Calendar' }[id]));
+  ok(JSON.stringify(outerFar) === JSON.stringify(expOuter), 'outer ring pins that are not open follow the pinned order', JSON.stringify({ outerFar, expOuter }));
   await release(p); await sleep(400);
   // hold time 450: dwell must be longer
   await T(p, 'touchStart', o2.x, o2.y); await sleep(480);
@@ -400,11 +452,23 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   await cancelTake(p);
   await p.evaluate(() => document.getElementById('device').classList.remove('orb-corner')); await sleep(300);
 
-  // ---- 15. Geometry at 360 px and 412 px; fixed slots ----
-  const geo = await p.evaluate(() => { const A = WosOrbSwitcher._assign(Array.from({ length: 14 }, (_, i) => ({ label: 'x' + i })), 'near'), B = WosOrbSwitcher._assign(Array.from({ length: 14 }, (_, i) => ({ label: 'x' + i })), 'far'); const c = ws => ({ innerApps: ws.filter(w => w.kind === 'app' && w.ring === 0).length, outerApps: ws.filter(w => w.kind === 'app' && w.ring === 1).length, voiceRing: ws.find(w => w.kind === 'voice').ring, all: ws.length }); return { near: c(A), far: c(B), f360: WosOrbSwitcher._frame(180, 820, 360, 892), f412: WosOrbSwitcher._frame(206, 820, 412, 892) }; });
-  ok(geo.near.innerApps === 5 && geo.near.outerApps === 8 && geo.near.voiceRing === 0, 'voice near: 5 apps inner + 8 outer (extras dropped)', JSON.stringify(geo.near));
-  ok(geo.far.innerApps === 6 && geo.far.outerApps === 7 && geo.far.voiceRing === 1, 'voice far: 6 apps inner + 7 outer', JSON.stringify(geo.far));
-  ok(geo.f412.s === 1 && geo.f360.s < 1 && geo.f360.cx - 190 * geo.f360.s >= 7.9 && geo.f360.cx + 190 * geo.f360.s <= 352.1, 'radial fits 360 px width (scaled) and 412 px unscaled', JSON.stringify(geo));
+  // ---- 15. Ring assignment unit checks and geometry at 360 px and 412 px; fixed slots ----
+  const geoU = await p.evaluate(() => {
+    const desk = i => ({ label: 'd' + i, open: true, desk: i }), pin = i => ({ label: 'p' + i, open: false, desk: null });
+    const c = ws => ({ innerDesks: ws.filter(w => w.kind === 'app' && w.ring === 0).length, outerDesks: ws.filter(w => w.kind === 'app' && w.ring === 1 && w.item.open).length, outerPins: ws.filter(w => w.kind === 'app' && w.ring === 1 && !w.item.open).length, voiceRing: ws.find(w => w.kind === 'voice').ring, voiceK: ws.find(w => w.kind === 'voice').k });
+    const logs = []; const keep = console.info; console.info = (...a) => logs.push(a.join(' '));
+    const A = WosOrbSwitcher._assign(Array.from({ length: 14 }, (_, i) => desk(i)), 'near'), B = WosOrbSwitcher._assign(Array.from({ length: 14 }, (_, i) => desk(i)), 'far');
+    const C = WosOrbSwitcher._assign([0, 1, 2].map(desk).concat(Array.from({ length: 10 }, (_, i) => pin(i))), 'near');
+    const D = WosOrbSwitcher._assign([0, 1, 2, 3, 4, 5, 6, 7].map(desk).concat([0, 1, 2, 3, 4].map(pin)), 'near');
+    console.info = keep;
+    return { near: c(A), far: c(B), mix: c(C), over: c(D), dropLog: logs.length, f360: WosOrbSwitcher._frame(180, 820, 360, 892), f412: WosOrbSwitcher._frame(206, 820, 412, 892), f320: WosOrbSwitcher._frame(160, 820, 320, 892) };
+  });
+  ok(geoU.near.innerDesks === 5 && geoU.near.outerDesks === 8 && geoU.near.voiceRing === 0 && geoU.near.voiceK === 0, 'voice near with 14 desks: 5 desks inner, overflow fills the 8 outer slots, the rest dropped', JSON.stringify(geoU.near));
+  ok(geoU.far.innerDesks === 6 && geoU.far.outerDesks === 7 && geoU.far.voiceRing === 1 && geoU.far.voiceK === 0, 'voice far with 14 desks: 6 inner, 7 outer (voice is the rightmost outer slot)', JSON.stringify(geoU.far));
+  ok(geoU.mix.innerDesks === 3 && geoU.mix.outerPins === 8 && geoU.mix.outerDesks === 0, '3 desks + 10 pins: 3 inner, pins fill the 8 outer slots (no desk spill)', JSON.stringify(geoU.mix));
+  ok(geoU.over.innerDesks === 5 && geoU.over.outerPins === 5 && geoU.over.outerDesks === 3, '8 desks + 5 pins: 5 inner; pins keep their outer slots, the 3 overflow desks take the remaining room', JSON.stringify(geoU.over));
+  ok(geoU.dropLog === 3, 'dropped overflow is console-logged (14 desks near and far, 10 pins)', String(geoU.dropLog));
+  ok(geoU.f412.s === 1 && geoU.f360.s === 1 && geoU.f320.s === 1 && geoU.f360.cx - 138 >= 7.9 && geoU.f360.cx + 138 <= 352.1 && geoU.f320.cx - 138 >= 7.9, 'the 138 px radial fits 412, 360 and 320 px widths unscaled', JSON.stringify(geoU));
   ok(runs().length === 0, 'whole run: zero /v1/runs or sessions', JSON.stringify(log.writes.filter(w => /runs|sessions/.test(w))));
   ok(p.errs.length === 0, 'zero page errors', p.errs.join(' | '));
   await ctx.close();
@@ -417,7 +481,11 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   await T(c2.p, 'touchStart', o3.x, o3.y); await sleep(520);
   const w3 = await wedges(c2.p);
   const lbl = await c2.p.evaluate(() => { const r = document.querySelector('.wor-label').getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top }; });
+  const g3 = await geo(c2.p), c3 = { x: o3.x, y: o3.y };
   ok(w3.length >= 8 && w3.every(w => w.x >= 8 && w.x <= 352 && w.y >= 40), 'at 360 px every wedge icon is on screen', JSON.stringify(w3.map(w => [Math.round(w.x), Math.round(w.y)])));
+  const edge = g3.flatMap(w => [w.a0, w.a1, (w.a0 + w.a1) / 2].map(a => [c3.x + w.r1 * Math.cos(a * Math.PI / 180), c3.y - w.r1 * Math.sin(a * Math.PI / 180)]));
+  ok(edge.every(([x, y]) => x >= 0 && x <= 360 && y >= 0), 'at 360 px no wedge outer edge is clipped by the screen', JSON.stringify(edge.map(e => e.map(Math.round)).filter(([x, y]) => x < 0 || x > 360 || y < 0)));
+  ok(g3.every(w => arcAtMid(w) >= 40) && Math.max(...g3.map(w => w.r1)) <= 150, 'at 360 px all wedges still >= 40 px arc and the radial stays within 150 px');
   ok(lbl.l >= 0 && lbl.r <= 360 && lbl.t >= 0, 'label pill on screen at 360 px', JSON.stringify(lbl));
   await shot(c2.p, 'radial-open-360');
   await T(c2.p, 'touchEnd'); await c2.ctx.close();
