@@ -123,7 +123,7 @@ def main():
             run([SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'connect', '-k',
                  'system-images;android-35;google_apis;' + ('x86_64' if FORUM else 'arm64-v8a'), '-d', 'pixel_7', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
             with (out / 'emulator.log').open('w') as log:
-                em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', '5686', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'] + (['-accel', 'kvm'] if FORUM else []), env=env, stdout=log, stderr=subprocess.STDOUT)
+                em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', '5686', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'] + (['-accel', 'on'] if FORUM else []), env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 240
             while time.monotonic() < deadline:
                 if em.poll() is not None: raise RuntimeError('emulator exited')

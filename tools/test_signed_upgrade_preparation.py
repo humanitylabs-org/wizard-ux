@@ -48,9 +48,28 @@ class SignedUpgradePreparationTest(unittest.TestCase):
         source = Path(qa.__file__).read_text()
         for text in ['--upgrade-only', 'empty-default-recovery', 'pre_pref_baseline',
                      'install preserves the exact pre-launch origin preferences',
-                     '/srv/work/heavy/production/worker.lock', "['-accel', 'kvm']", 'owned emulator serial is absent']:
+                     '/srv/work/heavy/production/worker.lock', "['-accel', 'on'] if FORUM else []", 'owned emulator serial is absent']:
             self.assertIn(text, source)
         self.assertNotIn("shell('echo", source)
+
+    def test_emulator_acceleration_values_match_current_cli(self):
+        import ast
+        launchers = ['qa_android_connect.py', 'qa_unified_share_android.py', 'qa_aa_lib.py', 'qa_usuals.py']
+        seen = set()
+        for name in launchers:
+            path = Path(qa.__file__).with_name(name)
+            if not path.exists():
+                continue
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, (ast.List, ast.Tuple)):
+                    for flag, value in zip(node.elts, node.elts[1:]):
+                        if isinstance(flag, ast.Constant) and flag.value == '-accel':
+                            if not isinstance(value, ast.Constant):
+                                self.fail('nonliteral acceleration value: ' + name)
+                            self.assertIn(value.value, ('on', 'off', 'auto'), name)
+                            self.assertEqual(value.value, 'on', name)
+                            seen.add(name)
+        self.assertTrue({'qa_android_connect.py', 'qa_unified_share_android.py'} <= seen)
 
     def test_synthetic_paired_upgrade_is_explicit_and_retains_real_baseline_checks(self):
         source = Path(qa.__file__).read_text()

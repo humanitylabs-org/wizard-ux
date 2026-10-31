@@ -66,6 +66,7 @@ def junit(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seal-sha256', required=True)
+    parser.add_argument('--resume', action='store_true', help='Reuse verified signed bytes and completed gates; only upgrade + native QA')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     if os.uname().nodename != 'forum' or not root.is_relative_to('/srv/work/AndroidBuilds/jobs'):
@@ -76,6 +77,13 @@ def main():
     if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
         raise SystemExit('wrong durable heavy lease')
     cfg = verify(root, args.seal_sha256)
+    if args.resume != (cfg.get('mode') == 'resume'):
+        raise SystemExit('explicit resume flag/config mismatch')
+    if args.resume:
+        sys.dont_write_bytecode = True
+        sys.path.insert(0, str(root / 'tools'))
+        import qa_unified_share_resume
+        raise SystemExit(qa_unified_share_resume.main(root, cfg, args.seal_sha256, fd, sys.modules[__name__]))
     deps = json.loads((root / 'browser-deps-manifest.json').read_text())
     for name, digest in deps.items():
         path = root / 'browser-deps/node_modules' / name
