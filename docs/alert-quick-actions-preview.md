@@ -26,7 +26,7 @@ The first executes the real Chats gesture/sheet/dispatch code and real bell API 
 The forum-only browser runner is `tests/browser/alert-row-actions.cjs`. It uses Chromium CDP touch events, a mobile 400×860 viewport, the staged shell, live skin switching (Dark / Light), screenshot capture, opaque panel checks, outside touch, browser Back, API readback, short tap, right-click, and an optional `origin/main` negative control. Browser evidence is not established by the unit suite.
 
 ```sh
-NODE_PATH="$PLAYWRIGHT_MODULES" \
+QA_PLAYWRIGHT="$PLAYWRIGHT_MODULE" \
 ALERT_PREVIEW_URL="$PREVIEW_URL" \
 ALERT_PREVIEW_HOST="$PREVIEW_HOST" \
 ALERT_BASELINE_JS="$QA_ROOT/baseline-chats.js" \

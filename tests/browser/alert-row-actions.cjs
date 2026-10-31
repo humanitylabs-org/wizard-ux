@@ -1,10 +1,10 @@
 // Run only on the forum browser worker, against the isolated QA_SAMPLE_ALERTS preview.
-// NODE_PATH=<Playwright modules> ALERT_PREVIEW_URL=http://127.0.0.1:<tunnel>/wizard-os-home/?open=chats&shell=phone
+// QA_PLAYWRIGHT=<Playwright module> ALERT_PREVIEW_URL=http://127.0.0.1:<tunnel>/wizard-os-home/?open=chats&shell=phone
 // ALERT_PREVIEW_HOST=<canonical host:preview port> ALERT_BASELINE_JS=<origin/main chats.js> node tests/browser/alert-row-actions.cjs
-const { chromium } = require('playwright');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const target = process.env.ALERT_PREVIEW_URL;
 if (!target) throw Error('ALERT_PREVIEW_URL must point at the isolated sample-alert preview');
+const { chromium } = require('../../tools/qa-playwright.cjs');
 const out = path.resolve(process.env.ALERT_QA_OUT || 'artifacts/alert-row-actions'); fs.mkdirSync(out, { recursive: true });
 const report = { target, host: process.env.ALERT_PREVIEW_HOST || '', checks: [], screenshots: [] };
 const check = (name, ok, detail) => { report.checks.push({ name, ok: !!ok, detail }); assert.ok(ok, name + ': ' + JSON.stringify(detail)); };
