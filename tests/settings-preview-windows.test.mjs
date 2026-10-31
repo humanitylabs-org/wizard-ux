@@ -15,9 +15,8 @@ test('desktop Settings opens as a window and every way of closing the window hid
   const open = slice(desk, '  function openSettings(focus) {', '  function closeSettings()');
   assert.match(open, /if \(w\) focusWin\(w\.id\); else \{ settingsFocus = document\.activeElement; newWin\(\{ app: 'settings' \}\); \}/);
   assert.match(desk, /    const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\);\n  \}/, 'on a desk Settings is a window');
-  // From Home with a package that fills Settings' System pages (Miguel's Home) it is a centred panel over Home; Esc, ✕ or
-  // a click outside closes it. The classic Home opens the window, as before (James, 31 Oct 2026).
-  assert.match(open, /if \(homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem\?\.\(\)\)\) \{/);
+  // From Home (any skin) it is a centred panel over Home; Esc, ✕ or a click outside closes it (James, 31 Oct 2026).
+  assert.match(open, /if \(homeOpen\) \{  \/\/ from Home/);
   assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
   assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.

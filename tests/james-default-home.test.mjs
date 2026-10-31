@@ -82,9 +82,10 @@ test('James: default Settings keeps the current AI page and has no "Your network
   assert.match(s, /pages\.some\(q => q\.group && q\.group !== p\.group\)/);
 });
 
-test('James: classic Home opens desktop Settings as a window; only Miguel\'s Home uses the centred panel', () => {
+test('James: desktop Home opens Settings as the centred panel over Home, never a window beside Chats', () => {
   const desk = read('web/desktop/desktop.js');
-  assert.match(desk, /if \(homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem\?\.\(\)\)\) \{/);
+  assert.match(desk, /    if \(homeOpen\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
+  assert.doesNotMatch(desk, /homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem/, 'no classic-Home window path');
   assert.match(read('web/core/settings.js'), /hasSystem: \(\) => PAGES\.some\(p => p\.group === 'System' && p\.available\(\)\)/);
 });
 
