@@ -79,7 +79,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open', 'search']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'state']); assert.ok(Object.isFrozen(api.panel));
@@ -245,9 +245,9 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-dock\] \{\n  top: 0; left: 0; bottom: 0; width: var\(--ob-col-w\);/, 'full height, flush left');
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="beside"\] \{\n  z-index: 2; top: 0; bottom: 0; left: var\(--ob-beside-left, var\(--ob-col-w\)\); right: auto; width: var\(--ob-chat-w\);/, 'a chat: a column right beside the list');
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="right"\] \{ z-index: 2; width: var\(--ob-app-w\);/, 'an app: the right third');
-  assert.match(lcss, /\.ob-picker \{ position: absolute; left: calc\(var\(--ob-left, 0px\) \+ 16px\);/, 'the look picker at the bottom of the orb area, beside the list');
+  assert.match(lcss, /\.ob-dock \{\n  position: absolute; left: 50%; bottom: 22px; transform: translateX\(-50%\);/, 'search pill and Look on the orb\'s axis at the bottom');
   // The hint names the shell's real keys (⌥V new voice chat, ⌥N new chat; Right ⌘ in the Mac app).
-  assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /mod \+ 'N'/);
+  assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /el\('kbd', '', \{ text: mod \+ 'Space' \}\)/, 'the search pill names ⌥Space');
   const m = JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json'));
   assert.deepEqual(m.capabilities, ['layout']);
   const prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
@@ -301,4 +301,29 @@ test('bar-center: a core slot in the middle of the desktop bar; the clock steps 
 test('the Orb desktop opens threads in the stock window (no card override)', () => {
   assert.ok(!read('web/desktop/desktop.js').includes('--desktop-window-max-height'));
   assert.ok(!read('web/layouts/orb/layout.css').includes('--desktop-window-max'));
+});
+
+test('Orbs view: hold ⌥ for app letters — never a key the desktop binds, stable per app, every app gets one', async () => {
+  const { ALT_TAKEN, SHIFT_TAKEN, assignKeys, keyOf } = await import(new URL('web/layouts/orb/keys.js', root));
+  // every ⌥ letter in the desktop's key table is reserved; a binding that ignores ⇧ reserves ⌥⇧ too
+  const desk = read('web/desktop/desktop.js'), on = desk.slice(desk.indexOf('  function onKey('), desk.indexOf("  addEventListener('keydown', e => onKey(e), true);"));
+  for (const line of on.split('\n')) for (const m of line.matchAll(/code === 'Key([A-Z])'/g)) {
+    assert.ok(ALT_TAKEN.includes(m[1]), `⌥${m[1]} is the desktop's`);
+    const shiftToo = !/!shift/.test(line) && (/alt && shift/.test(line) || /^    if \((alt && )?code === 'Key/.test(line));   // top-level ⌥ bindings with no ⇧ guard
+    if (shiftToo) assert.ok(SHIFT_TAKEN.includes(m[1]), `⌥⇧${m[1]} is the desktop's`);
+  }
+  const apps = ['Files', 'Messenger', 'Mail', 'Music', 'Money', 'Movies', 'Health', 'Home Assistant', 'Backup', 'Calendar', 'Contacts', 'Podcasts', 'Profiles', 'Wisdom', 'YouTube Music', 'Shopping', 'Sniper', 'Search', 'Setup', 'Pages', 'Troubleshooter', 'Morning Report', 'Card Benefits', 'Carlos CRM (demo)', 'Maverick Command', 'Zzz']
+    .map((name, i) => ({ id: 'a' + i, name }));
+  const k = assignKeys(apps);
+  assert.equal(Object.keys(k).length, apps.length, 'every app has a key');
+  assert.equal(new Set(Object.values(k)).size, apps.length, 'no two apps share one');
+  for (const v of Object.values(k)) { const shift = v.startsWith('⇧'), l = v.slice(-1); assert.ok(shift ? !SHIFT_TAKEN.includes(l) : !ALT_TAKEN.includes(l), v); }
+  assert.equal(assignKeys([{ id: 'm', name: 'Messenger' }]).m, 'E', 'Messenger: the first free letter of its name'); assert.equal(k.a0, 'E', 'Files: F, I, L are the desktop\'s, so E');
+  const again = assignKeys([{ id: 'new', name: 'Echo' }, ...apps], k);
+  for (const a of apps) assert.equal(again[a.id], k[a.id], 'an app keeps its letter when another arrives');
+  assert.equal(keyOf({ code: 'KeyE', shiftKey: false }), 'E'); assert.equal(keyOf({ code: 'KeyB', shiftKey: true }), '⇧B'); assert.equal(keyOf({ code: 'Digit1' }), null);
+  const js = read('web/layouts/orb/layout.js');
+  assert.match(js, /api\.after\(350, \(\) => \{ if \(altDown\) showKeys\(true\); \}\)/); assert.match(js, /api\.storage\.set\('keys', keyMap\);/);
+  assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.search\(\)\);/, 'the pill opens the shell\'s own search');
+  assert.match(desk, /openPalette: \(\) => palToggle\('all'\),/);
 });

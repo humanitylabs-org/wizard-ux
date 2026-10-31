@@ -27,6 +27,7 @@
  * tokens (--ob-*, the wearing tweak's tweak.css), read lazily. Everything goes through the layout API
  * (core/skin-host.js); no shell internals, no second composer. */
 import { STYLES, renderer, mix } from './styles.js';
+import { assignKeys, keyOf } from './keys.js';
 
 export default function setup(api) {
   if (api.env.shell !== 'desktop') return () => {};
@@ -54,11 +55,15 @@ export default function setup(api) {
   const strip = el('button', 'ob-strip', { type: 'button', title: 'Show conversations', 'aria-keyshortcuts': 'Alt+Backslash' });
   const badge = el('b', 'ob-badge');
   strip.append(icon(I.fold), badge, el('span', 'ob-strip-l', { text: 'Chats' }));
-  const hint = el('div', 'ob-hint');
   const mac = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
   const native = !!globalThis.webkit?.messageHandlers?.wizardNative;
   const mod = mac ? '⌥' : 'Alt+';
-  hint.append(el('kbd', '', { text: native ? 'Right ⌘' : mod + 'V' }), el('span', '', { text: 'to talk' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-short', { text: mod + 'N' }), el('span', '', { text: 'to type' }));
+  // The bottom of the scene: one quiet search pill (opens the shell's own ⌥Space / ⌘K search & launch; the key hint
+  // lives in it) with the Look button beside it.
+  const dock = el('div', 'ob-dock');
+  const hint = el('button', 'ob-search', { type: 'button', title: 'Search apps and chats, or ask (' + mod + 'Space)', 'aria-label': 'Search or ask', 'aria-keyshortcuts': 'Alt+Space' });
+  hint.append(icon(['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5 20 20']), el('span', 'ob-search-l', { text: 'Search or ask…' }), el('kbd', '', { text: mod + 'Space' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-talk', { text: native ? 'Right ⌘' : mod + 'V', title: 'to talk' }));
+  api.listen(hint, 'click', () => api.apps.search());
   // The look picker, bottom right: a quiet button that opens Style (live previews) and Colour.
   const picker = el('div', 'ob-picker');
   const pickBtn = el('button', 'ob-pick-btn', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'dialog', title: 'Orb style and colour', 'aria-label': 'Orb style and colour' });
@@ -71,7 +76,8 @@ export default function setup(api) {
   const h1 = el('div', 'ob-pop-h', { text: 'Style' }), h2 = el('div', 'ob-pop-h'); h2.append(el('span', '', { text: 'Colour' }), colourName);
   pop.append(h1, styleRow, h2, colourRow);
   picker.append(pop, pickBtn);
-  scene.append(sky, field, orbWrap, caption, hint, picker, foldBtn, strip);   // no name label: the orb is the entity
+  dock.append(hint, picker);
+  scene.append(sky, field, orbWrap, caption, dock, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
   /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended ---------- */
@@ -254,7 +260,9 @@ export default function setup(api) {
     if (/\bsglogo\b/.test(a.icon || '')) { const tpl = doc.createElement('template'); tpl.innerHTML = a.icon; face.append(tpl.content); b.classList.add('is-logo'); } // shell-made logo markup (WizSigil)
     else face.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
     const count = el('b', 'ob-sat-badge', { 'aria-hidden': 'true' }); count.hidden = true;
-    b.append(face, count, el('b', 'ob-sat-n', { text: a.name }));
+    const kc = el('kbd', 'ob-sat-key', { 'aria-hidden': 'true' });
+    b.append(face, count, kc, el('b', 'ob-sat-n', { text: a.name }));
+    keyEls.set(a.id, kc);
     api.listen(b, 'click', () => api.apps.open(a.id));
     api.apps.logo(a.id).then(url => {
       if (!url) return;
@@ -287,6 +295,7 @@ export default function setup(api) {
     const every = api.apps.list(), fit = fits(every.length), apps = every.slice(0, fit.cap), more = every.length > apps.length;
     const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|') + (more ? '|+' : '') + '|' + fit.scale;
     if (sig === appSig) return; appSig = sig; satScale = fit.scale;
+    keyEls.clear();
     const items = apps.map(a => ({ id: a.id, el: sat(a) }));
     if (more) {
       const all = el('button', 'ob-sat is-all', { type: 'button', 'aria-label': 'All apps (⌥O)' });
@@ -298,9 +307,30 @@ export default function setup(api) {
     // the concept's two rings, apps alternating between them at even steps round the orb, all drifting the same slow
     // way: neighbours always sit on different rings and two apps never slide onto each other
     sats = items.map((it, i) => ({ ...it, a: i / items.length * Math.PI * 2 + .4, ring: i % 2 ? 1 : 1.32, speed: .035 }));
-    extra = null; pinExtra();
+    extra = null; pinExtra(); paintKeys();
     placeSats(0);
   }
+  /* ---------- hold ⌥ for app letters: ⌥ + the letter shown opens that app (keys.js: never a key the desktop uses) ---------- */
+  const keyEls = new Map();
+  let keyMap = {}, byKey = new Map(), altDown = false, altCancel = null;
+  function paintKeys() {
+    keyMap = assignKeys(api.apps.list().map(a => ({ id: a.id, name: a.name })), api.storage.get('keys') || {});
+    api.storage.set('keys', keyMap);
+    byKey = new Map(Object.entries(keyMap).map(([id, k]) => [k, id]));
+    for (const [id, kc] of keyEls) { const k = keyMap[id] || ''; kc.textContent = k ? (mac ? '⌥' : 'Alt ') + (k.startsWith('⇧') ? '⇧' : '') + k.slice(-1) : ''; kc.hidden = !k; }
+  }
+  const showKeys = on => { scene.dataset.keys = on ? 'on' : ''; };
+  api.listen(doc, 'keydown', e => {
+    if (!home) return;
+    if (e.key === 'Alt' && !e.metaKey && !e.ctrlKey && !e.repeat) { altDown = true; altCancel?.(); altCancel = api.after(350, () => { if (altDown) showKeys(true); }); return; }
+    if (!e.altKey || e.metaKey || e.ctrlKey || e.defaultPrevented) { if (e.key !== 'Shift') { altDown = false; altCancel?.(); showKeys(false); } return; }
+    const k = keyOf(e), id = k && byKey.get(k);
+    if (!id) return;
+    e.preventDefault(); e.stopPropagation(); altDown = false; altCancel?.(); showKeys(false);
+    if (!e.repeat) api.apps.open(id);
+  });
+  api.listen(doc, 'keyup', e => { if (e.key === 'Alt') { altDown = false; altCancel?.(); showKeys(false); } });
+  api.listen(globalThis, 'blur', () => { altDown = false; altCancel?.(); showKeys(false); });
   // An app opened that has no satellite (All apps, beyond the first ten): a satellite of its own while it is open.
   let extra = null;
   function pinExtra() {
@@ -387,6 +417,8 @@ export default function setup(api) {
     scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); scene.style.setProperty('--ob-k', k.toFixed(3));
     scene.style.setProperty('--ob-left', Math.round(left) + 'px');
     scene.style.setProperty('--ob-free', Math.round(Math.max(160, (app ? appL : W) - left)) + 'px');
+    const half = Math.min(W / 2 - left, (app ? appL : W) - W / 2) - 16;   // room either side of the orb's axis
+    scene.dataset.dock = half < 190 ? 'compact' : '';
     pinExtra();
   }
   function paintPanel() {
