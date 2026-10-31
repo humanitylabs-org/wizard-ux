@@ -2,7 +2,7 @@
 // in that menu, "Show pin buttons" tweak brings row pins back, Novairecito keeps them on. Synthetic data, writes intercepted.
 // Usage: QA_TREE=<repo> QA_PLAYWRIGHT=<playwright> QA_OUT=<dir> node qa-chat-pin-menu.cjs
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = process.env.QA_TREE || __dirname;
 const OUT = process.env.QA_OUT || path.join(require('os').tmpdir(), 'wizard-pin-menu');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -11,6 +11,8 @@ const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 
 const now = Date.now() / 1000;
 const mk = (id, title, ago) => ({ id, title, source: 'wizard-mobile', status: 'completed', archived: false, hidden: false, message_count: 2, started_at: now - 900, last_active: now - ago, wizard_last_user_at: now - ago - 60, wizard_last_assistant_at: now - ago, latest_message: { role: 'assistant', content: 'Fixture reply for ' + title, timestamp: now - ago }, last_user_message: { role: 'user', content: 'Fixture question', timestamp: now - ago - 60 } });
 const sessions = [mk('qa_pin_a', 'QA · Pin fixture A', 20), mk('qa_pin_b', 'QA · Pin fixture B', 120), mk('qa_pin_c', 'QA · Pin fixture C', 300)];
+// A routed host-profile agent's own synthetic threads (listed only with ?agent=qa-host): same shared row menu.
+const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixture', 40), agent: { id: ROUTED, label: 'Synthetic routed', privacy: 'standard' } }];
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
@@ -24,7 +26,8 @@ const sessions = [mk('qa_pin_a', 'QA · Pin fixture A', 20), mk('qa_pin_b', 'QA 
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(prefs) });
     }
     if (!['GET', 'HEAD'].includes(method)) { writes.push({ method, path: u.pathname }); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, record: {} }) }); }
-    if (u.pathname === '/wizard/hermes/api/sessions') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data: sessions, has_more: false, limit: 100, offset: 0, snapshot: 'qa' }) });
+    if (u.pathname === '/wizard/v1/agents') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ agents: [{ id: 'hermes', is_default: true, label: 'Hermes', harness: 'hermes', privacy: 'standard', status: 'running' }, { id: ROUTED, label: 'Synthetic routed', harness: 'hermes', privacy: 'standard', status: 'running' }] }) });
+    if (u.pathname === '/wizard/hermes/api/sessions') { const ag = u.searchParams.get('agent') || '', first = (u.searchParams.get('offset') || '0') === '0'; const data = !first ? [] : ag === ROUTED ? routed : ag ? [] : sessions; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data, has_more: false, limit: 100, offset: 0, snapshot: 'qa' }) }); }
     if (u.pathname === '/wizard/thread-seen') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: { initializedAt: 1, threads: {} } }) });
     if (u.pathname === '/wizard/v1/boomerangs') return route.fulfill({ status: 200, contentType: 'application/json', body: '{"reminders":[]}' });
     if (u.pathname.startsWith('/wizard/')) return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
@@ -112,6 +115,18 @@ const sessions = [mk('qa_pin_a', 'QA · Pin fixture A', 20), mk('qa_pin_b', 'QA 
   }
   await setSkin(page, 'nebula');
   ok(await pinShown(page, root) === 0, 'leaving Novairecito family restores the unchanged device tweak choice');
+  // Routed agent: its own Chats window uses the same row menu and pin store.
+  await page.evaluate(ag => window.WizOpenAgentChats(ag), ROUTED);
+  const rwid = await page.waitForFunction(ag => Object.values(__wos.wins).find(w => w.app === 'chats' && w.agent === ag)?.id || '', ROUTED, { timeout: 10000 }).then(h => h.jsonValue());
+  const rroot = `[data-chats="${rwid}"]`;
+  await page.waitForSelector(`${rroot} .ch-row[data-chopen="qa_pin_r1"]`, { timeout: 15000 }); await sleep(300);
+  ok(await pinShown(page, rroot) === 0, 'routed agent: no pin button on its rows by default');
+  const rm = await menu(page, rroot, 'qa_pin_r1');
+  ok(rm && rm.pinVisible && rm.labels.includes('Pin') && !rm.labels.includes('Open'), 'routed agent: row menu has Pin and no Open', rm);
+  ok(await page.evaluate(() => { document.querySelector('.ch-sheet [data-rspin]').click(); return WosChatPins.has('qa_pin_r1') && !document.querySelector('.ch-sheet'); }), 'routed agent: menu Pin pins its thread');
+  await sleep(400);
+  ok(prefs.pinnedChats.includes('qa_pin_r1'), 'routed agent: pin write intercepted and read back', prefs.pinnedChats);
+  await page.screenshot({ path: path.join(OUT, 'phone-routed-pinned.png') });
   await ctx.close();
 
   // Desktop
