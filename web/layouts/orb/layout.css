@@ -96,45 +96,48 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat-n {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; }
 
-/* ---------- conversations: the stock Chats list docked on the right (desktop.js panel, api.panel.dock) ---------- */
-html[data-shell="desktop"][data-layout="orb"] { --ob-col-w: min(440px, max(372px, 30vw)); }
+/* ---------- in thirds: the stock Chats list docked on the left (desktop.js panel, api.panel.dock), the orb in the
+ * middle, a thread or an app in the content panel from the right ---------- */
+html[data-shell="desktop"][data-layout="orb"] { --ob-col-w: min(420px, max(340px, 28vw)); }
 /* Softer than a window: the skin's own window glass, a little clearer and blurred into the scene, no frame or shadow,
  * full height under the bar. Its own text and controls stay the skin's (legible on light skins too). */
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] {
-  top: 0; right: 0; bottom: 0; width: var(--ob-col-w); border-radius: 0; border: 0; box-shadow: none;
-  border-left: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 84%, transparent);
+  top: 0; left: 0; bottom: 0; width: var(--ob-col-w); border-radius: 0; border: 0; box-shadow: none;
+  border-right: 1px solid var(--ob-dock-line); background: color-mix(in srgb, var(--sk-win, var(--wz-base)) 84%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(1.15); backdrop-filter: blur(24px) saturate(1.15);
 }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock].focus { border-color: var(--ob-dock-line); box-shadow: none; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-dock] .dchats { background: none; }
-/* The fold handle, on the column's left edge; folded: a slim strip with the Ready count. */
+/* The content panel: about two thirds, from the list's edge to the right, over the orb. A thread shows alone (its
+ * window's own list pane stays hidden: the list is the docked one). */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"] { width: calc(100% - var(--ob-col-w) - 24px); background: var(--sk-win, var(--wz-base)); }
+html[data-shell="desktop"][data-layout="orb"]:has(.ob-scene[data-fold="folded"]) .panel-layer > .win.panel[data-side="right"] { width: calc(100% - 70px); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"][data-panel="chat"] .dchats :is(.pane-list, .pane-split) { display: none; }
+/* The fold handle, on the list's right edge; folded: a slim strip on the left with the Ready count. */
 html[data-shell="desktop"][data-layout="orb"] .ob-fold {
-  position: absolute; z-index: 9; right: var(--ob-right, 0px); top: 50%; width: 22px; height: 58px; margin-top: -29px; padding: 0;
-  display: grid; place-items: center; cursor: pointer; border-radius: 11px 0 0 11px; border: 1px solid var(--ob-line); border-right: 0;
-  background: var(--ob-glass); color: var(--ob-ink2); opacity: .55; transition: opacity 200ms, color 200ms, right 380ms var(--wz-ease);
+  position: absolute; z-index: 9; left: var(--ob-left, 0px); top: 50%; width: 22px; height: 58px; margin-top: -29px; padding: 0;
+  display: grid; place-items: center; cursor: pointer; border-radius: 0 11px 11px 0; border: 1px solid var(--ob-line); border-left: 0;
+  background: var(--ob-glass); color: var(--ob-ink2); opacity: .55; transition: opacity 200ms, color 200ms, left 380ms var(--wz-ease);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-fold:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink); }
 html[data-shell="desktop"][data-layout="orb"] :is(.ob-fold, .ob-strip):focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
 html[data-shell="desktop"][data-layout="orb"] :is(.ob-fold, .ob-strip) svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 html[data-shell="desktop"][data-layout="orb"] .ob-strip {
-  position: absolute; z-index: 9; right: 0; top: var(--bar-h, 34px); bottom: 0; width: 46px; padding: 14px 0 0; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 12px; border: 0; border-left: 1px solid var(--ob-dock-line);
+  position: absolute; z-index: 9; left: 0; top: var(--bar-h, 34px); bottom: 0; width: 46px; padding: 14px 0 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; border: 0; border-right: 1px solid var(--ob-dock-line);
   background: var(--ob-glass); color: var(--ob-ink2); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   animation: ob-strip-in 300ms cubic-bezier(.2, .8, .2, 1) both;
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-strip:hover { color: var(--ob-ink); }
 html[data-shell="desktop"][data-layout="orb"] :is(.ob-strip, .ob-fold)[hidden] { display: none !important; }
-@keyframes ob-strip-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes ob-strip-in { from { transform: translateX(-100%); } to { transform: none; } }
 html[data-shell="desktop"][data-layout="orb"] .ob-badge {
   min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box; border-radius: 99px; display: grid; place-items: center;
   background: var(--ob-amber); color: var(--ob-core); font: 700 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui); box-shadow: 0 0 14px var(--ob-amber);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-badge[hidden] { display: none !important; }
 html[data-shell="desktop"][data-layout="orb"] .ob-strip-l { writing-mode: vertical-rl; font: 600 calc(var(--wz-text-sm) * .82) / 1 var(--wz-font-ui); letter-spacing: .18em; text-transform: uppercase; color: var(--ob-ink3); }
-/* The app panel from the left: as wide as leaves the orb a clear gap before the list. */
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="left"] { background: var(--sk-win, var(--wz-base)); }
-html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="left"] { width: min(1080px, max(520px, calc(100% - var(--ob-col-w) - 300px)), calc(100% - var(--ob-col-w) - 36px)); }
 
 /* ---------- the hint line and the quiet look swatches ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-hint {
@@ -149,7 +152,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd.is-short { min-width: 40px; }
 /* The look picker: one quiet button bottom right; it opens Style (live previews) and Colour. */
-html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: absolute; right: calc(var(--ob-right, 0px) + 16px); bottom: 18px; z-index: 9; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: absolute; left: calc(var(--ob-left, 0px) + 16px); bottom: 18px; z-index: 9; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 3px; border-radius: 99px; cursor: pointer;
   border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -162,7 +165,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-pick-cv { width: 30px; height:
 html[data-shell="desktop"][data-layout="orb"] .ob-pop {
   width: 348px; padding: 14px 14px 16px; border-radius: 18px; box-sizing: border-box;
   border: 1px solid var(--ob-line); background: var(--ob-glass-solid); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-  box-shadow: var(--ob-shadow); transform-origin: 100% 100%; animation: ob-pop-in 200ms cubic-bezier(.2, .8, .2, 1) both;
+  box-shadow: var(--ob-shadow); transform-origin: 0 100%; animation: ob-pop-in 200ms cubic-bezier(.2, .8, .2, 1) both;
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-pop[hidden] { display: none !important; }
 @keyframes ob-pop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
@@ -193,6 +196,8 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([dat
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
+/* the panel's ‹ and ✕ show on every skin frame (borderless hides title-bar buttons) */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar > :is(.panel-back, [data-wact="close"]) { display: grid; position: static; flex: none; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button[data-wact="close"] { background: color-mix(in srgb, var(--wz-text) 7%, transparent); }
 /* A Chats window that is not the docked list (another agent's): one header, ✕ floating on the thread's own. */
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar {
@@ -201,14 +206,18 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-pan
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar > :not(button) { display: none !important; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]):has(.panel-back) .ch-head { padding-right: 88px; }
-/* a narrow free space (an app open beside the list): the orb steps back, its name and the hint give way */
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel="app"] .ob-hint { opacity: .5; }
+/* a narrow free space: the orb steps back, its name and the hint give way */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-tight="tight"] :is(.ob-name, .ob-hint) { opacity: 0; }
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-tight="tight"] .ob-orbwrap { opacity: .7; }
 html[data-shell="desktop"][data-layout="orb"] .ob-name { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .ob-hint { transition: opacity 300ms ease; }
-html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms, right 380ms var(--wz-ease); }
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms, left 380ms var(--wz-ease); }
 html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transform 380ms var(--wz-ease), opacity 300ms ease; }
+
+/* a thread or an app open on the right covers the orb area: the scene quiets down behind its glass */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) :is(.ob-hint, .ob-name, .ob-caption, .ob-picker) { opacity: 0; pointer-events: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) :is(.ob-orbwrap, .ob-field) { opacity: .3; }
+html[data-shell="desktop"][data-layout="orb"] .ob-field { transition: opacity 300ms ease; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
