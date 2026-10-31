@@ -38,7 +38,7 @@ Visual: <side-by-side screenshot, or "none">
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated title header | tools (icons, dot) in the shell bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
-| Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable failures |
+| Offline replica, edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable fail |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
 | Offline shell | `web/sw.js` | API cache | offline reload |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
