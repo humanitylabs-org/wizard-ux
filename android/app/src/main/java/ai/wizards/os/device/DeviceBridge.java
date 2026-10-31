@@ -121,6 +121,7 @@ public final class DeviceBridge implements RecorderService.Listener {
         String json = null;
         if (ACTION_SHARE.equals(a) && intent.getStringExtra(EXTRA_SHARE) != null) {
             json = obj("action", "share", "id", intent.getStringExtra(EXTRA_SHARE));
+            if (activity instanceof ai.wizards.os.MainActivity) ((ai.wizards.os.MainActivity) activity).beginIncomingShare(intent.getStringExtra(EXTRA_SHARE));
         } else if (ACTION_RECOVER.equals(a)) {
             RecorderService.clearSavedNotice(activity);
             json = obj("action", "recover");
@@ -313,6 +314,26 @@ public final class DeviceBridge implements RecorderService.Listener {
     }
 
     /* --- share --- */
+
+    public void cancelShareDelivery() { pending = null; main.removeCallbacks(deliver); }
+
+    /** Only the trusted main-frame message port dispatches these methods; not a JavascriptInterface. */
+    public Object shareRequest(String method, JSONObject params) throws IOException, JSONException {
+        String id = params.optString("shareId");
+        if (!(activity instanceof ai.wizards.os.MainActivity)) throw new IOException("Not the shell");
+        ai.wizards.os.MainActivity shell = (ai.wizards.os.MainActivity) activity;
+        if (!shell.ownsIncomingShare(id)) throw new IOException("Share no longer active");
+        if ("device.shares.queue".equals(method)) {
+            String queued = ShareStore.get(activity).enqueue(activity, params);
+            return new JSONObject().put("queued", true).put("id", queued);
+        }
+        if ("device.shares.present".equals(method)) { main.post(() -> shell.presentIncomingShare(id)); return true; }
+        if ("device.shares.finish".equals(method)) {
+            ShareStore.get(activity).delete(id);
+            main.post(() -> shell.finishIncomingShare(id)); return true;
+        }
+        throw new IOException("Unknown share method");
+    }
 
     @JavascriptInterface
     public String shareMeta(String id) {

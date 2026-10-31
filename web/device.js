@@ -229,12 +229,33 @@
     const d = DEV(), m = J(d?.shareMeta(id));
     if (!m) { toast('!', 'That share expired · share it again', 2400); return; }
     closeSheet();
-    // durable: resolves 'sent' only after the message has a receipt, so the staged copy survives a mid-upload kill.
-    const result = await window.WizShareWizard.open({durable: true,
-      text: [m.subject, m.text].filter(Boolean).join('\n').trim(), skipped: m.skipped || 0,
-      items: (m.items || []).map(f => ({...f, read: () => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
+    const port = window.WosDevicePort;
+    const [cap] = await Promise.all([port?.capability('device.shares'), window.WizConfig?.ready]);
+    if (!J(d?.shareMeta(id))) return; // Back during cold-start discovery already cancelled this import
+    let queued = false;
+    const finishNative = async () => {
+      if (cap) await port.call('device.shares.finish', {shareId:id});
+      else d.shareDone(id);
+    };
+    const resumable = cap && window.WizConfig?.has('resumable_uploads') && m.items?.length && m.items.every(f => /^[a-f0-9]{64}$/.test(f.sha256 || ''));
+    // durable (live 7bff0adf): on the web-upload path 'sent' waits for the message receipt, so the staged copy
+    // survives a mid-upload kill; the native queue path already holds its own custody.
+    const result = await window.WizShareWizard.open({durable:!resumable,
+      android:true, text:m.text || '', subject:m.subject || '', from:m.from || '', skipped:m.skipped || 0,
+      onPresented:cap ? () => port.call('device.shares.present', {shareId:id}).catch(() => {}) : null,
+      onCancelled:cap ? () => finishNative().catch(() => {}) : null,
+      nativeQueue:resumable ? async job => {
+        queued = true;
+        const receipt = await port.call('device.shares.queue', {shareId:id, agent:job.agent, agentLabel:job.agentLabel,
+          thread:job.target === '__new__' ? '' : job.target, note:job.note, keptItemIndexes:job.keptItemIndexes});
+        if (!receipt?.queued) throw new Error('Share was not queued');
+        await finishNative().catch(() => {}); // durable queue custody must not become a duplicate retry if closing loses its reply
+      } : null,
+      items:(m.items || []).map(f => ({...f, read:() => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
     });
-    if (result === 'sent' || result === 'cancelled') { try { d.shareDone(id); } catch (_) {} }
+    if ((result === 'sent' && !queued) || (!cap && result === 'cancelled') || result === 'unsupported') {
+      try { await finishNative(); } catch (_) {}
+    }
     log('share:result', id, result);
   }
 
@@ -383,7 +404,10 @@
     /* Native → page: queued intents (share, recovery notification). Returns true when taken. */
     handle(h) {
       if (!h || !W$()) return false;
-      if (h.action === 'share' && h.id) { onShare(String(h.id)); return true; }
+      if (h.action === 'share' && h.id) {
+        if (!window.WizShareWizard?.open || !W$().chats?.sendChat) return false; // native retries until the unified UI is ready
+        onShare(String(h.id)); return true;
+      }
       if (h.action === 'recover') { W$().closeSheets?.(); syncRecorder('notification'); return true; }
       return false;
     },

@@ -1,5 +1,5 @@
 """Shared emulator + CDP helpers for tools/qa_android_apps.py (runs on Thales)."""
-import json, os, pathlib, re, socket, subprocess, time, urllib.request
+import collections, json, os, pathlib, re, socket, subprocess, time, urllib.request, uuid
 from qa_paths import work_root
 from qa_paths import android_sdk, java_home
 
@@ -92,6 +92,17 @@ def wait(fn, secs, step=0.7):
 class Page:
     """Minimal CDP client for the WebView's top page."""
     def __init__(self, emu, devtools, match='wizard-os-home'):
+        # Opt-in observation only: do not reconnect, retry commands or change framing.
+        self._emu, self._devtools = emu, devtools
+        self._events = collections.deque(maxlen=96)
+        self._identities = {}
+        self._seq = 0
+        self._pending = None
+        self._diag_path = None
+        if os.environ.get('WIZARD_QA_CDP_DIAGNOSTIC') == '1':
+            self._diag_path = pathlib.Path(emu.out) / ('cdp-transport-' + uuid.uuid4().hex + '.json')
+        self._record('construct')
+        self._identity('before-connect')
         pid = emu.sx('pidof %s' % emu.pkg).strip()
         emu.sh(ADB, '-s', emu.S, 'forward', 'tcp:%d' % devtools, 'localabstract:webview_devtools_remote_%s' % pid)
         page = None
@@ -106,10 +117,49 @@ class Page:
         self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=40)
+        self._record('socket-open', local_port=self.s.getsockname()[1], peer_port=self.s.getpeername()[1])
         self.s.sendall(('GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n' % (path, host)).encode())
         buf = b''
         while b'\r\n\r\n' not in buf: buf += self.s.recv(4096)
-        self.buf = buf.split(b'\r\n\r\n', 1)[1]
+        header, self.buf = buf.split(b'\r\n\r\n', 1)
+        status = header.split(b'\r\n', 1)[0].split()
+        self._record('handshake', status=int(status[1]) if len(status) > 1 and status[1].isdigit() else None,
+                     buffered=len(self.buf))
+        self._identity('after-handshake')
+
+    def _record(self, event, **fields):
+        if self._diag_path is None:
+            return
+        self._seq += 1
+        if event in ('native-identity', 'identity-unavailable'):
+            self._identities[fields['boundary']] = dict(event=event, at=time.monotonic(), **fields)
+        self._events.append(dict(seq=self._seq, at=time.monotonic(), event=event,
+                                 pending=self._pending, **fields))
+        try:
+            # No request params, expressions, result bodies, URLs or raw errors.
+            self._diag_path.write_text(json.dumps({'diagnostic_only': True,
+                'full_acceptance': False, 'identities': self._identities,
+                'events': list(self._events)}, indent=2) + '\n')
+        except OSError:
+            pass  # An observer cannot replace the original transport failure.
+
+    def _identity(self, boundary):
+        if self._diag_path is None:
+            return
+        try:
+            pid = self._emu.sx('pidof %s' % self._emu.pkg, timeout=3).strip()
+            start = None
+            if pid.isdecimal():
+                stat = self._emu.sx('cat /proc/%s/stat' % pid, timeout=3)
+                start = stat.rsplit(')', 1)[1].split()[19]
+            rows = self._emu.sh(ADB, '-s', self._emu.S, 'forward', '--list', timeout=3)
+            forwards = [r.split() for r in rows.splitlines()
+                        if len(r.split()) == 3 and r.split()[0] == self._emu.S
+                        and r.split()[1] == 'tcp:%d' % self._devtools][:2]
+            self._record('native-identity', boundary=boundary,
+                         pid=pid if pid.isdecimal() else None, start_ticks=start, forwards=forwards)
+        except Exception as exc:
+            self._record('identity-unavailable', boundary=boundary, error_type=type(exc).__name__)
 
     def _send(self, obj):
         data = json.dumps(obj).encode(); hdr = bytearray([0x81]); mask = os.urandom(4); n = len(data)
@@ -121,7 +171,9 @@ class Page:
     def _need(self, k):
         while len(self.buf) < k:
             c = self.s.recv(65536)
-            if not c: raise RuntimeError('ws closed')
+            if not c:
+                self._record('eof', buffered=len(self.buf), needed=k)
+                raise RuntimeError('ws closed')
             self.buf += c
 
     def _recv(self):
@@ -130,15 +182,36 @@ class Page:
             self._need(2); b1, b2 = self.buf[0], self.buf[1]; n = b2 & 0x7f; off = 2
             if n == 126: self._need(4); n = int.from_bytes(self.buf[2:4], 'big'); off = 4
             elif n == 127: self._need(10); n = int.from_bytes(self.buf[2:10], 'big'); off = 10
+            self._record('frame-header', opcode=b1 & 15, fin=bool(b1 & 128),
+                         masked=bool(b2 & 128), length=n)
             self._need(off + n); payload = self.buf[off:off + n]; self.buf = self.buf[off + n:]
+            if b1 & 15 == 8:
+                self._record('peer-close', code=int.from_bytes(payload[:2], 'big') if len(payload) >= 2 else None)
             msg += payload
             if b1 & 0x80: return json.loads(msg.decode())
 
     def call(self, method, **params):
-        self.id += 1; my = self.id; self._send({'id': my, 'method': method, 'params': params})
-        while True:
-            d = self._recv()
-            if d.get('id') == my: return d
+        self.id += 1; my = self.id
+        self._pending = {'id': my, 'method': method}
+        self._record('call-start')
+        try:
+            self._send({'id': my, 'method': method, 'params': params})
+            self._record('sent')
+            while True:
+                d = self._recv()
+                if d.get('method') == 'Inspector.detached':
+                    # Fixed diagnostic enums, never arbitrary CDP payload text.
+                    reason = d.get('params', {}).get('reason')
+                    self._record('inspector-detached', reason=reason if reason in
+                        ('replaced_with_devtools', 'target_closed', 'Render process gone.') else 'other')
+                if d.get('id') == my:
+                    self._record('call-result')
+                    self._pending = None
+                    return d
+        except Exception as exc:
+            self._record('call-error', error_type=type(exc).__name__, errno=getattr(exc, 'errno', None))
+            self._identity('call-error')
+            raise
 
     def ev(self, expr):
         r = self.call('Runtime.evaluate', expression=expr, awaitPromise=True, returnByValue=True)
@@ -156,5 +229,6 @@ class Page:
         self.touch(*r); return True
 
     def close(self):
+        self._record('local-close')
         try: self.s.close()
         except Exception: pass

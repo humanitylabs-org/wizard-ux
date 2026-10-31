@@ -330,7 +330,27 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         handleBack(); // API < 33; never calls super, so Back can never finish the activity
     }
 
+    private volatile String incomingShareId;
+    public void beginIncomingShare(String id) {
+        incomingShareId = id;
+        web.setAlpha(0); // no Home flash on cold or warm incoming-share entry
+    }
+    public boolean ownsIncomingShare(String id) { return id != null && id.equals(incomingShareId); }
+    public void presentIncomingShare(String id) { if (ownsIncomingShare(id)) web.setAlpha(1); }
+    public void finishIncomingShare(String id) {
+        if (!ownsIncomingShare(id)) return;
+        incomingShareId = null;
+        device.cancelShareDelivery();
+        web.setAlpha(1);
+        moveTaskToBack(true); // return to the sending app; never finish/exit Wizard's root
+    }
+
     void handleBack() {
+        if (incomingShareId != null && web.getAlpha() == 0) {
+            String id = incomingShareId;
+            ai.wizards.os.share.ShareStore.get(this).delete(id);
+            finishIncomingShare(id); return;
+        }
         if (reach != null && reach.isOffline()) { retryReach(); return; } // Back on the connection screen: try again, stay
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");

@@ -258,7 +258,7 @@ public class CaptureJournalTest {
         allow(allowed, "share/ShareStore.java", "f.delete()", "d.delete()");
         allow(allowed, "share/ShareQueue.java", "f.delete()", "f.delete()", "d.delete()");
         allow(allowed, "share/ShareUploader.java", "out.delete()");
-        allow(allowed, "share/ShareActivity.java", "out.delete()", "out.delete()");
+        allow(allowed, "share/ShareActivity.java", "out.delete()");
         // APK/update archives and outgoing shared-file copies, never recording/chunk files.
         allow(allowed, "update/Updater.java", "f.delete()", "x.delete()", "f.delete()");
         allow(allowed, "apps/AppsInstaller.java", "f.delete()", "file(app,sha).delete()");

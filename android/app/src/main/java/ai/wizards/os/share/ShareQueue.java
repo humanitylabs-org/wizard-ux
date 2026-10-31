@@ -11,6 +11,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -48,12 +49,40 @@ public final class ShareQueue {
         return d;
     }
 
-    public File file(String id, int n) { return new File(dir(id), Math.max(0, n) + ".bin"); }
+    public synchronized File file(String id, int n) {
+        // A promoted staging directory keeps its original filenames. The upload list contains only the kept
+        // items, possibly reordered, so its logical index need not equal the physical file's index.
+        int index = Math.max(0, n);
+        JSONObject item = load(id);
+        JSONArray files = item == null ? null : item.optJSONArray("files");
+        JSONObject entry = files == null ? null : files.optJSONObject(index);
+        if (entry != null) index = Math.max(0, entry.optInt("storageIndex", index));
+        return new File(dir(id), index + ".bin");
+    }
+
+    /** All-or-nothing ownership handoff on the same private filesystem; never copies or links file bytes.
+     * Before the move, failures/crashes leave the complete staging directory available for retry/cancel.
+     * After it, the existing uploader sees the complete ready manifest and can resume without the sender.
+     * Excluded bytes move too, but are absent from the upload list and leave with dropCopies/delete. */
+    synchronized void promote(File staged, JSONObject item) throws IOException {
+        String id = item.optString("id");
+        if (id.isEmpty() || !id.equals(ShareStore.safe(id))) throw new IOException("Invalid share id");
+        if (!root.isDirectory() && !root.mkdirs()) throw new IOException("Couldn’t create the share queue");
+        File target = new File(root, id);
+        if (target.exists()) throw new IOException("Conflicting share directory");
+        saveIn(staged, item);
+        // Fail closed if atomic directory rename is unavailable; no destructive copy/delete fallback.
+        Files.move(staged.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE);
+    }
 
     public synchronized void save(JSONObject item) throws IOException {
         String id = item.optString("id");
         if (id.isEmpty()) throw new IOException("item without id");
-        File d = dir(id), tmp = new File(d, "item.json.tmp");
+        saveIn(dir(id), item);
+    }
+
+    private static void saveIn(File d, JSONObject item) throws IOException {
+        File tmp = new File(d, "item.json.tmp");
         try (FileOutputStream o = new FileOutputStream(tmp)) {
             o.write(item.toString().getBytes(StandardCharsets.UTF_8));
             o.getFD().sync();
