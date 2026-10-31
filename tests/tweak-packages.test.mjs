@@ -311,3 +311,11 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
   await f.E.toggle('wizard/unified-inbox'); assert.ok(f.all().includes('wizard/unified-inbox'));
 });
 
+test('Show pin buttons stays off for a device that saved tweak choices before it existed, and a later on is kept', async () => {
+  const saved = new Map([['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: { wizard: ['wizard/two-orbs'] } })], ['wos.app-borders.migrated.v1', 'true'], ['wos.two-orbs.migrated.v1', 'true']]);
+  let f = wizardExperience(saved); await f.E.refresh();
+  assert.ok(!f.all().includes('wizard/pin-buttons')); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/pin-buttons').on, false);
+  assert.ok(f.all().includes('wizard/app-borders'), 'the earlier deliberate App borders on is untouched');
+  await f.E.toggle('wizard/pin-buttons'); assert.ok(f.all().includes('wizard/pin-buttons'));
+  f = wizardExperience(saved); await f.E.refresh(); assert.ok(f.all().includes('wizard/pin-buttons'), 'the migration runs once');
+});
