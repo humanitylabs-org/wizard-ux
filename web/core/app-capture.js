@@ -597,10 +597,11 @@
           throw fail('native_cancel_timeout', 'Native capture has not cancelled yet; retry Cancel.');
         }, pause: async () => d.recPause(true), resume: async () => d.recPause(false), detach: () => clearInterval(timer) };
       },
-      async recover(row) {
+      async recover(row, {stopOnly = false} = {}) {
         const a = parse(d.recActive());
-        if (a?.id === row.nativeId) return { live: true };
-        const meta = parse(d.recClaim(row.nativeId));
+        if (a?.id === row.nativeId && !stopOnly) return { live: true };
+        // Stop/claim only the row's proven native owner; never call recStart or steal another app's mic.
+        const meta = parse(a?.id === row.nativeId ? d.recStop(row.nativeId) : d.recClaim(row.nativeId));
         if (!meta) throw fail('native_claim_pending', 'Native capture is not ready to claim; restore the bridge and retry recovery.');
         return { blob: await read(row.nativeId), durationMs: Number(meta.ms) || 0, meta };
       },
@@ -963,6 +964,36 @@
     const row = [...recoveryLive].map(id => ownedRows.get(id)).find(r => r?.appId === appId);
     return row ? start(appId, {kind: row.kind, resumeId: row.id, meta: row.meta}) : null;
   }
+  // A chat opening may salvage its own orphan, but must never attach()/resume() it as a live mic.
+  async function settle(appId, keepId = null) {
+    validate(appId, {});
+    const prior = active; // snapshot BEFORE awaits: a later mic tap is never stopped by old cleanup
+    if (prior?.row.appId === appId && prior.row.id !== keepId) await closeApp(appId);
+    await ready;
+    let unlock, lease;
+    try {
+      unlock = await acquire();
+      lease = {unlock, cancelled:false}; recoveryLease = lease;
+      await recoverLocked(lease);
+      for (const row of await rows()) {
+        if (lease.cancelled || active) break; // a tap yielded recovery; never touch the newer recorder
+        if (row.appId !== appId || row.id === keepId || row.kind !== 'audio' || !row.nativeId || row.status !== 'recoverable') continue;
+        const a = adapter({kind:row.kind}, row);
+        const recovered = await a.recover?.(row, {stopOnly:true});
+        if (!recovered || recovered.live) continue; // unknown custody is retained, never acknowledged
+        recoveryLive.delete(row.id);
+        if (recovered.blob && !row.bytes) {
+          const s = {row, queue:[], writes:Promise.resolve(), opts:{}, limit:DEFAULT_LIMIT};
+          enqueue(s, recovered.blob); await s.writes; if (s.error) throw s.error; Object.assign(row,s.row);
+        }
+        if (recovered.meta) row.meta = {...row.meta,native:recovered.meta};
+        if (recovered.durationMs != null) row.durationMs = recovered.durationMs;
+        await put({...row,status:'pending',partial:true,recoveryError:null});
+      }
+    } catch (e) { if (!['busy','recovery_yielded'].includes(e.code)) throw e; }
+    finally { if (recoveryLease === lease) recoveryLease = null; unlock?.(); }
+    return Promise.all((await rows()).filter(r => r.appId === appId && ['pending','recoverable'].includes(r.status)).map(result));
+  }
   async function pending(appId) {
     validate(appId, {}); await ready; await recover();
     return Promise.all((await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status)).map(result));
@@ -1036,10 +1067,12 @@
   }
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
-  W.WizAppCapture = Object.freeze({ version: 1, start, attach, pending, ack, prepare, discardPrepared, capabilities, getState: state,
+  W.WizAppCapture = Object.freeze({ version: 1, start, attach, settle, pending, ack, prepare, discardPrepared, capabilities, getState: state,
     beginVoiceBorrow, endVoiceBorrow, reloadCheck, prepareReload, closeApp,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
-      return r ? {id:r.id,meta:JSON.parse(JSON.stringify(r.meta)),phase:active?.row.id===r.id ? active.phase : 'recoverable'} : null; },
+      const live = active?.row.id === r?.id;
+      return r ? {id:r.id,appId:r.appId,active:live,recording:live && active.phase === 'recording' && !!active.engine && !active.inputStopped,
+        startedAt:r.startedAt,meta:JSON.parse(JSON.stringify(r.meta)),phase:live ? active.phase : 'recoverable'} : null; },
     configureNativeBridge(bridge) {
       if (active) throw fail('busy', 'Cannot replace an active meeting bridge.');
       if (bridge && (typeof bridge.start !== 'function' || typeof bridge.stop !== 'function')) throw fail('invalid_adapter', 'Meeting bridge must implement start/stop.');
