@@ -37,6 +37,7 @@ test('Miguel keeps his pin-free chats: his tweak hides the menu Pin and row pins
   assert.ok(json('web/tweaks/miguel/profile.json').tweaks.includes('miguel/hidden-pin'));
   const css = read('web/tweaks/miguel/hidden-pin/tweak.css');
   assert.match(css, /html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-sheet \[data-part="pin-action"\], html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-row-wrap \.ch-pin-toggle \{ display:none; \}/, 'outranks Show pin buttons');
+  assert.match(css, /\.ch-row-wrap\.diagnosed > \.ch-row\.ch-row \{ padding-right:90px; \}/); assert.match(css, /\.ch-row-wrap \.ch-row-signin \{ right:10px; \}/);
   assert.ok(!(cat.defaults || []).includes(PIN));
   for (const who of cat.profiles) assert.ok(!json(`web/tweaks/${who}/profile.json`).tweaks.includes(PIN), 'new features are not legacy preset defaults');
 });
