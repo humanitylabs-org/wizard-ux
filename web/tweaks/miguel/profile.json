@@ -18,7 +18,6 @@
   ],
   "flags": {},
   "off": [
-    "miguel/orb-shell",
-    "miguel/orb-switch"
+    "miguel/orb-shell"
   ]
 }
