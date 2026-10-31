@@ -3,7 +3,7 @@
 // Manager writes a wizard.md `icon:` there too). Only apps in the App Manager registry, only real raster/SVG images
 // up to 1 MB, never the template/Runtipi placeholder. The version is the image's own hash, so a changed logo shows on
 // the next reload while an unchanged one stays cached.
-import { readFileSync, statSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
@@ -30,7 +30,9 @@ export function sniffImage(b) {
   return /^<svg[\s>]/i.test(head) ? 'image/svg+xml' : '';
 }
 
-export function createAppLogos({ readWam, runtipiRoot, stat = statSync, read = readFileSync, placeholders = PLACEHOLDER_LOGOS }) {
+// lstat, not stat: logo.jpg must be a plain file in the app's own folder; a symlink (to anything else on the box) is
+// refused rather than followed.
+export function createAppLogos({ readWam, runtipiRoot, stat = lstatSync, read = readFileSync, placeholders = PLACEHOLDER_LOGOS }) {
   const cache = new Map();   // id → { key, logo: { body, type, v } | null }
   function load(app) {
     const [id, store] = String(app.urn || '').split(':');
@@ -42,8 +44,12 @@ export function createAppLogos({ readWam, runtipiRoot, stat = statSync, read = r
     if (hit && hit.key === key) return hit.logo;
     let logo = null;
     if (st.isFile() && st.size > 0 && st.size <= MAX_LOGO) {
-      const body = read(file), type = sniffImage(body), sum = createHash('sha256').update(body).digest('hex');
-      if (type && !placeholders.has(sum)) logo = { body, type, v: sum.slice(0, 16) };
+      const body = read(file);
+      // The cap holds for the bytes actually read, not only the earlier stat (the file can grow in between).
+      if (Buffer.isBuffer(body) && body.length > 0 && body.length <= MAX_LOGO) {
+        const type = sniffImage(body), sum = createHash('sha256').update(body).digest('hex');
+        if (type && !placeholders.has(sum)) logo = { body, type, v: sum.slice(0, 16) };
+      }
     }
     cache.set(id, { key, logo });
     return logo;

@@ -55,6 +55,19 @@ test('only registered apps with a real logo are listed; placeholders and junk ar
   assert.deepEqual(placeholder.list(), {});
 });
 
+test('a symlinked logo.jpg is refused, and the size cap holds for the bytes read', () => {
+  const b = box(); b.put('s', 'real', PNG);
+  const elsewhere = path.join(b.dir, 'elsewhere.png'); fs.writeFileSync(elsewhere, PNG);
+  const d = path.join(b.dir, 'apps', 's', 'link', 'metadata'); fs.mkdirSync(d, { recursive: true });
+  fs.symlinkSync(elsewhere, path.join(d, 'logo.jpg'));
+  const apps = [{ id: 'real', urn: 'real:s' }, { id: 'link', urn: 'link:s' }];
+  assert.deepEqual(Object.keys(createAppLogos({ readWam: () => ({ apps }), runtipiRoot: b.dir }).list()), ['real']);
+  // stat says small, the read returns more than the cap (the file grew in between): refused
+  const grown = createAppLogos({ readWam: () => ({ apps: [{ id: 'real', urn: 'real:s' }] }), runtipiRoot: b.dir,
+    read: () => Buffer.concat([PNG, Buffer.alloc(1024 * 1024)]) });
+  assert.deepEqual(grown.list(), {});
+});
+
 test('a changed logo gets a new version (cache-busting by content)', () => {
   const b = box(); b.put('s', 'jet', JPG);
   const logos = createAppLogos({ readWam: () => ({ apps: [{ id: 'jet', urn: 'jet:s' }] }), runtipiRoot: b.dir });
