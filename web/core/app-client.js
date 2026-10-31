@@ -482,6 +482,7 @@
       capabilities: opts => { if(service) return service.capture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
       attach: () => { if(service) return service.capture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
       current: () => { if(service) return service.capture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
+      settle: keepId => { if(service) return service.capture.settle(keepId); if(framed) throw new Error('Capture cleanup needs the verified host connection'); return captureModule().settle(standaloneId(),keepId); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
   ready();
