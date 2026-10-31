@@ -204,7 +204,7 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.deepEqual(ids, ['plasma', 'glass', 'oracle', 'chrome', 'marble', 'sun', 'planet', 'blackhole']);
   for (const id of ids.filter(i => i !== 'oracle')) assert.match(styles, new RegExp(`\\n  ${id}: \``), `${id} has its own shader`);
   assert.match(styles, /FRAG\.oracle = FRAG\.glass;/); assert.match(styles, /getContext\('webgl', \{/); assert.match(styles, /function plasma2d\(/); assert.match(styles, /function glass2d\(/);
-  assert.match(styles, /const CAP = 640;/, 'frame cost capped');
+  assert.match(styles, /const CAP = 640;/, 'frame cost capped'); assert.match(styles, /if \(cost > 12 && q > \.4\) \{ q = Math\.max\(\.4, q \* \.8\);/, 'a slow GPU renders fewer pixels');
   assert.deepEqual([...styles.match(/export const RETIRED = Object\.freeze\(\[([^\]]*)\]\)/)[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]), ['swarm', 'holo', 'glitch', 'crystal', 'aurora']);
   assert.ok(!/function (swarm|holo|glitch|crystal|aurora|bust|headSDF)\(/.test(styles), 'retired styles are gone');
   assert.match(js, /const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n    \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);

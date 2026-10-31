@@ -214,11 +214,11 @@ function program(G, style) {
 const rgb01 = hex => chans(hex).map(v => v / 255);
 /** A shader style: draws f into ctx (px × px); false when WebGL can't. */
 function shaded(style, mk) {
-  let ph = 0, last = -1;
+  let ph = 0, last = -1, q = 1, cost = 0;   // q: resolution this device affords (a slow GPU steps it down, never below 40%)
   return (ctx, px, f) => {
     const G = glOf(mk); if (!G) return false;
     const rec = program(G, style); if (!rec) return false;
-    const gl = G.gl, n = Math.max(8, Math.min(CAP, Math.round(px * (SCALE[style] || 1))));
+    const t0 = performance.now(), gl = G.gl, n = Math.max(8, Math.min(CAP, Math.round(px * (SCALE[style] || 1) * q)));
     const dt = last >= 0 && f.t > last ? Math.min(.1, f.t - last) : 0; last = f.t;
     if (!ph) ph = f.t % 1000;   // the first frame (and a reduced-motion still) starts mid-motion, never at zero
     ph += dt * spinOf(f.state) * (f.state === 'paused' ? .3 : 1);
@@ -232,6 +232,8 @@ function shaded(style, mk) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     ctx.clearRect(0, 0, px, px); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(G.cv, 0, G.cv.height - n, n, n, 0, 0, px, px);
+    // the copy waits for the GPU, so this is the frame's real cost: keep the big orb under ~12 ms
+    if (px > 200) { cost = cost ? cost * .8 + (performance.now() - t0) * .2 : performance.now() - t0; if (cost > 12 && q > .4) { q = Math.max(.4, q * .8); cost = 0; } else if (cost < 4 && q < 1) q = Math.min(1, q * 1.05); }
     return true;
   };
 }
