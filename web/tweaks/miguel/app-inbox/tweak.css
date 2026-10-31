@@ -1,8 +1,0 @@
-/* An app's item in Chats (inbox feed): the app's own mark, painted in the inbox yellow; its buttons wrap. */
-.ch-notif-wrap .ch-notif-ic { --c: var(--ui-y); }
-.ch-notif-wrap .ch-notif-ic .sgi { width: 62%; height: 62%; filter: none; }
-.ch-notif-thread .ch-notif-tacts { flex-wrap: wrap; }
-/* Settings › Notifications: one row per app, its own mark (the app's tile, as in the launcher) beside its name. */
-.ai-sources .ai-row { gap: 12px; }
-.ai-sources .ai-row .ai-ic { flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; }
-.ai-sources .ai-row .ai-ic .sgt { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; }

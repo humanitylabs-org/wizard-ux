@@ -2079,8 +2079,10 @@
     toast('↻', 'Refreshed', 900);
   }
   let toastT = 0;
-  function toast(icon, text, ms = 2200) {
+  function toast(icon, text, ms = 2200, act = null) {
     const t = $('#toast'); delete t.dataset.opening; t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
+    // One optional button (a package's Undo): it runs once and the toast goes.
+    if (act && typeof act.run === 'function') { const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-act'; b.textContent = String(act.label || 'Undo'); b.onclick = () => { clearTimeout(toastT); t.classList.remove('show'); b.onclick = null; act.run(); }; t.append(b); }
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
 
@@ -4028,6 +4030,7 @@
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     // Skin scripts pass plain text (file names, error messages): escaped, like the desktop toast.
     toast: text => toast('◇', esc(String(text ?? '')), 2400),
+    toastAct: (text, act) => toast('◇', esc(String(text ?? '')), 5000, act),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
     agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),

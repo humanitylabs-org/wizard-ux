@@ -101,11 +101,14 @@ the panel on the right, which closes when the thread is finished (Done, Snooze, 
 ## App inbox feeds (trusted `inbox` capability)
 
 Installed apps can list what needs the owner (`GET /<app>/api/inbox`, inbox feed v1). The shell reads those feeds only
-while a package holds `api.inbox.feeds({ on: true, act })`: off, nothing asks an app for a feed and Chats shows no app
-buttons (stock). `act(action, id)` sees an app item's buttons first (`app`, `x:<action id>`, `done`) and returns true
-when it handled one; the rest go to the inbox threads package. `api.inbox.sources.list()` / `.set(appId, { chats })`
-read and save the per-app "show in Chats" choice on the box (Notifications `/api/sources`). Settings sections may use
-the `notifications` page (hidden while empty). Example: `web/tweaks/miguel/app-inbox`.
+while a package holds `api.inbox.feeds({ on: true, act, keep })`: off, nothing asks an app for a feed and Chats shows no
+app buttons (stock). `act(action, id)` sees an app item's buttons first (`app`, `x:<action id>`, `done`, and `keep` when
+`keep: true` asks Chats for a quiet "Keep <App> in its app" button on an opened app item) and returns true when it
+handled one; the rest go to the inbox threads package. `api.inbox.sources.list()` / `.set(appId, { chats })` read and
+save the per-app "show in Chats" choice on the box (Notifications `/api/sources`). A trusted package's toast can carry
+one button: `api.toast(words, { action: 'Undo', run })`. Example: `web/tweaks/miguel/inbox`, which imports
+`wizard/unified-inbox`'s setup and loads instead of it (catalog `oneOf`: the first member listed loads; Settings shows
+the last member's switch, so the shared inbox keeps its name and place).
 
 ## Updates (Settings › About & updates)
 

@@ -90,7 +90,7 @@ test('feed text is data: unsafe open paths are dropped and fields are bounded', 
 });
 
 const same = (a, b, m) => assert.equal(JSON.stringify(a), JSON.stringify(b), m);
-// Off by default: the feeds are a tweak's (miguel/app-inbox holds api.inbox.feeds). Until one holds them, the inbox is
+// Off by default: the feeds are a tweak's (miguel/inbox holds api.inbox.feeds). Until one holds them, the inbox is
 // the stock Notifications-only path: no app is asked for a feed, no app item, no feed state saved on the device.
 test('feeds off (stock): no app is ever asked for a feed and marks stay the plain Notifications ones', async () => {
   const { B, S, ls } = load({ messenger: [chat()] }, {}, { on: false });
@@ -144,6 +144,33 @@ test('chats.js gates every app-item control on the held feeds', () => {
   assert.match(c, /how === 'typing in the Chats window' && !winAgent\(w\) && feedsOn\(\)/, 'typed words go to Wizard as stock');
   const h = readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
   assert.match(h, /get inboxFeeds\(\) \{ return inboxFeeds\.size > 0; \}/);
-  assert.doesNotMatch(h, /miguel\/app-inbox/, 'core never names a package');
-  assert.doesNotMatch(c + readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8'), /miguel\/app-inbox/);
+  assert.doesNotMatch(h, /miguel\/(app-)?inbox/, 'core never names a package');
+  assert.doesNotMatch(c + readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8'), /miguel\/(app-)?inbox/);
+  // Keep <App> in its app: only on an app item, only while the feeds holder offers it.
+  assert.match(c, /const noteKeep = it => it\?\.app && !it\.archived && feedsOn\(\) && window\.WosSkinHost\?\.inboxKeep \? \['keep'\] : \[\];/);
+  assert.match(h, /get inboxKeep\(\) \{ for \(const h of inboxFeeds\.values\(\)\) if \(h\.keep\) return true; return false; \}/);
+});
+
+// The per-app choice is on the item and under Archive (Miguel, 31 Oct 2026): no Settings page for it.
+test('no Notifications page in Settings; packages cannot add one', () => {
+  const st = readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+  const h = readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(st, /id: 'notifications', title: 'Notifications'/);
+  assert.match(h, /const SETTINGS_PAGES = Object\.freeze\(\['overview', 'ai', 'network', 'storage'\]\);/);
+});
+
+// A toast with Undo: a separate adapter, so every plain toast is byte-for-byte the stock one.
+test('a package toast may carry one button; plain toasts are unchanged', async () => {
+  const { fixture } = await import('./fixtures/tweaks.mjs');
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/inbox'], f.slots, { teamAuthors: ['miguel'] });
+  let ran = 0;
+  api.toast('Plain'); api.toast('Kept', { action: 'Undo', run: () => { ran++; } });
+  assert.deepEqual(f.toasts, ['Plain', 'Kept']); assert.equal(f.toastActs.length, 1); assert.equal(f.toastActs[0].label, 'Undo');
+  f.toastActs[0].run(); assert.equal(ran, 1);
+  await f.clear(); f.toastActs[0].run(); assert.equal(ran, 1, 'a dead package\'s Undo does nothing');
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  assert.match(app, /toastAct: \(text, act\) => toast\('◇', esc\(String\(text \?\? ''\)\), 5000, act\),/);
+  assert.match(desk, /toastAct: \(text, act\) => toast\('◇', text, 5000, act\),/);
 });

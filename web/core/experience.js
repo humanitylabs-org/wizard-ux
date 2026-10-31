@@ -96,8 +96,9 @@
   // An explicit off for any member (My skin recipe, a saved off, a release-wide off) turns the whole group off.
   const oneOf = (ids, own = recipe()) => { const out = [...ids]; for (const g of catalog?.oneOf || []) { const off = g.some(id => recipeChoice(own, id) === false || offFor(owner).includes(id) || globalOff(id)), on = g.filter(x => out.includes(x)); for (const id of off ? on : on.slice(1)) out.splice(out.indexOf(id), 1); } return out; };
   const groupOf = id => (catalog?.oneOf || []).find(g => g.includes(id)) || null;
-  // One switch per group in Settings: the member this skin's profile lists, else the first one installed.
-  const shownInGroup = id => { const g = groupOf(id); if (!g) return true; const present = g.filter(x => manifests.has(x)); return id === (present.find(x => set?.tweaks.includes(x)) || present[0]); };
+  // One switch per group in Settings: the member this skin's profile lists, else the group's base (listed last: the
+  // package the others replace keeps its switch, name and place, whichever member loads).
+  const shownInGroup = id => { const g = groupOf(id); if (!g) return true; const present = g.filter(x => manifests.has(x)); return id === (present.find(x => set?.tweaks.includes(x)) || present[present.length - 1]); };
   const groupOn = id => { const own = recipe(); return oneOf([...manifests.keys()].filter(x => enabled(x, own)), own).some(x => groupOf(id).includes(x)); };
   const explicitOff = id => recipeChoice(recipe(), id) === false || offFor(owner).includes(id) || globalOff(id);
   async function setOne(id, on) {

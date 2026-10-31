@@ -20,8 +20,6 @@
     { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
     { id: 'appearance', title: 'Appearance', group: 'Preferences' },
     { id: 'chats', title: 'Chats & app screens' },
-    // Filled only by a package (e.g. which apps' items show in Chats); hidden while nothing is on it.
-    { id: 'notifications', title: 'Notifications', available: filled('notifications') },
     { id: 'voice', title: 'Voice & typing' },
     // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
     // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.

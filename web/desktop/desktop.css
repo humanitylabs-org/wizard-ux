@@ -243,6 +243,9 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .toast { position: fixed; left: 50%; top: 3px; z-index: 50; transform: translate(-50%, -12px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px;
   padding: 8px 14px; border-radius: 99px; background: linear-gradient(rgba(22, 14, 46, .96), rgba(22, 14, 46, .96)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); font-size: 13px; color: var(--ink); transition: opacity 160ms, transform 160ms var(--ease); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
+/* A toast with one button (a package's Undo) takes the click; plain toasts stay click-through. */
+.toast.on.act { pointer-events: auto; }
+.toast .toast-act { margin-left: 2px; padding: 2px 6px; border: 0; border-radius: 8px; background: none; font: inherit; font-weight: 700; color: var(--violet-2, var(--ink)); cursor: pointer; }
 
 
 .win .desk-scroll{height:100%;overflow:auto;padding:12px}

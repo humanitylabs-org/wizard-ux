@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
+// Miguel's release: the inbox is one catalog oneOf group (his miguel/inbox loads instead of wizard/unified-inbox, whose
+// switch it keeps). "The inbox is on" = a member of that group loads.
+const INBOX = (catalog.oneOf || []).find(g => g.includes('wizard/unified-inbox')) || ['wizard/unified-inbox'];
+const inboxOn = ids => ids.filter(id => INBOX.includes(id)).length === 1;
+const groupsHidden = (catalog.oneOf || []).reduce((n, g) => n + g.length - 1, 0);
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
   test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/orb-switch'].includes(id) ? 'desktop' : 'phone'));
@@ -48,7 +53,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/hidden-pin': true }, 'written into its own switches once');
   skin = 'grove'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/hidden-pin'], 'a color pick keeps the tweaks');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size, 'every installed tweak is offered, whoever wrote it');
+  assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size - groupsHidden, 'every installed tweak is offered, whoever wrote it (one switch per replacement group)');
   await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/hidden-pin', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
   await E.toggle('miguel/hidden-pin'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/hidden-pin'] }; await E.refresh();
@@ -276,7 +281,8 @@ test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an 
 });
 
 test('Notifications in Chats is on by default for everyone, whatever tweak set', async () => {
-  const f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/unified-inbox'));
+  const f = wizardExperience(); await f.E.refresh(); assert.ok(inboxOn(f.all()), 'exactly one inbox package loads');
+  assert.equal(f.all().includes(INBOX[0]), true, 'the first member of the group wins');
   assert.equal((await f.E.defaults())['wizard/unified-inbox'], true);
   assert.ok(JSON.parse(read('web/tweaks/catalog.json')).defaults.includes('wizard/unified-inbox'), 'a release-wide default, so no set needs to list it');
 });
@@ -298,16 +304,17 @@ test('James: notifications are on for every skin, with one persistent owner off-
   let f = wizardExperience();
   for (const skin of ['nebula', 'novairecito']) {
     f.skin(skin); await f.E.chooseSkin();
-    assert.ok(f.all().includes('wizard/unified-inbox'), skin);
+    assert.ok(inboxOn(f.all()), skin);
     assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').on, true);
   }
+  assert.equal(f.E.state.tweaks.filter(t => INBOX.includes(t.id)).length, 1, 'one switch for the whole inbox, under the shared name');
   await f.E.toggle('wizard/unified-inbox');
-  assert.ok(!f.all().includes('wizard/unified-inbox'));
+  assert.ok(!f.all().some(id => INBOX.includes(id)), 'that one switch turns every member off');
   f = wizardExperience(f.storage); await f.E.refresh();
-  assert.ok(!f.all().includes('wizard/unified-inbox'), 'reload keeps owner off');
+  assert.ok(!f.all().some(id => INBOX.includes(id)), 'reload keeps owner off');
   f.skin('novairecito'); await f.E.chooseSkin();
-  assert.ok(!f.all().includes('wizard/unified-inbox'), 'changing skin keeps owner off');
-  await f.E.toggle('wizard/unified-inbox'); assert.ok(f.all().includes('wizard/unified-inbox'));
+  assert.ok(!f.all().some(id => INBOX.includes(id)), 'changing skin keeps owner off');
+  await f.E.toggle('wizard/unified-inbox'); assert.ok(inboxOn(f.all()) && f.all().includes(INBOX[0]), 'and back on');
 });
 test('notifications preserve existing Miguel off choices and old custom-skin ids after promotion', async () => {
   const saved = new Map([['wos.skin-tweaks.v1', JSON.stringify({version:1, off:{miguel:['miguel/unified-inbox']}})]]);

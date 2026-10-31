@@ -100,7 +100,7 @@ test('James: default Settings keeps the current AI page and has no "Your network
   assert.match(s, /const effectivePage = \(\) => page \|\| \(desktop \? \(filled\('overview'\)\(\) \? 'overview' : 'appearance'\) : ''\);/, 'desktop opens on Appearance as before');
   // Order unchanged from the classic list: Appearance first, then Chats, Voice, Phones…
   const order = [...between(s, 'const PAGES = [', '];').matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]).filter(id => !['overview', 'ai', 'network', 'storage'].includes(id));
-  assert.deepEqual(order, ['appearance', 'chats', 'notifications', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about'] /* Miguel's release adds Notifications */);
+  assert.deepEqual(order, ['appearance', 'chats', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about'] /* Miguel's per-app choice lives on the item, not in Settings */);
   // Group labels (System / Preferences) appear only when there is more than one group.
   assert.match(s, /pages\.some\(q => q\.group && q\.group !== p\.group\)/);
 });

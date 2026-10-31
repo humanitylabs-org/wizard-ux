@@ -1,0 +1,13 @@
+{
+  "id": "miguel/inbox",
+  "name": "Notifications in Chats",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav",
+    "inbox"
+  ],
+  "description": "The notifications in Chats, plus every app's 'needs you' items (what its badge counts) with the app's own buttons (Open, Reply, Mark as read, …). An opened app item can 'Keep <App> in its app'; kept apps are listed under Archive, one tap brings one back. Replaces wizard/unified-inbox (same switch)."
+}

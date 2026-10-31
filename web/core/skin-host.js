@@ -523,7 +523,7 @@
     });
   }
   // Settings pages a package may fill (core/settings.js lists each; a page with nothing on it stays hidden).
-  const SETTINGS_PAGES = Object.freeze(['overview', 'ai', 'network', 'storage', 'notifications']);
+  const SETTINGS_PAGES = Object.freeze(['overview', 'ai', 'network', 'storage']);
   // An installed app's mark (its sigil) as a fresh node a package can place; null when the sigils are not loaded.
   function appIcon(id, name) {
     if (!isDoc || !window.WizSigil?.html) return null;
@@ -545,6 +545,12 @@
       if (type === 'home' && !caps.has('layout')) throw new Error('home requires layout');
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
+    // A trusted package's toast may carry one button (e.g. Undo): toast(msg, { action, run }). Plain toasts are unchanged.
+    if (trusted) api.toast = (msg, opts) => {
+      if (!opts || typeof opts.run !== 'function' || typeof opts.action !== 'string' || !opts.action.trim()) return base.toast(msg);
+      const run = guard(a, 'toast.run', opts.run);
+      try { if (!shell) throw new Error('shell not ready'); (shell.toastAct || shell.toast)(String(msg).slice(0, 140), Object.freeze({ label: opts.action.trim().slice(0, 20), run: () => { if (!a.dead) run(); } })); } catch (e) { fault(a, 'toast', e); }
+    };
     // Trusted packages that replace each other (catalog oneOf) can share one store, so a look-only skin change keeps
     // the owner's choices: manifest `storage: "<name>"` keys it as `wos.skin.shared:<name>.*` instead of by package id.
     if (trusted && typeof manifest.storage === 'string' && /^[a-z0-9-]{1,40}$/.test(manifest.storage)) {
@@ -764,7 +770,8 @@
        * returning true means handled, anything else falls through to the inbox threads package. Released on teardown. */
       feeds(opts = {}) {
         if (a.dead || opts?.on !== true) return () => {};
-        inboxFeeds.set(a.id, { act: typeof opts.act === 'function' ? guard(a, 'inbox.feeds.act', opts.act) : null });
+        // keep: true also offers "Keep <App> in its app" on an opened app item (its act gets 'keep').
+        inboxFeeds.set(a.id, { act: typeof opts.act === 'function' ? guard(a, 'inbox.feeds.act', opts.act) : null, keep: opts.keep === true });
         window.WosBell?.feeds?.(true);
         const off = () => { if (inboxFeeds.delete(a.id)) { if (!inboxFeeds.size) window.WosBell?.feeds?.(false); window.dispatchEvent?.(new Event('wos:prefs')); } a.offs.delete(off); };
         a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
@@ -862,6 +869,7 @@
     get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
     /* chats.js: app items' own buttons render and typed replies go to the app only while a package holds feeds. */
     get inboxFeeds() { return inboxFeeds.size > 0; },
+    get inboxKeep() { for (const h of inboxFeeds.values()) if (h.keep) return true; return false; },
     inboxAct(action, id, text) {
       for (const h of inboxFeeds.values()) if (h.act && h.act(String(action), String(id), text == null ? undefined : String(text)) === true) return true;
       for (const h of inboxThreads.values()) { h.act(String(action), String(id), text == null ? undefined : String(text)); return true; } return false;

@@ -790,7 +790,7 @@ window.WizCore.chats = function createChats(H) {
     if (!w || w.thread !== '__new__' || winAgent(w) || !window.WosSkinHost?.inboxThreads) return null;
     const r = KIT.drafts.get('new').reply, m = r && NOTIF_KEY.exec(r.key || ''); if (!m) return null;
     const it = window.WosBell?.item?.(m[1]) || null;
-    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : [...noteAppActs(it), ...(it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'])] };
+    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : [...noteKeep(it), ...noteAppActs(it), ...(it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'])] };
   }
   /* An app item's own buttons (inbox feed): Open (`app`: the app itself, at the item when it says where), each declared action as `x:<id>`, except the
    * one that types (the composer is its box) and the one that finishes it (`done`, else `read`: that is the Done
@@ -804,12 +804,16 @@ window.WizCore.chats = function createChats(H) {
     const fin = noteDoneAct(it);
     return [...(window.WizCanOpen?.(it.app) ? ['app'] : []), ...it.actions.filter(a => !a.input && a !== fin).map(a => 'x:' + a.id)];
   }
+  // "Keep <App> in its app" (quiet, first): only while the feeds holder offers it (WosSkinHost.inboxKeep).
+  const noteKeep = it => it?.app && !it.archived && feedsOn() && window.WosSkinHost?.inboxKeep ? ['keep'] : [];
+  const NOTE_KEEP = '<svg viewBox="0 0 24 24"><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M12 4v10M8 10l4 4 4-4"/></svg>';
   const NOTE_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
   const NOTE_ASK = '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
   const NOTE_DO = '<svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>';
   function noteActBtn(NV, a) {
     const it = NV.item;
     if (a === 'app') return { label: 'Open', icon: NOTE_OPEN, hint: `Open in ${it?.appName || 'the app'}` };
+    if (a === 'keep') { const k = `Keep ${it?.appName || 'this app'} in its app`; return { label: k, icon: NOTE_KEEP, hint: k }; }
     if (a.startsWith('x:')) { const d = it?.actions.find(x => x.id === a.slice(2)); return d ? { label: d.label, icon: d.ask ? NOTE_ASK : NOTE_DO, hint: d.ask ? `Ask Wizard: ${d.label}` : `${d.label} in ${it.appName || 'the app'}` } : null; }
     const fin = a === 'done' ? noteDoneAct(it) : null;
     const A = NACT[a] || ACT[a];
@@ -827,7 +831,7 @@ window.WizCore.chats = function createChats(H) {
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
     ch(w.id).draft = ''; chatsBack(w);
     const xa = a.startsWith('x:') ? n.item?.actions.find(x => x.id === a.slice(2)) : null, fin = a === 'done' ? noteDoneAct(n.item) : null;
-    toast({ done: '✓', snooze: '◷', restore: '↺' }[a] || '✓', xa ? xa.label : fin ? fin.label : { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
+    if (a !== 'keep') toast({ done: '✓', snooze: '◷', restore: '↺' }[a] || '✓', xa ? xa.label : fin ? fin.label : { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600); // Keep: the package's toast (with Undo)
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
   }

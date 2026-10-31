@@ -2652,7 +2652,7 @@
 
   /* ---------------- toast ---------------- */
   let toastT = 0;
-  function toast(icon, text, ms = 2000) { const t = $('#toast'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
+  function toast(icon, text, ms = 2000, act = null) { const t = $('#toast'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.toggle('act', !!act); if (act && typeof act.run === 'function') { const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-act'; b.textContent = String(act.label || 'Undo'); b.onclick = () => { clearTimeout(toastT); t.classList.remove('on'); b.onclick = null; act.run(); }; t.append(b); } t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
   C.bridge.handle({
@@ -2856,6 +2856,7 @@
     dock: () => null,
     locked: () => false,
     toast: text => toast('◇', text, 2400),
+    toastAct: (text, act) => toast('◇', text, 5000, act),
   });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));

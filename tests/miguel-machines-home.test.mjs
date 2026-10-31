@@ -200,7 +200,7 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   const exp = read('web/core/experience.js'), host = read('web/core/skin-host.js');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   // James, 31 Oct 2026: the network Home is Miguel's alone; no stock copy, nothing on by default for every skin.
-  assert.equal(cat.oneOf, undefined, 'no stock Home map to choose between');
+  assert.ok(!(cat.oneOf || []).some(g => g.some(id => /machines-home$/.test(id))), 'no stock Home map to choose between');
   assert.ok(!cat.defaults.some(id => id.endsWith('/machines-home')), 'the network Home is never a release-wide default');
   assert.ok(!cat.tweaks.includes('wizard/machines-home') && cat.tweaks.includes('miguel/machines-home'));
   // The oneOf mechanism stays for any later pair of packages that fill the same place.

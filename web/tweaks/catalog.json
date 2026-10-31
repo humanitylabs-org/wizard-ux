@@ -19,13 +19,20 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
-    "miguel/app-inbox",
+    "miguel/inbox",
     "miguel/orb-shell",
     "miguel/orb-switch"
   ],
   "defaults": [
+    "miguel/inbox",
     "wizard/unified-inbox",
     "miguel/orb-switch"
+  ],
+  "oneOf": [
+    [
+      "miguel/inbox",
+      "wizard/unified-inbox"
+    ]
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
