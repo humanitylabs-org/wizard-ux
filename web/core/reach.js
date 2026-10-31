@@ -14,8 +14,8 @@
     const controller = new AbortController(); let timer;
     try {
       return await Promise.race([
-        (async () => { const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...options, signal: controller.signal }); return json ? { response, body: await response.json() } : response; })(),
-        new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Diagnosis timed out')); }, 4000); }),
+        (async () => { const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...options, signal: controller.signal }); return json ? { response, body: response.ok ? await response.json() : null } : response; })(),
+        new Promise((_, reject) => { timer = setTimeout(() => { reject(Object.assign(new Error('Diagnosis timed out'), { code: 'diagnosis_timeout' })); controller.abort(); }, 4000); }),
       ]);
     } finally { clearTimeout(timer); }
   }
@@ -53,7 +53,9 @@
         return result(failed.id, message ? message + (selfHeals ? ' It usually comes back on its own within a minute; messages wait and send afterwards. Open Troubleshooter if it doesn’t.' : ' Open Troubleshooter to check it.') : `${failed.label || failed.id}: ${failed.detail || 'Needs attention'}`, short);
       }
       if (body.overall === 'down') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', RECONNECTING);
-    } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
+    } catch (e) {
+      if (e?.code === 'diagnosis_timeout') return result('busy', 'Your Wizard is busy and answering slowly. Messages are kept on this device and send by themselves.', RECONNECTING);
+      return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
     // Healthy probes prove reachability, not why a separate read/send failed or
     // whether anything was admitted. The shared result stays request-neutral;
     // label('send') alone words it as a saved message (PR689 review).
@@ -108,7 +110,7 @@
       out.tailscale = speed(ping);
       let d; try { d = await diagnose(0); } catch (_) { d = null; }
       const healthy = d && ['send'].includes(d.layer);
-      out.wizard = healthy ? { state: 'ok', ms: 0, detail: 'Healthy' } : { state: 'bad', ms: 0, detail: d?.message || 'Wizard isn’t answering properly.', layer: d?.layer || '' };
+      out.wizard = healthy ? { state: 'ok', ms: 0, detail: 'Healthy' } : d?.layer === 'busy' ? { state: 'slow', ms: 0, detail: 'Busy · answering slowly', layer: 'busy' } : { state: 'bad', ms: 0, detail: d?.message || 'Wizard isn’t answering properly.', layer: d?.layer || '' };
     } else {
       out.internet = net.ok ? speed(net) : { state: 'bad', ms: 0, detail: offline ? 'This device is offline' : 'No connection' };
       out.tailscale = net.ok ? { state: 'bad', ms: 0, detail: ts ? 'Can’t reach your Wizard' : 'Can’t reach your Wizard’s address' } : { state: 'wait', ms: 0, detail: 'Needs internet first' };
