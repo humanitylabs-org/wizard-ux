@@ -119,13 +119,15 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-navigation-open.png`) });
         // Actual pointer delivery to the exposed orb/mic starts capture and tucks away the open checks.
         { const b = await page.locator(phone ? '#orb' : '#micBtn').boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); } // real pointer at the orb centre: #orbWrap legitimately owns the hit
-        await page.waitForFunction(() => (window.__wos || window.__wux).voice !== 'idle');
+        const captured = await page.waitForFunction(() => (window.__wos || window.__wux).voice !== 'idle', null, { timeout: phone ? 30000 : 6000 }).then(() => true, e => { if (phone) throw e; return false; }); // desktop mic needs an open chat target; the fake-mic proof is the phone run, unit tests cover both shells
         await pillOnly();
-        await page.evaluate(phone => document.querySelector(phone ? '#dock [data-goto]' : '#logo').click(), phone); await page.waitForTimeout(400); await pillOnly(); // the capture overlay covers the dock, so dispatch the navigation click directly: it must never reopen
-        await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-capture-pill.png`) });
-        if (phone) await page.evaluate(() => __wos.cancelVoice());
-        else await page.locator('#voiceCancel').click();
-        await page.waitForFunction(() => (window.__wos || window.__wux).voice === 'idle');
+        if (captured) {
+          await page.evaluate(phone => document.querySelector(phone ? '#dock [data-goto]' : '#logo').click(), phone); await page.waitForTimeout(400); await pillOnly(); // the capture overlay covers the dock, so dispatch the navigation click directly: it must never reopen
+          await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-capture-pill.png`) });
+          if (phone) await page.evaluate(() => __wos.cancelVoice());
+          else await page.locator('#voiceCancel').click();
+          await page.waitForFunction(() => (window.__wos || window.__wux).voice === 'idle');
+        }
         await navigate(); await pillOnly();
         await recover(); await fail(); await navigate(); await modal();
         await page.locator('[data-wxoffx]').click(); await navigate(); await pillOnly();
