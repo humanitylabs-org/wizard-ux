@@ -44,7 +44,7 @@
   }
   function voice(opts = {}) {
     const V = { state: 'idle', chunks: [], rec: null, stream: null, ac: null, an: null, t0: 0, raf: 0 };
-    const set = st => { V.state = st; try { opts.onState && opts.onState(st); } catch (e) {} };
+    const set = st => { V.state = st; window.dispatchEvent?.(new CustomEvent('wizard-voice-state', { detail: { state: st } })); try { opts.onState && opts.onState(st); } catch (e) {} };
     const stop = () => {
       try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
       try { V.ac && V.ac.close(); } catch (e) {}

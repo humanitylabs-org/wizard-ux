@@ -75,7 +75,26 @@ test('4s deadline handles hung fetch and status bodies, without hanging consumer
   assert.equal((await work).layer, 'device-offline'); assert.equal(h.timers.size, 0);
   const b = setup({ fetch: async url => url.endsWith('ping') ? response() : { ok: true, json: () => new Promise(() => {}) } });
   const bodyWork = b.api.diagnose(); for (let i = 0; i < 10; i++) await Promise.resolve();
-  [...b.timers.values()][0](); assert.equal((await bodyWork).layer, 'diagnosis');
+  [...b.timers.values()][0](); assert.equal((await bodyWork).layer, 'busy');
+});
+test('status deadline with a working ping reports busy, and the Wizard check is slow not a problem', async () => {
+  for (const bodyHung of [false, true]) {
+    const h = setup({ fetch: async url => !url.includes('/status') ? response() : bodyHung ? { ok: true, json: () => new Promise(() => {}) } : new Promise(() => {}) });
+    const work = h.api.checks();
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+    assert.equal(h.timers.size, 1); [...h.timers.values()][0]();
+    const rows = await work, d = await h.api.diagnose();
+    assert.equal(d.layer, 'busy'); assert.equal(d.short, 'Reconnecting…');
+    assert.match(d.message, /busy and answering slowly/); assert.match(d.message, /kept on this device and send by themselves/);
+    assert.equal(rows.wizard.state, 'slow'); assert.equal(rows.wizard.detail, 'Busy · answering slowly');
+    assert.doesNotMatch(rows.wizard.detail, /Problem|health report/); assert.equal(h.timers.size, 0);
+  }
+});
+test('real status HTTP and JSON failures retain the unavailable-health-report diagnosis', async () => {
+  for (const reply of [{ ok: false, status: 503, json: () => new Promise(() => {}) }, { ok: true, json: async () => { throw Error('bad JSON'); } }]) {
+    const h = setup({ fetch: async url => url.endsWith('ping') ? response() : reply });
+    const d = await h.api.diagnose(); assert.equal(d.layer, 'diagnosis'); assert.match(d.message, /health report isn’t available/);
+  }
 });
 test('Troubleshooter navigation is same-tab on phone and a safe new tab on desktop', async () => {
   const h = setup(); await h.api.open(); assert.deepEqual(h.opened[0], ['same', '/troubleshoot/']);
