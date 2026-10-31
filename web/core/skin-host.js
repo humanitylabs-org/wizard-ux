@@ -442,13 +442,6 @@
       phone: Object.freeze({
         home: () => live() ? shell.homeHost?.() || null : null,
         orb: () => live() ? shell.orbHost?.() || null : null,
-        // An app's mark as the dock draws it (logo or sigil, colour, live count; 'wizard' = Chats with its Ready count),
-        // as a fresh element the layout may place; null when the app is unknown.
-        mark: id => {
-          const h = live() && typeof id === 'string' && id ? shell.phoneMark?.(id) : '';
-          if (!h || !isDoc) return null;
-          const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
-        },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {

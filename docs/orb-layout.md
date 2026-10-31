@@ -138,24 +138,8 @@ on their line). Per device, no reload.
   where `phone.js` draws it in the same look inside `#orbWrap` (the stock drawing steps aside while
   `html[data-orb-phone]`). The stock gestures stay on the dock orb: a press on the centre orb is handed to `#orbWrap`
   as it starts (same pointer id), so tap, hold and the swipes are the dock orb's own.
-- **Bottom bar: three slots, the same on every screen.** The stock desk switcher (three desks each side of the orb)
-  steps aside; LEFT = the app used last other than the one in front (kept per device as `recent` in the layout's
-  storage, picked from `api.panel.running()`), CENTRE = the dock orb (an empty slot on Home, where the orb is up in the
-  scene), RIGHT = Chats with its Ready count. The marks are the dock's own (`api.phone.mark(id)`: logo or sigil, colour,
-  live count), the slots sit in the thumb corners and shrink with the screen (360-430 px checked), and swipes along the
-  bar still move desks. Left opens that app the stock way (`api.apps.open`), right opens the Chats list.
-- **Bolt**: whatever opens (an app, Chats, a thread) is struck from the bar's orb with the desktop's own lightning
-  (`shared.js` `boltPainter`, one drawing for both shells): it grows in once the orb has landed, holds ~0.65 s and
-  fades, so it never sits over what you read. Light screens paint it over (`source-over`), dark ones add it (`lighter`).
-- **Spin**: a sideways drag on the Home sky under the orbit (or on a satellite) turns the satellites like a ring under
-  the finger, with a calm coast after a flick; vertical moves stay the page's (`touch-action: pan-y`), the screen edges
-  stay the system's back swipe, a satellite let go after a spin does not open. Reduced motion: no coasting.
-- **Hold for a command** (core, both views): a press held still on the orb for 90 ms opens the browser mic early
-  (`warmMic`, only once the mic is known to be allowed and never with the native recorder), so the take that starts
-  (a 380 ms hold = command, or a tap = message, unchanged) records at once; any other end of the press closes it.
-- Layout-only hosts: `api.phone.home()` (the Home desk section; the sky lives there and slides with the desks),
-  `api.phone.orb()` (the dock orb's box) and `api.phone.mark(id)`. Desks (the tweak off) removes every node and flag:
-  the stock phone is back.
+- Layout-only hosts: `api.phone.home()` (the Home desk section; the sky lives there and slides with the desks) and
+  `api.phone.orb()` (the dock orb's box). Desks (the tweak off) removes every node and flag: the stock phone is back.
 
 ## Layouts a tweak can wear
 
