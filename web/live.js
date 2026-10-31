@@ -43,6 +43,8 @@
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
+    .replace(/(?:^|\n)[ \t]*\[System: [\s\S]*\]\s*$/, ' ') // Hermes' own note at the end of his turn (chat-kit SYSTEM_NOTE)
+    .replace(/^[ \t]*\[screenshot\][ \t]*$/gm, ' ') // the Agent Service's marker for a picture (the chip says Photo)
     .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   // Only the two connection apps Wizard knows; anything else in the field is ignored.

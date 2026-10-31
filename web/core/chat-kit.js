@@ -94,6 +94,10 @@
     for (const k of ['image_urls', 'imageUrls', 'images']) if (Array.isArray(m?.[k])) m[k].forEach(add);
     return urls.slice(0, 8);
   }
+  // Hermes appends its own notes to the owner's turn ("[System: The skills available … changed …]", a model switch, a
+  // surface switch): from a line that starts "[System: " to a "]" that ends the message. For the model, never his words;
+  // brackets inside his own text are untouched (mid-line, or followed by more of his words).
+  const SYSTEM_NOTE = /(?:^|\n)[ \t]*\[System: [\s\S]*\]\s*$/;
   const cleanText = s => reply.strip(String(s || ''))
     .replace(/\[WIZARD_FILES_V1\][\s\S]*?\[\/WIZARD_FILES_V1\]/g, '')
     .replace(/\[WIZARD_FILE_CHIPS_V1\][\s\S]*?\[\/WIZARD_FILE_CHIPS_V1\]/g, '')
@@ -102,6 +106,7 @@
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
+    .replace(SYSTEM_NOTE, '')
     .trim();
   // Hermes delivers a steer as its own user row wrapped in this marker (agent/prompt_builder.py STEER_MARKER_*).
   const STEER_OPEN = '[OUT-OF-BAND USER MESSAGE';
