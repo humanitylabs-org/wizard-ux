@@ -33,6 +33,9 @@
     },
     "thread-switch-row-end": {
       "since": 1
+    },
+    "bar-start": {
+      "since": 1
     }
   }
 }

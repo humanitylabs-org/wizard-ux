@@ -12,16 +12,20 @@
   };
   const copy = value => JSON.parse(JSON.stringify(value));
   let state = Store.read() || { version: 1, off: {} };
+  let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
   // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
   const files = new Map();
-  const fetchOnce = async url => {
-    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-cache', signal: AbortSignal.timeout(6000) });
+  const fetchOnce = async (url, ms = 6000) => {
+    const r = await fetch(new URL(url, document.baseURI), { cache: /[?&]v=/.test(url) ? 'default' : 'no-cache', signal: AbortSignal.timeout(ms) });
     if (!r.ok) throw new Error(`Could not read ${url} (${r.status})`); return r.json();
   };
+  // Release-stamped like every other shell file, so the browser keeps them until the next release.
+  const rel = () => document.querySelector?.('meta[name="wos-release"]')?.content || '';
   const read = url => {
     if (/profile\.json$/.test(url)) return fetchOnce(url); // a published profile can change; manifests cannot
-    if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url)).catch(e => { files.delete(url); throw e; }));
+    if (/^[0-9a-f]{6,40}$/.test(rel())) url += (url.includes('?') ? '&' : '?') + 'v=' + rel();
+    if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url, 30000)).catch(e => { files.delete(url); throw e; }));
     return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
   const changed = () => window.dispatchEvent(new Event('wos:experience'));
@@ -70,6 +74,26 @@
   };
   const enabled = (id, own = recipe()) => globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
     : own ? (recipeChoice(own, id) ?? (!!set?.tweaks.includes(id) && !offFor(owner).includes(id))) : !offFor(owner).includes(id);
+  // Packages that fill the same place (two Home maps): the first one listed in a catalog `oneOf` group wins.
+  // An explicit off for any member (My skin recipe, a saved off, a release-wide off) turns the whole group off.
+  const oneOf = (ids, own = recipe()) => { const out = [...ids]; for (const g of catalog?.oneOf || []) { const off = g.some(id => recipeChoice(own, id) === false || offFor(owner).includes(id) || globalOff(id)), on = g.filter(x => out.includes(x)); for (const id of off ? on : on.slice(1)) out.splice(out.indexOf(id), 1); } return out; };
+  const groupOf = id => (catalog?.oneOf || []).find(g => g.includes(id)) || null;
+  // One switch per group in Settings: the member this skin's profile lists, else the first one installed.
+  const shownInGroup = id => { const g = groupOf(id); if (!g) return true; const present = g.filter(x => manifests.has(x)); return id === (present.find(x => set?.tweaks.includes(x)) || present[0]); };
+  const groupOn = id => { const own = recipe(); return oneOf([...manifests.keys()].filter(x => enabled(x, own)), own).some(x => groupOf(id).includes(x)); };
+  const explicitOff = id => recipeChoice(recipe(), id) === false || offFor(owner).includes(id) || globalOff(id);
+  async function setOne(id, on) {
+    if (globalIds().includes(id)) {
+      const off = new Set(state.defaultsOff || []); on ? off.delete(id) : off.add(id);
+      state.defaultsOff = [...off]; Store.write(state);
+      if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
+      return;
+    }
+    if (recipe()) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
+    if (!owner || !set?.tweaks.includes(id)) return;
+    const off = new Set(offFor(owner)); on ? off.delete(id) : off.add(id);
+    state.off[owner] = [...off]; Store.write(state);
+  }
   const profileReads = new Map();
   function profile(who) {
     if (!profileReads.has(who)) {
@@ -108,34 +132,27 @@
       const all = [...new Set([...(own ? catalog.tweaks : next ? next.tweaks : []), ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      await window.WosSkinHost.loadTweaks(all.filter(id => enabled(id, own)), slots, { teamAuthors: catalog.teamAuthors });
-    } catch (e) { if (seq === generation) error = e.message; } finally { if (seq === generation) { busy = false; changed(); } }
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
+    } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: enabled(id) })) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: groupOf(id) ? groupOn(id) : enabled(id) })) });
     },
     installed, defaults,
+    // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
+    groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // Settings calls this after a skin pick; other skin changes arrive as `wos:skin`.
     chooseSkin() { if (wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
     async toggle(id) {
-      if (globalIds().includes(id)) {
-        const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
-        const off = new Set(state.defaultsOff || []); item.on ? off.add(id) : off.delete(id);
-        state.defaultsOff = [...off]; Store.write(state);
-        if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: !item.on } });
-        return apply();
-      }
-      if (recipe()) {
-        const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
-        await window.WosMySkin.update({ tweaks: { [id]: !item.on } }); return apply();
-      }
-      if (!owner || !set?.tweaks.includes(id)) return;
-      const off = new Set(offFor(owner)); off.has(id) ? off.delete(id) : off.add(id);
-      state.off[owner] = [...off]; Store.write(state); await apply();
+      const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+      // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
+      if (item.on) await setOne(id, false);
+      else for (const m of groupOf(id) || [id]) if (m === id || explicitOff(m)) await setOne(m, true);
+      return apply();
     },
   };
   window.WosExperience = experience;
