@@ -23,7 +23,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const NOW = Date.now(), MIN = 6e4;
 const VIDEO_ID = '0123456789abcdef0123456789abcdef';
 const W = {
-  writes: [], foreign: [], msgFetch: [], searchFetch: [], down: false, offline: false, voice: 'ok', brokenApp: false,
+  writes: [], foreign: [], msgFetch: [], searchFetch: [], archiveFetch: [], down: false, offline: false, voice: 'ok', brokenApp: false,
   threads: Array.from({ length: 45 }, (_, i) => ({ id: 'qa_t' + String(i).padStart(2, '0'), title: `Thread ${i}`, preview: `Preview line ${i}`, at: NOW - (i * 10 + 2) * MIN, status: 'completed', level: '' })),
 };
 W.threads[5].title = 'Quokka budget review';
@@ -42,12 +42,54 @@ function messages(id) {
   const t = W.threads.find(x => x.id === id); const at = (t ? t.at : NOW) / 1000;
   return [{ id: 1, role: 'user', content: `Question for ${id}`, timestamp: at - 60 }, { id: 2, role: 'assistant', content: BODY[id] || `Plain answer in ${id}.`, timestamp: at }];
 }
+/* archive parity fixture start */
+// Route contract mirrors live.js: lists and body search use ?agent=; slim title history walks archive_cursor.
+// All IDs and messages are disposable synthetic data. Restricted routes are explicitly private, not sentinels.
+const ARCHIVE_AGENTS = [
+  { kind: 'main', id: 'hermes', label: 'Merlin', is_default: true },
+  { kind: 'host-profile', id: 'qa-profile', label: 'Profile fixture', runtime: { kind: 'host-profile', profile: 'qa-profile' } },
+  { kind: 'container', id: 'qa-container', label: 'Container fixture', runtime: { kind: 'container', container: 'synthetic-only' } },
+  { kind: 'restricted', id: 'qa-restricted', label: 'Restricted fixture', privacy: 'private', permissions: { tools: [], network: false } },
+].map(a => ({ harness: 'hermes', privacy: 'standard', status: 'running', ...a }));
+function archiveReply(u) {
+  const id = u.searchParams.get('agent') || 'hermes';
+  if (!ARCHIVE_AGENTS.some(a => a.id === id)) return { status: 404, body: { error: 'unknown synthetic route' } };
+  const rows = [false, true].map(archived => {
+    const at = new Date(NOW - (archived ? 20 * 864e5 : 120000)).toISOString();
+    return { id: `qa_archive_${id}_${archived ? 'old' : 'live'}`, agent: id, listVersion: 1,
+      title: `Archive parity ${id} ${archived ? 'archived' : 'live'}`, preview: 'Synthetic archive parity reply', status: 'completed',
+      archived, hidden: false, cardTime: at, updatedAt: at, activityAt: at, lastAssistantAt: at, previewAt: at, messageCount: 2 };
+  });
+  const suffix = u.pathname.slice('/wizard/hermes/api/sessions'.length);
+  if (suffix) {
+    const [sid, tail] = suffix.slice(1).split('/'), row = rows.find(r => r.id === sid);
+    if (!row || (tail && tail !== 'messages')) return { status: 404, body: { error: 'synthetic thread not in this route' } };
+    return { status: 200, body: tail === 'messages' ? { data: [
+      { id: 1, role: 'user', content: 'Synthetic archive parity question', timestamp: NOW / 1000 - 60 },
+      { id: 2, role: 'assistant', content: row.preview, timestamp: NOW / 1000 },
+    ], pagination: { returned: 2 } } : { session: row } };
+  }
+  const meta = { view: 'list', list_version: 1, window: 'archive-50', snapshot: `qa-archive-${id}`, has_more: false,
+    archive_total: 1, archive_returned: 1, archive_cursor: null };
+  if (u.searchParams.get('mode') === 'body') {
+    const q = (u.searchParams.get('q') || '').toLowerCase();
+    const data = rows.filter(r => `${r.title} ${r.preview}`.toLowerCase().includes(q)).map(r => ({ id: r.id, agent: id, snippet: r.preview.toLowerCase() }));
+    return { status: 200, body: { ...meta, mode: 'body', data, search_total: data.length, partial: false } };
+  }
+  if (u.searchParams.get('fields') === 'slim') {
+    const cursor = u.searchParams.get('cursor');
+    return { status: 200, body: { ...meta, fields: 'slim', build: `qa-archive-build-${id}`, account_scope: 'qa-archive-owner',
+      data: [rows[cursor ? 1 : 0]], archive_cursor: cursor ? null : `qa-archive-${id}:1` } };
+  }
+  return { status: 200, body: { ...meta, data: rows } };
+}
+/* archive parity fixture end */
 const SHELL = { '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.js': 'application/javascript' };
 
-async function context(b, { desktop = false } = {}) {
-  const ctx = await b.newContext(desktop
+async function context(b, { desktop = false, archiveRoutes = false } = {}) {
+  const ctx = await b.newContext({ ...(archiveRoutes ? { serviceWorkers: 'block' } : {}), ...(desktop
     ? { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, ignoreHTTPSErrors: true }
-    : { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
+    : { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true }) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
     if (W.offline && (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/troubleshoot/'))) return r.abort('internetdisconnected');
@@ -67,7 +109,12 @@ async function context(b, { desktop = false } = {}) {
     }
     if (u.pathname === '/wizard/v1/bootstrap') return json({ bootstrap: 1, api: 'wizard-agent-service/1', settings: { owner: { name: 'Robin', place: '' }, agent: { name: 'Merlin' }, clock: { timezone: 'UTC', day_starts_at: '06:00' }, voice: { language: 'en', vocabulary: [] } },
       capabilities: { voice: true, router: true, files: true, approvals: true, steer: true, markdown: true }, endpoints: { sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs', transcribe: '/wizard/voice/transcribe', route: '/wizard/v1/route', upload: '/wizard/files/upload', apps: '/wizard/v1/apps' } });
-    if (u.pathname === '/wizard/v1/agents') return json({agents:[{id:'hermes',label:'Merlin',is_default:true,status:'running'}]});
+    if (u.pathname === '/wizard/v1/agents') return json({ agents: archiveRoutes ? ARCHIVE_AGENTS : [{id:'hermes',label:'Merlin',is_default:true,status:'running'}] });
+    if (archiveRoutes && /^\/wizard\/hermes\/api\/sessions(?:\/|$)/.test(u.pathname)) {
+      W.archiveFetch.push({ path: u.pathname, agent: u.searchParams.get('agent') || 'hermes', mode: u.searchParams.get('mode') || '', fields: u.searchParams.get('fields') || '', cursor: u.searchParams.get('cursor') || '' });
+      const reply = archiveReply(u);
+      return json(reply.body, reply.status);
+    }
     if (u.pathname === '/wizard/voice/status') return W.voice === 'ok' ? json({ ready: true, provider: 'tinfoil', name: 'Tinfoil', model: 'voxtral-small-24b', attested: true }) : json({ error: 'down' }, 503);
     if (u.pathname === '/wizard/hermes/api/sessions') {
       if (W.down) return json({ error: 'unavailable' }, 503);
@@ -115,6 +162,83 @@ async function page(ctx, url) {
 }
 const shot = (p, n) => p.screenshot({ path: path.join(SHOTS, n + '.png') }).catch(() => {});
 const ours = p => p.url().startsWith(BASE);
+
+async function archiveRouteChecks(b, desktop) {
+  // Fresh intercepted contexts: these are routed fixtures, never existing private/owner sessions.
+  W.offline = false; W.down = false; W.voice = 'ok'; W.archiveFetch.length = 0;
+  const scopedEvidence = new Set();
+  const ctx = await context(b, { desktop, archiveRoutes: true });
+  await ctx.addInitScript(() => {
+    localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.tour.done', '1');
+    localStorage.setItem('wos.skin', 'obsidian');
+  });
+  const p = await page(ctx, BASE + (desktop ? 'desktop.html?shell=desktop' : '?view=work'));
+  const shell = desktop ? 'desktop' : 'phone';
+  try {
+    await p.waitForFunction(() => (window.__wux || window.__wos)?.live?.ok && window.WosAgents?.ready);
+    await p.evaluate(() => document.getElementById('wosWelcome')?.remove());
+    await p.evaluate(() => WizLive.refreshAgents());
+    // Default/unified search deliberately includes public routes, but never restricted rows (live.js contract).
+    const unified = await p.evaluate(() => WizLive.searchRows().map(s => s.agent || 'hermes'));
+    ok(unified.includes('qa-profile') && unified.includes('qa-container') && !unified.includes('qa-restricted'), `${shell}: unified search includes public routed agents, excludes restricted`, unified);
+    for (const skin of ['obsidian', 'landscapes']) for (const layout of ['day', 'status']) {
+      await p.evaluate(({ skin, layout }) => {
+        WosSkin.set(skin); localStorage.setItem('wos.chats.layout.v1', layout); dispatchEvent(new Event('wos:prefs'));
+      }, { skin, layout });
+      await p.waitForFunction(skin => document.documentElement.dataset.skin === skin, skin);
+      await sleep(350); // allow the actual skin stylesheet and shell transitions to settle
+      for (const agent of ARCHIVE_AGENTS) {
+        const label = `${shell}/${skin}/${layout}/${agent.kind}`;
+        const requestMark = W.archiveFetch.length;
+        ok(await p.evaluate(id => WizOpenAgentChats(id), agent.id), `${label}: shell route opened`);
+        const wid = await p.evaluate(id => {
+          const H = window.__wux || window.__wos;
+          return Object.values(H.wins).find(w => w.app === 'chats' && w.focus?.kind === 'agent' && w.focus.key === id)?.id;
+        }, agent.id);
+        ok(!!wid, `${label}: actual Chats window has the requested agent Focus`, wid);
+        if (!wid) continue;
+        // Desktop's split list is a separate renderer window, owned by the focused Chats window.
+        const root = `[data-chats="${wid}${desktop ? '::list' : ''}"]`, search = `${root} [data-chsearch]`;
+        await p.fill(search, '');
+        const before = await p.evaluate(() => localStorage.getItem('wos.chats.sections.v1'));
+        await p.fill(search, 'archive parity');
+        await p.waitForSelector(`${root} [data-chbs="done"]`);
+        const snapshot = () => p.evaluate(root => {
+          const r = document.querySelector(root), secs = [...r.querySelectorAll('.ch-sec[data-sec]')];
+          const footer = r.querySelector('[data-chbs="done"]');
+          return { rows: [...r.querySelectorAll('[data-chopen]')].map(e => e.dataset.chopen),
+            order: secs.map(e => ({ key: e.dataset.sec, top: e.getBoundingClientRect().top, bottom: e.getBoundingClientRect().bottom, open: e.classList.contains('open') })).sort((a,b) => a.top - b.top),
+            footer: footer?.getBoundingClientRect().top };
+        }, root);
+        const live = `qa_archive_${agent.id}_live`, old = `qa_archive_${agent.id}_old`, s = await snapshot();
+        ok(s.rows.length === 2 && s.rows.includes(live) && s.rows.includes(old), `${label}: main/routed results contain only this agent, not another route`, s);
+        ok(s.order.length >= 2 && s.order.at(-1).key === 'archive' && s.order.at(-1).open, `${label}: Archive is last and opens during search`, s);
+        ok(s.order.every(e => s.footer >= e.bottom - 1), `${label}: completed body-search footer is below every result`, s);
+        await p.locator(`${root} [data-sectoggle="archive"]`).click();
+        const collapsed = await snapshot();
+        ok(!collapsed.order.find(e => e.key === 'archive')?.open && !collapsed.rows.includes(old) && collapsed.rows.includes(live), `${label}: Archive alone collapses`, collapsed);
+        ok(await p.evaluate(() => localStorage.getItem('wos.chats.sections.v1')) === before, `${label}: temporary collapse never writes saved list state`);
+        await p.locator(`${root} [data-sectoggle="archive"]`).click();
+        ok((await snapshot()).rows.includes(old), `${label}: Archive expands again`);
+        await p.fill(search, '');
+        ok(await p.locator(`${root} .ch-sec-last`).count() === 0, `${label}: non-search layout has no search-order override`);
+        await p.fill(search, 'archive parity');
+        await p.waitForSelector(`${root} [data-chbs="done"]`);
+        ok((await snapshot()).order.at(-1)?.open, `${label}: fresh search resets temporary collapse`);
+        await shot(p, `archive-${shell}-${skin}-${layout}-${agent.kind}`);
+        await p.fill(search, ''); // reset temporary state before the shared window switches agent Focus
+        if (!scopedEvidence.has(agent.id)) {
+          const freshRequests = W.archiveFetch.slice(requestMark);
+          ok(freshRequests.some(f => f.agent === agent.id && f.mode === 'body') && freshRequests.some(f => f.agent === agent.id && f.fields === 'slim' && f.cursor), `${shell}/${agent.kind}: first focused pass issued scoped body and archive-cursor requests`);
+          scopedEvidence.add(agent.id); // Later layouts may legitimately reuse the title/body index cache.
+        }
+      }
+    }
+    ok(p.errs.length === 0, `${shell}: Archive route checks have no page errors`, p.errs);
+  } catch (e) { ok(false, `${shell}: Archive route checks completed`, String(e)); }
+  finally { await ctx.close(); }
+}
+/* archive route checks end */
 
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=swiftshader'] });
@@ -484,6 +608,9 @@ const ours = p => p.url().startsWith(BASE);
   } catch (e) { ok(false, 'section crashed (continuing)', String(e).split('\n')[0]); }
   ok(d.errs.length === 0, 'desktop: no page errors', d.errs);
   await dctx.close();
+
+  await archiveRouteChecks(b, false);
+  await archiveRouteChecks(b, true);
 
   /* ---- fences ---- */
   ok(W.foreign.length === 0, 'nothing left the box (all requests intercepted)', W.foreign.slice(0, 3));
