@@ -27,7 +27,8 @@ test('right-click, long-press and swipe share the row menu: Pin/Unpin, never Ope
   const sheet = src.slice(src.indexOf('function openRowSheet'), src.indexOf('const emojiCategoryHtml'));
   assert.match(sheet, /data-part="pin-action" data-rspin>\$\{PIN_SVG\}\$\{PIN\.has\(sid\) \? 'Unpin' : 'Pin'\}/);
   assert.doesNotMatch(sheet, /data-part="pin-button"/, 'row pin styling never applies to the menu action');
-  assert.doesNotMatch(src, /data-rsopen/);
+  assert.match(sheet, /\$\{nid \? '<button type="button" data-rsopen/,'only alerts offer Open; the thread menu still omits it');
+  assert.match(src, /closest\('\[data-rsopen\]'\) && rowSheet\?\.nid/);
   assert.match(src, /contextmenu/); assert.match(src, /openRowSheet\(/);
 });
 
