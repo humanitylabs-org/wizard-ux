@@ -269,7 +269,7 @@ export default function setup(api) {
     const cy = H * .46;
     for (const s of sats) {
       if (!reduced) s.a += s.speed * dt;
-      const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.75, fit);
+      const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.5, fit);   // a narrow side: rounder orbits
       const x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
       const depth = Math.sin(s.a); // >0 in front of the orb, <0 behind it
       const sc = .78 + .22 * (depth + 1) / 2;
@@ -349,7 +349,8 @@ export default function setup(api) {
     const st = panelKind ? api.panel.state() : null, pw = st ? Math.min(W * .8, st.width || 0) : 0;
     free = Math.max(320, W - pw); cxTarget = free / 2;
     fit = pw ? Math.max(.42, Math.min(1, (free * .5 - 40) / (O * 1.65))) : 1;
-    scene.style.setProperty('--ob-free', Math.round(free) + 'px');
+    const k = pw ? Math.max(.6, Math.min(1, free / (O * 2.9))) : 1;   // a narrow free side: the orb itself steps down
+    scene.style.setProperty('--ob-free', Math.round(free) + 'px'); scene.style.setProperty('--ob-k', k.toFixed(3));
     if (jump || reduced || !cx) { cx = cxTarget; scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); }
   }
   function ease(dt) {

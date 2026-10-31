@@ -91,7 +91,10 @@ A tweak with the `layout` capability wears a built-in layout (`web/layouts/<id>/
 `two-orb` (`wizard/two-orbs`, phone) and `orb` (`miguel/orb-shell`, Orb desktop, desktop only). Switching the tweak
 off releases it and the stock shell comes back; a stored layout no live tweak wears goes back to Classic after
 tweaks load. Layouts also get the shell's own thread rows, Snooze / Done (Chats' `threadAct`), quick apps, Home and
-Settings › Look (`shellApi` in `core/skin-host.js`): see `docs/orb-layout.md`.
+Settings › Look (`shellApi` in `core/skin-host.js`): see `docs/orb-layout.md`. A layout without desks holds the
+**panel** (`api.panel.claim()`): every window then opens in one panel on the right over Home (outside the desks, never
+synced), `api.panel.close()` / `back()` / `state()`, `api.route().panel`; releasing it gives the desks back untouched.
+`api.back.push(close)` puts the layout's own popover in the Esc order.
 
 ## Updates (Settings › About & updates)
 

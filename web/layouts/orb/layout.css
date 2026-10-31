@@ -46,10 +46,10 @@ html[data-shell="desktop"][data-layout="orb"] .ob-field { position: absolute; in
 
 /* ---------- the orb ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap {
-  position: absolute; left: var(--ob-cx, 50%); top: 46%; width: var(--orb); height: var(--orb); transform: translate(-50%, -50%); z-index: 5;
-  transition: transform 180ms var(--wz-ease); pointer-events: none;
+  position: absolute; left: var(--ob-cx, 50%); top: 46%; width: var(--orb); height: var(--orb); transform: translate(-50%, -50%) scale(var(--ob-k, 1)); z-index: 5;
+  transition: transform 380ms var(--wz-ease); pointer-events: none;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap.is-pressed { transform: translate(-50%, -50%) scale(.96); }
+html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap.is-pressed { transform: translate(-50%, -50%) scale(calc(var(--ob-k, 1) * .96)); transition-duration: 180ms; }
 html[data-shell="desktop"][data-layout="orb"] .ob-orbc { width: 100%; height: 100%; display: block; }
 /* The hit area is the glass sphere itself (about 60% of the canvas), not its halo. */
 html[data-shell="desktop"][data-layout="orb"] .ob-orb {
@@ -58,11 +58,11 @@ html[data-shell="desktop"][data-layout="orb"] .ob-orb {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-orb:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
 html[data-shell="desktop"][data-layout="orb"] .ob-name {
-  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) / 2 + 14px); transform: translateX(-50%); z-index: 6; white-space: nowrap; pointer-events: none;
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) * var(--ob-k, 1) / 2 + 14px); transform: translateX(-50%); z-index: 6; white-space: nowrap; pointer-events: none;
   font: 500 calc(var(--wz-text-sm) * 1) / 1 var(--wz-font-ui); letter-spacing: .32em; padding-left: .32em; text-transform: uppercase; color: var(--ob-ink3);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-caption {
-  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) / 2 + 44px); transform: translateX(-50%); z-index: 6; width: min(640px, 90vw, calc(var(--ob-free, 100vw) - 48px));
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) * var(--ob-k, 1) / 2 + 44px); transform: translateX(-50%); z-index: 6; width: min(640px, 90vw, calc(var(--ob-free, 100vw) - 48px));
   text-align: center; pointer-events: none; font: 500 calc(var(--wz-text-sm) * 1.15) / 1.35 var(--wz-font-ui); color: var(--ob-ink2);
   opacity: 0; transition: opacity 300ms ease;
 }
@@ -188,21 +188,31 @@ html[data-shell="desktop"][data-layout="orb"] .ob-st:hover { background: var(--o
 html[data-shell="desktop"][data-layout="orb"] .ob-st[aria-checked="true"] { border-color: var(--ob-line2); background: var(--ob-btn-hi); color: var(--ob-ink); }
 html[data-shell="desktop"][data-layout="orb"] .ob-st:focus-visible, html[data-shell="desktop"][data-layout="orb"] .ob-co:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
 html[data-shell="desktop"][data-layout="orb"] .ob-st-cv { width: 64px; height: 64px; display: block; }
-html[data-shell="desktop"][data-layout="orb"] .ob-colours { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-colours { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 1px; }
 html[data-shell="desktop"][data-layout="orb"] .ob-co { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; display: grid; place-items: center; }
 html[data-shell="desktop"][data-layout="orb"] .ob-co i { width: 22px; height: 22px; border-radius: 50%; background: var(--sw); box-shadow: 0 0 0 1px var(--ob-line); transition: transform 140ms, box-shadow 140ms; }
 html[data-shell="desktop"][data-layout="orb"] .ob-co:hover i { transform: scale(1.12); }
 html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { box-shadow: 0 0 0 2px var(--ob-glass-solid), 0 0 0 3.5px var(--ob-ink2), 0 0 12px var(--sw-glow); }
 
 /* ---------- the panel (no desks): the concept's conversation panel, holding the real window ---------- */
-html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap, html[data-shell="desktop"][data-layout="orb"] :is(.ob-name, .ob-caption, .ob-threads, .ob-hint) { transition: transform 180ms var(--wz-ease); }
+html[data-shell="desktop"][data-layout="orb"] :is(.ob-name, .ob-caption) { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button[data-wact="close"] { background: color-mix(in srgb, var(--wz-text) 7%, transparent); }
-/* the sky dims a little behind an open panel, so the panel reads first */
+/* A thread or list: one header, the thread's own (title, Back to the list, Snooze / Done below); the panel's Back and ✕
+ * float at its right end instead of a second title bar. Apps keep a slim title bar with their name. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"] > .wbar {
+  position: absolute; top: 0; right: 0; z-index: 5; height: 54px; flex: none; padding: 0 10px 0 0; gap: 4px; border: 0; background: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"] > .wbar > :not(button) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"] .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:has(.panel-back) .ch-head { padding-right: 88px; }
+/* with a panel open the hint steps back and the look picker gives way (it would sit under the panel) */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-hint { opacity: .5; }
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-picker { opacity: 0; pointer-events: none; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
