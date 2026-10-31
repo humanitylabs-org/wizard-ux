@@ -353,6 +353,8 @@
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
         all: () => { if (live()) shell.openPicker?.(); },
+        // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
+        search: () => { if (live()) shell.openPalette?.(); },
         // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.
         logo: id => live() ? appLogo(id) : Promise.resolve(null),
         /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:

@@ -155,19 +155,32 @@ html[data-shell="desktop"][data-layout="orb"] .ob-badge[hidden] { display: none 
 html[data-shell="desktop"][data-layout="orb"] .ob-strip-l { writing-mode: vertical-rl; font: 600 calc(var(--wz-text-sm) * .82) / 1 var(--wz-font-ui); letter-spacing: .18em; text-transform: uppercase; color: var(--ob-ink3); }
 
 /* ---------- the hint line and the quiet look swatches ---------- */
-html[data-shell="desktop"][data-layout="orb"] .ob-hint {
-  position: absolute; left: var(--ob-cx, 50%); bottom: 96px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; white-space: nowrap;
-  font: 400 calc(var(--wz-text-sm) * 1) / 1 var(--wz-font-ui); color: var(--ob-ink3);
+/* The bottom of the scene, on the orb's axis: one quiet search pill (the shell's own ⌥Space search; its key hints
+ * inside) and the Look button beside it. Narrow (panels close in on both sides): both fold to round icons. */
+html[data-shell="desktop"][data-layout="orb"] .ob-dock {
+  position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 9; display: flex; align-items: flex-end; gap: 8px;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-hint i { font-style: normal; opacity: .5; }
-html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd {
-  display: inline-grid; place-items: center; min-width: 64px; height: 26px; padding: 0 10px; border-radius: 7px; box-sizing: border-box;
-  border: 1px solid var(--ob-line2); border-bottom-width: 2px; color: var(--ob-ink); background: var(--ob-key);
-  font: 600 calc(var(--wz-text-sm) * .92) / 1 var(--wz-font-ui);
+html[data-shell="desktop"][data-layout="orb"] .ob-search {
+  display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px 0 14px; border-radius: 99px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: var(--ob-ink3); font: 500 calc(var(--wz-text-sm) * .95) / 1 var(--wz-font-ui); opacity: .72; transition: opacity 200ms, border-color 200ms, color 200ms;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd.is-short { min-width: 40px; }
-/* The look picker: one quiet button bottom right; it opens Style (live previews) and Colour. */
-html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: absolute; left: calc(var(--ob-left, 0px) + 16px); bottom: 18px; z-index: 9; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink2); border-color: var(--ob-line2); }
+html[data-shell="desktop"][data-layout="orb"] .ob-search:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search-l { min-width: 9em; text-align: left; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search i { font-style: normal; opacity: .5; }
+html[data-shell="desktop"][data-layout="orb"] .ob-search kbd {
+  display: inline-grid; place-items: center; height: 22px; padding: 0 7px; border-radius: 6px; box-sizing: border-box;
+  border: 1px solid var(--ob-line); color: var(--ob-ink3); background: var(--ob-key); font: 600 calc(var(--wz-text-sm) * .78) / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-search { width: 36px; padding: 0; justify-content: center; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-search > :not(svg) { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-pick-l { display: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-dock="compact"] .ob-pick-btn { padding: 0 3px; }
+/* The look picker: one quiet button beside the pill; it opens Style (live previews) and Colour above. */
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop { position: absolute; bottom: calc(100% + 10px); left: 50%; translate: -50% 0; }
 html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 3px; border-radius: 99px; cursor: pointer;
   border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -221,13 +234,9 @@ html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-pan
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) > .wbar > :not(button) { display: none !important; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]) .ch-head { min-height: 54px; padding-right: 50px; box-sizing: border-box; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-panel="chat"]:not([data-dock]):has(.panel-back) .ch-head { padding-right: 88px; }
-html[data-shell="desktop"][data-layout="orb"] .ob-hint { transition: opacity 300ms ease; }
-html[data-shell="desktop"][data-layout="orb"] .ob-picker { transition: opacity 200ms, left 380ms var(--wz-ease); }
 html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transform 380ms var(--wz-ease), opacity 300ms ease; }
 
-/* Something open beside the orb: the orb stays exactly where it is, fully lit and clickable; only the key hint gives
- * way (the panels would cut it). */
-html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-hint { opacity: 0; pointer-events: none; }
+/* Something open beside the orb: the orb stays exactly where it is, fully lit and clickable. */
 /* the list's fold handle steps aside while a chat column stands against it (⌥\ still folds) */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-chat="open"] .ob-fold { display: none; }
 /* The app's satellite, pinned between the orb and its panel while it is open: lit, in the orb's bolt. */
@@ -236,5 +245,15 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opac
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
-  html[data-shell="desktop"][data-layout="orb"] .ob-hint { bottom: 30px; }
+  html[data-shell="desktop"][data-layout="orb"] .ob-dock { bottom: 16px; }
 }
+
+/* Hold ⌥: each app shows its key (⌥ + that letter opens it). */
+html[data-shell="desktop"][data-layout="orb"] .ob-sat-key {
+  position: absolute; left: 50%; top: 100%; translate: -50% 0; margin-top: 4px; padding: 0 6px; height: 20px; border-radius: 6px; box-sizing: border-box;
+  display: none; place-items: center; white-space: nowrap; pointer-events: none; z-index: 2;
+  border: 1px solid var(--ob-line2); border-bottom-width: 2px; background: var(--ob-glass-solid); color: var(--ob-ink);
+  font: 700 calc(var(--wz-text-sm) * .78) / 1 var(--wz-font-ui); letter-spacing: .04em; box-shadow: 0 2px 10px var(--ob-core);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-key:not([hidden]) { display: grid; }
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-keys="on"] .ob-sat-n { opacity: 0; }

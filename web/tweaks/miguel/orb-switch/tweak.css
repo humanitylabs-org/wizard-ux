@@ -20,6 +20,8 @@ html[data-shell="desktop"][data-layout="orb"] .os-side.is-orb {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--wz-base) 35%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--wz-text) 10%, transparent);
 }
 html[data-shell="desktop"] .os-switch.is-busy { opacity: .6; pointer-events: none; }
+/* The AI fuel gauge sits with the switch in the top centre (switch, then gauge); the gear stays top right. */
+html[data-shell="desktop"] #bar:has(.os-switch) .mh-glance.is-bar { position: fixed; left: calc(50% + 80px); top: calc(var(--bar-h, 34px) / 2); transform: translateY(-50%); margin: 0; z-index: 1; }
 /* Orb desktop with windows open: the bar is bare over the wallpaper, so the switch carries its own glass. */
 html[data-shell="desktop"][data-layout="orb"]:not([data-orb-scene="home"]) .os-switch {
   background: color-mix(in srgb, var(--wz-base) 64%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
