@@ -209,7 +209,7 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(styles, /const CAP = 640;/, 'frame cost capped'); assert.match(styles, /if \(cost > 12 && q > \.4\) \{ q = Math\.max\(\.4, q \* \.8\);/, 'a slow GPU renders fewer pixels');
   assert.deepEqual([...styles.match(/export const RETIRED = Object\.freeze\(\[([^\]]*)\]\)/)[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]), ['swarm', 'holo', 'glitch', 'crystal', 'aurora']);
   assert.ok(!/function (swarm|holo|glitch|crystal|aurora|bust|headSDF)\(/.test(styles), 'retired styles are gone');
-  assert.match(js, /import \{ COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList, glyphOf, colourOf \} from '\.\/shared\.js';/, 'one look, sky and satellite list for both shells');
+  assert.match(js, /import \{ COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList, glyphOf, colourOf, hash, boltPainter \} from '\.\/shared\.js';/, 'one look, sky, satellite list and bolt for both shells');
   assert.match(shared, /export const COLOURS = \[\['nebula', 'Nebula'\], .*\['arctic', 'Arctic'\],\n  \['marble', 'Marble'\], \['obsidian', 'Obsidian'\], \['bronze', 'Bronze'\], \['royal', 'Royal'\], \['crimson', 'Crimson'\], \['cyber', 'Cyber'\], \['sunset', 'Sunset'\], \['ocean', 'Ocean'\], \['skin', 'Skin accent'\]\];/);
   const tcss = read('web/tweaks/miguel/orb-shell/tweak.css');
   for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic', 'marble', 'obsidian', 'bronze', 'royal', 'crimson', 'cyber', 'sunset', 'ocean']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));
@@ -233,7 +233,10 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(js, /const want = pinId && s\.id === pinId \? 1 : 0;/); assert.match(js, /s\.el\.classList\.toggle\('is-pinned', k > \.5\);/);
   assert.match(js, /bolt\(cx \+ R, cy, s\.x - half, s\.y, t, pin, seed \+ 23, P\);/); assert.match(js, /bolt\(s\.x \+ half, s\.y, G\.appL, cy, t, pin, seed \+ 41, P\);/);
   assert.match(js, /if \(bolts\.chat\) bolt\(cx - R, cy, G\.chatR, cy,/);
-  assert.match(js, /const seed = reduced \? 977 : boltSeed/); assert.match(js, /if \(!reduced\) \{ const u = /, 'the running spark only with motion');
+  assert.match(js, /const seed = reduced \? 977 : boltSeed/); assert.match(shared, /if \(!reduced\) \{ const u = /, 'the running spark only with motion');
+  // one bolt drawing for both shells (shared.js), never a copy in either
+  assert.match(js, /const \{ bolt, glowAt \} = boltPainter\(sx, reduced\);/); assert.match(shared, /export function boltPainter\(sx, reduced\) \{/);
+  for (const src of [js, strip('web/layouts/orb/phone.js')]) assert.ok(!/function (jag|bolt|glowAt)\(/.test(src), 'no forked bolt code');
   assert.match(js, /placeSats\(dt\);\n    drawBolts\(t, dt\);/);
   assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
   assert.match(js, /prefers-reduced-motion: reduce/);

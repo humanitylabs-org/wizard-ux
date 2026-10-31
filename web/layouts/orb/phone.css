@@ -70,3 +70,30 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone][data-orb-at="centre"
 /* back on Home: they fade in with the scene (from nothing to their depth) while the orb grows into place */
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home .obp-sat { animation: obp-in 250ms ease; }
 @keyframes obp-in { from { opacity: 0; } }
+
+/* ---------- the bottom bar: three slots, the same on every screen ----------
+ * Left: the app used last (other than the one in front), right: Chats with its Ready count, centre: the dock orb (an
+ * empty slot on Home, where the orb is up in the scene). The stock desk switcher (three desks each side) steps aside;
+ * the slots wear the dock's own marks and sizes (.desk-dots.sym .ddot.d1), pinned to the thumb corners, so the bar
+ * never holds more than three things and never runs off the screen. Desk swipes along the bar work as before. */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > :is(#dotsL, #dotsR) { display: none !important; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots {
+  flex: 1 1 0; min-width: 0; width: auto; margin: 0; padding: 0 10px; box-sizing: border-box;
+  display: flex !important; align-items: center; pointer-events: auto;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots.left { justify-content: flex-start; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots.right { justify-content: flex-end; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots[hidden],
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots > .obp-slotbtn[hidden] { display: none !important; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots > .obp-slotbtn { flex: none; display: grid; place-items: center; -webkit-tap-highlight-color: transparent; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] #dock > .obp-slots > .obp-slotbtn .dsg { opacity: 1; transform: none; }
+/* the full-screen corner orb (a full-screen app): just the orb, as on the stock phone */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .device.orb-corner #dock > .obp-slots { display: none !important; }
+
+/* ---------- spin: the band of sky under the orbit takes a sideways drag on Home (vertical stays the page's) ---------- */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-spin { position: absolute; z-index: 3; pointer-events: none; touch-action: pan-y; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home .obp-spin { pointer-events: auto; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat { touch-action: pan-y; }
+
+/* ---------- the bolt: over what just opened, from the bar's orb; never takes a touch ---------- */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-bolt { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 51; pointer-events: none; }
