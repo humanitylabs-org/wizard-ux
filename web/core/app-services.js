@@ -54,7 +54,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { if (st.doc) window.WosSelMenu?.forget?.(st.doc); window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -199,6 +199,11 @@
     if (st.doc && st.doc !== doc) reset(st);
     st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
     const check = () => { if (!valid(st, doc)) throw fault('App frame is no longer authorized'); st.lastAlive = Date.now(); };
+    // Selected words in this app use the shell's one selection menu (core/sel-menu.js): Reply in chat opens a MAIN
+    // Chats draft beside the app with the words quoted (never sent), the same unsent-draft path as openContextDraft.
+    window.WosSelMenu?.watch?.({ doc, frame: st.frame, appId: st.appId, name: apps().find(a => a.id === st.appId)?.name || st.appId,
+      visible: () => valid(st, doc) && st.isVisible?.() === true,
+      reply: (id, item) => { if (!valid(st, doc) || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable'); return st.openContextDraft(st.appId + ':' + id, item); } });
     const hold = reason => {
       check(); if (st.holds.size >= 64) throw fault('Too many update holds');
       const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
@@ -281,6 +286,13 @@
       orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
       // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
       audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
+      /* Selected words: the shell owns the menu (core/sel-menu.js). items() adds this app's own items to ordinary
+       * selections; show() is for an app that draws its own selection (Wisdom), with its words and boxes in the app's
+       * viewport. pick({ id, text }) runs in the app; dismissed() tells it Back or a tap outside closed the menu. */
+      selection: Object.freeze({
+        items(list, pick) { check(); return window.WosSelMenu?.setItems?.(doc, list, pick) === true; },
+        show(spec, pick, dismissed) { check(); return window.WosSelMenu?.present?.(doc, spec, pick, dismissed) === true; },
+        hide() { check(); return window.WosSelMenu?.withdraw?.(doc) === true; } }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
