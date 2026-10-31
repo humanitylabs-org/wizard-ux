@@ -271,7 +271,7 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home, panel: ['thread', 'list', 'app'].includes(r.panel) ? r.panel : null });
   }
   /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
    * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
@@ -284,7 +284,7 @@
   if (isDoc) window.addEventListener?.('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
-    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}`;
+    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
   }
@@ -362,7 +362,35 @@
         // Closing the last window of a desk goes Home instead of to another desk (desks are out of sight). Released on teardown.
         emptyHome() { if (!live()) return () => {}; emptyHomes.add(a); const off = () => { emptyHomes.delete(a); a.offs.delete(off); }; a.offs.add(off); return off; },
       }),
+      /* No desks: while a layout holds the panel, whatever opens (a thread, a list, an app) shows in ONE panel on the
+       * right over Home instead of on a desk (desktop.js, outside the desks: never tiled, never synced). Opening another
+       * thing replaces it; back() reopens the one before. The desks underneath stay exactly as they were, and release
+       * (or teardown) gives them back. state() → { kind: 'thread' | 'list' | 'app', title, width, back } or null. */
+      panel: Object.freeze({
+        claim() {
+          if (!live()) return () => {};
+          panelHolders.add(a); panelSync();
+          const off = () => { panelHolders.delete(a); a.offs.delete(off); panelSync(); }; a.offs.add(off); return off;
+        },
+        close: () => live() ? !!shell.panelClose?.() : false,
+        back: () => live() ? !!shell.panelBack?.() : false,
+        state: () => { const s = live() ? shell.panelState?.() : null; return s ? Object.freeze({ ...s }) : null; },
+      }),
+      // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
+      back: Object.freeze({ push(close) {
+        if (a.dead || typeof close !== 'function') return () => {};
+        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
+        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        a.offs.add(off); return off;
+      } }),
     };
+  }
+  const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
+  let panelOn = false;
+  function panelSync() {
+    const on = [...panelHolders].some(l => !l.dead);
+    if (on === panelOn) return; panelOn = on;
+    try { shell?.panelMode?.(on); } catch (e) { try { console.warn('[layout] panel mode:', e); } catch (_) {} }
   }
   function setLayout(id) {
     const next = layoutOf(id) ? id : 'classic';
@@ -807,6 +835,8 @@
     get layout() { return layoutId; },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
+    /* desktop.js: a layout without desks holds the right-side panel (everything opens there, desks stay put). */
+    get panelMode() { return panelOn && [...panelHolders].some(l => !l.dead); },
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
     orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },

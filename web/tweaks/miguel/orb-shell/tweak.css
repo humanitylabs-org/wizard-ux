@@ -1,7 +1,7 @@
 /* Orb desktop: the layout's rules live in web/layouts/orb/layout.css (scoped to the desktop shell and the Orb layout).
  * Only the scene's own colours sit here (a skin layer), taken from the approved concept: the night sky and its ink, the
- * glass, the amber "ready" glow and the four orb looks (Nebula, Ember, Tide, Oracle). layout.js reads them for the
- * canvas (sky, orb); --ob-v1…3 colour the small orb shown while windows are open. */
+ * glass, the amber "ready" glow and the orb's colours. Each colour is four stops (--ob-look-<id>) that every orb style
+ * (layout.js / styles.js) draws with; "Skin accent" is worked out from the skin's own --wz-accent. */
 html[data-shell="desktop"][data-layout="orb"] {
   --ob-sky: #05040a; --ob-core: #07060f; --ob-white: #ffffff; --ob-face: #fff1c9;
   --ob-ink: #eceaf6; --ob-ink2: rgba(236, 234, 246, .62); --ob-ink3: rgba(236, 234, 246, .38);
@@ -10,11 +10,15 @@ html[data-shell="desktop"][data-layout="orb"] {
   --ob-sat: rgba(12, 10, 22, .55); --ob-sheen: rgba(255, 255, 255, .16); --ob-sheen-lo: rgba(255, 255, 255, .03);
   --ob-line: rgba(255, 255, 255, .12); --ob-line2: rgba(255, 255, 255, .3);
   --ob-btn: rgba(255, 255, 255, .07); --ob-btn-hi: rgba(255, 255, 255, .16); --ob-key: rgba(255, 255, 255, .04);
+  --ob-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(0, 0, 0, .25);
+  --ob-panel-line: rgba(255, 255, 255, .14);
   --ob-look-nebula: #7c5cff, #c26bff, #4cc9ff, #ff6bd6;
   --ob-look-ember: #ff7a1a, #ffb347, #ff3d5a, #ffd27a;
   --ob-look-tide: #18d6c4, #3aa0ff, #7cf5ff, #2b5cff;
-  --ob-look-oracle: #e8c37a, #fff1c9, #b98a3e, #ffd98a;
-  --ob-nebula-1: #7c5cff; --ob-nebula-2: #c26bff; --ob-nebula-3: #4cc9ff;
-  --ob-ember-1: #ff7a1a; --ob-ember-2: #ffd27a; --ob-tide-1: #18d6c4; --ob-tide-2: #7cf5ff; --ob-oracle-1: #b98a3e; --ob-oracle-2: #fff1c9;
+  --ob-look-gold: #e8c37a, #fff1c9, #b98a3e, #ffd98a;
+  --ob-look-mono: #c9ccd6, #ffffff, #8a90a2, #e9ecf4;
+  --ob-look-emerald: #19c37d, #7cf2b4, #0e8f6e, #c6ff8a;
+  --ob-look-rose: #ff5c8a, #ffb3c7, #c2357a, #ffd1a8;
+  --ob-look-arctic: #7fd4ff, #e4f7ff, #4a7dff, #b8fff4;
   --ob-v1: #7c5cff; --ob-v2: #c26bff; --ob-v3: #4cc9ff;
 }

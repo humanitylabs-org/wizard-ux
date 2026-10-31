@@ -1,25 +1,31 @@
 /* Orb layout (Miguel, 31 Oct 2026). Desktop only; worn by the miguel/orb-shell tweak, off by default.
  *
- *   Home (an empty desk, or ⌥` Home) becomes the scene of the approved concept (Files › Pages › orb-shell-concept),
- *   ported as it was drawn there:
+ *   All in on the orb: no desks, no workspace numbers. The scene of the approved concept (Files › Pages ›
+ *   orb-shell-concept) is always in front:
  *     - a dark starfield sky with a soft glow behind the orb, over the skin's wallpaper (the same calm night scene on
  *       light and dark skins);
- *     - the concept's glassy orb in the middle (inner swirling colour, halo, listening rings, a sharp ring when a command
- *       runs), following the real take (voice events) and the mic level (api.orb.onLevel). Four looks from the
- *       concept, picked by a quiet swatch row bottom right and kept per device: Nebula, Ember, Tide, Oracle (a face).
- *       Click = talk (a new chat; click again to send). Hold = a local command (release runs it).
+ *     - the orb in the middle, following the real take (voice events) and the mic level (api.orb.onLevel). Its look is
+ *       a Style × a Colour, picked in a quiet popover bottom right (live previews) and kept per device: seven styles
+ *       (styles.js: Glass, Oracle, Plasma, Swarm, Hologram, Glitch, Chrome) in nine colours (Nebula, Ember, Tide, Gold,
+ *       Mono, Emerald, Rose, Arctic, and the skin's own accent). Click = talk (a new chat; click again to send).
+ *       Hold = a local command (release runs it).
  *     - the owner's apps as round glass satellites on two tilted orbits (front bigger and brighter, behind dimmer),
  *       drifting slowly; the label shows on hover; a click opens the app. The app's own logo, else its glyph.
  *     - under the orb: its name, a caption line (what the take is doing), then the conversations as the concept's
  *       pills: every Ready thread glows amber (Snooze and Done on hover), at most two rows then "+N more" (the Ready
  *       list); Working is one quiet spinner pill ("1 working").
  *     - the real keys as the hint line near the bottom.
- *   Any open window takes over (the scene recedes); closing the last one brings it back. With windows open a small orb
- *   at the top left goes back Home.
+ *   Whatever opens (a pill, "+N more", the Working pill, a satellite, the voice) shows in ONE panel that slides in from
+ *   the right over the scene, like the concept's conversation panel: the real Chats thread or app window, hosted by
+ *   the shell (api.panel: desktop.js keeps it outside the desks). The scene moves left to stay in view. ✕, Esc or a
+ *   click on the sky slides it away; opening another thing replaces it. The desks are untouched underneath: turning the
+ *   Orb off brings them back exactly.
  *
- * Motion runs only while the scene is in front and the page is visible, at about 30 fps; reduced motion = still frames.
- * Colours are skin-layer tokens (--ob-*, the wearing tweak's tweak.css), read lazily. Everything goes through the
- * layout API (core/skin-host.js); no shell internals, no second composer. */
+ * Motion runs only while the page is visible, at about 30 fps; reduced motion = still frames. Colours are skin-layer
+ * tokens (--ob-*, the wearing tweak's tweak.css), read lazily. Everything goes through the layout API
+ * (core/skin-host.js); no shell internals, no second composer. */
+import { STYLES, renderer, mix } from './styles.js';
+
 export default function setup(api) {
   if (api.env.shell !== 'desktop') return () => {};
   const doc = document, root = doc.documentElement;
@@ -47,26 +53,39 @@ export default function setup(api) {
   const native = !!globalThis.webkit?.messageHandlers?.wizardNative;
   const mod = mac ? '⌥' : 'Alt+';
   hint.append(el('kbd', '', { text: native ? 'Right ⌘' : mod + 'V' }), el('span', '', { text: 'to talk' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-short', { text: mod + 'N' }), el('span', '', { text: 'to type' }));
-  const picker = el('div', 'ob-looks', { role: 'radiogroup', 'aria-label': 'Orb look' });
+  // The look picker, bottom right: a quiet button that opens Style (live previews) and Colour.
+  const picker = el('div', 'ob-picker');
+  const pickBtn = el('button', 'ob-pick-btn', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'dialog', title: 'Orb style and colour', 'aria-label': 'Orb style and colour' });
+  const pickCv = el('canvas', 'ob-pick-cv', { 'aria-hidden': 'true' });
+  pickBtn.append(pickCv, el('span', 'ob-pick-l', { text: 'Look' }));
+  const pop = el('div', 'ob-pop', { role: 'dialog', 'aria-label': 'Orb look' }); pop.hidden = true;
+  const styleRow = el('div', 'ob-styles', { role: 'radiogroup', 'aria-label': 'Style' });
+  const colourRow = el('div', 'ob-colours', { role: 'radiogroup', 'aria-label': 'Colour' });
+  const colourName = el('em', '');
+  const h1 = el('div', 'ob-pop-h', { text: 'Style' }), h2 = el('div', 'ob-pop-h'); h2.append(el('span', '', { text: 'Colour' }), colourName);
+  pop.append(h1, styleRow, h2, colourRow);
+  picker.append(pop, pickBtn);
   scene.append(sky, field, orbWrap, name, caption, threads, hint, picker);
-  // With windows open: a small orb at the top left goes back to the scene (⌥` still works).
-  const mini = el('button', 'ob-mini', { type: 'button', title: 'Home (⌥`)', 'aria-label': 'Home' });
-  mini.append(el('span', 'ob-mini-orb', { 'aria-hidden': 'true' }), el('span', 'ob-mini-dot', { 'aria-hidden': 'true' }));
-  api.mount(scene); api.mount(mini);
+  api.mount(scene);
 
   /* ---------- colours: skin-layer tokens, normalised to #rrggbb so alpha can be appended ---------- */
   const probe = el('canvas').getContext('2d');
   const norm = c => { if (!c || !probe) return ''; probe.fillStyle = 'black'; probe.fillStyle = c; const v = probe.fillStyle; return /^#[0-9a-f]{6}$/i.test(v) ? v : ''; };
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
-  const tokens = { at: -1e9 };
-  function colours(look) {
-    const now = performance.now();
-    if (tokens.look === look && tokens.ok && now - tokens.at < 5000) return tokens;
-    const list = cssVar('--ob-look-' + look).split(',').map(s => norm(s.trim())).filter(Boolean);
-    const acc = norm(cssVar('--ob-v1')) || norm(cssVar('--wz-accent')) || norm('slateblue');   // tokens not loaded yet
-    Object.assign(tokens, { look, at: now, ok: list.length >= 4, c: list.length >= 4 ? list.slice(0, 4) : [acc, acc, acc, acc],
-      white: norm(cssVar('--ob-white')) || norm('white'), core: norm(cssVar('--ob-core')) || norm('black'), face: norm(cssVar('--ob-face')) || norm('white') });
-    return tokens;
+  // Nine colours: eight from the tweak's tokens (--ob-look-<id>: four colours each) and the skin's own accent.
+  const COLOURS = [['nebula', 'Nebula'], ['ember', 'Ember'], ['tide', 'Tide'], ['gold', 'Gold'], ['mono', 'Mono'], ['emerald', 'Emerald'], ['rose', 'Rose'], ['arctic', 'Arctic'], ['skin', 'Skin accent']];
+  const pals = new Map();
+  function palette(id) {
+    const now = performance.now(), hit = pals.get(id);
+    if (hit && hit.ok && now - hit.at < 5000) return hit;
+    const white = norm(cssVar('--ob-white')) || norm('white'), core = norm(cssVar('--ob-core')) || norm('black');
+    let list = id === 'skin' ? [] : cssVar('--ob-look-' + id).split(',').map(s => norm(s.trim())).filter(Boolean);
+    const acc = norm(cssVar('--wz-accent')) || norm(cssVar('--ob-v1')) || norm('slateblue');
+    // the skin's accent, in four shades of itself (deep, light, pale, warm)
+    if (id === 'skin') list = [acc, mix(acc, white, .35), mix(acc, white, .65), mix(acc, norm(cssVar('--ob-amber')) || white, .3)];
+    const ok = list.length >= 4 && !!cssVar('--ob-look-nebula');   // tokens loaded
+    const p = { at: now, ok, c: list.length >= 4 ? list.slice(0, 4) : [acc, acc, acc, acc], white, core, face: norm(cssVar('--ob-face')) || white };
+    pals.set(id, p); return p;
   }
   const A = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
 
@@ -106,12 +125,18 @@ export default function setup(api) {
   api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
 
-  /* ---------- sky + orb, drawn like the concept ---------- */
-  const LOOKS = [['nebula', 'Nebula'], ['ember', 'Ember'], ['tide', 'Tide'], ['oracle', 'Oracle']];
-  const stored = api.storage.get('look');
-  let lookId = LOOKS.some(l => l[0] === stored) ? stored : 'nebula';
+  /* ---------- sky + orb ---------- */
+  // Kept per device: style + colour. The v3 single "look" (nebula / ember / tide / oracle) maps onto them once.
+  const has = (L, id) => L.some(l => l[0] === id);
+  const legacy = api.storage.get('look');
+  let styleId = api.storage.get('style'), colourId = api.storage.get('colour');
+  if (!has(STYLES, styleId)) styleId = legacy === 'oracle' ? 'oracle' : 'glass';
+  if (!has(COLOURS, colourId)) colourId = legacy === 'oracle' ? 'gold' : has(COLOURS, legacy) ? legacy : 'nebula';
   const sx = sky.getContext('2d'), ox = orbCv.getContext('2d');
-  let W = 0, H = 0, DPR = 1, O = 300, stars = [];
+  const mk = n => { const c = el('canvas'); c.width = c.height = n; return c; };
+  let W = 0, H = 0, DPR = 1, O = 300, stars = [], drawOrb = renderer(styleId, mk);
+  // Where the scene's centre is: the middle of what the panel leaves free (eased while it slides).
+  let cx = 0, cxTarget = 0, free = 0, fit = 1;
   function size() {
     const w = scene.clientWidth, h = scene.clientHeight; if (!w || !h) return false;
     if (w === W && h === H) return true;
@@ -122,79 +147,86 @@ export default function setup(api) {
     orbCv.width = orbCv.height = Math.round(O * 2 * DPR);
     let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     stars = Array.from({ length: Math.round(W * H / 5200) }, () => ({ x: rnd() * W, y: rnd() * H, r: rnd() * 1.1 + .2, p: rnd() * 6.3, s: .3 + rnd() }));
-    placeSats(0); fitThreads();
+    aim(true); placeSats(0); fitThreads();
     return true;
   }
   function drawSky(t, lv) {
-    const P = colours(lookId), c = P.c, cx = W / 2, cy = H * .46;
+    const P = palette(colourId), c = P.c, gx = cx || W / 2, cy = H * .46;
     sx.clearRect(0, 0, W, H);
-    const g = sx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .7);
+    const g = sx.createRadialGradient(gx, cy, 0, gx, cy, Math.max(W, H) * .7);
     g.addColorStop(0, A(c[0], .16 + lv * .1)); g.addColorStop(.35, A(c[1], .05)); g.addColorStop(1, 'transparent');
     sx.fillStyle = g; sx.fillRect(0, 0, W, H);
     sx.fillStyle = P.white;
     for (const s of stars) { sx.globalAlpha = .25 + .45 * (.5 + .5 * Math.sin(t * s.s + s.p)); sx.beginPath(); sx.arc(s.x, s.y, s.r, 0, 7); sx.fill(); }
     sx.globalAlpha = 1;
   }
-  function drawOrb(ctx, px, t, lv, state, fl, blink) {
-    const P = colours(lookId), c = P.c, face = lookId === 'oracle', cx = px / 2, cy = px / 2;
-    const breathe = 1 + Math.sin(t * 1.3) * .015;
-    const R = px * .3 * breathe * (1 + lv * .12 + (state === 'listening' ? .05 : 0));
-    ctx.clearRect(0, 0, px, px);
-    // halo
-    const halo = ctx.createRadialGradient(cx, cy, R * .6, cx, cy, R * 1.65);
-    halo.addColorStop(0, A(c[0], .5 + lv * .3)); halo.addColorStop(.5, A(c[1], .12)); halo.addColorStop(1, 'transparent');
-    ctx.fillStyle = halo; ctx.fillRect(0, 0, px, px);
-    // listening waves
-    if (state === 'listening') for (let i = 0; i < 3; i++) {
-      const k = (t * .9 + i / 3) % 1; ctx.strokeStyle = A(c[2], (1 - k) * .45); ctx.lineWidth = px * .004;
-      ctx.beginPath(); ctx.arc(cx, cy, R * (1.05 + k * .55), 0, 7); ctx.stroke();
+  const frameOf = (t, lv, state, fl, blink, col = colourId) => ({ t, lv, state, fl, blink, P: palette(col) });
+
+  /* ---------- the look picker: Style × Colour ---------- */
+  const styleTiles = STYLES.map(([id, label]) => {
+    const b = el('button', 'ob-st', { type: 'button', role: 'radio', 'data-style': id, 'aria-checked': 'false', title: label, 'aria-label': 'Style: ' + label });
+    const cv = el('canvas', 'ob-st-cv', { 'aria-hidden': 'true' });
+    b.append(cv, el('span', 'ob-st-n', { text: label }));
+    api.listen(b, 'click', () => setLook(id, colourId));
+    styleRow.append(b);
+    return { id, b, cv, ctx: cv.getContext('2d'), draw: renderer(id, mk) };
+  });
+  const colourDots = COLOURS.map(([id, label]) => {
+    const b = el('button', 'ob-co', { type: 'button', role: 'radio', 'data-colour': id, 'aria-checked': 'false', title: label, 'aria-label': 'Colour: ' + label });
+    b.append(el('i', '', { 'aria-hidden': 'true' }));
+    api.listen(b, 'click', () => setLook(styleId, id));
+    colourRow.append(b);
+    return { id, b, label };
+  });
+  const pickCtx = pickCv.getContext('2d'); let pickDraw = renderer(styleId, mk);
+  function paintSwatches() {
+    for (const d of colourDots) {
+      const P = palette(d.id), c = P.c;
+      d.b.style.setProperty('--sw', `radial-gradient(circle at 34% 30%, ${mix(c[1], P.white, .3)}, ${c[0]} 48%, ${mix(c[0], P.core, .55)} 72%, ${P.core})`);
+      d.b.style.setProperty('--sw-glow', c[0]);
     }
-    // body
-    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.clip();
-    const base = ctx.createRadialGradient(cx, cy - R * .3, R * .1, cx, cy, R);
-    base.addColorStop(0, A(c[0], .55)); base.addColorStop(1, P.core); ctx.fillStyle = base; ctx.fillRect(0, 0, px, px);
-    ctx.globalCompositeOperation = 'screen';
-    const spin = state === 'thinking' ? 3.2 : state === 'listening' ? 1.8 : 1;
-    for (let i = 0; i < 5; i++) {
-      const a = t * .35 * spin * (i % 2 ? 1 : -1.2) + i * 1.26;
-      const rr = R * (.38 + .12 * Math.sin(t * .7 + i));
-      const bx = cx + Math.cos(a) * rr, by = cy + Math.sin(a * 1.3) * rr * .8;
-      const br = R * (.55 + .1 * Math.sin(t + i * 2) + lv * .2);
-      const g = ctx.createRadialGradient(bx, by, 0, bx, by, br);
-      g.addColorStop(0, A(c[i % 4], .75)); g.addColorStop(1, A(c[i % 4], 0));
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fill();
-    }
-    ctx.globalCompositeOperation = 'source-over';
-    // glass highlight
-    const hl = ctx.createRadialGradient(cx - R * .35, cy - R * .45, 0, cx - R * .35, cy - R * .45, R * .7);
-    hl.addColorStop(0, A(P.white, .28)); hl.addColorStop(1, A(P.white, 0)); ctx.fillStyle = hl; ctx.fillRect(0, 0, px, px);
-    // Oracle: calm eyes and a mouth that moves with the voice
-    if (face) {
-      ctx.strokeStyle = A(P.face, .92); ctx.lineCap = 'round'; ctx.lineWidth = px * .009;
-      ctx.shadowColor = P.face; ctx.shadowBlur = px * .03;
-      const ey = cy - R * .12, ex = R * .3, open = blink ? .02 : (state === 'listening' ? .16 : .1);
-      for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(cx + s * ex, ey, R * .13, R * open, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); }
-      const mo = state === 'listening' ? R * (.02 + .08 * lv) : state === 'thinking' ? R * (.03 + .03 * Math.abs(Math.sin(t * 6))) : R * .012;
-      ctx.beginPath(); ctx.ellipse(cx, cy + R * .32, R * .16, mo, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-    ctx.restore();
-    // rim
-    ctx.strokeStyle = A(c[3], .35 + lv * .3); ctx.lineWidth = px * .004; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
-    // command flash: one sharp ring that says "doing it"
-    if (fl > 0) { ctx.strokeStyle = A(P.white, fl * .9); ctx.lineWidth = px * .006 * fl; ctx.beginPath(); ctx.arc(cx, cy, R * (1 + (1 - fl) * .9), 0, 7); ctx.stroke(); }
   }
-  function useLook(id) {
-    lookId = LOOKS.some(l => l[0] === id) ? id : 'nebula'; tokens.look = '';
-    scene.dataset.look = lookId; mini.dataset.look = lookId;
-    for (const b of picker.children) b.setAttribute('aria-checked', String(b.dataset.look === lookId));
+  function setLook(st, co) {
+    const sChanged = st !== styleId;
+    styleId = has(STYLES, st) ? st : 'glass'; colourId = has(COLOURS, co) ? co : 'nebula';
+    api.storage.set('style', styleId); api.storage.set('colour', colourId);
+    if (sChanged) { drawOrb = renderer(styleId, mk); pickDraw = renderer(styleId, mk); }
+    paintLook();
+  }
+  function paintLook() {
+    scene.dataset.style = styleId; scene.dataset.colour = colourId;
+    for (const s of styleTiles) s.b.setAttribute('aria-checked', String(s.id === styleId));
+    for (const d of colourDots) d.b.setAttribute('aria-checked', String(d.id === colourId));
+    colourName.textContent = (COLOURS.find(c => c[0] === colourId) || [0, ''])[1];
+    paintSwatches(); paintPick(performance.now() / 1000); previews(performance.now() / 1000);
     if (reduced) still();
   }
-  for (const [id, label] of LOOKS) {
-    const b = el('button', 'ob-look', { type: 'button', role: 'radio', 'data-look': id, 'aria-checked': 'false', title: label, 'aria-label': 'Orb look: ' + label });
-    api.listen(b, 'click', () => { if (id !== lookId) { api.storage.set('look', id); useLook(id); } });
-    picker.append(b);
+  // The button's own tiny orb (redrawn on a change and now and then; it never runs a loop of its own).
+  function paintPick(t) {
+    const n = Math.round(30 * DPR); if (pickCv.width !== n) pickCv.width = pickCv.height = n;
+    pickDraw(pickCtx, n, frameOf(t, 0, 'idle', 0, false));
   }
+  // Live previews while the popover is open: each style in the chosen colour.
+  function previews(t) {
+    if (pop.hidden) return;
+    const n = Math.round(64 * DPR);
+    for (const s of styleTiles) { if (s.cv.width !== n) s.cv.width = s.cv.height = n; s.draw(s.ctx, n, frameOf(t, s.id === styleId ? level : 0, s.id === styleId ? modeOf(voice) : 'idle', 0, false)); }
+  }
+  let popOff = null;
+  function openPop(on) {
+    if (on === !pop.hidden) return;
+    pop.hidden = !on; pickBtn.setAttribute('aria-expanded', String(on)); picker.classList.toggle('is-open', on);
+    popOff?.(); popOff = null;
+    if (on) { popOff = api.back.push(() => openPop(false)); paintSwatches(); previews(performance.now() / 1000); styleTiles.find(s => s.id === styleId)?.b.focus({ preventScroll: true }); }
+    if (reduced) still();
+  }
+  api.listen(pickBtn, 'click', () => openPop(pop.hidden));
+  // Arrow keys move along a row of choices.
+  for (const row of [styleRow, colourRow]) api.listen(row, 'keydown', e => {
+    const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]; if (!k) return;
+    const kids = [...row.children], i = kids.indexOf(doc.activeElement); if (i < 0) return;
+    e.preventDefault(); const n = kids[(i + k + kids.length) % kids.length]; n.focus({ preventScroll: true }); n.click();
+  });
 
   /* ---------- apps: round glass satellites on two tilted orbits ---------- */
   // The app's own logo first (the Store's picture of it); its designed glyph otherwise; never a bare letter.
@@ -234,10 +266,10 @@ export default function setup(api) {
   }
   function placeSats(dt) {
     if (!W) return;
-    const cx = W / 2, cy = H * .46;
+    const cy = H * .46;
     for (const s of sats) {
       if (!reduced) s.a += s.speed * dt;
-      const rx = O * 1.65 * s.ring / 1.32, ry = rx * .34;
+      const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.75, fit);
       const x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
       const depth = Math.sin(s.a); // >0 in front of the orb, <0 behind it
       const sc = .78 + .22 * (depth + 1) / 2;
@@ -288,9 +320,6 @@ export default function setup(api) {
     }
     threads.replaceChildren(...kids);
     fitThreads();
-    const news = ready.some(s => s.needs || s.unread);
-    mini.classList.toggle('has-news', news);
-    mini.setAttribute('aria-label', news ? 'Home · something is ready for you' : 'Home');
   }
   // At most two rows of Ready pills: the rest fold into "+N more" (which opens the Ready list).
   function fitThreads() {
@@ -314,6 +343,33 @@ export default function setup(api) {
 
   /* ---------- motion: one ~30 fps loop, only while the scene is in front and the page is visible ---------- */
   let running = false, lastT = 0, cancel = null, home = null, blinkAt = 3;
+  /* ---------- the panel: whatever opens slides in on the right; the scene moves to the middle of what is left ---------- */
+  let panelKind = null;
+  function aim(jump = false) {
+    const st = panelKind ? api.panel.state() : null, pw = st ? Math.min(W * .8, st.width || 0) : 0;
+    free = Math.max(320, W - pw); cxTarget = free / 2;
+    fit = pw ? Math.max(.42, Math.min(1, (free * .5 - 40) / (O * 1.65))) : 1;
+    scene.style.setProperty('--ob-free', Math.round(free) + 'px');
+    if (jump || reduced || !cx) { cx = cxTarget; scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); }
+  }
+  function ease(dt) {
+    if (Math.abs(cxTarget - cx) < .5) { if (cx !== cxTarget) { cx = cxTarget; scene.style.setProperty('--ob-cx', Math.round(cx) + 'px'); } return; }
+    cx += (cxTarget - cx) * Math.min(1, dt * 7);
+    scene.style.setProperty('--ob-cx', Math.round(cx) + 'px');
+  }
+  function paintPanel() {
+    const k = api.route().panel || null;
+    if (k !== panelKind) { panelKind = k; scene.dataset.panel = k || ''; }
+    if (W) aim();
+    api.frame(() => { if (!W) return; aim(); fitThreads(); if (reduced) still(); });  // the panel's width, once laid out
+  }
+  // A click on the open sky (not the orb, an app or a pill) puts the panel away and folds the picker.
+  api.listen(scene, 'pointerdown', e => {
+    if (e.button) return;
+    const bare = e.target === scene || e.target === sky || e.target === field;
+    if (!pop.hidden && !picker.contains(e.target)) openPop(false);
+    if (bare && panelKind) api.panel.close();
+  });
   function draw(now) {
     const t = now / 1000, dt = lastT ? Math.min(.1, (now - lastT) / 1000) : 0;
     lastT = now;
@@ -321,10 +377,14 @@ export default function setup(api) {
     level += (lvlTarget - level) * .25;
     if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
     const blink = t > blinkAt && t < blinkAt + .14; if (t > blinkAt + .14) blinkAt = t + 2.5 + ((hash(Math.floor(t)) % 300) / 100);
+    ease(dt);
     drawSky(t, level);
-    drawOrb(ox, orbCv.width, t, level, modeOf(voice), flash, blink);
+    drawOrb(ox, orbCv.width, frameOf(t, level, modeOf(voice), flash, blink));
     placeSats(dt);
+    if (!pop.hidden && (frameN++ & 1)) previews(t);
+    if (++pickN > 90) { pickN = 0; paintPick(t); }
   }
+  let frameN = 0, pickN = 0;
   function loop(now) {
     cancel = null; if (!running) return;
     if (now - lastT >= 30) draw(now);
@@ -346,22 +406,21 @@ export default function setup(api) {
     if (h !== home) {
       home = h; root.dataset.orbScene = h ? 'home' : 'desk';
       scene.classList.toggle('is-on', h); scene.inert = !h;
-      mini.hidden = h;
       wake();
       if (h) api.frame(() => { size(); fitThreads(); });
     }
   }
   function paint() {
-    paintVisible();
+    paintVisible(); paintPanel();
     if (!home) return;
     name.textContent = api.agents.here()?.label || 'Wizard';
     paintThreads(); paintApps();
   }
-  api.desk.emptyHome();     // no desk numbers here: closing the last window of a desk comes back to the orb
-  api.listen(mini, 'click', () => api.desk.home());
+  api.panel.claim();        // no desks: everything that opens shows in the panel on the right, over the scene
+  api.desk.emptyHome();
   api.on('route', paint);
   api.on('home', paint);   // every Home repaint (live threads, outbox) lands here
-  useLook(lookId);
+  paintLook();
   paint();
   onVoice(voice);
 

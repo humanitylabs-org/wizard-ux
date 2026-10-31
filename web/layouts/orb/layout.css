@@ -1,6 +1,7 @@
 /* Orb layout (desktop only; layout.js). Everything is scoped to html[data-shell="desktop"][data-layout="orb"], so the
  * phone and the classic desktop never see a rule of it. The Home scene is the approved concept's night scene on every
- * skin (its colours are the wearing tweak's --ob-* tokens); windows keep the skin's own look. Motion is driven by
+ * skin (its colours are the wearing tweak's --ob-* tokens). There are no desks: whatever opens shows in the shell's one
+ * panel on the right (desktop.css .panel-layer), which keeps the skin's own window look with the concept's round glass. Motion is driven by
  * layout.js (paused off Home, hidden tabs and reduced motion); CSS only adds hover/press touches. */
 
 /* ---------- the bar: only the switch / clock slot, the fuel gauge, updates and Settings stay ---------- */
@@ -45,7 +46,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-field { position: absolute; in
 
 /* ---------- the orb ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap {
-  position: absolute; left: 50%; top: 46%; width: var(--orb); height: var(--orb); transform: translate(-50%, -50%); z-index: 5;
+  position: absolute; left: var(--ob-cx, 50%); top: 46%; width: var(--orb); height: var(--orb); transform: translate(-50%, -50%); z-index: 5;
   transition: transform 180ms var(--wz-ease); pointer-events: none;
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap.is-pressed { transform: translate(-50%, -50%) scale(.96); }
@@ -57,11 +58,11 @@ html[data-shell="desktop"][data-layout="orb"] .ob-orb {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-orb:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
 html[data-shell="desktop"][data-layout="orb"] .ob-name {
-  position: absolute; left: 50%; top: calc(46% + var(--orb) / 2 + 14px); transform: translateX(-50%); z-index: 6; white-space: nowrap; pointer-events: none;
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) / 2 + 14px); transform: translateX(-50%); z-index: 6; white-space: nowrap; pointer-events: none;
   font: 500 calc(var(--wz-text-sm) * 1) / 1 var(--wz-font-ui); letter-spacing: .32em; padding-left: .32em; text-transform: uppercase; color: var(--ob-ink3);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-caption {
-  position: absolute; left: 50%; top: calc(46% + var(--orb) / 2 + 44px); transform: translateX(-50%); z-index: 6; width: min(640px, 90vw);
+  position: absolute; left: var(--ob-cx, 50%); top: calc(46% + var(--orb) / 2 + 44px); transform: translateX(-50%); z-index: 6; width: min(640px, 90vw, calc(var(--ob-free, 100vw) - 48px));
   text-align: center; pointer-events: none; font: 500 calc(var(--wz-text-sm) * 1.15) / 1.35 var(--wz-font-ui); color: var(--ob-ink2);
   opacity: 0; transition: opacity 300ms ease;
 }
@@ -96,7 +97,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible)
 
 /* ---------- conversations: the concept's pills ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-threads {
-  position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); z-index: 8; width: min(1160px, 92vw);
+  position: absolute; left: var(--ob-cx, 50%); bottom: 140px; transform: translateX(-50%); z-index: 8; width: min(1160px, 92vw, calc(var(--ob-free, 100vw) - 64px));
   display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px;
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-th {
@@ -144,7 +145,7 @@ html[data-shell="desktop"][data-layout="orb"] .ob-act.is-done:hover { color: var
 
 /* ---------- the hint line and the quiet look swatches ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-hint {
-  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; white-space: nowrap;
+  position: absolute; left: var(--ob-cx, 50%); bottom: 96px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; white-space: nowrap;
   font: 400 calc(var(--wz-text-sm) * 1) / 1 var(--wz-font-ui); color: var(--ob-ink3);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-hint i { font-style: normal; opacity: .5; }
@@ -154,42 +155,54 @@ html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd {
   font: 600 calc(var(--wz-text-sm) * .92) / 1 var(--wz-font-ui);
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-hint kbd.is-short { min-width: 40px; }
-html[data-shell="desktop"][data-layout="orb"] .ob-looks {
-  position: absolute; right: 22px; bottom: 20px; z-index: 7; display: inline-flex; gap: 8px; padding: 6px; border-radius: 99px;
-  opacity: .45; transition: opacity 200ms;
+/* The look picker: one quiet button bottom right; it opens Style (live previews) and Colour. */
+html[data-shell="desktop"][data-layout="orb"] .ob-picker { position: absolute; right: 20px; bottom: 18px; z-index: 9; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 3px; border-radius: 99px; cursor: pointer;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .92) / 1 var(--wz-font-ui); letter-spacing: .02em;
+  opacity: .55; transition: opacity 200ms, border-color 200ms, color 200ms;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-looks:is(:hover, :focus-within) { opacity: 1; }
-html[data-shell="desktop"][data-layout="orb"] .ob-look {
-  width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-  background: radial-gradient(circle at 35% 30%, var(--sw2), var(--sw1) 55%, var(--ob-core) 100%);
-  box-shadow: 0 0 0 1px var(--ob-line); transition: transform 140ms, box-shadow 140ms;
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn:is(:hover, :focus-visible), html[data-shell="desktop"][data-layout="orb"] .ob-picker.is-open .ob-pick-btn { opacity: 1; border-color: var(--ob-line2); color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-btn:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pick-cv { width: 30px; height: 30px; border-radius: 50%; display: block; }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop {
+  width: 348px; padding: 14px 14px 16px; border-radius: 18px; box-sizing: border-box;
+  border: 1px solid var(--ob-line); background: var(--ob-glass-solid); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  box-shadow: var(--ob-shadow); transform-origin: 100% 100%; animation: ob-pop-in 200ms cubic-bezier(.2, .8, .2, 1) both;
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-look:hover { transform: scale(1.15); }
-html[data-shell="desktop"][data-layout="orb"] .ob-look[aria-checked="true"] { box-shadow: 0 0 0 1.5px var(--ob-ink2), 0 0 10px -1px var(--sw1); }
-html[data-shell="desktop"][data-layout="orb"] .ob-look:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
-html[data-shell="desktop"][data-layout="orb"] .ob-look[data-look="nebula"] { --sw1: var(--ob-nebula-1); --sw2: var(--ob-nebula-2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-look[data-look="ember"] { --sw1: var(--ob-ember-1); --sw2: var(--ob-ember-2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-look[data-look="tide"] { --sw1: var(--ob-tide-1); --sw2: var(--ob-tide-2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-look[data-look="oracle"] { --sw1: var(--ob-oracle-1); --sw2: var(--ob-oracle-2); }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop[hidden] { display: none !important; }
+@keyframes ob-pop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+html[data-shell="desktop"][data-layout="orb"] .ob-pop-h {
+  display: flex; align-items: baseline; justify-content: space-between; margin: 2px 2px 10px;
+  font: 600 calc(var(--wz-text-sm) * .78) / 1 var(--wz-font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--ob-ink3);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-pop-h em { font-style: normal; letter-spacing: .02em; text-transform: none; font-weight: 500; color: var(--ob-ink2); }
+html[data-shell="desktop"][data-layout="orb"] .ob-styles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-st {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px 8px; border-radius: 12px; cursor: pointer;
+  border: 1px solid transparent; background: var(--ob-btn); color: var(--ob-ink2); font: 500 calc(var(--wz-text-sm) * .8) / 1 var(--wz-font-ui);
+  transition: background 140ms, border-color 140ms, color 140ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-st:hover { background: var(--ob-btn-hi); color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-st[aria-checked="true"] { border-color: var(--ob-line2); background: var(--ob-btn-hi); color: var(--ob-ink); }
+html[data-shell="desktop"][data-layout="orb"] .ob-st:focus-visible, html[data-shell="desktop"][data-layout="orb"] .ob-co:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 1px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-st-cv { width: 64px; height: 64px; display: block; }
+html[data-shell="desktop"][data-layout="orb"] .ob-colours { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-co { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; display: grid; place-items: center; }
+html[data-shell="desktop"][data-layout="orb"] .ob-co i { width: 22px; height: 22px; border-radius: 50%; background: var(--sw); box-shadow: 0 0 0 1px var(--ob-line); transition: transform 140ms, box-shadow 140ms; }
+html[data-shell="desktop"][data-layout="orb"] .ob-co:hover i { transform: scale(1.12); }
+html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { box-shadow: 0 0 0 2px var(--ob-glass-solid), 0 0 0 3.5px var(--ob-ink2), 0 0 12px var(--sw-glow); }
 
-/* ---------- with windows open: a small orb top left goes Home ---------- */
-html[data-shell="desktop"][data-layout="orb"] .ob-mini {
-  position: fixed; top: calc((var(--bar-h, 34px) - 24px) / 2); left: 12px; z-index: 2; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
-  background: none; cursor: pointer;
-}
-html[data-shell="desktop"][data-layout="orb"] .ob-mini[hidden], html[data-shell="desktop"][data-layout="orb"] .desktop-fullscreen .ob-mini { display: none; }
-html[data-shell="desktop"][data-layout="orb"] .ob-mini-orb {
-  position: absolute; inset: 0; border-radius: 50%; --m1: var(--ob-nebula-1); --m2: var(--ob-nebula-2); --m3: var(--ob-nebula-3);
-  background: radial-gradient(circle at 36% 30%, var(--m3) 0%, var(--m1) 45%, var(--ob-core) 100%);
-  box-shadow: 0 0 12px color-mix(in oklab, var(--m1) 60%, transparent), inset 0 0 0 1px color-mix(in oklab, var(--m2) 45%, transparent);
-  transition: transform 160ms var(--wz-ease);
-}
-html[data-shell="desktop"][data-layout="orb"] .ob-mini[data-look="ember"] .ob-mini-orb { --m1: var(--ob-ember-1); --m2: var(--ob-ember-2); --m3: var(--ob-ember-2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-mini[data-look="tide"] .ob-mini-orb { --m1: var(--ob-tide-1); --m2: var(--ob-tide-2); --m3: var(--ob-tide-2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-mini[data-look="oracle"] .ob-mini-orb { --m1: var(--ob-oracle-1); --m2: var(--ob-oracle-2); --m3: var(--ob-oracle-2); }
-html[data-shell="desktop"][data-layout="orb"] .ob-mini:is(:hover, :focus-visible) .ob-mini-orb { transform: scale(1.12); }
-html[data-shell="desktop"][data-layout="orb"] .ob-mini-dot { position: absolute; right: -3px; top: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--ob-amber); box-shadow: 0 0 0 2px var(--wz-base), 0 0 8px var(--ob-amber); display: none; }
-html[data-shell="desktop"][data-layout="orb"] .ob-mini.has-news .ob-mini-dot { display: block; }
+/* ---------- the panel (no desks): the concept's conversation panel, holding the real window ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap, html[data-shell="desktop"][data-layout="orb"] :is(.ob-name, .ob-caption, .ob-threads, .ob-hint) { transition: transform 180ms var(--wz-ease); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button[data-wact="close"] { background: color-mix(in srgb, var(--wz-text) 7%, transparent); }
+/* the sky dims a little behind an open panel, so the panel reads first */
+html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-panel]:not([data-panel=""]) .ob-hint { opacity: .5; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
