@@ -11,12 +11,11 @@ Reuse:
 - chat: REUSE WizardApp.nav.openThread
 - orb: EXTEND Orb.create (row updated)
 - streak: NEW web/core/streaks.js + row
-Visual: <side-by-side screenshot, or "none">
 ```
 
 `Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
-## Apps (`WizardApp` via `/wizard-os-home/core/app-client.js` only)
+## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
@@ -36,15 +35,15 @@ Visual: <side-by-side screenshot, or "none">
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
-| Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated title header | tools (icons, dot) in the shell bar |
+| Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Offline replica, edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable fail |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
 | Offline shell | `web/sw.js` | API cache | offline reload |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
-| Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
+| Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own springs/haptics | — |
 | Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | per-app lint forks | legacy warns; changed lines fail |
-| App kit: rows, sections, empty/add field | `WizardApp`: live `web/kit/wizard-ui.css` + `--wz-*`, then active skin (core/package/My skin) | kit forks; `.wz-field-row` chat; literal colours | two skins + My skin restyle `.wz-*` rows |
+| App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | kit forks; `.wz-field-row` chat; literals | two skins + My skin restyle `.wz-*` |
 
 ## Shell (`web/core/`): shared; per-kind variants EXTEND.
 
@@ -53,7 +52,7 @@ Visual: <side-by-side screenshot, or "none">
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Done | `WizCore` (`chats.js`, `.css`); Ready/Home alerts; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |

@@ -11,13 +11,13 @@ test('row pin buttons are hidden by default and the tweak shows them', () => {
   assert.match(css, /html\[data-tweaks~="wizard\/pin-buttons"\] \.ch-pin-toggle \{ display: grid; \}/);
   assert.equal(json('web/tweaks/wizard/pin-buttons/manifest.json').name, 'Show pin buttons');
 });
-test('the row menu carries Pin and no Open', () => {
+test('the thread row menu carries Pin and no Open; alert Open is separate', () => {
   const js = read('web/core/chats.js');
   const sheet = js.slice(js.indexOf('function openRowSheet'), js.indexOf('const emojiCategoryHtml'));
   assert.match(sheet, /data-rspin>\$\{PIN_SVG\}\$\{PIN\.has\(sid\) \? 'Unpin' : 'Pin'\}/);
   assert.doesNotMatch(sheet, /data-part="pin-button"/, 'the menu Pin is never hidden with the row buttons');
-  assert.doesNotMatch(sheet, /data-rsopen|>Open</);
-  assert.doesNotMatch(js, /data-rsopen/);
+  assert.match(sheet, /\$\{nid \? '<button type="button" data-rsopen/, 'only alerts offer Open');
+  assert.match(js, /closest\('\[data-rsopen\]'\) && rowSheet\?\.nid/);
 });
 test('Show pin buttons is off for Wizard and Mizel, on for Novairecito; the old Hide tweak is retired', () => {
   const cat = json('web/tweaks/catalog.json');
