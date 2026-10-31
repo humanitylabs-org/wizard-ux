@@ -81,25 +81,33 @@
   const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   /* No desks (a layout holds the panel, e.g. the Orb desktop): whatever opens shows in ONE panel on the right over
-   * Home instead of on a desk. The panel window lives outside the desks (never tiled, never synced, not restored after
-   * a reload); opening another thing replaces it (a short Back list keeps the ones before). The desks are left exactly
+   * Home instead of on a desk. A chat panel's window lives outside the desks (never tiled, never synced); an app is a
+   * desk of its own (below); opening another thing replaces it (a short Back list keeps the chats before). The desks are left exactly
    * as they were, so when the layout lets go they come straight back. Desk keys and desk moves do nothing meanwhile. */
   let panel = null;   // { id, back: [window objects], swap }: the chat panel (a thread; docked: a column beside the list)
   let panelApp = null;   // the same for an app: its own panel on the right, one app at a time (open beside a chat)
   /* Docked (a layout called api.panel.dock): the stock Chats list sits in its own panel on the LEFT for good (folded:
    * gone until unfolded); a thread picked in it opens in the panel on the right, which every finishing action closes. */
   let panelList = null, panelDocked = false, panelFrontId = null;   // panelList: { id }
-  /* Kept running (a layout called api.panel.park, the Orbs view): closing an app's panel only hides it; its window
-   * stays mounted out of sight (music keeps playing) and opening that app again brings it back as it was. Only
-   * panelQuit really closes it. */
-  let panelParked = [], panelParks = false;   // panelParked: [{ id }]
+  /* Apps are desks (Miguel, v8: "one-to-one with desks"). An app opened while a layout holds the panel (an installed
+   * app's frame or a page) becomes a real desk of its own, one app per desk, so it is saved, synced and restored
+   * exactly like any desk: looking away, a reload or another device's sync never closes it. The app panel only SHOWS
+   * one desk's app; hiding it (✕, Esc) slides the panel away and the desk stays open, its window alive out of sight
+   * (music keeps playing); panelQuit closes the desk. Every desk with an app is one running app (one per desk:
+   * its focused app, else its first). Chats panels and built-in views (Settings) are not desks. panelParks
+   * (api.panel.park) only decides whether an app that is NOT a desk hides instead of closing. */
+  let panelParks = false;
+  const panelDeskApp = w => !!w && (w.app === 'frame' || w.app === 'pages');
     const panelChat = () => panel && W[panel.id] ? W[panel.id] : null;   // the chat panel's window (a Chats window)
     const panelAppW = () => panelApp && W[panelApp.id] ? W[panelApp.id] : null;   // the app panel's window
     const panelListW = () => panelList && W[panelList.id] ? W[panelList.id] : null;
     const panelWins = () => [panelListW(), panelChat(), panelAppW()].filter(Boolean);
     const panelHas = id => !!id && (panel?.id === id || panelApp?.id === id || panelList?.id === id);
     const panelSlot = id => !id ? null : panel?.id === id ? panel : panelApp?.id === id ? panelApp : null;
-    const panelParkedW = () => panelParked.map(p => W[p.id]).filter(Boolean);
+    // One app per desk: the desk's focused app, else its first app (the window the panel shows for that desk).
+    const panelDeskRep = d => (panelDeskApp(W[d.focus]) ? W[d.focus] : d.wins.map(id => W[id]).find(panelDeskApp)) || null;
+    const panelReps = () => ws.map(panelDeskRep).filter(Boolean);
+    const panelParkedW = () => globalThis.WosSkinHost?.panelMode ? panelReps().filter(w => w.id !== panelApp?.id) : [];
     // The panel in front: the one holding the keyboard, else the one opened or clicked last, else the chat, the app.
     const panelWin = () => {
       const all = [panelChat(), panelAppW(), panelListW()].filter(Boolean); if (all.length < 2) return all[0] || null;
@@ -267,6 +275,7 @@
     if (!internal && !canLeave(id)) return;
     if (hud?.id === id) { hudClose(); return; }
     if (globalThis.WosSkinHost?.panelMode && panelHas(id)) { panelClose({ id }); return; }
+    if (globalThis.WosSkinHost?.panelMode && panelDeskApp(W[id])) { panelDeskClose(id); save(); render(); return; } // an app's desk out of sight
     const t = wsOf(id); if (t < 0) return;
     const d = ws[t];
     if (!internal) rememberClosed(id, t);
@@ -705,7 +714,9 @@
       const host = wsEl(i), d = ws[i];
       // Keep live windows (iframes keep their state); add new ones, drop closed ones.
       // Move surviving DOM nodes between hosts rather than remounting an iframe or draft.
-      for (const id of d.wins) { const ex = stage.querySelector(`.win[data-win="${id}"]`); if (!ex) mountWin(W[id], host); else if (ex.parentNode !== host) host.appendChild(ex); }
+      // A layout holding the panel: each desk's app lives in the panel layer (shown there, or alive out of sight).
+      const lay = globalThis.WosSkinHost?.panelMode ? panelLayerEl(d) : null, rep = lay && panelDeskRep(d);
+      for (const id of d.wins) { const to = rep?.id === id ? lay : host, ex = stage.querySelector(`.win[data-win="${id}"]`); if (!ex) mountWin(W[id], to); else if (ex.parentNode !== to) to.appendChild(ex); }
       host.hidden = homeOpen || i !== cur;
       let home = host.querySelector('.home');
       if (!d.wins.length) { if (!home) { home = document.createElement('div'); home.className = 'home'; home.tabIndex = -1; home.setAttribute('role', 'region'); host.appendChild(home); } home.setAttribute('aria-label', `Empty desktop ${C.workspaceNav.slot(i)}`); paintHome(home, homeHtml(i)); }
@@ -942,20 +953,26 @@
       ${w.app === 'frame' && a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}${w.app === 'frame' ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
       <button data-wact="close" title="Close (Esc)" aria-label="Close">✕</button></div>`;
   }
-  function panelMount() {
+  // The panel layer (made on first use; a desk with an app needs it even before anything is shown).
+  function panelLayerEl(d) {
     let layer = document.getElementById('panelLayer');
-    if (!layer) { if (!panel && !panelApp && !panelList) return; layer = Object.assign(document.createElement('div'), { id: 'panelLayer', className: 'panel-layer' }); stage.appendChild(layer); }
+    if (!layer && (!d || panelDeskRep(d))) { layer = Object.assign(document.createElement('div'), { id: 'panelLayer', className: 'panel-layer' }); stage.appendChild(layer); }
+    return layer;
+  }
+  function panelMount() {
+    const layer = panel || panelApp || panelList || panelReps().length ? panelLayerEl() : document.getElementById('panelLayer'); if (!layer) return;
     if (!panelChat()) panel = null;
-    if (!panelAppW()) panelApp = null;
+    if (!panelAppW() || (panelDeskApp(panelAppW()) && !panelReps().includes(panelAppW()))) panelApp = null;
     if (!panelListW()) panelList = null;
-    panelParked = panelParked.filter(p => W[p.id]);
     layer.classList.toggle('on', !!(panel || panelApp || panelList));
-    for (const w of panelParkedW()) { const el = winEl(w.id); if (el) { el.classList.add('panel-parked'); el.inert = true; } }
+    for (const w of panelParkedW()) { const el = winEl(w.id); if (el) { el.classList.add('panel', 'panel-parked'); el.classList.remove('panel-out', 'panel-swap'); el.dataset.panel = 'app'; el.dataset.side = 'right'; el.inert = true; } }
     for (const [slot, w] of [[panelList, panelListW()], [panel, panelChat()], [panelApp, panelAppW()]]) {
       if (!w) continue;
       let el = winEl(w.id);
       if (!el) { el = mountWin(w, layer); el.classList.add('panel'); if (slot.swap) el.classList.add('panel-swap'); }
       else if (el.parentNode !== layer) layer.appendChild(el);
+      if (el.classList.contains('panel-parked')) { el.classList.remove('panel-parked'); el.inert = false; }
+      el.classList.add('panel');
       el.dataset.panel = panelKind(w) === 'app' ? 'app' : 'chat';
       el.dataset.side = panelDockList(w) ? 'left' : slot === panel && panelDocked ? 'beside' : 'right';   // docked: a chat opens beside the list
       el.toggleAttribute('data-dock', panelDockList(w));
@@ -979,20 +996,28 @@
     window.WosResources?.back(); closePalette({ restore: false });
     const isApp = obj?.app !== 'chats', slot = isApp ? panelApp : panel;
     const prev = isApp ? panelAppW() : panelChat(); let back = slot?.back || [];
-    if (isApp && panelParks) {   // kept running: the one in front goes out of sight alive; a hidden one comes back as it was
-      if (prev) panelPark(prev.id);
-      const p = panelParked.find(x => W[x.id]?.app === obj.app && (W[x.id].appId || '') === (obj.appId || '') && (W[x.id].url || '') === (obj.url || ''));
-      if (p) {
-        panelParked = panelParked.filter(x => x !== p); panelApp = { id: p.id, back: [], swap: false }; panelFrontId = p.id;
-        const el = winEl(p.id); if (el) { el.classList.remove('panel-parked', 'panel-out'); el.inert = false; }
-        save(); render(); log('panel:unpark'); setTimeout(() => focusInside(p.id), 30); return W[p.id];
-      }
-      back = [];
-    } else if (prev) { if (!fromBack) { const keep = panelSnap(prev); if (keep) back = [...back, keep].slice(-PANEL_BACK); } panelDrop(prev.id, { swap: true }); }
+    if (isApp && panelDeskApp(obj)) {   // an app is a desk: the one in front goes out of sight alive (its desk stays)
+      if (prev && !panelDeskApp(prev)) panelDrop(prev.id, { swap: true });
+      return panelDeskShow(obj);
+    }
+    if (isApp && prev && panelDeskApp(prev)) panelApp = null;   // a built-in view over a desk's app: that app only hides
+    else if (prev) { if (!fromBack) { const keep = panelSnap(prev); if (keep) back = [...back, keep].slice(-PANEL_BACK); } panelDrop(prev.id, { swap: true }); }
     const id = uid(); W[id] = { id, ...obj };
     const next = { id, back, swap: !!prev }; if (isApp) panelApp = next; else panel = next; panelFrontId = id;
     save(); render(); log('panel:' + panelKind(W[id]));
     return W[id];
+  }
+  // Show an app's desk in the app panel: its open desk if it has one (brought back exactly as it was), else a new
+  // desk of its own (one app per desk, added after the others; the desk in Desks view stays the current one).
+  function panelDeskShow(obj) {
+    const same = w => w.app === obj.app && (w.appId || '') === (obj.appId || '') && (obj.appId || obj.app === 'pages' ? (w.pageSlug || '') === (obj.pageSlug || '') : (w.url || '') === (obj.url || ''));
+    let w = Object.values(W).find(x => panelDeskApp(x) && wsOf(x.id) >= 0 && same(x)) || null;
+    if (w) ws[wsOf(w.id)].focus = w.id;
+    else { const id = uid(); W[id] = { id, ...obj }; w = W[id]; ws.push({ ...freshDesk(), wins: [id], focus: id }); }
+    const swap = !!panelAppW() && panelAppW().id !== w.id;
+    panelApp = { id: w.id, back: [], swap }; panelFrontId = w.id;
+    save(); render(); log('panel:desk'); setTimeout(() => focusInside(w.id), 30);
+    return w;
   }
   // Closing: the content panel in front (Esc, ✕, a finished thread: the chat first, then the app), or the window asked
   // for. The docked list never closes.
@@ -1000,31 +1025,44 @@
     const f = panelWin(), front = f && panelSlot(f.id) ? f : panelChat() || panelAppW();
     const w = id ? (panelSlot(id) ? W[id] : null) : front;
     if (!w) { if (!panelChat()) panel = null; if (!panelAppW()) panelApp = null; return false; }
-    const wasApp = panelApp?.id === w.id, park = wasApp && panelParks && !quit;
+    const wasApp = panelApp?.id === w.id, park = wasApp && (panelParks || panelDeskApp(w)) && !quit;
     if (!park && !canLeave(w.id)) return false;
-    if (park) panelPark(w.id); else { panelDrop(w.id); if (wasApp) panelApp = null; else panel = null; }
+    if (park) panelPark(w.id); else if (wasApp && panelDeskApp(w)) { panelDeskClose(w.id); panelApp = null; } else { panelDrop(w.id); if (wasApp) panelApp = null; else panel = null; }
     const c = wasApp && panelChat();   // an app closed beside an open chat: the keyboard goes back to the chat
     if (paint) { save(); render(); const l = panelListW(); if (c) { panelFrontId = c.id; focusInside(c.id); } else if (l) { panelFrontId = l.id; winEl(l.id)?.focus({ preventScroll: true }); } else $('#desktopHome')?.focus({ preventScroll: true }); } // the keyboard goes back to the list (⌥↓ goes on from there)
     log('panel:close'); return true;
   }
   // Out of sight, still running (kept-running mode): it slides away like a close and keeps its frame alive.
+  // An app that is not a desk (a built-in view) and is asked to hide: it closes (only desks keep running).
   function panelPark(id) {
-    if (!W[id] || panelParked.some(p => p.id === id)) return;
+    if (!W[id]) return;
     if (panelApp?.id === id) panelApp = null;
-    panelParked.push({ id }); const el = winEl(id); if (el) { el.classList.add('panel-parked'); el.inert = true; }
+    if (!panelDeskApp(W[id])) { panelDrop(id); log('panel:park-drop'); return; }
+    const el = winEl(id); if (el) { el.classList.add('panel-parked'); el.inert = true; }
     log('panel:park');
   }
-  // Really close an app the panel holds (shown or kept running): its window goes, like any closed window.
+  // Close an app's desk: its window goes like any closed window (reopenable with ⌥⇧W in Desks), and the desk with it
+  // when nothing else is on it. Desks view's current desk stays current; Home stays in front.
+  function panelDeskClose(id) {
+    const t = wsOf(id); if (t < 0) { panelDrop(id); return; }
+    const d = ws[t]; rememberClosed(id, t);
+    const el = winEl(id); removeWin(id);
+    if (el) { el.querySelector('iframe')?._appDetach?.(); el.classList.add('panel-out'); el.inert = true; setTimeout(() => el.remove(), 420); }
+    if (!d.wins.length && ws.length > 1) { const here = ws[cur], prev = ws[lastWs]; ws.splice(ws.indexOf(d), 1); cur = Math.max(0, ws.indexOf(here)); lastWs = Math.max(0, ws.indexOf(prev)); }
+  }
+  // Really close an app the panel holds (shown or kept running): its desk closes.
   function panelQuit(appId) {
     const w = [panelAppW(), ...panelParkedW()].find(x => x && (x.appId || x.app) === appId); if (!w) return false;
+    if (!canLeave(w.id)) return false;
     if (panelApp?.id === w.id) return panelClose({ id: w.id, quit: true });
-    panelParked = panelParked.filter(p => p.id !== w.id); panelDrop(w.id); save(); render(); log('panel:quit'); return true;
+    if (panelDeskApp(w)) panelDeskClose(w.id); else panelDrop(w.id);
+    save(); render(); log('panel:quit'); return true;
   }
   // Apps the panel holds: the one shown and the ones kept running; playing = a same-origin media element is playing.
   function panelRunning() {
     const playing = w => { try { const d = winEl(w.id)?.querySelector('iframe')?.contentDocument; return !!d && [...d.querySelectorAll('audio,video')].some(m => !m.paused && !m.muted); } catch (_) { return false; } };
-    const a = panelAppW();
-    return [...(a ? [{ id: a.appId || a.app, open: true, playing: playing(a) }] : []), ...panelParkedW().map(w => ({ id: w.appId || w.app, open: false, playing: playing(w) }))];
+    const a = panelAppW(), seen = new Set(), one = r => !seen.has(r.id) && seen.add(r.id);   // one per app
+    return [...(a ? [{ id: a.appId || a.app, open: true, playing: playing(a) }] : []), ...panelParkedW().map(w => ({ id: w.appId || w.app, open: false, playing: playing(w) }))].filter(one);
   }
   // The quiet Back in a panel's title bar: the thing shown there before this one.
   function panelBack(id = '') {
@@ -1076,8 +1114,10 @@
       if (!homeOpen) { homeOpen = true; store.set('homeOpen', true); }
       render(); return;
     }
-    for (const w of [...panelWins(), ...panelParkedW()]) panelDrop(w.id, { swap: true });
-    panel = null; panelApp = null; panelList = null; panelDocked = false; panelParked = []; panelParks = false;
+    // The desks' apps stay open: back on their desks (render moves them home); only the panels' own windows close.
+    for (const w of panelWins()) if (!panelDeskApp(w) || wsOf(w.id) < 0) panelDrop(w.id, { swap: true });
+    for (const el of $$('#panelLayer > .win', stage)) if (W[el.dataset.win] && wsOf(el.dataset.win) >= 0) { el.classList.remove('panel', 'panel-parked', 'panel-swap', 'panel-out'); el.inert = false; delete el.dataset.panel; delete el.dataset.side; }
+    panel = null; panelApp = null; panelList = null; panelDocked = false; panelParks = false;
     const was = store.get('panelPrevHome', null); store.set('panelPrevHome', null);
     if (was === false && ws[cur].wins.length) { homeOpen = false; store.set('homeOpen', false); }
     save(); render();
@@ -2932,7 +2972,7 @@
     toastAct: (text, act) => toast('◇', text, 5000, act),
   });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
-  window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : []), ...(panelApp ? [panelApp.id] : []), ...panelParked.map(p => p.id)].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
+  window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : []), ...(panelApp ? [panelApp.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {
     const did = escStep(); log('back:' + (did || 'root'));
     if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);

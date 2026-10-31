@@ -142,9 +142,10 @@ test('no desks: while a layout holds the panel everything opens in panels over H
   assert.ok(fn('findWin').includes(`if (${ND}) return panelWins().find(fn) || null;`), 'never a hidden desk window');
   assert.ok(fn('escStep').includes(`if (${ND} && panelWin()) return panelEsc();`), 'Esc: the panels first');
   assert.ok(fn('closeWin').includes(`if (${ND} && panelHas(id)) { panelClose({ id }); return; }`));
-  // one at a time: the one before is kept for a quiet Back; the panel lives outside the desks (never synced)
+  // one at a time: the one before is kept for a quiet Back; a chat panel lives outside the desks (never synced), an app
+  // IS a desk (v8, below)
   assert.match(fn('panelOpen'), /panelDrop\(prev\.id, \{ swap: true \}\)/); assert.match(fn('panelOpen'), /back = \[\.\.\.back, keep\]\.slice\(-PANEL_BACK\)/);
-  assert.ok(!fn('panelOpen').includes('ws[') && !fn('panelOpen').includes('.wins'), 'no desk is touched');
+  assert.ok(!fn('panelOpen').includes('ws[') && !fn('panelOpen').includes('.wins'), 'panelOpen itself touches no desk (panelDeskShow does, for apps)');
   assert.match(fn('panelMode'), /store\.set\('panelPrevHome', homeOpen\)/); assert.match(fn('panelMode'), /if \(was === false && ws\[cur\]\.wins\.length\) \{ homeOpen = false;/);
   assert.match(src, /panelMode: on => panelMode\(!!on\),/); assert.match(src, /panelState: \(\) => \{ const c = panelChat\(\), p = panelAppW\(\), l = panelListW\(\), w = c \|\| p;/); assert.match(src, /panelDock: on => panelDock\(!!on\),/);
   assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length, panel: panelKind\(panelChat\(\) \|\| panelAppW\(\)\), panelList: !!panelListW\(\), panelApp: panelAppW\(\)\?\.appId/);
@@ -385,10 +386,10 @@ test('Orbs view satellites are status: running apps (closing only hides; Close q
   assert.match(js, /return all\.filter\(a => run\.has\(a\.id\) \? !a\.agent && !a\.connector : regular\(a\) && \(badgeMap\[a\.id\] \|\| 0\) > 0\)/);
   assert.match(desk, /system: !!AK\?\.isSystem\?\.\(a\), dev: !!AK\?\.inDev\?\.\(a\), connector: !!AK\?\.isConnector\?\.\(a\), agent: !!a\.agent \|\| a\.kind === 'chats'/, 'the shell\'s own kinds, no list of ids');
   assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close', \(\) => \{ api\.panel\.quit\(a\.id\);/);
-  assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && panelParks && !quit;/);
-  assert.match(desk, /if \(park\) panelPark\(w\.id\); else \{ panelDrop\(w\.id\);/);
-  assert.match(desk, /\.\.\.panelParked\.map\(p => p\.id\)\]\.map\(id => W\[id\]\)/, 'a hidden app still counts as open (its mic and audio keep going)');
-  assert.match(desk, /for \(const w of \[\.\.\.panelWins\(\), \.\.\.panelParkedW\(\)\]\) panelDrop\(w\.id, \{ swap: true \}\);/, 'turning the layout off closes them');
+  assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && \(panelParks \|\| panelDeskApp\(w\)\) && !quit;/);
+  assert.match(desk, /if \(park\) panelPark\(w\.id\); else if \(wasApp && panelDeskApp\(w\)\) \{ panelDeskClose\(w\.id\); panelApp = null; \}/, 'Close closes its desk');
+  assert.match(desk, /trackOpenApps\?\.\(\(\) => \[\.\.\.ws\.flatMap\(d => d\.wins\)/, 'a hidden app is a desk window: it still counts as open (its mic and audio keep going)');
+  assert.match(desk, /for \(const w of panelWins\(\)\) if \(!panelDeskApp\(w\) \|\| wsOf\(w\.id\) < 0\) panelDrop\(w\.id, \{ swap: true \}\);/, 'turning the layout off keeps the desks\' apps (the Desks view shows them)');
   assert.match(css, /\.panel-layer > \.win\.panel\.panel-parked \{ animation: panel-park 380ms cubic-bezier\(\.4, 0, \.7, \.2\) both; pointer-events: none; visibility: hidden; \}/);
 });
 
@@ -413,4 +414,33 @@ test('Orbs view satellites stay minimal (Miguel, v8): just the mark, a dot not a
   assert.match(js, /el\('span', 'ob-search-l', \{ text: 'Search apps or ask…' \}\)/);
   assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.all\(\)\);/, 'the pill opens the launcher in its apps-first mode');
   assert.match(js, /all apps: ' \+ MK \+ 'O'/, 'its tooltip names ⌥O');
+});
+
+test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {
+  const src = read('web/desktop/desktop.js');
+  const fn = name => src.slice(src.indexOf(`  function ${name}(`), src.indexOf('\n  }', src.indexOf(`  function ${name}(`)) + 4);
+  assert.match(src, /const panelDeskApp = w => !!w && \(w\.app === 'frame' \|\| w\.app === 'pages'\);/);
+  assert.match(fn('panelOpen'), /if \(isApp && panelDeskApp\(obj\)\) \{/, 'an app opened over the orb goes to a desk');
+  const show = fn('panelDeskShow');
+  assert.match(show, /ws\.push\(\{ \.\.\.freshDesk\(\), wins: \[id\], focus: id \}\)/, 'a new app = a new desk of its own');
+  assert.match(show, /Object\.values\(W\)\.find\(x => panelDeskApp\(x\) && wsOf\(x\.id\) >= 0 && same\(x\)\)/, 'an app already on a desk (any view, any device) comes back, never a second copy');
+  assert.match(show, /save\(\);/, 'saved (and so synced) like any desk change');
+  assert.match(src, /const panelParkedW = \(\) => globalThis\.WosSkinHost\?\.panelMode \? panelReps\(\)\.filter\(w => w\.id !== panelApp\?\.id\) : \[\];/, 'running = every desk\'s app, read from the desks (nothing in memory to lose)');
+  assert.match(fn('render'), /const to = rep\?\.id === id \? lay : host/, 'a desk\'s app lives in the panel layer while the Orbs view is on (never moved again: no frame reload)');
+  assert.match(fn('panelDeskClose'), /removeWin\(id\);/); assert.match(fn('panelDeskClose'), /ws\.splice\(ws\.indexOf\(d\), 1\)/, 'Close closes the desk');
+  assert.ok(!/homeOpen = false/.test(fn('panelDeskClose')), 'closing an app\'s desk keeps the orb in front');
+  // a desks sync round keeps them: an app desk on the shared state is placed again, nothing removed
+  globalThis.window = globalThis;
+  await import(new URL('web/core/workspace-sync.js', root).href + '?v8');
+  const W = { wa: { id: 'wa', app: 'frame', appId: 'music' }, wb: { id: 'wb', app: 'frame', appId: 'money' } };
+  const local = [{ id: 'da', wins: ['wa'], focus: 'wa' }, { id: 'db', wins: ['wb'], focus: 'wb' }];
+  const shared = { desks: local.map(d => ({ id: d.id, wins: d.wins.map(id => W[id]) })) };
+  const r = globalThis.WosWorkspaceSync.reconcile(local, W, JSON.parse(JSON.stringify(shared)), { fresh: id => ({ id, wins: [], focus: null }) });
+  assert.deepEqual(r.removed, []); assert.deepEqual(r.desks.map(d => d.wins), [['wa'], ['wb']]);
+  // a tweak reload (dispose + re-run every tweak) never blinks the panel off: that dropped every running app
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /if \(!on && panelOn && panelHold\) return;/);
+  assert.match(host, /panelHold\+\+;\n    try \{ return await loadTweaksNow\(\.\.\.args\); \} finally \{ panelHold--; panelSync\(\); \}/);
+  assert.match(host, /panelHold\+\+;\n    try \{ return await loadLayoutNow\(id\); \} finally \{ panelHold--; panelSync\(\); \}/, 'and while the layout itself loads again');
+  assert.match(host, /get panelMode\(\) \{ return panelOn && \(panelHold > 0 \|\| \[\.\.\.panelHolders\]\.some\(l => !l\.dead\)\); \},/);
 });
