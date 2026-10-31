@@ -55,3 +55,17 @@ test('clearing or closing removes them',()=>{
  const g=fixture(); g.service.titlebar.set(tools); g.detach(); assert.equal(box(g),undefined);
 });
 test('a reloaded document cannot set tools',()=>{ const f=fixture(); f.child.document={}; assert.throws(()=>f.service.titlebar.set(tools)); });
+test('search, QR and settings icons are shell-drawn, with an optional attention dot',()=>{
+ const f=fixture(); f.service.titlebar.set([{id:'qr',kind:'button',icon:'qr',label:'My QR codes'},{id:'search',kind:'button',icon:'search',label:'Search'},{id:'settings',kind:'button',icon:'settings',label:'Settings',dot:true},{id:'odd',kind:'button',icon:'<svg>',label:'Odd'}]);
+ const [qr,search,settings,odd]=box(f).children;
+ for(const b of [qr,search,settings]){ assert.equal(b.classList.contains('wtool-ic'),true); assert.match(b._html,/^<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M[0-9a-zA-Z .-]+"\/><\/svg>$/); }
+ assert.equal(settings.classList.contains('wtool-dot'),true); assert.equal(search.classList.contains('wtool-dot'),false);
+ assert.equal(odd._html,undefined); assert.equal(odd.textContent,'Odd');
+ assert.equal(settings.attrs['aria-label'],'Settings');
+});
+test('phone icon tools keep a 44px tap target over the slim skin bars',()=>{
+ const css=readFileSync(new URL('../web/styles.css',import.meta.url),'utf8');
+ assert.match(css,/html\[data-shell="phone"\] \.wbar > \.wtools > \.wtool\.wtool-ic\[data-tool\] \{ min-width: 44px; \}/);
+ assert.match(css,/\.wtool-ic::before \{[^}]*height: 44px;/);
+ assert.match(css,/\.wtool-dot::after \{[^}]*background: var\(--amber\)/);
+});
