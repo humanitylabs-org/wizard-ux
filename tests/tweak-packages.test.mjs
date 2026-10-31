@@ -51,7 +51,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   await E.toggle('miguel/hidden-pin'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/home-bars', 'miguel/hidden-pin'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
-  const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
+  const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
   await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
@@ -86,7 +86,7 @@ function wizardExperience(storage = new Map()) {
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>{ requests.push(url.pathname); return {ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))}; }});
   // Notifications in Chats is on by default for the Wizard family; these older checks are about the other tweaks.
-  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => id !== 'wizard/unified-inbox' && id !== 'wizard/machines-home'), all:()=>Array.from(active) };
+  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)), all:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/machines-home'), 'the network map is on by default for the Wizard skin'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
