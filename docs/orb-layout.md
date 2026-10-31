@@ -62,6 +62,9 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   the panel's edge, and a quieter one orb → the chat column. Jagged arcs with a glow, a second and third strand,
   short forks and a spark running along them, re-struck about ten times a second on the sky canvas in the same
   ~30 fps loop; reduced motion = one still glowing arc. Closing the panel lets the icon go back to its orbit.
+- **Resizable:** thin grips on the inner edges of the list, the chat column and the app panel (drag, or ←/→ on the
+  focused grip; double-click or Enter = back to the default; kept per device in `widths`; list 260-520 px, chat
+  360 px-45vw, app 360 px-60vw; never overlapping; the orb stays put).
 - The **Look** picker sits at the bottom of the orb area, right of whatever is open on the left.
 - **⌥\\** (or the handle on the list's edge) folds the list to a slim strip with the Ready count; a chat column then
   opens beside the strip. Kept per device.
