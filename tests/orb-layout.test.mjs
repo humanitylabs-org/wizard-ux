@@ -39,6 +39,8 @@ function desk({ layout = null } = {}) {
     sessionList: () => rows, sessionAct: (id, act) => { calls.push([act, id]); return true; }, openSessions: kind => calls.push(['list', kind]),
     apps: () => [{ id: 'files', name: 'Files', icon: '<span class="ic sgt"></span>' }], openApp: id => { calls.push(['app', id]); return true; }, openPicker: () => calls.push(['picker']),
     home: () => calls.push(['home']), openSettings: page => calls.push(['settings', page]),
+    panelMode: on => calls.push(['panelMode', on]), panelClose: () => { calls.push(['panelClose']); return true; }, panelBack: () => { calls.push(['panelBack']); return true; },
+    panelState: () => ({ kind: 'thread', title: 'Ready one', width: 484, back: 0 }),
   };
   return { host, ctx, mounted, links, calls, adapter, ls, get api() { return api; } };
 }
@@ -79,6 +81,11 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'list', 'logo', 'open']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['cancel', 'command', 'dictate', 'state', 'talk', 'tap']);
+  assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'state']); assert.ok(Object.isFrozen(api.panel));
+  assert.equal(D.host.panelMode, false);
+  api.panel.claim(); assert.equal(D.host.panelMode, true, 'no desks while the layout holds the panel');
+  assert.equal(JSON.stringify(api.panel.state()), JSON.stringify({ kind: 'thread', title: 'Ready one', width: 484, back: 0 })); assert.equal(api.panel.close(), true); assert.equal(api.panel.back(), true);
+  assert.deepEqual(D.calls.splice(0), [['panelMode', true], ['panelClose'], ['panelBack']]);
   assert.equal(typeof api.orb.ready, 'function');
   const L = api.sessions.list(); assert.equal(L.ready[0].id, 'r1'); L.ready[0].title = 'changed';
   assert.equal(api.sessions.list().ready[0].title, 'Ready one', 'a copy, never the shell\'s rows');
@@ -92,7 +99,8 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const mount = { nodeType: 1, remove() { D.mounted.splice(D.mounted.indexOf(this), 1); } }; api.mount(mount); assert.equal(D.mounted.length, 1, 'mounted on the desktop stage');
   assert.deepEqual(D.calls, [['snooze', 'r1'], ['done', 'r1'], ['open', 'r1'], ['list', 'ready'], ['app', 'files'], ['picker'], ['home'], ['settings', 'look'], ['command'], ['talk']]);
   D.host.setLayout('classic'); await settle();
-  assert.equal(D.mounted.length, 0, 'own nodes removed'); assert.deepEqual(D.calls.at(-1), ['teardown']);
+  assert.equal(D.mounted.length, 0, 'own nodes removed'); assert.deepEqual(D.calls.slice(-2), [['teardown'], ['panelMode', false]], 'the desks come back once it is off');
+  assert.equal(D.host.panelMode, false);
   assert.equal(D.host.emptyHome, false, 'desks behave as before once it is off');
   const n = D.calls.length;
   assert.equal(api.sessions.list(), null); assert.equal(api.sessions.act('r1', 'done'), false); api.apps.open('files'); api.desk.home(); api.voice.command();
@@ -104,7 +112,7 @@ test('skins and tweaks never get the layout-only lists or the command take', asy
   const f = fixture({ shell: 'desktop' }); let api;
   f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
   await f.host.loadTweaks(['miguel/orb-shell'], f.slots, { teamAuthors: ['miguel'] });
-  for (const k of ['sessions', 'apps', 'desk', 'voice', 'mount']) assert.equal(api[k], undefined, k);
+  for (const k of ['sessions', 'apps', 'desk', 'voice', 'mount', 'panel']) assert.equal(api[k], undefined, k);
   await f.clear();
 });
 
@@ -118,6 +126,30 @@ test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions,/);
 });
 
+test('no desks: while a layout holds the panel everything opens in one right-side panel over Home; desks stay put', () => {
+  const src = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
+  const ND = 'globalThis.WosSkinHost?.panelMode';
+  const fn = name => src.slice(src.indexOf(`  function ${name}(`), src.indexOf('\n  }', src.indexOf(`  function ${name}(`)) + 4);
+  assert.ok(fn('newWin').includes(`if (${ND}) return panelOpen(obj);`), 'a new window goes to the panel, never to a desk');
+  for (const f of ['goWs', 'reopenClosed', 'jumpBack', 'resizeFocused', 'moveWin', 'swapWin', 'stepDesk', 'stepWin', 'moveDesk', 'closeDesktop', 'hudKey'])
+    assert.ok(fn(f).includes(`if (${ND}) return`), `${f} does nothing without desks`);
+  assert.ok(fn('leaveHome').includes(`if (!homeOpen || ${ND}) return;`), 'Home stays in front');
+  assert.ok(fn('findWin').includes(`if (${ND}) { const p = panelWin(); return p && fn(p) ? p : null; }`), 'never a hidden desk window');
+  assert.ok(fn('escStep').includes(`if (${ND} && panelWin()) return panelClose() ? 'panel' : 'panel-stay';`), 'Esc slides it away');
+  assert.ok(fn('closeWin').includes(`if (${ND} && panel?.id === id) { panelClose(); return; }`));
+  // one at a time: the one before is kept for a quiet Back; the panel lives outside the desks (never synced)
+  assert.match(fn('panelOpen'), /panelDrop\(prev\.id, \{ swap: true \}\)/); assert.match(fn('panelOpen'), /back = \[\.\.\.back, keep\]\.slice\(-PANEL_BACK\)/);
+  assert.ok(!fn('panelOpen').includes('ws[') && !fn('panelOpen').includes('.wins'), 'no desk is touched');
+  assert.match(fn('panelMode'), /store\.set\('panelPrevHome', homeOpen\)/); assert.match(fn('panelMode'), /if \(was === false && ws\[cur\]\.wins\.length\) \{ homeOpen = false;/);
+  assert.match(src, /panelMode: on => panelMode\(!!on\),/); assert.match(src, /panelState: \(\) => \{ const w = panelWin\(\);/);
+  assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length, panel: panelKind\(\) \}/);
+  // it slides in from the right, a replacement settles in place, closing slides it away; reduced motion: none
+  assert.match(css, /\.panel-layer \{ position: absolute; inset: 0; z-index: 140; pointer-events: none; \}/);
+  assert.match(css, /@keyframes panel-in \{ from \{ transform: translateX\(calc\(100% \+ 24px\)\); \}/);
+  assert.match(css, /\.panel-layer > \.win\.panel\[data-panel="app"\] \{ width: min\(1120px/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.panel-layer > \.win\.panel \{ animation: none !important; \} \}/);
+});
+
 test('Orb layout files: desktop-scoped CSS only, no second composer, no raw storage or network', () => {
   const css = read('web/layouts/orb/layout.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@property[^{]*\{[^}]*\}/g, '');
   const rules = [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(sel => sel && !/^(to|from|\d+%)$/.test(sel));
@@ -126,18 +158,32 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
     const p = part.trim();
     assert.ok(p.startsWith('html[data-shell="desktop"][data-layout="orb"]'), `unscoped selector: ${p}`);
   }
-  const js = read('web/layouts/orb/layout.js').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const banned of ['localStorage', 'sessionStorage', 'fetch(', 'XMLHttpRequest', '__wux', '__wos', 'setTimeout', 'setInterval', 'textarea', 'contenteditable', 'querySelector', 'getElementById'])
-    assert.ok(!js.includes(banned), `layout.js uses ${banned}`);
+  const strip = f => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const js = strip('web/layouts/orb/layout.js'), styles = strip('web/layouts/orb/styles.js');
+  for (const [file, src] of [['layout.js', js], ['styles.js', styles]])
+    for (const banned of ['localStorage', 'sessionStorage', 'fetch(', 'XMLHttpRequest', '__wux', '__wos', 'setTimeout', 'setInterval', 'textarea', 'contenteditable', 'querySelector', 'getElementById', 'Math.random'])
+      assert.ok(!src.includes(banned), `${file} uses ${banned}`);
   assert.match(js, /api\.sessions\.act\(s\.id, act\)/); assert.match(js, /api\.env\.shell !== 'desktop'/);
-  // The approved concept's scene: its sky and glassy orb drawn in canvas, four looks kept per device, reactive to the
-  // take and the level; motion only while Home is in front. No vendored shader library any more.
-  assert.match(js, /const LOOKS = \[\['nebula', 'Nebula'\], \['ember', 'Ember'\], \['tide', 'Tide'\], \['oracle', 'Oracle'\]\]/);
-  assert.match(js, /function drawSky\(/); assert.match(js, /function drawOrb\(/);
-  assert.match(js, /api\.storage\.set\('look', id\)/); assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
+  // The approved concept's scene: its sky drawn in canvas; the orb is a Style × a Colour (seven styles drawn in-house in
+  // styles.js, nine colours), kept per device, reactive to the take and the level; live previews in the picker.
+  assert.match(js, /import \{ STYLES, renderer, mix \} from '\.\/styles\.js';/);
+  const ids = [...styles.match(/export const STYLES = Object\.freeze\(\[([\s\S]*?)\]\);/)[1].matchAll(/\['([a-z]+)', '[A-Za-z]+'\]/g)].map(m => m[1]);
+  assert.deepEqual(ids, ['glass', 'oracle', 'plasma', 'swarm', 'holo', 'glitch', 'chrome']);
+  for (const id of ids) assert.match(styles, new RegExp(`function ${id}\\(`), `${id} has its own drawing`);
+  assert.match(js, /const COLOURS = \[\['nebula', 'Nebula'\], \['ember', 'Ember'\], \['tide', 'Tide'\], \['gold', 'Gold'\], \['mono', 'Mono'\], \['emerald', 'Emerald'\], \['rose', 'Rose'\], \['arctic', 'Arctic'\], \['skin', 'Skin accent'\]\];/);
+  const tcss = read('web/tweaks/miguel/orb-shell/tweak.css');
+  for (const id of ['nebula', 'ember', 'tide', 'gold', 'mono', 'emerald', 'rose', 'arctic']) assert.match(tcss, new RegExp(`--ob-look-${id}: #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6}, #[0-9a-f]{6};`));
+  assert.match(js, /function drawSky\(/); assert.match(js, /api\.storage\.set\('style', styleId\); api\.storage\.set\('colour', colourId\);/);
+  assert.match(js, /if \(!has\(STYLES, styleId\)\) styleId = legacy === 'oracle' \? 'oracle' : 'glass';/, 'the v3 look carries over');
+  assert.match(js, /api\.orb\.onLevel\(/); assert.match(js, /api\.on\('voice', onVoice\)/);
+  assert.match(js, /popOff = api\.back\.push\(\(\) => openPop\(false\)\)/, 'Esc folds the picker first');
+  assert.match(js, /if \(!pop\.hidden && \(frameN\+\+ & 1\)\) previews\(t\);/, 'previews only while the picker is open');
+  // No desks: the layout holds the panel; a click on the bare sky puts it away; the scene moves to what is left free.
+  assert.match(js, /api\.panel\.claim\(\);/); assert.match(js, /if \(bare && panelKind\) api\.panel\.close\(\);/);
+  assert.match(js, /scene\.style\.setProperty\('--ob-cx', Math\.round\(cx\) \+ 'px'\)/);
   assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
   assert.match(js, /prefers-reduced-motion: reduce/);
-  assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored Paper Shaders');
+  assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored code');
   // Apps: round satellites on two tilted orbits with depth; their own logo, else a designed glyph; never a letter tile.
   assert.match(js, /ring: i % 2 \? 1 : 1\.32/); assert.match(js, /const depth = Math\.sin\(s\.a\)/);
   assert.match(js, /api\.apps\.logo\(a\.id\)/); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');

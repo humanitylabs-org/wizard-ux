@@ -78,10 +78,17 @@
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
   const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
+  /* No desks (a layout holds the panel, e.g. the Orb desktop): whatever opens shows in ONE panel on the right over
+   * Home instead of on a desk. The panel window lives outside the desks (never tiled, never synced, not restored after
+   * a reload); opening another thing replaces it (a short Back list keeps the ones before). The desks are left exactly
+   * as they were, so when the layout lets go they come straight back. Desk keys and desk moves do nothing meanwhile. */
+  let panel = null;   // { id, back: [window objects] }
+    const panelWin = () => panel && W[panel.id] ? W[panel.id] : null;
+
   let homeOpen = store.get('homeOpen', false) === true;
   // The keyboard in the heads-up chat makes it the window in front for keys, voice and chat actions.
   function hudHasFocus() { return !!hud?.open && !!W[hud.id] && !!document.getElementById('hudLayer')?.contains(document.activeElement); }
-  const focused = () => hudHasFocus() ? W[hud.id] : homeOpen ? null : W[ws[cur].focus] || null;
+  const focused = () => hudHasFocus() ? W[hud.id] : (globalThis.WosSkinHost?.panelMode && panelWin()) || (homeOpen ? null : W[ws[cur].focus] || null);
   save(); // Persist normalization before the layout-version marker can affect another boot.
 
   /* ---------------- chats (shared core) ---------------- */
@@ -192,6 +199,7 @@
 
   function newWin(obj, opts = {}) {
     if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
+    if (globalThis.WosSkinHost?.panelMode) return panelOpen(obj);
     leaveHome();
     const t = Number.isInteger(opts.ws) && ws[opts.ws] ? opts.ws : cur;
     const id = uid(); W[id] = { id, ...obj };
@@ -227,6 +235,7 @@
   function closeWin(id, internal = false) {
     if (!internal && !canLeave(id)) return;
     if (hud?.id === id) { hudClose(); return; }
+    if (globalThis.WosSkinHost?.panelMode && panel?.id === id) { panelClose(); return; }
     const t = wsOf(id); if (t < 0) return;
     const d = ws[t];
     if (!internal) rememberClosed(id, t);
@@ -241,6 +250,7 @@
     closedWins.push({ w, desk: d.id, deskAt: t, at: d.wins.indexOf(id), split: d.split }); if (closedWins.length > 12) closedWins.shift(); store.set('closed', closedWins);
   }
   function reopenClosed() {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     let c; do c = closedWins.pop(); while (c && W[c.w.id]); store.set('closed', closedWins);
     if (!c) return toast('↺', 'Nothing closed to reopen', 1500);
     closePalette({ restore: false }); toggleKeys(false); closeSettings(); closeUsage();
@@ -266,6 +276,7 @@
     return !!s && !!W[s] && wsOf(s) >= 0;
   }
   function jumpBack() {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const s = spotPrev;
     if (!spotLive(s)) return toast('↩', 'Nowhere to go back to yet', 1500);
     closePalette({ restore: false }); toggleKeys(false); closeSettings(); closeUsage();
@@ -284,6 +295,7 @@
   function splitOf(d, n) { const v = +d.split; return v >= SPLIT[0] && v <= SPLIT[1] ? v : n === 2 ? 0.5 : 0.56; }
   function resizable(d) { return !homeOpen && !d.mono && d.wins.length >= 2 && !(d.wins.length <= 4 && d.wins.some(id => W[id]?.share > 0)); }
   function resizeFocused(dir) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const d = ws[cur], f = focused();
     if (!f || hud?.id === f.id || !resizable(d)) return toast('⇔', `Two windows side by side: ${MOD}− narrower · ${MOD}= wider`, 1800);
     const n = d.wins.length, v = splitOf(d, n) + (d.wins[0] === f.id ? dir : -dir) * 0.08;
@@ -291,6 +303,7 @@
   }
   function focusWin(id, { scroll = true } = {}) {
     if (hud?.id === id) { hudFocus(); return; }
+    if (globalThis.WosSkinHost?.panelMode) { if (panel?.id === id) { if (scroll) focusInside(id); CHATS.markVisibleThreadsSeen(); } return; } // no desks: only the panel's window
     const t = wsOf(id); if (t < 0) return;
     const fromHome = homeOpen, switched = t !== cur;
     leaveHome();
@@ -306,7 +319,7 @@
     CHATS.markVisibleThreadsSeen();
   }
   function focusInside(id) {
-    if (homeOpen) return;
+    if (homeOpen && !(globalThis.WosSkinHost?.panelMode && panel?.id === id)) return;
     const el = winEl(id); if (!el) return;
     const w = W[id];
     if (w.app === 'chats') {
@@ -317,18 +330,20 @@
     el.focus({ preventScroll: true });
   }
   function moveWin(id, t) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const from = wsOf(id); if (from < 0 || t === from || t < 0 || t >= ws.length) return;
     const d = ws[from]; d.wins = d.wins.filter(x => x !== id); if (d.focus === id) d.focus = d.wins[0] || null; if (d.wins.length < 2) d.mono = false;
     ws[t].wins.push(id); ws[t].focus = id;
     save(); render(); toast('→', `Moved to desktop ${C.workspaceNav.slot(t)}`, 1000);
   }
   function swapWin(dir) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const d = ws[cur], i = d.wins.indexOf(d.focus), j = i + dir;
     if (i < 0 || j < 0 || j >= d.wins.length) return;
     [d.wins[i], d.wins[j]] = [d.wins[j], d.wins[i]]; save(); layout();
   }
   function toggleMono() {
-    if (homeOpen || hudHasFocus()) return; // Home must not alter a parked desktop's fullscreen preference; nor the HUD.
+    if (homeOpen || hudHasFocus() || globalThis.WosSkinHost?.panelMode) return; // Home must not alter a parked desktop's fullscreen preference; nor the HUD.
     const d = ws[cur]; if (!d.wins.length) return;
     d.mono = !d.mono; save(); layout();
     if (d.mono && !store.get('fullHint', false)) {
@@ -428,6 +443,7 @@
   }
   // Prefer this workspace, then any.
   function findWin(fn) {
+    if (globalThis.WosSkinHost?.panelMode) { const p = panelWin(); return p && fn(p) ? p : null; }
     const here = ws[cur].wins.map(id => W[id]).find(fn); if (here) return here;
     return Object.values(W).find(w => w.id !== hud?.id && fn(w)) || null; // the heads-up chat is never reused as a desk window
   }
@@ -435,8 +451,9 @@
     if (!sid) return;
     // Any agent's thread opens in the main Chats window, without changing its list Focus.
     const mine = mainChats;
-    let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
+    let w = !opts.fresh && ((globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(mine) || findWin(mine));
     if (!w) w = newWin({ app: 'chats', thread: null }, opts);
+    else if (globalThis.WosSkinHost?.panelMode && panel?.id === w.id && w.thread && w.thread !== sid) { const k = panelSnap(w); if (k) { panel.back = [...panel.back, k].slice(-PANEL_BACK); hudBar(w.id); } } // the panel's Back returns to it
     focusWin(w.id); CHATS.openChat(w.id, sid);
     setTimeout(() => focusInside(w.id), 30);
   }
@@ -449,7 +466,7 @@
   function newChat(opts = {}) {
     // ⌘Enter in an agent's Chats starts a chat with that agent; anywhere else, with the main agent.
     const f0 = focused();
-    let w = !opts.fresh && (f0?.app === 'chats' ? f0 : ws[cur].wins.map(id => W[id]).find(mainChats));
+    let w = !opts.fresh && (f0?.app === 'chats' ? f0 : (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(mainChats));
     if (!w) w = newWin({ app: 'chats', thread: null, ...(f0?.app === 'chats' && f0.focus ? { focus: { ...f0.focus } } : {}) }, opts);
     focusWin(w.id); CHATS.openNewDraft(w.id, '');
     syncChatsPane(w.id); setTimeout(() => focusInside(w.id), 30);
@@ -480,6 +497,7 @@
   const DESK1_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M10.6 9.6 12.6 8v8"/></svg>';
   function barHtml(w) {
     const a = appOf(w);
+    if (globalThis.WosSkinHost?.panelMode && panel?.id === w.id) return panelBar(w, a);
     if (hud?.id === w.id) return `<div class="wbar" data-drag title="Drag to move">${window.WosAgents.titlebar(w.agent || '', 'ic', 't')}
       <button data-wact="hud-home" title="Back to desktop 1 (${MOD}P)" aria-label="Back to desktop 1" aria-keyshortcuts="Alt+P">${DESK1_ICON}</button>
       <button data-wact="close" title="Close" aria-label="Close window">✕</button></div>`;
@@ -554,7 +572,7 @@
     let f = focused();
     const fresh = tries > 0 || homeOpen || !mainChats(f); // arriving from elsewhere always starts at the top
     if (homeOpen || !mainChats(f)) {
-      const w = ws[cur].wins.map(x => W[x]).find(mainChats);
+      const w = (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(mainChats);
       if (w && !homeOpen) { focusWin(w.id); f = w; return setTimeout(() => stepReady(0, 1), 0); }
       if (!tries) { openApp(APP.wizard); return setTimeout(() => stepReady(0, 1), 80); }
     }
@@ -627,7 +645,7 @@
     if (!f) return;
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panel?.id === w.id) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -645,7 +663,7 @@
   }
   function render() {
     // Stable desktop IDs preserve hosted apps, composers and scroll when desktop indices shift.
-    $$('.win', stage).forEach(el => { if (!W[el.dataset.win]) { el.querySelector('iframe')?._appDetach?.(); el.remove(); } });
+    $$('.win:not(.panel-out)', stage).forEach(el => { if (!W[el.dataset.win]) { el.querySelector('iframe')?._appDetach?.(); el.remove(); } });
     for (let i = 0; i < ws.length; i++) {
       const host = wsEl(i), d = ws[i];
       // Keep live windows (iframes keep their state); add new ones, drop closed ones.
@@ -657,7 +675,7 @@
       else if (home) home.remove();
     }
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
-    hudMount();
+    hudMount(); if (globalThis.WosSkinHost?.panelMode) panelMount();
     const home = $('#desktopHome');
     home.hidden = !homeOpen;
     if (homeOpen) paintHome(home, homeHtml(null));
@@ -759,7 +777,7 @@
     (ta && ta.getClientRects().length ? ta : el).focus({ preventScroll: true });
   }
   function hudOn(id) {
-    const w = W[id]; if (w?.app !== 'chats') return false;
+    const w = W[id]; if (w?.app !== 'chats' || globalThis.WosSkinHost?.panelMode) return false;
     if (hud?.id === id) return true;
     if (hud) hudDock({ focus: false });
     const t = wsOf(id); if (t < 0) return false;
@@ -780,7 +798,7 @@
   // Put the HUD window back as a normal window: on the desk in front (Home: the last desk), or on desk `to`
   // (⌥B and the 1 button: desktop 1, Chats' usual place), which then comes to the front.
   function hudDock({ focus = true, to = null } = {}) {
-    if (!hud) return false;
+    if (!hud || globalThis.WosSkinHost?.panelMode) return false;
     const id = hud.id; hudKeepPlace(); hud = null;
     if (!W[id]) { save(); render(); return false; }
     // Back to desktop 1: Chats gets desktop 1 to itself. Anything already there moves one desk to the right,
@@ -798,6 +816,7 @@
   }
   // ⌥P: float the Chats window in front (or this desk's, or the main one, or a new one); floating, put it back on desktop 1.
   function hudKey() {
+    if (globalThis.WosSkinHost?.panelMode) return false;
     if (hud) return hudDock({ to: 0 });
     const f = focused();
     // Any Chats window on this desk (main or an agent's) floats as it is; elsewhere only the main Chats is borrowed.
@@ -849,15 +868,90 @@
     }
   });
   addEventListener('resize', () => hudPaint());
+  /* ---- the panel (no desks): one window on the right over Home; see `panel` above ---- */
+  const PANEL_BACK = 6;
+  const panelKind = (w = panelWin()) => !w ? null : w.app === 'chats' ? (w.thread ? 'thread' : 'list') : 'app';
+  const panelSnap = w => { try { const { id, ...rest } = JSON.parse(JSON.stringify(w)); return rest; } catch (_) { return null; } };
+  // The panel's title bar: a quiet Back when something was open before, the app's own tools, and ✕ (Esc).
+  function panelBar(w, a) {
+    return `<div class="wbar">${panel.back.length ? `<button data-wact="panel-back" class="panel-back" title="Back" aria-label="Back to what was open before"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>` : ''}${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
+      ${w.app === 'frame' && a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}${w.app === 'frame' ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
+      <button data-wact="close" title="Close (Esc)" aria-label="Close">✕</button></div>`;
+  }
+  function panelMount() {
+    let layer = document.getElementById('panelLayer');
+    if (!layer) { if (!panel) return; layer = Object.assign(document.createElement('div'), { id: 'panelLayer', className: 'panel-layer' }); stage.appendChild(layer); }
+    const w = panelWin(); if (!w) panel = null;
+    layer.classList.toggle('on', !!w);
+    if (!w) return;
+    let el = winEl(w.id);
+    if (!el) { el = mountWin(w, layer); el.classList.add('panel'); if (panel.swap) el.classList.add('panel-swap'); }
+    else if (el.parentNode !== layer) layer.appendChild(el);
+    el.dataset.panel = panelKind(w) === 'app' ? 'app' : 'chat';
+  }
+  // One window out of the panel: the same cleanup as a closed window; it slides away unless another takes its place.
+  function panelDrop(id, { swap = false } = {}) {
+    const w = W[id]; if (!w) return;
+    boundManager?.dismiss(w);
+    window.WizBackgroundAudio?.closeApp(w.appId)?.catch(() => toast('♫', 'Audio could not stop. Pause it from the media controls.'));
+    if (w.app === 'chats') { threadShown(id, null); CHATS.saveDraft(id); }
+    delete W[id]; CHATS.forget(id);
+    const el = winEl(id); if (!el) return;
+    el.querySelector('iframe')?._appDetach?.();
+    if (swap || matchMedia('(prefers-reduced-motion: reduce)').matches) { el.remove(); return; }
+    el.classList.add('panel-out'); el.inert = true; setTimeout(() => el.remove(), 420);
+  }
+  function panelOpen(obj, { fromBack = false } = {}) {
+    window.WosResources?.back(); closePalette({ restore: false });
+    const prev = panelWin(); let back = panel?.back || [];
+    if (prev) { if (!fromBack) { const keep = panelSnap(prev); if (keep) back = [...back, keep].slice(-PANEL_BACK); } panelDrop(prev.id, { swap: true }); }
+    const id = uid(); W[id] = { id, ...obj };
+    panel = { id, back, swap: !!prev };
+    save(); render(); log('panel:' + panelKind());
+    return W[id];
+  }
+  function panelClose({ paint = true } = {}) {
+    const w = panelWin(); if (!w) { panel = null; return false; }
+    if (!canLeave(w.id)) return false;
+    panelDrop(w.id); panel = null;
+    if (paint) { save(); render(); $('#desktopHome')?.focus({ preventScroll: true }); }
+    log('panel:close'); return true;
+  }
+  // The quiet Back in the panel's title bar: the thing shown before this one.
+  function panelBack() {
+    const b = panel?.back; if (!b?.length) return false;
+    const obj = b[b.length - 1]; panel.back = b.slice(0, -1);
+    const thread = obj.app === 'chats' ? obj.thread : null;
+    const w = panelOpen(thread ? { ...obj, thread: null } : obj, { fromBack: true });
+    if (thread) { CHATS.openChat(w.id, thread); syncChatsPane(w.id); }
+    setTimeout(() => focusInside(w.id), 30);
+    return true;
+  }
+  // A layout took or let go of the panel: Home stays in front while it holds it; letting go puts back what was there.
+  function panelMode(on) {
+    if (on) {
+      if (store.get('panelPrevHome', null) === null) store.set('panelPrevHome', homeOpen);
+      closePalette({ restore: false });
+      if (!homeOpen) { homeOpen = true; store.set('homeOpen', true); }
+      render(); return;
+    }
+    const w = panelWin(); if (w) panelDrop(w.id, { swap: true }); panel = null;
+    const was = store.get('panelPrevHome', null); store.set('panelPrevHome', null);
+    if (was === false && ws[cur].wins.length) { homeOpen = false; store.set('homeOpen', false); }
+    save(); render();
+    if (!homeOpen && focused()) focusInside(focused().id);
+  }
   function paintFocus() {
     const d = ws[cur]; noteSpot();
-    $$('.win', stage).forEach(el => el.classList.toggle('focus', el.dataset.win === d.focus));
+    const front = globalThis.WosSkinHost?.panelMode && panelWin() ? panel.id : d.focus; // no desks: the panel's window is the one in front
+    $$('.win', stage).forEach(el => el.classList.toggle('focus', el.dataset.win === front));
     const f = focused(); document.title = f ? `${winTitle(f)} · Wizard` : 'Wizard';
     if (d.mono) layout();
   }
   // ⌥[ / ⌥]: one step left or right along the bar, no wrapping (Miguel, 27 Oct 2026). Left of desktop 1 is Home;
   // nothing is left of Home and nothing right of the last desktop.
   function stepDesk(dir) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     if (homeOpen) { if (dir > 0 && ws.length) { lastWs = cur; goWs(0); if (cur === 0 && homeOpen) leaveHome(); } return; }
     if (dir < 0 && cur === 0) { lastWs = cur; goHome(); return; }
     const t = cur + dir; if (t < 0 || t >= ws.length) return;
@@ -903,12 +997,14 @@
     log('step:' + (W[id]?.app || id) + (side ? ':' + side : ''));
   }
   function stepWin(dir) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const st = !homeOpen && nextStop(dir); if (st) return goStop(st);
     const from = ws[cur], wasHome = homeOpen; stepDesk(dir); // by desk, not index: leaving an empty desk prunes it
     if (homeOpen || (ws[cur] === from && !wasHome)) return;
     const stops = deskStops(); if (stops.length) goStop(stops[dir > 0 ? 0 : stops.length - 1]);
   }
   function goWs(i, { from } = {}) {
+    if (globalThis.WosSkinHost?.panelMode) return; // no desks while a layout holds the panel
     window.WosResources?.back();
     if (!Number.isInteger(i) || i < 0 || i >= ws.length) return;
     if (i === cur) { if (homeOpen) { leaveHome(); if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); } return; }
@@ -926,6 +1022,7 @@
   // A new desktop opens with the app selector over it: an empty desktop is a place to open something.
   // An empty current desktop is reused rather than stacked, so repeated ⌘T / + never leaves blanks behind.
   function newDesktop() {
+    if (globalThis.WosSkinHost?.panelMode) { openPicker(); return ws[cur]; } // no desks here: ⌥T just offers the apps (they open in the panel)
     if (ws[cur].wins.length) { ws.push(freshDesk()); goWs(ws.length - 1); } else if (homeOpen) leaveHome();
     openPicker({ desk: ws[cur].id });
     return ws[cur];
@@ -942,6 +1039,7 @@
     return true;
   }
   function closeDesktop(i = cur) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const d = ws[i]; if (!d) return false;
     // Check every window before destroying any: a recording can refuse the close.
     if (!d.wins.every(canLeave)) return false;
@@ -1025,6 +1123,7 @@
   /* Arrange desktops: drag one along the top bar (touch: press and hold, then drag), or ⌥⇧[ / ⌥⇧] for the one in
    * front. Desks keep their stable IDs, so open apps never remount; the new order syncs like any desk change. */
   function moveDesk(from, to) {
+    if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     if (from === to || !ws[from] || to < 0 || to >= ws.length) return false;
     const curD = ws[cur], lastD = ws[lastWs];
     ws.splice(to, 0, ws.splice(from, 1)[0]);
@@ -1075,7 +1174,7 @@
   /* Home is a root view, separate from desktops: every open app and draft stays mounted. */
   function leaveHome() {
     window.WosResources?.back();
-    if (!homeOpen) return;
+    if (!homeOpen || globalThis.WosSkinHost?.panelMode) return;
     if (settingsModal) closeSettings();
     homeOpen = false; store.set('homeOpen', false); render();
   }
@@ -1086,6 +1185,7 @@
     window.WizWebUpdate?.back(); // Preserve the accepted shared banner; fold its navigation list.
     LINKS?.close();
     for (let i = 0; i < 20 && CHATS.closeOverlay(); i++) { /* Close navigation sheets, never the recorder. */ }
+    if (globalThis.WosSkinHost?.panelMode && panel) panelClose({ paint: false }); // Home (⌥`) with no desks: the panel slides away
     homeOpen = true; store.set('homeOpen', true); render();
     $('#desktopHome').focus({ preventScroll: true });
   }
@@ -1137,7 +1237,7 @@
     if (e.target.closest('[data-home-settings]')) return openSettings();
     if (e.target.closest('[data-home-unsent]')) return openSettings('unsent');
     const ha = e.target.closest('.home [data-home-act]')?.dataset.homeAct;
-    if (ha) { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (ha === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } return; }
+    if (ha) { openApp(APP.wizard); const w = (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(x => x?.app === 'chats' && !x.agent); if (w) { if (ha === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } return; }
     const hr = e.target.closest('.home [data-thread]'); if (hr) return openThread(hr.dataset.thread);
     const ap = e.target.closest('.home [data-app]'); if (ap) return openApp(APP[ap.dataset.app]);
   });
@@ -1150,6 +1250,7 @@
     const act = e.target.closest('[data-wact]')?.dataset.wact;
     if (act === 'hud') return hudOn(id);
     if (act === 'hud-home') return hudDock({ to: 0 });
+    if (act === 'panel-back') return panelBack();
     if (act === 'close' && hud?.id === id) return hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
@@ -1175,7 +1276,7 @@
   /* Drag a window by its title bar: drop on another window to swap, or on a workspace number to move it. */
   let drag = null;
   stage.addEventListener('pointerdown', e => {
-    const bar = e.target.closest('.wbar'); if (!bar || e.target.closest('[data-wact]') || e.button !== 0) return;
+    const bar = e.target.closest('.wbar'); if (!bar || e.target.closest('[data-wact]') || e.target.closest('.win.panel') || e.button !== 0) return;
     drag = { id: bar.closest('.win').dataset.win, x: e.clientX, y: e.clientY, on: false };
   });
   addEventListener('pointermove', e => {
@@ -1472,7 +1573,7 @@
 
   /* Wizard Files (#23): the shared Files sheet, in a Chats window (attaches to its open thread, else starts a new chat). */
   function openFiles() {
-    let w = ws[cur].wins.map(id => W[id]).find(mainChats) || findWin(mainChats);
+    let w = (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(mainChats) || findWin(mainChats);
     if (!w) w = newWin({ app: 'chats', thread: null });
     focusWin(w.id);
     setTimeout(() => CHATS.PW?.openFiles(w.thread ? w.id : w.id + '::list'), 30);
@@ -1981,6 +2082,8 @@
     if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
     // The floating chat, when the keyboard is in it, walks back from its open thread before anything behind it.
     { const hb = hudBack(); if (hb) return hb; }
+    // No desks: Esc (and Back) slides the panel away, back to Home.
+    if (globalThis.WosSkinHost?.panelMode && panelWin()) return panelClose() ? 'panel' : 'panel-stay';
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     // The split list owns its own search state (id::list). Back there peels search/chips
@@ -2306,7 +2409,7 @@
     // ⌥X Resolve this: an open notification goes to the agent to stop these or fix the cause.
     if (alt && !shift && code === 'KeyX') return hit(() => { if (!e.repeat) chatAct('resolve', 'X'); });
     function chatAct(act, keyName) {
-      const f0 = focused(), f = f0?.app === 'chats' ? f0 : ws[cur].wins.map(x => W[x]).find(mainChats);
+      const f0 = focused(), f = f0?.app === 'chats' ? f0 : (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(mainChats);
       const name = act === 'done' ? 'Done' : act === 'resolve' ? 'Resolve this' : 'Snooze';
       if (homeOpen || !f?.thread || (f.thread === '__new__' && !CHATS.notifOpen?.(f.id))) return toast('✓', `Open a chat first, then ${MOD}${keyName} = ${name}`, 1800);
       if (!winEl(f.id)?.querySelector(`[data-chact="${act}"]`)) return toast('◷', act === 'resolve' ? 'Resolve this is for an open notification' : `${name} appears once the reply is in`, 1800);
@@ -2591,9 +2694,14 @@
   };
   /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin
    * declared when: 'always' runs its script here too. James's skins declare no package and load nothing. */
-  const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : (ws[cur].wins.map(id => W[id]).find(x => x && x.app === 'chats') || null); };
+  const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : ((globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(x => x && x.app === 'chats') || null); };
   window.WosSkinHost?.attach({
-    route() { const w = homeOpen ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur, home: homeOpen || !ws[cur].wins.length }; },
+    route() { const w = homeOpen && !panelWin() ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur, home: homeOpen || !ws[cur].wins.length, panel: panelKind() }; },
+    // No desks (core/skin-host.js api.panel): everything opens in one panel on the right over Home.
+    panelMode: on => panelMode(!!on),
+    panelClose: () => panelClose(),
+    panelBack: () => panelBack(),
+    panelState: () => { const w = panelWin(); if (!w) return null; const el = winEl(w.id); return { kind: panelKind(w), title: winTitle(w), width: el ? Math.max(0, Math.round(stage.clientWidth - el.offsetLeft)) : 0, back: panel.back.length }; },
     // Layouts (core/skin-host.js shellApi): mount on the stage, the orb's voice, Working / Ready rows with Chats' own
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
@@ -2622,7 +2730,7 @@
     openThread: id => openThread(id),
     goDesk: i => goWs(i),
     sessions: () => { const G = LIVE?.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
-    openSessions: kind => { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (kind === 'working') CHATS.setFilter(w, 'working'); else { if (w.thread) { CHATS.chatsBack(w); syncChatsPane(w.id); } CHATS.setFilter(w, ''); } } },  // Ready = the whole list, out of any open thread
+    openSessions: kind => { openApp(APP.wizard); const w = (globalThis.WosSkinHost?.panelMode ? [panelWin()].filter(Boolean) : ws[cur].wins.map(id => W[id])).find(x => x?.app === 'chats' && !x.agent); if (w) { if (kind === 'working') CHATS.setFilter(w, 'working'); else { if (w.thread) { CHATS.chatsBack(w); syncChatsPane(w.id); } CHATS.setFilter(w, ''); } } },  // Ready = the whole list, out of any open thread
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
     openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
@@ -2636,7 +2744,7 @@
     toast: text => toast('◇', text, 2400),
   });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
-  window.WizAppServices?.trackOpenApps?.(() => ws.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
+  window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {
     const did = escStep(); log('back:' + (did || 'root'));
     if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);

@@ -439,6 +439,19 @@ html.key-hints-on #clock { visibility: hidden; }
 .voice-menu kbd { font-family: var(--wz-font-mono); font-weight: 600; font-size: calc(var(--wz-text-sm) * .85); opacity: .6; }
 
 /* ---------- heads-up chat (HUD): one Chats window over every desk and Home; folded, the orb ---------- */
+/* No desks (a layout holds the panel, e.g. the Orb desktop; desktop.js panelOpen): one window on the right over Home.
+ * It slides in from the right, a replacement settles in place, closing slides it away. Below the floating chat. */
+.panel-layer { position: absolute; inset: 0; z-index: 140; pointer-events: none; }
+.panel-layer > .win.panel { pointer-events: auto; top: 12px; right: 12px; bottom: 12px; left: auto; width: min(460px, calc(100% - 24px)); height: auto; animation: panel-in 450ms cubic-bezier(.2, .8, .2, 1) both; }
+.panel-layer > .win.panel[data-panel="app"] { width: min(1120px, max(560px, 62%), calc(100% - 24px)); }
+.panel-layer > .win.panel.panel-swap { animation: panel-swap 240ms ease-out both; }
+.panel-layer > .win.panel.panel-out { animation: panel-out 380ms cubic-bezier(.4, 0, .7, .2) both; pointer-events: none; }
+.panel-layer > .win.panel .wbody iframe { pointer-events: auto; }
+.wbar .panel-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes panel-in { from { transform: translateX(calc(100% + 24px)); } to { transform: none; } }
+@keyframes panel-out { from { transform: none; } to { transform: translateX(calc(100% + 24px)); } }
+@keyframes panel-swap { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .panel-layer > .win.panel { animation: none !important; } }
 .hud-layer { position: absolute; inset: 0; z-index: 150; pointer-events: none; } /* above Home sheets (Resources is 120); the bar, palette and toasts sit outside the stage, above it */
 .hud-layer[hidden] { display: none; }
 .hud-layer > * { pointer-events: auto; }
