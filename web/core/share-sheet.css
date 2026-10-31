@@ -32,14 +32,14 @@ html[data-shell="desktop"] .wos-share .shs-b { border-radius: 18px; border: 1px 
   padding: 8px 2px; border-radius: 14px;
 }
 .wos-share .shs-agent:active, .wos-share .shs-app:active, .wos-share .shs-other:active,
-.wos-share .shs-agent:focus-visible, .wos-share .shs-app:focus-visible, .wos-share .shs-other:focus-visible { background: var(--wz-accent-soft, rgba(143, 99, 255, .18)); outline: none; }
-@media (hover: hover) { .wos-share .shs-agent:not(:disabled):hover, .wos-share .shs-app:hover, .wos-share .shs-other:hover { background: var(--wz-accent-soft, rgba(143, 99, 255, .14)); } }
+.wos-share .shs-agent:focus-visible, .wos-share .shs-app:focus-visible, .wos-share .shs-other:focus-visible { background: var(--wz-accent-soft); outline: none; }
+@media (hover: hover) { .wos-share .shs-agent:not(:disabled):hover, .wos-share .shs-app:hover, .wos-share .shs-other:hover { background: var(--wz-accent-soft); } }
 /* Agents: each agent's own sigil and hue (WosAgents.sigil); a stopped agent stays visible but can't be picked. */
 .wos-share .shs-agent:disabled { opacity: .45; cursor: default; }
 .wos-share .shs-agent .shs-ic { border-radius: 50%; }
 .wos-share .shs-ic { width: 50px; height: 50px; border-radius: 15px; display: grid; place-items: center; background: color-mix(in srgb, var(--c, #8f63ff) 22%, transparent); color: var(--c, #b99bff); }
 .wos-share .shs-ic .sgi { width: 62%; height: 62%; }
-.wos-share .shs-nm { max-width: 100%; font-size: 12px; font-weight: 600; line-height: 1.2; text-align: center; overflow: hidden; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.wos-share .shs-nm { max-width: 100%; font-size: var(--wz-text-sm); font-weight: 600; line-height: 1.2; text-align: center; overflow: hidden; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .wos-share .shs-other {
   display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 8px; padding: 12px 8px; border-radius: 14px;
   font-size: 15px; font-weight: 650; text-align: left; border-top: 1px solid var(--wz-border, var(--line, rgba(185, 155, 255, .14)));
