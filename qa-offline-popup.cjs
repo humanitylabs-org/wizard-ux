@@ -74,14 +74,18 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
       }
       for (const skin of ['nebula', 'signal']) {
         await recover();
-        await page.evaluate(skin => WosSkin.set(skin), skin);
-        await page.waitForFunction(skin => document.documentElement.dataset.skin === skin, skin);
+        await page.evaluate(() => (window.__wos || window.__wux).openSettings('look'));
+        await page.locator('[data-skinfamily="wizard"]').click();
+        await page.locator(`[data-skinpick="${skin}"]`).click();
+        await page.waitForFunction(skin => document.documentElement.dataset.skin === skin && document.querySelector(`[data-skinpick="${skin}"]`)?.getAttribute('aria-pressed') === 'true', skin);
+        await page.evaluate(() => window.__wos ? __wos.closeSheets() : __wux.closeSettings());
         await page.waitForTimeout(700); // finite shell/skin transitions must settle before evidence
         await fail();
         const start = Date.now(); await page.waitForTimeout(20000); await pillOnly();
         assert.ok(Date.now() - start >= 20000);
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-idle-20s.png`) });
         await navigate(); await modal();
+        await page.locator('[data-wxoffcheck]:not([disabled])').waitFor();
         if (phone) await page.waitForTimeout(700); // desk transition
         const geometry = await page.evaluate(phone => {
           const orb = document.querySelector(phone ? '#orb' : '#micBtn');
@@ -93,6 +97,13 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         assert.equal(geometry.dialogModal, 'false');
         if (phone) { assert.ok(geometry.card.y < 60); assert.ok(geometry.card.bottom < geometry.orb.top); }
         assert.match(geometry.bg, /^rgb\(/, 'opaque kit panel');
+        // Pixel opacity proof: the same interior panel pixels over a loud backdrop and a blank one.
+        const clip = { x: geometry.card.x + 20, y: geometry.card.y + 20, width: 8, height: 8 };
+        const plain = await page.screenshot({ clip });
+        await page.evaluate(() => { const p = document.createElement('div'); p.id = 'qaLoudBackdrop'; p.style.cssText = 'position:fixed;inset:0;z-index:189;pointer-events:none;background:magenta;color:lime;font-size:48px'; p.textContent = 'LOUD TEXT '.repeat(500); document.body.appendChild(p); });
+        const loud = await page.screenshot({ clip });
+        assert.deepEqual(loud, plain, `${shell} ${skin}: panel pixels independent of backdrop`);
+        await page.evaluate(() => document.getElementById('qaLoudBackdrop').remove());
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-navigation-open.png`) });
         // Actual pointer delivery to the exposed orb/mic starts capture and tucks away the open checks.
         await page.locator(phone ? '#orb' : '#micBtn').click();
