@@ -67,7 +67,8 @@
     // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
     ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
     ...(APP_CATEGORIES.has(a.category) ? { category: a.category } : {}),
-    sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
+    // Installed apps' icon is the package's own silhouette (App Manager registry): a fallback below HOUSE, see sigils.js.
+    sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [], ...(a.source === 'apps.json' ? { packaged: true } : {}) },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
   // The Agent Service is Wizard itself, not an app the owner manages.
