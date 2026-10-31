@@ -91,7 +91,7 @@ test('the generated files are in sync with the template (rebuild with tools/sigi
   const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*BRAND\*\/|\/\*FALLBACK\*\//g, '');
   for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|BRAND = |FALLBACK/.test(l)))
     assert.ok(js.includes(line), 'web/core/sigils.js is stale; rerun tools/sigils/build.py. Missing: ' + line.trim());
-  const house = JSON.parse(js.match(/const HOUSE = (\{.*?\});/)[1]);
+  const house = JSON.parse(js.match(/const HOUSE = [^{]*(\{.*?\})[);]/)[1]);
   const src = read('tools/sigils/build.py');
   for (const id of Object.keys(house)) assert.ok(src.includes(`'${id}'`), `HOUSE ${id} not in build.py`);
 });

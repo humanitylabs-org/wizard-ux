@@ -132,7 +132,7 @@ def main():
     style = open(os.path.join(HERE, 'style.css')).read()
     open(out_css, 'w').write(style.rstrip() + '\n\n' + '\n'.join(css) + '\n')
 
-    house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
+    house = {k: [g, tone(h, c).lstrip('#')] for k, (g, h, c) in HOUSE.items()}  # '#' is added back in sigils.js
     for k, (g, _, _) in HOUSE.items():
         assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
