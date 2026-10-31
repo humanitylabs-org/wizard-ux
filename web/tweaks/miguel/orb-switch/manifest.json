@@ -1,0 +1,12 @@
+{
+  "id": "miguel/orb-switch",
+  "name": "Classic | Orb switch",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "settings"
+  ],
+  "description": "Desktop: a small Classic desktop | Orb desktop switch, always in the top bar; one click turns Orb desktop on or off for this device, no reload"
+}

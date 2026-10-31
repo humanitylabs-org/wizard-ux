@@ -5,7 +5,7 @@ import { fixture, contract, read } from './fixtures/tweaks.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell'].includes(id) ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/orb-switch'].includes(id) ? 'desktop' : 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
@@ -39,7 +39,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   const storage = new Map([['wos.skin', 'obsidian']]); let skin = 'obsidian', active = [];
   const profiles = { miguel: { id: 'miguel', name: 'Miguel', version: 1, tweaks: ['miguel/hidden-pin'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
   const fams = [{ id: 'wizard', tweaks: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
-  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
+  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, setTimeout, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => { const who = url.pathname.match(/tweaks\/([^/]+)\/profile\.json$/)?.[1]; return who ? profiles[who] : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])); } }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
   await E.refresh(); assert.deepEqual(Array.from(active), ['miguel/hidden-pin'], 'a device from before keeps what its color brought');
