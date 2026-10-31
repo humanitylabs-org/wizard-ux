@@ -382,16 +382,19 @@
     const w = host && W[host.dataset.win]; if (!w || !['agents'].includes(w.appId)) return;
     openAgentChats(d.id, { thread: d.thread === '__new__' ? '__new__' : '' });
   });
+  // Resolves with the Chats window. o.share: see the phone shell's openAgentChats (main agent keeps All focus).
   async function openAgentChats(id, o = {}) {
     const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
-    if (!AG.get(id)) await AG.load(true);
-    if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
+    const mainShare = !!o.share && !AG.isOther(id);
+    if (!AG.get(id) && !mainShare) await AG.load(true);
+    if (!AG.get(id) && !mainShare) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
     let w = findWin(mainChats);
     if (w) focusWin(w.id); else w = newWin({ app: 'chats', thread: null });
-    CHATS.setFocus(w, { kind: 'agent', key: id });
+    if (!mainShare) CHATS.setFocus(w, { kind: 'agent', key: id });
+    else if (CHATS.winAgent(w)) CHATS.setFocus(w, null);
     if (o.thread === '__new__') { CHATS.openNewDraft(w.id, ''); syncChatsPane(w.id); }
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
-    return true;
+    return w;
   }
   window.WizOpenAgentChats = openAgentChats;
   // Keep deep app links on the same admission path as Home and the launcher.
