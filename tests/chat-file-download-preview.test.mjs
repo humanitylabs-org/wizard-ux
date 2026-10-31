@@ -46,7 +46,7 @@ test('the shell CSP lets the viewer frame blob: PDFs and nothing cross-origin', 
 });
 
 test('the viewer keeps light ink on its dark backdrop for light skins', () => {
-  const rule = /\n\.mviewer \{ --ink: #f3efff;[^}]*\}/.exec(css)?.[0] || '';
-  assert.match(rule, /--ink-2: #b9b0d8; --ink-3: #7d74a3;/);
+  const rule = /\n\.mviewer \{ --ink: color-mix\(in srgb, white[^}]*\}/.exec(css)?.[0] || '';
+  assert.match(rule, /--ink-2: color-mix\(in srgb, var\(--ink\) 72%, transparent\)/);
   assert.match(rule, /color: var\(--ink\)/);
 });
