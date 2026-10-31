@@ -1,4 +1,5 @@
-// QA (hold = command): a held orb is a command for the interface and never becomes a message to the agent.
+// QA (hold = command): a held command (now made from the voice wedge of the orb's radial, see qa-orb-radial.cjs; this suite feeds
+// the same handleText('command') entry the wedge ends in) is a command for the interface and never becomes a message to the agent.
 // "Search for good art" held over home or over an open thread opens Wizard Search; a held phrase that matches no
 // command shows choices and sends nothing until one is tapped; a router outage on a hold sends nothing.
 // A tap (not a hold) still reaches the agent / the open thread as before.
@@ -51,10 +52,11 @@ async function boot(b) {
     if (sm) { const t = THREADS.find(x => x.id === decodeURIComponent(sm[1])); return t ? json(r, { session: t }) : json(r, { error: 'not_found' }, 404); }
     if (u.pathname === '/wizard/thread-seen') return json(r, { state: { initializedAt: NOW - 864e5, threads: {} } });
     if (u.pathname === '/wizard/thread-dispositions') return json(r, { state: {} });
+    if (u.pathname === '/wizard/hermes/api/model/options') return json(r, { model: 'fixture-model', provider: 'fixture', providers: [{ slug: 'fixture', name: 'Synthetic fixture route', authenticated: true, is_current: true, models: ['fixture-model'] }] }); // AI connected: the first-run Welcome stays closed
     if (u.pathname === '/wizard/v1/apps') return json(r, { apps: [{ id: 'wizard-search', name: 'Search', desc: 'Image search and AI overview', url: '/wizard-search/', icon: '⌕', colors: ['#8f63ff', '#ff5ccf'], source: 'launcher.json' }] });
     return json(r, {});
   });
-  await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
+  await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); localStorage.setItem('wos.welcome.v1', 'done'); } catch (e) {} });
   const p = await ctx.newPage(); p.errs = [];
   p.on('pageerror', e => p.errs.push(String(e)));
   await p.goto(ORIGIN + '/qa-start').catch(() => {}); // a page before ours, so a wrong Back would really leave
