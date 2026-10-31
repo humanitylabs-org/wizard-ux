@@ -80,13 +80,17 @@ async function realShell(browser, results) {
    const ext=path.extname(f);const types={'.css':'text/css','.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'};
    return r.fulfill({status:200,contentType:types[ext]||'application/octet-stream',body:fs.readFileSync(f)});
   }
+  // Established synthetic installation: model/options must match Welcome's real response envelope.
+  // An empty 200 means disconnected and legitimately opens onboarding over the share controls.
+  if(u.pathname==='/wizard/hermes/api/model/options')return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({provider:'synthetic',providers:[{slug:'synthetic',authenticated:true,auth_type:'api_key'}]})});
+  if(u.pathname==='/wizard/v1/setup')return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({first_run:false})});
   const body=/\/sessions$/.test(u.pathname)?{data:[],has_more:false}:u.pathname==='/wizard/v1/agents'?{agents:[{id:'synthetic-main',label:'Synthetic',is_default:true,status:'running'},{id:'synthetic-private',label:'Synthetic Private',privacy:'private',status:'running'}]}:{};
   return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
  await ctx.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour','done')});
  const page=await ctx.newPage();
  await page.goto('http://opaque.test/wizard-os-home/',{waitUntil:'load'});
- await page.waitForFunction(()=>window.__wos&&window.WosSkin,{timeout:30000});
+ await page.waitForFunction(()=>window.__wos&&window.WosSkin&&window.WosWelcome?.log.some(s=>s.startsWith('boot:true:')),{timeout:30000});
  await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important} canvas{visibility:hidden!important}'});
  for(const skin of skins)for(const hosted of [true,false])for(const name of ['settings','overview','link-menu','share-sheet','share-picker']) {
   await page.evaluate(({skin,hosted,name})=>{
@@ -105,7 +109,8 @@ async function realShell(browser, results) {
     a.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:100,clientY:200}));
    }
   },{skin,hosted,name});
-  if(name==='share-picker')await page.locator('.dv-agent').click();
+  assert.equal(await page.locator('#wosWelcome').count(),0,'real shell fixture must not show first-run Welcome');
+  if(name==='share-picker')await page.locator('.wz-share .dv-agent').click({timeout:5000});
   const sel={settings:'#settings.open',overview:'#overview.open','link-menu':'.wiz-linkmenu','share-sheet':'.wz-share .dv-sheet','share-picker':'.wz-share .dv-picker'}[name];
   const panel=page.locator(sel);await panel.waitFor({state:'visible'});
   if(name.startsWith('share-')&&['nebula','grove'].includes(skin)&&hosted&&process.env.QA_SHOTS) {
@@ -161,4 +166,4 @@ async function realShell(browser, results) {
  console.log(JSON.stringify(result,null,2));
  assert.equal(failed.length,0,'text-bearing overlay interiors must be independent of content behind');
  console.log('PASS opaque overlays');
-})().catch(e=>{console.error(e);process.exitCode=1});
+})().catch(e=>{console.error(e);process.exit(1)}); // never hang a CI runner on an open browser

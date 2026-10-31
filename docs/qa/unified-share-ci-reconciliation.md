@@ -1,0 +1,17 @@
+# Unified-share CI reconciliation
+
+Preparation only. PR [781](https://github.com/humanitylabs-org/wizard-ux/pull/781) remains draft; no heavy submission, merge, publication or deployment is authorized here.
+
+## Change-owned failures
+
+- `opaque-overlays`: the expanded real-shell share picker needs a clickable agent row. The generic `{}` model-options response says **disconnected** to production Welcome, opening onboarding over that row. Serve an authenticated **synthetic** provider and `first_run:false`, wait for Welcome's actual boot decision, and assert no Welcome overlay exists. No overlay is removed/hidden, no forced click is used, and the loud/empty pixel equality assertion is unchanged. A scoped agent-row selector prevents unrelated matches. Failed browser execution exits instead of retaining an open browser indefinitely.
+- `owner-skins-guard`: the only new Signal-specific rules are share-component square corners and monospace rows. James explicitly approved the unified sheet (“Looks good, queue it up to ship it when you can”). Refresh only Signal's fingerprint for those two rules; all other fingerprints and existing Signal rules remain unchanged. Removing those two additions restores the prior fingerprint. This is approval bookkeeping, not a generic guard exemption.
+- `portable-paths`: report the actual worker hostname in the Connect QA receipt, rather than a hardcoded fallback machine name. Host/lease/signature admission guards remain unchanged.
+
+## Pre-existing failures: retained, not patched
+
+- **tap-outside-closes:** base `e21751abc5d97592b366c793b82372ff03065f50` already times out on `[data-get]` at `tools/qa-tap-outside-closes.cjs:228`, after recorder-recovery passes. [Base job](https://github.com/humanitylabs-org/wizard-ux/actions/runs/41179191408/job/124472906042). [Candidate's identical failure](https://github.com/humanitylabs-org/wizard-ux/actions/runs/41183215939/job/124484717685). The older base's shared-features job passed; that does not establish the newer merged base is green.
+- **phone-mic-only:** the actual merged base `8a251e373ebe38b18a8201e0692514ea3f6f5add` adds `s.stage = 'audio engine'` between `getUserMedia` and the external-microphone guard. The older test's exact two-line regex fails despite the guard remaining present. A detached, unchanged base worktree executed `node --test tests/phone-mic-only.test.mjs`: **7 tests, 6 pass, 1 fail**, specifically “both browser recorders check the route right after opening the mic.” Candidate and that base have identical `web/core/app-capture.js` and `tests/phone-mic-only.test.mjs`. [Base source](https://github.com/humanitylabs-org/wizard-ux/commit/8a251e373ebe38b18a8201e0692514ea3f6f5add). [Candidate shared-features failure](https://github.com/humanitylabs-org/wizard-ux/actions/runs/41183215939/job/124484717656).
+- **desktop-chats-escape.test.cjs:** an unchanged detached `e21751ab` base reproduces `voiceMenuBack is not defined`: **11 tests, 3 pass, 8 fail**. This file is outside `npm test`'s `.test.mjs` discovery. It is not a new unified-share regression. [Base test](https://github.com/humanitylabs-org/wizard-ux/blob/e21751abc5d97592b366c793b82372ff03065f50/tests/desktop-chats-escape.test.cjs).
+
+Exact final-head statuses/URLs and the immutable forum packet seal are recorded in the private release handoff. These inherited failures remain release/integration gates; they are not waived by preparing a packet.

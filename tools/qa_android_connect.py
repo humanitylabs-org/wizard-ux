@@ -241,7 +241,7 @@ def main():
                        'ok': completed and bool(checks) and all(x['passed'] for x in checks), 'physical_device': False,
                        'upgrade_network': 'offline, deliberately no owner traffic', 'published': False,
                        'pre_pref_baseline': config.get('pre_pref_baseline', False),
-                       'upgrade_only': upgrade_only, 'host': 'forum' if FORUM else 'thales',
+                       'upgrade_only': upgrade_only, 'host': os.uname().nodename,
                        'synthetic_pairing_fixture': config.get('baseline_origin_mode') == 'synthetic-fixture-paired',
                        'authenticated_owner_proof': False,
                        'baseline_origin_mode': config.get('baseline_origin_mode', 'baked-preference-migration'),
