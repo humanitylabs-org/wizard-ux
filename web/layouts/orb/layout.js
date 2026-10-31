@@ -91,7 +91,11 @@ export default function setup(api) {
   const colourRow = el('div', 'ob-colours', { role: 'radiogroup', 'aria-label': 'Colour' });
   const colourName = el('em', '');
   const h1 = el('div', 'ob-pop-h', { text: 'Style' }), h2 = el('div', 'ob-pop-h'); h2.append(el('span', '', { text: 'Colour' }), colourName);
-  pop.append(h1, styleRow, h2, colourRow);
+  // A way back to the Desks view from the scene itself, so the Orbs view alone (without the Desks | Orbs switch) never
+  // strands anyone: it turns this view off for this device, like its switch in Settings › Look.
+  const desksBtn = el('button', 'ob-desks', { type: 'button', text: 'Back to the Desks view', title: 'Turn the Orbs view off on this device (Settings › Look turns it back on)' });
+  api.listen(desksBtn, 'click', () => { api.desk.classic(); });
+  pop.append(h1, styleRow, h2, colourRow, desksBtn);
   picker.append(pop, pickBtn);
   dock.append(hint, picker);
   scene.append(sky, field, orbWrap, caption, keyRow, dock, foldBtn, strip);   // no name label: the orb is the entity
