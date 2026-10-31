@@ -64,18 +64,21 @@ function sendSurfaces(api) {
   return out;
 }
 async function statusBanner(api) {
-  const nodes = new Map(), element = () => ({ classList: { toggle() {} }, dataset: {}, addEventListener() {}, appendChild(el) { nodes.set(el.id, el); } });
+  const nodes = new Map(), element = () => ({ classList: { toggle() {} }, dataset: {}, setAttribute() {}, addEventListener() {}, appendChild(el) { nodes.set(el.id, el); } });
+  let clock = 1e6;
   const L = { ok: false, at: 0, error: '', sessions: [], listeners: [], refresh() {}, onChange(fn) { this.listeners.push(fn); } };
   const outbox = { unsent: () => [], onChange() {}, retryAll() { throw new Error('rendering must not resend'); } };
   const ctx = { navigator: { onLine: true }, document: { body: element(), documentElement: element(), getElementById: id => nodes.get(id), createElement: element },
     addEventListener() {}, setTimeout: () => 0, clearTimeout() {}, setInterval() {}, AbortSignal: { timeout: () => ({}) },
-    fetch: async () => { throw new Error('probe unavailable'); }, console, WizLive: L, WizReach: api, WosOutbox: outbox };
+    fetch: async () => { throw new Error('probe unavailable'); }, console, WizLive: L, WizReach: { ...api, checks: async () => null }, WosOutbox: outbox, Date: { now: () => clock } };
   ctx.window = ctx; vm.runInNewContext(read('web/core/status.js'), ctx); ctx.WizCore.status.attach({});
   L.at++; L.ok = true; L.listeners.forEach(fn => fn()); // healthy first, with no pending message
   L.error = 'offline'; L.ok = false; L.listeners.forEach(fn => fn()); // then a failed read
+  clock += 3100; ctx.WizCore.status.refresh(); // it lasts: the pop-up opens
+  ctx.WizCore.status.back(); // tucked away: the pill
   const html = ctx.document.getElementById('wxBanners')?.innerHTML || '';
   assert.match(html, /data-wxnet="reconnecting"/, 'a failed read raises the connection banner');
-  return html.match(/data-wxmore[^>]*>([^<]*)</)?.[1] ?? html;
+  return html.match(/data-wxoffopen[^>]*>([^<]*)</)?.[1] ?? html;
 }
 async function readSurfaces(api) {
   return {
