@@ -2,7 +2,7 @@
 (async () => {
   'use strict';
   if (document.documentElement.dataset.leaving || window.WizHomeScreenPolicy?.mode) return; // single-app sessions never initialize desks
-  if (window.WizLauncher?.ready) await window.WizLauncher.ready;
+  await window.WizLauncher?.waitForShell?.();
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));

@@ -55,6 +55,14 @@
       localStorage.setItem('wos.app-borders.migrated.v1', 'true');
     }
   } catch (_) {}
+  // Show pin buttons arrived default-off (James, 31 Oct 2026). A saved off list predates it, so it would read as on:
+  // add it to every saved list once; turning it on afterwards is the owner's choice and is kept.
+  try {
+    if (!localStorage.getItem('wos.pin-buttons.migrated.v1')) {
+      for (const [who, ids] of Object.entries(state.off)) if (who !== 'novaire' && Array.isArray(ids) && !ids.includes('wizard/pin-buttons')) state.off[who] = [...ids, 'wizard/pin-buttons'];
+      Store.write(state); localStorage.setItem('wos.pin-buttons.migrated.v1', 'true');
+    }
+  } catch (_) {}
   const recipe = () => window.WosMySkin?.active;
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
   const canonical = id => catalog?.aliases?.[id] || id;
