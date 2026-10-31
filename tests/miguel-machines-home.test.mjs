@@ -319,7 +319,7 @@ test('ninth review: failed first reads say so (AI accounts, network); availabili
   }
 });
 
-test('tenth review: Home Settings is always the panel; the glance counts only this Wizard\'s people', () => {
+test('tenth review: Miguel\'s Home opens Settings as the panel; the glance counts only this Wizard\'s people', () => {
   const desk = read('web/desktop/desktop.js');
   assert.match(desk, /if \(homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem\?\.\(\)\)\) \{  \/\/ from Home it is always the centred panel/, 'with Miguel\'s Home (System pages filled)');
   assert.match(desk, /if \(settingsWin\(\)\) hostSettings\(\);  \/\/ back into its desk window/, 'the desk window gets its panel back');
