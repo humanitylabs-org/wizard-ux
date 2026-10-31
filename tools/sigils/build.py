@@ -88,6 +88,7 @@ HOUSE = {
     'money':         ('dollar',   152, 0.13),
     'profiles':      ('profile',  296, None),
     'defleur-video': ('clip',     268, None),
+    'wizard-podcasts':('podcast', 89,  None),   # Podcasts: amber, in the widest free gap (Wisdom 78 / Cinequeue 100)
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),
     'morning':       ('coffee',   46,  None),   # Morning (installed id) wears Morning report's cup
@@ -131,7 +132,7 @@ def main():
     style = open(os.path.join(HERE, 'style.css')).read()
     open(out_css, 'w').write(style.rstrip() + '\n\n' + '\n'.join(css) + '\n')
 
-    house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
+    house = {k: [g, tone(h, c).lstrip('#')] for k, (g, h, c) in HOUSE.items()}  # '#' is added back in sigils.js
     for k, (g, _, _) in HOUSE.items():
         assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()

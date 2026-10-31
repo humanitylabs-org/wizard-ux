@@ -17,7 +17,8 @@
 (() => {
   'use strict';
   const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
-  const HOUSE = /*HOUSE*/;
+  // Colours are stored without '#' so this generated table holds no literal colour (style gate); added back here.
+  const HOUSE = Object.fromEntries(Object.entries(/*HOUSE*/).map(([id, [glyph, hex]]) => [id, [glyph, '#' + hex]]));
   const BRAND = /*BRAND*/;
   const FALLBACK = /*FALLBACK*/;
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
