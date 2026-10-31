@@ -331,6 +331,13 @@ a.fchip { color: inherit; text-decoration: none; }
 .mcard .mn { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mcard .mn b { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mcard .mn small { font-size: 11.5px; color: var(--ink-3); }
+/* File/video card + one-tap Download (chats.js mediaBtn): the ⤓ sits inside the card's right edge. */
+.mfile { position: relative; max-width: 320px; }
+.mfile > .mcard { width: 100%; max-width: none; padding-right: 54px; }
+.mfile > .mdl { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--ink); background: rgba(205, 190, 255, .14); border: 1px solid var(--line-2); }
+.mfile > .mdl svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mfile > .mdl:hover, .mfile > .mdl:focus-visible { background: rgba(205, 190, 255, .24); }
+.mfile > .mdl:active { transform: translateY(-50%) scale(.94); }
 .mcard.aud { max-width: 300px; }
 .mcard audio { width: 220px; height: 34px; margin-top: 2px; }
 /* Thread header actions: one row, icons + short words, no extra height. */
@@ -366,6 +373,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-compose .ch-stop svg { fill: var(--red); stroke: none; }
 /* Media viewer: full-screen overlay inside the app (Back closes it). */
 .mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; transition: opacity 180ms var(--ease); touch-action: none; }
+/* The viewer is always a dark backdrop, so its chrome keeps the default light ink on every skin
+ * (a light skin's black --ink made Close, the title and Download vanish into it). */
+.mviewer { --ink: #f3efff; --ink-2: #b9b0d8; --ink-3: #7d74a3; --line: rgba(205, 190, 255, .13); --line-2: rgba(205, 190, 255, .24); color: var(--ink); color-scheme: dark; }
 .mviewer.open { opacity: 1; }
 .mviewer[hidden] { display: none; }
 .mv-top { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 8px) 10px 6px 6px; }
@@ -385,6 +395,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-file .mv-ic { font-size: 40px; }
 .mv-file b { font-size: 15px; word-break: break-word; } .mv-file small, .mv-file p { font-size: 13px; color: var(--ink-3); margin: 0; }
 .mv-file audio { width: 280px; margin-top: 8px; }
+.mv-file .mv-dl { margin-top: 8px; padding: 11px 20px; border-radius: 99px; font-size: 14.5px; font-weight: 700; color: var(--ink); background: rgba(205, 190, 255, .16); border: 1px solid var(--line-2); }
+/* PDFs render in the browser's own reader (chat-kit.js show): a white page area filling the stage. */
+.mv-stage iframe.mv-pdf { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
 .mv-tx { max-height: 30vh; overflow: auto; text-align: left; color: var(--ink-2) !important; }
 .mv-doc { position: absolute; inset: 0; overflow: auto; padding: 8px 16px 24px; touch-action: pan-x pan-y; }
 .mv-doc pre { margin: 0; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; color: var(--ink-2); }
