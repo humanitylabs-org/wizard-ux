@@ -20,7 +20,8 @@
     "miguel/arrange-download",
     "wizard/app-borders",
     "miguel/refresh-button",
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "miguel/orb-shell"
   ],
   "defaults": [
     "wizard/unified-inbox",

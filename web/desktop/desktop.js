@@ -668,6 +668,7 @@
     // The selector a new desktop opened belongs to that empty desktop: once an app lands there, or the
     // desktop is left or closed, it steps aside and focus goes where the shell now points.
     if (!pal.hidden && palDesk && (homeOpen || ws[cur].id !== palDesk || ws[cur].wins.length)) { closePalette({ restore: false }); restFocus(); }
+    window.WosSkinHost?.changed(); // a layout hears Home come and go (route().home)
     queueMicrotask(() => window.WosResources?.sync());
     afterRender?.();
   }
@@ -1649,6 +1650,7 @@
       const rootCls = document.documentElement.classList; rootCls.toggle('voice-on', st !== 'idle'); rootCls.toggle('voice-paused', st === 'paused'); rootCls.toggle('voice-think', st === 'think'); if (st === 'idle') glow.style.setProperty('--vglow-lvl', '0');
       CHATS.PW?.paintMic(['listen','paused'].includes(st) && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
+      window.WosSkinHost?.voice(st); // a layout's own orb follows the take
       pill.classList.toggle('dict', vMode === 'dictate');
       pill.classList.toggle('app-voice', vMode === 'talk' && !!vConversation);
       $('#voiceKey').textContent = vMode === 'dictate' ? `${MOD}D` : commandTake ? `${MOD}C` : vNewChat ? vNewKey : nativeDesktop ? 'Right ⌘' : `${MOD}S`;
@@ -1658,7 +1660,7 @@
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
-    onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; glow.style.setProperty('--vglow-lvl', Math.min(1, l * 1.6).toFixed(2)); },
+    onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; glow.style.setProperty('--vglow-lvl', Math.min(1, l * 1.6).toFixed(2)); window.WosSkinHost?.level(l); },
   });
   function paintVoiceFiles() {
     const root=$('#voiceFiles'); if (!root) return;
@@ -2633,7 +2635,28 @@
    * declared when: 'always' runs its script here too. James's skins declare no package and load nothing. */
   const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : (ws[cur].wins.map(id => W[id]).find(x => x && x.app === 'chats') || null); };
   window.WosSkinHost?.attach({
-    route() { const w = homeOpen ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur }; },
+    route() { const w = homeOpen ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur, home: homeOpen || !ws[cur].wins.length }; },
+    // Layouts (core/skin-host.js shellApi): mount on the stage, the orb's voice, Working / Ready rows with Chats' own
+    // actions, the owner's quick apps (Home's app chips), Home and Settings.
+    mountHost: () => stage,
+    voiceState: () => ({ state: VOICE.state, command: !!commandTake, mode: vMode }),
+    talk: () => VOICE.state === 'idle' ? talkNew('Click the orb') : talk('send'),
+    voiceTap: () => talk('send'),
+    voiceCancel: () => vMode === 'dictate' ? dictate('cancel') : talk('cancel'),
+    command: () => commandVoice(),
+    agentHere: () => ({ id: '', label: window.WizConfig.agent(), main: true }),
+    sessionList: () => {
+      const G = LIVE?.ok ? LIVE.workGroups() : null; if (!G) return null;
+      const row = (s, kind) => ({ id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', snoozed: !!s.deferred, unread: !!LIVE.isNew?.(s),
+        needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', actions: kind === 'ready' ? CHATS.threadActions(s).filter(a => a === 'snooze' || a === 'done') : [] });
+      return { working: (G.working || []).map(s => row(s, 'working')), ready: (G.ready || []).map(s => row(s, 'ready')) };
+    },
+    // The thread's own Snooze / Done (Chats threadAct: the snooze tweak's interception, toasts, optimistic list).
+    sessionAct: (sid, act) => { const w = findWin(mainChats); CHATS.threadAct(w?.id || '', sid, act); return true; },
+    apps: () => (window.WizLauncher?.get('desktopQuick') || []).map(id => APP[id]).filter(a => a && !a.agent).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a) })),
+    openApp: id => !!APP[id] && openApp(APP[id]) !== false,
+    openPicker: () => openPicker(),
+    home: () => goHome(),
     back: () => !!escStep(),
     openList: () => { const w = skinChatsWin(); if (w) { CHATS.openChat(w.id, null); syncChatsPane(w.id); } },
     openThread: id => openThread(id),

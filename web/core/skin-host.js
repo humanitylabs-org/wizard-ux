@@ -24,10 +24,12 @@
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
+    // Desktop only (Miguel's miguel/orb-shell tweak wears it): the orb in the middle, apps around it, threads under it.
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'Desktop: the orb in the middle, apps around it, your threads under it', css: true, js: true }),
   ]);
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
-  let layoutId = 'classic', layoutRec = null, layoutSeq = 0;
+  let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
   const isDoc = typeof document !== 'undefined';
@@ -52,6 +54,26 @@
   const releaseToken = () => { try { const v = isDoc && document.querySelector('meta[name="wos-release"]')?.content; return v && /^[0-9a-f]{6,40}$/.test(v) ? v : ''; } catch (_) { return ''; } };
   const stamp = h => { const v = releaseToken(); return v ? h + (h.includes('?') ? '&' : '?') + 'v=' + v : h; };
   const url = (dir, file) => isDoc ? stamp(new URL(`skins/${dir}/${file}`, document.baseURI).href) : `skins/${dir}/${file}`;
+  /* orb.js draws its main orb on #orb as it loads. A page without one (desktop) gets a hidden stand-in that is put
+   * to sleep at once, so only the orbs a layout creates ever draw. Loaded once per page, never on Classic. */
+  let orbLoad = null;
+  function loadOrb() {
+    if (typeof window === 'undefined' || typeof window.Orb?.create === 'function') return Promise.resolve(typeof window !== 'undefined');
+    if (!isDoc) return Promise.resolve(false);
+    return orbLoad ||= new Promise(done => {
+      const standIn = !document.getElementById('orb');
+      if (standIn) {
+        const c = document.createElement('canvas'); c.id = 'orb'; c.hidden = true; c.width = c.height = 1;
+        const f = document.createElement('img'); f.id = 'orbFallback'; f.alt = ''; f.hidden = true;
+        // Own wrapper: orb.js watches the canvas's parent for icon changes; never let that be <body>.
+        const box = document.createElement('div'); box.hidden = true; box.dataset.orbStandIn = ''; box.append(c, f); document.body.append(box);
+      }
+      const s = document.createElement('script'); s.src = stamp(new URL('orb.js', document.baseURI).href);
+      s.onload = () => { if (standIn) try { window.Orb?.sleep?.(true); } catch (_) {} done(typeof window.Orb?.create === 'function'); };
+      s.onerror = () => { orbLoad = null; done(false); };
+      document.head.appendChild(s); requested.push(s.src);
+    });
+  }
 
   function env() {
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
@@ -150,7 +172,8 @@
       },
       /* Own controls: a node appended to the device, removed on teardown. */
       mount(node) {
-        const host = isDoc && document.getElementById('device'); if (!host || !node || node.nodeType !== 1) return () => {};
+        // The phone's #device; the desktop hands over its stage (no #device there).
+        const host = isDoc && (document.getElementById('device') || shell?.mountHost?.()); if (!host || !node || node.nodeType !== 1) return () => {};
         host.appendChild(node); a.mounts.add(node);
         return () => { node.remove(); a.mounts.delete(node); };
       },
@@ -186,6 +209,8 @@
           a.orbs.add(o); return o;
         },
         onLevel(fn) { const g = guard(a, 'orb.onLevel', fn); a.levels.add(g); levels.add(g); return () => { a.levels.delete(g); levels.delete(g); }; },
+        /* Resolves true once window.Orb exists. The desktop page doesn't load orb.js; this loads it once, on demand. */
+        ready: () => loadOrb(),
       }),
       storage: Object.freeze({
         get(key) { try { const v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
@@ -246,7 +271,7 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0) });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0), home: !!r.home });
   }
   /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
    * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
@@ -259,7 +284,7 @@
   if (isDoc) window.addEventListener?.('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
-    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}`;
+    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
   }
@@ -287,9 +312,34 @@
     try { mod = await importer(href); } catch (e) { try { console.warn(`[layout ${id}] import failed:`, e); } catch (_) {} return false; }
     if (seq !== layoutSeq || layoutId !== id || typeof mod?.default !== 'function') return false;
     const a = record(key, L.name + ' layout'); layoutRec = a;
-    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
+    try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
     lastRoute = ''; emitRoute();
     return layoutRec === a;
+  }
+  /* Layouts are built-in shell code, so they also get the shell's own lists and actions (no DOM crosses):
+   * the Working / Ready threads with the actions Chats offers on each, Snooze / Done through Chats' own threadAct
+   * (so a snooze tweak's interception applies), the owner's quick apps, Home and Settings › Look. */
+  function shellApi(a, base) {
+    const live = () => !a.dead && !!shell;
+    return {
+      // The orb's recorder plus a local command take (the held orb / ⌥C); call command() again to finish it.
+      voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined }),
+      sessions: Object.freeze({
+        list: () => { const l = live() ? shell.sessionList?.() : null; return l ? structuredClone(l) : null; },
+        open: id => { if (live() && typeof id === 'string' && id) shell.openThread(id); },
+        act: (id, action) => live() && typeof id === 'string' && id && ['snooze', 'done'].includes(action) ? !!shell.sessionAct?.(id, action) : false,
+        openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
+      }),
+      apps: Object.freeze({
+        list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
+        open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
+        all: () => { if (live()) shell.openPicker?.(); },
+      }),
+      desk: Object.freeze({
+        home: () => { if (live()) shell.home?.(); },
+        look: () => { if (live()) shell.openSettings?.('look'); },
+      }),
+    };
   }
   function setLayout(id) {
     const next = layoutOf(id) ? id : 'classic';
@@ -453,9 +503,11 @@
         a.offs.add(release); return release;
       }, use(id) {
         if (a.dead || !layoutOf(id)) return () => {};
-        setLayout(id);
+        // Already worn since boot (stored choice): keep the running layout instead of remounting it.
+        if (layoutId !== id || (!layoutRec && !layoutSeq)) setLayout(id);
+        layoutHolder = a.id;
         let released = false;
-        const release = () => { if (!released) { released = true; if (layoutId === id) setLayout('classic'); } };
+        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id) setLayout('classic'); } };
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
@@ -683,6 +735,8 @@
     // A run cut short by the network keeps the full list for next time, so the next load still paints them at once.
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
+    // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
+    if (layoutId === 'orb' && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
