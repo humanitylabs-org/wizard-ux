@@ -361,6 +361,15 @@ def g_dollar():
     bar = U(rrect(238, 118, 36, 46, 12), rrect(238, 348, 36, 46, 12))
     return D(coin, U(s_curve, bar))
 
+@glyph('podcast', 'A broadcast disc with a microphone cut out of it: shows that talk to you.')
+def g_podcast():
+    disc = circle(256, 256, 160)
+    capsule = rrect(212, 128, 88, 150, 44)
+    yoke = stroke("M170 232 A86 86 0 0 0 342 232", 28)
+    stem = rrect(242, 316, 28, 50, 0)
+    base = rrect(196, 356, 120, 28, 14)
+    return D(disc, U(capsule, yoke, stem, base))
+
 @glyph('clip', 'A film frame with play cut out: a video to edit.')
 def g_clip():
     frame = rrect(88, 132, 336, 248, 52)

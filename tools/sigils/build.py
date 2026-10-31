@@ -88,6 +88,7 @@ HOUSE = {
     'money':         ('dollar',   152, 0.13),
     'profiles':      ('profile',  296, None),
     'defleur-video': ('clip',     268, None),
+    'wizard-podcasts':('podcast', 89,  None),   # Podcasts: amber, in the widest free gap (Wisdom 78 / Cinequeue 100)
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),
     'morning':       ('coffee',   46,  None),   # Morning (installed id) wears Morning report's cup
