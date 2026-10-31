@@ -47,7 +47,7 @@ test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidd
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
   assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit/);
   assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
-  assert.match(js, /\['\[data-chact="done"\]', '→', 'Done'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
+  assert.match(js, /\['\[data-chact="done"\]', '→', 'Archive'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 

@@ -56,11 +56,11 @@ test('James: Miguel\'s network Home is his tweak, a separate switch any skin can
 });
 
 test('James: a device that ran the network Home keeps it only if it already wears Miguel\'s tweaks', async () => {
-  const miguel = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/hidden-pin': true }, defaultsMigrated: true }); await miguel.E.refresh();
+  const miguel = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/swipe-strip': true }, defaultsMigrated: true }); await miguel.E.refresh();
   assert.ok(miguel.active().includes('miguel/machines-home'), 'Miguel keeps his Home after the move');
   const james = experience('nebula', { version: 1, off: {}, preset: 'none', mix: {}, defaultsMigrated: true }); await james.E.refresh();
   assert.ok(!james.active().includes('miguel/machines-home'), 'James gets the classic Home back');
-  const optedOut = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/hidden-pin': true }, defaultsMigrated: true, defaultsOff: ['wizard/machines-home'] }); await optedOut.E.refresh();
+  const optedOut = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/swipe-strip': true }, defaultsMigrated: true, defaultsOff: ['wizard/machines-home'] }); await optedOut.E.refresh();
   assert.ok(!optedOut.active().includes('miguel/machines-home'), 'a device that had switched it off stays off');
   // Once only: switching it off afterwards sticks.
   await miguel.E.toggle('miguel/machines-home'); await miguel.E.refresh();

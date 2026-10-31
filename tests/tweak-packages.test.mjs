@@ -24,17 +24,17 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
   }
 });
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
-  const id = 'miguel/hidden-pin'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
+  const id = 'miguel/swipe-strip'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
   await f.host.loadTweaks([id, 'miguel/send-and-go'], f.slots, { teamAuthors: ['miguel'] });
-  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /miguel\/hidden-pin paused after an update · ask your Wizard to update it/); await f.clear();
+  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /miguel\/swipe-strip paused after an update · ask your Wizard to update it/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
   // An untrusted package that asks for data.read (as the retired home-bars did) still gets no data.
-  const asks = { ...JSON.parse(read('web/tweaks/miguel/hidden-pin/manifest.json')), capabilities: ['layout', 'data.read'] };
-  const f = fixture({ manifests: { 'miguel/hidden-pin': asks } }); let api;
+  const asks = { ...JSON.parse(read('web/tweaks/miguel/swipe-strip/manifest.json')), capabilities: ['layout', 'data.read'] };
+  const f = fixture({ manifests: { 'miguel/swipe-strip': asks } }); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/hidden-pin'], f.slots);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
@@ -46,24 +46,24 @@ test('multiple ordered packages clean listeners, CSS, mounts and action intercep
 });
 test('colors and tweaks are separate: a color pick never changes tweaks; a preset starts over; any tweak can be tried', async () => {
   const storage = new Map([['wos.skin', 'obsidian']]); let skin = 'obsidian', active = [];
-  const profiles = { miguel: { id: 'miguel', name: 'Miguel', version: 1, tweaks: ['miguel/hidden-pin'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
+  const profiles = { miguel: { id: 'miguel', name: 'Miguel', version: 1, tweaks: ['miguel/swipe-strip'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
   const fams = [{ id: 'wizard', tweaks: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
   const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, setTimeout, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => { const who = url.pathname.match(/tweaks\/([^/]+)\/profile\.json$/)?.[1]; return who ? profiles[who] : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])); } }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
-  await E.refresh(); assert.deepEqual(Array.from(active), ['miguel/hidden-pin'], 'a device from before keeps what its color brought');
-  assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/hidden-pin': true }, 'written into its own switches once');
-  skin = 'grove'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/hidden-pin'], 'a color pick keeps the tweaks');
+  await E.refresh(); assert.deepEqual(Array.from(active), ['miguel/swipe-strip'], 'a device from before keeps what its color brought');
+  assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/swipe-strip': true }, 'written into its own switches once');
+  skin = 'grove'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/swipe-strip'], 'a color pick keeps the tweaks');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size - groupsHidden, 'every installed tweak is offered, whoever wrote it (one switch per replacement group)');
-  await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/hidden-pin', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
-  await E.toggle('miguel/hidden-pin'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
-  profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/hidden-pin'] }; await E.refresh();
+  await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/swipe-strip', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
+  await E.toggle('miguel/swipe-strip'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
+  profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/swipe-strip'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
   await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
-  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
+  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/pin-buttons', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
   const authors = await E.authors(); assert.deepEqual(Array.from(authors, a => a.name), ['Miguel', 'James']);
   assert.ok(!authors.some(a => a.ids.some(id => cat.defaults.includes(id))), 'built-in features have no quick button');
   assert.equal(E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').builtin, true);
@@ -115,7 +115,7 @@ test('legacy two-orb migration opts in exactly once, preserving a later owner of
 test('overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture(); let api;
   f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
-  await f.mount('miguel/hidden-pin'); assert.equal(api.overview,undefined);
+  await f.mount('wizard/pin-buttons'); assert.equal(api.overview,undefined);
   await f.mount('miguel/arrange-download');
   assert.throws(()=>api.overview.use({hold:'exit',appHold:false}),/Invalid overview mode/);
   const release=api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false});
@@ -125,7 +125,7 @@ test('overview mode is capability gated, revoked on teardown, and stale handles 
 test('window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture(); let api;
   f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
-  await f.mount('miguel/hidden-pin'); assert.equal(api.windowRefresh,undefined);
+  await f.mount('wizard/pin-buttons'); assert.equal(api.windowRefresh,undefined);
   await f.mount('miguel/refresh-button'); assert.equal(f.windowRefresh,null);
   assert.throws(()=>api.windowRefresh.use({}),/Invalid window refresh mode/);
   const release=api.windowRefresh.use({pull:false,extra:1}); assert.deepEqual({...f.windowRefresh},{pull:false});

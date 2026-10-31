@@ -208,7 +208,7 @@
 
   /* ================= Markdown (GFM subset, no raw HTML) ================= */
   const SAFE_HREF = /^(https?:|mailto:|tel:)/i;
-  // A path on this Wizard ("/cinequeue/"), never a protocol-relative "//host" or a "/\\host" trick.
+  // A path on this Wizard ("/movies/"), never a protocol-relative "//host" or a "/\\host" trick.
   const HOME_PATH = /^\/(?![\/\\])[^\s]*$/;
   const SESSION_REF = /@session:default\/([A-Za-z0-9_](?:[A-Za-z0-9._:-]{0,178}[A-Za-z0-9_])?)/g;
   const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/; // Same contract as core/deeplink.js.

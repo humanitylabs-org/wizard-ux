@@ -5,9 +5,9 @@ import fs from 'node:fs';
 const chats = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 
-test('active follow-ups keep Snooze, make Done temporary, and expose explicit Stop watching', () => {
+test('active follow-ups keep Snooze, make Archive temporary, and expose explicit Stop watching', () => {
   assert.match(chats, /followUpActive\(s\)/);
-  assert.match(chats, /Done for now/);
+  assert.match(chats, /Archive for now/);
   assert.match(chats, /Stop watching/);
   assert.match(chats, /\['snooze', 'stop_watch', 'done'\]/);
   assert.match(chats, /LIVE\.stopWatching\(sid, LIVE\.ownerOf \? LIVE\.ownerOf\(s\) : undefined\)/);
@@ -19,7 +19,7 @@ test('archived watcher checks stay out of Working while their silent run is acti
   assert.ok(grouping.indexOf('if (s.archived)') < grouping.indexOf('else if (inWorking(s))'));
 });
 
-test('Done and Snooze remain presentation actions; only Stop watching hits the cancellation route', () => {
+test('Archive and Snooze remain presentation actions; only Stop watching hits the cancellation route', () => {
   assert.match(live, /stopWatching\(id, agent\)/);
   assert.match(live, /\/wizard\/follow-ups\/stop/);
   const archive = live.slice(live.indexOf('archive(id,'), live.indexOf('async stopWatching'));

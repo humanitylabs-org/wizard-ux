@@ -122,6 +122,6 @@ test('Chats windows resolve their own row before acting and Stop scopes to that 
   // Every watcher-visible surface reads the window's row, and Stop carries that row's own owner.
   assert.match(chats, /async function threadAct\(wid, sid, a\) \{\n    wid = owner\(wid\);\n    const s = rowOf\(wid, sid\);/);
   assert.match(chats, /LIVE\.stopWatching\(sid, LIVE\.ownerOf \? LIVE\.ownerOf\(s\) : undefined\)/);
-  assert.match(chats, /function openRowSheet\(wid, sid\) \{\n    const s = rowOf\(wid, sid\)/);
+  assert.match(chats, /function openRowSheet\(wid, sid, nid = ''\) \{\n    const s = nid \? window\.WosBell\?\.item\?\.\(nid\) : rowOf\(wid, sid\)/);
   assert.match(chats, /s = isNew \? null : rowOf\(w\.id, w\.thread\)/);
 });
