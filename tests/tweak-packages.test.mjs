@@ -335,7 +335,7 @@ test('a merged tweak keeps the device\'s switch: Defer and Done on means the mod
 });
 
 test('Settings › Look: tweaks grouped by author, each with an "All of theirs" switch, in every skin (Miguel, 31 Oct 2026)', () => {
-  const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows(S) {'), s.indexOf('  let authorList = null;'));
+  const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
   assert.match(rows, /class="tw-author"/, 'one section per author');
   assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
   assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');

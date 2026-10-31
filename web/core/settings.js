@@ -266,7 +266,7 @@
       const mine = exp.filter(t => t.author === who); if (!mine.length) return '';
       const on = mine.filter(t => t.on).length, all = on === mine.length;
       const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
-      return `<section class="tw-author" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</section>`;
+      return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
     }).join('');
     return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${groups}</div>`;
   }
