@@ -257,15 +257,20 @@
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
     const exp = s.tweaks.filter(t => !t.builtin);
-    const rows = list => tweakSwitches(list.map(t => ({ ...t, description: [t.description, t.builtin ? '' : 'by ' + name(t.author)].filter(Boolean).join(' · ') })), 'data-tweak-toggle', s.busy);
+    const rows = list => tweakSwitches(list, 'data-tweak-toggle', s.busy);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${err}${rows(exp)}</div>`;
-    const on = exp.filter(t => t.on).length;
-    // Quick buttons: one per author; they add to what is on (tap James's and Miguel's = all), tap again to take them off.
-    const quick = (authorList || []).filter(a => a.ids.length).map(a => { const all = a.ids.every(id => exp.find(t => t.id === id)?.on); return `<button type="button" class="tw-quick" data-tweakauthor="${esc(a.id)}" aria-pressed="${all}"${s.busy ? ' disabled' : ''}>${all ? '✓ ' : ''}${esc(a.name)}’s (${a.ids.length})</button>`; }).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Off unless you turn them on. Each one is someone’s idea being tried out.</p>${quick ? `<div class="tw-quicks" role="group" aria-label="Get someone’s tweaks">${quick}</div>` : ''}<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>All tweaks</b><small>${on} of ${exp.length} on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${err}${rows(exp)}</details></div>`;
+    // One section per author (Miguel, 31 Oct 2026): a switch that turns all of theirs on or off, then each tweak by itself.
+    // Same list whatever skin is worn; skins are looks only.
+    const order = [...(authorList || []).map(a => a.id), ...exp.map(t => t.author)].filter((who, i, all) => all.indexOf(who) === i);
+    const groups = order.map(who => {
+      const mine = exp.filter(t => t.author === who); if (!mine.length) return '';
+      const on = mine.filter(t => t.on).length, all = on === mine.length;
+      const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
+      return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
+    }).join('');
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${groups}</div>`;
   }
-  let tweaksOpen = false, authorList = null;
+  let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
@@ -358,9 +363,7 @@
     // Tapping the skin you wear takes it off (back to plain color + tweaks); any other one puts it on.
     if (own) { skinAction(() => M.active?.id === own.dataset.ownskin ? M.leave() : M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
-    if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
-    const set = el.closest('[data-tweakset] > summary');
-    if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
+    if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const quick = el.closest('[data-tweakauthor]');
