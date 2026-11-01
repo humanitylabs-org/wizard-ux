@@ -4,12 +4,13 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const source=read('web/core/app-services.js'), shared=read('web/core/share-wizard.js');
-function fixture() {
+function fixture(boundary = false) {
  const calls=[],replies=[],events={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL('/messenger/',location),document:{},addEventListener(){},postMessage(m){replies.push(m);}};
  const frame={tagName:'IFRAME',src:child.location.href,isConnected:true,contentWindow:child,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
  const document={hidden:false,readyState:'loading',addEventListener(){}};
  const window={WizCore:{apps:()=>({APPS:[{id:'messenger',kind:'wizard',url:'/messenger/'}]})},dispatchEvent(){}};
+ if (boundary) window.WizBrowserBoundary = {enabled:true,attach:()=>()=>{}};
  const context={window,document,location,URL,addEventListener(n,fn){events[n]=fn;},setInterval(){},setTimeout,clearTimeout,CustomEvent:class{},navigator:{}};
  vm.runInNewContext(shared,context);
  const validate=window.WizShareWizard.valid;
@@ -19,6 +20,13 @@ function fixture() {
  return {calls,replies,child,frame,detach,window,service:window.WizAppServices.connect(child,{}),message:events.message};
 }
 const payload=()=>({files:[new File(['a'],'voice.ogg',{type:'audio/ogg'}),new File(['b'],'photo.png',{type:'image/png'})],text:'Miguel: hello',title:'Messenger'});
+test('boundary-on refuses legacy share admission instead of exposing owner sending authority',async()=>{
+ const f=fixture(true);assert.equal(f.service,null);
+ for(const origin of ['https://wizard.example','null']){
+  for(const data of [{type:'wizard:app:hello',version:1,id:'hello'}, {type:'wizard:app:request',version:1,id:'share',op:'share.wizard',args:payload()}])await f.message({origin,source:f.child,data});
+ }
+ assert.equal(f.calls.length,0);assert.equal(f.replies.length,0);
+});
 test('installed frame forwards one batch internally, holds until sheet settles',async()=>{
  const f=fixture(),p=payload();let resolve;
  f.window.WizShareWizard.wizard=(data,authorize)=>new Promise(r=>{resolve=r;f.calls.push({data,authorize});});

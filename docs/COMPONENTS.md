@@ -102,6 +102,8 @@ Reuse:
 
 ## App voice/audio
 
+Default-off: `WizBrowserBoundary`, `WizBoundaryClient` ([contract](browser-boundary-services.md)).
+
 | Module | Contract |
 |---|---|
 | `web/core/app-voice.js` (`WosAppVoice`) | Registry names/claims. |

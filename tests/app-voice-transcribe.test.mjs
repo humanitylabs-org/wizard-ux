@@ -4,17 +4,30 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const source = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../web/core/app-client.js', import.meta.url), 'utf8');
-function fixture(config) {
+function fixture(config, boundary = false) {
   const calls = [], replies = [], location = new URL('https://wizard.example/wizard-os-home/'); let listener;
   const child = {location: new URL('/messenger/', location), document: {}, addEventListener(){}, postMessage(m){replies.push(m);}};
   const frame = {tagName: 'IFRAME', src: child.location.href, isConnected: true, contentWindow: child, hasAttribute: () => false, addEventListener(){}, removeEventListener(){}};
   const window = {WizCore: {apps: () => ({APPS: [{id: 'messenger', kind: 'wizard', url: '/messenger/'}]})}, dispatchEvent(){}, WizConfig: config === false ? {} : {ready: Promise.resolve(), endpoint: () => '/api/transcribe', voicePrompt: () => 'Names: Wizard.', transcribe: async (file, opts) => {calls.push({file, opts}); return {text: ' A real transcript '};}, ...config}};
+  if (boundary) window.WizBrowserBoundary = {enabled: true, attach: () => () => {}};
   vm.runInNewContext(source, {window, location, URL, addEventListener(n, fn){if (n === 'message') listener = fn;}, setInterval(){}, setTimeout, clearTimeout, document: {hidden: false, readyState: 'loading', addEventListener(){}}, CustomEvent: class{}, navigator: {}});
   const detach = window.WizAppServices.attach(frame, {appId: 'messenger', path: '/messenger/', isVisible: () => true});
   const service = window.WizAppServices.connect(child, {});
   return {window, child, frame, service, detach, calls, replies, message: e => listener(e)};
 }
 const audio = () => new Blob(['ogg bytes'], {type: 'audio/ogg'});
+test('boundary-on never revives the legacy transcribe bridge for same-origin or opaque frames', async () => {
+  const f = fixture(undefined, true);
+  assert.equal(f.service, null);
+  for (const origin of ['https://wizard.example', 'null']) {
+    for (const data of [
+      {type: 'wizard:app:hello', version: 1, id: 'hello'},
+      {type: 'wizard:app:request', version: 1, id: 'transcribe', op: 'voice.transcribe', args: {file: audio()}},
+    ]) await f.message({origin, source: f.child, data});
+  }
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.replies.length, 0);
+});
 test('installed frame uses the one configured transcriber, optional language, and returns only text', async () => {
   const f = fixture(); const file = audio();
   assert.equal((await f.service.voice.transcribe(file, {language: 'es'})).text, 'A real transcript');

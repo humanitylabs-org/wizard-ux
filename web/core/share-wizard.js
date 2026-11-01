@@ -8,6 +8,7 @@
   const blob = x => x && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(x));
   const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
   let active = null, jobs = 0, lane = Promise.resolve(); const retries = [];
+  const CONFIRM_TIMEOUT_MS = 60000;
   // One delivery at a time borrows a Chats window: two jobs sharing a temporary window would let the first close it
   // under the second. Uploads still run in parallel; only open + send + close is serialised.
   const inLane = fn => { const p = lane.then(fn, fn); lane = p.catch(() => {}); return p; };
@@ -19,8 +20,9 @@
     if (!files.length && !data?.text?.trim()) throw new Error('Nothing to share');
     return {files, text: data?.text || '', title: data?.title || ''};
   }
-  function finish(result, pending) {
-    const a = active; if (!a) return;
+  function finish(result, pending, expected = active) {
+    const a = active; if (!a || a !== expected) return;
+    clearTimeout(a.confirmTimer); clearInterval(a.authorityTimer);
     active = null; a.el.remove(); a.mount.classList.remove('dv-share-open');
     a.urls.forEach(u => URL.revokeObjectURL(u)); if (!pending) a.resolve(result); a.focus?.focus?.();
     const next = retries.shift(); if (next) setTimeout(() => open(...next.args).then(next.resolve), 0); // a failed send waiting its turn
@@ -31,7 +33,8 @@
   // sheet at once and the upload + send carry on in the background, so nobody stares at "Uploading 3 of 3…".
   // durable (native shares): resolve 'sent' only once the message has a receipt, so the caller keeps its staged copy
   // until then; a failed send resolves with whatever the owner does with the retry sheet (sent again or cancelled).
-  function open({items = [], text = '', title = '', skipped = 0, stay = false, comment = '', error = '', dest = '', durable = false} = {}, authorize = () => true) {
+  function open({items = [], text = '', title = '', skipped = 0, stay = false, comment = '', error = '', dest = '', durable = false, requireTrusted = false} = {}, authorize = () => true) {
+    if (requireTrusted && !authorize()) return Promise.resolve('denied');
     const w = host(), chats = w?.chats;
     if (!w || !chats?.uploadFile || !chats?.sendChat || !(w.openWizardThread || w.openThread)) return Promise.resolve('unsupported');
     if (active) return Promise.resolve('unsupported'); // never replace a sheet holding someone's unsent note
@@ -58,6 +61,10 @@
       <div class="dv-status" aria-live="polite">${esc(error)}</div></section>`;
     return new Promise(resolve => {
       const a = active = {el, mount, resolve, urls, focus: document.activeElement};
+      if (requireTrusted) {
+        a.confirmTimer = setTimeout(() => finish('denied', false, a), CONFIRM_TIMEOUT_MS);
+        a.authorityTimer = setInterval(() => { if (!authorize()) finish('denied', false, a); }, 250);
+      }
       mount.append(el); mount.classList.add('dv-share-open'); el.querySelector('[role=dialog]').focus({preventScroll:true});
       const $ = q => el.querySelector(q), status = $('.dv-status'), pick = $('.dv-chat');
       const radio = v => $(`input[name="dv-dest"][value="${v}"]`);
@@ -67,8 +74,9 @@
         if (e.target.closest('[data-dvclose]')) return back();
         const rm = e.target.closest('[data-attrm]');
         if (rm) { const n = Number(rm.dataset.attrm); kept[n] = false; rm.closest('[data-attkey]')?.remove(); const left = kept.filter(Boolean).length; $('.dv-count').textContent = left ? `${left} ${left === 1 ? 'item' : 'items'}` : 'Text'; return; }
-        if (!e.target.closest('[data-sharesend]')) return;
-        if (!authorize()) return finish('unsupported');
+        const b = e.target.closest('[data-sharesend]'); if (!b || active !== a) return;
+        if (requireTrusted && (e.isTrusted !== true || e.target.ownerDocument !== document || b.ownerDocument !== document || !b.isConnected || !el.isConnected || !el.contains(b))) return finish('denied', false, a);
+        if (!authorize()) return finish(requireTrusted ? 'denied' : 'unsupported', false, a);
         const target = radio('pick')?.checked ? pick.value : '__new__';
         if (!target) { status.textContent = 'Choose a chat, or pick New chat'; pick.focus(); return; }
         const note = [$('.dv-text').value.trim(), text.trim()].filter(Boolean).join('\n\n'), chosen = items.filter((_, n) => kept[n]);
@@ -77,7 +85,7 @@
         let files;
         try { files = chosen.map(f => new File([f.blob || f.read()], f.name, {type: f.mime})); }
         catch (_) { status.textContent = 'Couldn’t read a shared item · remove it and try again'; return; }
-        const job = {files, note, target, stay, title, text, durable, comment: $('.dv-text').value, authorize};
+        const job = {files, note, target, stay, title, text, durable, requireTrusted, comment: $('.dv-text').value, authorize};
         const done = a.resolve;
         finish('sent', durable);
         const p = deliver(w, chats, job);
@@ -89,17 +97,22 @@
     jobs++;
     try {
       const uploaded = [];
-      for (const f of job.files) uploaded.push(await chats.uploadFile(f));
-      if (!job.authorize()) return 'unsupported'; // the app lost its share permission while uploading
+      for (const f of job.files) {
+        if (!job.authorize()) return job.requireTrusted ? 'denied' : 'unsupported';
+        uploaded.push(await chats.uploadFile(f));
+      }
+      if (!job.authorize()) return job.requireTrusted ? 'denied' : 'unsupported'; // the app lost its share permission while uploading
       return await inLane(() => carry(w, chats, job, uploaded));
     } catch (err) {
+      if (!job.authorize()) return job.requireTrusted ? 'denied' : 'unsupported';
       // Nothing is lost: the same share comes back with the comment and destination kept, ready to send again.
       w.toast?.('!', 'Couldn’t send to Wizard · try again', 3200);
-      const args = [{items: job.files.map(f => ({name: f.name, mime: f.type, bytes: f.size, blob: f})), text: job.text, title: job.title, stay: job.stay, durable: job.durable, comment: job.comment, dest: job.target === '__new__' ? '' : job.target, error: 'Couldn’t send · check the connection and try again'}, job.authorize];
+      const args = [{items: job.files.map(f => ({name: f.name, mime: f.type, bytes: f.size, blob: f})), text: job.text, title: job.title, stay: job.stay, durable: job.durable, requireTrusted: job.requireTrusted, comment: job.comment, dest: job.target === '__new__' ? '' : job.target, error: 'Couldn’t send · check the connection and try again'}, job.authorize];
       return new Promise(resolve => { if (active) retries.push({args, resolve}); else open(...args).then(resolve); });
     } finally { jobs--; }
   }
   async function carry(w, chats, job, uploaded) {
+    if (!job.authorize()) return job.requireTrusted ? 'denied' : 'unsupported'; // recheck after waiting in the delivery lane
     // Never navigate: the owner has moved on. Any main Chats window carries the send (away + sid never moves it);
     // with none open, one is opened for the send and the desk/window the owner is on is put back straight away.
     const before = new Set(Object.keys(w.wins || {})), deskWas = w.idx, focusWas = w.cur ?? w.desks?.[w.idx]?.focus;
@@ -120,9 +133,9 @@
     if (!job.stay) w.toast?.('✦', 'Sent to Wizard', 1800);
     return 'sent';
   }
-  function wizard(data, authorize) {
+  function wizard(data, authorize, { requireTrusted = false } = {}) {
     const p = valid(data);
-    return open({stay:true, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
+    return open({stay:true, requireTrusted, durable:requireTrusted, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
   }
   document.addEventListener('keydown', e => {
     if (!active) return;
