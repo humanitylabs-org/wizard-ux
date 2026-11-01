@@ -29,11 +29,14 @@
     if (!connected(st)) return;
     // Opaque origins require '*'. Source identity + channel is the admission;
     // none of these messages contain an owner credential or ambient authority.
-    st.frame.contentWindow?.postMessage({ type: 'wizard:boundary', version: 1, channel: st.channel, op, ...data }, '*');
+    st.port?.postMessage({ type: 'wizard:boundary', version: 1, channel: st.channel, op, ...data });
   }
   function revoke(st) {
     if (!st) return;
     for (const [id, wait] of pending) if (wait.st === st) { clearTimeout(wait.timer); pending.delete(id); wait.resolve({ status: 'stale' }); }
+    st.port?.close(); st.port = null;
+    if (st.binding) window.fetch('/wizard/v1/browser-adapters/revoke', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:st.binding.handle})}).catch(() => {});
+    st.binding = null; st.bindingPromise = null; st.seen = new Set(); st.inflight = 0;
     st.channel = crypto.randomUUID(); st.ready = false;
     st.frame.closest('.win')?.classList.remove('wz-themed');
   }
@@ -46,12 +49,16 @@
       pending.set(id, { st, resolve, timer }); send(st, op, { id, ...data });
     });
   }
-  function attach(frame) {
+  function attach(frame, { appId, authorize, service } = {}) {
     if (!frame?.matches?.('iframe[sandbox]') || frame.sandbox.contains('allow-same-origin')) return () => {};
     if (sessions.has(frame)) return () => {};
-    const st = { frame, channel: crypto.randomUUID(), ready: false };
+    const st = { frame, appId, authorize, service, channel: crypto.randomUUID(), ready: false };
     sessions.set(frame, st);
-    const hello = () => { revoke(st); send(st, 'hello'); };
+    const hello = () => {
+      revoke(st);
+      st.challenge = null;
+      st.frame.contentWindow?.postMessage({ type:'wizard:boundary',version:1,channel:st.channel,op:'hello' }, '*');
+    };
     frame.addEventListener('load', hello); hello();
     return () => { frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
   }
@@ -59,11 +66,19 @@
     return frame.isConnected && !frame.closest('[hidden], [inert]') && frame.getClientRects().length > 0;
   }
   addEventListener('message', e => {
-    const d = e.data;
-    if (e.origin !== 'null' || !d || d.type !== 'wizard:boundary' || d.version !== 1) return;
-    const st = [...sessions.values()].find(s => s.frame.contentWindow === e.source);
+    const d=e.data;
+    if (e.origin !== 'null' || !d || d.type !== 'wizard:boundary' || d.version !== 1 || d.op !== 'ready' || d.portRole !== 'document') return;
+    const st=[...sessions.values()].find(s=>s.frame.contentWindow === e.source);
+    if (!connected(st) || st.channel !== d.channel || st.port || e.ports?.length !== 1) { for (const p of e.ports || []) p.close(); return; }
+    st.port=e.ports[0]; st.challenge=crypto.randomUUID(); const channel=st.channel;
+    st.port.onmessage = event => { if (connected(st) && st.channel === channel) receive(st,event.data); }; st.port.start();
+    send(st,'challenge',{nonce:st.challenge});
+  });
+  function receive(st, d) {
+    if (!d || d.type !== 'wizard:boundary' || d.version !== 1) return;
     if (!connected(st) || d.channel !== st.channel) return;
-    if (d.op === 'ready') { st.ready = true; if (st.appearance) send(st, 'theme', { appearance: st.appearance }); return; }
+    if (d.op === 'challenge.reply' && st.challenge && d.nonce === st.challenge) { st.challenge=null; st.ready=true; send(st,'connected'); if (st.appearance) send(st, 'theme', { appearance: st.appearance }); return; }
+    if (!st.ready) return;
     if (d.op === 'theme.applied' && d.revision === st.appearance?.revision) { const el = st.frame.closest('.win'); if (el && !el.classList.contains('wz-themed')) el.classList.add('wz-themed'); return; }
     if (d.op === 'reply' && typeof d.id === 'string') {
       const wait = pending.get(d.id);
@@ -73,7 +88,47 @@
       const statuses = ['handled', 'atRoot', 'pinned', 'inserted', 'refused', 'stale'];
       wait.resolve({ status: statuses.includes(d.status) ? d.status : 'refused', seal: typeof d.seal === 'string' && d.seal.length <= 80 ? d.seal : null });
     }
-  });
+    if (d.op === 'service.request') handleService(st,d);
+  }
+  const coded = code => Object.assign(new Error(code),{code});
+  async function server(path, body) {
+    const r = await window.fetch('/wizard/v1/browser-adapters/'+path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const value = await r.json(); if (!r.ok) throw coded(value.error || 'backend_failed'); return value;
+  }
+  async function handleService(st,d) {
+    const channel = st.channel;
+    const authorize = () => connected(st) && st.ready && st.channel === channel && st.authorize?.(channel) === true;
+    const reply = (value,error) => { if (authorize()) send(st,'service.reply',{id:d.id,value,error}); };
+    if (!authorize() || typeof d.id !== 'string' || !/^wbs-[1-9][0-9]{0,9}$/.test(d.id)) return;
+    if (st.seen.has(d.id)) { reply(undefined,{code:'replay',message:'Request already used',retryable:false}); return; }
+    if (st.seen.size >= 4096 || st.inflight >= 32) { reply(undefined,{code:'busy',message:'Reconnect app',retryable:true}); return; }
+    st.seen.add(d.id); st.inflight++;
+    try {
+      if (Object.keys(d).sort().join(',') !== 'args,channel,id,method,op,type,version') throw coded('bad_request');
+      if (['data.call','state.read','state.write','state.transaction'].includes(d.method)) {
+        if (new TextEncoder().encode(JSON.stringify(d)).byteLength > 65536) throw coded('too_large');
+        st.bindingPromise ||= server('bindings',{appId:st.appId,generation:channel}).then(b => {
+          if (!authorize()) { server('revoke',{handle:b.handle}).catch(() => {}); throw coded('denied'); }
+          st.binding=b; return b;
+        }).catch(e => { if (st.channel === channel) st.bindingPromise=null; throw e; });
+        const binding = await st.bindingPromise;
+        if (!authorize()) throw coded('denied');
+        let operation = 'state.local', args = {};
+        if (d.method === 'data.call') {
+          if (!d.args || Object.keys(d.args).sort().join(',') !== 'args,operation') throw coded('bad_request');
+          operation=d.args.operation; args=d.args.args;
+          if (operation !== 'fixture.notifications.list') throw coded('not_allowed');
+        }
+        const value = await server('call',{handle:binding.handle,generation:channel,requestId:d.id,operation,args});
+        if (!authorize()) throw coded('denied');
+        if (d.method === 'data.call') reply(value);
+        else reply(await window.WizAppState.call({appId:st.appId,sourceId:value.principal?.sourceId,namespace:value.namespace,quota:value.quota,authorize},d.method,d.args));
+      } else if (['ready','share.wizard','voice.transcribe'].includes(d.method)) {
+        await st.service?.(d,reply,authorize);
+      } else throw coded('not_allowed');
+    } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:code,retryable:['backend_failed','storage_unavailable','busy','timeout'].includes(code)}); }
+    finally { if (st.channel === channel) st.inflight--; }
+  }
   const api = Object.freeze({
     enabled: true,
     frameAttributes: () => 'sandbox="allow-scripts allow-forms allow-downloads" referrerpolicy="no-referrer"',

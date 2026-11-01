@@ -86,7 +86,11 @@
       // Do not revive synchronous legacy connect or child-document reads.
       if (!frame.matches?.('iframe[sandbox]') || frame.sandbox.contains('allow-same-origin') || frame.hasAttribute('srcdoc') || !within(new URL(frame.src), st.url)) return () => {};
       st.opaque = true; frames.set(frame, st);
-      const off = window.WizBrowserBoundary.attach(frame), load = () => reset(st);
+      const off = window.WizBrowserBoundary.attach(frame, {
+        appId: st.appId,
+        authorize: channel => opaqueValid(st,frame.contentWindow,channel),
+        service: (d,reply,authorize) => opaqueService(st,d,reply,authorize),
+      }), load = () => reset(st);
       frame.addEventListener('load', load);
       st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); off(); reset(st); };
       return st.detach;
@@ -480,16 +484,12 @@
   }
   // Only these methods exist under the boundary. All legacy/global/native RPCs
   // remain closed; app identity comes from shell registration, never the payload.
-  addEventListener('message', async e => {
-    const d = e.data;
-    if (!window.WizBrowserBoundary?.enabled || e.origin !== 'null' || !d || d.type !== 'wizard:boundary' || d.version !== VERSION || d.op !== 'service.request' || !['ready', 'share.wizard', 'voice.transcribe'].includes(d.method) || typeof d.id !== 'string' || !d.id || d.id.length > 96) return;
-    const st = from(e.source), authorize = () => opaqueValid(st, e.source, d.channel);
+  async function opaqueService(st, d, reply, authorize) {
     if (!authorize()) return;
     const key = d.channel + ':' + d.id;
     st.requests ||= new Set();
     if (st.requests.size >= 32 || st.requests.has(key)) return;
     st.requests.add(key);
-    const reply = (value, error) => { if (authorize()) e.source.postMessage({ type: 'wizard:boundary', version: VERSION, op: 'service.reply', channel: d.channel, id: d.id, value, error }, '*'); };
     const hold = uid();
     st.holds.set(hold, d.method === 'share.wizard' ? 'Share to Wizard' : 'App transcription'); changed();
     try {
@@ -506,7 +506,7 @@
       reply(value);
     } catch (err) { reply(null, { code: ['rate_limited', 'too_large', 'denied', 'invalid_request'].includes(err.code) ? err.code : 'failed', message: String(err.message || err).slice(0, 200) }); }
     finally { st.requests.delete(key); st.holds.delete(hold); changed(); }
-  });
+  }
   addEventListener('message', async e => {
     const d = e.data; if (!d || d.type !== 'wizard:app:request' || d.version !== VERSION || !OPS.has(d.op) || typeof d.id !== 'string' || d.id.length > 96) return;
     const st = from(e.source); if (!st || e.origin !== ORIGIN || !valid(st, st.doc)) return;

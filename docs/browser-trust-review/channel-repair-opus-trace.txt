@@ -1,0 +1,14 @@
+**PASS.** I found no blocker in this one-line delta. I reviewed only the diff and the trace-writer shape you described; I didn't run anything or open any other code.
+
+**What the fix gets right**
+- **It now reads a real field.** The old guard tested `r.url`, which the writer never sets. Every regex test therefore got `undefined`, which becomes the string `"undefined"` and never matches. The old guard could never fail.
+- **The regex is applied to the right thing.** `r.path` comes from `new URL(...).pathname`, so it has no query string or origin, and the anchored `/\/runs(?:[/?]|$)/` is enough. It matches `/wizard/hermes/v1/runs`, `/runs/` and `/runs/<id>`. It does not match `/reruns` or `/runsfoo`.
+- **The shape checks close the "vacuously true" hole.** `length>0` means an empty or unwired trace now fails the check instead of passing it. Checking that `path` is a string and `status` is an integer means a future rename of either field fails loudly, which is the same bug class that made the old line dead.
+- **The intentional 403 still passes.** The hostile no-cors POST gets `statusCode` 403. Since `403<400` is false, it isn't flagged, so the check proves a rejection, not that nothing was ever attempted. That matches the intent you stated.
+- **The method comparison is safe.** Fetch normalizes `post` to `POST`, and Node passes `request.method` through, so a lowercase method can't slip past the strict `==='POST'`.
+- **No name clash.** `r.path` is a property lookup, so it doesn't shadow the `path` module used by `path.join` nearby.
+
+**Limits that stay the same (none block this delta)**
+1. **Requests still in flight at check time aren't seen.** Entries are added on `response.on('finish')`. A request that is still open when the check runs, or that was aborted before `finish` fired, never appears in the trace. The main `context` is closed after the check, so this window exists in principle. It's harmless as long as the fixture answers `/runs` synchronously.
+2. **Percent-encoded paths aren't decoded.** `pathname` leaves something like `/v1/%72uns` encoded, so it would get past the regex. That only matters if the fixture's router decodes before routing. If it routes on the raw pathname, that request just gets a 404 and nothing is missed.
+3. **Only the fixture server is covered.** The check only sees traffic that reached `httpFixture`, and only `POST`. That's the scope you described, and this delta doesn't change it.

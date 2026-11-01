@@ -2,7 +2,7 @@
 
 **Appearance:** [Wizard app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). Inventory.
 
-**One implementation per capability.** NEW: `web/core/` + row, never an app.
+**One implementation per capability.** NEW: `web/core/` + row.
 
 CI: [reuse gate](app-reuse-gate.md).
 
@@ -19,6 +19,8 @@ Reuse:
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
+| Typed opaque data (default-off prototype) | `WizardApp.data.call`, `browser-boundary.js` port | owner-fetch | forged/replay/revoked |
+| Local state (default-off prototype) | NEW `WizAppState` (`core/app-state.js`), `WizardApp.state` | sync storage | CAS/reload/rollback |
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own chat UI/retries | shell `[data-chats]`; 503: one outbox item/message |
 | Home-screen identity + app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | manifest wins; frames untouched |
@@ -96,9 +98,9 @@ Reuse:
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
 | Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
-| Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
+| Tour/help; phone/desktop steps, Done/skip/exit | `WosTour` (`web/core/tour.js`); desktop `WosTour.desk` | — |
 | Install prompt (banner; `hold(on, owner?)` while a tour or overlay owns the top controls) | `WizardPwaInstall` (`web/pwa-install.js`) | a second `beforeinstallprompt` listener |
-| First run (Welcome: name, AI, colour, hello; Setup app) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) | shell-specific first-run checks, a second tour launcher |
+| First run and Setup/tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`) | duplicate first-run/tour |
 
 ## App voice/audio
 
@@ -114,6 +116,6 @@ Default-off: `WizBrowserBoundary`, `WizBoundaryClient` ([contract](browser-bound
 
 `WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`, items), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`, rig).
 
-AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; an unknown cap or spend shows as text, never zero or unlimited (`tests/claude-extra-usage.test.mjs`).
+AI usage: EXTEND `WosResources`/`WosUsage`; unknown cap/spend is text, never zero/unlimited (`tests/claude-extra-usage.test.mjs`).
 
-Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
+Devices: `WizPhoneConnect`, #677/#648; shared kit. Setup/Mac reuse; tinted action, step-2 check/Show again, Done.

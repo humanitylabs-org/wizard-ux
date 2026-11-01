@@ -1,0 +1,15 @@
+{
+  "id": "fixture-drafts",
+  "synthetic": true,
+  "browser_contract": {
+    "version": 1,
+    "isolation": "opaque",
+    "operations": [
+      "state.local"
+    ],
+    "state": {
+      "schema_version": 1,
+      "persistent_bytes": 5242880
+    }
+  }
+}

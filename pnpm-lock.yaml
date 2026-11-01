@@ -6,4 +6,18 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      fake-indexeddb:
+        specifier: 6.2.4
+        version: 6.2.4
+
+packages:
+
+  fake-indexeddb@6.2.4:
+    resolution: {integrity: sha512-INKeIKEtSViN4yVtEWEUqbsqmaIy7Ls+MfU0yxQVXg67pOJ/sH1ZxcVrP8XrKULUFohcPD9gnmym+qBfEybACw==}
+    engines: {node: '>=18'}
+
+snapshots:
+
+  fake-indexeddb@6.2.4: {}

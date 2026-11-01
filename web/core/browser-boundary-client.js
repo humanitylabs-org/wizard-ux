@@ -3,32 +3,39 @@
 (() => {
   'use strict';
   if (parent === window || globalThis.origin !== 'null') return;
-  let channel = '', back = null, applyTheme = null;
+  let channel = '', port = null, connected = false, back = null, applyTheme = null;
   const seals = new Map(), requests = new Map();
   let serial = 0;
-  const error = (code, message) => Object.assign(new Error(message), { code });
+  const error = (code, message, retryable = false) => Object.assign(new Error(message), { code, retryable });
   function cancelRequests() {
     for (const wait of requests.values()) { clearTimeout(wait.timer); wait.reject(error('denied', 'App document changed')); }
     requests.clear();
   }
-  const send = data => parent.postMessage({ type: 'wizard:boundary', version: 1, channel, ...data }, location.origin);
+  const send = data => port?.postMessage({ type: 'wizard:boundary', version: 1, channel, ...data });
   function release(id) { const s = seals.get(id); if (s) { s.el.removeEventListener('input', s.changed); seals.delete(id); } }
-  function clear() { for (const id of seals.keys()) release(id); cancelRequests(); }
-  addEventListener('pagehide', () => { clear(); channel = ''; });
+  function clear() { connected=false; for (const id of seals.keys()) release(id); cancelRequests(); }
+  addEventListener('pagehide', () => { clear(); port?.close(); port=null; channel = ''; });
   function editable(el) {
     return el?.isConnected && el.matches('textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input:not([type])') && !el.disabled && !el.readOnly && !el.closest('[inert],[data-no-dictation]') && typeof el.selectionStart === 'number';
   }
   addEventListener('message', e => {
     const d = e.data;
     if (e.source !== parent || e.origin !== location.origin || !d || d.type !== 'wizard:boundary' || d.version !== 1) return;
-    if (d.op === 'hello' && typeof d.channel === 'string' && d.channel.length <= 80) {
-      clear(); channel = d.channel; send({ op: 'ready' }); return;
-    }
-    if (!channel || d.channel !== channel) return;
+    if (d.op !== 'hello' || typeof d.channel !== 'string' || d.channel.length > 80) return;
+    clear(); port?.close(); channel = d.channel;
+    const ports = new MessageChannel(); port = ports.port1;
+    port.onmessage = event => receive(event.data); port.start();
+    parent.postMessage({type:'wizard:boundary',version:1,channel,op:'ready',portRole:'document'},location.origin,[ports.port2]);
+  });
+  function receive(d) {
+    if (!d || d.type !== 'wizard:boundary' || d.version !== 1 || !channel || d.channel !== channel) return;
+    if (d.op === 'challenge' && typeof d.nonce === 'string') { send({op:'challenge.reply',nonce:d.nonce}); return; }
+    if (d.op === 'connected') { connected=true; dispatchEvent(new Event('wizard:boundary:connected')); return; }
+    if (!connected) return;
     if (d.op === 'service.reply') {
       const wait = requests.get(d.id); if (!wait) return;
       clearTimeout(wait.timer); requests.delete(d.id);
-      if (d.error) wait.reject(error(d.error.code || 'failed', d.error.message || 'App request failed')); else wait.resolve(d.value);
+      if (d.error) wait.reject(error(d.error.code || 'failed', d.error.message || 'App request failed', d.error.retryable === true)); else wait.resolve(d.value);
       return;
     }
     const reply = (status, extra = {}) => send({ op: 'reply', id: d.id, status, ...extra });
@@ -55,12 +62,12 @@
       s.el.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: d.text }));
       return reply('inserted');
     }
-  });
+  }
   window.WizBoundaryClient = Object.freeze({
     connect({ onBack, onTheme }) { back = onBack; applyTheme = onTheme; },
-    get ready() { return !!channel; },
+    get ready() { return connected; },
     request(method, args, timeout = 15000) {
-      if (!channel || !['ready', 'share.wizard', 'voice.transcribe'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
+      if (!connected || !['ready', 'share.wizard', 'voice.transcribe', 'data.call', 'state.read', 'state.write', 'state.transaction'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
       if (requests.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
       const id = 'wbs-' + (++serial);
       return new Promise((resolve, reject) => {

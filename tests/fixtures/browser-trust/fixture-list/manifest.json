@@ -1,0 +1,15 @@
+{
+  "id": "fixture-list",
+  "synthetic": true,
+  "browser_contract": {
+    "version": 1,
+    "isolation": "opaque",
+    "operations": [
+      "fixture.notifications.list"
+    ],
+    "state": {
+      "schema_version": 1,
+      "persistent_bytes": 0
+    }
+  }
+}

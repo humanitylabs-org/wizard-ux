@@ -1,0 +1,7 @@
+/* Canonical roles; shared kit supplies dark standalone defaults. */
+html, body { min-height: 100%; }
+body { background: var(--wz-base); color: var(--wz-text); }
+html[data-wz-hosted] body { background: transparent; }
+main { padding: var(--wz-space-6, 24px); }
+textarea { display: block; width: 100%; box-sizing: border-box; margin-block: var(--wz-space-4, 16px); background: var(--wz-panel); color: var(--wz-text); border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px); font: inherit; padding: var(--wz-space-4, 16px); }
+#status { background: var(--wz-panel); color: var(--wz-text); padding: var(--wz-space-3, 12px); }

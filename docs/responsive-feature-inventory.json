@@ -56,6 +56,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-state.js": {
+      "loadedBy": [],
+      "note": "Default-off navigation bootstrap for both shells, before browser-boundary.js; not a UI mount"
+    },
     "core/app-versions.js": {
       "loadedBy": [
         "phone",

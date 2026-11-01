@@ -1,0 +1,68 @@
+# Browser-trust test/harness repair review (diff only)
+
+**Verdict: two blockers, then PASS within the scope below.** I reviewed only the diff you supplied. I ran nothing and read no other files, so `browser-boundary.js`, `app-services.js`, the client SDK and the rest of the harness are known only through what the diff shows. No unit or browser suite has been run in this review, and none is claimed.
+
+## Blockers
+
+### B1. The share flow does not wait for the denied sheet to close
+**Where:** `tools/qa-browser-adapters.cjs` ~205–209.
+
+The test denies the programmatic Send, waits for `qaShareResult==='denied'`, and then starts a second share straight away. It then calls `page.locator('.wz-share [data-sharesend]').waitFor()` and `.click()`.
+
+Both of those calls are strict. If the denied sheet is still in the DOM while it closes, or if denial leaves it open, the locator finds two elements. That either fails as a strict-mode violation or clicks the stale sheet's button. You already wait for the sheet to detach after the trusted send at ~211, but not after the denial.
+
+**Fix:** after ~207, add:
+```js
+await page.locator('.wz-share').waitFor({state:'detached'});
+```
+Do the same before the third share if the cancel path can follow a pending close.
+
+### B2. The shell-side test no longer sends an exact, correctly-sourced window request
+**Where:** `tests/browser-boundary-services.test.mjs` ~78–83.
+
+The old final `f.catalog.length=0; await f.emit(d)` was the only case that sent a window `service.request` with the correct source, the `'null'` origin and the current channel. It has been replaced by a request over the port. The remaining window cases each differ in one way (wrong source, wrong origin, `channel:'old'`, or the legacy type), so they would pass even if the shell still served a correct window request.
+
+"The window path is dead once the port exists" is the core property of this design, and the shell side of it is now untested. The client-side `c.deliver(fake)` case at ~159 covers only replies.
+
+**Fix:** keep the catalog intact and, before `f.catalog.length=0`, add:
+```js
+await f.emit(d); await quiet();
+```
+The existing `upstream.length===0` assertion then covers it. While there, also post `{...d,channel:'old',id:'wbs-98'}` over the authenticated port, so a stale generation on a live port is checked too.
+
+## Likely browser-harness failures to rule out before the forum run
+
+1. **Transcription budget used up mid-run** (~194–203). The block expects exactly 10 admitted calls for `fixture-app`, and the 11th to be `rate_limited`.
+   - If the earlier hostile `probe()` had any transcription admitted, an `await` inside the loop at ~198 rejects early.
+   - Any later step that needs a successful `fixture-app` transcription within ten minutes will now get `rate_limited`.
+   - **Fix:** assert that the budget is unused before the block, and either move the block to the end or give it its own app id.
+2. **`chats.sendChat` may not be intercepted** (~190–192). The patch only works if the share sheet looks up `(__wos||__wux).chats.sendChat` at call time. If it captured the function earlier, a real send reaches the token-gated service and the `shares.length===1` check fails. If neither global exists, the code throws a TypeError. **Fix:** assert that the global exists, then assert after the first send that the patch was the path actually taken.
+3. **`waitForURL` is stricter than the selector** (`tools/qa-browser-frame.cjs:10`). The selector matches `src*=pathname`, but the URL check is `url.pathname === pathname`. If the app loads at `…/index.html`, under a prefix, or after a `pushState`, the check waits the full 30 s default timeout. **Fix:** use `url.pathname.endsWith(pathname)`, or match the old `includes` behaviour.
+4. **`settled()` checks the wrong document** (~104, used at ~266 and ~282).
+   - It only checks the shell document's animations, not the fixture iframe's, so the iframe can still be mid-transition when the screenshot is taken. The old 600 ms sleep covered both.
+   - A paused finite animation never reaches `finished`, so the check would wait until it times out.
+   - **Fix:** treat `playState==='paused'` as settled, give it an explicit timeout, and run it on both `page` and `list`/`drafts`.
+5. **Dark mode for the whole context** (~112). `colorScheme:'dark'` changes every earlier check and all four in-shell screenshots, not just the standalone fallback check. **Fix:** use a separate dark context for `fixture-standalone-dark` only, unless dark is meant to be the baseline for all of them.
+6. **The outside-tap target is ambiguous** (~213). `[data-dvclose]` with `.first()` clicked at (5,5) only tests an outside tap if the first match is the backdrop. If it is a close button, the "outside sheet tap" check is mislabelled.
+7. **Staging needs the new helper.** The adapter now loads `./qa-browser-frame.cjs` from its own folder. That is correct for baseline runs where `QA_UX_ROOT` is an older tree. Confirm the forum job copies the helper next to the adapter.
+8. **Minor:** the `[qa-canvas]` lines use `console.error`. If any check fails on frame console errors, switch them to `console.info`.
+
+## Unit-test notes (not blocking)
+
+- **Nonce test** (~197–210). It asserts that a correct reply still succeeds after a wrong guess on the same port, so it locks in a permissive behaviour. A failed challenge should close that attempt. If production already does that, this test will time out, so check which behaviour you want.
+- **One-second polling timeout.** `until()` gives up after 1000 ms. The ten held `pending` requests in the budget test can hit that on a slow CI machine and surface as unhandled rejections before `Promise.all` is attached.
+- **Cloning the audio.** Real port cloning of Node `Blob` is fine. If the SDK turns the Blob into a `File`, cloning a `File` depends on the Node version. Check this on the CI Node version.
+
+## Wording in `PROTOTYPE-FINDINGS.md` (~43)
+
+- The text says both "no product handler changes were needed" and that unsupported operations "now explicitly return `not_allowed`". State that this behaviour was already in `079a7c91` and that only the transport fixture changed.
+- `tests/browser-harness-frame.test.mjs` is a mocked call-order test, not a reproduction of the race. Its "old path returns undefined" assertion is tautological, because the mock's `frames()` is hard-coded to `[]`. Say it is a regression guard for the new helper.
+
+## PASS scope (after B1 and B2)
+
+- **Race-fix diagnosis and fix: correct.** Resolving the iframe's own browsing context before waiting for its URL removes the `about:blank` race in `page.frames().find`, and Playwright keeps the same frame object when an out-of-process iframe swaps processes.
+- **Unit transport repair: sound.** It uses real MessageChannels, `wbs-*` ids, an echoed challenge, admission checks, and polling that captures late replies (reading after `quiet()` would catch a suppressed reply that leaked through).
+- **Client-side checks: correct.** Exact-looking window replies are ignored, a reload or new hello revokes pending calls, and `pagehide` revokes and resets readiness.
+- **Lifecycle telemetry and the five-screenshot check:** fine.
+- **Share and transcription sinks:** the right set of cases (oversized, ten-call budget, programmatic Send denied, one trusted send, outside cancel), subject to the risks above.
+- **Not proven:** that any unit or browser test passes, how the production handlers behave beyond what the tests assert, and the cause of the original canvas target-closed failure. The findings doc already says that cause is unproven.

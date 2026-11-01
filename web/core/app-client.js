@@ -422,6 +422,8 @@
       onCompanionMessage: fn => listen(companionMessages, fn),
     }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
+    data: Object.freeze({ call: requestData => window.WizBoundaryClient ? request('data.call', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
+    state: Object.freeze(Object.fromEntries(['read','write','transaction'].map(method => [method, args => window.WizBoundaryClient ? request('state.'+method,args) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'}))]))),
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
     nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
@@ -486,5 +488,6 @@
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
   window.WizBoundaryClient?.connect({ onBack: back, onTheme: applyTheme });
+  addEventListener('wizard:boundary:connected', () => ready());
   ready();
 })();

@@ -11,4 +11,4 @@ add_header X-Content-Type-Options "nosniff" always;
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header Permissions-Policy "camera=(), geolocation=(), microphone=(self), payment=(), usb=()" always;
 sub_filter_once on;
-sub_filter '<head>' '<head><meta name="wizard-shell-token" content="${WIZARD_SHELL_TOKEN}"><script src="core/browser-boundary.js"></script>';
+sub_filter '<head>' '<head><meta name="wizard-shell-token" content="${WIZARD_SHELL_TOKEN}"><script src="core/app-state.js"></script><script src="core/browser-boundary.js"></script>';

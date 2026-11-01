@@ -1,0 +1,33 @@
+## Verdict: PASS for the test-only synthetic scope
+
+I found no correctness blockers that are concrete and show up in the diff itself. All five previous blockers are fixed: the denied sheet detaches, `wbs-97` and `wbs-98` are covered, animations settle frame by frame, there's a separate dark context and an explicit backdrop click. I also checked these and they hold up:
+
+- **Hostile-transport test:** `wbs-97` is an exact, well-sourced window request, so it isolates "window requests are ignored". `wbs-98` sends a stale channel on an authenticated port. `wbs-99` sends an unregistered app on a valid port. The opaque-transcription and unsupported-op tests act as positive controls, because `.error.code` throws on `undefined`. So silently dropping every port message can't make this pass.
+- **Fixture helpers:** `request()` exits when either a reply arrives or `admits()` goes false, so the detached-frame and navigation cases return `undefined` honestly rather than by timeout. The 5 s `until` bound is well above the slowest path in the budget test.
+- **Forged-reply test:** a delivered `fake` (correct source, origin and channel) plus `settled === false` after a quiet period now proves that window replies are ignored. Triggering the new hello through `loads.load()` is the right simulation.
+- **`appFrame`:** it resolves `contentFrame()` from the element and then runs `waitForURL` on the path. The fixture paths are exact, so comparing `pathname` is correct. The unit test pins the call order. Playwright is imported only through `qa-playwright.cjs`.
+- **SDK block, budget accounting:** first call, oversized call (no budget), nine more, then `rate_limited` adds up to exactly 10 upstream calls. The guard on existing holds protects that count from earlier phases, and the hostile probe uses only old window requests.
+- **SDK block, sheet behaviour:** given the real implementation you describe (synchronous remove, `isTrusted` rejected before delivery, `sendChat` looked up dynamically), the stubs are actually reached. Denied → detached → trusted Send → `sent` → detached → backdrop → `cancelled` follows the real lifecycle. A wrong `sid` or text assumption fails loudly; it can't pass falsely.
+
+## Hardening I'd make (non-blocking, each is one line)
+
+1. **The run-POST check could pass vacuously.** `r.status<400` is false when `status` is `undefined`, for example an aborted or in-flight request or a differently named field. Then a POST to `/runs` would slip through. `sendChat` is stubbed, so any POST to `/runs` at all means the stub was bypassed. A stronger version:
+   ```js
+   check(report.serviceTrace.length>0 && !report.serviceTrace.some(r=>r.method==='POST' && /\/runs(?:[/?]|$)/.test(r.url)),'browser proof never attempts an owner run');
+   ```
+   It also matters whether run traffic actually goes through the service that writes `serviceTrace`, rather than the Hermes fixture. If it doesn't, this check proves nothing.
+2. **The nonce test doesn't catch a queued pre-auth request.** `wbs-1` is sent before the challenge is answered, but upstream is only checked before the correct reply. If the boundary queued that request and replayed it after `connected`, the test would still pass. Add `await quiet(); assert.equal(f.upstream.length,0);` at the end. Separately, the test currently requires that a correct reply after a wrong guess still connects. That is fine today, but it would break a future fail-closed hardening, so it's worth a comment.
+3. **The screenshot count counts paths, not distinct files.** Use `new Set(...).size===5`. If a skin loop ever runs twice, the current check fails for the wrong reason.
+4. **Small fixes:**
+   - Check that `WizConfig.transcribe` and `chats.sendChat` really equal the stubs after you assign them, in case either object is frozen.
+   - Reset `report.phase` after the opacity loop so later lifecycle events aren't tagged `list-opacity-sepia`.
+   - Wait for the sheet to detach after `cancelled` too, so the three paths match.
+
+## Assumptions to confirm in the fixture source (not visible in the diff)
+
+- The standalone check needs the computed `colorScheme` to equal `'dark'`. A fixture that declares `color-scheme: light dark` computes to `'light dark'` and fails even in the dark context.
+- The default target in the share sheet must be `'__new__'`.
+
+Both would fail loudly, not pass falsely.
+
+I ran nothing. These are static findings, and none of the browser acceptance checks are claimed as passed. The findings doc already marks them as staged until the run on forum returns.

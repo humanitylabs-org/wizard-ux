@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
 import {webcrypto} from 'node:crypto';
+import {MessageChannel} from 'node:worker_threads';
+// Real ports exercise structured cloning and asynchronous delivery; only DOM
+// and upstream resources are synthetic. Close every port after each test.
+const ports = new Set();
+test.afterEach(() => { for (const p of ports) p.close(); ports.clear(); });
+function channelPair() {
+  const c = new MessageChannel(); ports.add(c.port1); ports.add(c.port2); return c;
+}
+const until = async predicate => {
+  const end = Date.now() + 5000;
+  while (!predicate()) { assert.ok(Date.now() < end, 'message transport did not settle'); await new Promise(r => setTimeout(r, 1)); }
+};
+const quiet = () => new Promise(r => setTimeout(r, 20));
 const read = name => fs.readFileSync(new URL('../web/core/' + name, import.meta.url), 'utf8');
 function fixture() {
   const events = new Map(), replies = [], upstream = [], sheets = [], loads = new Map();
@@ -25,15 +38,31 @@ function fixture() {
   vm.runInNewContext(read('app-services.js'),ctx);
   const detach=ctx.WizAppServices.attach(frame,{appId:'fixture',path:'/fixture/'});
   const channel=()=>replies.findLast(x=>x.data.op==='hello')?.data.channel;
-  const emit=async(data,source=frame.contentWindow,origin='null')=>{for(const fn of events.get('message')||[])await fn({data,source,origin});};
-  const ready=()=>emit({type:'wizard:boundary',version:1,op:'ready',channel:channel()});
-  let serial=0;
-  const request=async(method,args={},extra={})=>{
-    const id='rpc-'+ ++serial;
-    await emit({type:'wizard:boundary',version:1,op:'service.request',channel:channel(),id,method,args,...extra});
-    return replies.findLast(x=>x.data.op==='service.reply'&&x.data.id===id)?.data;
+  const emit=async(data,source=frame.contentWindow,origin='null',ports=[])=>{for(const fn of events.get('message')||[])await fn({data,source,origin,ports});};
+  const documents = new Map();
+  const ready=async(target=frame)=>{
+    const generation=channel(), pair=channelPair(), st={port:pair.port1,connected:false,channel:generation};
+    documents.set(target,st);
+    st.port.onmessage=({data})=>{
+      replies.push({data,port:true});
+      if(data.op==='challenge') st.port.postMessage({...data,op:'challenge.reply'});
+      if(data.op==='connected') st.connected=true;
+    };
+    st.port.start();
+    await emit({type:'wizard:boundary',version:1,op:'ready',portRole:'document',channel:generation},target.contentWindow,'null',[pair.port2]);
+    await until(()=>st.connected);
+    assert.equal(ctx.WizBrowserBoundary.admits(target,target.contentWindow,generation),true);
   };
-  return {ctx,frame,loads,detach,ready,request,emit,channel,replies,upstream,sheets,catalog};
+  let serial=0;
+  const request=async(method,args={},extra={},target=frame)=>{
+    const id='wbs-'+ ++serial, st=documents.get(target);
+    st.port.postMessage({type:'wizard:boundary',version:1,op:'service.request',channel:st.channel,id,method,args,...extra});
+    const reply=()=>replies.findLast(x=>x.data.op==='service.reply'&&x.data.id===id)?.data;
+    await until(()=>reply() || !ctx.WizBrowserBoundary.admits(target,target.contentWindow,st.channel));
+    await quiet();
+    return reply();
+  };
+  return {ctx,frame,loads,detach,ready,request,emit,channel,replies,upstream,sheets,catalog,documents};
 }
 const audio=()=>new Blob(['synthetic audio'],{type:'audio/ogg'});
 test('opaque registered source can transcribe without any child DOM access',async()=>{
@@ -49,7 +78,10 @@ test('forged windows, wrong origin/channel, unregistered apps and legacy transpo
   await f.emit(d,{});await f.emit(d,f.frame.contentWindow,'https://box.example.test');
   await f.emit({...d,channel:'old'});
   await f.emit({type:'wizard:app:request',version:1,id:'legacy',op:'voice.transcribe',args:d.args});
-  f.catalog.length=0;await f.emit(d);
+  await f.emit({...d,id:'wbs-97'});
+  f.documents.get(f.frame).port.postMessage({...d,channel:'old',id:'wbs-98'});await quiet();
+  f.catalog.length=0;
+  f.documents.get(f.frame).port.postMessage({...d,id:'wbs-99'});await quiet();
   assert.equal(f.upstream.length,0);assert.equal(f.sheets.length,0);
 });
 test('ten calls per app share one budget across reload and reattach; eleventh never goes upstream',async()=>{
@@ -80,31 +112,38 @@ test('detached and stale frames cannot share or transcribe or receive asynchrono
   assert.equal(f.upstream.length,0);assert.equal(f.sheets.length,0);
   const g=fixture();await g.ready();let resolve;
   g.ctx.WizConfig.ready=new Promise(r=>resolve=r);
-  const p=g.request('voice.transcribe',{file:audio()});await Promise.resolve();g.loads.get('load')();resolve();
+  const p=g.request('voice.transcribe',{file:audio()});await until(()=>g.ctx.WizAppServices.inspect()[0].holds.length===1);g.loads.get('load')();resolve();
   assert.equal(await p,undefined);assert.equal(g.upstream.length,0);
 });
 test('unsupported capabilities never expose generic fetch/native/install through the boundary',async()=>{
   const f=fixture();await f.ready();
-  for(const op of ['fetch','native','install','share.text','capture.pending'])assert.equal(await f.request(op,{}),undefined);
+  for(const op of ['fetch','native','install','share.text','capture.pending'])assert.equal((await f.request(op,{})).error.code,'not_allowed');
   assert.equal(f.upstream.length,0);
 });
 function client(f) {
   const events=new Map(), outgoing=[];
-  const parent={postMessage(data){outgoing.push(data);queueMicrotask(()=>f.emit(data));}};
+  const parent={postMessage(data,target,ports=[]){outgoing.push(data);queueMicrotask(()=>f.emit(data,f.frame.contentWindow,'null',ports));}};
+  class ClientChannel {
+    constructor() {
+      const c=channelPair();this.port1=c.port1;this.port2=c.port2;
+      const post=c.port1.postMessage.bind(c.port1);
+      c.port1.postMessage=data=>{outgoing.push(data);post(data);};
+    }
+  }
   const document={createElement:()=>({}),head:{appendChild(){}},addEventListener(){}};
   const ctx={parent,document,location:new URL('https://box.example.test/fixture/'),origin:'null',
     history:{pushState(){},replaceState(){}},setTimeout,clearTimeout,URL,Blob,File,crypto:webcrypto,
-    navigator:{},console,addEventListener(n,fn){if(!events.has(n))events.set(n,[]);events.get(n).push(fn);},dispatchEvent(){},CustomEvent:class{}};
+    navigator:{},console,Event,MessageChannel:ClientChannel,addEventListener(n,fn){if(!events.has(n))events.set(n,[]);events.get(n).push(fn);},dispatchEvent(){},CustomEvent:class{}};
   ctx.window=ctx;
   const deliver=(data,source=parent,origin='https://box.example.test')=>{for(const fn of events.get('message')||[])fn({data,source,origin});};
   f.frame.contentWindow.postMessage=data=>{f.replies.push({data,target:'*'});queueMicrotask(()=>deliver(data));};
   vm.runInNewContext(read('browser-boundary-client.js'),ctx);
   vm.runInNewContext(read('app-client.js'),ctx);
   deliver({type:'wizard:boundary',version:1,op:'hello',channel:f.channel()});
-  return {ctx,deliver,outgoing,pagehide:()=>events.get('pagehide').forEach(fn=>fn())};
+  return {ctx,deliver,outgoing,ready:()=>until(()=>ctx.WizBoundaryClient.ready),pagehide:()=>events.get('pagehide').forEach(fn=>fn())};
 }
 test('actual WizardApp facade routes opaque share and transcribe through the channel and preserves structured errors',async()=>{
-  const f=fixture(),c=client(f);await f.ready();
+  const f=fixture(),c=client(f);await c.ready();
   assert.equal((await c.ctx.WizardApp.voice.transcribe(audio())).text,'fixture words');
   assert.equal(await c.ctx.WizardApp.share.wizard({text:'synthetic'}),'denied');
   await assert.rejects(c.ctx.WizardApp.voice.transcribe(new Blob([new Uint8Array(25*1024*1024+1)])),e=>e.code==='too_large');
@@ -115,13 +154,14 @@ test('actual WizardApp facade routes opaque share and transcribe through the cha
   assert.ok(c.outgoing.some(d=>d.op==='service.request'&&d.method==='voice.transcribe'));
 });
 test('opaque client rejects forged replies and revokes all pending calls on new hello/pagehide',async()=>{
-  const f=fixture(),c=client(f);await f.ready();
+  const f=fixture(),c=client(f);await c.ready();
   f.ctx.WizConfig.ready=new Promise(()=>{});
   const p=c.ctx.WizBoundaryClient.request('voice.transcribe',{file:audio()});
   const req=c.outgoing.at(-1),fake={type:'wizard:boundary',version:1,op:'service.reply',channel:f.channel(),id:req.id,value:{text:'forged'}};
-  c.deliver(fake,{});c.deliver({...fake,channel:'old'});c.deliver(fake,undefined,'https://foreign.example');
+  c.deliver(fake,{});c.deliver({...fake,channel:'old'});c.deliver(fake,undefined,'https://foreign.example');c.deliver(fake);
+  let settled=false;p.then(()=>settled=true,()=>settled=true);await quiet();assert.equal(settled,false);
   const rejected=assert.rejects(p,e=>e.code==='denied');
-  c.deliver({type:'wizard:boundary',version:1,op:'hello',channel:'replacement'});await rejected;
+  f.loads.get('load')();await rejected;await c.ready();
   const q=c.ctx.WizBoundaryClient.request('share.wizard',{text:'synthetic'}),gone=assert.rejects(q,e=>e.code==='denied');c.pagehide();await gone;
   assert.equal(c.ctx.WizBoundaryClient.ready,false);
   await assert.rejects(c.ctx.WizBoundaryClient.request('fetch',{}),e=>e.code==='unavailable');
@@ -130,14 +170,14 @@ test('budget expires after ten minutes and simultaneous frames use the same app 
   const f=fixture();let now=1000;f.ctx.Date={now:()=>now};await f.ready();
   // Requests reserve slots synchronously before waiting for the transcriber.
   let release;f.ctx.WizConfig.ready=new Promise(r=>release=r);
-  const pending=Array.from({length:10},()=>f.request('voice.transcribe',{file:audio()}));
+  const pending=Promise.all(Array.from({length:10},()=>f.request('voice.transcribe',{file:audio()})));
   const firstChannel=f.channel();
   const second={...f.frame,contentWindow:{postMessage:data=>f.replies.push({data,target:'*'})}};
-  const off=f.ctx.WizAppServices.attach(second,{appId:'fixture',path:'/fixture/'}),channel=f.channel();
-  await f.emit({type:'wizard:boundary',version:1,op:'ready',channel},second.contentWindow);
-  await f.emit({type:'wizard:boundary',version:1,op:'service.request',id:'second',channel,method:'voice.transcribe',args:{file:audio(),appId:'spoofed'}},second.contentWindow);
-  assert.equal(f.replies.at(-1).data.error.code,'rate_limited');assert.equal(f.upstream.length,0);
-  release();await Promise.all(pending);assert.equal(f.upstream.length,10);off();
+  const off=f.ctx.WizAppServices.attach(second,{appId:'fixture',path:'/fixture/'});
+  await f.ready(second);
+  await until(()=>f.ctx.WizAppServices.inspect().find(s=>s.appId==='fixture').holds.length===10);
+  assert.equal((await f.request('voice.transcribe',{file:audio(),appId:'spoofed'},{},second)).error.code,'rate_limited');assert.equal(f.upstream.length,0);
+  release();await pending;await until(()=>f.upstream.length===10);off();
   now+=10*60*1000;
   assert.equal((await f.request('voice.transcribe',{file:audio()},{channel:firstChannel})).value.text,'fixture words');
   assert.equal(f.upstream.length,11);
@@ -156,10 +196,25 @@ test('phone and desktop boundary watchers register installed app services but ne
     frame._watched=false;ctx.W['fixture-win'].appId='link';invoke();assert.equal(calls[1][0],'boundary');
   }
 });
+test('services require a document port and the exact nonce response, not window ready or a guessed nonce',async()=>{
+  const f=fixture(),c=f.channel(),pair=channelPair(),incoming=[];
+  pair.port1.onmessage=({data})=>incoming.push(data);pair.port1.start();
+  const ready={type:'wizard:boundary',version:1,op:'ready',channel:c,portRole:'document'};
+  await f.emit(ready);assert.equal(f.ctx.WizBrowserBoundary.admits(f.frame,f.frame.contentWindow,c),false);
+  await f.emit(ready,f.frame.contentWindow,'null',[pair.port2]);
+  await until(()=>incoming.some(d=>d.op==='challenge'));
+  const challenge=incoming.find(d=>d.op==='challenge');
+  pair.port1.postMessage({...challenge,op:'challenge.reply',nonce:'guessed'});
+  pair.port1.postMessage({type:'wizard:boundary',version:1,channel:c,op:'service.request',id:'wbs-1',method:'voice.transcribe',args:{file:audio()}});
+  await quiet();assert.equal(f.upstream.length,0);assert.equal(incoming.some(d=>d.op==='connected'),false);
+  pair.port1.postMessage({...challenge,op:'challenge.reply'});await until(()=>incoming.some(d=>d.op==='connected'));
+  assert.equal(f.ctx.WizBrowserBoundary.admits(f.frame,f.frame.contentWindow,c),true);
+  await quiet();assert.equal(f.upstream.length,0); // no pre-auth request may be queued for later admission
+});
 test('navigation after upstream starts suppresses its result to the replacement document',async()=>{
   const f=fixture();await f.ready();let finish;
   f.ctx.WizConfig.transcribe=()=>new Promise(r=>finish=r);
-  const p=f.request('voice.transcribe',{file:audio()});await new Promise(r=>setImmediate(r));
+  const p=f.request('voice.transcribe',{file:audio()});await until(()=>typeof finish==='function');
   f.loads.get('load')();finish({text:'old document words'});
   assert.equal(await p,undefined);
 });

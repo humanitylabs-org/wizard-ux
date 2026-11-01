@@ -1,0 +1,15 @@
+**PASS.** I found no concrete blocker in this diff. This was a static read only; I didn't run anything.
+
+Everything you listed checks out against the diff:
+- **Root path:** the scratch root comes from the manifest's `WIZARD_WORK_ROOT`, and only after the manifest's SHA is verified. The manifest path is resolved before the `is_relative_to` check. `evidence/`, `synthetic-home/` and `TMPDIR` must not exist yet, and `TMPDIR`'s parent must already exist.
+- **`/runs` check:** it fails only on POSTs with status below 400. The expected 403s from the hostile page still pass.
+- **Fixture budget:** the guard checks `boundary-fixture` for holds before the SDK proof starts. Transcription and share are swapped for synthetic stand-ins before the proof calls and restored afterwards. Both handlers are looked up at call time, which matches the unit-test pattern.
+- **Share proof:** a programmatic click is denied, a trusted click is delivered once with `sid==='__new__'`, and a tap outside the sheet cancels without a second delivery.
+- **`appFrame`:** it now resolves the iframe through `elementHandle().contentFrame()` and then waits for the URL, which fixes the race where the frame list still showed a blank page. The new unit test pins that order.
+- **Port and nonce:** the unit tests require a document port and the exact nonce reply, and confirm no request sent before admission runs later.
+
+Four points I can't confirm from the diff alone. None of them blocks:
+1. **Missing status on `/runs`:** if `serviceTrace` ever records a `/runs` POST with no `status` (an aborted request, or one logged before the response), `undefined < 400` is false and the check misses it. If that can happen, `!(r.status >= 400)` would be safer.
+2. **Trimming:** the stand-in returns `' synthetic spoken words '`, but the check expects the trimmed text. That only works if the service or client trims; if neither does, the run fails rather than letting a bug through.
+3. **`TMPDIR` location:** nothing requires `TMPDIR` to sit under `WIZARD_WORK_ROOT`. The manifest is SHA-bound, so this is the operator's choice rather than a hole.
+4. **Duplicate iframes:** `appFrame` takes the first iframe whose `src` matches. If an older window with the same path is still open, it returns that one. The old lookup had the same behaviour, so this isn't new.

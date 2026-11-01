@@ -10,7 +10,7 @@ function harness(secret = TOKEN) {
   const node = secret === null ? null : { content: secret, remove() { this.removed = true; } };
   const document = { querySelector: () => node, activeElement: null };
   const sandbox = { document, location: { origin: 'https://box.example.test', href: 'https://box.example.test/wizard-os-home/desktop.html' },
-    Request, Headers, URL, crypto: webcrypto, Map, Promise, Object, setTimeout: (fn, ms) => setTimeout(fn, ms === 1200 ? 20 : ms), clearTimeout,
+    Request, Headers, URL, TextEncoder, crypto: webcrypto, Map, Promise, Object, setTimeout: (fn, ms) => setTimeout(fn, ms === 1200 ? 20 : ms), clearTimeout,
     addEventListener: (name, fn) => events.set(name, fn), fetch: async request => { requests.push(request); return new Response('{}'); } };
   sandbox.window = sandbox; sandbox.parent = sandbox;
   vm.runInNewContext(source, sandbox);
@@ -20,7 +20,15 @@ function harness(secret = TOKEN) {
     getClientRects: () => [{}], closest: s => s === '.win' ? host : null,
     addEventListener: (name, fn) => frameEvents.set(name, fn), removeEventListener: name => frameEvents.delete(name),
     contentWindow: { postMessage: (data, origin) => messages.push({ data, origin }) } };
-  const reply = (data, origin = 'null', from = frame.contentWindow) => events.get('message')({ data: { type: 'wizard:boundary', version: 1, channel: messages.at(-1)?.data.channel, ...data }, origin, source: from });
+  let port;
+  const reply = (data, origin = 'null', from = frame.contentWindow) => {
+    const body={ type:'wizard:boundary',version:1,channel:messages.at(-1)?.data.channel,...data };
+    if (data.op === 'ready' && origin === 'null' && from === frame.contentWindow) {
+      port={start(){},close(){this.closed=true;},postMessage(d){messages.push({data:d,port:true});if(d.op==='challenge')this.onmessage({data:{type:'wizard:boundary',version:1,channel:d.channel,op:'challenge.reply',nonce:d.nonce}});}};
+      events.get('message')({data:{...body,portRole:'document'},origin,source:from,ports:[port]});
+    } else if (origin === 'null' && from === frame.contentWindow && port && !port.closed) port.onmessage({data:body});
+    else events.get('message')({data:body,origin,source:from,ports:[]});
+  };
   return { sandbox, node, frame, frameEvents, messages, requests, reply, document, classes };
 }
 
@@ -79,6 +87,25 @@ test('appearance marker requires acknowledgement of the current revision', () =>
   h.reply({ op: 'theme.applied', revision: 6 }); assert.equal(h.classes.has('wz-themed'), false);
   h.reply({ op: 'theme.applied', revision: 7 }); assert.equal(h.classes.has('wz-themed'), true);
   h.frameEvents.get('load')(); assert.equal(h.classes.has('wz-themed'), false);
+});
+test('adapter port rejects unknown, forged identity, replay and stale generation before disclosure', async () => {
+  const h=harness(), api=h.sandbox.WizBrowserBoundary;let granted=true;
+  api.attach(h.frame,{appId:'fixture-list',authorize:()=>granted});h.reply({op:'ready'});
+  const request=(id,method,args,extra={})=>h.reply({op:'service.request',id,method,args,...extra});
+  const settle=()=>new Promise(r=>setImmediate(r));
+  request('wbs-1','owner.fetch',{});await settle();assert.equal(h.messages.at(-1).data.error.code,'not_allowed');
+  request('wbs-1','owner.fetch',{});assert.equal(h.messages.at(-1).data.error.code,'replay');
+  request('wbs-2','data.call',{operation:'fixture.notifications.list',args:{limit:2},appId:'fixture-drafts'});await settle();assert.equal(h.messages.at(-1).data.error.code,'bad_request');
+  const count=h.messages.length, calls=h.requests.length;
+  request('wbs-3','data.call',{operation:'fixture.notifications.list',args:{limit:2}},{channel:'stale-generation'});await settle();assert.equal(h.messages.length,count);assert.equal(h.requests.length,calls);
+  granted=false;request('wbs-4','data.call',{operation:'fixture.notifications.list',args:{limit:2}});await settle();assert.equal(h.messages.length,count);
+});
+test('temporary binding creation failure can recover on same channel',async()=>{
+ const h=harness();h.sandbox.WizBrowserBoundary.attach(h.frame,{appId:'fixture-list',authorize:()=>true});h.reply({op:'ready'});
+ let attempts=0;h.sandbox.fetch=async()=>{if(++attempts===1)throw new Error('temporary');return new Response('{}');};
+ const send=id=>h.reply({op:'service.request',id,method:'data.call',args:{operation:'fixture.notifications.list',args:{limit:2}}});
+ send('wbs-1');await new Promise(r=>setImmediate(r));assert.equal(h.messages.at(-1).data.error.code,'backend_failed');
+ send('wbs-2');await new Promise(r=>setImmediate(r));assert.equal(attempts,3);assert.equal(h.messages.at(-1).data.error,undefined);
 });
 test('the shell has no same-origin, popup or top-navigation sandbox exception', () => {
   assert.equal(harness().sandbox.WizBrowserBoundary.frameAttributes(), 'sandbox="allow-scripts allow-forms allow-downloads" referrerpolicy="no-referrer"');
