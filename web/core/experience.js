@@ -92,15 +92,38 @@
   const explicitOff = id => recipeChoice(recipe(), id) === false || offFor(owner).includes(id) || globalOff(id);
   async function setOne(id, on) {
     if (globalIds().includes(id)) {
+      // Confirm the box write before changing the independent built-in off-switch.
+      if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
       const off = new Set(state.defaultsOff || []); on ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; Store.write(state);
-      if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
       return;
     }
     if (recipe()) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
     if (!owner || !set?.tweaks.includes(id)) return;
     const off = new Set(offFor(owner)); on ? off.delete(id) : off.add(id);
     state.off[owner] = [...off]; Store.write(state);
+  }
+  async function changeChoices(choices) {
+    const before = copy(state), own = recipe();
+    const previous = own && Object.fromEntries(Object.keys(choices).map(id => [id, enabled(id, own)]));
+    let saved = false;
+    try {
+      // One box write: All cannot stop halfway through a recipe.
+      if (own) {
+        await window.WosMySkin.update({ tweaks: choices }); saved = true;
+        const off = new Set(state.defaultsOff || []);
+        for (const [id, on] of Object.entries(choices)) if (globalIds().includes(id)) on ? off.delete(id) : off.add(id);
+        state.defaultsOff = [...off]; Store.write(state);
+      } else for (const [id, on] of Object.entries(choices)) await setOne(id, on);
+      await apply(); if (error) throw new Error(error);
+    } catch (e) {
+      state = before; Store.write(state);
+      let restoreError = '';
+      if (saved) try { await window.WosMySkin.update({ tweaks: previous }); } catch (restore) { restoreError = restore.message; }
+      await apply();
+      if (restoreError) throw new Error(`${e.message}. Could not restore the previous choices: ${restoreError}`);
+      throw e;
+    }
   }
   const profileReads = new Map();
   function profile(who) {
@@ -124,7 +147,9 @@
     const published = fam?.tweaks ? await profile(fam.tweaks) : null;
     return Object.fromEntries((await installed()).map(m => [m.id, globalIds().includes(m.id) || (!!published?.tweaks.includes(m.id) && !(published.off || []).includes(m.id))]));
   }
-  async function apply() {
+  let inFlight = null, targetOwner = null;
+  function apply() { targetOwner = wornOwner(); return (inFlight = applyOnce()); }
+  async function applyOnce() {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
       const who = wornOwner();
@@ -152,30 +177,29 @@
     async authors() {
       return (await Promise.all((catalog?.profiles || []).map(async id => {
         const p = await profile(id);
-        return { id, name: p.name || ({ wizard: 'James', miguel: 'Miguel', novaire: 'Novairecito' })[id] || id,
-          ids: experience.state.tweaks.filter(t => t.author === id && !t.builtin).map(t => t.id) };
+        return { id, name: id === 'wizard' ? 'Wizard' : p.name || ({ miguel: 'Miguel', novaire: 'Novairecito' })[id] || id,
+          ids: id === owner ? experience.state.tweaks.filter(t => !t.builtin).map(t => t.id) : [] };
       }))).filter(a => a.ids.length);
     },
     async chooseAuthor(who) {
       // Only the worn skin's offered tweaks; never turn on another skin's packages or release-wide defaults.
-      const mine = experience.state.tweaks.filter(t => t.author === who && !t.builtin);
+      const mine = who === owner ? experience.state.tweaks.filter(t => !t.builtin) : [];
       if (!mine.length) return;
       const on = !mine.every(t => t.on);
-      for (const t of mine) for (const id of groupOf(t.id) || [t.id]) await setOne(id, on);
-      return apply();
+      const ids = [...new Set(mine.flatMap(t => groupOf(t.id) || [t.id]))];
+      return changeChoices(Object.fromEntries(ids.map(id => [id, on])));
     },
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // Settings calls this after a skin pick; other skin changes arrive as `wos:skin`.
-    chooseSkin() { if (wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
+    chooseSkin() { if (busy && targetOwner === wornOwner()) return inFlight; if (wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
-      if (item.on) await setOne(id, false);
-      else for (const m of groupOf(id) || [id]) if (m === id || explicitOff(m)) await setOne(m, true);
-      return apply();
+      const choices = item.on ? { [id]: false } : Object.fromEntries((groupOf(id) || [id]).filter(m => m === id || explicitOff(m)).map(m => [m, true]));
+      return changeChoices(choices);
     },
   };
   window.WosExperience = experience;

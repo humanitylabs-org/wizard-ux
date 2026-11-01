@@ -294,7 +294,7 @@ test('seventh review: one switch per Home map group; desktop Ready leaves the op
   const exp = read('web/core/experience.js'), desk = read('web/desktop/desktop.js');
   assert.match(exp, /\.filter\(\(\[id\]\) => shownInGroup\(id\)\)/, 'Settings lists one switch per group');
   assert.match(exp, /on: groupOf\(id\) \? groupOn\(id\) : enabled\(id\)/, 'and it shows what actually loads');
-  assert.match(exp, /if \(item\.on\) await setOne\(id, false\);\n      else for \(const m of groupOf\(id\) \|\| \[id\]\) if \(m === id \|\| explicitOff\(m\)\) await setOne\(m, true\);/, 'one tap back on clears every member');
+  assert.match(exp, /const choices = item\.on \? \{ \[id\]: false \} : Object\.fromEntries\(\(groupOf\(id\) \|\| \[id\]\)\.filter\(m => m === id \|\| explicitOff\(m\)\)\.map\(m => \[m, true\]\)\);/, 'one tap back on clears every member');
   assert.match(desk, /if \(w\.thread\) \{ CHATS\.chatsBack\(w\); syncChatsPane\(w\.id\); \} CHATS\.setFilter\(w, ''\);/);
 });
 

@@ -68,7 +68,7 @@ Reuse:
 | Share to Wizard | `WizShareWizard` (`share-wizard.js`); Back guard `WizSheetBack` (`sheetback.js`) | one opaque sheet; `share.wizard`; `durable`; own double-Back timer |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
-| Settings in both shells | `WosSettings.register` (`settings.js`; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
+| Settings, immediate Appearance receipt | `WosSettings.register/focus`, `settings.js` `lookAction`: busy → paint → reconcile; `hasSystem`, `WosFeatures` | shell-only pages, delayed tap paint |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |

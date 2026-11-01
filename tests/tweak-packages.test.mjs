@@ -322,10 +322,12 @@ test('Show pin buttons stays off for a device that saved tweak choices before it
   f = wizardExperience(saved); await f.E.refresh(); assert.ok(f.all().includes('wizard/pin-buttons'), 'the migration runs once');
 });
 
-test('Settings › Look: tweaks grouped by author, each with an "All of theirs" switch, in every skin (Miguel, 31 Oct 2026)', () => {
+test('Settings › Look: one All switch belongs to the worn skin owner, not package namespaces', () => {
   const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
   assert.match(rows, /class="tw-author"/, 'one section per author');
   assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
+  assert.doesNotMatch(rows, /exp\.filter\(t => t\.author === who\)/, 'carried shared tweaks remain in the worn set');
+  assert.doesNotMatch(rows, /wizard: 'James'/);
   assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
   assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
 });

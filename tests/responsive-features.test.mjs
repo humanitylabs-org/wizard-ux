@@ -150,7 +150,7 @@ test('nested Look / skin tweaks Back returns to Settings before shell root Back,
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
   sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'wizard/pin-buttons',name:'Show pin buttons',description:'A pin button on every chat',author:'wizard',on:true},{id:'wizard/unified-inbox',name:'Notifications in Chats',description:'Core default',author:'wizard',builtin:true,on:true}],active:['wizard/pin-buttons']} };
   for (const { root, view } of roots) {
-    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*data-tweakauthor="wizard"[^]*1 of 1 on[^]*data-tweak-toggle="wizard\/pin-buttons"/);
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*data-tweakauthor="miguel"[^]*1 of 1 on[^]*data-tweak-toggle="wizard\/pin-buttons"/);
     assert.match(root.innerHTML,/Built-in choices[^]*data-tweak-toggle="wizard\/unified-inbox"/, 'core default retains its individual off-switch');
     assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
     assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
