@@ -4,7 +4,7 @@ useDefault = true
 
 [[allowlists]]
 description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names, Android test certificate digests"
-regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^wos\.[a-z0-9-]+\.v[0-9]+$''']
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^wos\.[a-z0-9-]+\.v[0-9]+$''', '''^wux\.[a-z0-9-]+\.v[0-9]+$''']
 paths = ['''^android/app/src/test/''']
 
 [[allowlists]]

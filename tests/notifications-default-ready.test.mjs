@@ -37,7 +37,7 @@ test('Home Ready counts unread and snoozed notification rows but not completed r
 test('phone and desktop Home and Chats badge use the notification Ready count and repaint when it changes', () => {
   for(const file of ['web/app.js','web/desktop/desktop.js']) {
     const src=read(file);
-    assert.equal((src.match(/\+ \(window\.WosBell\?\.readyCount\?\.\(\) \|\| 0\)/g)||[]).length,2,file);
+    assert.equal((src.match(/\+ \(window\.WosBell\?\.readyCount\?\.\(\) \|\| 0\)/g)||[]).length,file.includes('desktop')?1:2,file);
     assert.match(src,/addEventListener\('wizard:notifications',/);
   }
 });

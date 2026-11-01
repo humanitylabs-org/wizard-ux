@@ -35,6 +35,29 @@ test('nav.snoozeOrder: trusted nav only, last only, host-owned and released on t
   const stale = api; await f.clear(); assert.equal(f.host.snoozeOrder, 'default');
   assert.throws(() => stale.nav.snoozeOrder('last'), /Trusted navigation/); assert.equal(f.host.snoozeOrder, 'default');
 });
+test('normal skin lists keep the renderer snoozed tail, without reversed-list CSS overrides', () => {
+  const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+  const source = read('web/core/chats.js');
+  const start = source.indexOf('  function readyBody(');
+  const end = source.indexOf('  /* Notifications listed in Ready', start);
+  assert.ok(start >= 0 && end > start, 'production Ready renderer found');
+  const ctx = vm.createContext({
+    snoozeLast: () => true, deferredOf: s => !!s.deferred,
+    readyOrder: 'newest', READY_ORDERS: [], READY_ORDER_LABEL: {},
+    noteByTime: () => 0,
+    withNotes: (rows, notes, rowFn) => rows.map(rowFn).join('')
+  });
+  vm.runInContext(source.slice(start, end), ctx);
+  const html = ctx.readyBody([{ id: 'later', deferred: true }, { id: 'awake' }], s => `<row>${s.id}</row>`);
+  assert.ok(html.indexOf('<row>awake</row>') < html.indexOf('<row>later</row>'), 'production renderer emits awake rows first');
+  const tweak = read('web/tweaks/miguel/snooze-someday/tweak.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(tweak, /\border\s*:/, 'obsolete order overrides would invert the rendered snoozed tail');
+  assert.doesNotMatch(tweak, /data-skin/, 'tweak behavior must not depend on palette');
+  for (const skin of ['obsidian', 'landscapes']) {
+    assert.doesNotMatch(read(`web/skins/${skin}/skin.css`), /flex-direction\s*:\s*column-reverse/, `${skin} uses the renderer order`);
+  }
+});
+
 test('the shipped tweak turns snoozeOrder last on and one-tap Snooze restores (no picker)', async () => {
   const f = fixture(); const seen = [];
   f.ctx.window.WosBoomerang = { someday: async opts => { seen.push(opts); } };

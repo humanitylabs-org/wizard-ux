@@ -7,7 +7,7 @@ const js = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url)
 const css = fs.readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
 test('app picker tiles mark long one-word names', () => {
   const marks = js.match(/<span class="nm\$\{\/\\S\{13,\}\/\.test\(it\.name\) \? ' long' : ''\}">/g) || [];
-  assert.equal(marks.length, 2, 'both picker renderers mark long names');
+  assert.equal(marks.length, 1, 'the picker renderer marks long names');
   assert.ok(/\S{13,}/.test('Troubleshooter') && !/\S{13,}/.test('Home Assistant'));
 });
 test('long labels fit the tile and never split a word bare', () => {

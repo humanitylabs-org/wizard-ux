@@ -53,8 +53,9 @@ html[data-skin^="obsidian"] :is(.sgi, .logo, .wic) { filter: grayscale(1); }
 html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
 
 /* New chat greeting (moved from core/chats.css). */
-:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-empty.nc-classic { display: none; }
-:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 440px; animation: ncIn .32s ease-out both; }
+
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-newchat { text-align: center; animation: ncIn .32s ease-out both; }
+
 html[data-skin^="obsidian"] .ch-newchat .nc-mark { background: radial-gradient(120% 120% at 30% 20%, #3a3a3a, #0c0c0c); box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18); }
 /* Light: the skin-wide sigil dimmer (grayscale + brightness .35) turned the white hat grey on the black tile. Keep it crisp white, with a lighter shadow on paper. */
 html[data-skin="obsidian-light"] .ch-newchat .nc-mark { background: radial-gradient(120% 120% at 30% 20%, #2a2a2a, #000); box-shadow: 0 8px 22px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.14); }
@@ -73,8 +74,9 @@ html[data-skin^="obsidian"] .selmenu svg { stroke: var(--ink); }
 html[data-skin^="obsidian"] .selmenu .sm-grip svg, html[data-skin^="obsidian"] .selmenu.drag .sm-grip svg { fill: var(--ink-3); stroke: none; }
 /* Model switch (Miguel's skins): four slots above the composer, Opus · Astra · Sol · the private Tinfoil model.
  * The private slot shows its model id (Kimi K3) in private-browsing purple with a small lock, never a provider name. */
-html[data-skin^="obsidian"] .ch-swrow { flex: 0 0 auto; display: flex; align-items: center; padding: 4px 10px 0; }
-html[data-skin^="obsidian"] .ms { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; --ms-i: 1; --secure: hsl(282 88% 74%); --secure-on: #1d0630; }
+
+html[data-skin^="obsidian"] .ms { --ms-i: 1; --secure: hsl(282 88% 74%); --secure-on: #1d0630; }
+
 html[data-skin^="obsidian"] .ms-track { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 38px; border-radius: 19px; background: color-mix(in srgb, var(--ink) 7%, transparent); touch-action: none; user-select: none; -webkit-user-select: none; }
 html[data-skin^="obsidian"] .ms-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 4); border-radius: 16px; background: var(--ink); transform: translateX(calc(var(--ms-i) * 100%)); transition: transform 220ms cubic-bezier(.2, .9, .25, 1); pointer-events: none; }
 html[data-skin^="obsidian"] .ms-track.dragging .ms-thumb { transition: none; }
@@ -93,12 +95,13 @@ html[data-skin^="obsidian"] .ms-more { flex: 0 0 auto; height: 38px; min-width: 
 html[data-skin^="obsidian"] .ms-more small { font-size: 11.5px; font-weight: 650; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-skin^="obsidian"] .ch-swrow + .ch-compose { border-top: 0; }
 html[data-skin^="obsidian"] .ch-model.private, html[data-skin^="obsidian"] .mrow.secure .mn b { color: var(--secure, hsl(282 88% 74%)); }
-html[data-skin^="obsidian"] .mrow.secure .mn b { display: inline-flex; align-items: center; gap: 6px; }
-html[data-skin^="obsidian"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
+
+html[data-skin^="obsidian"] .mrow.secure .ag-lock { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+
 html[data-skin="obsidian-light"] .ms { --secure: hsl(282 70% 44%); --secure-on: #ffffff; }
 /* Model switch: when other controls leave it too little room, the four slots fold into one chip (current model + ⋯) that opens the full model menu, so it always fits. */
-html[data-skin^="obsidian"] .ms { container: ms / inline-size; position: relative; }
+
 @container ms (max-width: 250px) {
   html[data-skin^="obsidian"] .ms-track { flex: 0 1 auto; display: flex; background: none; pointer-events: none; }
   html[data-skin^="obsidian"] .ms-track.off, html[data-skin^="obsidian"] .ms-thumb, html[data-skin^="obsidian"] .ms-o:not(.on) { display: none; }
@@ -118,82 +121,92 @@ html[data-skin="obsidian-light"] .ch-model.private { color: hsl(282 70% 44%); }
 
 /* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
  * lower dock, desktop list order and slim header. Scoped to this skin; James's skins keep the stock layout. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec { display: flex; flex-direction: column-reverse; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec-b { display: flex; flex-direction: column-reverse; }
+
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-top: 0; border-bottom: 1px solid var(--line); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-scroll { padding-bottom: 8px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: 8px; }
+
+
 html[data-skin^="obsidian"] .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread { display: flex; flex-direction: column; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose:not(.has-text) .ch-mic:not(.on) { display: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { min-height: 34px; padding-top: 6px; padding-bottom: 6px; opacity: .8; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-scroll { flex-direction: column; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec { order: 1; flex-direction: column; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec:not([data-sec="ready"]) .ch-sec-b { flex-direction: column; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { order: 0; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { order: 2; margin-top: auto; flex-direction: column-reverse; }
+
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { opacity: .8; }
+
+
+
+
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-bottom: 0; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { border-top: 1px solid var(--line); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head { padding-left: 14px; }
+
 html[data-skin^="obsidian"] #device.orb-lift { --corner-b: 9px; }
-html[data-skin^="obsidian"] #device.orb-corner .win.full .ch-compose:not(.has-text) { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
-html[data-skin^="obsidian"] #device.orb-corner .win.full .ch-compose.has-text { padding-right: 10px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head { padding: 4px 10px 4px 14px; border-bottom: 0; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head .ti, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head .ti .ti-b { min-height: 26px; }
+
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head { border-bottom: 0; }
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head .ti b { font-size: 14.5px; font-weight: 650; color: var(--ink-2); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .win.full .wbar { height: 28px; border-bottom: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .win.full .wbar { border-bottom: 0; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-tacts button { border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-latest { bottom: auto; top: auto; right: 50%; transform: translateX(50%); bottom: 140px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-fab { right: calc(var(--corner-r) + var(--corner-orb) + 10px); bottom: calc(var(--safe-b) + var(--corner-b)); width: 44px; height: 44px; border-radius: 22px; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-fab { border-radius: 22px; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose textarea { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose .ch-attach { background: none; border: 0; color: var(--ink-2); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose .ch-attach svg { stroke: var(--ink-2); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); position: relative; z-index: 2; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose { border-top: 0; }
+
 html[data-skin^="obsidian"] #device.orb-corner { --corner-r: 16px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { flex-direction: column; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--safe-b, 0px) + var(--corner-b)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-bar { min-height: var(--corner-orb); align-items: center; padding-right: calc(var(--corner-r) + 2 * var(--corner-orb) + 18px); margin: 0; }
+
+
+
 html[data-skin^="obsidian"] .ch-compose button.ch-attach { background: none !important; border: 0 !important; box-shadow: none !important; }
 html[data-skin^="obsidian"] .ch-compose button.ch-attach svg { stroke: var(--ink-2) !important; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-rdy-bar { padding-right: 120px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-fab { width: 44px; height: 44px; border-radius: 22px; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-scroll { display: flex; flex-direction: column; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"] { order: -2; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="working"] { order: -1; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="ready"] { order: 0; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-fab { border-radius: 22px; }
+
+
+
+
+
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
 /* Desktop voice button: a plain flat disc in the skin's own black/white with the mic showing (was a glossy violet-tinted sphere). */
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) { border: 0 !important; background: var(--ob-tint) !important; box-shadow: inset 0 0 0 1px var(--ob-edge) !important; }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) svg { opacity: 1; stroke: var(--ink); }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on):hover { background: color-mix(in srgb, var(--ink) 16%, transparent) !important; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-head { padding: 3px 10px 3px 4px; min-height: 0; }
+
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-head .ti b { font-size: 14px; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-head .ch-back { width: 30px; height: 30px; }
+
 html[data-skin^="obsidian"] { --ch-priv: hsl(282 88% 74%); }
 html[data-skin^="obsidian"] { --safe-b-low: calc(var(--safe-b) * .45); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
-html[data-skin^="obsidian"] .dock .orb-wrap { z-index: 3; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .scrub { bottom: max(0px, calc(var(--safe-b-low) - 10px)); height: 12px; z-index: 1; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.immersive .tiles.has-full { bottom: 0; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(4px + var(--safe-b-low)) !important; }
+
+
+
+
+
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) #device.orb-corner { --corner-b: 4px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .imm-edge { height: calc(12px + var(--safe-b-low)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
-html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) { left: 0; right: 0; top: calc(var(--sb) + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b-low, var(--safe-b)) - 4px); --gap: 2px; gap: 2px; }
+
+
+
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) { --gap: 2px; }
+
 html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
 html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-top: 0; border-bottom: 0; border-radius: 0 0 22px 22px; }
 html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.focus { box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .5); }
-html[data-skin^="obsidian"][data-shell="phone"] .win .wb[data-wact="full"] { display: none; }
-html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.solo.app-chats > .wbar { display: none; }
+
+
 html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
-html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .ch-compose { padding-bottom: 4px !important; padding-top: 6px; gap: 6px; }
-html[data-skin^="obsidian"] .ch-rdy-bar button { white-space: nowrap; flex: 0 0 auto; }
+
+html[data-skin^="obsidian"] .ch-rdy-bar button { white-space: nowrap; }
+
 
 /* Miguel's behaviour pieces (behaviour.js): big dock Back, Defer/Done on the switch row, top-centre toasts. */
 html[data-skin^="obsidian"] .mz-dock-back { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; z-index: 4; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform 160ms ease, background 160ms; }
@@ -201,113 +214,132 @@ html[data-skin^="obsidian"] .mz-dock-back svg { width: 24px; height: 24px; fill:
 html[data-skin^="obsidian"] .mz-dock-back:active { transform: translateY(-50%) scale(.92); }
 html[data-skin^="obsidian"] .mz-dock-back[hidden] { display: none; }
 html[data-skin^="obsidian"] .dock.mz-back-on #dotsL { visibility: hidden; }
-html[data-skin^="obsidian"] .ch-swrow { gap: 6px; }
-html[data-skin^="obsidian"] .ch-swrow .ch-tacts { margin: 0; gap: 4px; flex: 0 0 auto; display: flex; }
-html[data-skin^="obsidian"] .ch-swrow .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; border-radius: 18px; border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-html[data-skin^="obsidian"] .ch-swrow .ch-tacts button span { display: none; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ch-tacts button { width: auto; padding: 0 12px; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ch-tacts button span { display: inline; }
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow { justify-content: space-between; }
-html[data-skin^="obsidian"] .toast { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+
+
+html[data-skin^="obsidian"] .ch-swrow .ch-tacts button { border-radius: 18px; border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+
+
+
+
+
+
 /* Opinionated (phone, test port): floating pill bottom bar, like iOS tab bars (LINE, Slack, WhatsApp, Telegram).
  * Same orb, desk icons, Back, scrubber and gestures; only the shape moves: an inset frosted capsule lifted off the
  * screen edge so desk swipes start well above the iPhone home-indicator swipe zone. Corner orb (full screen) unchanged. */
 html[data-skin^="obsidian"] { --pill-h: 66px; --pill-x: 12px; --pill-b: calc(var(--safe-b-low) + 8px); --pill-top: calc(var(--pill-b) + var(--pill-h)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { left: var(--pill-x); right: var(--pill-x); bottom: var(--pill-b); height: var(--pill-h); padding: 0; gap: 18px; align-items: center; border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-wrap, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { margin-top: 0; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub { bottom: 2px; height: 10px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub i { width: 30px; height: 3px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 7px; width: 46px; height: 46px; transform: translateY(-50%); border-color: transparent; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back):active { transform: translateY(-50%) scale(.92); }
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) { bottom: calc(var(--pill-top) + 6px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.immersive) .tiles.has-full { bottom: calc(var(--pill-top) + 6px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--pill-top) - 9px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub .sc-label { bottom: calc(var(--pill-h) + 4px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
+
+
+
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { border-color: transparent; }
+
+
+
+
+
+
 /* Opinionated (phone, test port) round 2: content runs under the pill and fades out into the background (iOS style)
  * instead of stopping in a hard edge above it; quieter pill; chat Back drawn as a hamburger (back to the list). */
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full):has(> .win.solo.app-chats) { bottom: 0; }
+
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats { border-radius: 0; }
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-thread { padding-bottom: calc(var(--pill-top) + 4px); }
+
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-msgs { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px); mask-image: linear-gradient(to top, transparent 0, #000 28px); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub:not(.on) i { opacity: 0; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-ring { opacity: .45; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) svg { display: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back)::before { content: ""; width: 20px; height: 2px; border-radius: 2px; background: currentColor; box-shadow: 0 -6.5px 0 currentColor, 0 6.5px 0 currentColor; }
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-fab { bottom: calc(var(--pill-top) + 12px); }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back)::before { border-radius: 2px; background: currentColor; box-shadow: 0 -6.5px 0 currentColor, 0 6.5px 0 currentColor; }
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .moons { opacity: .55; }
 /* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
  * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
+
 /* The room under the last row is a real flex item, not scroll padding: iPhone Safari leaves a flex scroller's
  * bottom padding out of the scroll range, so a just-full list would not scroll the last row clear of + and the pill. */
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: 0; }
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll::after { content: ""; display: block; order: 99; flex: 0 0 calc(var(--pill-top) + 66px); }
+
+
 /* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
  * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.orb-ring, .moons, .orb-halo) { display: none; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock .scrub:not(.on) i { opacity: 0; }
 /* Opinionated (phone): bigger everything inside the pill. The orb grows to nearly the pill's height and carries the
  * current app's icon inside its glass, so it reads as the orb sitting on top of whatever is in view. */
 html[data-skin^="obsidian"] { --pill-h: 72px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 62px; gap: 20px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { width: auto; min-width: 0; flex: 1 1 0; gap: 16px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 14px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 14px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 32px; height: 32px; opacity: .9; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 62px; }
+
+
+
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { border: 0; background: none; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { opacity: .9; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi.sgl { font-size: 23px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dplus .dsg svg { width: 30px; height: 30px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-badge { top: -2px; right: -4px; min-width: 20px; height: 20px; font-size: 12px; z-index: 3; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 6px; width: 58px; height: 58px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back)::before { width: 26px; height: 2.6px; box-shadow: 0 -8.5px 0 currentColor, 0 8.5px 0 currentColor; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: screen; opacity: .8; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 30px; height: 30px; opacity: 1; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-badge { font-size: 12px; }
+
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back)::before { box-shadow: 0 -8.5px 0 currentColor, 0 8.5px 0 currentColor; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { pointer-events: none; mix-blend-mode: screen; opacity: .8; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { opacity: 1; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg .sgi.sgl { font-size: 22px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app :is(.dn, .dbg) { display: none; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .dock .orb-app { opacity: 0; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { justify-content: space-evenly; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi { width: 88%; height: 88%; }
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { mix-blend-mode: normal; opacity: .92; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 36px; height: 36px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { width: 100%; height: 100%; background: var(--ink); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bg) 80%, transparent)) drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { background: var(--ink); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bg) 80%, transparent)) drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 82%; mask-size: auto 82%; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb { -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { background: #fff; filter: drop-shadow(0 0 4px rgba(0, 0, 0, .55)); }
 
 /* Miguel's skins (phone): app title bars as slim as the chat thread header, so apps keep the screen.
  * Same 14.5px title as a chat thread, a 36px bar, and no extra gap under the status bar. */
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .win { padding-top: calc(var(--sb) + var(--safe-t)); --sf-head: calc(36px + var(--sb) + var(--safe-t)); }
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .win > .wbar { height: 36px; min-height: 36px; flex-basis: 36px; padding-right: calc(40px + var(--sf-padding, 16px)); }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .win { --sf-head: calc(36px + var(--sb) + var(--safe-t)); }
+
+
 html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar > :is(.wt, .t) { font-size: 14.5px; font-weight: 650; letter-spacing: -.01em; }
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] { width: 36px; min-width: 36px; height: 36px; right: calc(var(--sf-padding, 16px) - 8px); }
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] svg { width: 16px; height: 16px; }
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool { height: 28px; min-width: 28px; }
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { height: 28px; font-size: 12.5px; }
-html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .shield { top: 36px; }
+
+
+
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { font-size: 12.5px; }
+
+
 
 
 /* App selector, Miguel's look: names in full ink at a readable size, section titles one step brighter, Get apps
  * drawn as a tile like its neighbours (hairline edge) instead of an unbordered box. */
-html[data-skin^="obsidian"] .launcher .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.22; letter-spacing: -.01em; max-width: 100%; padding: 0 1px; }
+html[data-skin^="obsidian"] .launcher .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.22; letter-spacing: -.01em; }
+
 html[data-skin^="obsidian"] .launcher .lgroup h4 { color: var(--ink-2); font-size: 12px; letter-spacing: .1em; }
 html[data-skin^="obsidian"] .launcher .lgroup h4 span { color: var(--ink-2); font-size: 12px; }
 html[data-skin^="obsidian"] .launcher .lapp[data-app="app-store"] .ic { background: color-mix(in srgb, var(--ink) 7%, transparent); border: 1px solid var(--line-2); box-shadow: none; color: var(--ink); }
 
 /* Reply to a notification (Miguel's look): one quiet quote line, no box. A hairline rule on the left, the title in ink,
  * one or two lines in ink-2, and a bare × (44px target). The sent message shows the same quote above his words. */
-html[data-skin^="obsidian"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
-html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { width: 44px; height: 44px; margin: -6px -4px -6px 0; background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
+html[data-skin^="obsidian"] .ch-compose .ch-reply { border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
+
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
+
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x:hover { color: var(--ink); }
 html[data-skin^="obsidian"] .ch-reply-t b, html[data-skin^="obsidian"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
 html[data-skin^="obsidian"] .ch-reply-t span, html[data-skin^="obsidian"] .ch-rq span { color: var(--ink-2); }
-html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
-html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important; }
+html[data-skin^="obsidian"] .msg.u .bub .ch-rq { border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
+
+
 /* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x, html[data-skin^="obsidian"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
-html[data-skin^="obsidian"] .ch-compose.has-reply .ch-reply { margin-bottom: 4px; }
+
 
 /* Brand marks (Miguel's skins): real products wear their own logo, in their own colours, so the tile is a visual cue
  * (see the Cloudflare cloud, go to Cloudflare). Same box and size as every sigil: the mark is still a mask, and the
@@ -323,32 +355,33 @@ html[data-skin^="obsidian"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { b
 
 /* Dock fit (Miguel, 21 Oct): with many desks open, each side holds at most Home + two neighbours on the left and two
  * neighbours + New on the right, so nothing squeezes under the orb or past the pill's ends. A dot marks hidden desks. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { gap: 12px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { gap: 8px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 8px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 8px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 32px; height: 32px; flex: 0 0 32px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 30px; height: 30px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .ddot[data-goto]:not(.dhome):nth-last-child(n+3) { display: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .ddot[data-goto]:nth-child(n+3) { display: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .dhome { order: -1; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .dplus { order: 1; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3)), #dotsR:has(> .ddot[data-goto]:nth-child(3))) > .dmore { display: none; }
+
+
+
+
+
+
+
+
+
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+
 
 /* App kinds on New desk (Apps · Agent apps · Connectors): the last group scrolls clear of the floating pill dock. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { padding-bottom: calc(var(--pill-top, 90px) + 24px); }
+
 
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
+
 
 /* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
 
 /* Opinionated (Miguel's skins): Home resources as the most compact readout: two rows (Server, then AI accounts) of
    small ring + label cells on one shared 3-column grid, no headings, warnings or freshness text; one settings gear.
    resources.js renders .rs-dialed only for these skins. */
-html[data-skin^="obsidian"] [data-home-resources] { margin-top: 0; }
+
 html[data-skin^="obsidian"] .rs-dialed { padding: 10px 14px; }
 html[data-skin^="obsidian"] .rs-dials { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 6px; }
 html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin-top: 8px; }
@@ -365,22 +398,22 @@ html[data-skin^="obsidian"] .rs-dl small { font-size: 10px; color: var(--wz-text
 html[data-skin^="obsidian"] .rs-dial:active { opacity: .7; }
 html[data-skin^="obsidian"] .rs-dial:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; border-radius: 8px; }
 html[data-skin^="obsidian"] .rs-dial-empty { grid-column: 1 / -1; min-height: 30px; display: flex; align-items: center; font-size: 11.5px; color: var(--wz-text-muted, var(--ink-3)); }
-html[data-skin^="obsidian"] .home-tools .home-system { display: none; }
+
 
 /* Opinionated (Miguel's skins): Ready / Working as two squarish tiles: the count large at the top, the label with its
    dot underneath. Same surface, radius and edges as the resources card below so Home reads as one set. Landscapes gets
    a frosted dark panel so both stay legible over bright photos. */
-html[data-skin^="obsidian"] .home .constellation { gap: 10px; margin-bottom: 10px; }
-html[data-skin^="obsidian"] .home .constellation .now-card {
-  flex: 1 1 0; min-height: 0; height: 84px; padding: 12px 14px; border-radius: var(--wz-home-widget-radius, 20px);
-  display: grid; grid-template: "n n" 1fr "p k" auto / auto 1fr; align-items: center; column-gap: 7px; row-gap: 0; text-align: left;
+
+html[data-skin^="obsidian"] .home .constellation .now-card { border-radius: var(--wz-home-widget-radius, 20px); text-align: left;
   background: var(--wz-home-widget-surface); border: 1px solid var(--wz-home-widget-border); box-shadow: none; }
-html[data-skin^="obsidian"] .home .constellation .now-card .n { grid-area: n; align-self: start; }
-html[data-skin^="obsidian"] .home .constellation .now-card .pip { grid-area: p; width: 6px; height: 6px; flex: none; margin: 0; }
-html[data-skin^="obsidian"] .home .constellation .now-card .meta { grid-area: k; display: block; }
+
+
+
+
 html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin^="obsidian"] .home .constellation .now-card .n { padding: 0; font-size: 30px; line-height: 1; font-weight: 420; letter-spacing: -.03em; color: var(--wz-text, var(--ink)); }
-html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.97); }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { font-size: 30px; line-height: 1; font-weight: 420; letter-spacing: -.03em; color: var(--wz-text, var(--ink)); }
+
+
   background: linear-gradient(180deg, rgba(22, 20, 30, .74), rgba(12, 11, 18, .82)); border-color: rgba(255, 255, 255, .12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
 /* Dark / Light: clean, modern surfaces (no grain): a flat raised card with a crisp hairline. */
@@ -390,16 +423,17 @@ html[data-skin="obsidian-light"] :is(.home .constellation .now-card, .rs-dialed)
 /* Opinionated (Miguel's skins, 21 Oct): everything on Home centred and shrink-wrapped so the background shows as much
    as possible. Date and clock centred; Ready / Working as two small centred tiles; resources as ONE centred row of tiny
    ring dials (Server | AI) with the label under each ring. No panel is wider or taller than its content. */
-html[data-skin^="obsidian"] .home .home-top { text-align: center; padding-left: 0; padding-right: 0; }
-html[data-skin^="obsidian"] .home .home-attn { align-items: center; }
-html[data-skin^="obsidian"] .home .constellation { justify-content: center; gap: 8px; margin-bottom: 8px; }
-html[data-skin^="obsidian"] .home .constellation .now-card {
-  flex: 0 0 82px; width: 82px; min-width: 0; height: auto; padding: 8px 12px 7px; border-radius: 16px;
-  grid-template: "n n" auto "p k" auto / auto auto; justify-content: center; justify-items: center; row-gap: 3px; column-gap: 5px; }
-html[data-skin^="obsidian"] .home .constellation .now-card .n { align-self: center; font-size: 22px; }
+html[data-skin^="obsidian"] .home .home-top { text-align: center; }
+
+
+
+html[data-skin^="obsidian"] .home .constellation .now-card { border-radius: 16px; }
+
+html[data-skin^="obsidian"] .home .constellation .now-card .n { font-size: 22px; }
+
 html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 11px; }
-html[data-skin^="obsidian"] .home .constellation .now-card .pip { width: 5px; height: 5px; }
-html[data-skin^="obsidian"] [data-home-resources] { display: flex; justify-content: center; }
+
+
 html[data-skin^="obsidian"] .rs-dialed { display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-start; width: fit-content; max-width: 100%; padding: 8px 8px 7px; border-radius: 16px; }
 html[data-skin^="obsidian"] .rs-dials { display: flex; gap: 0; }
 html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin: 0 0 0 6px; padding: 0 0 0 6px; border-left: 1px solid var(--line); }
@@ -414,21 +448,21 @@ html[data-skin^="obsidian"] .home-time { font-variant-numeric: normal; }
 html[data-skin^="obsidian"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
 
 /* "For agents" (Agent apps, Agents, Connectors): one quiet folded row under Apps. */
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row svg { margin-left: auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms; }
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
-html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
+
+
+
+
+
+
+
 
 /* Home without date and clock (Miguel, 21 Oct): the device already shows the time. */
-html[data-skin^="obsidian"] :is(.home-date, .home-time) { display: none; }
+
 
 /* Home Ready/Working: colour the word and number instead of a dot (Miguel, 21 Oct). */
-html[data-skin^="obsidian"] .home .constellation .now-card .pip { display: none; }
+
 html[data-skin^="obsidian"] .home .constellation .now-card :is(.k, .n) { color: var(--c); }
-html[data-skin^="obsidian"] .home .constellation .now-card { grid-template: "n" auto "k" auto / auto; column-gap: 0; }
+
 
 /* Speedometer dials (Miguel's skins, 22 Oct): each reading is a small 240° car gauge (ticks, arc, needle, digital
    readout). Needles start at zero and sweep up on first load, staggered, like a car cluster on start; later readings
@@ -451,60 +485,65 @@ html[data-skin^="obsidian"] .rs-gauge b { position: absolute; left: 0; right: 0;
 html[data-skin^="obsidian"] .rs-dial-off .rs-track { stroke-dasharray: 2 3; }
 html[data-skin^="obsidian"] .rs-dial-off :is(.rs-arc, .rs-ndl) { opacity: 0; }
 html[data-skin^="obsidian"] .rs-dialed .rs-dl { max-width: none; font-size: 9.5px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin^="obsidian"][data-shell="phone"] .home [data-home-resources] { order: -1; margin: 0 0 6px; }
-html[data-skin^="obsidian"][data-shell="phone"] .home .home-top { order: -2; }
+
+
 
 /* Blend into the background (Miguel's skins, 22 Oct): no dark chips behind Home controls. The Settings gear is a bare
    icon, Ready / Working are round outlined buttons in their own colour, and the phone pill dock is a light frosted glass
    that lets the background through while the icons stay clear. */
 html[data-skin^="obsidian"] .home-tools .gear, html[data-skin^="obsidian"] .gear { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--wz-text, var(--ink)); }
-html[data-skin^="obsidian"] .gear svg { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 70%, transparent)); }
-html[data-skin^="obsidian"] .home .constellation { gap: 18px; }
-html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { flex: 0 0 74px; width: 74px; height: 74px; padding: 0; border-radius: 50%; place-content: center; row-gap: 1px; background: color-mix(in srgb, var(--c) 9%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .gear svg { stroke-width: 1.7; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 70%, transparent)); }
+
+
+html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { border-radius: 50%; background: color-mix(in srgb, var(--c) 9%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
 html[data-skin^="obsidian"] .home .constellation .now-card .n { font-size: 24px; line-height: 1; }
 html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 10.5px; line-height: 1.1; }
-html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.94); background: color-mix(in srgb, var(--c) 18%, transparent); }
+html[data-skin^="obsidian"] .home .constellation .now-card:active { background: color-mix(in srgb, var(--c) 18%, transparent); }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 46%, transparent); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
 html[data-skin="obsidian-light"] .home .constellation .now-card.wz-home-widget { background: color-mix(in srgb, var(--c) 7%, #fff 40%); }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #fff 58%, transparent); box-shadow: 0 4px 18px rgba(0, 0, 0, .07); }
 /* Symmetric dock (Miguel, 22 Oct): two fixed slots each side of the orb, mirrored, so the bar balances at every desk.
  * The orb is the current desk and the biggest thing on the bar; the nearest neighbours sit a touch larger and brighter
  * than the outer pair. Empty slots keep their space. New desk is a dashed empty-desk outline, never a plus. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { flex: 1 1 0; display: grid; grid-template-columns: 1fr 1fr; justify-items: center; align-items: center; gap: 0; padding: 0 6px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > * { order: 0; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 32px; height: 32px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 36px; height: 36px; flex: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 30px; height: 30px; transition: transform 200ms, opacity 200ms; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.84); opacity: .62; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { opacity: .92; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::before, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::after { display: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); opacity: .92; transform: none; }
+
+
+
+
+
+
+
+
+
+
 
 /* Swipe-up Apps sheet open: the orb turns into a plain X, since tapping it closes the sheet (the only time it changes). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap :is(.orb, .orb-fallback, .orb-app, .orb-badge, .moons) { opacity: 0 !important; transition: opacity 160ms; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap::before { content: ""; position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 3;
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap::before { border-radius: 50%; pointer-events: none;
   background: color-mix(in srgb, var(--ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
   -webkit-mask: none; box-shadow: inset 0 0 0 0 transparent;
   background-image: linear-gradient(45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px)), linear-gradient(-45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px));
   background-size: 22px 22px; background-position: center; background-repeat: no-repeat; animation: wosOrbX 180ms ease-out; }
+
 @keyframes wosOrbX { from { transform: translate(-50%, -50%) rotate(-90deg) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) rotate(0) scale(1); opacity: 1; } }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .desk-dots { opacity: .35; pointer-events: none; }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { opacity: 1; color: #1b1b1f; }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { stroke: currentColor; }
 
 /* Three a side (Miguel, 22 Oct): bigger icons, the orb biggest, little dead space. Near > middle > far, all mirrored. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 66px; gap: 2px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { grid-template-columns: repeat(3, 1fr); padding: 0 4px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 46px; height: 46px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 36px; height: 36px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 42px; height: 42px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { transform: none; opacity: .95; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.88); opacity: .78; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d3 .dsg { transform: scale(.76); opacity: .6; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 38px; height: 38px; }
-@media (max-width: 360px) { html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 38px; height: 38px; } html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 32px; height: 32px; } html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 60px; } }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > .ddot { display: grid !important; place-items: center; order: 0 !important; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 66px; }
+
+
+
+
+
+
+
+
+
+@media (max-width: 360px) {   html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 60px; } }
+
 
 /* Instant icons: the app selector shows every icon at once (no staggered fade-in that read as icons loading late),
  * and the brand marks above are inlined (web/brand/apps/*.svg, same bytes) so they never wait on a request. */
@@ -512,27 +551,31 @@ html[data-skin^="obsidian"] .launcher.open .lgrid .lapp { animation: none; }
 
 /* Ready / Working as glyph + dots (Miguel's skins, 22 Oct): no tile, no number; two quiet rows sitting on the
    background, one dot per chat. app.js homeDots() renders .nc-vis only for these skins. */
-html[data-skin^="obsidian"] .home .constellation { flex-direction: row; justify-content: center; align-items: center; flex-wrap: wrap; gap: 0 18px; max-width: 100%; margin-bottom: 12px; }
-html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { flex: none; width: auto; height: auto; min-height: 0; padding: 8px 6px; display: flex; border-radius: 12px; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin^="obsidian"] .home .constellation .now-card :is(.pip, .meta, .n) { display: none; }
-html[data-skin^="obsidian"] .nc-vis { display: flex; align-items: center; gap: 7px; color: var(--c); }
-html[data-skin^="obsidian"] .nc-vis .nc-ic { width: 19px; height: 19px; margin-right: 3px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin^="obsidian"] .nc-vis i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
-html[data-skin^="obsidian"] .nc-vis em { font-style: normal; font-size: 14px; font-weight: 700; line-height: 1; }
-html[data-skin^="obsidian"] .nc-vis.nc-zero { opacity: .45; }
-html[data-skin^="obsidian"] [data-act="working"] .nc-vis:not(.nc-zero) .nc-ic { animation: nc-spin 1.6s linear infinite; }
-html[data-skin^="obsidian"] [data-act="working"] .nc-vis i { animation: nc-pulse 1.5s ease-in-out infinite; animation-delay: calc(var(--n) * 160ms); }
-html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.96); background: color-mix(in srgb, var(--c) 12%, transparent); }
+
+html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { border-radius: 12px; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+
+
+
+
+
+
+
+
+html[data-skin^="obsidian"] .home .constellation .now-card:active { background: color-mix(in srgb, var(--c) 12%, transparent); }
+
 @keyframes nc-spin { to { transform: rotate(360deg); } }
 @keyframes nc-pulse { 0%, 100% { opacity: .55; transform: scale(.78); } 50% { opacity: 1; transform: scale(1); } }
 html[data-skin="obsidian-light"] .home .constellation .now-card[data-act="ready"] { --c: #14935a; }
 
 /* Miguel's skins (phone, 22 Oct): no Back in the dock. A thread's Back is a small chevron in the top-left of its header
  * (swipe right still goes back), and the voice controls (cancel, pause, screenshot, attach) sit centred inside the pill. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { padding-left: 4px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { width: 28px; height: 28px; border-radius: 9px; color: var(--ink-3); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .voice .arc { bottom: calc(var(--pill-b) + var(--pill-h) / 2); }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { border-radius: 9px; color: var(--ink-3); }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { stroke-width: 2.2; }
+
+
 
 /* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
 html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
@@ -550,99 +593,104 @@ html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub table { font-size:
 /* Miguel's skins (phone): Desks overview. Smaller desk cards (three across) with each desk's count badge, used by both
  * the pinch overview and the swipe-up version, which grows out of the bottom pill as one panel (the pill's own icons stay
  * as its bottom row, the orb is the handle: tap or swipe down closes). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card { min-height: 116px; padding: 8px 6px 8px; border-radius: 18px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n3), html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n4) { min-height: 132px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-body { padding-top: 14px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n3, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n4 { padding-top: 16px; gap: 2px 4px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-symbol { width: 50px; height: 50px; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card { border-radius: 18px; }
+
+
+
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-symbol .sgi.sgl { font-size: 25px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n2 .ov-symbol { width: 32px; height: 32px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-symbol { width: 24px; height: 24px; }
+
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n2 .sgi.sgl { font-size: 16px; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .sgi.sgl { font-size: 12px; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-win em { font-size: 9.5px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-win em { height: 1.2em; -webkit-line-clamp: 1; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top b { font-size: 12px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top small { font-size: 10px; -webkit-line-clamp: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top small { font-size: 10px; }
+
 /* The current desk is already outlined: drop the "Here" tag; ✕ moves to the top-left so the badge owns the top-right. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-here { display: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-chrome { top: 0; left: 0; right: auto; flex-direction: row-reverse; min-height: 30px; gap: 2px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-x { width: 30px; height: 30px; font-size: 12px; border-radius: 10px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-review { font-size: 9px; line-height: 16px; padding: 0 5px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-badge { position: absolute; top: 6px; right: 6px; z-index: 2; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; font: 800 11px/20px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--bg) 90%, transparent); pointer-events: none; }
+
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-x { font-size: 12px; border-radius: 10px; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-review { font-size: 9px; line-height: 16px; }
+
+
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .ov .ov-badge { background: #000; color: #fff; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add { flex-direction: column; gap: 4px; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add span { font-size: 28px; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add b { font-size: 12px; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-head b { font-size: 21px; }
 
 /* Swipe-up version: the pill extended. A light scrim over the desk; the panel shares the pill's side insets, radius,
  * frosted material and bottom edge, so the pill visibly grows upward. The real dock rides on top as its bottom row. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { padding: 0; overflow: hidden; background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { position: absolute; left: var(--pill-x, 12px); right: var(--pill-x, 12px); bottom: var(--pill-b, 8px); max-height: calc(100% - var(--safe-t, 0px) - 64px); display: flex; flex-direction: column; padding-bottom: var(--pill-h, 66px); border-radius: calc(var(--pill-h, 66px) / 2); border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(26px) saturate(1.4); backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 -10px 40px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; transform-origin: 50% 100%; transform: translateY(14px) scaleY(.4); opacity: 0; transition: transform 300ms var(--spring, cubic-bezier(.2, .9, .2, 1.05)), opacity 160ms; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { transform: none; opacity: 1; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 10px 6px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-head { padding: 0 6px 12px 10px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-done { height: 34px; border-radius: 17px; padding: 0 14px; font-size: 13px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card { background: color-mix(in srgb, var(--ink) 5%, transparent); border-color: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ov-add { background: transparent; border: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-hint { margin: 12px 8px 4px; font-size: 11px; }
+
+
+
+
+
+
+
+
+
+
 /* The dock stays visible above the panel and drops its own pill shell, so it reads as the panel's bottom row. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .desk-label { opacity: 0; }
+
 /* Draw the New desk plus as two bars (the fullwidth ＋ glyph is missing from some fonts and shows as a box). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov:not(.ov-pill) :is(.ov-add span, .ov-empty-symbol) { font-size: 0; width: 24px; height: 24px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; }
+
+
 /* Near-opaque so the panel reads as one even surface over any page (a bright frame showed through at 86%). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 95%, transparent); }
+
 
 /* Swipe-up, round 2: the pill itself with room to spare. It grows upward from its own shape (clip-path), shows the
  * dock's own desk icons and badges in a grid (each rises from its spot in the pill), and an ✕ takes the orb's place. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .dock { opacity: 0; pointer-events: none; transition: opacity 140ms; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { transform: none; opacity: 1; background: color-mix(in srgb, var(--bg) 78%, transparent); border-color: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); clip-path: inset(calc(100% - var(--pill-h, 66px)) 0 0 0 round calc(var(--pill-h, 66px) / 2)); transition: clip-path 320ms cubic-bezier(.2, .9, .25, 1); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { clip-path: inset(0 0 0 0 round calc(var(--pill-h, 66px) / 2)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { background: rgba(0, 0, 0, .28); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 22px 12px 4px; -webkit-mask-image: none; mask-image: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 14px 4px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell { min-height: 0; height: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; color: var(--ink); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border: 0; box-shadow: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic { background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent), 0 0 18px color-mix(in srgb, var(--violet-2, #a58bff) 22%, transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 32px; height: 32px; opacity: .9; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic .dsg { opacity: 1; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi { width: 88%; height: 88%; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 23px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: #1b1b1f; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-nm { max-width: 100%; font-size: 11px; font-weight: 550; line-height: 1.2; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-nm { color: var(--ink); font-weight: 650; }
+
+
+
 /* Closing a desk: hold any icon (that also starts drag-to-reorder) and small ✕s appear, like an iPhone home screen. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { position: absolute; left: calc(50% - 32px); top: -6px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 10px; color: var(--ink); background: color-mix(in srgb, var(--bg) 70%, var(--ink) 30%); display: none; place-items: center; z-index: 3; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell .ov-x { display: grid; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell:not(.ov-home):not(.ov-new) .ov-ic { animation: ovJiggle .32s ease-in-out infinite alternate; }
+
+
+
 @keyframes ovJiggle { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.drag { opacity: .25; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ghost { background: none; box-shadow: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.merging .ov-ic { box-shadow: 0 0 0 2px var(--violet-2); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.splitting .ov-ic { box-shadow: 0 0 0 2px #5cd6ff; }
+
+
+
+
 /* The ✕ sits exactly where the orb was, inside the pill-height bottom row. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close { position: absolute; left: 50%; bottom: calc((var(--pill-h, 66px) - 52px) / 2); width: 52px; height: 52px; margin-left: -26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close:active { transform: scale(.92); }
+
+
+
 /* Four per row across the full width (the dock's own rhythm), even breathing room, and an even fill over any page. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 4px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 24px 12px 14px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 94%, transparent); }
+
+
+
 
 /* Same icon size as the pill dock (42px), with a ring for the desk in view. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { width: 60px; height: 60px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 42px; height: 42px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 29px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 38px; height: 38px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { left: calc(50% - 35px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { max-height: calc(100% - var(--safe-t, 0px) - 24px); }
+
+
+
+
+
+
 
 /* Credit fuel gauge (Tinfoil, 22 Oct): same gauge with E / F at the ends; needle = credit left of the last top-up,
    readout = dollars left. Amber once under a quarter tank, like a low-fuel light. */
@@ -723,7 +771,7 @@ html[data-skin^="obsidian"] .rs-cap-col { min-width: 30px; display: flex; flex-d
 html[data-skin^="obsidian"] .rs-cap-col .rs-cap-seg { width: 100%; height: 14px; border-radius: 5px; }
 html[data-skin^="obsidian"] .rs-cap-col small { font-size: 11px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html[data-skin^="obsidian"] .rs-cap-bar { gap: 4px; }
-html[data-skin^="obsidian"] .device:has(.rs-sheet) .home-tools { visibility: hidden; }
+
 
 /* Home resources as bars (Miguel, 23 Oct): label | bar | value, one row each. AI first, then compute. Fill = what is left.
    No panel; Landscapes gets a soft dark halo per row so it reads over bright photos. */
@@ -750,7 +798,7 @@ html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-wi
    icons, plain text tabs with no pill or divider, sentence-case section titles, no row dividers, a dot only when a
    machine is offline. */
 html[data-skin^="obsidian"] .rs-sheet { background: var(--bg); border: 0; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin^="obsidian"] .device:has(.rs-sheet) [data-home-resources] { visibility: hidden; }
+
 html[data-skin^="obsidian"] .rs-detail-head { padding: 12px 10px 4px; gap: 6px; }
 html[data-skin^="obsidian"] .rs-detail-head button { width: 38px; height: 38px; background: none; border: 0; border-radius: 50%; font-size: 26px; color: var(--wz-text, var(--ink)); }
 html[data-skin^="obsidian"] .rs-detail-head [data-res-refresh] { font-size: 19px; color: var(--wz-text-secondary, var(--ink-2)); }
@@ -760,7 +808,8 @@ html[data-skin^="obsidian"] .rs-tabs button { flex: none; padding: 6px 0; border
 html[data-skin^="obsidian"] .rs-tabs .selected { background: none; color: var(--wz-text, var(--ink)); font-weight: 650; box-shadow: inset 0 -2px 0 currentColor; }
 html[data-skin^="obsidian"] .rs-dv-wrap { padding: 6px 4px 18px; gap: 26px; }
 html[data-skin^="obsidian"] .rs-dv-g h3 { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--wz-text, var(--ink)); margin-bottom: 10px; }
-html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) { border-top: 0; padding: 7px 0; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) { border-top: 0; }
+
 html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) .rs-dot { visibility: hidden; }
 html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li):is(.rs-st-offline, .rs-st-unreachable, .rs-st-stale) .rs-dot { visibility: visible; }
 html[data-skin^="obsidian"] .rs-dv-m { grid-template-columns: 0 1fr; column-gap: 0; }
@@ -772,7 +821,7 @@ html[data-skin^="obsidian"] .rs-caps { gap: 16px; margin-bottom: 18px; }
 html[data-skin^="obsidian"] .rs-cap-h { font-size: 12.5px; }
 html[data-skin^="obsidian"] .rs-cap-h b { font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
 html[data-skin^="obsidian"] .rs-cap-h span { color: var(--wz-text, var(--ink)); }
-html[data-skin^="obsidian"] .device:has(.rs-sheet) .home :is(.constellation, .home-attn) { visibility: hidden; }
+
 html[data-skin^="obsidian"] .rs-detail-head button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
 html[data-skin^="obsidian"] .rs-detail-head button { outline-offset: 0; }
 html[data-skin^="obsidian"][data-shell="phone"] .rs-detail-head button:focus { outline: none; box-shadow: none; }
@@ -819,17 +868,19 @@ html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1f
 /* Chat pins: row pin buttons are off by default everywhere now (Show pin buttons tweak); Pin stays in the row menu. */
 
 /* Desktop + New chat (Miguel 27 Oct): same family as the composer controls, a round button in the skin's fill, no glow. */
-html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--ob-fill); color: var(--ob-on); box-shadow: none; }
+html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab { border-radius: 50%; border: 0; background: var(--ob-fill); color: var(--ob-on); box-shadow: none; }
+
 html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab svg { stroke: var(--ob-on); }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose textarea { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 
 /* Desktop Latest pill (Miguel, 28 Oct 2026): it sat on the Done button, so a double click could close the thread. It now
  * rides in the thread's column just above the Snooze/Done row, centred, taking no space (32px tall, -44px top, 12px gap). */
-html[data-skin^="obsidian"][data-shell="desktop"] .ch-thread > .ch-latest { position: relative; inset: auto; transform: none; flex: none; align-self: center; margin: -44px auto 12px; z-index: 6; }
+
 /* Phone polish (Miguel 27 Oct, same pass as the desktop one): sheets, the long-press menu and the count badge follow
  * the skin. The long-press menu used to run under the pill dock (its lower actions were hidden behind it). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b { padding-bottom: calc(var(--pill-top) + 10px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b:not(.ch-emoji-sheet) { max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; }
+
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b:not(.ch-emoji-sheet) { overscroll-behavior: contain; }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose button.ch-mic.on { animation: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink) 22%, transparent); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b button:focus-visible { outline: none; background: var(--ob-tint); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b button:active { background: var(--ob-tint); }
@@ -838,6 +889,6 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-emoji-search:focus-w
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .sheet { border-color: color-mix(in srgb, var(--ink) 14%, transparent); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b { -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-latest { background: color-mix(in srgb, var(--bg) 92%, transparent); border-color: var(--ob-edge); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .win.solo.app-chats .ch-latest { bottom: calc(var(--pill-top) + 100px); }
+
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock .orb-badge { box-shadow: 0 0 0 2px var(--bg); }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .dock .orb-badge { color: #fff; }

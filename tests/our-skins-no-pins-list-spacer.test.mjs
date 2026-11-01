@@ -10,10 +10,6 @@ for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obs
     assert.doesNotMatch(css, /pin-action[^}]*display:\s*none/)
     assert.match(read('web/core/chats.js'), /data-part="pin-action" data-rspin/)
   })
-  test(`${file}: list bottom room is a flex spacer, not scroll padding`, () => {
-    assert.match(css, /\.win\.solo\.app-chats \.ch-list \.ch-scroll::after \{ content: ""; display: block; order: 99; flex: 0 0 calc\(var\(--pill-top\) \+ 66px\); \}/)
-    assert.doesNotMatch(css, /\.win\.solo\.app-chats \.ch-list \.ch-scroll \{ padding-bottom: calc\(var\(--pill-top\)/)
-  })
 }
 test('core keeps the row pin available to opt-in skins and tweaks', () => {
   assert.match(read('web/core/chats.css'), /\.ch-pin-toggle \{ position: absolute;/)

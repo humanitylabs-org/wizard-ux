@@ -1,1 +1,14 @@
 /* The switch above the message box is styled by the shell; this tweak adds no surface of its own. */
+
+/* Switch row geometry (moved here from Miguel's Dark/Light/Landscapes skins, 1 Nov 2026: skins are colours only). */
+html[data-tweaks~="miguel/model-pills"] .ch-swrow { flex: 0 0 auto; display: flex; align-items: center; padding: 4px 10px 0; }
+html[data-tweaks~="miguel/model-pills"] .ms { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+html[data-tweaks~="miguel/model-pills"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
+html[data-tweaks~="miguel/model-pills"] .ms { container: ms / inline-size; position: relative; }
+html[data-tweaks~="miguel/model-pills"] .ch-swrow { gap: 6px; }
+html[data-tweaks~="miguel/model-pills"] .ch-swrow .ch-tacts { margin: 0; gap: 4px; flex: 0 0 auto; display: flex; }
+html[data-tweaks~="miguel/model-pills"] .ch-swrow .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; }
+html[data-tweaks~="miguel/model-pills"] .ch-swrow .ch-tacts button span { display: none; }
+html[data-tweaks~="miguel/model-pills"][data-shell="desktop"] .ch-swrow .ch-tacts button { width: auto; padding: 0 12px; }
+html[data-tweaks~="miguel/model-pills"][data-shell="desktop"] .ch-swrow .ch-tacts button span { display: inline; }
+html[data-tweaks~="miguel/model-pills"][data-shell="desktop"] .ch-swrow { justify-content: space-between; }

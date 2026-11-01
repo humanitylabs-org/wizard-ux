@@ -242,8 +242,7 @@ window.WizCore.chats = function createChats(H) {
     deferred: { label: 'Snoozed', syn: ['snooze', 'defer', 'deferred', 'later', 'boomerang', 'parked'], empty: 'Nothing snoozed.', test: s => deferredOf(s) || Boolean(BOOM()?.nextFor(s.id)) },
   };
   const FILTERS = STATUS; // app.js (Home cards) names a status filter
-  // Miguel's skins list by status only, so a Yesterday filter has nothing to show there.
-  const statusEntries = () => Object.entries(STATUS).filter(([k]) => !(k === 'yesterday' && ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''))).filter(([k]) => !(snoozeLast() && k === 'deferred'));
+  const statusEntries = () => Object.entries(STATUS).filter(([k]) => !(snoozeLast() && k === 'deferred'));
   const subjectOf = s => String(s.attention?.subject || '').trim();
   function subjects() {
     const n = new Map(); for (const s of (LIVE.ok ? LIVE.unified() : [])) { if (s.hidden) continue; const k = subjectOf(s); if (k) n.set(k, (n.get(k) || 0) + 1); }
@@ -814,20 +813,17 @@ window.WizCore.chats = function createChats(H) {
 
   // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
   const COMPACT_KEY = 'wos.chats.compact.v1';
-  // Miguel's skins (Dark, Light, Landscapes) default to the compact list; an explicit choice in Filter always wins.
-  const OUR_SKINS = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'];
   // Regenerate sits under the last reply only for a skin (or My skin) that asks: `html[data-skin] { --wos-reply-regenerate: on; }`.
   const regenOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-regenerate').trim() === 'on'; } catch (_) { return false; } };
-  const ourSkin = () => OUR_SKINS.includes(document.documentElement.dataset.skin || '');
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => window.WosSkinHost?.snoozeOrder === 'last';
-  const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v == null ? OUR_SKINS.includes(document.documentElement.dataset.skin || '') : v === '1'; } catch (e) { return false; } };
+  const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v === '1'; } catch (e) { return false; } };
   function filterSheet(w, c) {
     const opt = (k, key, label, on) => `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfopt="${k}:${esc(key)}"><i class="ch-fdot ${k === 'status' ? key : 'subject'}"></i>${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
     return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${statusEntries().map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${focusSection(w)}
-      ${ourSkin() ? '' : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
+      ${`<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
       <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
       </div></div>`;
   }

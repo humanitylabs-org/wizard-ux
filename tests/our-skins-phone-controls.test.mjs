@@ -20,18 +20,6 @@ const O = 'html[data-skin^="obsidian"]:not([data-shell="desktop"])';
 const L = 'html[data-skin^="landscapes"]:not([data-shell="desktop"])';
 const SOLO = '.device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats';
 
-test('the long-press and model menus end above the pill dock on all three skins', () => {
-  for (const [css, p] of [[obsidian, O], [landscapes, L]]) {
-    const r = rule(css, `${p} ${SOLO} .ch-sheet-b`);
-    assert.ok(r, `${p} pads the chat sheets`);
-    assert.match(r, /padding-bottom:\s*calc\(var\(--pill-top\)/);
-    // A thread in many Spaces gets one action per Space: the padded sheet must scroll, never clip its top actions.
-    const sc = rule(css, `${p} ${SOLO} .ch-sheet-b:not(.ch-emoji-sheet)`) || '';
-    assert.match(sc, /max-height:\s*calc\(100% - /);
-    assert.match(sc, /overflow-y:\s*auto/);
-  }
-});
-
 test('phone sheets, menu rows and the count badge follow the skin (no violet edge, no glow)', () => {
   for (const [css, p] of [[obsidian, O], [landscapes, L]]) {
     for (const sel of ['.sheet', '.ch-latest', '.ch-sheet-b button:focus-visible', '.ch-sheet-b button:active', '.ch-emoji-search:focus-within']) {

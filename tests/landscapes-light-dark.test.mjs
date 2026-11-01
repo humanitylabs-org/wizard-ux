@@ -25,7 +25,8 @@ test('the Landscapes package and Miguel\'s shell rules cover both palettes', () 
   const css = read('web/skins/landscapes/skin.css');
   assert.doesNotMatch(css, /data-skin="landscapes"\]/, 'shared rules use ^="landscapes"');
   assert.match(css, /html\[data-skin="landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.msg\.u \.bub \{ background: rgba\(0, 0, 0, \.07\)/);
-  for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.match(read(f), /'landscapes', 'landscapes-light'/, f);
+  // Skins are colours only (1 Nov 2026): no shell file picks a layout from the worn skin.
+  for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /'landscapes'|'obsidian'/, f);
   assert.doesNotMatch(read('web/desktop/desktop.css'), /data-skin="landscapes"\]/);
 });
 
@@ -47,11 +48,6 @@ test('Landscapes Light: the Latest pill and the small in-thread notes read as in
   const css = read('web/skins/landscapes/skin.css');
   assert.match(css, /landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.ch-latest \{ background: rgba\(250, 250, 252/);
   assert.match(css, /landscapes-light[^\n]*:is\(\.msg\.agentnote > summary, \.laterrun, [^\n]*\{ color: var\(--ink-2\); \}/);
-});
-
-test('desktop Latest pill sits centred above the Snooze/Done row, never on Done', () => {
-  for (const [d, pre] of [['landscapes', 'html\\[data-skin\\^="landscapes"\\]'], ['obsidian', 'html\\[data-skin\\^="obsidian"\\]']])
-    assert.match(read(`web/skins/${d}/skin.css`), new RegExp(pre + '\\[data-shell="desktop"\\] \\.ch-thread > \\.ch-latest \\{ position: relative;[^}]*align-self: center; margin: -44px auto 12px;'));
 });
 
 test('Landscapes Light resource sheet draws capacity bars in ink, not white', () => {
