@@ -1,7 +1,11 @@
 # Generated only when WIZARD_BROWSER_BOUNDARY=1. Never serve this configuration.
-if ($http_sec_fetch_dest != document) { return 403; }
-if ($http_sec_fetch_mode != navigate) { return 403; }
-limit_except GET { deny all; }
+# Refusals return their own short body with no <head>: nginx's built-in error pages are HTML with a <head>, and
+# sub_filter below would inject the shell token into them (found with real nginx 1.28 on wizard-os #386; the Node
+# stand-in could not show it). default_type covers the extensionless document paths; .html keeps text/html.
+default_type text/plain;
+if ($http_sec_fetch_dest != document) { return 403 "navigation only\n"; }
+if ($http_sec_fetch_mode != navigate) { return 403 "navigation only\n"; }
+if ($request_method !~ ^(GET|HEAD)$) { return 405 "navigation only\n"; }
 add_header Cache-Control "private, no-store" always;
 add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
 add_header Cross-Origin-Opener-Policy "noopener-allow-popups" always;

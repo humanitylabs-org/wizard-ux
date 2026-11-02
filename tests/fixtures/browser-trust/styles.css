@@ -5,3 +5,6 @@ html[data-wz-hosted] body { background: transparent; }
 main { padding: var(--wz-space-6, 24px); }
 textarea { display: block; width: 100%; box-sizing: border-box; margin-block: var(--wz-space-4, 16px); background: var(--wz-panel); color: var(--wz-text); border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px); font: inherit; padding: var(--wz-space-4, 16px); }
 #status { background: var(--wz-panel); color: var(--wz-text); padding: var(--wz-space-3, 12px); }
+#items li { background: var(--wz-panel); color: var(--wz-text); padding: var(--wz-space-3, 12px); margin-block: var(--wz-space-2, 8px); border-radius: var(--wz-radius, 12px); }
+#items li[data-read="true"] .state { color: var(--wz-text-dim, var(--wz-text)); }
+#items .pressed { opacity: .7; }

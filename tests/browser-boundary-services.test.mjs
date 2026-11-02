@@ -218,3 +218,42 @@ test('navigation after upstream starts suppresses its result to the replacement 
   f.loads.get('load')();finish({text:'old document words'});
   assert.equal(await p,undefined);
 });
+test('production data operations: exact server body, write keys, status, sanitized outcomes and unsupported storage', async () => {
+  const f = fixture(), calls = [];
+  f.ctx.TextEncoder = TextEncoder;   // the shell measures request bytes before any server call
+  let next = () => ({ status: 200, body: { items: [], nextCursor: null } });
+  f.ctx.fetch = async (url, init) => {
+    const body = JSON.parse(init.body); calls.push({ url, body });
+    if (url.endsWith('/bindings')) return new Response(JSON.stringify({ handle: 'h-1', principal: {} }), { status: 200 });
+    const r = next(body); return new Response(JSON.stringify(r.body), { status: r.status });
+  };
+  await f.ready();
+  const key = webcrypto.randomUUID();   // generated, never a literal (secret scanners flag literal keys)
+  assert.deepEqual((await f.request('data.call', { operation: 'notifications.list', args: { limit: 20, cursor: null } })).value, { items: [], nextCursor: null });
+  next = () => ({ status: 200, body: { id: 'n1', read: true, revision: 'r-1', operationKey: key } });
+  assert.equal((await f.request('data.call', { operation: 'notifications.mark_read', args: { id: 'n1', expectedRevision: 'r-0' }, operationKey: key })).value.read, true);
+  next = () => ({ status: 200, body: { status: 'succeeded', operationKey: key } });
+  assert.equal((await f.request('data.status', { operation: 'notifications.mark_read', operationKey: key })).value.status, 'succeeded');
+  const sent = calls.filter(c => c.url.endsWith('/call')).map(c => c.body);
+  assert.deepEqual(sent.map(b => Object.keys(b).sort().join()), ['args,generation,handle,operation,requestId', 'args,generation,handle,operation,operationKey,requestId', 'args,generation,handle,operation,requestId']);
+  assert.equal(sent[1].operationKey, key);
+  assert.deepEqual(sent[2], { ...sent[2], operation: 'data.status', args: { operation: 'notifications.mark_read', operationKey: key } });
+  // Lost/unknown outcome: the app gets outcome + key, never a value; retryable only where documented.
+  next = () => ({ status: 409, body: { error: 'outcome_unknown', outcome: 'unknown', operationKey: key, retryable: false, upstream: '<html>secret</html>' } });
+  const unknown = await f.request('data.call', { operation: 'notifications.mark_read', args: { id: 'n1', expectedRevision: 'r-0' }, operationKey: key });
+  assert.equal(unknown.value, undefined);
+  assert.deepEqual(unknown.error, { code: 'outcome_unknown', message: 'outcome_unknown', retryable: false, outcome: 'unknown', operationKey: key });
+  next = () => ({ status: 507, body: { error: 'quota_exceeded' } });
+  assert.equal((await f.request('data.call', { operation: 'notifications.mark_read', args: { id: 'n2', expectedRevision: 'r-0' }, operationKey: key })).error.code, 'quota_exceeded');
+  const before = calls.length;
+  for (const [method, args, code] of [
+    ['data.call', { operation: 'owner.fetch', args: {} }, 'not_allowed'],
+    ['data.call', { operation: 'notifications.mark_read', args: { id: 'n1', expectedRevision: 'r-0' } }, 'bad_request'],       // write without key
+    ['data.call', { operation: 'notifications.list', args: { limit: 1, cursor: null }, operationKey: key }, 'bad_request'],   // key on a read
+    ['data.call', { operation: 'notifications.list', args: { limit: 1, cursor: null }, appId: 'profiles' }, 'bad_request'],  // forged principal
+    ['data.status', { operation: 'notifications.list', operationKey: key }, 'bad_request'],
+    ['state.remove', { area: 'persistent', key: 'draft' }, 'unsupported_capability'],
+    ['state.read', { area: 'session', key: 'draft' }, 'unsupported_capability'],
+  ]) assert.equal((await f.request(method, args)).error.code, code, method + ' ' + JSON.stringify(args));
+  assert.equal(calls.length, before, 'refused locally before any server call');
+});

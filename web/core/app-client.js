@@ -422,7 +422,8 @@
       onCompanionMessage: fn => listen(companionMessages, fn),
     }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
-    data: Object.freeze({ call: requestData => window.WizBoundaryClient ? request('data.call', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
+    data: Object.freeze({ call: requestData => window.WizBoundaryClient ? request('data.call', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})),
+      status: requestData => window.WizBoundaryClient ? request('data.status', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
     state: Object.freeze(Object.fromEntries(['read','write','transaction'].map(method => [method, args => window.WizBoundaryClient ? request('state.'+method,args) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'}))]))),
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
