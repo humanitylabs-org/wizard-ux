@@ -99,7 +99,7 @@ test('the shell forwards exactly the reviewed fields, never a URL, and keeps thr
 
 test('the opaque client exposes intent.confirm / intent.open with a long timeout; WizardApp.intent maps to them', () => {
   const client = read('browser-boundary-client.js'), app = read('app-client.js');
-  assert.match(client, /'intent\.confirm', 'intent\.open'(, 'recovery\.call')?(, '(upload|download)\.[a-z]+')*\]\.includes\(method\)/);
+  assert.match(client, /'intent\.confirm', 'intent\.open'(, 'recovery\.call')?(, 'store\.call')?(, '(upload|download)\.[a-z]+')*\]\.includes\(method\)/);
   assert.match(app, /intent: Object\.freeze\(\{ confirm: requestData => window\.WizBoundaryClient \? request\('intent\.confirm', requestData, 600000\)/);
   const boundary = read('browser-boundary.js');
   assert.match(boundary, /INTENT_DELAY_MS = 500, INTENT_PER_MINUTE = 3/);

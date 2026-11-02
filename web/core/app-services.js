@@ -91,11 +91,14 @@
       const builtIn = apps().find(a => a.id === st.appId);
       const recovery = st.appId === 'troubleshooter' && builtIn && !Object.hasOwn(builtIn, 'source') && st.url.pathname === '/troubleshoot/'
         ? { builtIn: true, openApp: id => { try { return !!window.WizOpenApp?.(id); } catch (_) { return false; } } } : undefined;
+      // The built-in App Store (apps.js) at its fixed shell path gets the shell-owned Store operations (O1).
+      const store = st.appId === 'app-store' && builtIn && !Object.hasOwn(builtIn, 'source') && st.url.pathname === '/wizard-os-home/store/index.html'
+        ? { builtIn: true } : undefined;
       const off = window.WizBrowserBoundary.attach(frame, {
         appId: st.appId,
         authorize: channel => opaqueValid(st,frame.contentWindow,channel),
         service: (d,reply,authorize) => opaqueService(st,d,reply,authorize),
-        recovery,
+        recovery, store,
       }), load = () => reset(st);
       frame.addEventListener('load', load);
       st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); off(); reset(st); };

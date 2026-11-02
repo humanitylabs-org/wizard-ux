@@ -2,7 +2,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { createStoreDataRoutes, PREFIX, installedMetadata, serviceOrigin } from '../tools/store-data-origin.mjs';
+import { createStoreDataRoutes, PREFIX, installedMetadata, serviceOrigin, readShellToken } from '../tools/store-data-origin.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 test('installed metadata is an allowlist (nested generated credentials never emitted)',()=>{
   const result=installedMetadata({installed:[{info:{id:'transcriber',name:'Transcriber',form_fields:[{password:'secret'}]},app:{status:'running',version:1,config:{password:'secret'},userConfig:{secret:'secret'}},metadata:{latestVersion:2,password:'secret'},config:'secret'}]});
   assert.deepEqual(result,{installed:[{info:{id:'transcriber',name:'Transcriber'},app:{status:'running',version:1},metadata:{latestVersion:2}}]});
@@ -50,4 +53,29 @@ test('Store reads the shell app list from the configured loopback Agent Service'
   finally { s.closeAllConnections(); await new Promise(r=>s.close(r)); }
   assert.equal(res.status,200); assert.equal(j.complete,true); assert.deepEqual(j.unavailable,[]);
   assert.ok(seen.includes('http://127.0.0.1:8798/wizard/v1/apps'));
+});
+
+test('browser boundary on: the installed list sends the shell token to the Service only, so it is complete (wizard-os 389)', async () => {
+  const TOKEN = 'ab'.repeat(32), calls = [];
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'sd-tok-')), file = path.join(dir, 'shell-token');
+  fs.writeFileSync(file, TOKEN + '\n');
+  assert.equal(readShellToken(file), TOKEN);
+  assert.equal(readShellToken(undefined), '');
+  fs.writeFileSync(path.join(dir, 'bad'), 'not-a-token'); assert.equal(readShellToken(path.join(dir, 'bad')), '');
+  const handler = createStoreDataRoutes({ service: 'http://127.0.0.1:8798', shellToken: () => readShellToken(file), readWam: () => ({ apps: [{ id: 'files' }] }),
+    readRuntipi: () => ({ base: 'http://fixture', token: 't' }),
+    fetchImpl: async (url, init) => {
+      const token = new Headers(init?.headers).get('x-wizard-shell-token');
+      calls.push({ url: String(url), token });
+      // The Service under the boundary: owner API without the shell token is 401.
+      if (String(url).startsWith('http://127.0.0.1:8798/') && token !== TOKEN) return new Response('{}', { status: 401 });
+      return new Response(JSON.stringify(String(url).includes('/api/apps/installed') ? { installed: [] } : { apps: [{ id: 'files', url: '/files/' }] }), { headers: { 'content-type': 'application/json' } });
+    } });
+  const s = http.createServer(handler); await new Promise(r => s.listen(0, '127.0.0.1', r));
+  let j;
+  try { j = await (await fetch(`http://127.0.0.1:${s.address().port}${PREFIX}wizard/v1/installed-apps`)).json(); }
+  finally { s.closeAllConnections(); await new Promise(r => s.close(r)); fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.equal(j.complete, true); assert.deepEqual(j.unavailable, []);
+  assert.ok(calls.some(c => c.url === 'http://127.0.0.1:8798/wizard/v1/apps' && c.token === TOKEN));
+  assert.ok(calls.filter(c => !c.url.startsWith('http://127.0.0.1:8798/')).every(c => c.token === null), 'never sent anywhere else');
 });

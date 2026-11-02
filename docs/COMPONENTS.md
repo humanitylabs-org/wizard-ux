@@ -104,7 +104,7 @@ Reuse:
 
 ## App voice/audio
 
-Default-off: `WizBrowserBoundary`, `WizBoundaryClient` ([contract](browser-boundary-services.md)): Troubleshooter-only `recovery.call` (own recovery token; `WizAppServices` passes `recovery` only for `troubleshooter`); `wizard-files` gets `files.*` tickets, `WizardApp.upload`/`download`; `own_tab` apps (File Browser) open as a noopener tab. Flag on: `WosModels` reads Claude accounts via shell `models.claude_accounts`.
+Default-off: `WizBrowserBoundary`, `WizBoundaryClient` ([contract](browser-boundary-services.md)): built-in-only `recovery.call` (Troubleshooter, own token), `store.call` (App Store via `store-bridge.js`; changes confirmed in shell); `wizard-files`: `files.*` tickets, `WizardApp.upload`/`download`; `own_tab` apps open as a noopener tab. Flag on: `WosModels` reads Claude accounts via shell `models.claude_accounts`.
 
 | Module | Contract |
 |---|---|

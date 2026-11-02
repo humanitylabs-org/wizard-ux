@@ -62,10 +62,11 @@
       pending.set(id, { st, resolve, timer }); send(st, op, { id, ...data });
     });
   }
-  function attach(frame, { appId, authorize, service, recovery } = {}) {
+  function attach(frame, { appId, authorize, service, recovery, store } = {}) {
     if (!frame?.matches?.('iframe[sandbox]') || frame.sandbox.contains('allow-same-origin')) return () => {};
     if (sessions.has(frame)) return () => {};
-    const st = { frame, appId, authorize, service, recovery: recovery?.builtIn === true ? Object.freeze({ builtIn: true, openApp: recovery.openApp }) : null, channel: crypto.randomUUID(), ready: false };
+    const st = { frame, appId, authorize, service, recovery: recovery?.builtIn === true ? Object.freeze({ builtIn: true, openApp: recovery.openApp }) : null,
+      store: store?.builtIn === true ? Object.freeze({ builtIn: true }) : null, channel: crypto.randomUUID(), ready: false };
     sessions.set(frame, st);
     const hello = () => {
       revoke(st);
@@ -314,6 +315,99 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
       chip = intentChip(st, kind === 'navigate' ? `Review: ${appName(st)} sign-in page` : `Review: ${String(queued.summary?.title || 'Confirm').slice(0, 48)}`, openReview);
     }).catch(e => { if (e.accepted) { delete e.accepted; } throw e; });
   }
+  /* ---- App Store panel (wizard-os 389 O1; spec REVIEW-BRIEF: Store is a shell-controlled panel) ----
+   * The built-in App Store renders the public index (untrusted text) in an opaque window, so its own reads of the
+   * owner's /wizard-os-home/store-data/ and store-install/ are refused from Origin:null, correctly: those owner APIs
+   * get no CORS. Instead the shell itself answers a fixed set of typed Store operations for ONLY that registered
+   * built-in window (app-services; an installed app can never take its id or path). Each operation maps to ONE fixed
+   * path with exact, validated arguments; the frame never names a URL, method or header. Reads are answered as they
+   * are. Owner changes (install/update/switch, remove, a model approval) first need the owner's own confirmation in
+   * shell UI (Review chip + dialog, same trusted-activation rules and rate as shell intents): a script in the
+   * Store's frame can ask, never decide. No installed-app grant is involved: this is shell power, not an app's. */
+  const STORE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/, STORE_REPO = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/, STORE_SHA = /^[a-f0-9]{40}$/;
+  const STORE_FEATURE = /^[a-z0-9][a-z0-9_-]{0,63}$/, STORE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:\/-]{0,127}$/;
+  const STORE_READ_LIMIT = 4194304;
+  const STORE_OPS = {
+    catalog: a => exactKeys(a, ['offset', 'refresh']) && Number.isSafeInteger(a.offset) && a.offset >= 0 && a.offset <= 100000 && typeof a.refresh === 'boolean'
+      && { path: `store-data/wizard/v1/index/search?limit=100&offset=${a.offset}${a.refresh ? '&refresh=1' : ''}` },
+    'installed.runtipi': a => exactKeys(a, []) && { path: 'store-data/api/apps/installed' },
+    'installed.wizard': a => exactKeys(a, []) && { path: 'store-data/wizard/v1/installed-apps' },
+    link: a => exactKeys(a, ['repo', 'commit']) && STORE_REPO.test(a.repo) && (a.commit === null || STORE_SHA.test(a.commit))
+      && { path: 'store-data/wizard/v1/link?' + new URLSearchParams({ repo: a.repo, ...(a.commit ? { commit: a.commit } : {}) }) },
+    'router.needs': a => exactKeys(a, ['app']) && STORE_ID.test(a.app) && { path: 'store-data/router/v1/needs/' + a.app },
+    'install.status': a => exactKeys(a, ['id']) && STORE_ID.test(a.id) && { path: 'store-install/' + a.id },
+    'remove.plan': a => exactKeys(a, ['id']) && STORE_ID.test(a.id) && { path: `store-install/_remove/${a.id}/plan` },
+    'remove.status': a => exactKeys(a, ['id']) && STORE_ID.test(a.id) && { path: 'store-install/_remove/' + a.id },
+    'app.agents': a => exactKeys(a, ['id']) && STORE_ID.test(a.id) && { abs: `/wizard/v1/apps/${a.id}/agents` },
+    install: a => exactKeys(a, ['id', 'source', 'repo', 'commit', 'operation']) && STORE_ID.test(a.id) && STORE_ID.test(a.source) && STORE_REPO.test(a.repo)
+      && STORE_SHA.test(a.commit) && ['install', 'update', 'switch'].includes(a.operation)
+      && { path: 'store-install/' + a.id, body: { source: a.source, repo: a.repo, commit: a.commit, operation: a.operation },
+        confirm: { title: `${{ install: 'Install', update: 'Update', switch: 'Switch' }[a.operation]} ${a.id}?`,
+          detail: `From github.com/${a.repo} at ${a.commit.slice(0, 12)} (${a.source}).`, action: { install: 'Install', update: 'Update', switch: 'Switch' }[a.operation] } },
+    remove: a => exactKeys(a, ['id', 'repo', 'commit', 'dependents', 'empties']) && STORE_ID.test(a.id) && STORE_REPO.test(a.repo) && STORE_SHA.test(a.commit)
+      && Array.isArray(a.dependents) && a.dependents.length <= 64 && a.dependents.every(x => STORE_ID.test(x))
+      && Array.isArray(a.empties) && a.empties.length <= 64 && a.empties.every(x => typeof x === 'string' && STORE_ID.test(x))
+      && { path: 'store-install/_remove/' + a.id, body: { repo: a.repo, commit: a.commit, dependents: a.dependents, empties: a.empties },
+        confirm: { title: `Remove ${a.id}?`, detail: `Removes the app and its data from this Wizard${a.dependents.length ? `, and ${a.dependents.length} app${a.dependents.length === 1 ? '' : 's'} that need it` : ''}.`, action: 'Remove', danger: true } },
+    'router.approve': a => exactKeys(a, ['app', 'feature', 'provider', 'model']) && STORE_ID.test(a.app) && STORE_FEATURE.test(a.feature) && STORE_ID.test(a.provider) && STORE_MODEL.test(a.model)
+      && { path: 'store-data/router/v1/approve', body: { app: a.app, feature: a.feature, provider: a.provider, model: a.model },
+        confirm: { title: `Let ${a.app} use ${a.model}?`, detail: `For "${a.feature}", through ${a.provider}.`, action: 'Allow' } },
+  };
+  // The owner's confirmation in shell DOM (same chip, dialog, wake delay, trusted activation and 3-a-minute budget as
+  // shell intents). Resolves true only on the owner's own activation of the dialog's action button.
+  function shellConfirm(st, summary, authorize) {
+    intentBudget(st.appId);
+    if (st.intent) throw coded('busy');
+    return new Promise((resolve, reject) => {
+      let ui = null, chip = null, done = false, wake = 0, armed = false;
+      const finish = (ok, error) => {
+        if (done) return; done = true; clearInterval(watch); clearTimeout(timer);
+        chip?.remove(); if (ui) { try { ui.dlg.close(); } catch (_) {} ui.dlg.remove(); }
+        if (st.intent === state) st.intent = null;
+        if (error) reject(error); else resolve(ok);
+      };
+      const state = { cancel: () => finish(false, coded('cancelled')) };
+      st.intent = state;
+      const timer = setTimeout(() => finish(false, coded('expired')), 120000);
+      const watch = setInterval(() => { if (!authorize()) finish(false, coded('denied')); }, 400);
+      const activate = () => { if (!done && authorize() && performance.now() >= wake) finish(true); };
+      const openReview = () => {
+        if (done || ui || !authorize()) return;
+        chip?.remove(); chip = null;
+        ui = intentDialog(st, summary, 'confirm');
+        ui.dlg.addEventListener('cancel', e => { e.preventDefault(); finish(false, coded('cancelled')); });
+        ui.cancel.addEventListener('click', e => { if (e.isTrusted) finish(false, coded('cancelled')); });
+        ui.go.setAttribute('aria-disabled', 'true');
+        ui.go.addEventListener('pointerdown', e => { armed = e.isTrusted && e.isPrimary && performance.now() >= wake; ui.go.classList.add('pressed'); });
+        ui.go.addEventListener('pointerleave', () => { armed = false; ui.go.classList.remove('pressed'); });
+        ui.go.addEventListener('pointerup', e => { ui.go.classList.remove('pressed'); const ok = armed && e.isTrusted && ui.go.contains(e.target) && performance.now() >= wake; armed = false; if (ok) activate(); });
+        ui.go.addEventListener('click', e => { if (e.isTrusted && e.detail === 0 && ui.dlg.contains(document.activeElement)) activate(); });
+        ui.dlg.showModal(); ui.cancel.focus();
+        wake = performance.now() + INTENT_DELAY_MS;
+        setTimeout(() => { if (!done && ui) ui.go.removeAttribute('aria-disabled'); }, INTENT_DELAY_MS);
+      };
+      chip = intentChip(st, `Review: ${String(summary.title).slice(0, 48)}`, openReview);
+    });
+  }
+  async function storeCall(st, args, authorize) {
+    if (!exactKeys(args, ['op', 'args']) || typeof args.op !== 'string') throw coded('bad_request');
+    if (!Object.hasOwn(STORE_OPS, args.op)) throw coded('not_allowed');
+    const spec = STORE_OPS[args.op](args.args);
+    if (!spec) throw coded('bad_request');
+    if (spec.confirm && !(await shellConfirm(st, spec.confirm, authorize))) throw coded('cancelled');
+    if (!authorize()) throw coded('denied');
+    const url = spec.abs || '/wizard-os-home/' + spec.path;
+    let r;
+    try {
+      r = await window.fetch(url, spec.body ? { method: 'POST', cache: 'no-store', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(spec.body) } : { cache: 'no-store', credentials: 'same-origin' });
+    } catch (_) { throw coded('backend_unavailable'); }
+    const text = await r.text().catch(() => '');
+    if (text.length > STORE_READ_LIMIT) throw coded('too_large');
+    let value = null; try { value = text ? JSON.parse(text) : null; } catch (_) { value = null; }
+    // The Store keeps its own handling of each endpoint's statuses (e.g. 404 = "App Manager needs updating").
+    return { status: r.status, value };
+  }
   /* ---- Troubleshooter recovery view (wizard-os #385 census row "troubleshooter"; default-off) ----
    * Only the shell's built-in Troubleshooter window (registered by app-services with `recovery`) gets these typed
    * operations: each maps to ONE fixed path on the host recovery listener (/troubleshoot/api/), called by the shell
@@ -433,6 +527,13 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
         if (st.recovery?.builtIn !== true || st.appId !== 'troubleshooter') throw coded('not_allowed');
         if (new TextEncoder().encode(JSON.stringify(d)).byteLength > 65536) throw coded('too_large');
         const value = await recoveryCall(st, d.args);
+        if (!authorize()) throw coded('denied');
+        reply(value);
+      } else if (d.method === 'store.call') {
+        // Only the shell's built-in App Store window; never an installed app, whatever its id.
+        if (st.store?.builtIn !== true || st.appId !== 'app-store') throw coded('not_allowed');
+        if (new TextEncoder().encode(JSON.stringify(d)).byteLength > 65536) throw coded('too_large');
+        const value = await storeCall(st, d.args, authorize);
         if (!authorize()) throw coded('denied');
         reply(value);
       } else if (d.method === 'intent.confirm' || d.method === 'intent.open') {

@@ -64,7 +64,11 @@ export function shellMetadata(doc) {
     status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
   }));
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes(), appLogos } = {}) {
+export function readShellToken(file = process.env.WIZARD_SHELL_TOKEN_FILE) {
+  if (!file) return '';
+  try { const t = readFileSync(file, 'utf8').trim(); return /^[a-f0-9]{64}$/.test(t) ? t : ''; } catch (_) { return ''; }
+}
+export function createStoreDataRoutes({ shellToken = () => readShellToken(), fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes(), appLogos } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();
@@ -72,7 +76,10 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
     if (!r.ok) throw new Error('app_data_unavailable');
     return installedMetadata(await r.json());
   };
-  const serviceJson = async (p) => { const r=await fetchImpl(service+p,{redirect:'error',signal:AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
+  // Browser boundary on (wizard-os 389): the Agent Service refuses its owner API without the shell token, so the
+  // Store's installed list read "incomplete" and no release change could be requested. This box-local shell process
+  // reads the same token file as the WAM API (WIZARD_SHELL_TOKEN_FILE) and sends it only to the Service origin.
+  const serviceJson = async (p) => { const t=shellToken(); const r=await fetchImpl(service+p,{redirect:'error',signal:AbortSignal.timeout(8000),...(t?{headers:{'X-Wizard-Shell-Token':t}}:{})}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
   const getOverview = overview || (async () => buildOverview(await gatherSources({ fetchJson: serviceJson, readInstalled: installedList })));
   let ovCache = null;
   const logos = new Map();
