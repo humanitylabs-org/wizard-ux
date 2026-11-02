@@ -150,6 +150,22 @@ public final class HomeScreenShortcuts {
         if (!"image/png".equals(size.outMimeType) || size.outWidth < 48 || size.outWidth > 256 || size.outHeight < 48 || size.outHeight > 256) return null;
         return BitmapFactory.decodeByteArray(bytes,0,bytes.length);
     }
+    /** Icon drawing format: 1 = adaptive (fills the launcher's mask). Older pins redraw once on refresh. */
+    static final int ICON_FORMAT = 1;
+    /**
+     * The web sends a square icon whose glyph sits in its middle two thirds. As a plain bitmap the launcher shrinks
+     * it onto a white disc; as an adaptive bitmap the square is the visible area (72 of 108 dp), padded with its own
+     * corner colour, so the dark tile fills the circle edge to edge and the glyph stays inside the safe zone.
+     */
+    static Icon adaptive(Bitmap square) {
+        int side = square.getWidth(), full = Math.round(side * 108f / 72f), inset = (full - side) / 2;
+        Bitmap out = Bitmap.createBitmap(full, full, Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(out);
+        canvas.drawColor(square.getPixel(0, 0) | 0xff000000);
+        android.graphics.Rect dst = new android.graphics.Rect(inset, inset, inset + side, inset + side);
+        canvas.drawBitmap(square, null, dst, new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        return Icon.createWithAdaptiveBitmap(out);
+    }
     /** No tap needed: can only change this package's existing pinned identity, never request a pin. */
     private static String refresh(Context c, JSONObject data) {
         String app = data.optString("appId"), png = data.optString("icon");
@@ -161,13 +177,13 @@ public final class HomeScreenShortcuts {
         if (bitmap == null) return "error";
         String id = HomeScreenPolicy.identity(origin(c),app);
         android.content.SharedPreferences prefs = c.getSharedPreferences("home-screen-pins",Context.MODE_PRIVATE);
-        if (!HomeScreenPolicy.needsUpdate(ownPinned,prefs.getString(id + ":name",null),
+        if (prefs.getInt(id + ":fmt",0) >= ICON_FORMAT && !HomeScreenPolicy.needsUpdate(ownPinned,prefs.getString(id + ":name",null),
                 prefs.getString(id + ":icon",null),name,png)) return "unchanged";
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,id).setShortLabel(name).setLongLabel(name)
-            .setIcon(Icon.createWithBitmap(bitmap)).build();
+            .setIcon(adaptive(bitmap)).build();
         // Recheck ownership immediately before the update; updateShortcuts itself cannot create a pin.
         if (!pinned(c,app) || !c.getSystemService(ShortcutManager.class).updateShortcuts(Collections.singletonList(shortcut))) return "error";
-        prefs.edit().putString(id + ":name",name).putString(id + ":icon",png).apply();
+        prefs.edit().putString(id + ":name",name).putString(id + ":icon",png).putInt(id + ":fmt",ICON_FORMAT).apply();
         if (BuildConfig.DEBUG) android.util.Log.i("WizardHomeShortcuts","updated " + id);
         return "updated";
     }
@@ -183,11 +199,11 @@ public final class HomeScreenShortcuts {
         if (bitmap == null) return "error";
         String shortcutId = HomeScreenPolicy.identity(origin(c),app), token = UUID.randomUUID().toString();
         c.getSharedPreferences("home-screen-pins",Context.MODE_PRIVATE).edit().putString(shortcutId,token)
-            .putString(shortcutId + ":name",name).putString(shortcutId + ":icon",png).apply();
+            .putString(shortcutId + ":name",name).putString(shortcutId + ":icon",png).putInt(shortcutId + ":fmt",ICON_FORMAT).apply();
         Intent launch = new Intent(c,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(taskUri(c,app))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_NEW_TASK);
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,shortcutId).setShortLabel(name).setLongLabel(name)
-            .setIcon(Icon.createWithBitmap(bitmap)).setIntent(launch).build();
+            .setIcon(adaptive(bitmap)).setIntent(launch).build();
         Intent callback = new Intent(c,PinConfirmed.class).setData(taskUri(c,app)).putExtra("token",token);
         PendingIntent pending = PendingIntent.getBroadcast(c,0,callback,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return c.getSystemService(ShortcutManager.class).requestPinShortcut(shortcut,pending.getIntentSender()) ? "pending" : "unsupported";
