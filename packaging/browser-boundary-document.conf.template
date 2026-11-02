@@ -1,4 +1,5 @@
 # Generated only when WIZARD_BROWSER_BOUNDARY=1. Never serve this configuration.
+# wizard-recovery-token is empty unless WIZARD_RECOVERY_TOKEN_FILE is set: the Troubleshooter's own, distinct gate.
 # Refusals return their own short body with no <head>: nginx's built-in error pages are HTML with a <head>, and
 # sub_filter below would inject the shell token into them (found with real nginx 1.28 on wizard-os #386; the Node
 # stand-in could not show it). default_type covers the extensionless document paths; .html keeps text/html.
@@ -15,4 +16,4 @@ add_header X-Content-Type-Options "nosniff" always;
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header Permissions-Policy "camera=(), geolocation=(), microphone=(self), payment=(), usb=()" always;
 sub_filter_once on;
-sub_filter '<head>' '<head><meta name="wizard-shell-token" content="${WIZARD_SHELL_TOKEN}"><script src="core/app-state.js"></script><script src="core/browser-boundary.js"></script>';
+sub_filter '<head>' '<head><meta name="wizard-shell-token" content="${WIZARD_SHELL_TOKEN}"><meta name="wizard-recovery-token" content="${WIZARD_RECOVERY_TOKEN}"><script src="core/app-state.js"></script><script src="core/browser-boundary.js"></script>';

@@ -99,7 +99,7 @@ const PNG = (() => {
   // 4. nginx stand-in.
   const tpl = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8');
   const docHeaders = [...tpl.matchAll(/add_header ([A-Za-z-]+) "([^"]*)" always;/g)].map(m => [m[1], m[2]]);
-  const inject = tpl.match(/sub_filter '<head>' '([^']*)';/)[1].replace('${WIZARD_SHELL_TOKEN}', token);
+  const inject = tpl.match(/sub_filter '<head>' '([^']*)';/)[1].replace('${WIZARD_SHELL_TOKEN}', token).replace('${WIZARD_RECOVERY_TOKEN}', process.env.QA_RECOVERY_TOKEN || '');
   const serveFile = (res, file, extra = {}) => { if (!fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', ...extra }); res.end(fs.readFileSync(file)); };
   const nreq = report.notificationsRequests;
   const proxy = http.createServer((req, res) => {

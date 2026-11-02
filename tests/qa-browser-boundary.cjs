@@ -65,7 +65,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
   });
   const fp = await listen(fixture);
   const socket = http.createServer(); const np = await listen(socket); await close(socket);
-  let doc = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8').replace('${WIZARD_SHELL_TOKEN}', token);
+  let doc = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8').replace('${WIZARD_SHELL_TOKEN}', token).replace('${WIZARD_RECOVERY_TOKEN}', process.env.QA_RECOVERY_TOKEN || '');
   if (process.env.QA_COOP_NEGATIVE_CONTROL === '1') doc = doc.replace('add_header Cross-Origin-Opener-Policy "noopener-allow-popups" always;', '');
   const docPath = path.join(out, 'document.conf'); fs.writeFileSync(docPath, doc);
   let exact = '';

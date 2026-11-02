@@ -200,9 +200,16 @@
         .then(r => r.ok ? r.json() : null).catch(() => null);
       // A Claude app that hangs or errors is "not answering", which is different from "no Claude app" (404 or the
       // host's HTML fallback): only the first gets a line in the picker, so a broken app never looks like no subscription.
-      const claude = fetch('/wizard-claude/api/accounts', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
-        .then(r => { M.claudeDown = r.status >= 500; return r.ok ? r.json() : null; })
-        .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
+      // Browser trust preview: the Claude app's own listener answers only the Agent Service adapter, so the shell
+      // reads one fixed, reduced answer through its own typed operation (never the app-frame path); same notes.
+      const claude = window.WizBrowserBoundary?.enabled
+        ? fetch('/wizard/v1/browser-shell/call', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation: 'models.claude_accounts', args: {} }), signal: AbortSignal.timeout(6000) })
+          .then(r => r.ok ? r.json() : r.status === 404 ? { state: 'absent' } : Promise.reject(new TypeError('shell read ' + r.status)))
+          .then(v => { M.claudeDown = v?.state === 'unavailable'; return v?.state === 'ok' ? { accounts: arr(v.accounts) } : null; })
+          .catch(() => { M.claudeDown = true; return null; })
+        : fetch('/wizard-claude/api/accounts', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
+          .then(r => { M.claudeDown = r.status >= 500; return r.ok ? r.json() : null; })
+          .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
         .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); M.recheckPlaceholder(); return M.options; })

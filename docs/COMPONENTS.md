@@ -104,7 +104,7 @@ Reuse:
 
 ## App voice/audio
 
-Default-off: `WizBrowserBoundary`, `WizBoundaryClient` ([contract](browser-boundary-services.md)).
+Default-off: `WizBrowserBoundary`, `WizBoundaryClient` ([contract](browser-boundary-services.md)). The built-in Troubleshooter window alone gets `recovery.call` (fixed recovery-scoped ops, distinct recovery token; `WizAppServices` passes the `recovery` option only for `troubleshooter` at `/troubleshoot/`). With the flag on, `WosModels` reads Claude accounts via the shell-owned `models.claude_accounts` Service operation.
 
 | Module | Contract |
 |---|---|

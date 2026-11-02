@@ -35,7 +35,7 @@
     if (d.op === 'service.reply') {
       const wait = requests.get(d.id); if (!wait) return;
       clearTimeout(wait.timer); requests.delete(d.id);
-      if (d.error) { const e = error(d.error.code || 'failed', d.error.message || 'App request failed', d.error.retryable === true); if (typeof d.error.outcome === 'string') e.outcome = d.error.outcome; if (typeof d.error.operationKey === 'string') e.operationKey = d.error.operationKey; wait.reject(e); } else wait.resolve(d.value);
+      if (d.error) { const e = error(d.error.code || 'failed', typeof d.error.message === 'string' ? d.error.message.slice(0, 300) : 'App request failed', d.error.retryable === true); if (typeof d.error.outcome === 'string') e.outcome = d.error.outcome; if (typeof d.error.operationKey === 'string') e.operationKey = d.error.operationKey; wait.reject(e); } else wait.resolve(d.value);
       return;
     }
     const reply = (status, extra = {}) => send({ op: 'reply', id: d.id, status, ...extra });
@@ -67,7 +67,7 @@
     connect({ onBack, onTheme }) { back = onBack; applyTheme = onTheme; },
     get ready() { return connected; },
     request(method, args, timeout = 15000) {
-      if (!connected || !['ready', 'share.wizard', 'voice.transcribe', 'nav.contextDraft', 'data.call', 'data.status', 'media.open', 'state.read', 'state.write', 'state.transaction', 'intent.confirm', 'intent.open'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
+      if (!connected || !['ready', 'share.wizard', 'voice.transcribe', 'nav.contextDraft', 'data.call', 'data.status', 'media.open', 'state.read', 'state.write', 'state.transaction', 'intent.confirm', 'intent.open', 'recovery.call'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
       if (requests.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
       const id = 'wbs-' + (++serial);
       return new Promise((resolve, reject) => {

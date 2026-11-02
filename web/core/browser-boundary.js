@@ -9,12 +9,24 @@
   const secret = node.content;
   node.remove();
   if (parent !== window || !/^[a-f0-9]{64}$/.test(secret)) throw new Error('Invalid shell bootstrap');
+  // The Troubleshooter's own recovery gate (optional; same navigation-only bootstrap). A DISTINCT secret: the host
+  // recovery listener checks it itself, so it keeps working with the Agent Service down, and it never sees the shell
+  // token. Sent only to /troubleshoot/api/ on this origin.
+  const recoveryNode = document.querySelector('meta[name="wizard-recovery-token"]');
+  const recoverySecret = recoveryNode && /^[a-f0-9]{64}$/.test(recoveryNode.content) && recoveryNode.content !== secret ? recoveryNode.content : '';
+  recoveryNode?.remove();
   const ORIGIN = location.origin, sessions = new Map(), pending = new Map();
   const nativeFetch = window.fetch.bind(window);
   const ownerPath = p => (/^\/wizard\//.test(p) && !/^\/wizard\/mcp(?:\/|$)/.test(p)) || /^\/(?:api|v1)\//.test(p) || /^\/(?:wizard-os-home|wizard-ux)\/(?:api|store-install)\//.test(p);
   window.fetch = function(input, init) {
     const request = new Request(input instanceof Request ? input : new URL(input, location.href), init);
     const url = new URL(request.url);
+    if (url.origin === ORIGIN && /^\/troubleshoot\/api\/(?!ping$)/.test(url.pathname)) {
+      if (!recoverySecret) return nativeFetch(request);
+      const headers = new Headers(request.headers);
+      headers.set('X-Wizard-Recovery-Token', recoverySecret);
+      return nativeFetch(new Request(request, { headers, redirect: 'error' }));
+    }
     if (url.origin !== ORIGIN || !ownerPath(url.pathname)) return nativeFetch(request);
     const headers = new Headers(request.headers);
     headers.set('X-Wizard-Shell-Token', secret);
@@ -50,10 +62,10 @@
       pending.set(id, { st, resolve, timer }); send(st, op, { id, ...data });
     });
   }
-  function attach(frame, { appId, authorize, service } = {}) {
+  function attach(frame, { appId, authorize, service, recovery } = {}) {
     if (!frame?.matches?.('iframe[sandbox]') || frame.sandbox.contains('allow-same-origin')) return () => {};
     if (sessions.has(frame)) return () => {};
-    const st = { frame, appId, authorize, service, channel: crypto.randomUUID(), ready: false };
+    const st = { frame, appId, authorize, service, recovery: recovery?.builtIn === true ? Object.freeze({ builtIn: true, openApp: recovery.openApp }) : null, channel: crypto.randomUUID(), ready: false };
     sessions.set(frame, st);
     const hello = () => {
       revoke(st);
@@ -293,6 +305,78 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
       chip = intentChip(st, kind === 'navigate' ? `Review: ${appName(st)} sign-in page` : `Review: ${String(queued.summary?.title || 'Confirm').slice(0, 48)}`, openReview);
     }).catch(e => { if (e.accepted) { delete e.accepted; } throw e; });
   }
+  /* ---- Troubleshooter recovery view (wizard-os #385 census row "troubleshooter"; default-off) ----
+   * Only the shell's built-in Troubleshooter window (registered by app-services with `recovery`) gets these typed
+   * operations: each maps to ONE fixed path on the host recovery listener (/troubleshoot/api/), called by the shell
+   * with the recovery token (fetch wrapper above). No Agent Service in the path except `provider_run`, which reads a
+   * Service fact and degrades to "not yet" when the Service is down. Not a relay: fixed paths, exact arguments,
+   * bounded replies; the frame never names a URL, method or header. */
+  const RECOVERY_ENGINES = ['claude', 'chatgpt', 'tinfoil'];
+  const RECOVERY_APPS = ['wizard-claude', 'wizard-chatgpt', 'wizard-tinfoil', 'app-store'];
+  const RECOVERY_CACHE = 'wos.recovery.troubleshooter.engines';
+  const exactKeys = (a, keys) => !!a && typeof a === 'object' && !Array.isArray(a) && Object.keys(a).sort().join(',') === [...keys].sort().join(',');
+  const hex = (v, n) => typeof v === 'string' && new RegExp(`^[a-f0-9]{${n}}$`).test(v);
+  const RECOVERY_OPS = {
+    status: a => exactKeys(a, ['fresh', 'accounts']) && typeof a.fresh === 'boolean' && typeof a.accounts === 'boolean'
+      && { path: 'status' + (a.fresh || a.accounts ? '?' + new URLSearchParams({ ...(a.fresh ? { fresh: '1' } : {}), ...(a.accounts ? { accounts: '1' } : {}) }) : '') },
+    engines: a => exactKeys(a, []) && { path: 'engines' },
+    'engine.set': a => exactKeys(a, ['engine']) && RECOVERY_ENGINES.includes(a.engine) && { path: 'engine', body: { engine: a.engine } },
+    incidents: a => exactKeys(a, []) && { path: 'incidents' },
+    repairs: a => exactKeys(a, ['limit']) && Number.isInteger(a.limit) && a.limit >= 1 && a.limit <= 50 && { path: 'repairs?limit=' + a.limit },
+    'repair.read': a => exactKeys(a, ['id', 'since']) && hex(a.id, 16) && Number.isSafeInteger(a.since) && a.since >= 0 && { path: `repair/${a.id}?since=${a.since}` },
+    'repair.start': a => exactKeys(a, ['id', 'message', 'engine']) && (a.id === null || hex(a.id, 16)) && typeof a.message === 'string' && a.message.trim() && a.message.length <= 16000
+      && ['auto', ...RECOVERY_ENGINES].includes(a.engine) && { path: 'repair', body: { id: a.id, message: a.message, engine: a.engine } },
+    'repair.stop': a => exactKeys(a, []) && { path: 'repair/stop', body: {} },
+    'repair.approve': a => exactKeys(a, ['id', 'approvalId', 'approved']) && (a.id === null || hex(a.id, 16)) && hex(a.approvalId, 32) && typeof a.approved === 'boolean'
+      && { path: 'repair/approve', body: { id: a.id, approvalId: a.approvalId, approved: a.approved } },
+    action: a => exactKeys(a, ['action']) && typeof a.action === 'string' && /^[a-z]{1,20}:[a-z-]{1,40}$/.test(a.action) && { path: 'action', body: { action: a.action } },
+  };
+  async function recoveryCall(st, args) {
+    if (!exactKeys(args, ['op', 'args']) || typeof args.op !== 'string') throw coded('bad_request');
+    const a = args.args;
+    if (args.op === 'provider_run') {
+      // The diagnosed sign-in screen: "was the waiting message sent?" One boolean from the Agent Service.
+      if (!exactKeys(a, ['runId']) || typeof a.runId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(a.runId)) throw coded('bad_request');
+      try { const r = await window.fetch('/wizard/v1/provider-recovery?run_id=' + encodeURIComponent(a.runId), { cache: 'no-store' }); return { sent: r.ok && (await r.json())?.sent === true }; }
+      catch (_) { return { sent: false }; }
+    }
+    if (args.op === 'cache.read') {
+      if (!exactKeys(a, [])) throw coded('bad_request');
+      try { const v = JSON.parse(localStorage.getItem(RECOVERY_CACHE) || 'null'); return v && typeof v === 'object' ? v : null; } catch (_) { return null; }
+    }
+    if (args.op === 'cache.write') {
+      // Last known picker only (painted before the first answer). Plain display data, shape-checked, 8 KiB.
+      const v = a?.value, cell = x => x === undefined || x === null || typeof x === 'boolean' || (typeof x === 'string' && x.length <= 200);
+      if (!exactKeys(a, ['value']) || !exactKeys(v, ['engines', 'selected']) || !Array.isArray(v.engines) || v.engines.length > 6 || !(v.selected === null || RECOVERY_ENGINES.includes(v.selected))
+        || !v.engines.every(e => e && typeof e === 'object' && !Array.isArray(e) && Object.keys(e).length <= 16 && Object.values(e).every(cell))) throw coded('bad_request');
+      const text = JSON.stringify(v);
+      if (text.length > 8192) throw coded('too_large');
+      try { localStorage.setItem(RECOVERY_CACHE, text); } catch (_) { throw coded('storage_unavailable'); }
+      return { saved: true };
+    }
+    if (args.op === 'open_app') {
+      // Source-bound navigation: only from this registered window, only while the owner is in it, only a connection
+      // app the shell itself knows, opened as a Wizard window (never a URL from the frame).
+      if (!exactKeys(a, ['appId']) || !RECOVERY_APPS.includes(a.appId)) throw coded('bad_request');
+      if (document.activeElement !== st.frame || document.hidden) throw coded('denied');
+      return { opened: !!st.recovery.openApp?.(a.appId) };
+    }
+    if (!Object.hasOwn(RECOVERY_OPS, args.op)) throw coded('not_allowed');
+    const spec = RECOVERY_OPS[args.op](a);
+    if (!spec) throw coded('bad_request');
+    let r;
+    try {
+      r = await window.fetch('/troubleshoot/api/' + spec.path, spec.body ? { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'X-Wizard-Troubleshoot': '1' }, body: JSON.stringify(spec.body) } : { cache: 'no-store' });
+    } catch (_) { throw coded('backend_unavailable'); }
+    const text = await r.text().catch(() => '');
+    if (text.length > 1048576) throw coded('backend_failed');
+    let value = null; try { value = JSON.parse(text); } catch (_) { throw coded(r.ok ? 'backend_failed' : 'backend_unavailable'); }
+    if (r.ok) return value;
+    // The recovery page shows the listener's own short reason (e.g. "Approval expired or not active").
+    const e = coded(r.status === 403 || r.status === 401 ? 'not_allowed' : r.status === 409 ? 'conflict' : r.status >= 500 ? 'backend_failed' : 'bad_request');
+    e.detail = String(value?.error || value?.detail || ('HTTP ' + r.status)).slice(0, 300);
+    throw e;
+  }
   async function handleService(st,d) {
     const channel = st.channel;
     const authorize = () => connected(st) && st.ready && st.channel === channel && st.authorize?.(channel) === true;
@@ -333,12 +417,19 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
         if (d.method === 'media.open') reply(ticketOf(value));
         else if (d.method === 'data.call' || d.method === 'data.status') reply(value);
         else reply(await window.WizAppState.call({appId:st.appId,sourceId:value.principal?.sourceId,namespace:value.namespace,quota:value.quota,authorize},d.method,d.args));
+      } else if (d.method === 'recovery.call') {
+        // Only the built-in Troubleshooter window; never an installed app, whatever its id.
+        if (st.recovery?.builtIn !== true || st.appId !== 'troubleshooter') throw coded('not_allowed');
+        if (new TextEncoder().encode(JSON.stringify(d)).byteLength > 65536) throw coded('too_large');
+        const value = await recoveryCall(st, d.args);
+        if (!authorize()) throw coded('denied');
+        reply(value);
       } else if (d.method === 'intent.confirm' || d.method === 'intent.open') {
         reply(await intentRequest(st, d, channel, authorize));
       } else if (['ready','share.wizard','voice.transcribe','nav.contextDraft'].includes(d.method)) {
         await st.service?.(d,reply,authorize);
       } else throw coded('not_allowed');
-    } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:code,retryable:['backend_unavailable','storage_unavailable','busy','timeout'].includes(code),...(e.outcome ? {outcome:e.outcome} : {}),...(e.operationKey ? {operationKey:e.operationKey} : {})}); }
+    } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:typeof e.detail === 'string' ? e.detail : code,retryable:['backend_unavailable','storage_unavailable','busy','timeout'].includes(code),...(e.outcome ? {outcome:e.outcome} : {}),...(e.operationKey ? {operationKey:e.operationKey} : {})}); }
     finally { if (st.channel === channel) st.inflight--; }
   }
   const api = Object.freeze({

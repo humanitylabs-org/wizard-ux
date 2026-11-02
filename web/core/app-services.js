@@ -86,10 +86,16 @@
       // Do not revive synchronous legacy connect or child-document reads.
       if (!frame.matches?.('iframe[sandbox]') || frame.sandbox.contains('allow-same-origin') || frame.hasAttribute('srcdoc') || !within(new URL(frame.src), st.url)) return () => {};
       st.opaque = true; frames.set(frame, st);
+      // The built-in Troubleshooter (apps.js; an installed app can never take its id) at its fixed host path gets the
+      // recovery-scoped operations; its connection-app links open as Wizard windows, never a frame-supplied URL.
+      const builtIn = apps().find(a => a.id === st.appId);
+      const recovery = st.appId === 'troubleshooter' && builtIn && !Object.hasOwn(builtIn, 'source') && st.url.pathname === '/troubleshoot/'
+        ? { builtIn: true, openApp: id => { try { return !!window.WizOpenApp?.(id); } catch (_) { return false; } } } : undefined;
       const off = window.WizBrowserBoundary.attach(frame, {
         appId: st.appId,
         authorize: channel => opaqueValid(st,frame.contentWindow,channel),
         service: (d,reply,authorize) => opaqueService(st,d,reply,authorize),
+        recovery,
       }), load = () => reset(st);
       frame.addEventListener('load', load);
       st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); off(); reset(st); };

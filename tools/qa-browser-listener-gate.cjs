@@ -85,7 +85,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const np = await freePort();
   const ng = path.join(out, 'nginx'); fs.mkdirSync(ng, { recursive: true }); fs.chmodSync(ng, 0o777);
   const tpl = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8');
-  fs.writeFileSync(path.join(ng, 'doc.conf'), tpl.replace('${WIZARD_SHELL_TOKEN}', token));
+  fs.writeFileSync(path.join(ng, 'doc.conf'), tpl.replace('${WIZARD_SHELL_TOKEN}', token).replace('${WIZARD_RECOVERY_TOKEN}', process.env.QA_RECOVERY_TOKEN || ''));
   const conf = `worker_processes 1; pid /tmp/qa-nginx.pid; error_log /qa/error.log warn; daemon off;
 events { worker_connections 64; }
 http {
