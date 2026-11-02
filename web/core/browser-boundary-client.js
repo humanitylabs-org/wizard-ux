@@ -67,7 +67,7 @@
     connect({ onBack, onTheme }) { back = onBack; applyTheme = onTheme; },
     get ready() { return connected; },
     request(method, args, timeout = 15000) {
-      if (!connected || !['ready', 'share.wizard', 'voice.transcribe', 'data.call', 'data.status', 'state.read', 'state.write', 'state.transaction'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
+      if (!connected || !['ready', 'share.wizard', 'voice.transcribe', 'nav.contextDraft', 'data.call', 'data.status', 'state.read', 'state.write', 'state.transaction'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
       if (requests.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
       const id = 'wbs-' + (++serial);
       return new Promise((resolve, reject) => {

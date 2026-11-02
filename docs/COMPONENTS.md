@@ -19,7 +19,7 @@ Reuse:
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
-| Typed opaque data (default-off) | `WizardApp.data.call/status`, `browser-boundary.js` port | owner-fetch | forged/replay/revoked/WAM grant |
+| Opaque data, reply draft (off) | `WizardApp.data.call/status`, `nav.openContextDraft` via boundary port | owner-fetch | forged/replay/revoked |
 | Local state (default-off prototype) | NEW `WizAppState` (`core/app-state.js`), `WizardApp.state` | sync storage | CAS/reload/rollback |
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own chat UI/retries | shell `[data-chats]`; 503: one outbox item/message |

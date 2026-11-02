@@ -91,6 +91,9 @@
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:notifications:count') return;
     S.unread = d.unread | 0; S.needs = d.needs | 0; paint(); loadItems();
   });
+  // Opaque Notifications frame (browser trust preview): it cannot post a count. After each write the shell proved
+  // through a typed operation, the shell re-reads the count itself; the badge stays in its one place.
+  addEventListener('wizard:browser-data-written', e => { if (e.detail?.appId === 'notifications') refresh(true); });
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-chbell]')) return;
     e.preventDefault(); e.stopPropagation();

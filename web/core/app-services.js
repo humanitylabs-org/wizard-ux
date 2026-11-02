@@ -334,17 +334,7 @@
       /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
        * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */
       back() { check(); if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; },
-      openContextDraft(data) {
-        check();
-        // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
-        // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
-        // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
-        if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
-        if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
-        // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
-        // reference DATA only in the message that is sent (WosChat.reply).
-        return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
-      }, openThread(id, opts) {
+      openContextDraft(data) { check(); return contextDraft(st, data); }, openThread(id, opts) {
         check();
         // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).
         if (!hostedThreadAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
@@ -476,6 +466,30 @@
     for (const name of policy.caches) { if (!valid(st)) return removed; if (await window.caches?.delete(name)) removed.push(name); }
     return removed;
   }
+  // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
+  // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
+  // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
+  // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
+  // reference DATA only in the message that is sent (WosChat.reply). One path for same-origin and opaque frames.
+  function contextDraft(st, data) {
+    if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
+    if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
+    return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
+  }
+  // Opaque frames cannot prove a user gesture to the shell. A draft opens only while the frame holds focus (the owner
+  // tapped inside it), at most once per 1.5 s and 20 per 10 minutes per app. Nothing is ever sent.
+  const DRAFT_LIMITS = Object.freeze({ gapMs: 1500, calls: 20, windowMs: 10 * 60 * 1000 });
+  const draftBudgets = new Map();
+  function opaqueContextDraft(st, data) {
+    if (document.activeElement !== st.frame || document.hidden) throw codedFault('denied', 'Tap inside the app first');
+    if (!data || typeof data !== 'object' || Object.keys(data).sort().join(',') !== 'id,message,title') throw codedFault('invalid_request', 'Invalid app context');
+    const now = Date.now(), calls = (draftBudgets.get(st.appId) || []).filter(t => now - t < DRAFT_LIMITS.windowMs);
+    if (calls.length >= DRAFT_LIMITS.calls || (calls.length && now - calls[calls.length - 1] < DRAFT_LIMITS.gapMs)) throw codedFault('rate_limited', 'Too many reply drafts; try again later');
+    const receipt = contextDraft(st, data);
+    calls.push(now); draftBudgets.set(st.appId, calls);
+    // Only the receipt's documented shape crosses back into the frame.
+    return { kind: receipt?.kind === 'unsent-draft' ? 'unsent-draft' : 'unknown', sent: receipt?.sent === false ? false : null };
+  }
   function opaqueValid(st, source, channel) {
     if (!st?.opaque || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st)) return false;
     try {
@@ -491,7 +505,7 @@
     if (st.requests.size >= 32 || st.requests.has(key)) return;
     st.requests.add(key);
     const hold = uid();
-    st.holds.set(hold, d.method === 'share.wizard' ? 'Share to Wizard' : 'App transcription'); changed();
+    st.holds.set(hold, d.method === 'share.wizard' ? 'Share to Wizard' : d.method === 'nav.contextDraft' ? 'Reply draft' : 'App transcription'); changed();
     try {
       let value;
       if (d.method === 'ready') value = { version: VERSION, hosted: true, appId: st.appId };
@@ -503,6 +517,7 @@
         }
       }
       if (d.method === 'voice.transcribe') value = await transcribeFile(d.args?.file, { language: d.args?.language }, { appId: st.appId, authorize });
+      if (d.method === 'nav.contextDraft') { if (!authorize()) throw codedFault('denied', 'App frame is no longer authorized'); value = opaqueContextDraft(st, d.args); }
       reply(value);
     } catch (err) { reply(null, { code: ['rate_limited', 'too_large', 'denied', 'invalid_request'].includes(err.code) ? err.code : 'failed', message: String(err.message || err).slice(0, 200) }); }
     finally { st.requests.delete(key); st.holds.delete(hold); changed(); }

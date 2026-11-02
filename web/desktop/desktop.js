@@ -625,14 +625,15 @@
   }
   function watchFrame(f, el) {
     if (!f) return;
-    if (window.WizBrowserBoundary?.enabled) {
-      const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      f._appDetach = a?.url ? window.WizAppServices.attach(f, { appId: a.id, path: a.url }) : window.WizBrowserBoundary.attach(f);
-      return;
-    }
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    const opts = a?.url ? { appId: a.id, path: a.url, back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) } : null;
+    if (window.WizBrowserBoundary?.enabled) {
+      // Opaque frame: only reviewed shell services (see web/app.js watchFrames).
+      f._appDetach = opts ? window.WizAppServices.attach(f, { appId: opts.appId, path: opts.path, openContextDraft: opts.openContextDraft, isVisible: opts.isVisible }) : window.WizBrowserBoundary.attach(f);
+      return;
+    }
+    if (opts) f._appDetach = window.WizAppServices?.attach(f, opts);
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;

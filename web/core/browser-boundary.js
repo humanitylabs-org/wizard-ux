@@ -92,8 +92,8 @@
   }
   const coded = code => Object.assign(new Error(code),{code});
   // Reviewed operation ids only; the Service re-checks every one against WAM install/grant state.
-  const DATA_OPERATIONS = new Set(['fixture.notifications.list','notifications.list','notifications.mark_read']);
-  const WRITES = new Set(['notifications.mark_read']);
+  const DATA_OPERATIONS = new Set(['fixture.notifications.list','notifications.list','notifications.mark_read','notifications.inbox','notifications.mark']);
+  const WRITES = new Set(['notifications.mark_read','notifications.mark']);
   async function server(path, body) {
     const r = await window.fetch('/wizard/v1/browser-adapters/'+path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     let value; try { value = await r.json(); } catch (_) { throw coded(r.ok ? 'backend_failed' : 'outcome_unknown'); }
@@ -139,9 +139,12 @@
         }
         const value = await server('call',{handle:binding.handle,generation:channel,requestId:d.id,operation,args,...extra});
         if (!authorize()) throw coded('denied');
+        // Shell-internal signal after a proven write (e.g. the Notifications badge re-reads its own count).
+        // It carries the registered app id, never app-supplied data; frames cannot dispatch shell events.
+        if (d.method === 'data.call' && WRITES.has(operation)) { try { dispatchEvent(new CustomEvent('wizard:browser-data-written', { detail: Object.freeze({ appId: st.appId, operation }) })); } catch (_) {} }
         if (d.method === 'data.call' || d.method === 'data.status') reply(value);
         else reply(await window.WizAppState.call({appId:st.appId,sourceId:value.principal?.sourceId,namespace:value.namespace,quota:value.quota,authorize},d.method,d.args));
-      } else if (['ready','share.wizard','voice.transcribe'].includes(d.method)) {
+      } else if (['ready','share.wizard','voice.transcribe','nav.contextDraft'].includes(d.method)) {
         await st.service?.(d,reply,authorize);
       } else throw coded('not_allowed');
     } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:code,retryable:['backend_unavailable','storage_unavailable','busy','timeout'].includes(code),...(e.outcome ? {outcome:e.outcome} : {}),...(e.operationKey ? {operationKey:e.operationKey} : {})}); }

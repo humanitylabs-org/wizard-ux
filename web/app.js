@@ -1586,14 +1586,16 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
-      if (window.WizBrowserBoundary?.enabled) {
-        const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-        f._appDetach = a?.url ? window.WizAppServices.attach(f, { appId: a.id, path: a.url }) : window.WizBrowserBoundary.attach(f);
-        return;
-      }
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      const opts = a?.url ? { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) } : null;
+      if (window.WizBrowserBoundary?.enabled) {
+        // Opaque frame: only reviewed shell services. Of the legacy callbacks it gets the unsent reply draft and
+        // the visibility check that guards it; never openThread, Back callbacks or a document connection.
+        f._appDetach = opts ? window.WizAppServices.attach(f, { appId: opts.appId, path: opts.path, openContextDraft: opts.openContextDraft, isVisible: opts.isVisible }) : window.WizBrowserBoundary.attach(f);
+        return;
+      }
+      if (opts) f._appDetach = window.WizAppServices?.attach(f, opts);
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.remove('loading'); wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }

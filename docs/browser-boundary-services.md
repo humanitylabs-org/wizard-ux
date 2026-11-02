@@ -25,3 +25,11 @@ Checked open wizard-ux PR file lists before editing. PRs 447, 454, 467 and 472 a
 Node tests use synthetic audio, synthetic destinations and VM DOM fixtures. They cover the actual WizardApp/client/service protocol and actual shared sheet handler, but a VM event with `isTrusted: true` is a branch test, not a real browser user-gesture receipt.
 
 The existing Forum hostile-browser evidence for the prior exact draft revisions remains reusable baseline evidence (22/22); it is not presented as a new-head browser run. Native main-frame isolation, app-storage paths, actual browser/handset confirmation and daily-app QA remain enablement gates. The separate WAM storage-test fixture import failure `@/common/helpers/app-helpers` remains outside this slice. Link installs remain off.
+
+## Notifications app over the boundary (card 2, wizard-os #385)
+
+- REUSE the card-1 data path (`WizardApp.data.call/status` → shell → Agent Service → WAM grants). The reviewed ids gain `notifications.inbox` (read: view, counts, marks) and `notifications.mark` (write, compare-and-set, needs `operationKey`); both are refused in the shell unless listed and re-checked by the Service.
+- EXTEND the unsent reply draft (`WizardApp.nav.openContextDraft`, same `contextDraft` validation and Chats owner as same-origin frames) to opaque frames as `nav.contextDraft`. The shell admits it only while the registered frame holds focus in a visible document, with exact keys `{id,title,message}`, at most once per 1.5 s and 20 per 10 minutes per app. Only `{kind, sent}` crosses back; nothing is sent.
+- EXTEND the Notifications badge (`notif-bell.js`): opaque frames cannot post `wizard:notifications:count` (origin `null` never matches). After a proven write the shell dispatches `wizard:browser-data-written` with the registered app id and the bell re-reads its own count, so the badge keeps its one place.
+- The frame watchers hand an opaque frame only `openContextDraft` and `isVisible` from the same-origin options; never `openThread`, Back callbacks or a document connection.
+- Thumbnails still load as plain images from the app's `/notifications/media/*` route; a typed media adapter and server-side protection of `/notifications/api/*` are card 3 (#386).
