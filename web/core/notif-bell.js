@@ -15,8 +15,12 @@
     const n = S.unread, lbl = n ? `Notifications, ${n} unread` : 'Notifications';
     return `<button type="button" class="ch-bell${S.needs ? ' needs' : ''}" data-chbell aria-label="${lbl}">${BELL}${n ? `<b>${n > 99 ? '99+' : n}</b>` : ''}</button>`;
   }
+  // Each notification counts in exactly one place (Miguel, 2 Nov 2026): with Notifications in Chats on, its items
+  // are Chats Ready rows and count on the Chats badge (readyCount), so the Notifications app badge stays empty;
+  // with it off, the app badge counts them and Chats doesn't.
+  const inChats = () => !!window.WosSkinHost?.inboxList;
   function paint() {
-    window.WizCore?.workspaceNav?.setCount('notifications', S.unread);
+    window.WizCore?.workspaceNav?.setCount('notifications', inChats() ? 0 : S.unread);
     for (const b of document.querySelectorAll('[data-chbell]')) {
       const h = html(); if (!h) { b.remove(); continue; }
       const t = document.createElement('div'); t.innerHTML = h; const nb = t.firstElementChild;
@@ -98,6 +102,7 @@
   }, true);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   addEventListener('wizard:apps', () => { refresh(); paint(); });
+  addEventListener('wos:prefs', () => paint());   // Notifications in Chats turned on or off: the count moves
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
   window.WosBell = { html, refresh, paint, watch, mark, readyCount, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
