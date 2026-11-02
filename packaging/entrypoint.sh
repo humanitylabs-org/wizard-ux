@@ -17,6 +17,7 @@ esac
 export WIZARD_AGENT_SERVICE_ORIGIN WIZARD_SHELL_LISTEN
 cp /etc/wizard-shell/static.conf /tmp/wizard-static.conf
 cp /etc/wizard-shell/proxy.conf /tmp/wizard-proxy.conf
+sed 's/^proxy_set_header X-Forwarded-For .*/proxy_set_header X-Forwarded-For $http_x_forwarded_for;/' /etc/wizard-shell/proxy.conf > /tmp/wizard-proxy-health.conf
 cp /etc/wizard-shell/proxy-mcp.conf /tmp/wizard-proxy-mcp.conf
 . /etc/wizard-shell/browser-boundary.sh
 # Substitute only these two names; nginx's own $variables stay as they are.

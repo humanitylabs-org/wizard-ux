@@ -29,6 +29,12 @@ http {
   }
   # Only a successful answer may be kept for a year; an error (a file missing mid-deploy) is never cached.
   map $status $wizard_cache_ok { 200 $wizard_cache; 304 $wizard_cache; default "no-store"; }
+  # Opaque (sandboxed, Origin: null) shell windows such as the App Store load the shell's own ES modules; module
+  # scripts are always CORS fetches, so without this Chromium refuses them and the window stays blank (wizard-os 389
+  # rehearsal). Only static script files of these static locations, only for Origin: null, anonymous (no
+  # Allow-Credentials): owner APIs, documents and the token-bearing boundary pages never get it.
+  map "$http_origin:$uri" $wizard_module_acao { "~^null:/[^?]*\.m?js$" "*"; default ""; }
+  map $uri $wizard_module_vary { "~\.m?js$" "Origin"; default ""; }
   # Chat attachments and files: kept only when the service actually sent them (never a 401/404/5xx).
   map $status $wizard_attach_cache { 200 "private, max-age=31536000, immutable"; 304 "private, max-age=31536000, immutable"; default "no-store"; }
   map $status $wizard_file_cache { 200 "private, max-age=86400"; 304 "private, max-age=86400"; default "no-store"; }
@@ -110,6 +116,14 @@ http {
     location ~ "^/wizard/files/wf_[0-9a-f]{32}/content$" {
       proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf;
       proxy_hide_header Cache-Control; add_header Cache-Control $wizard_file_cache always;
+    }
+    # Box-local health probes (wizard doctor, Troubleshooter, Guardian) carry no browser or proxy marks, and the Agent
+    # Service lets exactly those through its browser boundary. The shared proxy settings add X-Forwarded-For with the
+    # caller's address, which made every probe through this listener look proxied (401 under the boundary, wizard-os
+    # 389 rehearsal). Here the header is passed on only when the caller sent one: Tailscale Serve always does, so a
+    # tailnet request is still refused; a browser still carries Origin/Sec-Fetch and is refused too.
+    location = /wizard/health {
+      proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy-health.conf;
     }
     location / { proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf; }
   }

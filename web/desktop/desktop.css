@@ -97,10 +97,11 @@ html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scroll
 .wbody iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #05030c; }
 /* an unfocused window takes one click to focus without the click landing inside an iframe */
 .win:not(.focus) .wbody iframe { pointer-events: none; }
-.frame-fallback { position: absolute; inset: 0; display: none; background: #0b0717; place-items: center; text-align: center; padding: 24px; color: var(--ink-3); }
+/* Skin surface and text tokens, not a fixed dark panel: light skins (Landscapes Light) drew their dark --ink on it. */
+.frame-fallback { position: absolute; inset: 0; display: none; background: var(--wz-panel, var(--wz-base, var(--bg))); place-items: center; text-align: center; padding: 24px; color: var(--wz-text, var(--ink-3)); }
 .frame-fallback.on { display: grid; }
-.frame-fallback b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 6px; }
-.frame-fallback a { color: var(--violet-2); }
+.frame-fallback b { display: block; color: var(--wz-text, var(--ink)); font-size: 15px; margin-bottom: 6px; }
+.frame-fallback a { color: var(--wz-accent, var(--violet-2)); }
 
 /* ---------- Chats on the desktop: list beside thread ---------- */
 .dchats { position: absolute; inset: 0; display: flex; container-type: inline-size; }
