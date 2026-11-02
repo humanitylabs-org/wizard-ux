@@ -250,17 +250,20 @@
    * .wz-* components. Same-origin parent only; mirrored on every appearance push, so a skin change follows live. */
   const KIT = '/wizard-os-home/kit/wizard-ui.css', KIT_TOKENS = '/wizard-os-home/kit/wizard-tokens.css';
   function syncSkinLayer() {
-    let pd = null; try { pd = parent.document; } catch (_) { return false; }
-    const head = document.head; if (!pd || !head) return false;
+    const head = document.head; if (!head) return false;
     const vendored = [...head.querySelectorAll('link[rel="stylesheet"]')].find(l => /(^|\/)wizard-ui\.css(\?|$)/.test(l.getAttribute('href') || '') && l.dataset.wzShared !== 'kit');
     if (vendored && !head.querySelector('link[data-wz-shared="kit"]')) {
       // Tokens travel with the kit: older vendored kits carried their own fallbacks and no tokens file.
-      const mk = (href, kind) => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = new URL(href, location.origin).href; l.dataset.wzShared = kind; return l; };
+      // location.href, not origin: an opaque (browser-boundary) frame's origin is "null"; the kit is public CSS.
+      const mk = (href, kind) => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = new URL(href, location.href).href; l.dataset.wzShared = kind; return l; };
       const t = mk(KIT_TOKENS, 'tokens'), k = mk(KIT, 'kit');
       let ready = 0; const done = () => { if (++ready === 2) vendored.disabled = true; };
       t.addEventListener('load', done, { once: true }); k.addEventListener('load', done, { once: true });
       vendored.after(t, k);
     }
+    // Skin layers and My skin mirror the shell document: same-origin parent only (an opaque frame gets tokens only).
+    let pd = null; try { pd = parent.document; } catch (_) { return true; }
+    if (!pd) return true;
     const want = [...pd.querySelectorAll('link[rel="stylesheet"]')].filter(l => /(^|\/)core\/skins\.css(\?|$)/.test(l.getAttribute('href') || '') || l.dataset.skinPkg).filter(l => !l.disabled).map(l => l.href);
     const have = new Map([...head.querySelectorAll('link[data-wz-skin-layer]')].map(l => [l.href, l]));
     for (const [href, l] of have) if (!want.includes(href)) l.remove();
@@ -449,6 +452,9 @@
     // Browser trust preview (opaque frame): a scoped 60 s picture ticket, {resourceId, purpose} ->
     // {kind:'ticket', url, expiresAt, mime, bytes}. The shell checks the grant; the url is on a non-owner origin.
     open: requestData => window.WizBoundaryClient ? request('media.open', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
+    // Browser boundary (opaque frame) only: the resumable upload port and the shell's trusted save/open (ADAPTER-SKETCH §6).
+    upload: Object.freeze(Object.fromEntries(['create','chunk','status','commit','abort'].map(m => [m, requestData => window.WizBoundaryClient ? request('upload.' + m, requestData, m === 'chunk' ? 120000 : 30000) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'}))]))),
+    download: Object.freeze({ request: requestData => window.WizBoundaryClient ? request('download.request', requestData, 30000) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
     device: Object.freeze({ legacy: Object.freeze({
       available(method) { return !!service?.device?.legacy?.available(method); },
       call(method, args = []) { if (!service?.device?.legacy) throw new Error('Legacy device unavailable'); return service.device.legacy.call(method, args); },

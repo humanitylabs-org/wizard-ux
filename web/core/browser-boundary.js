@@ -49,7 +49,7 @@
     st.port?.close(); st.port = null;
     try { st.intent?.cancel(); } catch (_) {}
     if (st.binding) window.fetch('/wizard/v1/browser-adapters/revoke', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:st.binding.handle})}).catch(() => {});
-    st.binding = null; st.bindingPromise = null; st.seen = new Set(); st.inflight = 0;
+    st.binding = null; st.bindingPromise = null; st.seen = new Set(); st.inflight = 0; st.uploads = new Map();
     st.channel = crypto.randomUUID(); st.ready = false;
     st.frame.closest('.win')?.classList.remove('wz-themed');
   }
@@ -106,18 +106,27 @@
   const coded = code => Object.assign(new Error(code),{code});
   // Reviewed operation ids only; the Service re-checks every one against WAM install/grant state.
   const DATA_OPERATIONS = new Set(['fixture.notifications.list','notifications.list','notifications.mark_read','notifications.inbox','notifications.mark',
-    'ai_accounts.inventory','ai_accounts.progress','ai_accounts.step','claude_code.status','claude_code.code','claude_code.cancel','claude_code.test']);
+    'ai_accounts.inventory','ai_accounts.progress','ai_accounts.step','claude_code.status','claude_code.code','claude_code.cancel','claude_code.test',
+    'files.list','files.index','files.thumbnail']);
   const WRITES = new Set(['notifications.mark_read','notifications.mark','ai_accounts.step','claude_code.code','claude_code.cancel','claude_code.test']);
   // Owner-consent operations (shell intents): never a data.call; only through the shell's own review dialog.
   const CONSENT_OPERATIONS = new Set(['ai_accounts.change','claude_code.connect','claude_code.logout']);
   // Scoped media tickets (ADAPTER-SKETCH §6): one reviewed operation per app; the Service re-checks the grant.
-  const MEDIA_OPERATIONS = Object.freeze({ notifications: 'notifications.media' });
+  const MEDIA_OPERATIONS = Object.freeze({ notifications: 'notifications.media', 'wizard-files': 'files.content' });
+  // Per media operation: the purposes a frame may ask for, and the content types a ticket may carry back.
+  const MEDIA_PURPOSES = Object.freeze({ 'notifications.media': ['thumbnail', 'read'], 'files.content': ['read', 'play'] });
+  const MEDIA_MIME = Object.freeze({ 'notifications.media': /^image\/(png|jpeg|gif|webp)$/,
+    'files.content': /^(image\/(png|jpeg|gif|webp|avif)|video\/(mp4|webm|quicktime|x-m4v)|audio\/(mpeg|mp4|x-m4a|wav|ogg|opus|flac|aac)|text\/plain|application\/pdf|application\/octet-stream)$/ });
+  // Upload port + trusted downloads (ADAPTER-SKETCH §6): the operation family per app; the ticket stays in the shell.
+  const TRANSFER_APPS = Object.freeze({ 'wizard-files': 'files' });
+  const TRANSFER_METHODS = new Set(['upload.create', 'upload.chunk', 'upload.status', 'upload.commit', 'upload.abort', 'download.request']);
+  const UPLOAD_CHUNK = 1048576;
   // Only a ticket on the dedicated content origin goes back to a frame: never the owner origin, a path or a redirect.
-  function ticketOf(v) {
+  function ticketOf(v, operation = 'notifications.media') {
     if (!v || typeof v !== 'object' || Object.keys(v).sort().join(',') !== 'bytes,expiresAt,kind,methods,mime,range,url' || v.kind !== 'ticket') throw coded('backend_failed');
     let u; try { u = new URL(v.url); } catch (_) { throw coded('backend_failed'); }
     if (!/^https?:$/.test(u.protocol) || u.origin === ORIGIN || u.username || u.password || u.search || u.hash || !/^\/t\/[A-Za-z0-9_-]{43}$/.test(u.pathname)) throw coded('backend_failed');
-    if (!/^image\/(png|jpeg|gif|webp)$/.test(v.mime) || !Number.isSafeInteger(v.bytes) || v.bytes < 0 || typeof v.expiresAt !== 'string' || !(Date.parse(v.expiresAt) > 0)) throw coded('backend_failed');
+    if (!MEDIA_MIME[operation]?.test(v.mime) || !Number.isSafeInteger(v.bytes) || v.bytes < 0 || typeof v.expiresAt !== 'string' || !(Date.parse(v.expiresAt) > 0)) throw coded('backend_failed');
     return Object.freeze({ kind: 'ticket', url: u.href, expiresAt: v.expiresAt, mime: v.mime, bytes: v.bytes, methods: ['GET', 'HEAD'], range: v.range === true });
   }
   async function server(path, body) {
@@ -388,7 +397,9 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
     try {
       if (Object.keys(d).sort().join(',') !== 'args,channel,id,method,op,type,version') throw coded('bad_request');
       if (['state.remove','state.list','state.clear'].includes(d.method) || (d.method.startsWith('state.') && d.args?.area !== undefined && d.args.area !== 'persistent')) throw coded('unsupported_capability');
-      if (['data.call','data.status','media.open','state.read','state.write','state.transaction'].includes(d.method)) {
+      if (TRANSFER_METHODS.has(d.method)) {
+        reply(await transfer(st, d, channel, authorize));
+      } else if (['data.call','data.status','media.open','state.read','state.write','state.transaction'].includes(d.method)) {
         if (new TextEncoder().encode(JSON.stringify(d)).byteLength > 65536) throw coded('too_large');
         const binding = await bindingOf(st, channel, authorize);
         if (!authorize()) throw coded('denied');
@@ -401,9 +412,9 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
           if (WRITES.has(operation) !== (keys === 'args,operation,operationKey')) throw coded('bad_request');
           if (WRITES.has(operation)) extra = {operationKey:d.args.operationKey};
         } else if (d.method === 'media.open') {
-          if (!d.args || Object.keys(d.args).sort().join(',') !== 'purpose,resourceId' || typeof d.args.resourceId !== 'string' || d.args.resourceId.length > 200 || !['thumbnail','read'].includes(d.args.purpose)) throw coded('bad_request');
           operation = Object.hasOwn(MEDIA_OPERATIONS, st.appId) ? MEDIA_OPERATIONS[st.appId] : '';
           if (!operation) throw coded('not_allowed');
+          if (!d.args || Object.keys(d.args).sort().join(',') !== 'purpose,resourceId' || typeof d.args.resourceId !== 'string' || d.args.resourceId.length > 200 || !MEDIA_PURPOSES[operation].includes(d.args.purpose)) throw coded('bad_request');
           args = {resourceId:d.args.resourceId, purpose:d.args.purpose};
         } else if (d.method === 'data.status') {
           if (!d.args || Object.keys(d.args).sort().join(',') !== 'operation,operationKey' || !WRITES.has(d.args.operation)) throw coded('bad_request');
@@ -414,7 +425,7 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
         // Shell-internal signal after a proven write (e.g. the Notifications badge re-reads its own count).
         // It carries the registered app id, never app-supplied data; frames cannot dispatch shell events.
         if (d.method === 'data.call' && WRITES.has(operation)) { try { dispatchEvent(new CustomEvent('wizard:browser-data-written', { detail: Object.freeze({ appId: st.appId, operation }) })); } catch (_) {} }
-        if (d.method === 'media.open') reply(ticketOf(value));
+        if (d.method === 'media.open') reply(ticketOf(value, operation));
         else if (d.method === 'data.call' || d.method === 'data.status') reply(value);
         else reply(await window.WizAppState.call({appId:st.appId,sourceId:value.principal?.sourceId,namespace:value.namespace,quota:value.quota,authorize},d.method,d.args));
       } else if (d.method === 'recovery.call') {
@@ -429,8 +440,74 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
       } else if (['ready','share.wizard','voice.transcribe','nav.contextDraft'].includes(d.method)) {
         await st.service?.(d,reply,authorize);
       } else throw coded('not_allowed');
-    } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:typeof e.detail === 'string' ? e.detail : code,retryable:['backend_unavailable','storage_unavailable','busy','timeout'].includes(code),...(e.outcome ? {outcome:e.outcome} : {}),...(e.operationKey ? {operationKey:e.operationKey} : {})}); }
+    } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:typeof e.detail === 'string' ? e.detail : code,retryable:['backend_unavailable','backend_failed','storage_unavailable','busy','timeout'].includes(code) && e.retryable !== false,...(e.outcome ? {outcome:e.outcome} : {}),...(e.operationKey ? {operationKey:e.operationKey} : {}),...(Number.isSafeInteger(e.offset) ? {offset:e.offset} : {})}); }
     finally { if (st.channel === channel) st.inflight--; }
+  }
+  /* Upload port and trusted downloads (wizard-os ADAPTER-SKETCH §6; first-party Files view). The frame sends typed
+   * messages over its own authenticated boundary port; the shell holds the upload ticket (never given to the frame),
+   * forwards one outstanding chunk of at most 1 MiB with its offset and hash, and the Agent Service checks binding,
+   * generation, installation and the files.upload grant again for EVERY chunk. Downloads are shell save/open actions:
+   * the frame names a resource id, never a URL, and only while the owner is acting (user activation). */
+  async function transfer(st, d, channel, authorize) {
+    const family = Object.hasOwn(TRANSFER_APPS, st.appId) ? TRANSFER_APPS[st.appId] : '';
+    if (!family) throw coded('not_allowed');
+    const a = d.args;
+    if (d.method !== 'upload.chunk' && new TextEncoder().encode(JSON.stringify(d)).byteLength > 16384) throw coded('too_large');
+    // Downloads: the owner's own action in this window, checked before anything else happens.
+    const activated = navigator.userActivation ? navigator.userActivation.isActive : false;
+    const binding = await bindingOf(st, channel, authorize);
+    if (!authorize()) throw coded('denied');
+    const call = async (operation, args) => { const v = await server('call', { handle: binding.handle, generation: channel, requestId: d.id, operation, args }); if (!authorize()) throw coded('denied'); return v; };
+    const uploads = st.uploads ||= new Map();
+    const hex = v => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v), id = v => typeof v === 'string' && /^up_[0-9a-f]{32}$/.test(v);
+    if (d.method === 'upload.create') {
+      if (!exactKeys(a, ['folder', 'filename', 'mime', 'bytes', 'clientUploadId'])) throw coded('bad_request');
+      const v = await call(family + '.upload.create', a);
+      if (!v || !id(v.uploadId) || !Number.isSafeInteger(v.offset) || !Number.isSafeInteger(v.bytes) || typeof v.status !== 'string') throw coded('backend_failed');
+      if (typeof v.ticket === 'string') { if (uploads.size >= 64) uploads.delete(uploads.keys().next().value); uploads.set(v.uploadId, { ticket: v.ticket, busy: false }); }
+      return { uploadId: v.uploadId, offset: v.offset, bytes: v.bytes, status: v.status, chunkBytes: Math.min(UPLOAD_CHUNK, Number(v.chunkBytes) || UPLOAD_CHUNK) };
+    }
+    if (d.method === 'upload.chunk') {
+      if (!exactKeys(a, ['uploadId', 'offset', 'sha256', 'bytes']) || !id(a.uploadId) || !Number.isSafeInteger(a.offset) || a.offset < 0 || !hex(a.sha256)
+        || Object.prototype.toString.call(a.bytes) !== '[object ArrayBuffer]' || a.bytes.byteLength < 1 || a.bytes.byteLength > UPLOAD_CHUNK) throw coded('bad_request');
+      const u = uploads.get(a.uploadId);
+      if (!u) throw Object.assign(coded('expired'), { retryable: false });
+      if (u.busy) throw coded('busy');   // one outstanding chunk per upload
+      u.busy = true;
+      try {
+        let r;
+        try {
+          r = await window.fetch('/wizard/v1/browser-adapters/upload-chunk', { method: 'POST', cache: 'no-store', body: a.bytes,
+            headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(a.offset), 'X-Wizard-Upload-Ticket': u.ticket, 'X-Wizard-Chunk-Sha256': a.sha256 } });
+        } catch (_) { throw coded('backend_unavailable'); }
+        let v = {}; try { v = await r.json(); } catch (_) { throw coded('backend_failed'); }
+        if (!authorize()) throw coded('denied');
+        if (!r.ok) { const e = coded(typeof v.error === 'string' ? v.error : 'backend_failed'); if (Number.isSafeInteger(v.offset)) e.offset = v.offset; if (v.retryable === false) e.retryable = false; if (e.code === 'expired') uploads.delete(a.uploadId); throw e; }
+        if (!Number.isSafeInteger(v.offset)) throw coded('backend_failed');
+        return { offset: v.offset };
+      } finally { u.busy = false; }
+    }
+    if (d.method === 'upload.status' || d.method === 'upload.abort') {
+      if (!exactKeys(a, ['uploadId']) || !id(a.uploadId)) throw coded('bad_request');
+      const v = await call(family + (d.method === 'upload.status' ? '.upload.status' : '.upload.abort'), { uploadId: a.uploadId });
+      if (d.method === 'upload.abort' || v?.status !== 'open') uploads.delete(a.uploadId);
+      return v;
+    }
+    if (d.method === 'upload.commit') {
+      if (!exactKeys(a, ['uploadId', 'sha256', 'operationKey']) || !id(a.uploadId) || !hex(a.sha256) || typeof a.operationKey !== 'string' || !/^[0-9a-f-]{36}$/.test(a.operationKey)) throw coded('bad_request');
+      const v = await call(family + '.upload.commit', a);
+      uploads.delete(a.uploadId);
+      return v;
+    }
+    // download.request {resourceId, action: 'save' | 'open'}: the shell itself saves or opens the file.
+    if (!exactKeys(a, ['resourceId', 'action']) || typeof a.resourceId !== 'string' || a.resourceId.length > 200 || !['save', 'open'].includes(a.action)) throw coded('bad_request');
+    if (!activated || document.hidden) throw coded('denied');
+    const v = ticketOf(await call(family + '.content', { resourceId: a.resourceId, purpose: a.action === 'save' ? 'download' : 'read' }), family + '.content');
+    if (a.action === 'open') { window.open(v.url, '_blank', 'noopener,noreferrer'); return { done: 'opened' }; }
+    const link = document.createElement('a');
+    link.href = v.url; link.download = ''; link.rel = 'noreferrer noopener'; link.referrerPolicy = 'no-referrer'; link.hidden = true;
+    document.body.append(link); link.click(); link.remove();
+    return { done: 'saved' };
   }
   /* Reviewed separate-origin exception (wizard-os #385, Files decision 2 Nov 2026): File Browser runs on its own https
    * origin and opens ONLY as its own tab, never in a Wizard window. The Agent Service flags it (`own_tab`) from WAM state;

@@ -31,21 +31,21 @@ function raw(url, { method = 'GET', headers = {}, body } = {}) {
   });
 }
 
-async function startService({ out, serviceRoot, box, token, ownerProof, content = null }) {
+async function startService({ out, serviceRoot, box, token, ownerProof, content = null, boundary = true, extra = {} }) {
   const { createWizardServer } = await import(pathToFileURL(path.join(serviceRoot, 'server/service.mjs')));
   const { createHermesFixture } = await import(pathToFileURL(path.join(serviceRoot, 'server/fixture.mjs')));
   const hermes = createHermesFixture({ expectedKey: 'boundary-fixture-only' }); const hp = await listen(hermes);
   const svcHome = path.join(out, 'service-home'); fs.mkdirSync(svcHome, { recursive: true });
   const options = { upstreamOrigin: `http://127.0.0.1:${hp}`, hermesKey: 'boundary-fixture-only', requireAccess: false, ownerProof,
-    browserBoundary: { enabled: true, token }, hermesHome: path.join(svcHome, 'hermes'), wizardOsHome: path.join(box, 'home'),
+    browserBoundary: { enabled: boundary, token }, hermesHome: path.join(svcHome, 'hermes'), wizardOsHome: path.join(box, 'home'),
     appsJsonPath: path.join(box, 'home/apps.json'), settingsPath: path.join(svcHome, 'settings.json'), launcherPath: path.join(svcHome, 'launcher.json'),
     agentBridge: false, followThrough: false, joinedDelegation: 'off',
-    browserAdapterWam: { receiptsPath: path.join(out, 'service-state/receipts.json'), ...(content ? { content } : {}) } };
+    browserAdapterWam: { receiptsPath: path.join(out, 'service-state/receipts.json'), ...(content ? { content } : {}) }, ...extra };
   return { createWizardServer, options, hermes };
 }
 
 /** The shell document stand-in (template headers + token injection) on https://box.test:<port>. */
-function shellProxy({ tls, web, token, ownerProof, servicePort, routes = {}, record = () => {} }) {
+function shellProxy({ tls, web, token, ownerProof, servicePort, routes = {}, record = () => {}, inject: injectOn = true, intercept = () => false }) {
   const tpl = fs.readFileSync(path.join(web, '../packaging/browser-boundary-document.conf.template'), 'utf8');
   const docHeaders = [...tpl.matchAll(/add_header ([A-Za-z-]+) "([^"]*)" always;/g)].map(m => [m[1], m[2]]);
   const inject = tpl.match(/sub_filter '<head>' '([^']*)';/)[1].replace('${WIZARD_SHELL_TOKEN}', token).replace('${WIZARD_RECOVERY_TOKEN}', '');
@@ -59,16 +59,19 @@ function shellProxy({ tls, web, token, ownerProof, servicePort, routes = {}, rec
     const doc = p.match(/^\/(?:wizard-os-home|wizard-ux)\/(|index\.html|desktop\.html)$/);
     if (doc) {
       if (req.headers['sec-fetch-dest'] !== 'document' || req.headers['sec-fetch-mode'] !== 'navigate' || req.method !== 'GET') { res.writeHead(403, { 'Content-Type': 'text/plain' }); return res.end('navigation only'); }
-      const html = fs.readFileSync(path.join(web, doc[1] || 'index.html'), 'utf8').replace('<head>', '<head>' + inject);
-      res.writeHead(200, { 'Content-Type': 'text/html', ...Object.fromEntries(docHeaders) }); return res.end(html);
+      const html = fs.readFileSync(path.join(web, doc[1] || 'index.html'), 'utf8').replace('<head>', '<head>' + (injectOn ? inject : ''));
+      res.writeHead(200, { 'Content-Type': 'text/html', ...(injectOn ? Object.fromEntries(docHeaders) : {}) }); return res.end(html);
     }
     if (p.startsWith('/wizard-os-home/')) return serveFile(res, path.join(web, path.normalize(p.slice('/wizard-os-home/'.length)).replace(/^(\.\.[/\\])+/, '')));
+    if (intercept(req, res, p)) return;
     if (p.startsWith('/wizard/')) return forward(req, res, servicePort, { ...req.headers, 'x-wizard-owner-proof': ownerProof });
     for (const [prefix, route] of Object.entries(routes)) {
       if (!p.startsWith(prefix)) continue;
-      const rec = { via: 'shell-origin', method: req.method, path: p, site: req.headers['sec-fetch-site'] || '', dest: req.headers['sec-fetch-dest'] || '', mode: req.headers['sec-fetch-mode'] || '', origin: req.headers.origin ?? '', cookie: req.headers.cookie !== undefined };
+      const rec = { via: 'shell-origin', at: Date.now(), method: req.method, path: p, site: req.headers['sec-fetch-site'] || '', dest: req.headers['sec-fetch-dest'] || '', mode: req.headers['sec-fetch-mode'] || '', origin: req.headers.origin ?? '', cookie: req.headers.cookie !== undefined };
       record(rec);
       if (route.static) return serveFile(res, path.join(route.static, p.slice(prefix.length) || 'index.html'));
+      // The Wizard gateway strips an app's path prefix before its listener (wam links); Host stays the box name.
+      if (route.strip) { const rest = req.url.slice(prefix.length - 1); return forward(Object.assign(req, { url: rest }), res, route.port, { ...req.headers, 'tailscale-user-login': 'owner@example.com', 'x-forwarded-for': '100.64.0.7', 'x-forwarded-proto': 'https', 'x-forwarded-host': req.headers.host }, rec); }
       // Tailscale Serve keeps Host and adds the owner's login and X-Forwarded-*.
       return forward(req, res, route.port, { ...req.headers, 'tailscale-user-login': 'owner@example.com', 'tailscale-user-name': 'Owner', 'x-forwarded-for': '100.64.0.7', 'x-forwarded-proto': 'https', 'x-forwarded-host': req.headers.host }, rec);
     }

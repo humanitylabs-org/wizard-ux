@@ -44,3 +44,11 @@ The existing Forum hostile-browser evidence for the prior exact draft revisions 
 
 - EXTEND `WizBrowserBoundary`: an app the Agent Service flags `own_tab` (WAM state, File Browser only) never gets a Wizard window. The shell checks its address is a different https origin and opens it with `noopener,noreferrer`; Back to Wizard stays in the shell. Flag off: unchanged frame.
 - Real-Chromium QA: `tools/qa-browser-files-own-tab.cjs` (`QA_BASELINE=1` for the unmigrated before shot).
+
+## Wizard Files in the opaque frame (wizard-os #385 card 2 / #386 card 3; default-off)
+
+- REUSE the card-1 data path for `files.list`, `files.index`, `files.thumbnail` (reviewed ids; the Agent Service re-checks WAM grants per call).
+- EXTEND `media.open`: `wizard-files` maps to `files.content` (purposes `read`/`play`; a closed inline MIME list, everything else an attachment ticket). Tickets come only from the dedicated content origin.
+- EXTEND `WizardApp` / `WizBoundaryClient` with `upload.create|chunk|status|commit|abort` and `download.request`. The shell keeps the upload ticket (never sent to the frame), forwards one outstanding chunk of at most 1 MiB with its offset and sha256 to `POST /wizard/v1/browser-adapters/upload-chunk`, and the Service re-checks binding, generation, installation and the `files.upload` grant for every chunk. Downloads are shell save/open actions on a resource id, only during the owner's own user activation.
+- Opaque frames load the shared kit by `location.href` (their origin is `null`) and get tokens only; skin layers stay same-origin-parent only.
+- Real-Chromium QA: `tools/qa-browser-wizard-files.cjs` (`QA_BASELINE=1` for the unmigrated app).
