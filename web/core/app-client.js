@@ -425,6 +425,10 @@
     data: Object.freeze({ call: requestData => window.WizBoundaryClient ? request('data.call', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})),
       status: requestData => window.WizBoundaryClient ? request('data.status', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
     state: Object.freeze(Object.fromEntries(['read','write','transaction'].map(method => [method, args => window.WizBoundaryClient ? request('state.'+method,args) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'}))]))),
+    // Shell intents (opaque frames only): queue an owner confirmation ({operation, args, operationKey}) or a reviewed
+    // sign-in page ({target, ref}). Wizard shows a Review chip on this window; the owner decides in Wizard's own dialog.
+    intent: Object.freeze({ confirm: requestData => window.WizBoundaryClient ? request('intent.confirm', requestData, 600000) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})),
+      open: requestData => window.WizBoundaryClient ? request('intent.open', requestData, 600000) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
     nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
