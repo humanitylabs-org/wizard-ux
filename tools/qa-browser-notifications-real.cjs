@@ -69,8 +69,11 @@ const PNG = (() => {
   if (report.baseline) { report.baselineContract = declared.browser.reason; }
   else {
   check(declared.browser.admissible === false && declared.browser.reason === 'no_grant', 'WAM: the app\'s own declaration alone is not admissible');
-  check(JSON.stringify(declared.browser.contract.operations) === '["notifications.inbox","notifications.mark"]', 'WAM: installed contract = the app\'s wizard.md (inbox + mark)');
-  wam('grant', 'notifications', 'notifications.inbox', 'notifications.mark');
+  // A build with scoped media tickets (card 3) also declares notifications.media; the owner grants it too.
+  const withMedia = JSON.stringify(declared.browser.contract.operations) === '["notifications.inbox","notifications.mark","notifications.media"]';
+  report.mediaTickets = withMedia;
+  check(withMedia || JSON.stringify(declared.browser.contract.operations) === '["notifications.inbox","notifications.mark"]', 'WAM: installed contract = the app\'s wizard.md (inbox + mark' + (withMedia ? ' + media)' : ')'));
+  wam('grant', 'notifications', 'notifications.inbox', 'notifications.mark', ...(withMedia ? ['notifications.media'] : []));
   report.browserFacts = appsJson().apps.find(a => a.id === 'notifications').browser;
   check(report.browserFacts.admissible && report.browserFacts.source_id === 'standard:oscarhenrycollins/notifications', 'WAM: owner grant recorded for this installation and source');
   }
@@ -81,14 +84,17 @@ const PNG = (() => {
   const { createHermesFixture } = await import(pathToFileURL(path.join(process.env.QA_SERVICE_ROOT, 'server/fixture.mjs')));
   const hermes = createHermesFixture({ expectedKey: 'boundary-fixture-only' }); const hp = await listen(hermes);
   const svcHome = path.join(out, 'service-home'); fs.mkdirSync(svcHome, { recursive: true });
+  const cprobe = http.createServer(), contentPort = await listen(cprobe); await close(cprobe);
   const receiptsPath = path.join(out, 'service-state/browser-operation-receipts.json');
   const service = createWizardServer({ upstreamOrigin: `http://127.0.0.1:${hp}`, hermesKey: 'boundary-fixture-only', requireAccess: false, ownerProof,
     browserBoundary: { enabled: true, token }, hermesHome: path.join(svcHome, 'hermes'), wizardOsHome: path.join(box, 'home'),
     appsJsonPath: path.join(box, 'home/apps.json'), settingsPath: path.join(svcHome, 'settings.json'), launcherPath: path.join(svcHome, 'launcher.json'),
-    agentBridge: false, followThrough: false, joinedDelegation: 'off', browserAdapterWam: { receiptsPath } });
+    agentBridge: false, followThrough: false, joinedDelegation: 'off', browserAdapterWam: { receiptsPath, ...(report.mediaTickets ? { content: { publicBase: `http://127.0.0.1:${contentPort}` } } : {}) } });
   const trace = []; report.serviceTrace = trace;
   service.on('request', (req, res) => res.on('finish', () => trace.push({ method: req.method, path: new URL(req.url, 'http://x').pathname, status: res.statusCode, origin: req.headers.origin || '', hasShellToken: typeof req.headers['x-wizard-shell-token'] === 'string' })));
   const sp = await listen(service);
+  const content = report.mediaTickets ? service.browserContent.createServer() : null;
+  if (content) { await new Promise(r => content.listen(contentPort, '127.0.0.1', r)); children.push({ kill: () => { content.closeAllConnections?.(); content.close(); } }); }
   const receipts = () => { try { return Object.values(JSON.parse(fs.readFileSync(receiptsPath, 'utf8')).receipts); } catch (_) { return []; } };
   // 4. nginx stand-in.
   const tpl = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8');
@@ -238,7 +244,8 @@ const PNG = (() => {
     report.thumbnail = thumb;
     check(thumb?.ok === true, 'minimal screen: the MEDIA thumbnail renders');
     const mediaReq = nreq.filter(r => r.path.startsWith('/notifications/media/') && fromFrame(r));
-    report.open.push({ item: 'thumbnails', detail: 'loaded by the opaque frame as a no-cors image GET straight from /notifications/media/* (ambient gateway route, ' + mediaReq.length + ' request(s)); no typed M adapter yet. OPEN: card 3 (#386).' });
+    if (report.mediaTickets) check(mediaReq.length === 0 && new URL(thumb.src).origin === `http://127.0.0.1:${contentPort}` && /^\/t\//.test(new URL(thumb.src).pathname), 'thumbnail through a 60 s media ticket on the content origin; the frame never asked /notifications/media/*');
+    else report.open.push({ item: 'thumbnails', detail: 'loaded by the opaque frame as a no-cors image GET straight from /notifications/media/* (ambient gateway route, ' + mediaReq.length + ' request(s)); no typed M adapter yet. OPEN: card 3 (#386).' });
     const shotDark = path.join(out, 'notifications-real-obsidian-detail.png'); await page.screenshot({ path: shotDark }); report.screenshots.push(shotDark);
     // Reply: an unsent Chats draft through the bounded shell service; nothing is sent.
     const postsBefore = trace.filter(r => r.method === 'POST' && !r.path.startsWith('/wizard/v1/browser-adapters/')).length;

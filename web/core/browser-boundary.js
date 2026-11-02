@@ -94,6 +94,16 @@
   // Reviewed operation ids only; the Service re-checks every one against WAM install/grant state.
   const DATA_OPERATIONS = new Set(['fixture.notifications.list','notifications.list','notifications.mark_read','notifications.inbox','notifications.mark']);
   const WRITES = new Set(['notifications.mark_read','notifications.mark']);
+  // Scoped media tickets (ADAPTER-SKETCH §6): one reviewed operation per app; the Service re-checks the grant.
+  const MEDIA_OPERATIONS = Object.freeze({ notifications: 'notifications.media' });
+  // Only a ticket on the dedicated content origin goes back to a frame: never the owner origin, a path or a redirect.
+  function ticketOf(v) {
+    if (!v || typeof v !== 'object' || Object.keys(v).sort().join(',') !== 'bytes,expiresAt,kind,methods,mime,range,url' || v.kind !== 'ticket') throw coded('backend_failed');
+    let u; try { u = new URL(v.url); } catch (_) { throw coded('backend_failed'); }
+    if (!/^https?:$/.test(u.protocol) || u.origin === ORIGIN || u.username || u.password || u.search || u.hash || !/^\/t\/[A-Za-z0-9_-]{43}$/.test(u.pathname)) throw coded('backend_failed');
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(v.mime) || !Number.isSafeInteger(v.bytes) || v.bytes < 0 || typeof v.expiresAt !== 'string' || !(Date.parse(v.expiresAt) > 0)) throw coded('backend_failed');
+    return Object.freeze({ kind: 'ticket', url: u.href, expiresAt: v.expiresAt, mime: v.mime, bytes: v.bytes, methods: ['GET', 'HEAD'], range: v.range === true });
+  }
   async function server(path, body) {
     const r = await window.fetch('/wizard/v1/browser-adapters/'+path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     let value; try { value = await r.json(); } catch (_) { throw coded(r.ok ? 'backend_failed' : 'outcome_unknown'); }
@@ -117,7 +127,7 @@
     try {
       if (Object.keys(d).sort().join(',') !== 'args,channel,id,method,op,type,version') throw coded('bad_request');
       if (['state.remove','state.list','state.clear'].includes(d.method) || (d.method.startsWith('state.') && d.args?.area !== undefined && d.args.area !== 'persistent')) throw coded('unsupported_capability');
-      if (['data.call','data.status','state.read','state.write','state.transaction'].includes(d.method)) {
+      if (['data.call','data.status','media.open','state.read','state.write','state.transaction'].includes(d.method)) {
         if (new TextEncoder().encode(JSON.stringify(d)).byteLength > 65536) throw coded('too_large');
         st.bindingPromise ||= server('bindings',{appId:st.appId,generation:channel}).then(b => {
           if (!authorize()) { server('revoke',{handle:b.handle}).catch(() => {}); throw coded('denied'); }
@@ -133,6 +143,11 @@
           if (!DATA_OPERATIONS.has(operation)) throw coded('not_allowed');
           if (WRITES.has(operation) !== (keys === 'args,operation,operationKey')) throw coded('bad_request');
           if (WRITES.has(operation)) extra = {operationKey:d.args.operationKey};
+        } else if (d.method === 'media.open') {
+          if (!d.args || Object.keys(d.args).sort().join(',') !== 'purpose,resourceId' || typeof d.args.resourceId !== 'string' || d.args.resourceId.length > 200 || !['thumbnail','read'].includes(d.args.purpose)) throw coded('bad_request');
+          operation = Object.hasOwn(MEDIA_OPERATIONS, st.appId) ? MEDIA_OPERATIONS[st.appId] : '';
+          if (!operation) throw coded('not_allowed');
+          args = {resourceId:d.args.resourceId, purpose:d.args.purpose};
         } else if (d.method === 'data.status') {
           if (!d.args || Object.keys(d.args).sort().join(',') !== 'operation,operationKey' || !WRITES.has(d.args.operation)) throw coded('bad_request');
           operation='data.status'; args={operation:d.args.operation,operationKey:d.args.operationKey};
@@ -142,7 +157,8 @@
         // Shell-internal signal after a proven write (e.g. the Notifications badge re-reads its own count).
         // It carries the registered app id, never app-supplied data; frames cannot dispatch shell events.
         if (d.method === 'data.call' && WRITES.has(operation)) { try { dispatchEvent(new CustomEvent('wizard:browser-data-written', { detail: Object.freeze({ appId: st.appId, operation }) })); } catch (_) {} }
-        if (d.method === 'data.call' || d.method === 'data.status') reply(value);
+        if (d.method === 'media.open') reply(ticketOf(value));
+        else if (d.method === 'data.call' || d.method === 'data.status') reply(value);
         else reply(await window.WizAppState.call({appId:st.appId,sourceId:value.principal?.sourceId,namespace:value.namespace,quota:value.quota,authorize},d.method,d.args));
       } else if (['ready','share.wizard','voice.transcribe','nav.contextDraft'].includes(d.method)) {
         await st.service?.(d,reply,authorize);

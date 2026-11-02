@@ -139,3 +139,37 @@ test('badge: the shell re-reads its own count after a proven Notifications write
   assert.match(src, /addEventListener\('wizard:browser-data-written', e => \{ if \(e\.detail\?\.appId === 'notifications'\) refresh\(true\); \}\);/);
   assert.match(src, /if \(e\.origin !== location\.origin \|\| !d \|\| d\.type !== 'wizard:notifications:count'\) return;/);   // opaque origin "null" never matches
 });
+
+test('media.open: exact args, the app\'s one reviewed media operation, and only a content-origin ticket goes back', async () => {
+  const f = fixture(), calls = [];
+  const ticket = { kind: 'ticket', url: 'http://127.0.0.1:9911/t/' + 'A'.repeat(43), expiresAt: new Date(Date.now() + 60000).toISOString(), mime: 'image/png', bytes: 1234, methods: ['GET', 'HEAD'], range: true };
+  let next = () => ticket;
+  f.ctx.fetch = async (url, init) => {
+    const body = JSON.parse(init.body); calls.push({ url, body });
+    if (url.endsWith('/bindings')) return new Response(JSON.stringify({ handle: 'h-1', principal: {} }), { status: 200 });
+    return new Response(JSON.stringify(next()), { status: 200 });
+  };
+  await f.ready();
+  const ok = await f.request('media.open', { resourceId: 'n:SynthBBBB0001:1', purpose: 'thumbnail' });
+  assert.deepEqual(JSON.parse(JSON.stringify(ok.value)), ticket);
+  const call = calls.find(c => c.url.endsWith('/call'));
+  assert.deepEqual(Object.keys(call.body).sort(), ['args', 'generation', 'handle', 'operation', 'requestId']);
+  assert.equal(call.body.operation, 'notifications.media');
+  assert.deepEqual(call.body.args, { resourceId: 'n:SynthBBBB0001:1', purpose: 'thumbnail' });
+  // Frames cannot pick the operation, add fields or ask for another purpose.
+  for (const args of [{ resourceId: 'n:x:1' }, { resourceId: 'n:x:1', purpose: 'download' }, { resourceId: 'n:x:1', purpose: 'read', operation: 'files.read' }, { resourceId: 7, purpose: 'read' }])
+    assert.equal((await f.request('media.open', args)).error.code, 'bad_request', JSON.stringify(args));
+  // A ticket pointing at the owner origin, carrying a query, a non-image type or extra fields never reaches the frame.
+  for (const bad of [{ ...ticket, url: 'https://box.example.test/t/' + 'A'.repeat(43) }, { ...ticket, url: ticket.url + '?x=1' },
+    { ...ticket, url: 'http://127.0.0.1:9911/notifications/media/x.png' }, { ...ticket, mime: 'text/html' }, { ...ticket, extra: 1 }, { ...ticket, url: 'javascript:alert(1)' }]) {
+    next = () => bad;
+    assert.equal((await f.request('media.open', { resourceId: 'n:x:1', purpose: 'read' })).error.code, 'backend_failed', JSON.stringify(bad));
+  }
+});
+
+test('opaque client: media.open is an allowed request and WizardApp.media.open routes through it', () => {
+  assert.match(read('browser-boundary-client.js'), /'media\.open'/);
+  const src = read('app-client.js');
+  assert.match(src, /open: requestData => window\.WizBoundaryClient \? request\('media\.open', requestData\)/);
+  assert.equal(src.match(/\n    media: Object\.freeze\(/g).length, 1, 'one WizardApp.media (view + open), never a second key that hides view');
+});

@@ -441,7 +441,10 @@
       if (framed) return false;
       const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
       if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;
-    } }),
+    },
+    // Browser trust preview (opaque frame): a scoped 60 s picture ticket, {resourceId, purpose} ->
+    // {kind:'ticket', url, expiresAt, mime, bytes}. The shell checks the grant; the url is on a non-owner origin.
+    open: requestData => window.WizBoundaryClient ? request('media.open', requestData) : Promise.reject(Object.assign(new Error('unavailable'),{code:'unavailable'})) }),
     device: Object.freeze({ legacy: Object.freeze({
       available(method) { return !!service?.device?.legacy?.available(method); },
       call(method, args = []) { if (!service?.device?.legacy) throw new Error('Legacy device unavailable'); return service.device.legacy.call(method, args); },
