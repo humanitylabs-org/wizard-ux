@@ -79,7 +79,8 @@ public final class EverywhereOutbox {
         /** The recording has been turned into words (before it is sent on to Wizard). */
         default void onWords(Item it, String text) { }
         /** Keyboard dictation: the words are ready to type. */
-        default void onDictated(Item it, String text) { }
+        default boolean onDictated(Item it, String text, boolean mayInsert,
+                java.util.function.Consumer<Boolean> completed) { return false; }
     }
 
     public static final class Item {
@@ -90,6 +91,8 @@ public final class EverywhereOutbox {
         public long createdAt, nextAt, sentAt;
         /** Side button only: the phone was locked when this was spoken. */
         public boolean locked;
+        /** Fsynced before dispatch. Restart/retry can copy, but must never auto-insert this item again. */
+        public boolean dictationAttempted;
         public int attempts;
         boolean sessionReady;
         JSONObject audioFile;
@@ -104,7 +107,7 @@ public final class EverywhereOutbox {
                     .put("createdAt", createdAt).put("nextAt", nextAt).put("sentAt", sentAt).put("attempts", attempts)
                     .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile)
                     .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked)
-                    .put("meetingEvent", meetingEvent);
+                    .put("meetingEvent", meetingEvent).put("dictationAttempted", dictationAttempted);
         }
 
         static Item from(JSONObject o) {
@@ -116,6 +119,7 @@ public final class EverywhereOutbox {
             it.sessionReady = o.optBoolean("sessionReady"); it.audioFile = o.optJSONObject("audioFile");
             it.source = o.optString("source", SRC_EVERYWHERE);
             it.locked = o.optBoolean("locked");
+            it.dictationAttempted = o.optBoolean("dictationAttempted");
             it.meetingEvent = o.optString("meetingEvent");
             JSONArray a = o.optJSONArray("shots"); if (a != null) it.shots = a;
             JSONArray f = o.optJSONArray("shotFiles"); if (f != null) it.shotFiles = f;
@@ -155,6 +159,8 @@ public final class EverywhereOutbox {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
+    /** Live owner fence only; persisted dictationAttempted still handles process restart/retry. */
+    private final java.util.Set<String> dictationsInFlight = new java.util.HashSet<>();
     private final Runnable pumpTask = this::pumpNow;
     private boolean pumping;
     /** Set for the app-wide instance: "Not sent" and reply notifications don't depend on the floating orb running. */
@@ -196,7 +202,7 @@ public final class EverywhereOutbox {
     }
 
     /** Atomic write: temp file, fsync, rename. */
-    private synchronized void save() {
+    private synchronized boolean save() {
         try {
             JSONArray a = new JSONArray();
             for (Item it : items.values()) a.put(it.json());
@@ -206,8 +212,10 @@ public final class EverywhereOutbox {
                 o.getFD().sync();
             }
             if (!tmp.renameTo(file)) throw new IOException("rename failed");
+            return true;
         } catch (Exception e) {
             Log.e(TAG, "outbox save failed", e);
+            return false;
         }
     }
 
@@ -359,6 +367,60 @@ public final class EverywhereOutbox {
         });
     }
 
+    /** Shared by production and the native fixture: ownership survives asynchronous editor evidence. */
+    void deliverDictation(Item it) {
+        final boolean mayInsert;
+        synchronized (this) {
+            if (items.get(it.id) != it || !it.dictation() || dictationsInFlight.contains(it.id)) return;
+            mayInsert = !it.dictationAttempted;
+            it.dictationAttempted = true;
+            it.state = "sending";
+            if (!save()) {
+                it.state = "failed"; it.error = "Words kept · could not save typing attempt";
+                changed(); return;
+            }
+            dictationsInFlight.add(it.id);
+        }
+        final java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.function.Consumer<Boolean> complete = verified -> {
+            if (!finished.compareAndSet(false, true)) return;
+            synchronized (EverywhereOutbox.this) {
+                dictationsInFlight.remove(it.id);
+                if (items.get(it.id) != it) return; // Owner deleted while the editor was replying.
+                if (verified) {
+                    it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
+                    if (!it.audioPath.isEmpty()) custody.release(it.id, CaptureJournal.Reason.DELIVERED_ON_PHONE);
+                    it.audioPath = ""; items.remove(it.id);
+                } else {
+                    // Clipboard is not durable delivery. Retain the words AND original take until the
+                    // owner deletes them; Retry has the attempted fence and cannot type twice.
+                    it.state = "failed"; it.error = "Words kept · check the field before pasting";
+                }
+                save();
+            }
+            changed();
+        };
+        for (Listener listener : snapshot()) {
+            try {
+                // The accepted insertion owns its timeout, exact clipboard payload and completion.
+                // In particular, synchronous editor preflight may outlive 2.5 seconds. Never arm
+                // a competing timer before entering the owner or rewrite its delayed paste clip.
+                if (listener.onDictated(it, it.text, mayInsert, complete)) return;
+                if (finished.get()) return; // A synchronous callback is terminal even if owner returns false.
+            } catch (RuntimeException e) {
+                Log.w(TAG, "dictation owner failed", e);
+                // An exception is ambiguous: the owner may already have dispatched a write. No
+                // second owner or clipboard recovery. Allow its own pending completion first;
+                // a clipboard-free backstop is measured AFTER the failing call returns.
+                if (!finished.get()) main.postDelayed(() -> complete.accept(false), 2500);
+                return;
+            }
+        }
+        // Only an explicit lack of owner may prepare raw recovery words. Clipboard is not delivery.
+        try { if (!finished.get() && app != null) WizardKeyboardService.copyAsLatest(app, it.text.trim()); }
+        finally { complete.accept(false); }
+    }
+
     private void failed(Item it, int status, String msg) {
         boolean gaveUp;
         synchronized (this) {
@@ -427,27 +489,7 @@ public final class EverywhereOutbox {
         }
         // Dictation stops here: the words go into the text field, nothing goes to Wizard.
         if (it.dictation()) {
-            final String words = it.text;
-            // The meeting marker records what was said even if no field takes it (the listener refines typed/copied).
-            meetingNote(it, "event", "local", "kind", "dictation", "text", DictationCleanup.cleanTranscriptForInsertion(words));
-            // Keep the item pending through main-thread insertion/clipboard recovery. Removing it on the
-            // I/O thread allowed a queued tap to start a second take before the first words were inserted.
-            main.post(() -> {
-                try {
-                    for (Listener l : snapshot()) l.onDictated(it, words);
-                } finally {
-                    synchronized (EverywhereOutbox.this) {
-                        it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
-                        if (audio != null) //noinspection ResultOfMethodCallIgnored
-                            custody.release(it.id, CaptureJournal.Reason.DELIVERED_ON_PHONE); // the words were typed in
-                        it.audioPath = "";
-                        items.remove(it.id);
-                        save();
-                    }
-                    changed();
-                }
-                Log.i(TAG, "dictated " + it.id + " chars=" + words.length() + " attempts=" + it.attempts);
-            });
+            main.post(() -> deliverDictation(it));
             return;
         }
         // 2. The recording rides along as a voice note.

@@ -42,5 +42,5 @@ Basic pin toggling, ID spelling, persistence, and unopened-app release worked in
 - Targeted unit files run serially: **230/230 across 22 files** (radial itself 9/9).
 - Updated browser acceptance: **91/91 twice locally**. The attempted third pass and OFF hold-command suite were stopped before launch when host load exceeded 6. A forum run of three consecutive 91/91 passes, OFF hold-command and Android-UA OFF smoke is still required before activation.
 - Screenshots reviewed at 412 px on Nebula and Grove, empty state and settings sheet. The hint and sheet have an opaque base under Appearance v1 surfaces.
-- Local raw source/pin reproduction, touch A/B results and receipts: `/home/telos/.hermes/cache/scratch/orb-radial-pins/`.
+- Local raw source/pin reproduction, touch A/B results and receipts: `$TMPDIR/orb-radial-pins/` (controller-local scratch; not shipped source).
 - No live deployment or owner preference change is implied by this document. Follow the exact-head worker receipt and fresh rollback gate.

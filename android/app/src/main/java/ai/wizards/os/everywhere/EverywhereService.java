@@ -1334,31 +1334,45 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     /** Voice typing: type the words where the cursor is; if no field takes them, they're on the clipboard. */
     @Override
-    public void onDictated(EverywhereOutbox.Item it, String words) {
-        // Archimedes Anywhere's path: reject decoder loops, run its clean-up, skip a duplicate, insert at the cursor.
+    public boolean onDictated(EverywhereOutbox.Item it, String words, boolean mayInsert,
+            java.util.function.Consumer<Boolean> completed) {
         if (DictationCleanup.isLikelyRepetitionLoop(words)) {
             WizardKeyboardService.copyAsLatest(this, words.trim());
             toast("That came back garbled · copied instead of typed");
-            Log.w(TAG, "dictation looked like a repetition loop chars=" + words.length());
-            buzz(30);
-            return;
+            buzz(30); completed.accept(false); return true;
         }
         String text = DictationCleanup.cleanTranscriptForInsertion(words);
         long now = System.currentTimeMillis();
-        if (text.equals(lastInserted) && now - lastInsertAt < 2500L) { Log.i(TAG, "dictation duplicate skipped"); return; }
-        boolean fresh = now - it.createdAt < 3 * 60_000L;
-        WizardKeyboardService k = WizardKeyboardService.get();
-        boolean typed = fresh && k != null && k.insertText(text);
-        if (typed) { lastInserted = text; lastInsertAt = now; }
-        else {
-            WizardKeyboardService.copyAsLatest(this, text.trim());
-            toast(k == null ? "Copied · turn on Accessibility → Wizard OS to type it for you" : "Copied · paste it where you want it");
+        if (mayInsert && text.equals(lastInserted) && now - lastInsertAt < 2500L) {
+            completed.accept(true); return true;
         }
-        Log.i(TAG, "dictation " + (typed ? "typed" : "copied") + " chars=" + text.length());
-        if (it.meetingEvent != null && !it.meetingEvent.isEmpty())
-            ai.wizards.os.mizel.MeetingLoans.note(this, it.meetingEvent, ai.wizards.os.mizel.MeetingLoans.obj(
-                    "event", "local", "kind", "dictation", "text", text, "inserted", typed ? "typed" : "copied"));
-        buzz(typed ? 18 : 30);
+        boolean fresh = now - it.createdAt < 3 * 60_000L;
+        WizardKeyboardService keyboard = WizardKeyboardService.get();
+        java.util.function.Consumer<DictationCommit.Result> finish = result -> {
+            boolean typed = result == DictationCommit.Result.VERIFIED;
+            try {
+                if (typed) { lastInserted = text; lastInsertAt = System.currentTimeMillis(); }
+                else {
+                    // The insertion owner leaves an uncertain paste's exact payload in place;
+                    // changing its clipboard now can alter a delayed paste. IC uncertainty prepares
+                    // its own shaped recovery clip. The durable outbox retains both kinds.
+                    if (result != DictationCommit.Result.UNVERIFIED)
+                        WizardKeyboardService.copyAsLatest(this, text.trim());
+                    toast(result == DictationCommit.Result.UNVERIFIED || !mayInsert
+                            ? "Words kept · check the field before pasting"
+                            : keyboard == null ? "Copied · turn on Accessibility → Wizard OS to type it for you"
+                            : "Copied · paste it where you want it");
+                }
+                Log.i(TAG, "dictation " + result + " chars=" + text.length());
+                if (it.meetingEvent != null && !it.meetingEvent.isEmpty())
+                    ai.wizards.os.mizel.MeetingLoans.note(this, it.meetingEvent, ai.wizards.os.mizel.MeetingLoans.obj(
+                            "event", "local", "kind", "dictation", "text", text, "inserted", typed ? "typed" : "copied"));
+                buzz(typed ? 18 : 30);
+            } finally { completed.accept(typed); }
+        };
+        if (mayInsert && fresh && keyboard != null) keyboard.insertText(text, finish);
+        else finish.accept(DictationCommit.Result.UNAVAILABLE);
+        return true;
     }
 
     private String lastInserted = "";

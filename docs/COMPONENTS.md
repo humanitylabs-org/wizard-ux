@@ -13,7 +13,7 @@ Reuse:
 - streak: NEW web/core/streaks.js + row
 ```
 
-`Reuse: n/a (reason)` requires no `web/` or `android/` changes.
+`Reuse: n/a` only without `web/` or `android/` edits.
 
 ## Apps (`WizardApp`)
 
@@ -45,7 +45,7 @@ Reuse:
 | Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | per-app lint forks | legacy warns; changed lines fail |
 | App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | kit forks; `.wz-field-row` chat; literals | two skins + My skin restyle `.wz-*` |
 
-## Shell (`web/core/`): shared; per-kind variants EXTEND.
+## Shell (`web/core/`): variants EXTEND.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
@@ -90,12 +90,12 @@ Reuse:
 | Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; `single-app-session.js`, `home-screen-apps.css`: host owns status/cutout, child inset 0; docs/pwa-app-install.md | app CSS inset ownership |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
 
-## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
+## Visual (side-by-side screenshot under `Visual:`)
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
-| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; orb adapter `api.orb.switcher()` with awaited lazy readiness + one fresh-URL retry; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; legacy overlays survive palettes), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own palettes/canvases |
+| Orb | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html`; ordered ramps + GL restore retain mode/level/sleep | PNG/CSS spin, Lottie, SVG |
+| Skins/scenery (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; `api.orb.switcher()`: await lazy ready, retry fresh URL once; `core/slots.json`: `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` → off; legacy overlays survive palettes), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients/canvases/palettes/colours |
 | Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) | desk wedges |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |

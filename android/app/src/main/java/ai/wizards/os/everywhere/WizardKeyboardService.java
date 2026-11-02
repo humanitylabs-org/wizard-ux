@@ -159,126 +159,197 @@ public class WizardKeyboardService extends AccessibilityService {
 
     /* ------------------------------------------------------------------ typing */
 
-    /**
-     * Types the words where the cursor is: Archimedes Anywhere's insertText, copied verbatim. Strategy 1 is the
-     * accessibility InputConnection (commitText at the cursor, works in Obsidian/WebViews/everything on Android 13+),
-     * verified by re-reading the field; strategy 2 is a clipboard paste that restores the old clipboard.
-     * Never replaces the whole field (ACTION_SET_TEXT rewrote Obsidian documents).
-     */
-    public boolean insertText(String text) {
-        // Find target for capitalization context
-        AccessibilityNodeInfo target = findEditable();
-        if (target == null) target = lastFocusedNode;
+    private long editorGeneration;
+    private boolean inserting;
 
-        // Trim leading whitespace
-        text = text.stripLeading();
+    @android.annotation.TargetApi(33)
+    @Override public InputMethod onCreateInputMethod() {
+        return new InputMethod(this) {
+            @Override public void onStartInput(android.view.inputmethod.EditorInfo info, boolean restarting) {
+                editorGeneration++;
+                super.onStartInput(info, restarting);
+            }
+            @Override public void onFinishInput() {
+                editorGeneration++;
+                super.onFinishInput();
+            }
+        };
+    }
 
-        // Get the field text BEFORE insertion (via accessibility node) for verification
-        String fieldTextBefore = null;
-        AccessibilityNodeInfo verifyNode = target;
-        if (verifyNode != null && verifyNode.getText() != null) {
-            fieldTextBefore = verifyNode.getText().toString();
+    /** One selected channel, one write, bounded asynchronous evidence. Never rewrites the whole field. */
+    void insertText(String text, java.util.function.Consumer<DictationCommit.Result> completion) {
+        if (text == null || text.trim().isEmpty() || inserting) {
+            completion.accept(DictationCommit.Result.UNAVAILABLE); return;
         }
+        inserting = true;
+        new Insertion(text, completion).start();
+    }
 
-        // Strategy 1: InputConnection (API 33+) — works in ALL apps including Obsidian
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    /** Never use a cached node for writes. Refresh and bind the active window's actual input focus. */
+    private AccessibilityNodeInfo focusedEditor() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        AccessibilityNodeInfo node = root == null ? null : root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        return node != null && node.refresh() && node.isFocused() && node.isEditable() ? node : null;
+    }
+
+    private static DictationCommit.Snapshot nodeText(AccessibilityNodeInfo node) {
+        if (node == null || !node.refresh() || !node.isFocused() || !node.isEditable()) return null;
+        CharSequence value = node.getText(), hint = node.getHintText();
+        return DictationCommit.nodeSnapshot(value == null ? null : value.toString(),
+                hint == null ? null : hint.toString(), node.isShowingHintText(),
+                node.getTextSelectionStart(), node.getTextSelectionEnd());
+    }
+
+    @android.annotation.TargetApi(33)
+    private static DictationCommit.Snapshot connectionText(InputMethod.AccessibilityInputConnection connection) {
+        return connectionText(connection, 512);
+    }
+
+    @android.annotation.TargetApi(33)
+    private static DictationCommit.Snapshot connectionText(InputMethod.AccessibilityInputConnection connection, int left) {
+        SurroundingText value = connection.getSurroundingText(left, 128, 0);
+        return value == null ? null : new DictationCommit.Snapshot(
+                value.getText() == null ? null : value.getText().toString(),
+                value.getSelectionStart(), value.getSelectionEnd(), value.getOffset(),
+                value.getText() != null && value.getText().length() - Math.max(value.getSelectionStart(),value.getSelectionEnd()) < 128);
+    }
+
+    private String shape(String text, DictationCommit.Snapshot context) {
+        String before = context.text.substring(0, context.start);
+        String after = context.text.substring(context.end);
+        if (!before.isEmpty() && !Character.isWhitespace(text.charAt(0))) {
+            char last = before.charAt(before.length() - 1);
+            if (Character.isLetterOrDigit(last) || last == ')' || last == '"') text = " " + text;
+        }
+        text = adjustCapitalizationFromContext(before, text);
+        if (text.endsWith(" ") && !after.isEmpty() && " .,!?;:)".indexOf(after.charAt(0)) >= 0)
+            text = text.stripTrailing();
+        return text;
+    }
+
+    @android.annotation.SuppressLint("NewApi") // IC branch is guarded by SDK >= 33; paste works on minSdk.
+    private final class Insertion {
+        final String original;
+        final java.util.function.Consumer<DictationCommit.Result> completion;
+        final long generation = editorGeneration;
+        final ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+        AccessibilityNodeInfo node;
+        InputMethod.AccessibilityInputConnection connection;
+        DictationCommit.Snapshot before;
+        ClipData saved;
+        String payload, clipLabel, editorPackage;
+        int fieldId, inputType, windowId = -1;
+        boolean paste, done, wrote;
+        final Runnable timeout = () -> finish(DictationCommit.Result.UNVERIFIED);
+
+        Insertion(String text, java.util.function.Consumer<DictationCommit.Result> completion) {
+            this.original = text; this.completion = completion;
+        }
+        boolean sameNode() {
+            AccessibilityNodeInfo current = focusedEditor();
+            return node != null && current != null && node.equals(current);
+        }
+        boolean sameConnection() {
+            // InputMethod returns a new wrapper on each call. Lifecycle generation, not Java wrapper
+            // identity, binds the remote editor; a node, when available, is an additional focus fence.
+            InputMethod method = getInputMethod();
+            android.view.inputmethod.EditorInfo info = method == null ? null : method.getCurrentInputEditorInfo();
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            return generation == editorGeneration && method != null && method.getCurrentInputStarted()
+                    && method.getCurrentInputConnection() != null && info != null
+                    && java.util.Objects.equals(editorPackage, info.packageName) && fieldId == info.fieldId
+                    && inputType == info.inputType && (windowId < 0 || root != null && root.getWindowId() == windowId)
+                    && (node == null || sameNode());
+        }
+        void start() {
             try {
-                InputMethod inputMethod = getInputMethod();
-                if (inputMethod != null) {
-                    InputMethod.AccessibilityInputConnection ic = inputMethod.getCurrentInputConnection();
-                    if (ic != null) {
-                        // Get surrounding text for context-aware behavior
-                        SurroundingText surrounding = ic.getSurroundingText(50, 50, 0);
-                        
-                        if (surrounding != null) {
-                            CharSequence before = surrounding.getText().subSequence(
-                                0, surrounding.getSelectionStart());
-                            CharSequence after = surrounding.getText().subSequence(
-                                surrounding.getSelectionEnd(), surrounding.getText().length());
-                            
-                            // Smart leading space: if cursor is right after a word character
-                            // (no space between), prepend a space
-                            if (before.length() > 0) {
-                                char lastBefore = before.charAt(before.length() - 1);
-                                if (Character.isLetterOrDigit(lastBefore) || lastBefore == ')' || lastBefore == '"') {
-                                    text = " " + text;
-                                }
-                            }
-                            
-                            // Context-aware capitalization
-                            text = adjustCapitalizationFromContext(
-                                before.toString(), text);
-                            
-                            // Smart trailing space: don't add if next char is space/punctuation
-                            if (text.endsWith(" ") && after.length() > 0) {
-                                char nextChar = after.charAt(0);
-                                if (nextChar == ' ' || nextChar == '.' || nextChar == ',' 
-                                    || nextChar == '!' || nextChar == '?' || nextChar == ';'
-                                    || nextChar == ':' || nextChar == ')') {
-                                    text = text.stripTrailing();
-                                }
-                            }
-                        } else {
-                            // No surrounding text — capitalize first letter
-                            text = capitalizeFirst(text);
-                        }
-                        
-                        ic.commitText(text, 1, null);
-                        
-                        // Verify insertion via accessibility node (not InputConnection which may be stale)
-                        try {
-                            Thread.sleep(100); // Wait for field to update
-                        } catch (InterruptedException ie) { /* ignore */ }
-                        
-                        // Re-find the editable node to get fresh text
-                        AccessibilityNodeInfo freshNode = findEditable();
-                        if (freshNode == null) freshNode = lastFocusedNode;
-                        String fieldTextAfter = null;
-                        if (freshNode != null) {
-                            freshNode.refresh(); // Force refresh from the view
-                            if (freshNode.getText() != null) {
-                                fieldTextAfter = freshNode.getText().toString();
-                            }
-                        }
-                        
-                        // If we can verify and text didn't change, commitText silently failed
-                        if (fieldTextBefore != null && fieldTextAfter != null 
-                                && fieldTextBefore.equals(fieldTextAfter)) {
-                            Log.w(TAG, "commitText silently failed — field text unchanged. Falling through to clipboard.");
-                            throw new Exception("Stale InputConnection — field text unchanged after commitText");
-                        }
-                        
-                        return true;
+                cancelClipRestore();
+                node = focusedEditor();
+                before = nodeText(node);
+                if (before != null && before.valid()) {
+                    payload = shape(original, before);
+                    try { saved = clipboard.getPrimaryClip(); } catch (RuntimeException ignored) { }
+                    clipLabel = "Wizard dictation " + java.util.UUID.randomUUID();
+                    clipboard.setPrimaryClip(ClipData.newPlainText(clipLabel, payload));
+                    // TextView advertises paste only when a text clip is available. Check AFTER
+                    // installing ours, but before dispatching either kind of editor mutation.
+                    if (sameNode() && before.same(nodeText(node)) && node.getActionList().contains(
+                            AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE)) {
+                        paste = true;
                     }
                 }
-            } catch (Exception e) {
-                Log.w(TAG, "InputConnection strategy failed: " + e.getMessage());
-                // Fall through to clipboard method
+                if (!paste) {
+                    restoreClip();
+                    if (Build.VERSION.SDK_INT < 33 || getInputMethod() == null) {
+                        finish(DictationCommit.Result.UNAVAILABLE); return;
+                    }
+                    android.view.inputmethod.EditorInfo info = getInputMethod().getCurrentInputEditorInfo();
+                    if (info == null) { finish(DictationCommit.Result.UNAVAILABLE); return; }
+                    editorPackage = info.packageName; fieldId = info.fieldId; inputType = info.inputType;
+                    AccessibilityNodeInfo root = getRootInActiveWindow();
+                    windowId = root == null ? -1 : root.getWindowId();
+                    connection = getInputMethod().getCurrentInputConnection();
+                    before = connection == null ? null : connectionText(connection);
+                    if (before == null || !before.valid() || !sameConnection()) {
+                        finish(DictationCommit.Result.UNAVAILABLE); return;
+                    }
+                    payload = shape(original, before);
+                }
+                if (generation != editorGeneration || (paste ? !sameNode() || !before.same(nodeText(node))
+                        : !sameConnection() || !before.same(connectionText(connection)))) {
+                    restoreClip(); finish(DictationCommit.Result.UNAVAILABLE); return;
+                }
+                // From here even a false action return or exception is potentially a mutation.
+                // It is NEVER permission to dispatch a different strategy.
+                wrote = true;
+                main.postDelayed(timeout, 1500);
+                if (paste) node.performAction(AccessibilityNodeInfo.ACTION_PASTE);
+                else connection.commitText(payload, 1, null);
+                main.postDelayed(() -> poll(0), 100);
+            } catch (RuntimeException e) {
+                if (!wrote) restoreClip();
+                finish(wrote ? DictationCommit.Result.UNVERIFIED : DictationCommit.Result.UNAVAILABLE);
             }
         }
-
-        // Strategy 2: Clipboard paste (fallback for older Android or when IME unavailable)
-        if (target == null) return false;
-        android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
-                getSystemService(CLIPBOARD_SERVICE);
-        cancelClipRestore();
-        android.content.ClipData oldClip = clipboard.getPrimaryClip();
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Wizard", text));
-        boolean pasted = target.performAction(AccessibilityNodeInfo.ACTION_PASTE);
-        // A failed paste leaves the words on the clipboard as the newest entry. Restoring the old clip
-        // afterwards buried the transcript under it in the keyboard's clipboard history.
-        if (ClipRestore.shouldRestore(pasted, oldClip != null)) {
-            final android.content.ClipData saved = oldClip;
-            final String ours = text;
-            pendingRestore = () -> {
-                pendingRestore = null;
-                try {
-                    if (ClipRestore.stillOurs(primaryText(clipboard), ours)) clipboard.setPrimaryClip(saved);
-                } catch (Exception ignored) {}
-            };
-            main.postDelayed(pendingRestore, 500);
+        void poll(int attempt) {
+            if (done) return;
+            try {
+                if (generation != editorGeneration || (paste ? !sameNode() : !sameConnection())) {
+                    finish(DictationCommit.Result.UNVERIFIED); return;
+                }
+                DictationCommit.Snapshot after = paste ? nodeText(node) : connectionText(connection, Math.max(512,payload.length()+64));
+                boolean verified = paste ? DictationCommit.verifies(before, after, payload)
+                        : DictationCommit.verifiesWindow(before, after, payload);
+                if (verified) { finish(DictationCommit.Result.VERIFIED); return; }
+            } catch (RuntimeException ignored) { }
+            if (attempt < 2) main.postDelayed(() -> poll(attempt + 1), attempt == 0 ? 150 : 250);
+            else finish(DictationCommit.Result.UNVERIFIED);
         }
-        return pasted;
+        void restoreClip() {
+            try {
+                ClipData current = clipboard.getPrimaryClip();
+                if (saved != null && clipLabel != null && current != null
+                        && clipLabel.contentEquals(current.getDescription().getLabel())
+                        && ClipRestore.stillOurs(primaryText(clipboard), payload)) {
+                    clipboard.setPrimaryClip(saved);
+                }
+            } catch (RuntimeException ignored) { /* No clipboard read permission: never blind-restore. */ }
+        }
+        void finish(DictationCommit.Result result) {
+            if (done) return;
+            done = true; main.removeCallbacks(timeout); inserting = false;
+            if (paste && result == DictationCommit.Result.VERIFIED) {
+                pendingRestore = () -> { pendingRestore = null; restoreClip(); };
+                main.postDelayed(pendingRestore, 500);
+            }
+            if (result == DictationCommit.Result.UNVERIFIED && !paste) {
+                try { copyAsLatest(WizardKeyboardService.this, payload == null ? original : payload); }
+                catch (RuntimeException ignored) { /* The outbox still retains the words and take. */ }
+            }
+            // An uncertain paste may consume the clipboard LATER. Do not replace its shaped payload
+            // with trimmed recovery text, and do not overwrite a newer clip while waiting for it.
+            completion.accept(result);
+        }
     }
 
     private volatile Runnable pendingRestore;
