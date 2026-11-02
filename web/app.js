@@ -1205,6 +1205,8 @@
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    // Browser boundary: the reviewed own-tab app (File Browser) opens in its own tab, never in a window.
+    if (a.ownTab && window.WizBrowserBoundary?.enabled) { openingEnd(a.id); closeSheets(true); return window.WizBrowserBoundary.openOwnTab(a); }
     if (a.id === 'setup' && window.WosWelcome) { openingEnd(a.id); closeSheets(true); window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
     // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
@@ -1524,6 +1526,8 @@
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
+    // Browser boundary: never a frame for the own-tab exception (e.g. a saved desk window); only the shell's tab link.
+    if (a.ownTab && window.WizBrowserBoundary?.enabled) { const href = window.WizBrowserBoundary.ownTabUrl(a); return `<div class="frame-wrap blocked own-tab"><div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} opens in its own tab</h3><p>It runs on its own address, outside Wizard’s windows.</p>${href ? `<a class="cta" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Open ${esc(a.name)}</a>` : ''}</div></div>`; }
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes() : ''} ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;

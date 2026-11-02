@@ -432,8 +432,25 @@ dialog.wz-intent::backdrop{background:rgba(3,1,10,.55)}
     } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:typeof e.detail === 'string' ? e.detail : code,retryable:['backend_unavailable','storage_unavailable','busy','timeout'].includes(code),...(e.outcome ? {outcome:e.outcome} : {}),...(e.operationKey ? {operationKey:e.operationKey} : {})}); }
     finally { if (st.channel === channel) st.inflight--; }
   }
+  /* Reviewed separate-origin exception (wizard-os #385, Files decision 2 Nov 2026): File Browser runs on its own https
+   * origin and opens ONLY as its own tab, never in a Wizard window. The Agent Service flags it (`own_tab`) from WAM state;
+   * the shell checks the address is a different https origin, then opens it with no opener and no referrer. Nothing
+   * crosses into the tab: no token, no frame, no message channel. */
+  function ownTabUrl(a) {
+    if (a?.ownTab !== true || typeof a.url !== 'string') return '';
+    let u; try { u = new URL(a.url); } catch (_) { return ''; }
+    if (u.protocol !== 'https:' || u.origin === ORIGIN || u.username || u.password || u.hash) return '';
+    return u.href;
+  }
+  function openOwnTab(a) {
+    const href = ownTabUrl(a);
+    if (!href) return false;
+    window.open(href, '_blank', 'noopener,noreferrer');
+    return true;
+  }
   const api = Object.freeze({
     enabled: true,
+    ownTabUrl, openOwnTab,
     frameAttributes: () => 'sandbox="allow-scripts allow-forms allow-downloads" referrerpolicy="no-referrer"',
     attach,
     // Shell-only admission for the two bounded app services. Origin:null is

@@ -65,6 +65,8 @@
     ...(a.desktop_only ? { desktopOnly: true } : {}),
     phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
     status: a.status,
+    // Browser boundary: the reviewed own-tab exception (File Browser). The shell opens it as a tab, never a frame.
+    ...(a.own_tab === true && /^https:\/\//.test(a.url || '') ? { ownTab: true } : {}),
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],

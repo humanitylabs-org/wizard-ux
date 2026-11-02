@@ -403,6 +403,8 @@
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focused()?.appId === id });
   function openApp(a, opts = {}) {
     if (!a) return false;
+    // Browser boundary: the reviewed own-tab app (File Browser) opens in its own tab, never in a window.
+    if (a.ownTab && window.WizBrowserBoundary?.enabled) return window.WizBrowserBoundary.openOwnTab(a);
     if (a.id === 'setup' && window.WosWelcome) { window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { const ex = !opts.fresh && findWin(w => w.app === 'pages'); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages'}, opts); return true; }
     // A launcher link to one of the agent's Pages opens in the Pages window: a page is a sandboxed (opaque-origin)
@@ -498,6 +500,8 @@
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
+    // Browser boundary: never a frame for the own-tab exception (e.g. a restored desk); only the shell's tab link.
+    if (a.ownTab && window.WizBrowserBoundary?.enabled) { const href = window.WizBrowserBoundary.ownTabUrl(a); return `<div class="frame-fallback on own-tab"><div><b>${esc(a.name)} opens in its own tab</b>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">Open ${esc(a.name)} ↗</a>` : ''}</div></div>`; }
     return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}"${window.WizBrowserBoundary?.enabled ? ' class="appframe" ' + window.WizBrowserBoundary.frameAttributes() : ''} src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }
