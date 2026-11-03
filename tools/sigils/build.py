@@ -56,7 +56,7 @@ HOUSE = {
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
-    'wizard':        ('hat',      296, None),
+    'wizard':        ('hermes',   '#7A5CFF', None),   # main Chats is Hermes; Home owns the company hat
     'social':        ('social',   322, None),
     'wizard-music':  ('music',    344, None),
     'iching':        ('iching',   75,  0.06),
@@ -65,11 +65,11 @@ HOUSE = {
     'v-day':         ('day',      48,  None),
     'v-week':        ('week',     310, None),
     'v-month':       ('month',    262, 0.08),
-    'v-inbox':       ('inbox',    166, None),
+    'v-inbox':       ('inbox',    92,  None),   # Drop: sunny yellow, so it never reads as Secret Drop's teal (Robert, 30 Oct 2026)
     'usuals':        ('usuals',   42,  None),
     'side-button':   ('side',     300, 0.07),
     'maps':          ('pin',      114, None),
-    'app-store':     ('apps',     284, None),
+    'app-store':     ('apps',     '#7A5CFF', None),
     'system':        ('gauge',    200, 0.07),
     'notifications': ('bell',     70,  None),
     'morning-report':('coffee',   46,  None),
@@ -86,7 +86,7 @@ HOUSE = {
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
     'money':         ('dollar',   152, 0.13),
-    'profiles':      ('profile',  296, None),
+    'profiles':      ('profile',  '#7A5CFF', None),
     'defleur-video': ('clip',     268, None),
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),
@@ -97,13 +97,27 @@ HOUSE = {
     'wizard-ux':     ('wizard',   280, 0.09),
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
-    'agents':        ('agents',   270, 0.10),
+    'agents':        ('agents',   '#7A5CFF', None),   # front hat #7A5CFF too (style.css)
+    # Launch set (Robert, 29 Oct 2026): every app on a stock Wizard gets a sigil.
+    'messages':      ('chats',    191, None),   # speech bubble with the newest hat inside, same as Messenger
+    'recorder':      ('recorder', 30,  None),
+    'sasquatch':     ('foot',     172, None),   # Sasquatch's own teal footprint
+    'tasks':         ('tasks',    128, None),
+    'knowledge':     ('shelf',    268, None),
+    'setup':         ('setup',    300, 0.07),
+    'settings':      ('setup',    300, 0.07),   # Settings wears the Setup gear with the logo door, never the ⚙ letter fallback
+    'wizard-connection-router': ('router', 210, 0.08),
+    'wizard-simplefin': ('bank',  112, None),
+    'wizard-google': ('search',   250, None),
+    'wizard-youtube-music': ('music', 352, None),
+    'wizard-voice-service': ('voice', 318, None),
 }
-# Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
-#   hat          supplied company hat (Chats, main agent)
+# Brand-mask sigils: drawn from web/brand assets in style.css, not from glyphs.py.
+#   hat          supplied company hat (Home and non-default standard agents)
 #   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
 #   agents       tools/sigils/agent_hats.py: two layered hats, private green behind main purple
-MASKS = ('hat', 'hat-private', 'agents')
+#   hermes       Hermes product mark (the main agent)
+MASKS = ('hat', 'hat-private', 'agents', 'hermes')
 # Real products wear their own brand mark (web/brand/apps/<mark>.svg; sources in tools/sigils/README.md, "Brand marks").
 # html() adds `sgb sgb-<mark>` next to the house glyph; a skin opts in by styling .sgb-<mark> (Miguel's skins do, in
 # web/skins/*/skin.css), so any other skin still shows the house glyph unchanged.
@@ -114,6 +128,8 @@ BRAND = {
     'wizard-tinfoil':    'tinfoil',
     'hermes-agent':      'hermes',
     'hermes-frontend-3': 'hermes',
+    'wizard-google':     'google',
+    'wizard-youtube-music': 'youtube-music',
 }
 # Apps with no sigil yet get their initial on a hue picked from their id.
 FALLBACK_HUES = [20, 66, 112, 158, 196, 230, 268, 300, 334]
@@ -134,7 +150,9 @@ def main():
     style = open(os.path.join(HERE, 'style.css')).read()
     open(out_css, 'w').write(style.rstrip() + '\n\n' + '\n'.join(css) + '\n')
 
-    house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
+    # Keep emitted colour data free of CSS literals so the style ratchet can scan the generated JS.
+    # The template restores the leading hash at runtime; the public WizSigil API remains unchanged.
+    house = {k: [g, (h if isinstance(h, str) else tone(h, c)).removeprefix('#')] for k, (g, h, c) in HOUSE.items()}
     for k, (g, _, _) in HOUSE.items():
         assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
@@ -144,7 +162,7 @@ def main():
     js = js.replace('/*BRAND*/', json.dumps(BRAND, separators=(',', ':')))
     for k, m in BRAND.items():
         assert os.path.exists(os.path.join(ROOT, 'web', 'brand', 'apps', m + '.svg')), (k, m)
-    js = js.replace('/*FALLBACK*/', json.dumps([tone(h) for h in FALLBACK_HUES]))
+    js = js.replace('/*FALLBACK*/', json.dumps([tone(h).removeprefix('#') for h in FALLBACK_HUES]))
     open(os.path.join(ROOT, 'web', 'core', 'sigils.js'), 'w').write(js)
     json.dump({k: dict(d=v['d'], desc=v['desc']) for k, v in lib.items()},
               open(os.path.join(HERE, 'sigils.json'), 'w'), indent=1)

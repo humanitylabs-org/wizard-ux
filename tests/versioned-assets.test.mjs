@@ -57,6 +57,21 @@ test('any change anywhere in web/ moves the token; rerunning the stamp is a no-o
   assert.equal((readFileSync(join(b, 'index.html'), 'utf8').match(/name="wos-release"/g) || []).length, 1);
 });
 
+test('a layered hotfix restamps an already-stamped tree with one new release token', () => {
+  const d = stamped();
+  const before = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
+  writeFileSync(join(d, 'core/agents.js'), readFileSync(join(d, 'core/agents.js'), 'utf8') + '\n// layered hotfix\n');
+  execFileSync('sh', [STAMP, d]);
+  const index = readFileSync(join(d, 'index.html'), 'utf8'), after = tokenOf(index);
+  assert.notEqual(after, before, 'the layered change moves the release token');
+  for (const page of ['index.html', 'desktop.html']) {
+    const html = readFileSync(join(d, page), 'utf8');
+    assert.equal(tokenOf(html), after, `${page} carries the new release meta`);
+    assert.doesNotMatch(html, new RegExp(`\\?v=${before}(?:["'])`), `${page} has no previous release URL`);
+  }
+  assert.match(readFileSync(join(d, 'core/thread-swipe-back.js'), 'utf8'), new RegExp(`from './swipe-intent\\.js\\?v=${after}'`));
+});
+
 test('the image build runs the stamp over the shipped web tree', () => {
   const df = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
   assert.match(df, /stamp-assets\.sh \/usr\/share\/nginx\/wizard-ux/);

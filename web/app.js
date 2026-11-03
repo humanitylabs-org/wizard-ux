@@ -517,7 +517,7 @@
     const second = wins.find(w => w !== lead), c2 = second ? ovMark(winApp(second)).color : primary.color;
     const name = d.home ? 'Home' : !wins.length ? 'New desk' : deskName(i);
     let body;
-    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}"><i class="sgi sg-home" aria-hidden="true"></i></span>`;
+    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}"><i class="sgi sg-hat" aria-hidden="true"></i></span>`;
     else if (!wins.length) body = '<span class="ov-empty-symbol" aria-hidden="true">＋</span>';
     else body = wins.map(w => {
       const a = winApp(w), m = ovMark(a), same = wins.filter(x => winApp(x).id === a.id).length > 1;

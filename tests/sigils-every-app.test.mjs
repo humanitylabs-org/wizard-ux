@@ -29,6 +29,66 @@ test('every known Wizard App Store app has a designed sigil (no letter fallback)
   assert.deepEqual(missing, [], `add a HOUSE entry in tools/sigils/build.py for: ${missing.join(', ')}`);
 });
 
+test('Home wears the approved 12%-wider hat while the main Hermes agent wears the Hermes logo', () => {
+  const S = sigil();
+  assert.ok(S.has('hermes'), 'Hermes is available as a first-class mask sigil');
+  const css = read('web/core/sigils.css');
+  const hermesBadge = css.match(/\.sgi\.sg-hermes\s*\{([^}]*)\}/s);
+  assert.ok(hermesBadge, 'Hermes badge rule exists');
+  assert.match(hermesBadge[1], /background:\s*(?:#F7F5FF|color\(srgb 0\.96862745 0\.96078431 1\));/, 'Hermes uses the exact approved light circle');
+  assert.match(hermesBadge[1], /border-radius:\s*50%;/, 'Hermes badge is circular');
+  assert.match(hermesBadge[1], /mask:\s*none;/, 'Hermes is not reversed into the app hue');
+  assert.match(hermesBadge[1], /transform:\s*scale\(\.68\);/, 'the circular badge matches the hat\'s 68% optical height');
+  const hermesPortrait = css.match(/\.sgi\.sg-hermes::after\s*\{([^}]*)\}/s);
+  assert.ok(hermesPortrait, 'Hermes portrait layer exists');
+  assert.match(hermesPortrait[1], /inset:\s*0;/, 'the portrait fills the circle without changing the badge size');
+  assert.match(hermesPortrait[1], /background:\s*(?:#08070A|color\(srgb 0\.03137255 0\.02745098 0\.03921569\));/, 'the portrait stays the exact approved black');
+  assert.match(hermesPortrait[1], /mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/, 'the portrait uses the Hermes source mark');
+  assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
+  assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
+  assert.equal(S.of({ id: 'wizard', name: 'Chats' }).glyph, 'hermes', 'main Chats uses the Hermes badge in dock and active-orb navigation');
+  assert.match(S.html({ id: 'wizard', name: 'Chats' }), /class="sgi sg-hermes"/, 'main Chats renders the full-colour circled Hermes mark');
+  for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {
+    const src = read(p);
+    assert.match(src, /class="sgi sg-hat"/, `${p}: Home uses the hat`);
+    assert.doesNotMatch(src, /class="sgi sg-home"/, `${p}: old house mark is gone`);
+  }
+  const style = read('tools/sigils/style.css');
+  assert.match(style, /\.sgi\.sg-hat[^{}]*\{[^}]*mask-size:\s*56\.59224% 68%/s, 'Home inherits the selected exactly 12%-wider hat geometry');
+});
+
+test('phone navigation keeps active and inactive app marks smaller and inside the orb', () => {
+  const css = read('web/core/desks.css');
+  const nav = css.match(/#device:not\(\.orb-corner\) \.dock :is\(\.ddot\.sig\[data-goto\], #orbApp\) \.dsg\s*\{([^}]*)\}/s);
+  assert.ok(nav, 'one shell rule sizes active and inactive app marks without shrinking New desk');
+  assert.match(nav[1], /scale:\s*\.9;/, 'both navigation states step down by ten percent');
+  const active = css.match(/#device:not\(\.orb-corner\) \.dock #orbApp \.dsg\s*\{([^}]*)\}/s);
+  assert.ok(active, 'the active app has an explicit orb containment cap');
+  const cap = Number(active[1].match(/max-width:\s*([\d.]+)%/)?.[1]);
+  assert.equal(cap, 54, 'the active mark is capped before the shared optical scale');
+  assert.ok(cap * .9 < 50, 'the active mark remains inside the visible half-diameter of the orb');
+  assert.match(active[1], /max-height:\s*54%;/);
+});
+
+test('two-orb active marks preserve the Hermes light badge and black portrait', () => {
+  const css = read('web/layouts/two-orb/layout.css');
+  assert.match(css, /#orbApp :is\(img, \.sgi, svg\)\s*\{[^}]*max-width:\s*24px;[^}]*max-height:\s*24px;[^}]*\}/s,
+    'all active-orb marks keep the same containment cap');
+  assert.match(css, /#orbApp :is\(img, \.sgi:not\(\.sg-hermes\), svg\)\s*\{[^}]*filter:\s*brightness\(0\) invert\(1\);[^}]*\}/s,
+    'only ordinary masks are whitened in the active orb');
+  assert.match(css, /#orbApp \.sgi:not\(\.sg-hermes\)\s*\{[^}]*background:\s*(?:#fff|white);[^}]*\}/s,
+    'the layout never paints over the Hermes badge');
+  assert.match(css, /:is\(\.to-face, \.to-chip-sig\) \.sgi\s*\{[^}]*width:\s*82%;[^}]*height:\s*82%;[^}]*\}/s,
+    'all agent marks keep the approved optical box');
+  assert.match(css, /:is\(\.to-face, \.to-chip-sig\) \.sgi:not\(\.sg-hermes\)\s*\{[^}]*filter:\s*brightness\(0\) invert\(1\)[^}]*\}/s,
+    'agent-orb whitening also excludes the full-colour Hermes badge');
+  const tweak = read('web/tweaks/wizard/two-orbs/tweak.css');
+  assert.match(tweak, /#orbApp :is\(img, \.sgi:not\(\.sg-hermes\), svg\)\s*\{[^}]*filter:\s*brightness\(0\);[^}]*\}/s,
+    'the neutral two-orbs tweak also preserves the Hermes badge and portrait');
+  assert.doesNotMatch(tweak, /#orbApp :is\(img, \.sgi, svg\)/,
+    'no later two-orbs tweak can flatten Hermes into a blank dot');
+});
+
 test('Cloudflare wears the warm cloud', () => {
   const S = sigil(), s = S.of({ id: 'wizard-cloudflare', name: 'Cloudflare (Testing)' });
   assert.equal(s.glyph, 'cloud');
@@ -91,7 +151,7 @@ test('the generated files are in sync with the template (rebuild with tools/sigi
   const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*BRAND\*\/|\/\*FALLBACK\*\//g, '');
   for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|BRAND = |FALLBACK/.test(l)))
     assert.ok(js.includes(line), 'web/core/sigils.js is stale; rerun tools/sigils/build.py. Missing: ' + line.trim());
-  const house = JSON.parse(js.match(/const HOUSE = (\{.*?\});/)[1]);
+  const house = JSON.parse(js.match(/const HOUSE = Object\.fromEntries\(Object\.entries\((\{.*?\})\)\.map/)[1]);
   const src = read('tools/sigils/build.py');
   for (const id of Object.keys(house)) assert.ok(src.includes(`'${id}'`), `HOUSE ${id} not in build.py`);
 });

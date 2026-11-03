@@ -21,7 +21,7 @@
   function icon(desk, wins, appOf) {
     const S = window.WizSigil;
     if (!S) return '';
-    if (desk.home) return '<span class="dsg" style="--c:#C9BEFF"><i class="sgi sg-home" aria-hidden="true"></i></span>';
+    if (desk.home) return '<span class="dsg"><i class="sgi sg-hat" aria-hidden="true"></i></span>';
     const ids = desk.wins || [], focused = wins[desk.focus] || wins[ids[0]];
     if (!focused) return '<span class="dsg empty" aria-hidden="true"></span>';
     const a = appOf(focused) || {}, sigil = a.sigil || a, s = S.of(sigil);

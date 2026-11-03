@@ -15,8 +15,9 @@ html[data-layout="two-orb"] #device:not(.orb-corner) #orbWrap::before {
 html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp:not(:empty) { display: grid !important; place-items: center; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 1 !important; mix-blend-mode: normal; }
 html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp .dsg { width: 24px; height: 24px; opacity: 1; background: none !important; box-shadow: none !important; border: 0 !important; }
 html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(.dn, .dbg) { display: none; }
-html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi, svg) { max-width: 24px; max-height: 24px; filter: brightness(0) invert(1); }
-html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp .sgi { width: 24px; height: 24px; background: #fff; }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi, svg) { max-width: 24px; max-height: 24px; }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi:not(.sg-hermes), svg) { filter: brightness(0) invert(1); }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp .sgi:not(.sg-hermes) { width: 24px; height: 24px; background: white; }
 html[data-layout="two-orb"]:not([data-to-take]) #device:not(.orb-corner):is([data-voice="listen"], [data-voice="command"]) #orbWrap::before { animation: to-centre 1.2s ease-in-out infinite; }
 @keyframes to-centre { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--wz-accent, #7c4dff) 30%, transparent), 0 4px 16px rgba(0,0,0,.35); } }
 
@@ -97,8 +98,9 @@ html[data-layout="two-orb"] .to-chip-name {
 }
 html[data-layout="two-orb"] .to-chip.sel .to-chip-name { background: var(--c); color: #fff; }
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt > * { --c: #fff; color: #fff; }
-/* The agent's hat in white on its own colour. */
-html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgi { width: 82%; height: 82%; filter: brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+/* Ordinary agent hats stay white on their own colour; Hermes keeps its light badge and black portrait. */
+html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgi { width: 82%; height: 82%; }
+html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgi:not(.sg-hermes) { filter: brightness(0) invert(1) drop-shadow(0 1px 2px color-mix(in srgb, black 35%, transparent)); }
 
 /* ---------- an agent take runs on the agent orb, not the dock ----------
  * The dock centre is the desktop/system button: an agent take never changes it, fades it or hides the desk dots.
