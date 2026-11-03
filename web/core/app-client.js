@@ -447,6 +447,16 @@
     voice: Object.freeze({ commands, stripAddress: text => service ? service.voice.stripAddress(text) : String(text || ''), transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
     share: Object.freeze({ get wizard() { return service?.share?.wizard ? data => service.share.wizard(data) : transportReady ? data => request('share.wizard', data, 600000) : undefined; }, text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
+    /* Selected words: Wizard's one selection menu (core/sel-menu.js). Hosted apps get it for ordinary selections with
+     * no code (Reply in chat, Copy, Share). items(list, pick) adds the app's own items; an app that draws its own
+     * selection (Wisdom) calls show({ text, rect | rects, items }, pick, dismissed) and hide(). false: no host menu
+     * here (standalone, older shell), so the app keeps its own. pick receives { id, text }. */
+    selection: Object.freeze({
+      get available() { return !!service?.selection; },
+      items: (list, pick) => { try { return service?.selection?.items(list, pick) === true; } catch (_) { return false; } },
+      show: (spec, pick, dismissed) => { try { return service?.selection?.show(spec, pick, dismissed) === true; } catch (_) { return false; } },
+      hide: () => { try { return service?.selection?.hide() === true; } catch (_) { return false; } },
+    }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
     /* The agent orb as this app's main button (two-orb layout): claim({ icon, label }, onTap) puts the icon on the orb

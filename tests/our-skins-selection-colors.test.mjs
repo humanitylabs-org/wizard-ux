@@ -11,7 +11,8 @@ const landscapes = read('web/skins/landscapes/skin.css');
 const rule = (css, sel) => {
   const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const m = css.match(new RegExp(`(?:^|\\n)${esc}\\s*\\{([^}]*)\\}`));
-  return m ? m[1] : null;
+  assert.ok(m, `${sel} rule exists`);
+  return m[1];
 };
 
 test('each of Miguel\'s skins paints its own selection highlight with readable text', () => {
@@ -25,10 +26,10 @@ test('each of Miguel\'s skins paints its own selection highlight with readable t
 });
 
 test('the selection menu uses skin ink on a skin surface, not core violet', () => {
-  assert.match(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu') || '', /background:\s*color-mix\(in srgb, var\(--bg\)/);
+  assert.doesNotMatch(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu') || '', /background:/, 'inherit core’s opaque skin base');
   assert.match(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu button') || '', /color:\s*var\(--ink\)/);
   assert.match(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu svg') || '', /stroke:\s*var\(--ink\)/);
-  assert.match(rule(landscapes, 'html[data-skin^="landscapes"] .selmenu') || '', /background:\s*rgba\(16, 18, 22/);
+  assert.doesNotMatch(rule(landscapes, 'html[data-skin^="landscapes"] .selmenu') || '', /background:/, 'inherit core’s opaque skin base');
   assert.match(rule(landscapes, 'html[data-skin^="landscapes"] .selmenu svg') || '', /stroke:\s*#fff/);
 });
 

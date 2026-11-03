@@ -64,7 +64,8 @@ html[data-skin="obsidian-light"] .ch-newchat .nc-mark .sgi { filter: none; }
    in Light). Here they follow the skin: neutral highlight, and the menu is the same surface as the page with ink on it. */
 html[data-skin="obsidian"] ::selection { background: rgba(255, 255, 255, .26); color: #fff; }
 html[data-skin="obsidian-light"] ::selection { background: rgba(0, 0, 0, .13); color: #000; }
-html[data-skin^="obsidian"] .selmenu { background: color-mix(in srgb, var(--bg) 94%, transparent); border-color: var(--ob-edge); box-shadow: 0 10px 30px rgba(0, 0, 0, .28), 0 0 0 1px var(--ob-tint); }
+/* Inherit core's opaque Appearance base; skin glass must not show text behind the menu. */
+html[data-skin^="obsidian"] .selmenu { border-color: var(--ob-edge); box-shadow: 0 10px 30px rgba(0, 0, 0, .28), 0 0 0 1px var(--ob-tint); }
 html[data-skin="obsidian-light"] .selmenu { box-shadow: 0 10px 28px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08); }
 html[data-skin^="obsidian"] .selmenu.drag { box-shadow: 0 16px 40px rgba(0, 0, 0, .32), 0 0 0 1px var(--ob-edge); }
 html[data-skin^="obsidian"] .selmenu button { color: var(--ink); }

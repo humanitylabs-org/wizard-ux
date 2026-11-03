@@ -790,9 +790,10 @@ html[data-skin^="landscapes"] .rs-br { grid-template-columns: 58px minmax(60px, 
 /* New chat mark: frosted glass like the rest of the skin instead of core's violet tile. */
 html[data-skin^="landscapes"] .ch-newchat .nc-mark { background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 10px 30px rgba(0, 0, 0, .28), inset 0 0 0 1px rgba(255, 255, 255, .28), inset 0 1px 0 rgba(255, 255, 255, .35); }
 
-/* Text selection and the selection menu: white on dark frosted glass, no violet (core/sel-menu.css). */
+/* Text selection and the selection menu: skin ink on an opaque base, no violet (core/sel-menu.css). */
 html[data-skin^="landscapes"] ::selection { background: rgba(255, 255, 255, .32); color: #fff; }
-html[data-skin^="landscapes"] .selmenu { background: rgba(16, 18, 22, .78); border-color: rgba(255, 255, 255, .22); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+/* Inherit core's opaque Appearance base in both palettes; no text through glass. */
+html[data-skin^="landscapes"] .selmenu { border-color: rgba(255, 255, 255, .22); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
 html[data-skin^="landscapes"] .selmenu.drag { box-shadow: 0 16px 40px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .3); }
 html[data-skin^="landscapes"] .selmenu button { color: #fff; }
 html[data-skin^="landscapes"] .selmenu button:active { background: rgba(255, 255, 255, .16); }
@@ -864,7 +865,7 @@ html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.launcher, .new-desk) { background: linear-gradient(180deg, rgba(252, 252, 253, .9), rgba(244, 245, 248, .92)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 10px 30px rgba(0, 0, 0, .12); }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.launcher, .new-desk) :is(.lapp .nm, .lgroup h4) { text-shadow: none; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet { background: #f6f7f9; box-shadow: 0 18px 50px rgba(0, 0, 0, .16); }
-html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .selmenu { background: rgba(250, 250, 252, .86); border-color: rgba(0, 0, 0, .12); box-shadow: 0 10px 28px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .selmenu { border-color: rgba(0, 0, 0, .12); box-shadow: 0 10px 28px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08); }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .selmenu.drag { box-shadow: 0 16px 40px rgba(0, 0, 0, .2), 0 0 0 1px rgba(0, 0, 0, .14); }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .selmenu button { color: #111216; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .selmenu button:active { background: rgba(0, 0, 0, .08); }
