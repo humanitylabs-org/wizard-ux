@@ -335,7 +335,7 @@
     const d = builtinDefs.get(name); if (!d || !shell || builtins.has('core:' + name) || disabled.has('core:' + name)) return false;
     if (d.when === 'touch' && !env().touch) return false;
     const a = record('core:' + name, d.label); builtins.set(a.id, a);
-    try { a.teardown = d.setup(makeApi(a)); } catch (e) { fault(a, 'setup', e); }
+    try { a.teardown = d.setup(d.capabilities ? { ...makeApi(a), ...tweakApi(a, { capabilities: d.capabilities }, true) } : makeApi(a)); } catch (e) { fault(a, 'setup', e); }
     lastRoute = ''; emitRoute();
     return builtins.get(a.id) === a;
   }
@@ -511,6 +511,7 @@
       default: () => { if (a.dead) return null; const o = window.WosModels?.defaultOption?.(); return o ? Object.freeze({ id: String(o.value || ''), provider: String(o.provider || '') }) : null; } });
       api.thread = Object.freeze({ model: choice => a.dead ? null : shell?.model?.(choice, () => !a.dead) });
     }
+    if (trusted && caps.has('data.read')) api.workspaces = window.WizWorkspaces;
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
       // A reading kept on screen outside Home or Settings (the desktop top bar) keeps the feed polling while it shows.
@@ -671,7 +672,7 @@
     voice(state) { if (layers().length) emit('voice', Object.freeze({ ...(shell?.voiceState ? shell.voiceState() : { state }) })); },
     loadPersonal, scriptProblem,
     /* core/*.js: a gesture every skin wears. `when: 'touch'` skips desktop pointers. */
-    builtin(name, setup, { when = 'touch', label = name } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label }); return startBuiltin(name) || !shell; },
+    builtin(name, setup, { when = 'touch', label = name, capabilities } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label, capabilities }); return startBuiltin(name) || !shell; },
     get builtinState() { return [...builtins.keys()]; },
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
     get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), error: personalError ? { ...personalError } : null, listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },

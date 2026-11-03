@@ -73,21 +73,18 @@ test('James: Miguel\'s Home keeps its phone widget, desktop glance and System pa
   for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}',`), page + ' stays in his tweak');
 });
 
-test('James: the workspace control is hidden with one workspace and is a small icon (no "This Wizard" text) with two', () => {
-  const src = read('web/tweaks/miguel/machines-home/tweak.js');
-  const wiz = between(src, '  function renderWiz() {', '\n  }\n');
-  assert.match(wiz, /const multi = managedList\(\)\.length > 0;/);
-  assert.match(wiz, /wizBox\.hidden = !multi;/, 'one workspace: no control at all');
-  assert.match(wiz, /if \(!multi\) \{ S\.open\.delete\('wsm'\); S\.open\.delete\('wsm-why'\); \}/, 'a menu left open closes with it');
-  const button = wiz.slice(wiz.indexOf('wizBtn.replaceChildren('), wiz.indexOf('wizMenu.hidden'));
-  assert.match(button, /mh-wiz-ic/, 'an icon');
-  assert.doesNotMatch(button, /text: own|thisName\(\)|This Wizard/, 'never the workspace name in the bar');
-  assert.match(wiz, /wizBtn\.title = `Workspace: \$\{own\}`/, 'the name is in the tooltip and label');
-  assert.match(wiz, /'aria-label', `Workspace: \$\{own\}\. Switch workspace`/);
-  assert.match(read('web/tweaks/miguel/machines-home/tweak.css'), /\.mh-root\.is-topbar\.is-wiz\[hidden\] \{ display: none !important; \}/);
-  // The underlying switcher stays (company Wizard later): the menu and Settings › Your network's + still add one.
-  assert.match(src, /'\+ Add a workspace'/);
-  assert.match(src, /cls: 'mh-ws-add', 'aria-label': 'Add a Wizard you manage', data: \{ act: 'add-managed' \}/);
+test('James: stock switcher stays hidden at one, icon-only at two; network Home remains a tweak', () => {
+  const src = read('web/core/workspaces.js');
+  assert.match(src, /get visible\(\) \{ return state.items.length >= 2;/);
+  assert.match(src, /button.hidden = !W.visible/);
+  assert.match(src, /document.createElementNS/);
+  assert.match(src, /button.title = `Wizard:/);
+  assert.match(src, /'\+ Add a Wizard'/);
+  assert.match(src, /page: 'connections'/);
+  assert.doesNotMatch(src, /page: '(overview|ai|network|storage)'/);
+  const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
+  assert.doesNotMatch(tweak, /wizMenu|renderWiz/);
+  assert.match(tweak, /api.workspaces.add\(\)/);
 });
 
 test('James: default Settings keeps the current AI page and has no "Your network" or "Network & security" page', () => {
