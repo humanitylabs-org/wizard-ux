@@ -1,9 +1,9 @@
 /* Skins and tweaks are separate choices (Miguel, 30 Oct 2026). A skin is only a look. Every
  * tweak (web/tweaks/<author>/<id>) is one switch, off by default, labelled with its author; a quick
  * button per author turns all of theirs on (or off). Catalog `defaults` are built-in features, not experiments: on for
- * everyone, with an owner off-switch. Saved per device as { mix } in wos.skin-tweaks.v1. A device from before keeps
+ * everyone, with an owner off-switch. Cached on each device as { mix } in wos.skin-tweaks.v1. A device from before keeps
  * exactly what it ran: the set its color used to bring (with its offs) is written into mix once, then never again.
- * Device storage is isolated here until Agent Service offers an owner profile route. */
+ * The mix here is this device's cached copy; core/look-sync.js keeps it the owner's one set on every device. */
 (() => {
   'use strict';
   const KEY = 'wos.skin-tweaks.v1', ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
@@ -110,6 +110,8 @@
     if (!catalog?.tweaks.includes(id)) return;
     const mix = { ...(state.mix || {}) }; if (on === presetOn(id)) delete mix[id]; else mix[id] = on;
     state.mix = mix; Store.write(state);
+    // An owner's own switch (not a migration): core/look-sync.js shares it with his other devices.
+    try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on } })); } catch (_) {}
   }
   const profileReads = new Map();
   function profile(who) {
@@ -194,6 +196,20 @@
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
+    // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
+    get mix() { return copy(state.mix || {}); },
+    // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
+    async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
+    // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
+    async adopt(mix, { current = () => true } = {}) {
+      catalog ||= await read('tweaks/catalog.json');
+      if (!current()) return; // a local switch during the catalog read owns the state; the synchronizer replays its newer projection
+      const grouped = new Set((catalog.oneOf || []).flat()), next = {};
+      for (const id of catalog.tweaks) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
+      for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
+      state.mix = next; state.preset = 'none'; delete state.carry; Store.write(state);
+      return apply();
+    },
     refresh: apply,
     // A color pick never changes tweaks; kept so older callers stay harmless.
     chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },

@@ -369,6 +369,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/look-sync.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/mic.js": {
       "loadedBy": [
         "phone",
@@ -826,6 +833,7 @@
     "core/launcher.js",
     "core/links.css",
     "core/links.js",
+    "core/look-sync.js",
     "core/mic.js",
     "core/my-skin.js",
     "core/notif-bell.js",
