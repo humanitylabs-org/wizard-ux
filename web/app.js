@@ -1149,7 +1149,7 @@
     focusWin(here); save(); openingEnd();
     return W[here];
   }
-  // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
+  // Hosted apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
@@ -1450,8 +1450,8 @@
     foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
-   * Same order as the App Store: Apps = anything with a screen you use; Agent apps = backend-only apps your agent uses
-   * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
+   * Same order as the App Store: Apps = owner-facing apps; Agent apps = backend apps plus explicitly agent-facing
+   * system utilities (screenless items open settings); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '');
   /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
    * My skin) sets `--wos-orb-swipe-up` on <html>: `desks` = the regular overview, `pill` = Miguel's pill panel (the skin
@@ -1466,7 +1466,7 @@
   const appKinds = () => AK.kinds(APPS, APP);
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
-  const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
+  const kindTile = a => AK.opensScreen(a) ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
   const plusTile = (attrs, label) => `<button class="lapp lapp-get" ${attrs}><span class="ic">+</span><span class="nm">${esc(label)}</span></button>`;
   const getTile = k => plusTile(`data-storekind="${AK.GET[k][0]}"`, AK.GET[k][1]);
   // System apps lead their group in the same grid; their purple tile (skin.css .lapp-sys) marks them, no label or box.
@@ -1476,7 +1476,7 @@
     const grp = (k, body) => `<div class="lgroup kg-${k}"><h4>${AK.LABELS[k]}</h4><div class="lgrid">${body}${getTile(k)}</div></div>`;
     const G = {
       apps: grp('apps', sysSplit(K.apps, kindTile)),
-      wiz: grp('wiz', sysSplit(K.wiz, backTile)),
+      wiz: grp('wiz', sysSplit(K.wiz, kindTile)),
       agents: grp('agents', sysSplit(K.agents, kindTile) + (K.builder ? plusTile('data-app="agents"', 'Build agents') : '')),
       conns: grp('conns', sysSplit(K.conns, kindTile)),
     };
@@ -1505,7 +1505,7 @@
   function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
   function renderEmpty(i) {
     // Miguel's app kinds are every skin's New desk (James, 23 Oct 2026): Apps with system apps first and ringed, then
-    // Wizard apps, Agents and Connectors folded under "For agents".
+    // Agent apps, Agents and Connectors folded under "For agents".
     // Search apps (James, 23 Oct 2026): a pill at bottom centre, above the dock; typing filters every group in place
     // (For agents unfolds while a query is on), Enter opens the first match.
     tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}<p class="nd-none" hidden>No app matches</p></div><form class="nd-search" role="search" data-ndsearch><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" data-ndq placeholder="Search apps" aria-label="Search apps" autocomplete="off" enterkeyhint="go"></form>`;
@@ -1682,7 +1682,7 @@
   }, true);
   function ndFilter(input) {
     const nd = input.closest('.glance')?.querySelector('.new-desk'); if (!nd) return null;
-    // Names first ("Wiza" finds the Wizard apps, not every app whose blurb says Wizard); descriptions only when no name fits.
+    // Names first ("Wiza" finds matching app names, not every app whose blurb says Wizard); descriptions only when no name fits.
     const n = norm(input.value); let first = null;
     const tiles = [...nd.querySelectorAll('.lapp')].map(t => { const a = APP[t.dataset.app || t.dataset.appinfo], nm = norm(t.querySelector('.nm')?.textContent);
       return { t, nm, byName: nm.split(' ').some(w => w.startsWith(n)) || nm.startsWith(n), byDesc: norm(a?.desc).includes(n) || nm.includes(n) }; });

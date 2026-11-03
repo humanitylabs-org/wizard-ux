@@ -1,6 +1,6 @@
 /* App kinds (Miguel's design): both shells sort apps the same way, in App Store order.
- *   Apps        anything with a screen you use
- *   Agent apps  backend-only apps your agent uses (tap = its settings sheet)
+ *   Apps        owner-facing apps used directly
+ *   Agent apps  backend apps plus explicitly agent-facing system utilities (tap = settings when screenless)
  *   Agents      each agent's chats; "Build agents" opens the Agents app that makes and manages them
  *   Connectors  sign-ins to another service (AI subscriptions, bank feeds, Cloudflare...)
  * System apps (the defaults Wizard OS ships for its parking spots, wizard-os docs/SYSTEM_APPS.md) lead their group and
@@ -19,6 +19,11 @@
   // Notifications shown in Chats (a package holds WosSkinHost.inboxThreads): its page is no longer the way in, so it
   // sits with the agent apps (system ring, tap = its settings sheet) even while the app still serves a page.
   const inChats = a => !!a && a.id === 'notifications' && !!window.WosSkinHost?.inboxThreads;
+  // Built-in utilities can opt into the agent shelf without pretending they are installed backend services. Pages is
+  // opened through agent-created page links, so its library is useful but not a main owner app.
+  const isAgentApp = a => !!a && (a.agentApp === true || inChats(a));
+  // Most Wizard-kind agent apps are screenless and open settings. An explicit screen keeps a built-in utility openable.
+  const opensScreen = a => !!a && (a.screen === true || a.kind !== 'wizard' || !!a.url);
   const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
   // Section labels and the App Store section each "+ Get" tile opens (store/store.js KINDS ids).
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });
@@ -30,12 +35,12 @@
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats, main agent first (as registered). The Agents app itself is the "Build agents" tile.
     const agents = mine.filter(a => a.kind === 'chats').sort((x, y) => isSystem(y) - isSystem(x));
-    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a) && !inChats(a)).sort(byName);
+    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a) && !isAgentApp(a)).sort(byName);
     // In development (James, 23 Oct 2026): launcher links and test copies fold under their own row.
     const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
-    const back = [...mine.filter(inChats), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
+    const back = [...mine.filter(isAgentApp), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
     return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];
-  window.WosAppKinds = Object.freeze({ inChats, isSystem, isConnector, inDev, byName, kinds, sysFirst, LABELS, GET, storeUrl });
+  window.WosAppKinds = Object.freeze({ inChats, isAgentApp, opensScreen, isSystem, isConnector, inDev, byName, kinds, sysFirst, LABELS, GET, storeUrl });
 })();

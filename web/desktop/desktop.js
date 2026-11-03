@@ -1309,7 +1309,7 @@
   }
   function pickKinds() {
     const AK = window.WosAppKinds, K = AK.kinds(APPS, APP), out = [];
-    const app = a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, sys: AK.isSystem(a), run: o => a.url || a.kind !== 'wizard' ? openApp(a, o) : window.WosAppRoute?.open(a.id, { name: a.name }) });
+    const app = a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, sys: AK.isSystem(a), run: o => AK.opensScreen(a) ? openApp(a, o) : window.WosAppRoute?.open(a.id, { name: a.name }) });
     const get = k => ({ kind: 'app', get: true, name: AK.GET[k][1], run: () => openStoreKind(AK.GET[k][0]) });
     const group = (k, list, extra = []) => out.push({ head: AK.LABELS[k], items: [...AK.sysFirst(list).map(app), ...extra, get(k)] });
     group('apps', K.apps);

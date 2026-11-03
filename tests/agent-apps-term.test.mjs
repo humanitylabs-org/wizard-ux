@@ -1,5 +1,6 @@
 // Decision #84 (wizard-os docs/DECISIONS.md, 23 Oct 2026): owners never see "Wizard apps". Screenless apps agents use are
-// "Agent apps", apps with a screen are plain "Apps". Code identifiers (kind: 'wizard', data-wizard-apps) keep their names.
+// "Agent apps"; the built-in Pages utility joins that shelf because its contents come from agents. Everyday apps with
+// their own screen are plain "Apps". Code identifiers (kind: 'wizard', data-wizard-apps) keep their names.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
