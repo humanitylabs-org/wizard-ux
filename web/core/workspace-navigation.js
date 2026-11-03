@@ -6,18 +6,36 @@
   const C = window.WizCore = window.WizCore || {};
   /* Per-app counts (Chats = Ready threads, Notifications = unread, later any app). The badge belongs to the
    * app: each desk mark carries the count of the apps it holds, and the orb shows the desk in view. */
-  const counts = {};
-  function setCount(id, n) {
-    n = Math.max(0, n | 0); if ((counts[id] || 0) === n) return;
+  /* An item counts in one place (Settings › Notifications): an app set to Chats shows no badge of its own, its items
+   * wait in Chats and count in Chats' badge instead. `raw` keeps what the app reported, `counts` what is shown. */
+  // `more`: an app that lists only its newest items says there are more; its count shows as "50+".
+  const counts = {}, raw = {}, more = new Set();
+  // A quiet choice (the routing part's Off, say) shows no badge at all.
+  const shown = (id, n) => id !== 'wizard' && (window.WosBell?.inChats?.(id) || window.WosBell?.isOff?.(id)) ? 0 : n;
+  function apply(id) {
+    const n = shown(id, raw[id] || 0); if ((counts[id] || 0) === n) return;
     counts[id] = n; window.dispatchEvent(new CustomEvent('wizard:app-counts', { detail: { id, n } }));
   }
+  function setCount(id, n, plus) {
+    const was = more.has(id); if (plus) more.add(id); else more.delete(id);
+    raw[id] = Math.max(0, n | 0);
+    if (was !== !!plus) { counts[id] = -1; } apply(id);
+  }
+  // A routing choice changed: show every reported count again through it.
+  function rerouted() { for (const id of Object.keys(raw)) apply(id); }
   function deskCount(desk, wins, appOf) {
     if (!desk || desk.home) return 0;
     const seen = new Set(); let n = 0;
     for (const id of desk.wins || []) { const a = wins[id] && appOf(wins[id]); const k = a && a.id; if (k && !seen.has(k)) { seen.add(k); n += counts[k] || 0; } }
     return n;
   }
-  const fmt = n => n > 99 ? '99+' : String(n);
+  function deskMore(desk, wins, appOf) {
+    if (!desk || desk.home) return false;
+    return (desk.wins || []).some(id => { const a = wins[id] && appOf(wins[id]); return !!(a && more.has(a.id) && counts[a.id] > 0); });
+  }
+  const fmt = (n, plus) => n > 99 ? '99+' : plus ? n + '+' : String(n);
+  // One app's badge as shown: '' when none, '50+' when the app lists only its newest items.
+  const label = id => { const n = counts[id] || 0; return n > 0 ? fmt(n, more.has(id)) : ''; };
   function icon(desk, wins, appOf) {
     const S = window.WizSigil;
     if (!S) return '';
@@ -25,7 +43,7 @@
     const ids = desk.wins || [], focused = wins[desk.focus] || wins[ids[0]];
     if (!focused) return '<span class="dsg empty" aria-hidden="true"></span>';
     const a = appOf(focused) || {}, sigil = a.sigil || a, s = S.of(sigil);
-    return `<span class="dsg" style="--c:${a.sgc || s.color}">${a.sgh || S.html(sigil)}${ids.length > 1 ? `<b class="dn">${ids.length}</b>` : ''}${(() => { const n = deskCount(desk, wins, appOf); return n ? `<b class="dbg">${fmt(n)}</b>` : ''; })()}</span>`;
+    return `<span class="dsg" style="--c:${a.sgc || s.color}">${a.sgh || S.html(sigil)}${ids.length > 1 ? `<b class="dn">${ids.length}</b>` : ''}${(() => { const n = deskCount(desk, wins, appOf); return n ? `<b class="dbg">${fmt(n, deskMore(desk, wins, appOf))}</b>` : ''; })()}</span>`;
   }
   // Desktop keys (Miguel, 27 Oct 2026): Home lives on ⌥` (left of 1), so desktops are numbered from 1.
   const slot = (index, homeIncluded = false) => index + (homeIncluded ? 0 : 1);
@@ -34,5 +52,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, deskCount, fmt, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, rerouted, deskCount, deskMore, fmt, label, counts });
 })();

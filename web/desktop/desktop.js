@@ -1003,7 +1003,7 @@
   function paintBar() {
     window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
+    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0), !!window.WosBell?.readyMore?.());
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
@@ -1590,6 +1590,15 @@
   function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
   setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
   $('#settingsBtn').addEventListener('click', () => openSettings());
+  // What the notification routing part puts on the cog (WosBell.attention; stock: nothing, so the cog is untouched).
+  function paintCog() {
+    const b = $('#settingsBtn'); if (!b) return;
+    const at = window.WosBell?.attention?.(), n = at?.n | 0; let m = b.querySelector('.cog-n');
+    if (!n) { if (m) { m.remove(); b.setAttribute('aria-label', 'Settings'); } return; }
+    if (!m) { m = document.createElement('b'); m.className = 'cog-n'; b.append(m); }
+    m.textContent = n > 99 ? '99+' : String(n); b.setAttribute('aria-label', `Settings, ${n} ${at.label}`);
+  }
+  addEventListener('wizard:notify-attention', paintCog); paintCog();
   C.voiceStatus?.onChange(() => renderSettings());
   OUTBOX?.onChange(() => renderSettings());
 

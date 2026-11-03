@@ -585,6 +585,47 @@
       open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage'].includes(page)) shell?.openSettings?.(page); },
       refresh: () => { if (!a.dead) window.WosSettings?.refresh?.(); },
     });
+    /* Trusted packages may replace where notifications go: the `notify-routing` part in core/notif-bell.js (version 1),
+     * and read / save the box's saved choices at Notifications' /notifications/api/routes. No other URL,
+     * method or header crosses this boundary. The replacement dies with the package (stock Badge | Chats comes back). */
+    if (caps.has('notify') && trusted) api.notify = Object.freeze({
+      routing(impl, opts = {}) {
+        const R = window.WosBell?.routing; if (!R || a.dead || !impl || typeof impl !== 'object') return false;
+        const wrapped = {};
+        for (const [k, fn] of Object.entries(impl)) if (typeof fn === 'function' && k !== 'attach') wrapped[k] = (...args) => {
+          if (a.dead) throw new Error('turned off');
+          try { return fn(...args); } catch (e) { fault(a, 'notify.' + k, e); throw e; }
+        };
+        // The host handed to the replacement: what it may read and do, nothing more, and only while it lives.
+        if (typeof impl.attach === 'function') wrapped.attach = host => { if (!a.dead) impl.attach(Object.freeze({
+          stored: () => a.dead ? {} : host.stored(), route: id => host.route(String(id)), installed: () => !a.dead && host.installed(),
+          adopt: next => !a.dead && host.adopt(next), changed: () => { if (!a.dead) host.changed(); },
+          mark: (ids, marks = {}) => { const m = Object.fromEntries(['read', 'archived'].filter(k => typeof marks[k] === 'boolean').map(k => [k, marks[k]])); return a.dead || !Array.isArray(ids) || !Object.keys(m).length ? Promise.resolve(false) : host.mark(ids.map(String).slice(0, 200), m); },
+        })); };
+        const r = R.replace(wrapped, { owner: a.id, version: opts?.version });
+        if (typeof r === 'function') { a.offs.add(r); return true; }
+        try { shell?.toast?.(r === 'version' ? `${a.label || a.id} paused after an update · ask your Wizard to update it` : `${a.label || a.id} couldn't change notifications (${r})`); } catch (_) {}
+        return false;
+      },
+      routes: Object.freeze({
+        async get() {
+          if (a.dead) return null;
+          try {
+            const r = await bounded(fetch(new URL('/notifications/api/routes', document.baseURI).href, { method: 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error' }));
+            if (!r.ok) return null; const j = await r.json(); return a.dead || !j || typeof j !== 'object' ? null : structuredClone(j);
+          } catch (_) { return null; }
+        },
+        async save(routes) {
+          if (a.dead || !routes || typeof routes !== 'object' || Array.isArray(routes)) return false;
+          const clean = {}; for (const [k, v] of Object.entries(routes).slice(0, 200)) if (typeof v === 'string' && /^[a-z0-9][a-z0-9:-]{0,80}$/.test(k) && /^[a-z][a-z0-9-]{0,19}$/.test(v)) clean[k] = v;
+          if (!Object.keys(clean).length) return false;
+          try {
+            const r = await bounded(fetch(new URL('/notifications/api/routes', document.baseURI).href, { method: 'POST', credentials: 'same-origin', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routes: clean }) }));
+            return !a.dead && r.ok;
+          } catch (_) { return false; }
+        },
+      }),
+    });
     if (caps.has('inbox')) api.inbox = Object.freeze({
       watch(fn) {
         if (a.dead || typeof fn !== 'function' || !window.WosBell?.watch) return () => {};
@@ -611,7 +652,19 @@
       reply(id, words = '') {
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
-        return !!shell.contextDraft('notifications:' + it.id, { title: it.title, message: it.message }, String(words || ''));
+        // An app's item rides with its app name, so the agent knows where it came from (and which app tools to use).
+        const title = it.app ? `${it.appName || it.app}: ${it.title || 'Item'}` : it.title;
+        const message = it.app ? `${it.message}\n\n(From the ${it.appName || it.app} app, ${it.app}; item ${it.key})` : it.message;
+        return !!shell.contextDraft('notifications:' + it.id, { title, message }, String(words || ''));
+      },
+      // An app's item (an app set to Chats in Settings › Notifications): open that app, at the item when it says where.
+      open(id) {
+        if (a.dead) return false;
+        const it = window.WosBell?.item?.(id); if (!it?.app || typeof window.WizOpenApp !== 'function') return false;
+        if (!it.open) return !!window.WizOpenApp(it.app);
+        let base = ''; try { base = (window.WizCore?.apps?.('mobile')?.APPS || []).find(x => x.id === it.app)?.url || ''; } catch (_) {}
+        try { const u = new URL(it.open, new URL(base || `/${it.app}/`, location.origin)); if (u.origin === location.origin && window.WizOpenApp(it.app, u.pathname + u.search + u.hash)) return true; } catch (_) {}
+        return !!window.WizOpenApp(it.app);
       },
     });
     return Object.freeze(api);
@@ -631,7 +684,7 @@
       const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
       const m = await response.json();
-      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings'].includes(c))) throw new Error('Invalid manifest');
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings','notify'].includes(c))) throw new Error('Invalid manifest');
       if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
       const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
       if (typeof mod.default !== 'function') throw new Error('Missing setup');

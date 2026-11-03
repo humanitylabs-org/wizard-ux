@@ -240,6 +240,9 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .toast { position: fixed; left: 50%; top: 3px; z-index: 50; transform: translate(-50%, -12px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px;
   padding: 8px 14px; border-radius: 99px; background: linear-gradient(rgba(22, 14, 46, .96), rgba(22, 14, 46, .96)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); font-size: 13px; color: var(--ink); transition: opacity 160ms, transform 160ms var(--ease); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
+/* A toast with an action (Undo) takes taps while it shows. */
+.toast.on:has(button) { pointer-events: auto; }
+.toast button { margin-left: 2px; padding: 0; border: 0; background: none; font: inherit; font-weight: 800; color: var(--violet-2, var(--wz-accent)); cursor: pointer; }
 
 
 .win .desk-scroll{height:100%;overflow:auto;padding:12px}
@@ -457,3 +460,6 @@ html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(96px +
 .win.hud:not([hidden]) { animation: hud-in 200ms var(--ease, ease-out) both; }
 @keyframes hud-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .win.hud:not([hidden]) { animation: none; } }
+/* The Settings cog's count (System notices set to Badge, WosBell.attention). The phone cog reuses its own .gear-n. */
+#settingsBtn { position: relative; }
+#settingsBtn .cog-n { position: absolute; top: -3px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-size: var(--wz-text-sm); font-weight: 800; line-height: 16px; text-align: center; pointer-events: none; }

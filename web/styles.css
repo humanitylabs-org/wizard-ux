@@ -386,6 +386,8 @@ body {
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .toast .ti { font-size: 15px; }
 .toast button { margin-left: 4px; font-weight: 800; color: var(--violet-2); }
+/* A toast with Undo (WosBell.movedToast) keeps its line: absolute at left:50% would otherwise wrap it at half width. */
+.toast:has(.wos-undo) { width: max-content; }
 
 /* Coach */
 .coach { position: absolute; inset: 0; z-index: 90; display: grid; place-items: end center; background: radial-gradient(80% 60% at 50% 85%, rgba(20, 10, 50, .7), rgba(2, 1, 8, .92)); padding-bottom: calc(var(--safe-b) + 6px); animation: fade 500ms both; }

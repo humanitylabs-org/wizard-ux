@@ -152,6 +152,42 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size:var(--wz-text-lg); font-weight: 600; touch-action: manipulation; }
 .st-seg button[aria-checked="true"] { background: var(--wz-accent); color: var(--wz-base); font-weight: 700; }
 .st-seg button:disabled { opacity: .6; }
+/* Settings › Notifications: one line per app, its name on the left and Badge | Chats on the right. */
+.st-nr { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.st-nr .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-nr .st-tx b { font-size: var(--wz-text-lg); font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.st-nr .st-tx small { font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+/* The Badge | Chats picker (WosBell.picker): the same control in Settings › Notifications and in every notification
+ * opened in Chats, so it is styled once here (settings.css loads in both shells), not per place. */
+.st-nr-seg.wos-route { flex: none; width: 184px; }
+/* Four choices (Chats · Badge · Morning report · Off): columns sized to their words so every label stays whole;
+ * outranks the desktop cap on segmented controls (.st-desktop .st-seg) and the equal columns of .st-seg. */
+.st-seg.st-nr-seg.wos-route { width: auto; max-width: none; grid-auto-columns: auto; }
+.st-nr-seg.wos-route button span { white-space: nowrap; }
+.st-nr-seg.wos-route button:disabled { opacity: .35; }
+.st-nr-seg.wos-route button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 6px 10px; font-size: var(--wz-font-size); }
+.st-nr-seg.wos-route .wos-route-ic { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.st-nr-seg.wos-route [data-notify-to="badge"] .wos-route-ic { fill: currentColor; stroke: none; }
+/* The Morning Report's coffee cup is a filled glyph (512 grid), not a line icon. */
+.st-nr-seg.wos-route svg.wos-route-ic.wos-route-mr { fill: currentColor; stroke: none; width: 16px; height: 16px; }
+/* Narrow: words only, so the four choices stay whole on one row. Narrow means the page or the chat column, not only
+ * the screen: Settings in a desktop window or a notification in a slim Chats column is narrow too. */
+[data-settings-feature="notification-routing"], .ch-notif-route { container-type: inline-size; }
+@container (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; justify-content: stretch; } .st-nr-seg.wos-route button { padding: 6px 8px; } .st-nr-seg.wos-route .wos-route-ic { display: none; } }
+/* Narrower than the four words (a slim desktop Settings window): two by two. */
+@container (max-width: 320px) { .st-seg.st-nr-seg.wos-route { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; justify-content: stretch; } .st-nr-seg.wos-route button { padding: 6px 8px; } .st-nr-seg.wos-route .wos-route-ic { display: none; } }
+/* Settings › Notifications › System › Recent: notices about Wizard itself, newest first; unseen ones carry a dot. */
+.st-sys-list { list-style: none; margin: 0; padding: 0; }
+.st-sys-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.st-sys-list li .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-sys-list li b { font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.st-sys-list li small { color: var(--wz-text-secondary); font-size: var(--wz-text-sm); overflow-wrap: anywhere; }
+.st-sys-list li time { flex: none; color: var(--wz-text-secondary); font-size: var(--wz-text-sm); }
+.st-sys-list li.new b::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--wz-accent); vertical-align: middle; }
+/* In Chats: one line above the notification, the question on the left and the picker on the right. */
+.ch-notif-route { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 0 0 12px; padding: 0 2px; }
+.ch-notif-route > span { flex: 1 1 140px; min-width: 0; font-size: var(--wz-text-sm); color: var(--wz-text-secondary); overflow-wrap: anywhere; text-wrap: balance; }
 /* Look: the skin picker sits flat on the page under a plain heading. */
 .st-root .sk-row { padding: 0; margin: 0 0 8px; }
 .st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }

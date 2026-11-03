@@ -128,9 +128,10 @@ test('James: default Settings keeps the current AI page and has no "Your network
   for (const file of core) assert.doesNotMatch(read(file), /page: '(overview|ai|network|storage)'/, file + ' fills no System page');
   assert.match(s, /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \}/, 'the current AI usage / Resources page stays');
   assert.match(s, /const effectivePage = \(\) => page \|\| \(desktop \? \(filled\('overview'\)\(\) \? 'overview' : 'appearance'\) : ''\);/, 'desktop opens on Appearance as before');
-  // Order unchanged from the classic list: Appearance first, then Chats, Voice, Phones…
+  // Order unchanged from the classic list: Appearance first, then Chats, Voice, Phones… (Notifications, where each
+  // app's notifications go, sits right after Chats since 1 Nov 2026.)
   const order = [...between(s, 'const PAGES = [', '];').matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]).filter(id => !['overview', 'ai', 'network', 'storage'].includes(id));
-  assert.deepEqual(order, ['appearance', 'chats', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about']);
+  assert.deepEqual(order, ['appearance', 'chats', 'notifications', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about']);
   // Group labels (System / Preferences) appear only when there is more than one group.
   assert.match(s, /pages\.some\(q => q\.group && q\.group !== p\.group\)/);
 });
