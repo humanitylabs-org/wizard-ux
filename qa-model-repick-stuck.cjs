@@ -21,7 +21,7 @@ for(const delayCatalogue of [true,false]){
  const sess={id:SID,title:'Thread running nine hours possible bug',source:'api_server',model:'claude-opus-5-5[1m]',provider:null,status:'completed',message_count:2,updated_at:new Date().toISOString()};
  await ctx.route('**/wizard/hermes/api/model/options',async r=>{await gate;r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(CATALOGUE)});});
  await ctx.route('**/wizard/hermes/api/sessions?*',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:[sess],has_more:false})}));
- await ctx.route(`**/wizard/hermes/api/sessions/${SID}/model*`,async r=>{const body=JSON.parse(r.request().postData()||'{}');sess.model=body.model;sess.provider=body.provider;sess.wizard_model_lock_updated_at=Date.now()/1000;
+ await ctx.route(`**/wizard/hermes/api/sessions/${SID}/model*`,async r=>{const body=JSON.parse(r.request().postData()||'{}');sess.model=body.model;sess.provider=body.provider;sess.wizard_model_lock_updated_at=(body.selection_version||0)+1;
    r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({runtime:{model_lock:'accepted',model:body.model,provider:body.provider,selection_version:sess.wizard_model_lock_updated_at}})});});
  await p.goto(URL_);await p.waitForFunction(()=>__wos?.live?.ok && WosDevice?.ready);
  await p.evaluate(()=>WosTour?.finish('qa'));await p.waitForTimeout(500);

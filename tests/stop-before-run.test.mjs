@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
+import { matchesRuntime } from './helpers/model-runtime-matcher.mjs';
 
 // Miguel, 28 Oct 2026: "when I send there is no way to stop the agent for a while; the Stop button shows up late."
 // Stop must show the moment a send is pending, and before the run exists it withdraws the send: no run is created.
@@ -32,7 +33,7 @@ function client(origin, transcribe = async () => ({ text: 'hello there' })) {
     addEventListener() {}, clearTimeout,
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
-    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route, matchesRuntime },
     WizConfig: { transcribe, voicePrompt: () => '' },
   };
   ctx.window = ctx; vm.runInNewContext(outboxSrc, ctx);
@@ -203,14 +204,17 @@ test('a take still on the phone when Stop is tapped is withdrawn when it arrives
 });
 
 test('a steer in flight when Stop is tapped and then rejected never becomes a new turn', async t => {
-  const calls = []; let releaseSteer;
+  const calls = []; let releaseSteer, steered = false;
   const steerHeld = new Promise(r => { releaseSteer = r; });
   const server = createServer(async (req, res) => {
     for await (const _ of req) {}
     calls.push(req.url);
     const json = (s, v) => { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(v)); };
-    if (req.url === '/wizard/hermes/v1/runs/live/steer') { await steerHeld; return json(409, { error: { code: 'run_not_accepting_steer', message: 'stopped' } }); }
-    if (req.url === '/wizard/hermes/v1/runs/live') return json(200, { run_id: 'live', session_id: 'wizard_t', status: 'cancelled' });
+    if (req.url === '/wizard/hermes/v1/runs/live/steer') { steered = true; await steerHeld; return json(409, { error: { code: 'run_not_accepting_steer', message: 'stopped' } }); }
+    // Algorithm-only fixture: initially matching/confirmed, terminal only AFTER
+    // the steer was dispatched. No native/runtime certification is implied.
+    if (req.url === '/wizard/hermes/v1/runs/live') return json(200, { run_id: 'live', session_id: 'wizard_t', status: steered ? 'cancelled' : 'running',
+      ...(!steered ? { runtime: { model: 'm', provider: 'p', model_lock: 'confirmed' } } : {}) });
     if (req.url === '/wizard/hermes/v1/runs') return json(202, { run_id: 'must_not_exist' });
     json(500, { error: 'unexpected' });
   });
@@ -219,10 +223,36 @@ test('a steer in flight when Stop is tapped and then rejected never becomes a ne
   const page = client(`http://127.0.0.1:${server.address().port}`); t.after(page.close);
   const it = await page.api.enqueue({ kind: 'reply', sessionId: 'wizard_t', model: 'm', provider: 'p', text: 'also do this', steerRunId: 'live' });
   await until(() => calls.includes('/wizard/hermes/v1/runs/live/steer'));
+  assert.equal(calls[0], '/wizard/hermes/v1/runs/live', 'active matching preflight happened before dispatch');
   const outcome = page.api.cancel(it.id);
   releaseSteer();
   assert.equal((await outcome).outcome, 'cancelled');
   await new Promise(r => setTimeout(r, 60));
   assert.equal(calls.filter(u => u === '/wizard/hermes/v1/runs').length, 0, 'no new turn admitted');
   assert.equal(page.api.get(it.id).state, 'held');
+});
+
+test('Stop withdraws synchronously while steer identity preflight is held; no steer or new turn follows', async t => {
+  const calls = []; let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const server = createServer(async (req, res) => {
+    for await (const _ of req) {}
+    calls.push(req.url);
+    if (req.method === 'GET') await gate;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ run_id: 'foreign', session_id: 'wizard_t', status: 'completed' }));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+  const page = client(`http://127.0.0.1:${server.address().port}`); t.after(page.close);
+  const it = await page.api.enqueue({ kind: 'reply', sessionId: 'wizard_t', model: 'm', provider: 'p', text: 'original unsent', steerRunId: 'live' });
+  await until(() => calls.includes('/wizard/hermes/v1/runs/live'));
+  const cancelled = page.api.cancel(it.id);
+  assert.equal(page.api.get(it.id).cancelled, true, 'Stop is recorded in the same frame, before network release');
+  assert.equal((await Promise.race([cancelled, new Promise((_, reject) => setTimeout(() => reject(new Error('Stop waited for preflight')), 500))])).outcome, 'cancelled');
+  assert.equal(page.api.get(it.id).state, 'held'); assert.equal(page.api.get(it.id).text, 'original unsent');
+  assert.equal(page.api.forThread('wizard_t').length, 0, 'local send presentation clears without the read');
+  release(); await page.api.pump(); await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(calls.length, 1, 'only the preflight read occurred');
+  assert.equal(page.api.retryAll(), 0); assert.equal(page.api.get(it.id).state, 'held');
 });

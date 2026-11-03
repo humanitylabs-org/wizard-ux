@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
+import { matchesRuntime } from './helpers/model-runtime-matcher.mjs';
 
 const source = readFileSync(process.env.OUTBOX_TEST_SOURCE || new URL('../web/outbox.js', import.meta.url), 'utf8');
 const runId = 'wizardq_finished', sessionId = 'wizard_existing';
@@ -32,7 +33,7 @@ function client(origin, rows = new Map()) {
     addEventListener() {}, clearTimeout,
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
-    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route, matchesRuntime },
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
@@ -46,21 +47,29 @@ async function settled(api, id, minAttempts = 0) {
   throw new Error('Outbox did not settle');
 }
 async function fixture(t, options = {}) {
-  const calls = [], admitted = new Map(); let loseAdmission = !!options.loseAdmission;
+  const calls = [], admitted = new Map(); let loseAdmission = !!options.loseAdmission, steered = false;
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const c of req) chunks.push(c);
     const body = Buffer.concat(chunks).toString();
     calls.push({ path: req.url, method: req.method, body, key: req.headers['idempotency-key'] });
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
     if (req.url.includes('/steer')) {
+      steered = true;
       if (options.ambiguous === 'network') { req.socket.destroy(); return; }
       if (options.ambiguous === 'json') { res.writeHead(200); res.end('not json'); return; }
       if (options.accepted) return json(200, { accepted: true, run_id: runId });
       return json(options.steerStatus || 409, options.rejection || rejection);
     }
     if (req.method === 'GET') {
+      // Algorithm-only metadata: not a claim about stock Hermes. Preflight must
+      // reach the intended steer; only its rejection transitions the run read.
+      if (!steered) return json(options.preflightStatus || 200, options.preflight || {
+        run_id: runId, session_id: sessionId, status: 'running',
+        runtime: { model: 'test-model', provider: 'test-provider', model_lock: 'confirmed' },
+      });
       if (options.beforeRead) await options.beforeRead();
-      return json(options.readStatus || 200, { run_id: options.otherRun || runId, session_id: options.otherSession || sessionId, status: options.runStatus || 'completed' });
+      return json(options.readStatus || 200, { run_id: options.otherRun || runId, session_id: options.otherSession || sessionId, status: options.runStatus || 'completed',
+        ...(options.readId ? { id: options.readId } : {}) });
     }
     if (req.url === '/wizard/hermes/v1/runs') {
       if (options.admitStatus) return json(options.admitStatus, { error: 'QA request rejected' });
@@ -80,11 +89,62 @@ async function fixture(t, options = {}) {
   return { ...c, calls, admitted, enqueue, origin: `http://127.0.0.1:${server.address().port}` };
 }
 
+function assertPhasedSteer(f) {
+  assert.equal(f.calls[0]?.method, 'GET', 'matching active run read precedes steer');
+  assert.equal(f.calls[1]?.path.includes('/steer'), true, 'the intended steer is actually attempted');
+}
+
+test('terminal at preflight is a separate one-admission case, never a steer rejection', async t => {
+  const f = await fixture(t, { preflight: { run_id: runId, session_id: sessionId, status: 'completed' } });
+  const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.state, 'sent', it.error); assert.equal(f.admitted.size, 1);
+  assert.equal(f.calls.filter(c => c.path.includes('/steer')).length, 0);
+  assert.equal(f.calls[0].method, 'GET'); assert.equal(f.calls.find(c => c.method === 'POST').key, it.id);
+  assert.equal(JSON.parse(f.calls.find(c => c.method === 'POST').body).input, 'Follow up in this same thread');
+});
+for (const [name, preflight] of [
+  ['foreign run active', { run_id: 'foreign', session_id: sessionId, status: 'running' }],
+  ['foreign session terminal', { run_id: runId, session_id: 'foreign', status: 'completed' }],
+  ['missing run', { session_id: sessionId, status: 'completed' }],
+  ['missing session', { run_id: runId, status: 'running' }],
+  ['contradictory id aliases', { run_id: runId, id: 'foreign', session_id: sessionId, status: 'completed' }],
+  ['contradictory run_id aliases', { run_id: 'foreign', id: runId, session_id: sessionId, status: 'running' }],
+  ['malformed body', []],
+]) test(`preflight ${name} keeps original unsent with no steer or admission`, async t => {
+  const f = await fixture(t, { preflight }); const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.state, 'failed'); assert.equal(it.text, 'Follow up in this same thread');
+  assert.equal(it.steerRunId, runId); assert.equal(it.steerDispatch, undefined); assert.equal(it.body, undefined); assert.equal(it.steerBody, undefined);
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0); assert.equal(f.admitted.size, 0);
+  f.close(); const restored = client(f.origin, f.rows); t.after(restored.close);
+  await restored.api.load(); await restored.api.pump();
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0); assert.equal(f.admitted.size, 0);
+  assert.equal(restored.api.get(it.id).text, 'Follow up in this same thread');
+});
+for (const status of [404, 409, 410, 503]) test(`preflight HTTP ${status} is not permission for a new turn`, async t => {
+  const f = await fixture(t, { preflightStatus: status }); const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.text, 'Follow up in this same thread'); assert.equal(it.steerRunId, runId);
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 0); assert.equal(f.admitted.size, 0);
+});
+test('matching id-only active preflight reaches steer using the real matcher', async t => {
+  const f = await fixture(t, { accepted: true, preflight: { id: runId, session_id: sessionId, status: 'running',
+    runtime: { model: 'test-model', provider: 'test-provider', model_lock: 'confirmed' } } });
+  const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.state, 'sent'); assertPhasedSteer(f); assert.equal(f.admitted.size, 0);
+});
+test('claimed arbitrary provider alias is not a matching confirmed runtime', async t => {
+  const runtime = { model: 'test-model', provider: 'arbitrary-alias', model_lock: 'confirmed', requested: { model: 'test-model', provider: 'test-provider' } };
+  assert.equal(matchesRuntime(runtime, { model: 'test-model', provider: 'test-provider' }), false);
+  const f = await fixture(t, { preflight: { run_id: runId, session_id: sessionId, status: 'running', runtime } });
+  const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.state, 'sent'); assert.equal(f.calls.filter(c => c.path.includes('/steer')).length, 0); assert.equal(f.admitted.size, 1);
+});
+
 for (const status of ['completed', 'failed', 'cancelled', 'interrupted', 'expired']) {
   test(`definite steer rejection after ${status} continues the same session exactly once`, async t => {
     const f = await fixture(t, { runStatus: status }); const enqueued = await f.enqueue();
     const it = await settled(f.api, enqueued.id);
     assert.equal(it.state, 'sent', it.error);
+    assertPhasedSteer(f);
     assert.equal(it.steered, false);
     assert.equal(f.admitted.size, 1);
     const call = f.calls.find(x => x.path === '/wizard/hermes/v1/runs');
@@ -145,6 +205,7 @@ for (const options of [
   const f = await fixture(t, options); const it = await f.enqueue();
   assert.equal((await settled(f.api, it.id)).state, 'unconfirmed');
   assert.equal(f.api.retry(it.id), false); assert.equal(f.admitted.size, 0);
+  assertPhasedSteer(f);
   const restored = client('http://unused', f.rows); t.after(restored.close);
   await restored.api.load(); assert.equal(restored.api.get(it.id).state, 'unconfirmed');
   assert.equal(restored.api.retry(it.id), false);
@@ -176,12 +237,14 @@ for (const status of [408, 425, 429, 500, 503, 403, 413]) test(`ordinary admissi
 for (const options of [
   { accepted: true }, { runStatus: 'running' }, { runStatus: 'queued' }, { runStatus: 'stopping' },
   { readStatus: 503 }, { otherRun: 'another-run' }, { otherSession: 'another-session' },
+  { readId: 'contradictory-id' },
   { rejection: { error: { code: 'model_lock_mismatch', message: 'Route changed' } } },
   { rejection: { error: 'untyped conflict' } }, { steerStatus: 403 },
 ]) test(`no fallback without definite rejection AND matching terminal run: ${JSON.stringify(options)}`, async t => {
   const f = await fixture(t, options); const it = await f.enqueue();
   const result = await settled(f.api, it.id);
   assert.equal(result.state, options.accepted ? 'sent' : 'failed');
+  assertPhasedSteer(f);
   assert.equal(f.admitted.size, 0);
 });
 
@@ -191,10 +254,12 @@ test('a failed old-client item recovers on Retry after the run finishes', async 
   // Restore a historical rejected item. Older clients kept only the rejection
   // text, so Retry must obtain a fresh typed rejection rather than infer one.
   const record = f.rows.get(item.id); record.error = rejection.error.message;
+  let steered = false;
   const server = createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
-    if (req.url.includes('/steer')) { res.statusCode = 409; res.end(JSON.stringify(rejection)); }
-    else if (req.method === 'GET') res.end(JSON.stringify({ run_id: runId, session_id: sessionId, status: 'completed' }));
+    if (req.url.includes('/steer')) { steered = true; res.statusCode = 409; res.end(JSON.stringify(rejection)); }
+    else if (req.method === 'GET') res.end(JSON.stringify({ run_id: runId, session_id: sessionId, status: steered ? 'completed' : 'running',
+      ...(!steered ? { runtime: { model: 'test-model', provider: 'test-provider', model_lock: 'confirmed' } } : {}) }));
     else res.end(JSON.stringify({ run_id: 'continued' }));
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));

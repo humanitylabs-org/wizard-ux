@@ -115,6 +115,7 @@
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
+      selection: item.wizard_selection || null,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
       retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
@@ -1036,7 +1037,7 @@
       if (s && WORKING.has(s.status) && s.runId) {
         try {
           const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}${aq(id)}`)).json();
-          if (!M.matchesRuntime(active.runtime, route))
+          if (active.runtime?.model_lock !== 'confirmed' || !M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
@@ -1158,7 +1159,7 @@
       // retry failures still carry a status and must remain actionable.
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         ...(s.status ? { status: s.status } : {}),
-        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
+        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt, selection: s.selection } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);

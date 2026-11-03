@@ -45,7 +45,7 @@ async function fence(ctx, shell) {
 function bodies(shell, rx) {
   return writes.filter(w => w.shell === shell && rx.test(w.path)).map(w => { try { return JSON.parse(w.body); } catch (e) { return {}; } });
 }
-async function exercise(browser, shell) {
+async function exercise(browser, shell, skin) {
   const desktop = shell === 'desktop';
   const ctx = await browser.newContext(desktop
     ? { viewport: { width: 1365, height: 850 } }
@@ -57,6 +57,9 @@ async function exercise(browser, shell) {
   await page.goto(new URL(desktop ? 'desktop.html' : '?open=chats', URL_).href, { waitUntil: 'domcontentloaded' });
   const root = desktop ? '__wux' : '__wos';
   await page.waitForFunction(root => window[root]?.chats, root, { timeout: 30000 });
+  await page.waitForFunction(()=>window.WosSkin);
+  await page.evaluate(skin=>WosSkin.set(skin),skin);
+  await page.waitForTimeout(300);
   await page.evaluate(root => {
     const api = window[root], w = Object.values(api.wins).find(x => x.app === 'chats');
     api.chats.openNewDraft(w.id, '');
@@ -76,7 +79,7 @@ async function exercise(browser, shell) {
   ok(/^Astra/.test(state.stale), `${shell}: seeded stale draft override is visible before New chat`, state);
   ok(state.override === null && state.chip.startsWith(state.expected.short), `${shell}: New chat resets to the current Hermes default label`, state);
   ok(/^Opus/.test(state.chip), `${shell}: live configured new-chat default is Opus`, state.chip);
-  await page.screenshot({ path: `${OUT}/${shell}-new-chat-opus.png`, fullPage: false });
+  await page.screenshot({ path: `${OUT}/${shell}-${skin}-new-chat-opus.png`, fullPage: false });
 
   // An explicit per-chat choice still wins for this chat and rides with first send.
   await page.evaluate(({ root, wid, astra }) => {
@@ -99,7 +102,7 @@ async function exercise(browser, shell) {
 }
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--no-sandbox'] });
-  try { await exercise(browser, 'phone'); await exercise(browser, 'desktop'); }
+  try { for(const skin of ['nebula','obsidian']) { await exercise(browser, 'phone',skin); await exercise(browser, 'desktop',skin); } }
   finally { await browser.close(); }
   console.log(`\n${pass} pass, ${fail} fail · ${writes.length} intercepted writes`);
   process.exit(fail ? 1 : 0);

@@ -29,7 +29,7 @@ test('legacy default + ready pool: new chats, the Opus slot and send all use the
   const M = await load(native);
   assert.equal(M.defaultOption().provider, 'anthropic');
   assert.equal(M.defaultOption().value, 'claude-opus-5-5');
-  assert.deepEqual({ ...M.snapshot('') }, { model: 'claude-opus-5-5', provider: 'anthropic' });
+  assert.deepEqual({ ...M.snapshot('') }, { model: 'claude-opus-5-5', provider: 'anthropic', selection_version: 0 });
   assert.equal((await M.resolveRoute(M.snapshot(''))).provider, 'anthropic');
   assert.equal(opus(M).provider, 'anthropic');
   assert.equal(M.options.filter(o => o.isGlobalDefault).length, 1);
@@ -40,7 +40,7 @@ test('legacy default + ready pool: new chats, the Opus slot and send all use the
 test('an explicit legacy pick is never rewritten', async () => {
   const M = await load(native);
   const pick = { model: 'claude-opus-5-5[1m]', provider: SUB };
-  assert.deepEqual({ ...M.snapshot('', pick) }, pick);
+  assert.deepEqual({ ...M.snapshot('', pick) }, { ...pick, selection_version: 0 });
   assert.equal((await M.resolveRoute(pick)).provider, SUB);
   assert.equal(M.visible(pick.model, pick.provider).find(o => M.family(o.value, o.provider) === 'claude:opus').provider, SUB);
 });
@@ -70,8 +70,8 @@ test('routed agents (host-profile, container, restricted) keep their own legacy 
   const M = await load(native, {}, false, { WosAgents, WizLive });
   assert.equal(M.snapshot('').provider, 'anthropic'); // main agent: pool
   for (const k of kinds) {
-    assert.deepEqual({ ...M.snapshot('', null, k) }, { model: 'claude-opus-5-5[1m]', provider: SUB, agent: k }, `new ${k} chat`);
-    assert.deepEqual({ ...M.snapshot(`thread-${k}`) }, { model: 'claude-opus-5-5[1m]', provider: SUB, agent: k }, `routed ${k} thread`);
+    assert.deepEqual({ ...M.snapshot('', null, k) }, { model: 'claude-opus-5-5[1m]', provider: SUB, agent: k, selection_version: 0 }, `new ${k} chat`);
+    assert.deepEqual({ ...M.snapshot(`thread-${k}`) }, { model: 'claude-opus-5-5[1m]', provider: SUB, agent: k, selection_version: 0 }, `routed ${k} thread`);
     assert.equal((await M.resolveRoute(M.snapshot('', null, k))).provider, SUB);
   }
 });
