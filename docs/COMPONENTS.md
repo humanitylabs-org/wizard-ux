@@ -72,6 +72,7 @@ Reuse:
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases | PNG/emoji icons |
+| Desktop keys | `watchFrame → onKey` (`desktop/desktop.js`); frame capture, keyup/blur | another key relay |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs+defaults, 1s boot cap | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |

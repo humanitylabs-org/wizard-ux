@@ -638,7 +638,14 @@
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         fields().bind(doc);
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
-        doc.addEventListener('keydown', e => onKey(e, true), true); doc.addEventListener('keyup', e => keyHints.up(e), true);
+        // Keyboard events never bubble out of an iframe. Use its window's capture phase,
+        // just like the shell: an app's window-level stopPropagation (e.g. an editor/modal)
+        // otherwise prevents the document hook from ever seeing desktop chords. Forward
+        // the original event, once; onKey still decides which keys belong to the app.
+        const frameWindow = doc.defaultView;
+        frameWindow.addEventListener('keydown', e => onKey(e, true), true);
+        frameWindow.addEventListener('keyup', e => keyHints.up(e), true);
+        frameWindow.addEventListener('blur', () => keyHints.hide());
         try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
       } catch (e) {}
     });
