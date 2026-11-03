@@ -23,6 +23,8 @@
   const base = () => { try { return (window.WizConfig?.endpoint('sessions')) || '/wizard/hermes/api/sessions'; } catch (e) { return '/wizard/hermes/api/sessions'; } };
   const sigOf = s => [s.messageCount ?? '', s.activityAt || '', s.lastAssistantAt || '', s.updatedAt || ''].join('|');
   const words = q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  // Server search snippets are deliberately clipped, so they can lose the exact transport-prompt ending.
+  const visibleSnippet = s => C.isAutomaticPrompt?.(s) || /(?:\[AUTO\]|\[Nebula:?\])[ \t]+Please share the complete /.test(String(s || '')) ? '' : s;
 
   async function textsOf(s, signal) {
     const key = `${s.agent || 'hermes'}:${s.id}`, sig = sigOf(s), hit = cache.get(key);
@@ -73,8 +75,9 @@
           const publish = rows => {
             if (r.ctrl.signal.aborted || runs[wid] !== r) return;
             for (const s of rows || []) {
-              r.rows.set(s.id,s); window.WizLive.rememberSearch?.(s);
-              r.hits.set(s.id,match([s.searchSnippet || s.preview || s.title],ws) || {snippet:s.searchSnippet || s.preview || '',html:esc(s.searchSnippet || s.preview || '')});
+              const hit = match([visibleSnippet(s.searchSnippet), visibleSnippet(s.preview), s.title].filter(Boolean), ws);
+              if (!hit) continue;
+              r.rows.set(s.id,s); window.WizLive.rememberSearch?.(s); r.hits.set(s.id,hit);
             }
             r.onUpdate?.();
           };
@@ -108,10 +111,10 @@
   function seed(r, prev) {
     const ws = words(r.q);
     if (prev && prev.agent === r.agent && r.q.includes(prev.q)) for (const [id, s] of prev.rows) {
-      const m = match([s.title, s.preview, s.searchSnippet].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
+      const m = match([s.title, visibleSnippet(s.preview), visibleSnippet(s.searchSnippet)].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
     }
     for (const s of candidates(r.agent)) {
-      const title=match([s.title,s.preview].filter(Boolean),ws);
+      const title=match([s.title,visibleSnippet(s.preview)].filter(Boolean),ws);
       if(title) { r.rows.set(s.id,s); r.hits.set(s.id,title); }
       const hit = cache.get(`${s.agent || 'hermes'}:${s.id}`);
       if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) { r.rows.set(s.id,s); r.hits.set(s.id, m); } }

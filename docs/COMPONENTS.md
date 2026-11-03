@@ -52,7 +52,7 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages` preload; early answers; notification drafts; `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; seq resume; provider-access Errors; send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
+| Chats | `WizCore` (`chats.js`, `.css`): transport `isAutomaticPrompt`/`WosChat`/`WizLive`/`chatSearch`; preload, early answers, notification drafts; Focus; seq resume; provider errors; send/cache; Esc → `CHATS.clearFilter(id::list)`; `readyRank` | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
