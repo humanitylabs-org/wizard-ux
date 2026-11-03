@@ -680,6 +680,13 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
 .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
+/* While searching, Archive is the last section on every skin and phone/desktop shell (the repeated class outranks
+   the skins' own Archive-on-top rules). */
+.ch-list.ch-list.ch-list .ch-sec.ch-sec-last[data-sec] { order: 9; position: static; margin-top: 0; }
+/* The search progress line stays above the results and the finished line below them, whatever order the sections take. */
+.ch-list.ch-list.ch-list .ch-bodysearch { order: 10; }
+.ch-list.ch-list.ch-list .ch-bodysearch.busy { order: -9; }
+
 /* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
 .ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
 .ch-bell svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

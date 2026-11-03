@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { listFixture, sectionKeys } from './fixtures/chats-list-render.mjs';
 const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chats = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 function device(req, initial = {}) {
@@ -50,7 +51,13 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   const b = device(req); await tick(); assert.equal(b.store.get('wos.chats.layout.v1'), 'status');
   assert.match(live, /localStorage\.getItem\(LAYOUT_KEY\) === 'status' \? 'status' : 'day'/);
   assert.match(live, /else if \(chatLayout\(\) === 'status'\) g\.ready\.push\(s\);[^\n]*\n\s*else if \(!isFinite\(t\) \|\| t < yB\) g\.pastWeek\.push\(s\);/);
-  assert.match(chats, /\(byStatus\(\) \? SECTIONS_STATUS : SECTIONS_DAY\)\.map/);
+  // Exercise the actual renderer's selection in both modes, not the spelling of its map/sort pipeline.
+  const day = ['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive'];
+  const status = ['errors', 'working', 'ready', 'deferred', 'archive'];
+  for (const query of ['', 'match']) {
+    assert.deepEqual(sectionKeys(listFixture({ query }).render()), day, `By day sections, query=${query}`);
+    assert.deepEqual(sectionKeys(listFixture({ status: true, query }).render()), status, `By status sections, query=${query}`);
+  }
   assert.match(chats, /data-chlayout=/);
 });
 test('a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with', () => {
