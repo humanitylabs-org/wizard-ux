@@ -1840,9 +1840,15 @@ window.WizCore.chats = function createChats(H) {
   // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
   const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
   const streamShown = (st, turns) => {
-    const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
-    if (!ans || !got.endsWith(ans)) return false;
-    return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+    const got = bare(st.text);
+    // A stale Working row or recent outbox receipt can reopen an earlier run AFTER the latest answer landed.
+    // Its replay then shares that latest baseline: match any displayed final turn (James, 1 Nov 2026), but
+    // keep the bound local to that turn so a new answer merely ending like an old "Yes." cannot disappear.
+    return turns.some(t => {
+      if (!t.a || t.a.final === false) return false;
+      const ans = bare(t.a.text);
+      return !!ans && got.endsWith(ans) && got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+    });
   };
   // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
   // earlier notes), while the stream replays them from its first event. Draw only what the transcript lacks, or the
