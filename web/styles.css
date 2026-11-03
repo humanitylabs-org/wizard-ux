@@ -232,29 +232,32 @@ body {
   border-radius: 50%; display: grid; place-items: center; pointer-events: none; opacity: 0;
   transform: translate(0, 0) scale(.3);
   transition: transform 460ms var(--spring), opacity 220ms;
-  background: rgba(18, 10, 42, .72); border: 1px solid rgba(205, 190, 255, .3);
+  border-width: 1px; border-style: solid;
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .08);
 }
+/* Paint defaults stay weak; geometry and interactions keep their existing selectors. */
+button:where(.arc) { background: rgba(18, 10, 42, .72); border-color: rgba(205, 190, 255, .3); }
 .arc svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .arc small { position: absolute; top: 100%; margin-top: 6px; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
 .arc b { font-size: 15px; font-weight: 850; }
-.arc:active { background: rgba(60, 40, 120, .8); }
-.arc-left { color: #ffb0bf; }
+button:where(.arc:active) { background: rgba(60, 40, 120, .8); }
+button:where(.arc-left) { color: #ffb0bf; }
 .arc-mid .i-play { display: none; }
 .device[data-voice="paused"] .arc-mid .i-play { display: block; }
 .device[data-voice="paused"] .arc-mid .i-pause { display: none; }
-.device[data-voice="paused"] .arc-mid { background: rgba(255, 190, 85, .18); border-color: rgba(255, 190, 85, .5); color: var(--amber); }
+button:where(.device[data-voice="paused"] .arc-mid) { background: rgba(255, 190, 85, .18); border-color: rgba(255, 190, 85, .5); color: var(--amber); }
 .voice.on .arc { pointer-events: auto; opacity: 1; }
 .voice.on .arc-left  { transform: translate(-86px, -66px) scale(1); transition-delay: 30ms; }
 .voice.on .arc-mid   { transform: translate(0, -106px) scale(1); }
 .voice.on .arc-right { transform: translate(86px, -66px) scale(1); transition-delay: 60ms; }
-.arc-right { color: #fff; }
+button:where(.arc-right) { color: #fff; }
 /* Attach: count badge once a file rides along; a soft pulse while it uploads. */
 .arc-count { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; display: none; place-items: center;
-  font: 800 10.5px/1 system-ui; font-style: normal; background: var(--violet-2); color: #140b2c; }
+  font: 800 10.5px/1 system-ui; font-style: normal; }
+i:where(.arc-count) { background: var(--violet-2); color: #140b2c; }
 .arc-right.has .arc-count { display: grid; }
-.arc-right.has { border-color: rgba(205, 190, 255, .6); background: rgba(80, 52, 170, .55); }
+button:where(.arc-right.has) { border-color: rgba(205, 190, 255, .6); background: rgba(80, 52, 170, .55); }
 .arc-right.busy svg { animation: blink 1s ease-in-out infinite; }
 .voice.cmd .arc-mid, .voice.cmd .arc-right { opacity: 0; pointer-events: none; transform: translate(0, -60px) scale(.3); }
 .voice.cmd .arc-left { opacity: 0; pointer-events: none; }
@@ -612,13 +615,14 @@ body {
 .device:not(.orb-corner) .voice .arc {
   bottom: calc(var(--safe-b) + 38px); width: 44px; height: 44px;
   margin: 0 0 -22px -22px; backdrop-filter: none; -webkit-backdrop-filter: none;
-  box-shadow: none; background: rgba(25, 15, 49, .9); transform: scale(.6);
+  box-shadow: none; transform: scale(.6);
 }
+button:where(.device:not(.orb-corner) .voice .arc) { background: rgba(25, 15, 49, .9); }
 .device:not(.orb-corner) .voice.on .arc-left { transform: translate(-124px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-right { transform: translate(124px, 0) scale(1); }
-.device:not(.orb-corner)[data-voice="paused"] .voice .arc-mid { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
+button:where(.device:not(.orb-corner)[data-voice="paused"] .voice .arc-mid) { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
 .device:not(.orb-corner) .voice .arc small { display: none; }
 .device:is([data-voice="listen"], [data-voice="paused"]) .desk-dots { opacity: 0; pointer-events: none; }
 .device:not(.orb-corner) .timer { top: 44px; min-width: 0; font-size: 10px; line-height: 12px; padding: 0; border: 0; background: var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }

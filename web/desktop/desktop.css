@@ -322,30 +322,35 @@ html.voice-think #voiceGlow::after { opacity: .45; }
 
 #voicePill { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); z-index: 2147483001; box-sizing: border-box;
   height: 26px; max-width: min(420px, calc(100vw - 24px)); display: flex; align-items: center; gap: 7px; padding: 0 4px 0 10px;
-  border-radius: 99px; background: linear-gradient(rgba(16, 10, 30, .82), rgba(16, 10, 30, .82)), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));
+  border-radius: 99px;
   border: 1px solid rgba(255, 92, 207, .38); box-shadow: 0 6px 22px -8px rgba(255, 92, 207, .55), 0 0 0 1px rgba(0, 0, 0, .25);
-  font-size: 12px; line-height: 1; color: var(--ink); white-space: nowrap; pointer-events: auto; -webkit-app-region: no-drag; }
+  font-size: 12px; line-height: 1; white-space: nowrap; pointer-events: auto; -webkit-app-region: no-drag; }
+:is(button, div, span):where(#voicePill) { background: linear-gradient(rgba(16, 10, 30, .82), rgba(16, 10, 30, .82)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 #voicePill[hidden] { display: none; }
 #voicePill .rec-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 8px var(--pink); animation: blinkrec 1.1s ease-in-out infinite; }
 #voicePill.dict .rec-dot, #voicePill.think .rec-dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
 #voicePill.dict { border-color: rgba(63, 224, 255, .4); box-shadow: 0 6px 22px -8px rgba(63, 224, 255, .5), 0 0 0 1px rgba(0, 0, 0, .25); }
 #voicePill.app-voice { border-color: #f2ad52; }
 #voiceTime { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .02em; color: var(--ink); }
-#voicePill .lvl { flex: none; width: 26px; height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+#voicePill .lvl { flex: none; width: 26px; height: 3px; border-radius: 3px; overflow: hidden; }
+:is(button, div, span):where(#voicePill .lvl) { background: rgba(255, 255, 255, .12); }
 #voicePill .lvl b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--violet-2), var(--pink)); transition: width 80ms linear; }
 #voiceText { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
-#voiceCancel { flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08); color: var(--ink-2); font-size: 10px; line-height: 18px; cursor: pointer; }
-#voiceCancel:hover { background: rgba(255, 92, 207, .25); color: #fff; }
+#voiceCancel { flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; font-size: 10px; line-height: 18px; cursor: pointer; }
+:is(button, div, span):where(#voiceCancel) { background: rgba(255, 255, 255, .08); color: var(--ink-2); }
+:is(button, div, span):where(#voiceCancel:hover) { background: rgba(255, 92, 207, .25); color: #fff; }
 #voicePill .voice-tray { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%) translateY(-4px); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
-  width: max-content; max-width: min(460px, calc(100vw - 24px)); padding: 6px; border-radius: 14px; background: linear-gradient(rgba(16, 10, 30, .92), rgba(16, 10, 30, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));
+  width: max-content; max-width: min(460px, calc(100vw - 24px)); padding: 6px; border-radius: 14px;
   border: 1px solid var(--line-2); box-shadow: 0 10px 30px -10px #000c; opacity: 0; visibility: hidden; transition: opacity .15s ease, transform .15s ease, visibility 0s .15s; }
+:is(button, div, span):where(#voicePill .voice-tray) { background: linear-gradient(rgba(16, 10, 30, .92), rgba(16, 10, 30, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 #voicePill .voice-tray::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
 #voicePill:hover .voice-tray, #voicePill:focus-within .voice-tray, #voicePill:has(#voiceFiles:not(:empty)) .voice-tray { opacity: 1; visibility: visible; transform: translateX(-50%); transition: opacity .15s ease, transform .15s ease; }
 #voicePill .voice-hint { display: flex; align-items: center; gap: 5px; padding: 0 4px; color: var(--ink-3); font-size: 11px; }
 #voicePill .voice-hint kbd { font: inherit; padding: 1px 5px; border-radius: 5px; border: 1px solid var(--line-2); color: var(--ink-2); }
 #voicePill .voice-extras { display: flex; gap: 4px; }
-#voicePill .voice-extras button { padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line-2); background: rgba(205, 190, 255, .08); color: var(--ink); font-size: 12px; cursor: pointer; }
-#voicePill .voice-extras button:hover:not(:disabled) { background: rgba(205, 190, 255, .18); }
+#voicePill .voice-extras button { padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 12px; cursor: pointer; }
+:is(button, div, span):where(#voicePill .voice-extras button) { background: rgba(205, 190, 255, .08); color: var(--ink); }
+:is(button, div, span):where(#voicePill .voice-extras button:hover:not(:disabled)) { background: rgba(205, 190, 255, .18); }
 #voicePill .voice-extras button:disabled { opacity: .4; cursor: default; }
 #voicePill #voiceFiles { flex-basis: 100%; font-size: 12px; }
 #voicePill #voiceFiles:empty { display: none; }
