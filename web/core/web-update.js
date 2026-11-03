@@ -61,7 +61,7 @@
     if ((!force && Date.now() - lastCheck < 60e3) || !navigator.onLine) return;
     lastCheck = Date.now();
     const p = await fingerprint(); if (!p) return;
-    if (!print0) { print0 = printNow = p; return; }
+    if (!print0) { print0 = printNow = p; window.WosSettings?.refresh(); return; }
     if (p === print0 || p === printNow) return;
     printNow = p;
     if (!pending) { pending = true; log('web:changed'); }
@@ -213,6 +213,8 @@
     get armed() { return !!armed; },
     get pending() { return pending; },
     get version() { return printNow; },
+    // First successful version-file observation; not a stamp of the document's loaded code.
+    get firstObservedVersion() { return print0.startsWith('v:') ? print0.slice(2) : ''; },
     _state: () => ({ pending, print0: !!print0, changes, listOpen }),
   });
   // Older name used by hosted-app QA and the app services layer.

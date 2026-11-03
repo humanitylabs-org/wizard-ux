@@ -44,7 +44,7 @@ test('up to date shows installed version and no Update button; Ask me is shown w
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false }]);
   const h = U.html();
   assert.equal(U.card(), null); assert.equal(U.cardHtml(), '', 'nothing to do: no card');
-  assert.match(h, /<b data-osu-title>Wizard OS 0\.3\.15<\/b><\/span><span class="st-val">Up to date<\/span>/, 'a quiet value, not an Up to date pill');
+  assert.match(h, /<b data-osu-title>Wizard OS \(server\) 0\.3\.15<\/b><\/span><span class="st-val">Up to date<\/span>/, 'a quiet value, not an Up to date pill');
   assert.doesNotMatch(h, /data-osu="apply"|osu-card/);
   assert.match(h, /data-osu="ask" role="radio" aria-checked="true"/);
   assert.match(h, /Nothing installs until you tap Install\./);
@@ -57,11 +57,13 @@ test('an unpinned box says it is updated by hand and offers no Update', async ()
   assert.doesNotMatch(h, /data-osu="apply"/);
 });
 
-test('hidden when the App Manager has no updates route (older box or no Serve mount)', async () => {
+test('unavailable App Manager route stays visible without unverified install/policy controls', async () => {
   for (const reply of [() => [404, { error: 'no install for that app' }], () => [403, { error: 'owner only' }], () => { throw new Error('offline'); }]) {
     const { U, registered } = await load(reply);
-    assert.equal(U.html(), '');
-    assert.equal(registered[0].available(), false);
+    assert.match(U.html(), /could not be verified/);
+    assert.match(U.html(), /data-osu="retry"/);
+    assert.doesNotMatch(U.html(), /data-osu="(?:auto|ask|apply)"/);
+    assert.equal(registered[0].available(), true);
   }
 });
 

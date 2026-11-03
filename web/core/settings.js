@@ -504,10 +504,19 @@
     html: ctx => { const on = !!ctx.barMics().get(), k = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt+';
       return `<div class="st-group" data-bar-mics><h4>Top bar</h4><button class="st-row" data-bar-mics-set role="switch" aria-checked="${on}"><span class="st-tx"><b>Show every voice button</b><small>${esc(`New voice chat, Dictate and Tell the computer beside the mic. Off, they are in the mic’s menu (right-click or hold) and on ${k}V, ${k}D and ${k}C.`)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`; },
     act: (ctx, el) => { const m = ctx.barMics?.(); if (!m || !el.closest('[data-bar-mics-set]')) return false; m.set(!m.get()); ctx.render?.(); return true; } });
+  // Moved from the phone adapter: one About renderer, native data/actions only in WosDevice.
+  function deviceAboutHtml() {
+    const d = window.WosDevice?.settingsState?.(); if (!d) return '';
+    return `<div class="st-row static"><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
+      <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${d.notificationsAllowed ? `On · when ${esc(window.WizConfig.agent())} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
+      <button class="st-row" data-dvupd data-settings-version="phone"><span class="st-tx"><b>Phone app (Android) ${esc(d.installed || '· version unavailable')}</b><small>${esc(d.updateDescription)}</small></span><span class="st-go">›</span></button>`;
+  }
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
     // No separate "Check for updates": the shell checks every minute and the update card offers Reload.
-    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
+    const observed = window.WizWebUpdate?.firstObservedVersion || '';
+    const device = deviceAboutHtml();
+    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div><p class="st-hint">The interface and your Wizard’s server update separately.${device ? ' The Android phone app updates separately too. Their version numbers are not comparable.' : ''}</p>${device}<details data-settings-technical><summary>Technical details</summary><div class="st-row static" data-settings-version="interface"><span class="st-tx"><b>Interface revision at first check</b><small title="${esc(observed)}">${esc(observed ? observed.slice(0, 8) : 'Not available yet')}</small></span></div><p class="st-hint" data-settings-observed-full style="overflow-wrap:anywhere">${esc(observed || 'Not available yet')}</p><p class="st-hint">The first successful version-file check, not a stamp of the code loaded in this page.</p></details>${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   // Settings › Resources shows the Home bars themselves (core/resources.js draws them into this host and keeps them
   // live); tapping a bar opens the same detail sheet as on Home (devices, health, AI accounts with reset times).
