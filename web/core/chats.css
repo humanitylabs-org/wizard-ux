@@ -680,6 +680,13 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
 .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
+/* Flat search is a single normal-flow item even on skins that reorder/status-position sections. */
+.ch-search-results { flex: 0 0 auto; min-width: 0; }
+.ch-row .ch-search-status { align-self: flex-start; display: inline-block; padding: 2px 7px; border: 1px solid var(--wz-border, var(--line-2)); border-radius: 6px; background: color-mix(in srgb, var(--wz-text, var(--ink)) 8%, var(--wz-base, var(--bg))); color: var(--wz-text, var(--ink)); font-size: var(--wz-text-sm); font-weight: 500; line-height: 1.4; opacity: 1; }
+/* The search progress line stays above the results and the finished line below them, whatever order the sections take. */
+.ch-list.ch-list.ch-list .ch-bodysearch { order: 10; }
+.ch-list.ch-list.ch-list .ch-bodysearch.busy { order: -9; }
+
 /* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
 .ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
 .ch-bell svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

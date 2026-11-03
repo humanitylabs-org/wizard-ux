@@ -1,7 +1,7 @@
 /* Wizard UX core: search inside message bodies, not just titles (feature/chat-polish). Both shells.
  *
- * Wizard has no full-text endpoint, so titles and previews filter instantly (core/chats.js) and this reads
- * recent threads' messages lazily to find body hits:
+ * Titles/previews filter instantly (core/chats.js); indexed server snippets arrive in the background.
+ * On older servers this reads recent threads' messages lazily to find body hits:
  *   - newest threads first, a page of their latest messages each (LIMIT), BATCH threads per round,
  *     at most CONC requests at once; "Search older threads" extends the round by another BATCH
  *   - a thread's text is cached until its message count / activity changes (LRU, CACHE_N threads)
@@ -41,19 +41,19 @@
     while (cache.size > CACHE_N) cache.delete(cache.keys().next().value);
     return texts;
   }
-  // The snippet: ~40 characters either side of the first word's first match in the first text that has every word.
+  // Keep the highlighted excerpt; prefer the message with most query words, newest on ties.
   function match(texts, ws) {
-    for (let i = texts.length - 1; i >= 0; i--) { // newest first
-      const raw = String(texts[i] || '').replace(/\s+/g, ' '), low = raw.toLowerCase();
-      if (!ws.every(w => low.includes(w))) continue;
-      const at = low.indexOf(ws[0]);
+    const ordered = texts.map((text, index) => ({ text, index, coverage: ws.filter(w => String(text || '').toLowerCase().includes(w)).length })).filter(x => x.coverage).sort((a,b) => b.coverage - a.coverage || b.index - a.index);
+    for (const { text } of ordered) {
+      const raw = String(text || '').replace(/\s+/g, ' '), low = raw.toLowerCase();
+      const at = Math.min(...ws.filter(w => low.includes(w)).map(w => low.indexOf(w)));
       const from = Math.max(0, at - 40), to = Math.min(raw.length, at + ws[0].length + 60);
       const piece = raw.slice(from, to);
       const re = new RegExp(ws.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
       let html = '', last = 0, m;
       while ((m = re.exec(piece))) { html += esc(piece.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>'; last = m.index + m[0].length; if (!m[0]) re.lastIndex++; }
       html += esc(piece.slice(last));
-      return { snippet: (from > 0 ? '…' : '') + piece + (to < raw.length ? '…' : ''), html: (from > 0 ? '…' : '') + html + (to < raw.length ? '…' : '') };
+      return { query: ws.join(' '), body: bodyEvidence(texts, ws.join(' ')), snippet: (from > 0 ? '…' : '') + piece + (to < raw.length ? '…' : ''), html: (from > 0 ? '…' : '') + html + (to < raw.length ? '…' : '') };
     }
     return null;
   }
@@ -108,16 +108,65 @@
   function seed(r, prev) {
     const ws = words(r.q);
     if (prev && prev.agent === r.agent && r.q.includes(prev.q)) for (const [id, s] of prev.rows) {
-      const m = match([s.title, s.preview, s.searchSnippet].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
+      const m = match([s.title, s.preview, s.searchSnippet].filter(Boolean), ws);
+      if (m) { m.body = bodyEvidence([s.searchSnippet], r.q); r.rows.set(id, s); r.hits.set(id, m); }
     }
     for (const s of candidates(r.agent)) {
       const title=match([s.title,s.preview].filter(Boolean),ws);
+      if (title) title.body = bodyEvidence([], r.q);
       if(title) { r.rows.set(s.id,s); r.hits.set(s.id,title); }
       const hit = cache.get(`${s.agent || 'hermes'}:${s.id}`);
-      if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) { r.rows.set(s.id,s); r.hits.set(s.id, m); } }
+      if (hit && hit.sig === sigOf(s)) { const m = match(hit.texts, ws); if (m) { r.rows.set(s.id,s); r.hits.set(s.id, m); } }
     }
   }
+  // EXTEND WizCore.chatSearch: one relevance policy for instant, indexed and fetched-body hits.
+  // Coverage is lexicographic; recency can only scale relevance within a coverage/strength tier.
+  const SEARCH_RELEVANCE = Object.freeze({ titlePrefix: 8, titleSubstring: 5, preview: 3, body: 1,
+    density: 1.5, densityCap: 20, phrase: 4, singleBodyLocations: 2, halfLifeDays: 4, recencyFloor: 0.5 });
+  const low = s => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  function bodyEvidence(texts, query) {
+    const ws = [...new Set(words(query))], counts = Object.create(null);
+    for (const w of ws) counts[w] = 0;
+    for (const text of Array.isArray(texts) ? texts : []) {
+      const t = low(text);
+      for (const w of ws) { let at = 0, n = 0; while ((at = t.indexOf(w, at)) !== -1) { n++; at += w.length; } counts[w] += n; }
+    }
+    return { counts };
+  }
+  function relevance(row, query, hit) {
+    const ws = [...new Set(words(query))], title = low(row?.title), preview = low(row?.preview);
+    const titleWords = title.split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
+    // The server returns ONE clipped snippet, not a match count. Never invent density from messageCount.
+    // Fetched messages carry query-bound counts; otherwise only distinct snippet locations are known.
+    const body = hit?.query === ws.join(' ') && hit?.body ? hit.body : bodyEvidence([row?.searchSnippet || hit?.snippet || ''], query);
+    const fields = ws.map(word => {
+      const titleWeight = titleWords.some(t => t.startsWith(word)) ? SEARCH_RELEVANCE.titlePrefix : title.includes(word) ? SEARCH_RELEVANCE.titleSubstring : 0;
+      const inPreview = preview.includes(word), count = Math.max(0, Number(body.counts?.[word]) || 0);
+      return { word, count, titleWeight, inPreview, matched: !!(titleWeight || inPreview || count),
+        weight: titleWeight + (inPreview ? SEARCH_RELEVANCE.preview : 0) + (count ? SEARCH_RELEVANCE.body + SEARCH_RELEVANCE.density * Math.log1p(Math.min(SEARCH_RELEVANCE.densityCap, count)) : 0) };
+    });
+    const coverage = fields.filter(f => f.matched).length;
+    const strong = ws.length !== 1 || fields.some(f => f.titleWeight || f.inPreview || f.count >= SEARCH_RELEVANCE.singleBodyLocations);
+    const phrase = ws.length > 1 && [title, low(row?.searchSnippet || hit?.snippet)].some(t => t.includes(ws.join(' ')));
+    return { fields, coverage, strong, phrase };
+  }
+  function rankDetails(rows, query, cardAt, hits, now = Date.now()) {
+    const list = Array.isArray(rows) ? rows.filter(r => r && typeof r === 'object') : [];
+    const ws = [...new Set(words(query))];
+    const entries = list.map((row, index) => ({ row, index, ...relevance(row, query, hits?.get(row.id)) }));
+    const idf = Object.fromEntries(ws.map(w => [w, Math.log(1 + list.length / (1 + entries.filter(e => e.fields.some(f => f.word === w && f.matched)).length))]));
+    return entries.map(e => {
+      // Use live.js's exact card clock, including its request clock for active/error rows.
+      const parsed = Date.parse(typeof cardAt === 'function' ? cardAt(e.row) : e.row.activityAt || e.row.updatedAt), at = Number.isFinite(parsed) ? parsed : 0;
+      const ageDays = Math.max(0, (now - at) / 86400000);
+      const multiplier = SEARCH_RELEVANCE.recencyFloor + (1 - SEARCH_RELEVANCE.recencyFloor) * Math.pow(0.5, ageDays / SEARCH_RELEVANCE.halfLifeDays);
+      const raw = e.fields.reduce((sum, f) => sum + idf[f.word] * f.weight, 0) + (e.phrase ? SEARCH_RELEVANCE.phrase * ws.reduce((sum, w) => sum + idf[w], 0) : 0);
+      return { ...e, at, raw, multiplier, score: raw * multiplier, idf };
+    }).sort((a, b) => b.coverage - a.coverage || Number(b.strong) - Number(a.strong) || b.score - a.score || b.at - a.at || a.index - b.index);
+  }
+  function rank(rows, query, cardAt, hits, now) { return rankDetails(rows, query, cardAt, hits, now).map(e => e.row); }
   C.chatSearch = {
+    rank, rankDetails, relevance, bodyEvidence, words, SEARCH_RELEVANCE,
     query(wid, q, onUpdate, agent = '') {
       const ws = words(q);
       if (!ws.length || ws.join(' ').length < 1) { cancel(wid); return null; }
