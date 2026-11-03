@@ -81,6 +81,22 @@ html[data-win-glass] .win { background: var(--sk-win); }
 :where(html:not([data-skin="nebula"])) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 :where(html:not([data-skin="nebula"])) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 html:not([data-skin="nebula"]) .device { background: var(--bg); }
+/* A take's controls follow the skin too. The phone dock's Cancel / Pause / Screenshot / Attach discs (styles.css
+   `.device:not(.orb-corner) .voice .arc`, a fixed navy) and the desktop's recording pill and its tray (desktop.css,
+   a fixed navy under --ink) out-ranked the rule above, so on a light skin they read black on navy. Here they are the
+   skin's own panel, ink and lines (Nebula keeps the original navy). */
+html:not([data-skin="nebula"]) .device .voice .arc { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg))); border-color: var(--line-2); color: var(--ink); }
+html:not([data-skin="nebula"]) .device .voice .arc-left { color: var(--red, var(--ink)); }
+html:not([data-skin="nebula"]) .device .voice .arc:active { background: color-mix(in srgb, var(--ink) 14%, var(--wz-panel, var(--wz-base, var(--bg)))); }
+html:not([data-skin="nebula"]) .device .voice .arc-right.has { background: color-mix(in srgb, var(--violet) 16%, var(--wz-panel, var(--wz-base, var(--bg)))); border-color: color-mix(in srgb, var(--violet) 55%, transparent); }
+html:not([data-skin="nebula"]) .device[data-voice="paused"] .voice .arc-mid { background: color-mix(in srgb, var(--amber) 18%, var(--wz-panel, var(--wz-base, var(--bg)))); border-color: color-mix(in srgb, var(--amber) 55%, transparent); color: var(--amber); }
+html:not([data-skin="nebula"]) .device .voice .arc-count { background: var(--violet-2); color: var(--bg); }
+html:not([data-skin="nebula"]) :is(#voicePill, #voicePill .voice-tray) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--ink); }
+html:not([data-skin="nebula"]) #voicePill .lvl { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+html:not([data-skin="nebula"]) #voiceCancel { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); }
+html:not([data-skin="nebula"]) #voiceCancel:hover { background: color-mix(in srgb, var(--pink) 25%, transparent); color: var(--ink); }
+html:not([data-skin="nebula"]) #voicePill .voice-extras button { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+html:not([data-skin="nebula"]) #voicePill .voice-extras button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 
 /* ---------- Settings → Look → Skin (picker: five swatches, tap applies at once) ---------- */
 .sk-row { display: block; padding: 12px 10px 10px; }
