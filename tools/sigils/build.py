@@ -99,9 +99,7 @@ HOUSE = {
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
     'agents':        ('agents',   270, 0.10),
 }
-# Approved identities that keep their house mask over a legacy package picture.
-# Scoped to Notes (style/ICONS.md); other apps retain shipped-logo precedence.
-HOUSE_ONLY = ['notes', 'wizard-notes']
+
 # Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
 #   hat          supplied company hat (Chats, main agent)
 #   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
@@ -144,8 +142,7 @@ def main():
     js = js.replace('/*NAMES*/', json.dumps(sorted(lib.keys())))
     js = js.replace('/*HOUSE*/', json.dumps(house, separators=(',', ':')))
     js = js.replace('/*HOUSE_ALIASES*/', json.dumps(house_aliases, separators=(',', ':')))
-    assert all(k in HOUSE for k in HOUSE_ONLY)
-    js = js.replace('/*HOUSE_ONLY*/', json.dumps(HOUSE_ONLY))
+
     js = js.replace('/*BRAND*/', json.dumps(BRAND, separators=(',', ':')))
     for k, m in BRAND.items():
         assert os.path.exists(os.path.join(ROOT, 'web', 'brand', 'apps', m + '.svg')), (k, m)

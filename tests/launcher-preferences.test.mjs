@@ -50,14 +50,19 @@ test('failed seed is retried on focus, never marks a device migration complete',
   await f.policy.ready; assert.equal(f.policy.shared,false);
   await f.events.focus(); assert.equal(f.policy.shared,true); assert.equal(posts,2);
 });
-test('registry masks and colours beat HOUSE, HOUSE remains only legacy fallback', () => {
+test('named registry glyphs and colours override HOUSE; files remain unowned fallbacks', () => {
   const ctx={window:{WizCore:{appMetadata:id=>id==='wisdom'?{icon:'wisdom',colors:['#123456']}:undefined}}};
   vm.runInNewContext(read('core/sigils.js'),ctx);
-  assert.deepEqual(plain(ctx.window.WizSigil.of({id:'wisdom'})),{glyph:'wisdom',color:'#123456'});
-  const file=ctx.window.WizSigil.of({id:'wisdom',icon:'/own.svg',colors:['#abcdef']});
-  assert.equal(file.img,'/own.svg'); assert.equal(file.color,'#abcdef');
-  const fallback=ctx.window.WizSigil.of({id:'wisdom',icon:'',colors:[]});
-  assert.ok(fallback.glyph); assert.notEqual(fallback.color,'#123456');
+  const sigil=ctx.window.WizSigil;
+  assert.deepEqual(plain(sigil.of({id:'wisdom'})),{glyph:'wisdom',color:'#123456'});
+  assert.deepEqual(plain(sigil.of({id:'wisdom',icon:'chats',colors:['#abcdef']})),{glyph:'chats',color:'#abcdef'});
+  const file=sigil.of({id:'unowned-fixture',icon:'/own.svg',colors:['#abcdef']});
+  assert.equal(file.img,'/own.svg'); assert.equal(file.color,'#abcdef'); assert.equal(file.glyph,'');
+  const house=sigil.of({id:'wisdom',icon:'/own.svg',colors:['#abcdef']});
+  assert.deepEqual(plain(house),{glyph:sigil.house.wisdom[0],color:sigil.house.wisdom[1]});
+  assert.equal(house.img,undefined);
+  const fallback=sigil.of({id:'wisdom',icon:'',colors:[]});
+  assert.deepEqual(plain(fallback),plain(house)); assert.notEqual(fallback.color,'#123456');
 });
 test('shells and both hosted-thread consumers have no optional app lists; settings agent order stays untouched', () => {
   for (const p of ['app.js','desktop/desktop.js']) assert.doesNotMatch(read(p),/\['wizard', 'wizard-signal'|\['topics', 'mizel'|const quick = \[/);

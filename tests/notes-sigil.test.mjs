@@ -35,13 +35,14 @@ test('Notes compatibility alias and cached metadata cannot restore a legacy icon
   }
 });
 
-test('Notes-only identity repair does not change unrelated shipped logos or glyphs', () => {
-  const logos = { 'maverick-command': legacyLogo('maverick-command'), calendar: legacyLogo('calendar') };
+test('unknown shipped logos stay intact while every designed identity wins', () => {
+  const logos = { 'maverick-command': legacyLogo('maverick-command') };
   const S = sigils({ logos });
   for (const id of Object.keys(logos)) {
     assert.equal(S.of({ id }).logo, logos[id]);
     assert.match(S.html({ id }), /class="sglogo"/);
   }
+  assert.match(S.html({ id: 'calendar' }), /class="sgi sg-calendar"/);
   assert.match(S.html({ id: 'files' }), /class="sgi sg-files"/);
   assert.match(S.html({ id: 'unknown-app', name: 'Unknown' }), /class="sgi sgl"/);
 });

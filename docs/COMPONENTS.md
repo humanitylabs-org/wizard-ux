@@ -71,7 +71,7 @@ Reuse:
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; `WizSigil.of` keeps approved Notes/`wizard-notes` HOUSE masks over legacy package pictures, leaving other app-logo precedence unchanged | PNG/emoji icons |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); registry glyphs/aliases, masks and brands beat package pictures; Store reuses the same identity; unknown logos preserved | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs+defaults, 1s boot cap | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |

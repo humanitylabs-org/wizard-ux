@@ -34,12 +34,19 @@
       try { const image = new Image(); image.src = sigil.logo; await image.decode(); const k = Math.max(192 / image.naturalWidth, 192 / image.naturalHeight), w = image.naturalWidth * k, h = image.naturalHeight * k; ctx.drawImage(image, (192 - w) / 2, (192 - h) / 2, w, h); return c.toDataURL('image/png'); } catch (_) {}
     }
     const glyph = header.querySelector('.sgi');
-    const mask = glyph && getComputedStyle(glyph).getPropertyValue('--sg').trim();
-    const match = mask?.match(/^url\(["']?(data:image\/svg\+xml[^"')]+)["']?\)$/);
-    if (match) {
-      const image = new Image(); image.src = match[1]; await image.decode();
+    const computed = glyph && getComputedStyle(glyph);
+    // Keep existing house/glyph pins; only brand-only apps need the brand mask.
+    const mask = computed && computed.getPropertyValue(!sigil.glyph && glyph.classList.contains('sgb') ? '--sgb' : '--sg').trim();
+    // Match the renderer's same-origin file whitelist; never load an external mask.
+    const match = mask?.match(/^url\(["']?((?:data:image\/svg\+xml[^"')]+|\/(?!\/)[A-Za-z0-9._~\/-]+\.(?:svg|png|webp)))["']?\)$/);
+    let image = null;
+    if (match) { try { image = new Image(); image.src = match[1]; await image.decode(); } catch (_) { image = null; } }
+    if (image) {
       const tmp = document.createElement('canvas'); tmp.width = tmp.height = 192;
-      const t = tmp.getContext('2d'); t.drawImage(image,32,32,128,128); t.globalCompositeOperation = 'source-in'; t.fillStyle = sigil.color; t.fillRect(0,0,192,192); ctx.drawImage(tmp,0,0);
+      // Raster files retain their aspect; existing SVG drawing remains unchanged.
+      const raster = match[1].startsWith('/') && /\.(?:png|webp)$/.test(match[1]), k = raster ? Math.min(128 / image.naturalWidth, 128 / image.naturalHeight) : 0;
+      const w = raster ? image.naturalWidth * k : 128, h = raster ? image.naturalHeight * k : 128;
+      const t = tmp.getContext('2d'); t.drawImage(image,(192-w)/2,(192-h)/2,w,h); t.globalCompositeOperation = 'source-in'; t.fillStyle = sigil.color; t.fillRect(0,0,192,192); ctx.drawImage(tmp,0,0);
     } else { ctx.fillStyle = sigil.color; ctx.font = 'bold 100px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(sigil.letter || a.name[0],96,100); }
     return c.toDataURL('image/png');
   }
