@@ -51,6 +51,49 @@ test('agent-aware hosted navigation pins a known running non-main agent before o
   assert.match(client, /get threadAgents\(\) \{ return service\?\.nav\?\.threadAgents === true; \}/);
 });
 
+test('native draft admission precedes agent pin/navigation and conflicts do not open a layer',()=>{
+ const effects=[],hosted=new Map(),w={appId:'wisdom'};
+ const frame={isConnected:true,closest:()=>({dataset:{win:'w'}}),style:{},parentElement:{style:{position:'relative'},append(){}}};
+ let accepts=false;
+ const A={get:id=>id==='philosopher'?{status:'running'}:null,isOther:id=>id==='philosopher'};
+ const sandbox={W:{w},window:{WosAgents:A},LIVE:{pinAgent:(...a)=>effects.push(['pin',...a])},KIT:{reply:{clean:r=>r},drafts:{admit:(k,text,r)=>{effects.push(['admit',k,text,r?.key]);return accepts},get:()=>({reply:{key:'wisdom:one'}})}},hosted,closeHosted(){},document:{createElement:()=>({style:{},dataset:{}})},getComputedStyle:()=>({position:'relative'}),requestAnimationFrame(){},openChat:(...a)=>effects.push(['open',...a])};
+ launcherFixture(sandbox);const fn=chats.slice(chats.indexOf('  function openHosted('),chats.indexOf('  function closeHosted('));vm.runInNewContext(fn+';this.openHosted=openHosted;',sandbox);
+ const opts={agent:'philosopher',reply:{key:'wisdom:one'},draft:{text:'My exact question'}};
+ assert.equal(sandbox.openHosted('w',frame,'sid',opts),false);assert.equal(hosted.size,0);assert.deepEqual(effects,[['admit','direct:sid','My exact question','wisdom:one']]);
+ effects.length=0;accepts=true;assert.equal(sandbox.openHosted('w',frame,'sid',opts),true);assert.deepEqual(effects,[['admit','direct:sid','My exact question','wisdom:one'],['pin','sid','philosopher'],['open','w','sid']]);
+ effects.length=0;assert.equal(sandbox.openHosted('w',frame,'sid',opts),false);assert.deepEqual(effects,[]);
+ hosted.clear();assert.equal(sandbox.openHosted('w',frame,'sid',{...opts,agent:'missing'}),false);assert.deepEqual(effects,[]);
+});
+
+test('pinned native Back uses the real shared hosted teardown without an Incognito dependency', () => {
+  const pinned = read('web/core/single-app-session.js');
+  const functions = [
+    chats.slice(chats.indexOf('  function closeHosted('), chats.indexOf('  const isHosted')),
+    chats.slice(chats.indexOf('  function chatsBack('), chats.indexOf('  /* Send steps back')),
+    chats.slice(chats.indexOf('  function saveDraft('), chats.indexOf('  function openMedia(')),
+    pinned.slice(pinned.indexOf('  window.__wosNativeBack ='), pinned.indexOf('  window.WizAppServices?.guardBack')),
+  ];
+  const w = {id:'single-app', thread:'synthetic-thread'}, state = {draft:'  exact question\nkept  ',files:[],readNav:2,trail:[]};
+  const frame = {inert:true,style:{visibility:'hidden'}}, container = {style:{position:'relative'}}, effects = [];
+  let overlay = true, recording = false;
+  const hosted = new Map([[w.id, {w,frame,container,oldPosition:'',previous:{value:null,writable:true,configurable:true,enumerable:true},layer:{remove:()=>effects.push('remove')}}]]);
+  const sandbox = {window:{}, wid:w.id, threadWindow:w, W:{[w.id]:w}, ch:()=>state, hosted, frame:null, loaded:false,
+    // #630 declares a nullable closure slot; no Incognito API is installed or consulted.
+    INC:null, replyVoice:{back:()=>recording}, links:null, LIVE:{session:()=>null},
+    KIT:{drafts:{set:(...args)=>effects.push(args)}},draftKey:()=> 'direct:synthetic-thread',
+    save:()=>assert.fail('hosted Back must not persist a workspace'),renderChats:()=>assert.fail('must restore original iframe'),
+    chats:{isHosted:()=>hosted.has(w.id),closeOverlay:()=>{const was=overlay;overlay=false;return was;}}};
+  vm.runInNewContext(functions.join('\n')+'\nchats.threadBack = threadBack;', sandbox);
+  // No beforeLeave shim: main does not ship Incognito. Overlays/active capture still own Back first.
+  assert.equal('beforeLeave' in sandbox.chats,false);
+  assert.equal(sandbox.window.__wosNativeBack(),'chat-overlay');assert.equal(hosted.size,1);assert.deepEqual(effects,[]);
+  recording=true;assert.equal(sandbox.window.__wosNativeBack(),'recording');assert.equal(hosted.size,1);recording=false;
+  assert.equal(sandbox.window.__wosNativeBack(),'thread');assert.equal(hosted.size,0);
+  assert.deepEqual(effects,[['direct:synthetic-thread','  exact question\nkept  ',state.files],'remove']);
+  assert.equal(state.readNav,3);assert.equal(w.thread,null);assert.equal(frame.inert,false);assert.equal(frame.style.visibility,'');assert.equal(container.style.position,'');
+  assert.equal(sandbox.window.__wosNativeBack(),'root');assert.equal(effects.length,2);
+});
+
 test('Manager-only link ownership is unchanged', () => {
   assert.match(services, /function managerAuthorized\(st\) \{\n    if \(!st \|\| st\.appId !== 'wizard-manager'/);
 });

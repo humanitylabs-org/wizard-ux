@@ -1,3 +1,10 @@
+# Historical QA manifest SHA256 file digests (Playwright *ProcessEntry.js); not Sentry tokens.
+1acc8bcd4a40ff4bb0e3fe272db747e813ff34b0:tools/flight/r32/source-manifest.json:sentry-access-token:3514
+1acc8bcd4a40ff4bb0e3fe272db747e813ff34b0:tools/flight/r32/source-manifest.json:sentry-access-token:3515
+1acc8bcd4a40ff4bb0e3fe272db747e813ff34b0:tools/flight/r32/source-manifest.json:sentry-access-token:3539
+1acc8bcd4a40ff4bb0e3fe272db747e813ff34b0:tools/flight/r32/source-manifest.json:sentry-access-token:3540
+# Public localStorage key wos.notify.route.v1; not a credential.
+e4d8da50dd3edfa1c038fca580c68d8ab2a33087:web/core/notif-bell.js:generic-api-key:24
 # Verified SHA256 of qa-new-chat-keys.cjs at this commit; not a credential.
 b47ccc766a9814270426fe7e7a88befcb3229db0:docs/responsive-remainder-verification.json:generic-api-key:99
 # localStorage key name wux.applogos.v1 in core/apps.js; not a credential.

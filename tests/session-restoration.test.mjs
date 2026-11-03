@@ -13,7 +13,7 @@ function fixture(id,save,utilities={}){
  const storage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};
  const listeners={},frames=[],apps={APP:{[id]:{id,name:id==='wisdom'?'Wisdom':'Wizard Signal',kind:'wizard',url:id==='wisdom'?'/wisdom/':'/wizard-signal/'}}};
  const device={classList:{add(){}},appendChild(){}};
- const win={dataset:{},style:{setProperty(){}},replaceChildren(){},append(){},appendChild(f){f.isConnected=true;frames.push(f)},innerHTML:''};
+ const win={dataset:{},style:{setProperty(){}},addEventListener(){},replaceChildren(){},append(){},appendChild(f){f.isConnected=true;frames.push(f)},innerHTML:''};
  const rootDoc={documentElement:{style:{setProperty(){}}},styleSheets:[],querySelector:()=>null};
  const document={documentElement:{setAttribute(){},style:{setProperty(){}}},getElementById:n=>n==='device'?device:{classList:{add(){},remove(){}}},addEventListener(){},createElement(tag){
   if(tag==='article')return win;

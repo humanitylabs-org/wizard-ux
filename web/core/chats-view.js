@@ -139,7 +139,71 @@
     core.views = Object.freeze({ providerFor, defaultId: () => selected, name: id => installed.get(id)?.name || 'Chats' });
     return core;
   }
-  window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL, lint,
+  // EXTEND the shared Chats host for shells without an orb recorder. Capture,
+  // microphone arbitration, durability and delivery stay in their existing owners.
+  function replyRecorder({ appId, chats, repaint, toast }) {
+    const owner = 'wizard-chats';
+    let take = null, pending = null, work = null;
+    const paint = () => repaint?.();
+    async function send(row, wid, sid) {
+      if (!row.blob?.size) throw Error('Recording recovery is incomplete · original kept');
+      const outbox = window.WosOutbox, custody = 'hosted-' + row.id;
+      if (!outbox) throw Error('Recording kept · shared outbox unavailable');
+      // Recover durable receipts before capture can write this id. Sent tombstones
+      // remain owned even after their audio/kind is compacted out of the store.
+      await outbox.load();
+      if (!outbox.recoveryComplete || outbox.quarantined(custody)) throw Error('Recording kept · device recovery incomplete');
+      // Lost capture acknowledgements must not seal another draft or send twice.
+      if (!outbox.handedOff(custody)) {
+        const held = await outbox.capture(row.blob, custody);
+        if (!held?.durable || held.storageError) throw Error('Recording kept · device save failed');
+        const it = await chats().sendVoiceTo(wid, sid, row.blob, [], true, row.meta.route, null, custody, row.meta.runId);
+        if (!it?.durable || it.storageError) throw Error('Recording kept · retry this voice reply');
+      }
+      await window.WizAppCapture.ack(owner, row.id); pending = null;
+    }
+    function recordReply(wid, sid) {
+      if (work || !sid || sid === '__new__') return 'busy';
+      if (take && (take.sid !== sid || take.wid !== wid)) { toast?.('!', 'Finish the recording in its original thread'); return 'busy'; }
+      const stopping = take;
+      if (!stopping) take = {wid, sid, session:null};
+      paint(); // same-frame feedback, before permission/disk/route work
+      work = (async () => {
+        if (stopping) {
+          pending = await stopping.session.stop(); take = null; paint();
+          await send(pending, wid, sid); return 'sent';
+        }
+        const resource = window.WizAppCapture;
+        if (!resource) throw Error('Shared microphone unavailable');
+        if (pending && (pending.meta?.appId !== appId || pending.meta?.sessionId !== sid)) throw Error('A recording is kept in its original thread');
+        if (pending && !pending.blob?.size) pending = null; // retain original in the capture store
+        const saved = pending || (await resource.pending(owner)).find(r => r.meta?.appId === appId && r.meta?.sessionId === sid && r.blob?.size);
+        if (saved) {
+          const confirmed = pending === saved;
+          pending = saved; take = null;
+          if (!confirmed) { toast?.('◉', 'Recording kept · tap again to send to this thread'); return 'kept'; }
+          await send(saved, wid, sid); return 'sent';
+        }
+        const route = chats().modelRoute(wid, sid), session = window.WizLive?.session(sid);
+        take.session = await resource.start(owner, {kind:'audio', meta:{appId, sessionId:sid, route, runId:chats().isWorking(session) ? session.runId || '' : ''}});
+        return 'started';
+      })().catch(e => {
+        if (!take?.session) take = null;
+        toast?.('!', String(e.message || 'Recording kept · try again')); return 'failed';
+      }).finally(() => { work = null; paint(); });
+      return work;
+    }
+    function back() {
+      if (work) return true;
+      if (!take) return false;
+      const held = take;
+      work = held.session.stop().then(row => { pending = row; take = null; toast?.('◉', 'Recording kept · tap the thread microphone to send'); })
+        .catch(e => toast?.('!', String(e.message || 'Recording kept · retry Stop'))).finally(() => { work = null; paint(); });
+      return true;
+    }
+    return {recordReply, recordingFor:() => take?.sid || pending?.meta?.sessionId || '', busy:() => !!(take || work), back};
+  }
+  window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL, lint, replyRecorder,
     defaultId: () => selected, installed: () => [...installed.values()].map(a => ({ ...a })),
     tiles: () => [...installed.values()].filter(a => a.id !== DEFAULT || installed.size > 1).map(a => ({ id: a.id, name: a.id === DEFAULT ? 'Chats (standard)' : a.name, kind: 'chats', chatsProvider: a.id, icon: '✦', g: ['var(--violet-2)', 'var(--violet-2)'], desc: 'Chats view · same conversations' })),
   });

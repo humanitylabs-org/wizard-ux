@@ -4,6 +4,8 @@ html[data-app-session] #device > :not(#singleApp):not(#toast) { display: none !i
 html[data-app-session] #device { width:100%; height:100dvh; max-width:none; border:0; border-radius:0; margin:0; transform:none; }
 html[data-app-session] #singleApp { position:absolute; inset:0; display:block; padding:0; margin:0; border:0; border-radius:0; }
 html[data-app-session] #singleApp iframe { position:absolute; inset:var(--single-cut, 0px) 0 0; width:100%; height:calc(100% - var(--single-cut, 0px)); border:0; background:var(--bg,#05030c); }
+/* The shared Chats overlay replaces the child visually, not the pinned task or its reader state. */
+html[data-app-session] #singleApp .hosted-thread { inset:var(--single-cut, 0px) 0 0 !important; }
 html[data-app-session] .linksheet .ls-keep { display:none; }
 /* Inset overlay CONTENT once; its backing and the app canvas stay edge-to-edge.
  * Padding the sheet does not move its absolutely positioned panel. */
