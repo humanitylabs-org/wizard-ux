@@ -48,10 +48,15 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   let state = {}; const req = async (u, i = {}) => { if (i.method === 'PUT') state = { ...state, ...JSON.parse(i.body) }; return { ok: true, json: async () => state }; };
   const a = device(req); await tick(); await a.putPrefs({ chatLayout: 'status' });
   const b = device(req); await tick(); assert.equal(b.store.get('wos.chats.layout.v1'), 'status');
-  assert.match(live, /localStorage\.getItem\(LAYOUT_KEY\) === 'status' \? 'status' : 'day'/);
-  assert.match(live, /else if \(chatLayout\(\) === 'status'\) g\.ready\.push\(s\);[^\n]*\n\s*else if \(!isFinite\(t\) \|\| t < yB\) g\.pastWeek\.push\(s\);/);
+  assert.match(live, /: \(v === 'status' \? 'status' : 'day'\);/);
+  assert.match(live, /else if \(layout === 'status'\) g\.ready\.push\(s\);[^\n]*\n\s*else if \(!isFinite\(t\) \|\| t < yB\) g\.pastWeek\.push\(s\);/);
   assert.match(chats, /\(byStatus\(\) \? SECTIONS_STATUS : SECTIONS_DAY\)\.map/);
   assert.match(chats, /data-chlayout=/);
+  // Group by day switch (tweak miguel/group-by-day): only when a tweak sets --wos-chats-group-switch; it then replaces
+  // the Layout picker and writes the same saved choice.
+  assert.match(chats, /\$\{ourSkin\(\) \|\| LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
+  assert.match(chats, /\$\{LIVE\.groupSwitch \? `<button type="button" class="ch-fopt\$\{byStatus\(\) \? '' : ' on'\}" data-chgroupday aria-pressed="\$\{!byStatus\(\)\}">Group by day/);
+  assert.match(chats, /closest\('\[data-chgroupday\]'\)\) \{ LIVE\.chatLayout = byStatus\(\) \? 'day' : 'status';/);
 });
 test('a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with', () => {
   // WosMorph keeps every form field's live value, so a <select> painted with "1 week" kept saying so after the
