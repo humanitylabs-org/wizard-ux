@@ -315,7 +315,7 @@ window.WosChatPower = function chatPower(A) {
   }
   async function pickModel(o, direct) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
-    if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
+    if (M?.isPending?.(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
@@ -328,8 +328,8 @@ window.WosChatPower = function chatPower(A) {
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
       let route;
-      try { route = await M.setThreadModel(sh.sid, o); }
-      catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
+      try { route = await M.setThreadModel(sh.sid, o, s.agent || 'hermes'); }
+      catch (e) { toast('!', e.message || 'Model choice not confirmed · message kept', 3600); return; }
       if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
     }
@@ -371,7 +371,7 @@ window.WosChatPower = function chatPower(A) {
   const retrying = new Map();
   async function retryThread(wid, sid, o, sourceId, alive) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
-    if (retrying.has(sid) || M?.pending?.has(sid) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
+    if (retrying.has(sid) || M?.isPending?.(sid, s.agent) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
     const savedId = sourceId || s.retryRunId;
     const wasWaiting = s.status === 'queued' && s.queueReason === 'provider_access';
     retrying.set(sid, o ? `Retrying on ${o.name}…` : 'Retrying…');
@@ -392,8 +392,8 @@ window.WosChatPower = function chatPower(A) {
         const cur = threadModel(s);
         if (cur.model !== o.value || (o.provider && cur.provider !== o.provider)) {
           let route;
-          try { route = await M.setThreadModel(sid, o); }
-          catch (_) { toast('!', 'Couldn’t change the model · try again', 2600); return false; }
+          try { route = await M.setThreadModel(sid, o, s.agent || 'hermes'); }
+          catch (e) { toast('!', e.message || 'Model choice not confirmed · message kept', 3600); return false; }
           if (alive && !alive()) return false;
           Object.assign(s, route);
           // Saving can take seconds. Hydrate again ONLY across that await; a

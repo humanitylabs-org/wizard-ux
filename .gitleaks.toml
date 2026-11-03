@@ -18,3 +18,9 @@ description = "Verified SHA-256 of shared style tokens.css, not a credential"
 condition = "AND"
 paths = ['''^docs/provenance/appearance-review\.json$''']
 regexes = ['''^fdb2b9a39a2b2b4893a5f3f3d13db4e685097dcdd55037ebb9d102ffccdedca1$''']
+
+[[allowlists]]
+description = "Verified notification route localStorage key at e4d8da50 line 24; not a credential"
+condition = "AND"
+paths = ['''^web/core/notif-bell\.js$''']
+regexes = ['''^wos\.notify\.route\.v1$''']

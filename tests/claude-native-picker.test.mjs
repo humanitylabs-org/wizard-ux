@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { webcrypto as crypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../web/core/chat-models.js', import.meta.url), 'utf8');
 const SUB = 'claude-subscription-directsdk-experimental';
@@ -12,10 +13,10 @@ const payload = (native = true) => ({ provider:'openai-codex', model:'gpt-6.1-so
 function models(connection, fail=false) {
  const window={};
  const requests=[];
- const fetch=async (url,init) => {requests.push({url,init}); if(url.includes('/sessions/'))return {ok:true,json:async()=>({runtime:{model_lock:'accepted',model:'claude-opus-5-5',provider:'anthropic',selection_version:12}})};
+ const fetch=async (url,init) => {requests.push({url,init}); if(url.includes('/sessions/'))return {ok:true,json:async()=>({runtime:{model_lock:'accepted',model:'claude-opus-5-5',provider:'anthropic',selection_version:JSON.parse(init.body).selection_version+1}})};
  if(url.includes('wizard-claude')){if(fail)throw Error('offline'); return {ok:true,json:async()=>connection};}
  return {ok:true,json:async()=>url.includes('model/options')?payload():null};};
- vm.runInNewContext(source,{window,fetch,AbortSignal,console});
+ vm.runInNewContext(source,{window,fetch,AbortSignal,console,crypto});
  return {M:window.WosModels,requests};
 }
 const native={accounts:[{id:'native',status:'ready'}]};
