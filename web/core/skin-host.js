@@ -581,7 +581,8 @@
       threads(handlers = {}) {
         if (a.dead || typeof handlers.act !== 'function') return () => {};
         inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act), list: handlers.list === true });
-        const off = () => { if (inboxThreads.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); };
+        window.WosChat?.inboxHint?.set(true);
+        const off = () => { if (inboxThreads.delete(a.id)) { if (!inboxThreads.size) window.WosChat?.inboxHint?.set(false); window.dispatchEvent?.(new Event('wos:prefs')); } };
         a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
       },
       reply(id, words = '') {
