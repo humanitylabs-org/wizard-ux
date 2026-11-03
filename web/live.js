@@ -12,6 +12,7 @@
   const READY_OR_ATTENTION = new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']);
   const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
   const ALIASES = { started: 'running', accepted: 'queued', pending: 'queued', waiting: 'waiting_for_approval' };
+  const isAutomaticPrompt = s => globalThis.WizCore?.isAutomaticPrompt?.(s) === true;
   const WEEK = 7 * 864e5;
 
   const iso = v => {
@@ -65,7 +66,12 @@
     return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) {
+      const automatic = item.previewRole === 'user' && isAutomaticPrompt(item.preview);
+      return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item,
+        ...(automatic ? { preview: '', previewRole: undefined } : {}),
+        runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    }
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = ALIASES[raw] || raw || undefined;
@@ -74,9 +80,14 @@
     const latest = item.latest_message && typeof item.latest_message === 'object' ? item.latest_message : null;
     const lastUser = item.last_user_message && typeof item.last_user_message === 'object' ? item.last_user_message : null;
     const working = WORKING.has(status) || status === 'waiting_for_approval';
-    const latestText = clean(text(latest?.content ?? latest?.text));
-    const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
+    const latestRaw = text(latest?.content ?? latest?.text);
+    const userRaw = text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview);
+    const previewRaw = text(item.preview);
+    const latestAutomatic = latest?.role === 'user' && isAutomaticPrompt(latestRaw);
+    const latestText = latestAutomatic ? '' : clean(latestRaw);
+    const userText = isAutomaticPrompt(userRaw) ? '' : clean(userRaw);
+    const fallbackText = isAutomaticPrompt(previewRaw) ? '' : clean(previewRaw);
+    const preview = working ? (item.wizard_helper_status ? (latestText || fallbackText || userText) : (userText || latestText)) : (latestText || userText || fallbackText);
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -97,7 +108,7 @@
       // The idempotency key of the newest run Wizard knows for this thread (= the outbox item id for our sends).
       lastRunKey: String(item.wizard_last_run_idempotency_key || ''),
       lastRunStatus: ALIASES[item.wizard_last_run_status] || String(item.wizard_last_run_status || ''),
-      preview, previewRole: latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
+      preview, previewRole: latestAutomatic ? undefined : latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
       previewAt: latestAt,
       requestAt: userAt || lastUserAt,
       assignedAt: optIso(item.wizard_assigned_at),
@@ -117,7 +128,7 @@
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
       retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
-      request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
+      request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : clean(userRaw),
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
     };

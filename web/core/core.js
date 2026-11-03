@@ -12,6 +12,9 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Scheduled report delivery is model-mediated, but its transport request is not the owner speaking.
+  // Keep the marker narrow so an ordinary message that happens to begin with [AUTO] or [Nebula:] stays visible.
+  const isAutomaticPrompt = s => /^(?:\[AUTO\]|\[Nebula:\])[ \t]+Please share the complete [^\r\n]{1,240} report exactly as saved\.$/.test(String(s || '').trim());
   // Per-shell storage: the phone and the desktop keep their own layouts, everything else is shared server state.
   const store = prefix => ({
     get(k, d) { try { const v = localStorage.getItem(prefix + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
@@ -29,5 +32,5 @@
     let EMO = {}, at = 0;
     return id => { if (Date.now() - at > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} at = Date.now(); } return EMO[`direct:${id}`] || window.WizBrand.html; };
   })();
-  window.WizCore = Object.assign(window.WizCore || {}, { esc, clip, norm, store, ago, emoOf, DOW });
+  window.WizCore = Object.assign(window.WizCore || {}, { esc, clip, norm, isAutomaticPrompt, store, ago, emoOf, DOW });
 })();

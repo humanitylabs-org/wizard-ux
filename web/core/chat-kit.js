@@ -163,7 +163,7 @@
           if (cur) cur.steps++;
           continue;
         }
-        if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
+        if (window.WizCore?.isAutomaticPrompt?.(raw) || kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
         const files = chipFiles(raw), images = imagesOf(m, content);
         const rq = reply.split(raw).reply; // a Notifications Reply: shown as a card above his words
         let t = helm(cleanText(raw)).text;
