@@ -13,7 +13,7 @@
     ['today','Later today'],['tomorrow-am','Tomorrow'],['2d','In 2 days'],['3d','In 3 days'],['5d','In 5 days'],['1w','Next week']
   ];
   let reminders=[], loaded=false, sheet=null, listeners=new Set(), poll=0, restoreFocus=null;
-  const focused=new Set(), watchedAt=new Map();
+  const focused=new Set(), watchedAt=new Map(), cancelling=new Set();
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const pad=n=>String(n).padStart(2,'0');
   const dateString=(y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
@@ -66,7 +66,7 @@
   // nothing happened in the thread since it was set (no message from James, no Restore).
   const adopted=new Set();
   function adopt(list){const L=live();if(!L?.ok||!L.defer)return;for(const r of list){const t=Date.parse(r.created_at);if(r.status!=='scheduled'||!isFinite(t)||adopted.has(r.id))continue;const s=L.session?.(r.session_id);if(!s||s.archived||s.deferred||L.busy?.(s.id))continue;adopted.add(r.id);if(Date.parse(s.lastUserAt)>t||Date.parse(s.restoredAt)>t)continue;void L.defer(s.id)}}
-  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;adopt(list);reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
+  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return'&&!cancelling.has(j.id)).map(fromJob);arrived(list);reminders=list;loaded=true;adopt(list);reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
   const forSession=id=>reminders.filter(r=>r.session_id===id);
   const dueFor=id=>forSession(id).filter(r=>r.status==='due');
   const nextFor=id=>forSession(id).filter(r=>r.status==='scheduled').sort((a,b)=>Date.parse(a.due_at)-Date.parse(b.due_at))[0]||null;
@@ -129,7 +129,7 @@
       if(e.target.closest('[data-cal-prev]')){shiftCalendar(form,-1);return}if(e.target.closest('[data-cal-next]')){shiftCalendar(form,1);return}
       const day=e.target.closest('[data-cal-day]');if(day){form.date.value=day.dataset.calDay;renderCalendar(form);calendar.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.focus();return}
       const nt=e.target.closest('[data-boom-note-toggle]');if(nt){const note=form.querySelector('.boom-note');note.hidden=!note.hidden;nt.setAttribute('aria-expanded',String(!note.hidden));nt.textContent=note.hidden?'＋ Add a note':'Hide note';if(!note.hidden)form.note.focus();return}
-      if(e.target.closest('[data-boom-close]')||e.target===sheet){e.stopPropagation();close();return}if(e.target.closest('[data-boom-cancel]')){e.stopPropagation();void cancel(existing.id)}
+      if(e.target.closest('[data-boom-close]')||e.target===sheet){e.stopPropagation();close();return}if(e.target.closest('[data-boom-cancel]')){e.stopPropagation();void cancel(existing.id).catch(()=>window.dispatchEvent(new CustomEvent('wos:boomerang-error')))}
     },true);
     form.addEventListener('change',e=>{if(e.target.name==='timezone'){refreshPresets();renderCalendar(form)}if(e.target.name==='date'){const v=parseDate(form.date.value);form.elements['cal-month'].value=String(v.m);form.elements['cal-year'].innerHTML=years(v.y);form.elements['cal-year'].value=String(v.y);renderCalendar(form)}if(e.target.name==='cal-month'||e.target.name==='cal-year')renderCalendar(form)});
     form.addEventListener('keydown',e=>{
@@ -144,7 +144,18 @@
       askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{session:opts.sessionId,at:r.due_at,zone:r.timezone,label:returnLabel(r)}}));void away(opts.sessionId)}catch(err){error.textContent=err.message||'Could not snooze';submit.disabled=false}finally{saving=false}};
     form.querySelector('[data-boom-close]').focus();
   }
-  async function cancel(id){const sid=reminders.find(r=>r.id===id)?.session_id;await req(`${API}/${encodeURIComponent(id)}`,{method:'DELETE'});reminders=reminders.filter(r=>r.id!==id);emit();close();void refresh();const s=sid&&live()?.session?.(sid);if(s?.deferred&&!s.archived&&!nextFor(sid))void live().restore?.(sid)} // no snooze left: back in the list
+  async function cancel(id){
+    const item=reminders.find(r=>r.id===id);if(!item||cancelling.has(id))return;
+    const index=reminders.indexOf(item),old=sheet,focus=restoreFocus;cancelling.add(id);
+    reminders=reminders.filter(r=>r.id!==id);close();emit();
+    // Banner taps, like sheet taps, paint before the request (background refreshes may be held).
+    const removed=[...document.querySelectorAll?.('[data-boom-id]')||[]].filter(n=>n.dataset.boomId===id).map(node=>({node,parent:node.parentNode,next:node.nextSibling}));
+    for(const {node} of removed)node.remove();
+    try{await req(`${API}/${encodeURIComponent(id)}`,{method:'DELETE'})}
+    catch(e){if(!reminders.some(r=>r.id===id))reminders.splice(index,0,item);for(const {node,parent,next} of removed)if(parent.isConnected&&![...parent.querySelectorAll('[data-boom-id]')].some(n=>n.dataset.boomId===id))parent.insertBefore(node,next?.parentNode===parent?next:null);if(old&&!sheet){sheet=old;restoreFocus=focus;document.body.append(old)}emit();throw e}
+    finally{cancelling.delete(id)}
+    void refresh();const s=live()?.session?.(item.session_id);if(s?.deferred&&!s.archived&&!nextFor(item.session_id))void live().restore?.(item.session_id)
+  } // no snooze left: back in the list
   // Done with a returned Boomerang: the schedule is removed (it fired once; nothing else refers to it).
   const acknowledge=id=>cancel(id);
   

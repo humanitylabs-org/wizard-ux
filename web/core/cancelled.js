@@ -27,6 +27,7 @@
   const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb', desktop: 'Microphone' };
   let web = [];          // [{id, at, ms, source, mime, bytes, blob}]
   const sessionWeb = new Map(); // Failed durable writes keep an explicit retry owner in this page.
+  const deleting = new Set();
   let busy = new Set(), errs = {}, open = new Set();
   const texts = (() => { try { return JSON.parse(localStorage.getItem(TX_KEY) || '{}'); } catch (e) { return {}; } })();
   const saveTexts = () => { try { localStorage.setItem(TX_KEY, JSON.stringify(texts)); } catch (e) {} };
@@ -161,8 +162,9 @@
     return '';
   }
   async function remove(id) {
-    const t = all().find(x => x.id === id); if (!t) return;
-    const why = await drop(t);
+    const t = all().find(x => x.id === id); if (!t || deleting.has(id)) return;
+    deleting.add(id); repaint();
+    let why; try { why = await drop(t); } catch (e) { why = e.message || 'device storage refused it'; } finally { deleting.delete(id); repaint(); }
     // Say why, so a failure on the phone is diagnosable from one screenshot.
     if (why) { toast('!', 'Couldn’t delete · ' + why.slice(0, 90), 4000); repaint(); return; }
     toast('✕', 'Deleted', 1200); repaint();
@@ -171,8 +173,10 @@
   async function deleteAll() {
     if (Date.now() - confirmAll > 4000) { confirmAll = Date.now(); repaint(); toast('!', 'Tap Delete all again to delete every recording here', 4000); return; }
     confirmAll = 0;
+    if (deleting.size) return;
     const list = all(); let failed = 0, why = '';
-    for (const t of list) { const w = await drop(t); if (w) { failed++; why = why || w; } }
+    for (const t of list) deleting.add(t.id); repaint();
+    for (const t of list) { let w; try { w = await drop(t); } catch (e) { w = e.message || 'device storage refused it'; } finally { deleting.delete(t.id); } if (w) { failed++; why = why || w; } }
     repaint();
     toast(failed ? '!' : '✕', failed ? `Deleted ${list.length - failed} · ${failed} couldn’t be deleted · ${why.slice(0, 70)}` : `Deleted ${list.length}`, failed ? 5000 : 1600);
   }
@@ -186,13 +190,13 @@
       ${t.conversation ? `<div class="cx-t">App voice input · original destination retained</div><button data-cx="manager" ${b ? 'disabled' : ''}>Retry original to app</button>` : ''}
       ${err ? `<div class="cx-err">${esc(err)}</div>` : ''}
       ${t.sessionOnly ? '<div class="cx-err">Storage unavailable · kept only while this page stays open.</div><button data-cx="save">Retry saving</button>' : ''}
-      <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost">Delete</button></div></div>`;
+      <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost" ${deleting.has(t.id) ? 'disabled' : ''}>${deleting.has(t.id) ? 'Deleting…' : 'Delete'}</button></div></div>`;
   }
   function html() {
     const l = all();
     return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
       ${l.length ? l.map(row).join('') : '<div class="st-empty">No recordings waiting.</div>'}
-      ${l.length > 1 ? `<button class="st-wide ghost" data-cx-all="delete">${Date.now() - confirmAll < 4000 ? 'Tap again to delete all ' + l.length : 'Delete all'}</button>` : ''}
+      ${l.length > 1 ? `<button class="st-wide ghost" data-cx-all="delete" ${deleting.size ? 'disabled' : ''}>${deleting.size ? 'Deleting…' : Date.now() - confirmAll < 4000 ? 'Tap again to delete all ' + l.length : 'Delete all'}</button>` : ''}
       <details class="st-info"><summary aria-label="About recovered recordings">?</summary><p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></details></div>`;
   }
   function repaint() {

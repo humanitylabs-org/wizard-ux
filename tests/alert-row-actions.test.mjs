@@ -11,13 +11,13 @@ const flush = () => new Promise(r => setImmediate(r));
 
 async function harness({ read = false, fail = false, nid = 'sample-alert', kind = 'main' } = {}) {
   let items = [{ id: nid, title: 'Sample alert', message: 'Nothing needed from you', read, archived: false }];
-  const calls = [], opened = [], sheets = [], listeners = {}, timers = new Map(); let now = 1000, seq = 0;
+  const calls = [], opened = [], sheets = [], listeners = {}, timers = new Map(); let now = 1000, seq = 0, paints = 0;
   const row = { dataset: { chnotif: nid }, style: {}, focus() {}, isConnected: true };
   const wrap = { style: { setProperty() {} }, classList: { add() {}, remove() {} }, querySelector: () => null };
   row.closest = s => s === '.ch-row-wrap' ? wrap : (s.includes('[data-chnotif]') ? row : null);
   const scopedReads = [], agent = kind === 'main' ? '' : 'qa-' + kind;
   const session = { id: 'thread', title: kind + ' thread', agent };
-  const el = { insertAdjacentHTML: (_, h) => sheets.push(h), querySelector: () => null, querySelectorAll: selector => { assert.ok(['[data-chnotif]', '[data-chopen]'].includes(selector)); return [row]; } };
+  const el = { insertAdjacentHTML: (_, h) => sheets.push(h), querySelector: selector => selector === '.ch-list' ? {} : null, querySelectorAll: selector => { assert.ok(['[data-chnotif]', '[data-chopen]'].includes(selector)); return [row]; } };
   const ctx = { console, document: { addEventListener() {}, querySelectorAll: () => [] }, location: { origin: 'https://example.invalid' },
     Date: { now: () => now }, CustomEvent: class { constructor(type) { this.type = type; } },
     setTimeout(fn, ms) { const n = ++seq; timers.set(n, { fn, ms }); return n; }, clearTimeout(n) { timers.delete(n); }, setInterval() {},
@@ -28,9 +28,9 @@ async function harness({ read = false, fail = false, nid = 'sample-alert', kind 
     },
     WizCore: { backendApps: () => [{ id: 'notifications' }] }, WosSkinHost: { inboxList: true, inboxAct: (...a) => opened.push(a), claimed: () => false },
     LIVE: { warm() {}, workGroups: () => ({ ready: [] }), isNew: () => false, session: () => session, sessionFor: (sid, a) => { scopedReads.push([sid, a]); return a === agent ? session : null; } }, root: { addEventListener(k, fn) { (listeners[k] ||= []).push(fn); } },
-    track: { querySelector: () => el }, CH: {}, W: { w: { id: 'w', agent, runtime_kind: kind } }, AGS: () => ({ isOther: a => !!a }), focusOf: () => null, focusedAgent: () => '', threadActions: () => ['done'],
+    track: { querySelector: () => el }, CH: { w: {} }, H: { win: id => ctx.W[id] }, elOf: () => el, W: { w: { id: 'w', agent, runtime_kind: kind } }, AGS: () => ({ isOther: a => !!a }), focusOf: () => null, focusedAgent: () => '', threadActions: () => ['done'],
     PIN: new Set(), PIN_SVG: '', RENAME_SVG: '', spacesOf: () => [], SPACE: { one: 'Space' },
-    esc: String, notePlain: String, vib() {}, toast() {}, idOf: () => 'w', ownerSwipe: () => true,
+    esc: String, notePlain: String, vib() {}, toast() {}, renderChats() {}, renderChatList() { paints++; }, idOf: () => 'w', ownerSwipe: () => true,
     closeSwipe() {}, swipeTray() {}, swipeA11y() {}, topicOn: () => false, followUpActive: () => false, owner: x => x, openChat: () => assert.fail('not a chat thread'),
   };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8'), ctx);
@@ -41,10 +41,11 @@ async function harness({ read = false, fail = false, nid = 'sample-alert', kind 
   const tapClick = cut("    if (justPressed() &&", "    const o = e.target.closest('[data-chopen]');");
   vm.runInContext(cut('  const ACT = {', '  // Notification-thread only:') + cut('  const actionLabel =', '  const owner =') + cut('  function winAgent(w) {', '  function agentRec(id) {') + cut('  const ROW_MENU =', '  const emojiCategoryHtml')
     + '\nfunction closeRowSheet() { rowSheet = null; sheets.length = 0; }\n'
+    + cut('  function paintActionLists()', '  async function threadAct(')
     + cut('  let notesOff =', '  const noteAt =') + cut('  let lp =', '  /* Gmail-style swipe') + '\nlet swipeOpen = null;\n'
     + src.slice(pointerStart, pointerEnd) + cut('  function justPressed()', '  // A list must not re-render')
     + `\nthis.tap = e => { ${tapClick} }; this.action = e => { ${actionClick} }; this.api = { notes, openRowSheet, justPressed, closeRowSheet, noteRowAct };`, Object.assign(ctx, { sheets }));
-  return { ctx, calls, opened, sheets, row, scopedReads, agent,
+  return { ctx, calls, opened, sheets, row, scopedReads, agent, get paints() { return paints; },
     event(type, extra = {}) { const e = { target: row, button: 0, pointerType: 'touch', pointerId: 1, clientX: 20, clientY: 40, preventDefault() {}, ...extra }; for (const fn of listeners[type] || []) fn(e); },
     hold() { for (const [id, t] of timers) if (t.ms === 480) { timers.delete(id); t.fn(); } },
     advance(ms) { now += ms; },
@@ -62,7 +63,8 @@ test('touch hold on an alert uses the shared sheet with exactly one Archive acti
   h.event('pointerup'); h.ctx.tap({ target: h.row }); assert.deepEqual(h.opened, []);
 });
 for (const action of ['done']) test(`${action} uses the real Notifications mark path and removes the alert from Ready`, async () => {
-  const h = await harness(); h.event('pointerdown'); h.hold(); h.event('pointerup'); h.choose(action); await flush();
+  const h = await harness(); h.event('pointerdown'); h.hold(); h.event('pointerup'); h.choose(action);
+  assert.ok(h.paints > 0, 'the actual shared action helper paints synchronously before reconciliation'); await flush();
   assert.deepEqual(plain(h.calls), [{ url: '/notifications/api/mark', body: { ids: ['sample-alert'], read: true, archived: true } }]);
   assert.deepEqual(plain(h.ctx.api.notes()), { awake: [], later: [] }); assert.equal(h.sheets.length, 0); assert.deepEqual(h.opened, []);
 });

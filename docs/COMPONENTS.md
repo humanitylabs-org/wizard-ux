@@ -52,22 +52,22 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); paint first; alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Models/retry, composer mic, receipts, reading place; label clear of draft text | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
+| Models/retry, composer mic, receipts, reading place; label clear of draft text | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`; dismiss rollback); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) | device-local pin lists |
-| Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) | own timers or reminder stores |
+| Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`; optimistic delete) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
-| Cancelled-recording keep | `WosCancelled` (`cancelled.js`) | — |
+| Cancelled-recording keep | `WosCancelled` (`cancelled.js`; deleting progress) | — |
 | Share to Wizard | `WizShareWizard` (`share-wizard.js`) | one sheet; `share.wizard`; native `durable` |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
-| Settings in both shells | `WosSettings.register` (`settings.js`; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
+| Settings in both shells | `WosSettings.register` (`settings.js`; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle`; optimistic skin removal | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |

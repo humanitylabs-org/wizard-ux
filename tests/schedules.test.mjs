@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import http from 'node:http';
 import { schedulerFixture } from './fixtures/scheduler.mjs';
 const read = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-const settle = async f => { const until = Date.now() + 3000; while (!f()) { if (Date.now() > until) throw Error('Fixture did not settle'); await new Promise(r => setTimeout(r, 5)); } };
+const pendingHTTP = new Set();
+const settle = async f => { const until = Date.now() + 3000; while (!f() || pendingHTTP.size) { if (Date.now() > until) throw Error('Fixture did not settle'); await new Promise(r => setTimeout(r, 5)); } };
 async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe/London', now = '2026-10-21T12:00:00Z' } = {}) {
   const fixture = schedulerFixture(); fixture.missing = missing;
   const server = http.createServer(async (req, res) => {
@@ -15,7 +16,7 @@ async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const origin = `http://127.0.0.1:${server.address().port}`, opened = [], notices = [];
-  const s = { console, Map, Set, WeakMap, Date, String, CSS: { escape: String }, setTimeout, requestAnimationFrame: f => f(), document: { activeElement: null }, navigator: { userAgent: 'Fixture' }, location: { host: 'example.test' }, localStorage: { getItem: () => null }, fetch: (url, opts) => fetch(origin + url, opts) };
+  const s = { console, Map, Set, WeakMap, Date, String, CSS: { escape: String }, setTimeout, requestAnimationFrame: f => f(), document: { activeElement: null }, navigator: { userAgent: 'Fixture' }, location: { host: 'example.test' }, localStorage: { getItem: () => null }, fetch: (url, opts) => { const pending = fetch(origin + url, opts); pendingHTTP.add(pending); pending.then(() => pendingHTTP.delete(pending), () => pendingHTTP.delete(pending)); return pending; } };
   s.Date = class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return Date.parse(now); } };
   s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' }; s.WizConfig = { timeZone: () => timeZone };
   vm.runInNewContext(read('web/core/settings.js'), s);
@@ -40,6 +41,21 @@ async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe
   };
   return { ...h, s, fixture, opened, notices, mount, act, input };
 }
+for (const ok of [true, false]) test(`confirmed delete paints before a stalled backend, with rollback=${!ok}`, async t => {
+  const h = await harness(t); h.fixture.jobs[0].id = 'tap-job'; await h.s.WosSchedules.load(); h.view.focus('schedules');
+  let release; const original = h.s.fetch;
+  h.s.fetch = (url, opts) => opts?.method === 'DELETE' ? new Promise(r => { release = () => r({ ok, status: ok ? 200 : 500, json: async () => ({ error: 'fixture delete failed' }) }); }) : original(url, opts);
+  h.act('delete', 'tap-job'); assert.match(h.root.innerHTML, /role="alertdialog"/);
+  h.act('confirm-delete', 'tap-job');
+  assert.doesNotMatch(h.root.innerHTML, /role="alertdialog"|data-sc-id="tap-job"/);
+  await h.s.WosSchedules.load(); assert.doesNotMatch(h.root.innerHTML, /data-sc-id="tap-job"/, 'stale read cannot restore a pending delete');
+  if (ok) h.fixture.handle('/wizard/v1/schedules/tap-job', 'DELETE', {});
+  release();
+  await settle(() => ok ? !h.root.innerHTML.includes('disabled') : h.root.innerHTML.includes('fixture delete failed'));
+  assert.equal(h.root.innerHTML.includes('data-sc-id="tap-job"'), !ok);
+  assert.equal(h.root.innerHTML.includes('role="alertdialog"'), !ok);
+  if (!ok) assert.ok(h.notices.some(n => n[0] === '!'));
+});
 test('one registration is loaded by both entrypoints; colours only use Appearance tokens', () => {
   for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/schedules\.js/);
   const css = read('web/core/settings.css').split('/* Shared approved')[0];

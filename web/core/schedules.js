@@ -7,6 +7,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const states = new WeakMap();
   const state = ctx => { if (!states.has(ctx)) states.set(ctx, { sheet: null, busy: false, error: '' }); return states.get(ctx); };
+  const deleting = new Set();
   let jobs = null, unavailable = false, error = '', inflight = null;
   const changed = () => window.WosSettings?.refresh();
   async function request(suffix = '', method = 'GET', body) {
@@ -22,7 +23,7 @@
       try {
         const d = await request();
         if (!Array.isArray(d.schedules)) throw Error('Could not read schedules');
-        jobs = d.schedules; unavailable = false; error = '';
+        jobs = d.schedules.filter(j => !deleting.has(j.id)); unavailable = false; error = '';
       } catch (e) {
         unavailable = e.status === 404;
         if (unavailable) jobs = null;
@@ -174,8 +175,14 @@
     if (what === 'toggle' && j) { work(ctx, async () => { await request('/' + encodeURIComponent(j.id), 'PATCH', { enabled: !j.enabled }); await readback(); }); return true; }
     if (what === 'run' && j) { work(ctx, async () => { await request('/' + encodeURIComponent(j.id) + '/run', 'POST', {}); await readback(); ctx.toast?.('✓', 'Run requested', 1800); }); return true; }
     if (what === 'confirm-delete' && s.sheet?.type === 'delete' && j) {
-      const sh = s.sheet;
-      work(ctx, async () => { await request('/' + encodeURIComponent(j.id), 'DELETE'); await readback(); if (s.sheet === sh) close(ctx); }); return true;
+      const sh = s.sheet, index = jobs.indexOf(j);
+      deleting.add(j.id); jobs = jobs.filter(job => job.id !== j.id); close(ctx); changed();
+      work(ctx, async () => {
+        try { await request('/' + encodeURIComponent(j.id), 'DELETE'); }
+        catch (e) { if (!jobs.some(job => job.id === j.id)) jobs.splice(index, 0, j); if (!s.sheet) s.sheet = sh; ctx.toast?.('!', e.message || 'Could not delete schedule', 2400); throw e; }
+        finally { deleting.delete(j.id); changed(); }
+        await readback();
+      }); return true;
     }
     return true;
   }

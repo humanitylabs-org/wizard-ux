@@ -124,7 +124,7 @@
     if (action === 'troubleshoot') { window.WizReach?.open(); return; }
     if (origin === 'everywhere') {
       if (action === 'retry') native()?.retryUnsent?.(id);
-      if (action === 'delete') native()?.deleteUnsent?.(id);
+      if (action === 'delete') { for (const row of ctx.root?.querySelectorAll('[data-ubid]') || []) if (row.dataset.ubid === id) { const b = row.querySelector('[data-ub="delete"]'); if (b) { b.disabled = true; b.textContent = 'Deleting…'; } } native()?.deleteUnsent?.(id); }
       setTimeout(() => ctx.changed?.(), 300); return;
     }
     const it = ctx.outbox?.get(id); if (!it) return;
@@ -144,7 +144,12 @@
       const ext = /aac/.test(it.audioType) ? 'aac' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /wav/.test(it.audioType) ? 'wav' : /ogg/.test(it.audioType) ? 'ogg' : 'webm';
       a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); return;
     }
-    if (action === 'delete') Promise.resolve(ctx.outbox.remove(id)).then(ok => ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400));
+    if (action === 'delete') {
+      // Custody deletes must be durable before losing the original; acknowledge the tap now.
+      const buttons = [...(ctx.root?.querySelectorAll('[data-ubid]') || [])].filter(row => row.dataset.ubid === id).map(row => row.querySelector('[data-ub="delete"]')).filter(Boolean);
+      for (const b of buttons) { if (b.disabled) return; b.disabled = true; b.textContent = 'Deleting…'; }
+      Promise.resolve(ctx.outbox.remove(id)).then(ok => { ctx.render?.(); ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400); }, () => { for (const b of buttons) { b.disabled = false; b.textContent = 'Delete'; } ctx.toast?.('!', 'Could not save deletion · original kept', 2400); });
+    }
     if (action === 'open') ctx.openThread(it.sessionId);
     // Moving an audio-bearing/in-flight record to a text composer would lose custody. Never do it.
     if (action === 'edit') {
@@ -276,9 +281,9 @@
   function skinAction(action, done, failed) {
     try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
   }
-  function ownTiles(S) {
+  function ownTiles(S, removing) {
     const M = window.WosMySkin;
-    return (M?.recipes || []).map(skin => {
+    return (M?.recipes || []).filter(skin => skin.id !== removing).map(skin => {
       const palette = S.list.find(k => k.id === skin.base);
       return `<button type="button" class="skp-card" data-ownskin="${esc(skin.id)}" aria-pressed="${M.active?.id === skin.id}" aria-label="${esc(skin.name)}">${palette ? mini(palette) : ''}<span class="skp-nm">${esc(skin.name)}</span></button>`;
     }).join('');
@@ -314,7 +319,7 @@
     loadFaces();
     // One list of every color, whoever made it (James's five, Novaire's two, Miguel's four), in the skins' own order.
     const colours = `<div class="skp-colours"><div class="skp" role="group" aria-label="${esc(own?.name || 'All')} skins">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>`;
-    const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S)}${newTile()}</div></div>` : '';
+    const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S, ctx.skinRemoving)}${newTile()}</div></div>` : '';
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
@@ -336,7 +341,8 @@
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
       if (ctx.skinSaving) return true; ctx.skinSaving = true;
-      skinAction(() => M.remove(ctx.skinRemove.id), snapshot => { ctx.skinSaving = false; ctx.skinUndo = snapshot; ctx.skinRemove = null; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
+      const removed = ctx.skinRemove; ctx.skinRemoving = removed.id; ctx.skinRemove = null; ctx.render();
+      skinAction(() => M.remove(removed.id), snapshot => { ctx.skinSaving = false; ctx.skinRemoving = null; ctx.skinUndo = snapshot; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.skinRemoving = null; if (!ctx.skinRemove) ctx.skinRemove = removed; ctx.render(); ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
     }
     if (ctx.skinRemove) return true;
     if (el.closest('[data-skin-undo]')) { if (ctx.skinSaving) return true; ctx.skinSaving = true; skinAction(() => M.restore(ctx.skinUndo), () => { ctx.skinSaving = false; ctx.skinUndo = null; ctx.render(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not restore skin', 3000); }); return true; }

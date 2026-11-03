@@ -1470,6 +1470,8 @@ window.WizCore.chats = function createChats(H) {
   }
   // The agent name used in composer hints and receipts: the open agent's label, else the main agent's name.
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
+  // User actions are not background refreshes: paint every list pane before awaiting I/O.
+  function paintActionLists() { for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && !w.thread && el?.querySelector('.ch-list')) renderChatList(w, el); } }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
@@ -1479,7 +1481,8 @@ window.WizCore.chats = function createChats(H) {
       closeRowSheet();
       // Like an inbox: marking an open thread unread steps out of it first, or the open pane reads it straight back.
       for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === sid) threadBack(x); }
-      const ok = await LIVE.markUnread(sid);
+      const pending = LIVE.markUnread(sid); paintActionLists();
+      const ok = await pending; paintActionLists();
       toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;
@@ -1496,7 +1499,8 @@ window.WizCore.chats = function createChats(H) {
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
-    const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
+    const pending = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid);
+    paintActionLists(); const ok = await pending; paintActionLists();
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
     if (!ok) toast('!', { done: 'Couldn’t archive · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
@@ -1510,7 +1514,8 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     // The Notifications app has read / archived, not a separate done or flag state.
     // Archive marks the alert read and takes it out of Ready.
-    const ok = await window.WosBell.mark([nid], a === 'unread' ? { read: false } : { read: true, archived: true });
+    const pending = window.WosBell.mark([nid], a === 'unread' ? { read: false } : { read: true, archived: true });
+    paintActionLists(); const ok = await pending; paintActionLists();
     toast(ok ? '✓' : '!', ok ? (a === 'unread' ? 'Marked unread' : 'Archived') : 'Couldn’t save · alert restored', ok ? 1600 : 3200);
   }
   let rowSheet = null; // { wid, sid?, nid?, trigger }
@@ -2762,12 +2767,13 @@ window.WizCore.chats = function createChats(H) {
     const failedDismiss = e.target.closest('[data-obdismissfailed]'); if (failedDismiss) {
       if (failedDismiss.disabled) return true;
       failedDismiss.disabled = true;
-      Promise.resolve(OUTBOX.dismissFailed(failedDismiss.dataset.obdismissfailed)).then(ok => {
+      const pending = OUTBOX.dismissFailed(failedDismiss.dataset.obdismissfailed); paintActionLists();
+      Promise.resolve(pending).then(ok => {
         if (!ok) failedDismiss.disabled = false;
         // A pressed desktop list temporarily holds background paints. An explicit
         // dismissal must update its own pill now, rather than wait for a later poll.
         const current = H.win(id);
-        if (ok && current && !current.thread) renderChatList(current, elOf(id));
+        if (current && !current.thread) renderChatList(current, elOf(id));
         H.toast(ok ? '✓' : '!', ok ? 'Dismissed · original kept in Unsent messages' : 'Could not save dismissal · original kept', 2400);
       }).catch(() => { failedDismiss.disabled = false; H.toast('!', 'Could not save dismissal · original kept', 2400); });
       return true;
@@ -2775,7 +2781,9 @@ window.WizCore.chats = function createChats(H) {
     // Errors-section voice rows own their Dismiss (confirm → delete).
     const dismiss = !e.target.closest('[data-errob]') && e.target.closest('[data-obdismiss]'); if (dismiss) {
       const sent = OUTBOX.get(dismiss.dataset.obdismiss)?.state === 'sent';
-      Promise.resolve(OUTBOX.dismissBubble(dismiss.dataset.obdismiss)).then(ok => {
+      const pending = OUTBOX.dismissBubble(dismiss.dataset.obdismiss); renderChats(w);
+      Promise.resolve(pending).then(ok => {
+        renderChats(w);
         H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
       }); return true;
     }
@@ -2806,7 +2814,7 @@ window.WizCore.chats = function createChats(H) {
     if (justPressed() && e.target.closest('[data-chopen], [data-chnotif]')) return true; // a long-press/swipe just opened the actions sheet
     if (swipeOpen) { closeSwipe(); if (e.target.closest('.ch-list')) return true; } // a tap anywhere closes an open swipe first
     const pick = topicOn() && e.target.closest('[data-chpick]'); if (pick) { const key = pick.dataset.chpick, sid = key.startsWith('thread:') ? key.slice(7) : '', s = sid && LIVE.session(sid); openEmojiSheet(id, key, s?.title || 'Draft emoji'); return true; }
-    const pn = e.target.closest('[data-chpin]'); if (pn) { const on = PIN.toggle(pn.dataset.chpin); vib(8); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+    const pn = e.target.closest('[data-chpin]'); if (pn) { const on = PIN.toggle(pn.dataset.chpin); paintActionLists(); vib(8); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     const nr = e.target.closest('.ch-list .ch-notif-row[data-chnotif]'); if (nr) { window.WosSkinHost?.inboxAct?.('open', nr.dataset.chnotif); return true; }
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
@@ -2858,7 +2866,7 @@ window.WizCore.chats = function createChats(H) {
     }
     const rsSpace = e.target.closest('[data-rsspace]');
     if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet, add = rsSpace.dataset.add === 'true', name = spaces().find(x => x.id === rsSpace.dataset.rsspace)?.name || SPACE.one; closeRowSheet(); if (spaceMember(rsSpace.dataset.rsspace, sid, add)) toast('✓', `${add ? 'Added to' : 'Removed from'} ${name}`, 2000); return true; }
-    if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+    if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet; closeRowSheet(); const on = PIN.toggle(sid); paintActionLists(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
     if (e.target.closest('[data-chrename]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openRenameSheet(id, w.thread); return true; }
