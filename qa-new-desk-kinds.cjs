@@ -19,10 +19,13 @@ const fails = [], ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if 
       const fa = nd.querySelector('.forag'), body = nd.querySelector('.forag .fa-body');
       return { kinds: nd.classList.contains('kinds'), first: nd.querySelector('.kg-apps h4')?.textContent, sysCount: nd.querySelectorAll('.kg-apps .lapp-sys').length,
         sysBorder: sys ? getComputedStyle(sys).borderTopWidth : null, folded: !!fa && getComputedStyle(body).display === 'none', faRow: fa ? getComputedStyle(fa.querySelector('.fa-row')).display : null,
+        pagesInApps: !!nd.querySelector('.kg-apps [data-app="pages"], .kg-apps [data-appinfo="pages"]'),
+        pagesInAgentApps: !!nd.querySelector('.kg-wiz [data-app="pages"], .kg-wiz [data-appinfo="pages"]'),
         groups: [...nd.querySelectorAll('.lgroup h4')].map(h => h.textContent) };
     });
     ok(s && s.kinds && s.first === 'Apps', `${skin}: New desk uses app kinds (${JSON.stringify(s)})`);
     ok(s && s.sysCount > 0 && parseFloat(s.sysBorder) >= 2, `${skin}: system apps lead Apps with a ring`);
+    ok(s && !s.pagesInApps && s.pagesInAgentApps, `${skin}: Pages is under Agent apps, not Apps`);
     ok(s && s.folded && s.faRow === 'flex', `${skin}: "For agents" row folded`);
     if (SHOTS) await p.screenshot({ path: `${SHOTS}/newdesk-${skin}.png` });
     await p.evaluate(() => window.__nd?.querySelector('[data-fatoggle]')?.click()); await p.waitForTimeout(300);
