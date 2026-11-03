@@ -1840,9 +1840,13 @@ window.WizCore.chats = function createChats(H) {
   // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
   const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
   const streamShown = (st, turns) => {
-    const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
-    if (!ans || !got.endsWith(ans)) return false;
-    return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+    const got = bare(st.text);
+    // A terminal replay can belong to any earlier displayed final, not only the latest one.
+    return turns.some(t => {
+      if (!t.a || t.a.final === false) return false;
+      const ans = bare(t.a.text);
+      return !!ans && got.endsWith(ans) && got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+    });
   };
   // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
   // earlier notes), while the stream replays them from its first event. Draw only what the transcript lacks, or the
@@ -1888,10 +1892,11 @@ window.WizCore.chats = function createChats(H) {
     // Or the transcript already shows these words: reopening a thread while the outbox still names its run (or the list
     // still says working) starts a new subscriber whose baseline already includes the answer, and the run replays from
     // its first event. Without this the whole reply showed twice under "Finishing…" (Miguel, 27 Oct 2026).
-    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
+    // Matching words alone can be a partial new answer: hide its duplicate text but keep reading.
+    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || (st.terminal && streamShown(st, turns)))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
-    const visible = st && !st.landed ? streamUnshown(streamAnswer(st.text), turns) : '';
+    const visible = st && !st.landed && !streamShown(st, turns || []) ? streamUnshown(streamAnswer(st.text), turns) : '';
     // James: one activity surface. Timed tool rows belong to the existing WosWork disclosure;
     // the stream adds only answer text, never a second steps list or a steps-only bubble.
     return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';

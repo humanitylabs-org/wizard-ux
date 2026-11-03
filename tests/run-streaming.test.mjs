@@ -5,6 +5,43 @@ import { readFileSync } from 'node:fs';
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const settle = () => new Promise(r => setImmediate(r));
+
+// James, 1 Nov 2026. EXTEND WizCore's existing stream/transcript ownership; no second renderer.
+// A whole-module jsdom reproduction lives in chats-old-reply-stream.dom.mjs (optional QA toolchain).
+for (const agent of ['', 'philosopher']) test(`an earlier run replay retires even with a newer final answer already in its baseline (${agent || 'main'})`, () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = { status: 'running', runId: 'old-run' };
+  let callback, closed = 0;
+  const ctx = { LIVE: { pendingRun: () => '', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }),
+    isWorking: s => s.status === 'running', esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive() {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout() {} };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  const old = 'It is a 48 KB file of login keys and settings from Buzz.', newest = 'Noted: the Buzz keys file stays.';
+  const turns = [{ notes: ['I checked the file.'], a: { at: 1, text: old, final: true } }, { notes: [], a: { at: 2, text: newest, final: true } }];
+  ctx.syncStream(w, c, turns, agent);
+  const baseline = c.stream.baseline;
+  callback({ text: 'I checked the file.\n\n' + old, steps: [], terminal: true });
+  assert.equal(ctx.syncStream(w, c, turns, agent), '', 'old answer must not appear again below the new one');
+  assert.equal(c.stream.baseline, baseline, 'newest answer was present before opening the old stream');
+  assert.equal(c.stream.landed, true); assert.equal(closed, 1);
+  assert.equal(ctx.syncStream(w, c, turns, agent), ''); assert.equal(closed, 1);
+});
+
+test('earlier-turn replay matching keeps the existing per-turn length, final and media guards', () => {
+  const ctx = {};
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.shown = streamShown;', ctx);
+  const turn = (text, notes = [], final = true) => ({ notes, a: { text, final } });
+  const newer = turn('A different, newer answer.', ['Notes from another run must not enlarge the old answer budget.']);
+  assert.equal(ctx.shown({ terminal: true, text: 'Yes.' }, [turn('Yes.'), newer]), true);
+  assert.equal(ctx.shown({ terminal: true, text: 'Extra new words. Yes.' }, [turn('Yes.'), newer]), false);
+  assert.equal(ctx.shown({ terminal: true, text: 'Working note.' }, [turn('Working note.', [], false), newer]), false);
+  assert.equal(ctx.shown({ terminal: true, text: '' }, [turn(''), newer]), false);
+  assert.equal(ctx.shown({ terminal: true, text: 'Checking. Answer.' }, [turn('Answer.', ['Checking.']), newer]), true);
+  assert.equal(ctx.shown({ terminal: true, text: 'New words after Answer.' }, [turn('Answer.'), newer]), false);
+  assert.equal(ctx.shown({ terminal: true, text: 'Before.\nMEDIA:/synthetic/image.png\nAfter.\n[WIZARD_STATUS_V1]{}' },
+    [turn('Before.\n![Image](/wizard/attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "wizard-inline-0")\nAfter.'), newer]), true);
+});
+
+// Continue exercising all neighbouring stream lifecycle cases below.
 function harness() {
   const sources = [], frames = [], timers = [], calls = [];
   class ES {
@@ -258,6 +295,9 @@ test('a reopened thread whose answer already landed never shows the replayed run
   // The run replays from its first event: an interim line, then the same answer with its status trailer.
   callback({ text: "Now I'll save the rule." + answer + '\n\n[WIZARD_STATUS_V1]{"state":"done"}[/WIZARD_STATUS_V1]', steps: [], terminal: false });
   assert.equal(ctx.syncStream(w, c, turns, ''), '', 'no provisional copy under the landed answer');
+  assert.equal(c.stream.landed, false); assert.equal(closed, 0, 'identical partial words are not a completion receipt');
+  callback({ text: "Now I'll save the rule." + answer, steps: [], terminal: true });
+  assert.equal(ctx.syncStream(w, c, turns, ''), '');
   assert.equal(c.stream.landed, true); assert.equal(closed, 1);
   // A real new run whose words are not in the transcript yet still streams.
   const c2 = {};
