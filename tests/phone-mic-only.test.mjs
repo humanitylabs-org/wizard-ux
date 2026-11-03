@@ -44,6 +44,6 @@ for (const [label, src, name, g] of [
 
 test('both browser recorders check the route right after opening the mic', () => {
   assert.match(app, /getUserMedia\(\{ audio:[^\n]+\n[^\n]*\n\s+if \(await browserMicIsExternal\(\)\)/);
-  assert.match(capture, /s\.stream = await navigator\.mediaDevices\.getUserMedia[^\n]+\n[^\n]*\n\s+if \(await externalMic\(\)\)/);
+  assert.match(capture, /s\.stream = await navigator\.mediaDevices\.getUserMedia[^\n]+\n(?:\s*(?:s\.stage = 'audio engine';|\/\/[^\n]*)\n)*\s*if \(await externalMic\(\)\)/);
   assert.match(app, /err\?\.code === 'external_mic'/);
 });
