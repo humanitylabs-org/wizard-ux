@@ -755,7 +755,12 @@
    * user aim, opts.here) may share an existing desk; app openers pass opts through and never pick a desk. */
   // Directly beside the desk in front, Home included (James, 11 Oct 2026: from Home, Yesterday and every other
   // app open on the desk right next to Home; Chats just moves one to the right).
-  function insertPos() { return idx + 1; }
+  // With workspace sync on, desk order is shared by every device, so a phone-only placement reshuffles the owner's
+  // other devices too (Miguel, 1 Nov 2026: Backup and Calendar kept jumping to desktops 1 and 2). Then a new app
+  // opens on a new desk at the end, and an app already open opens on its desk where it is (bringBeside).
+  // ok=null also means a first read or wake is pending; only a confirmed missing API permits local placement.
+  const sharedDeskOrder = () => { const s = window.WosWorkspaceSync?.current; return !!s && s.on && !s.unsupported; };
+  function insertPos() { return sharedDeskOrder() ? desks.length : idx + 1; }
   function openWin(obj, opts = {}) {
     if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
     const w = { id: newId(), ...obj }; W[w.id] = w;
@@ -1233,6 +1238,7 @@
   /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
    * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
   function bringBeside(id) {
+    if (sharedDeskOrder()) return;
     const from = deskOf(id); if (from < 0 || from === idx) return;
     const t = insertPos(); if (from === t) return;
     if (desks[from].wins.length === 1) {

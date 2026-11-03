@@ -140,6 +140,7 @@
     // survive a reload and are merged and pushed when the box answers again.
     let st = ls.get(key, null) || { rev: -1, base: null, last: null };
     let lastLocal = st.last || null;
+    let unsupported = false; // Confirmed API absence only; ok=null also covers startup and wake pending a GET.
     let closed = [], info = { device: '', at: '' }, ok = null, timer = 0, busy = false, again = false, applying = false, alive = true;
     const off = () => ls.get(OFF, false) === true;
     const persist = () => { st.last = lastLocal; ls.set(key, st); };
@@ -177,6 +178,7 @@
           const want = pending || merge(lastLocal || st.base, local, st.base);
           const { status, j } = await req('PUT', '', { baseRev: st.rev, device: name, state: want });
           if (!j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
+          unsupported = false;
           st = { rev: j.rev, base: j.state }; persist(); take(j);
           if (status === 200) { pending = null; const cur = now(); if (same(cur, local)) put(j.state); else { pending = merge(local, cur, j.state); put(pending); unsent(); again = true; } break; }
           if (status !== 409) throw new Error('state ' + status);
@@ -184,7 +186,7 @@
           pending = merge(lastLocal || want, now(), j.state); put(pending); unsent();
         }
         ok = true;
-      } catch (e) { if (e.absent) ok = null; else { ok = false; setTimeout(schedule, 5000); } }
+      } catch (e) { if (e.absent) { unsupported = true; ok = null; } else { ok = false; setTimeout(schedule, 5000); } }
       finally { busy = false; emit(); if (again) { again = false; schedule(); } }
     }
     function schedule() { clearTimeout(timer); timer = setTimeout(push, 500); }
@@ -234,6 +236,7 @@
           const { status, j } = await req('GET', `?since=${st.base ? st.rev : -1}&wait=${wait}`, undefined, controller.signal);
           if (!alive || controller.woken || off()) continue;
           if (status !== 200 || !j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
+          unsupported = false;
           // Revisions can be reused after restore/reset. Validate the snapshot too, including the first read of a
           // saved checkpoint. Ignore a read overtaken by this client's PUT instead of rolling its baseline back.
           if (!busy && st === baseline) {
@@ -244,7 +247,7 @@
         } catch (e) {
           if (!alive) break;
           if (controller.woken) continue;
-          if (e.absent) { ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
+          if (e.absent) { unsupported = true; ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
           ok = false; emit(); fails++;
           await pause(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
         } finally {
@@ -274,7 +277,7 @@
         for (const type of ['pageshow', 'focus', 'online']) window.removeEventListener?.(type, wake);
         for (const type of ['visibilitychange', 'resume']) document.removeEventListener?.(type, wake);
       },
-      get on() { return !off(); }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
+      get on() { return !off(); }, get ok() { return ok; }, get unsupported() { return unsupported; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
     };
     window.WosWorkspaceSync.current = api;
     return api;
