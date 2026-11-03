@@ -35,6 +35,16 @@ public final class ServerOrigin {
         catch (Exception e) { return null; }
     }
 
+    /** What someone types into the address field: also a bare host ("wizard.example.ts.net", "host:8443"), which gets
+     *  https:// in front. Never http. Same rule as the iPhone app (WizardOrigin.typed). */
+    public static String typed(String text, boolean allowQa) {
+        String clean = parse(text, allowQa);
+        if (clean != null || text == null) return clean;
+        String t = text.trim();
+        if (t.isEmpty() || t.contains("://") || t.toLowerCase(Locale.ROOT).startsWith("wizard:")) return null;
+        return parse("https://" + t);
+    }
+
     private static String https(String input) throws Exception {
         URI u = new URI(input);
         String path = u.getRawPath();

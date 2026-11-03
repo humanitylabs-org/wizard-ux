@@ -9,6 +9,13 @@
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
   const shell = () => !native() && /WizardShell\//.test(navigator.userAgent || '');
   const shellOrb = () => shell() && window.WosDeviceOrb?.ready ? window.WosDeviceOrb : null;
+  // Change Wizard is the phone app's own navigation: Android's bridge, or the iPhone's WizardShell plugin (Capacitor).
+  // Neither writes an address: the app's connect screen saves one only after it passes the check. Null in a browser.
+  const changeWizard = () => {
+    if (typeof native()?.changeServer === 'function') return () => native().changeServer();
+    const ios = window.Capacitor?.Plugins?.WizardShell;
+    return typeof ios?.changeWizard === 'function' ? () => Promise.resolve(ios.changeWizard()).catch(() => {}) : null;
+  };
   // Rows are plain lines split by hairlines: no boxes, no icon tiles; a second line only when it says something.
   const row = (id, title, sub) => `<button class="st-row wz-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
   // System pages are filled by packages (WosSettings.register with page = one of these); a page with nothing on it hides.
@@ -488,11 +495,13 @@
     }
     return false;
   } });
-  register({ id: 'server', available: () => typeof native()?.changeServer === 'function', html() {
+  register({ id: 'server', available: () => !!changeWizard(), html() {
     return `<div class="st-group"><h4>Connection</h4>${row('change-server', 'Change Wizard', 'Scan another box QR or enter its address')}</div>`;
   }, act(ctx, el) {
     if (el.closest('[data-st]')?.dataset.st !== 'change-server') return false;
-    native().changeServer(); return true;
+    const go = changeWizard();
+    if (!go) return false;
+    go(); return true;
   } });
   register({ id: 'voice', html: () => window.WizCore.voiceStatus?.card() || '' });
   register({ id: 'microphone', aliases: ['mic'], available: () => !!window.WosMic?.available(), html: () => window.WosMic?.html() || '', act: (ctx, el) => window.WosMic?.act(el, ctx) });

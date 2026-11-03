@@ -23,6 +23,22 @@ public class ServerOriginTest {
         for (String value : new String[]{"", "box.example", "http://box.example", "https://user:password@box.example", "https://box.example/other", "https://box.example?x=1", "https://box.example/#secret", "https://box.example:", "https://box.example:0", "https://box.example:65536", "https://box.example./", "https://box.example/%2f", "https://box.example\\@evil.test", "https://box.example\n.evil.test", "wizard://evil?origin=https%3A%2F%2Fbox.example", "wizard://connect?origin=https%3A%2F%2Fbox.example&origin=https%3A%2F%2Fevil.test", "wizard://connect?origin=https%253A%252F%252Fbox.example", "wizard://connect?origin=http%3A%2F%2Fbox.example", "wizard://connect?origin=%zz"}) assertNull(value, ServerOrigin.parse(value));
         assertNull(ServerOrigin.parse(null));
     }
+    @Test public void typedBareHostGetsHttpsNeverHttp() {
+        assertEquals("https://wizard.example.ts.net", ServerOrigin.typed("wizard.example.ts.net", false));
+        assertEquals("https://wizard.example.ts.net", ServerOrigin.typed("  Wizard.Example.ts.net/ ", false));
+        assertEquals("https://host.ts.net:8443", ServerOrigin.typed("host.ts.net:8443", false));
+        assertEquals("https://box.example", ServerOrigin.typed("https://box.example/", false));
+        assertNull(ServerOrigin.typed("http://x", false));
+        assertNull(ServerOrigin.typed("http://box.example", false));
+        assertNull(ServerOrigin.typed("wizard:foo", false));
+        assertNull(ServerOrigin.typed("WIZARD://evil?origin=x", false));
+        assertNull(ServerOrigin.typed("", false));
+        assertNull(ServerOrigin.typed("   ", false));
+        assertNull(ServerOrigin.typed(null, false));
+        assertNull(ServerOrigin.typed("user@box.example", false));
+        assertEquals("http://localhost:8123", ServerOrigin.typed("http://localhost:8123", true));
+        assertNull(ServerOrigin.typed("http://localhost:8123", false));
+    }
     @Test public void storedChoiceWinsOverBuildMigration() {
         assertEquals("https://chosen.example", ServerOrigin.migrated("https://chosen.example", "https://legacy.example"));
         assertEquals("https://legacy.example", ServerOrigin.migrated(null, "https://legacy.example/"));

@@ -43,6 +43,43 @@ public class ReachPolicyTest {
     }
 
     @Test
+    public void refusalIsTheWizardsAnswerNotTheNetworks() {
+        assertTrue(ReachPolicy.refused(401));
+        assertTrue(ReachPolicy.refused(403));
+        assertFalse(ReachPolicy.refused(200));
+        assertFalse(ReachPolicy.refused(404));
+        assertFalse(ReachPolicy.refused(502));
+        // A network change neither retries a refusal nor paints over it, unless the network goes.
+        assertFalse(ReachPolicy.retryOnChange(Why.REFUSED, Why.NOT_ANSWERING));
+        assertFalse(ReachPolicy.retryOnChange(Why.REFUSED, Why.TAILSCALE_OFF));
+        assertFalse(ReachPolicy.redrawOnChange(Why.REFUSED, Why.NOT_ANSWERING));
+        assertFalse(ReachPolicy.redrawOnChange(Why.REFUSED, Why.TAILSCALE_OFF));
+        assertTrue(ReachPolicy.redrawOnChange(Why.REFUSED, Why.NO_NETWORK));
+        assertTrue(ReachPolicy.redrawOnChange(Why.TAILSCALE_OFF, Why.NO_NETWORK));
+        assertFalse(ReachPolicy.redrawOnChange(Why.NOT_ANSWERING, Why.NOT_ANSWERING));
+        assertEquals("This phone isn't allowed into this Wizard", ReachPolicy.title(Why.REFUSED));
+        assertEquals("Sign in to Tailscale with your Wizard's account.", ReachPolicy.body(Why.REFUSED));
+        assertTrue(ReachPolicy.offerTailscale(Why.REFUSED, true));
+        assertFalse(ReachPolicy.offerTailscale(Why.REFUSED, false));
+    }
+
+    @Test
+    public void onlyTailscalesAddressRangeCountsAsTailscale() {
+        assertTrue(ReachPolicy.tailscaleAddress(ip(100, 64, 0, 1)));
+        assertTrue(ReachPolicy.tailscaleAddress(ip(100, 127, 255, 255)));
+        assertTrue(ReachPolicy.tailscaleAddress(ip(100, 101, 7, 9)));
+        assertFalse(ReachPolicy.tailscaleAddress(ip(100, 63, 0, 1)));
+        assertFalse(ReachPolicy.tailscaleAddress(ip(100, 128, 0, 1)));
+        assertFalse(ReachPolicy.tailscaleAddress(ip(10, 0, 0, 1)));   // another VPN (e.g. a commercial one)
+        assertFalse(ReachPolicy.tailscaleAddress(new byte[16]));      // IPv6
+        assertFalse(ReachPolicy.tailscaleAddress(null));
+    }
+
+    private static byte[] ip(int a, int b, int c, int d) {
+        return new byte[]{ (byte) a, (byte) b, (byte) c, (byte) d };
+    }
+
+    @Test
     public void wordsNameTheFix() {
         assertEquals("Tailscale is off", ReachPolicy.title(Why.TAILSCALE_OFF));
         assertTrue(ReachPolicy.body(Why.TAILSCALE_OFF).contains("Turn Tailscale on"));

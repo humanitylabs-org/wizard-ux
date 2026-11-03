@@ -1,16 +1,33 @@
 # Android: connect to an owner's Wizard
 
-The generic `ai.wizards.os` APK has no server or photo-server default. First launch opens **Connect to your Wizard**. Open Setup on the owner's Mac/box, enable phone access, sign in to the same Tailscale account on the phone, then scan the Wizard QR or paste the HTTPS box address. Camera permission is requested by the QR scanner only; pasting needs no camera permission.
+The generic `ai.wizards.os` APK has no server or photo-server default. First launch opens **Connect to your Wizard**. On the owner's computer, open Wizard › Settings › Phones & devices and turn on phone access, sign in to the same Tailscale account on the phone, then scan the Wizard QR code or type the box address (a bare host such as `wizard.example.ts.net` gets `https://` in front; never `http://`). Camera permission is requested by the QR scanner only; pasting needs no camera permission.
 
 ## Pairing contract
 
 Matches the phone-setup work in wizard-os PR #38 / wizard-ux PR #15 (launch L2):
 
-- Setup connection QR: `wizard://connect?origin=https%3A%2F%2Fbox.example.ts.net`.
-- Plain HTTPS box URLs remain accepted for manual entry and older Setup QR codes.
+- Connection QR (Settings › Phones & devices): `wizard://connect?origin=https%3A%2F%2Fbox.example.ts.net`.
+- Plain HTTPS box URLs remain accepted for manual entry and older QR codes. Typed text only (`ServerOrigin.typed`) also accepts a bare host or `host:port` and adds `https://`; text with another scheme or `wizard:` is not rewritten.
 - The contained address must be HTTPS, have a valid host/port, and contain no user info, query or fragment. Root and the shell path `/wizard-os-home/` are accepted; arbitrary paths are rejected. Port 443 is normalized away. Nondefault HTTPS ports remain part of the origin.
 - A QR/deep link only prefills Connect. The user confirms; a read-only GET of `/wizard-os-home/` must return 200 HTML with the Wizard shell markers before anything is persisted. Redirects/login pages, TLS errors and generic HTTP-200 pages do not pass. This is a reachability/product check, **not authentication or cryptographic server identification**. Normal TLS and the server's owner authorization still apply; the app never bypasses either.
 - The Tailscale sign-in QR is a different URL and must not be scanned as the Wizard address.
+
+## When connecting fails
+
+`WizardProbe.probe` returns a typed result, and `WizardProbe.message` gives the owner's words (the same as the iPhone app's `WizardOrigin.swift`):
+
+| Result | When | Message |
+|---|---|---|
+| `NOT_FOUND` | the name doesn't resolve | "Couldn't find {host}. …" (Tailscale wording on `*.ts.net`) |
+| `NO_ANSWER` | timeout, refused connection, TLS, other I/O before an answer | "Couldn't reach {host}. …" |
+| `REFUSED` | 401/403 (e.g. another Tailscale user than the Wizard's owner) | "This phone isn't allowed into this Wizard. Sign in to Tailscale with your Wizard's account." |
+| `HTTP` | any other non-200 (redirects included) | "{host} answered, but didn't open Wizard (HTTP {status})." |
+| `NOT_WIZARD` | not `text/html`, or no shell markers | "{host} answered, but it isn't a Wizard." |
+
+- Only `NOT_FOUND` and `NO_ANSWER` on a `*.ts.net` address open the Tailscale guide. Anything that answered shows its message on Connect; if it answers that way during the guide's re-checks, the guide closes and the message shows.
+- "Tailscale is on" means a VPN network holding an IPv4 in Tailscale's 100.64.0.0/10. Another VPN doesn't count.
+- "Not on your Wizard's network" needs two not-found results in a row with Tailscale on, on Connect and on the can't-reach screen. The count resets when Tailscale's state (the screen's reason) changes or any other result arrives.
+- While loading the saved Wizard, a main-frame 401/403 from it shows the can't-reach screen as "This phone isn't allowed into this Wizard" (Try again, Open Tailscale when installed, the address with Edit address), never the server's raw page and never the Tailscale guide. A network change doesn't repaint or retry it; the regular retry and coming back to the app do.
 
 Settings → Connection → **Change Wizard** reopens Connect. The offline screen also offers Change Wizard, so an unreachable old box does not trap the owner. Back at unconfigured Connect stays in the app; when configured it returns to the current Wizard. Cancelling or failing validation never discards the saved server.
 

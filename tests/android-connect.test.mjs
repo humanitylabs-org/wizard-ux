@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
-function feature(native) {
-  const sandbox = { CSS: { escape: s => String(s) }, WizardOSNative: native, WizCore: {}, WizBrand: { html: 'W' }, location: { host: 'fixture.invalid' }, navigator: { userAgent: 'Android' }, document: {}, requestAnimationFrame() {} };
+function feature(native, { userAgent = 'Android', Capacitor } = {}) {
+  const sandbox = { CSS: { escape: s => String(s) }, WizardOSNative: native, Capacitor, WizCore: {}, WizBrand: { html: 'W' }, location: { host: 'fixture.invalid' }, navigator: { userAgent }, document: {}, requestAnimationFrame() {} };
   sandbox.window = sandbox;
   vm.runInNewContext(source, sandbox);
   // Exercise the real settings mount/feature filtering, not a different Android-only settings implementation.
@@ -30,6 +30,25 @@ test('Change Wizard uses shared settings and only invokes native navigation', ()
   const element = { closest(selector) { if (selector === '[data-settings-feature]') return { dataset: { settingsFeature: 'server' } }; if (selector === '[data-st]') return { dataset: { st: 'change-server' } }; return null; } };
   assert.equal(view.dispatch(element), true);
   assert.equal(calls, 1);
+});
+
+const changeRow = { closest(selector) { if (selector === '[data-settings-feature]') return { dataset: { settingsFeature: 'server' } }; if (selector === '[data-st]') return { dataset: { st: 'change-server' } }; return null; } };
+const iPhone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 WizardOS-iOS/1.0';
+test('Change Wizard on iPhone opens the app\'s connect screen through WizardShell, never as Android', () => {
+  let calls = 0;
+  const Capacitor = { Plugins: { WizardShell: { changeWizard() { calls++; return Promise.resolve(); } } } };
+  const { root, view } = feature(undefined, { userAgent: iPhone, Capacitor });
+  view.focus('server');
+  assert.match(root.innerHTML, /Change Wizard/);
+  assert.equal(view.dispatch(changeRow), true);
+  assert.equal(calls, 1);
+});
+test('Change Wizard stays hidden in Safari and in a Capacitor page without WizardShell', () => {
+  for (const Capacitor of [undefined, { Plugins: {} }]) {
+    const { root, view } = feature(undefined, { userAgent: iPhone, Capacitor });
+    view.focus('server');
+    assert.doesNotMatch(root.innerHTML, /Change Wizard/);
+  }
 });
 
 test('QR scanner follows the phone orientation (zxing CaptureActivity is landscape by default)', () => {

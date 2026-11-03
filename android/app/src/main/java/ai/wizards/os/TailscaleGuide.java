@@ -92,6 +92,16 @@ final class TailscaleGuide {
     /** From the WebView's error text: the name didn't resolve (true), anything else, including a hang (false). */
     static boolean missingFrom(String webError) { return webError != null && webError.contains("NAME_NOT_RESOLVED"); }
 
+    /**
+     * `missing` from not-found results in a row with Tailscale on: "not on your network" needs two (right after Tailscale
+     * connects a name can briefly fail to resolve), one is still unsure (null), none means the name resolved (false).
+     */
+    static Boolean missingAfter(int notFoundInARow) {
+        if (notFoundInARow >= 2) return Boolean.TRUE;
+        if (notFoundInARow == 1) return null;
+        return Boolean.FALSE;
+    }
+
     /** Installed (or on): open it. Otherwise: Google Play. */
     static String button(boolean on, boolean installed) { return on || installed ? OPEN : GET; }
     static String hint(boolean on, boolean installed) { return on || installed ? "" : PLAY_HINT; }

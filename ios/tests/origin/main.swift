@@ -54,6 +54,32 @@ if WizardProbe.headerProblem(status: 302, contentType: "text/html", host: "h") =
 if WizardProbe.headerProblem(status: 200, contentType: "text/html; charset=utf-8", host: "h") != nil { failures += 1; print("FAIL: shell headers refused") }
 if WizardProbe.headerProblem(status: 200, contentType: "application/x-text/html-data", host: "h") == nil { failures += 1; print("FAIL: text/html substring passed") }
 if WizardProbe.headerProblem(status: 200, contentType: "TEXT/HTML ; charset=utf-8", host: "h") != nil { failures += 1; print("FAIL: TEXT/HTML refused") }
+// 401/403: the Wizard is there but this phone's Tailscale user isn't its owner (its own message, not "HTTP 403")
+for status in [401, 403] {
+    let m = WizardProbe.headerProblem(status: status, contentType: "text/html", host: "h")
+    if m != "This phone isn't allowed into this Wizard. Sign in to Tailscale with your Wizard's account." || !WizardProbe.refused(m ?? "") || WizardProbe.noAnswer(m ?? "") {
+        failures += 1; print("FAIL: \(status) message: \(m ?? "nil")")
+    }
+}
+if WizardProbe.refused(WizardProbe.headerProblem(status: 502, contentType: "text/html", host: "h") ?? "") { failures += 1; print("FAIL: 502 counted as refused") }
+// Main-frame answers at launch: refused (401/403), server (5xx, the Wizard restarting), else shown as a page
+for (status, verdict) in [(401, "refused"), (403, "refused"), (500, "server"), (502, "server"), (503, "server"), (599, "server"),
+                          (200, nil), (304, nil), (404, nil), (400, nil), (499, nil), (600, nil), (0, nil)] as [(Int, String?)] {
+    expect(WizardProbe.launchVerdict(status: status), verdict, "launchVerdict \(status)")
+}
+// The launch watchdog gives up early when it can't work (Android ReachPolicy.failNow)
+if !WizardProbe.hopeless(network: false, needsTailscale: false, tailscaleOn: true) { failures += 1; print("FAIL: no network not hopeless") }
+if !WizardProbe.hopeless(network: true, needsTailscale: true, tailscaleOn: false) { failures += 1; print("FAIL: Tailscale off not hopeless") }
+if WizardProbe.hopeless(network: true, needsTailscale: true, tailscaleOn: true) || WizardProbe.hopeless(network: true, needsTailscale: false, tailscaleOn: false) {
+    failures += 1; print("FAIL: a reachable setup counted as hopeless")
+}
+// A Store install link with no Wizard set says to connect first; with a Wizard it goes on to the Wizard's pages
+let install = URL(string: "wizard://install?repo=github.com%2Fa%2Fb&commit=abc")!
+if !WizardOrigin.needsWizardFirst(install, hasWizard: false) || WizardOrigin.needsWizardFirst(install, hasWizard: true) { failures += 1; print("FAIL: install link before a Wizard") }
+if WizardOrigin.needsWizardFirst(URL(string: "wizard://connect?origin=https%3A%2F%2Fbox.example")!, hasWizard: false) { failures += 1; print("FAIL: connect link counted as install") }
+if WizardOrigin.needsWizardFirst(URL(string: "https://box.example/")!, hasWizard: false) { failures += 1; print("FAIL: https link counted as install") }
+NetPath.start(); Thread.sleep(forTimeInterval: 0.5) // the monitor answers on its own queue
+print("network on this Mac: \(NetPath.isUp)")
 // Only wizard://connect is consumed by the app; other wizard:// routes (Store install links) pass through
 if !WizardOrigin.isConnectLink(URL(string: "wizard://connect?origin=https%3A%2F%2Fbox.example")!) { failures += 1; print("FAIL: connect link not ours") }
 if !WizardOrigin.isConnectLink(URL(string: "WIZARD://Connect?origin=x")!) { failures += 1; print("FAIL: connect link case") }

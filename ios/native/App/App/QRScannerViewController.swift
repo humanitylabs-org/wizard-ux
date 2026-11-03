@@ -80,7 +80,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
         let hint = UILabel()
         hint.translatesAutoresizingMaskIntoConstraints = false
-        hint.text = "Scan the Wizard QR code shown in Setup → Use Wizard on your phone"
+        hint.text = "Scan the QR code in Wizard › Settings › Phones & devices"
         hint.textColor = .white
         hint.font = .systemFont(ofSize: 17, weight: .semibold)
         hint.textAlignment = .center
