@@ -72,8 +72,211 @@ function routeFor() {
   };
 }
 
+// Focused offline admission for the desktop new-send adapter. This stays in the
+// thread-navigation suite; all content is synthetic and every request is local.
+// QA_SEND_RETURN=1 QA_WEB_DIR=<repo> QA_OUT=<dir> node qa-thread-trail.cjs https://wizard.test/wizard-os-home/
+async function sendReturnChecks(b) {
+  if (!WEB) throw new Error('Focused send-return QA requires sealed source');
+  const evidence = [], contexts = new Map(), checks = [];
+  const flush = () => fs.writeFileSync(path.join(OUT,'send-return-evidence.json'),JSON.stringify({pass,fail,checks,evidence,realRuns:0},null,2));
+  const check = (condition,name,extra='') => { ok(condition,name,extra); checks.push({name,pass:!!condition,extra}); flush(); };
+  const close = async c => { const journal=evidence.find(x=>x.context===contexts.get(c)); if(journal) { journal.final=await Promise.race([c.pages()[0]?.evaluate(()=>({receipts:window.__qaReceipts,models:window.WosModels&&{ready:WosModels.ready,options:WosModels.options,error:WosModels.error,loading:!!WosModels.loading,defaultOption:WosModels.defaultOption()},items:[...(window.WosOutbox?._items?.values()||[])].map(x=>({id:x.id,sessionId:x.sessionId,state:x.state,text:x.text,error:x.error,runId:x.runId}))})).catch(()=>null),sleep(1500).then(()=>({diagnosticTimeout:true}))]); } clearTimeout(contexts.get(c)); contexts.delete(c); await c.close(); flush(); };
+  const closeAll = async () => { for (const c of [...contexts.keys()]) await close(c).catch(()=>{}); };
+  try {
+  async function boot(mobile, skin, half = false) {
+    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:1200,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+    contexts.set(c,setTimeout(()=>{void c.close().catch(()=>{});},60000)); // hard per-context case cap
+    const intercepted = [], errors = [], heldRuns = [], receipts = [], requests = []; let holdAck = true;
+    const journal={mobile,skin,half,writes:intercepted,errors,receipts,requests,models:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
+    await c.exposeBinding('__qaReceipt',(_source,value)=>{receipts.push(value);flush();});
+    await c.exposeBinding('__qaModelState',(_source,value)=>{journal.models.push(value);flush();});
+    await c.route('**/*', async r => {
+      const q = r.request(), u = new URL(q.url()); requests.push({method:q.method(),path:u.pathname}); flush();
+      const json = (status, body) => r.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+      if (u.origin !== origin) return r.abort();
+      if (!['GET','HEAD'].includes(q.method())) {
+        const write={method:q.method(),path:u.pathname,body:q.postData() || '',key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
+        if (u.pathname.endsWith('/v1/runs')) {
+          if (holdAck) await new Promise(resolve => heldRuns.push(resolve));
+          write.ack={run_id:'qa_return_'+write.key,session_id:JSON.parse(write.body).session_id,status:'queued'}; flush(); return json(202,write.ack);
+        }
+        if (u.pathname === '/wizard/thread-seen') return json(200,{state:JSON.parse(q.postData() || '{}').state || {initializedAt:1,threads:{}}});
+        return json(200,{ok:true});
+      }
+      // chat-models.normalize/resolveRoute require a confirmed default. An empty
+      // {} lets enqueue persist a durable FAILED item without ever posting a run.
+      if (u.pathname === '/wizard/hermes/api/model/options') return json(200,{model:'qa-model',provider:'qa-provider',providers:[{slug:'qa-provider',authenticated:true,models:['qa-model']}]});
+      if (u.pathname === '/wizard/v1/agents') return json(200,{agents:[{id:'hermes',label:'QA Agent',is_default:true,status:'running',model:{model:'qa-model',provider:'qa-provider'}}]});
+      if (u.pathname === '/wizard/hermes/api/sessions') return json(200,{object:'list',data:!u.searchParams.get('agent')||u.searchParams.get('agent')==='hermes'?Object.keys(FIX).map(fixSession):[],has_more:false,limit:100,offset:0,snapshot:'synthetic-return'});
+      const m = u.pathname.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/);
+      if (m && FIX[m[1]]) return json(200,m[2] ? {object:'list',data:FIX[m[1]].rows().map(x=>({...x,session_id:m[1]})),pagination:{limit:500,offset:0}} : {session:fixSession(m[1])});
+      if (u.pathname === '/wizard/thread-seen') return json(200,{state:{initializedAt:1,threads:{}}});
+      if (u.pathname === '/wizard/v1/boomerangs') return json(200,{reminders:[]});
+      if (u.pathname.startsWith('/wizard/')) return json(200,{});
+      const rel = u.pathname.replace(/^\/wizard-os-home\//,'') || 'index.html';
+      const file = path.resolve(WEB,'web',rel), root = path.resolve(WEB,'web') + path.sep;
+      if (!file.startsWith(root) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return r.fulfill({status:404,body:''});
+      const mime = rel.endsWith('.html') ? 'text/html' : rel.endsWith('.css') ? 'text/css' : rel.endsWith('.json') ? 'application/json' : rel.endsWith('.svg') ? 'image/svg+xml' : rel.endsWith('.png') ? 'image/png' : 'application/javascript';
+      return r.fulfill({status:200,contentType:mime,body:fs.readFileSync(file)});
+    });
+    await c.addInitScript(skin => { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.done','1'); localStorage.setItem('wos.skin',skin); },skin);
+    const p = await c.newPage(); p.setDefaultTimeout(8000); p.setDefaultNavigationTimeout(12000); p.on('pageerror',e=>{errors.push(String(e));flush();});
+    await p.goto(URL_+(URL_.includes('?')?'&':'?')+'shell='+(mobile?'phone':'desktop'),{waitUntil:'load'});
+    await p.waitForFunction(mobile => mobile ? !!window.__wos?.live?.session('qa_tt_a') : !!window.__wux?.live?.session('qa_tt_a'),mobile);
+    // The catalogue is lazy. Welcome's independent model/options fetch does not
+    // populate WosModels; await the real module, never synthesize its state.
+    await p.evaluate(async()=>{
+      const M=window.WosModels;
+      if(typeof M?.load!=='function')throw new Error('Fixture contract: WosModels.load missing');
+      const snapshot=phase=>({phase,ready:M.ready,options:M.options,error:M.error,loading:!!M.loading,defaultOption:M.defaultOption()});
+      await window.__qaModelState(snapshot('before-load'));
+      const pending=M.load();
+      await window.__qaModelState(snapshot('load-started'));
+      let cap;
+      try { await Promise.race([pending,new Promise((_,reject)=>{cap=setTimeout(()=>reject(new Error('Fixture model load exceeded 6s')),6000);})]); }
+      finally { clearTimeout(cap); await window.__qaModelState(snapshot('after-load')); }
+      const d=M.defaultOption();
+      if(!M.ready||M.error||M.loading||d?.value!=='qa-model'||d?.provider!=='qa-provider'||!M.options.some(o=>o.value===d.value&&o.provider===d.provider&&o.isGlobalDefault))
+        throw new Error('Fixture model catalogue invalid: '+JSON.stringify(snapshot('invalid')));
+    });
+    await p.evaluate(mobile => {
+      document.getElementById('wosWelcome')?.remove(); if (mobile) __wos.goDesk(1); else __wux.openChatsList();
+      // done() persists sent before the hook; landed() may later compact text and
+      // runId away. Bind this receipt to the exact idempotency key, not 'some sent'.
+      window.__qaReceipts=[];
+      WosOutbox.onSent((it,res)=>{const value={id:it.id,sessionId:it.sessionId,kind:it.kind,text:it.text,model:it.model,provider:it.provider,body:it.body,state:it.state,runId:res.runId};__qaReceipts.push(value);void window.__qaReceipt(value);});
+    },mobile);
+    if (half) await p.evaluate(()=>__wux.newWin({app:'settings'}));
+    const id = await p.evaluate(mobile=>Object.values((mobile ? __wos : __wux).wins).find(w=>w.app==='chats'&&!w.agent).id,mobile);
+    if (!mobile) await p.evaluate(id=>__wux.focusWin(id),id);
+    await p.waitForTimeout(300);
+    const root = `.win[data-win="${id}"]`, list = mobile ? root : root + ' .pane-list';
+    const state = () => p.evaluate(({id,mobile})=>{
+      const w=(mobile ? __wos : __wux).wins[id], el=document.querySelector(`.win[data-win="${id}"]`);
+      const box=el.querySelector('.dchats'), list=el.querySelector(mobile ? '.ch-list' : '.pane-list');
+      return {thread:w.thread ?? null,attr:box?.dataset.thread,width:box?.getBoundingClientRect().width,list:!!list&&list.getBoundingClientRect().width>0&&getComputedStyle(list).display!=='none',draft:el.querySelector('.ch-compose textarea')?.value || ''};
+    },{id,mobile});
+    const newChat = async () => { await p.locator(list+' [data-chnew]').first().click(); await p.waitForSelector(root+' .ch-compose textarea',{state:'visible'}); };
+    const send = async text => {
+      holdAck=true;
+      await p.locator(root+' .ch-compose textarea').fill(text);
+      // Bubble listener runs after the real form's handler, in the SAME task.
+      await p.evaluate(({id,mobile})=>{document.addEventListener('submit',()=>{const w=(mobile ? __wos : __wux).wins[id],box=document.querySelector(`.win[data-win="${id}"] .dchats`); window.__qaSubmit={thread:w.thread??null,attr:box?.dataset.thread};},{once:true});},{id,mobile});
+      await p.locator(root+' .ch-send').click();
+      journal.submission=await p.evaluate(()=>__qaSubmit);flush();return journal.submission;
+    };
+    const holdSave = () => p.evaluate(()=>{const ob=WosOutbox,enqueue=ob.enqueue;window.__qaResume=null;ob.enqueue=async x=>{await new Promise((resolve,reject)=>{window.__qaResume={resolve,reject};});return enqueue.call(ob,x);};window.__qaUnhold=()=>{ob.enqueue=enqueue;};});
+    const release = async reject => { await p.evaluate(reject=>{const r=__qaResume;__qaUnhold();reject ? r.reject(new Error('QA disk full')) : r.resolve();},reject); };
+    const openOther = () => p.locator(list+' [data-chopen="qa_tt_b"]').first().click();
+    const ack = () => {holdAck=false;heldRuns.splice(0).forEach(r=>r());};
+    const sent = async text => {
+      await p.waitForFunction(text=>[...WosOutbox._items.values()].some(x=>x.text===text&&x.state==='sending'),text);
+      await p.waitForFunction(text=>[...WosOutbox._items.values()].some(x=>x.text===text&&!!x.body),text);
+      for(let n=0;n<80&&!intercepted.some(w=>w.path.endsWith('/v1/runs')&&JSON.parse(w.body).input===text);n++)await p.waitForTimeout(50);
+      const runs=intercepted.filter(w=>w.path.endsWith('/v1/runs')&&JSON.parse(w.body).input===text);
+      if(runs.length!==1||!runs[0].key)throw new Error('Expected one exact held run for '+text);
+      const write=runs[0],body=JSON.parse(write.body);
+      const item=await p.evaluate(key=>{const x=WosOutbox._items.get(key);return x&&{id:x.id,sessionId:x.sessionId,text:x.text,model:x.model,provider:x.provider,body:x.body};},write.key);
+      check(!!item&&item.text===text&&body.input===text&&body.session_id===item.sessionId&&body.model===item.model&&body.provider===item.provider&&body.require_model_lock===true&&write.body===item.body,'held run bound to exact item, destination, text and model', {write,item});
+      return async()=>{ack();await p.waitForFunction(key=>__qaReceipts.some(x=>x.id===key),write.key);const receipt=await p.evaluate(key=>__qaReceipts.find(x=>x.id===key),write.key);check(receipt.state==='sent'&&receipt.text===text&&receipt.sessionId===body.session_id&&receipt.runId===write.ack.run_id&&receipt.body===write.body,'persisted receipt bound to exact intercepted ACK',{receipt,write});};
+    };
+    return {c,p,id,root,list,state,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors};
+  }
+  // Parent runner admits the full matrix only after the exact real form can
+  // reach a held run and persist its matching ACK on every sealed source.
+  if(process.env.QA_SEND_RETURN_SMOKE==='1') {
+    try { const t=await boot(false,'nebula',true);
+      await t.newChat(); await t.holdSave(); await t.send('QA model route smoke'); await t.release(false);
+      await (await t.sent('QA model route smoke'))();
+      check(t.errors.length===0,'model route smoke has no page errors',t.errors);
+      console.log('MODEL_ROUTE_SMOKE_OK'); await close(t.c);
+    } catch(e) { check(false,'model route smoke exception',String(e.stack||e)); }
+    return;
+  }
+  for (const skin of ['nebula','grove']) { try {
+    const t=await boot(false,skin,true), {p}=t;
+    check((await t.state()).width<=620,skin+': real tiled half-width Chats');
+    await t.newChat(); await t.holdSave();
+    const sync=await t.send('QA half new '+skin);
+    check(sync.thread===null&&sync.attr==='',skin+': real New chat click/send returns list in same task',sync);
+    await p.waitForTimeout(450); let st=await t.state();
+    check(st.thread===null&&st.attr===''&&st.list,skin+': list remains past legacy timer with save held',st);
+    if (process.env.QA_EXPECT_RED === '1') {
+      await p.screenshot({path:path.join(OUT,'baseline-half-new-send.png')});
+      evidence[evidence.length-1].red={state:st,sync};flush();
+      console.log(st.thread==='__new__'&&!st.list ? 'RED_EXPECTED half-width timer reopened __new__' : 'RED_NOT_REPRODUCED');
+      await close(t.c); return;
+    }
+    await t.release(false);
+    const ackExact=await t.sent('QA half new '+skin);
+    await p.waitForTimeout(350); st=await t.state();
+    check(st.thread===null&&st.list,skin+': pending run ACK leaves list visible',st);
+    await ackExact();
+    st=await t.state(); check(st.thread===null&&st.list,skin+': outbox ACK does not reopen New chat',st);
+    check(await p.evaluate(skin=>WosSkin.current===skin&&document.documentElement.dataset.skin===skin,skin),skin+': screenshot wears requested real shell skin');
+    await p.screenshot({path:path.join(OUT,`half-new-send-${skin}.png`)});
+    await t.newChat(); await t.holdSave(); await t.send('QA recover '+skin); await t.release(true); await p.waitForTimeout(450);
+    st=await t.state(); check(st.thread==='__new__'&&st.draft==='QA recover '+skin,skin+': failed save restores original composer without timer clearing words',st);
+    await p.locator(t.root+' [data-chback]').click();
+    await t.newChat(); await t.holdSave(); await t.send('QA navigate success '+skin); await t.openOther(); await p.waitForTimeout(450);
+    check((await t.state()).thread==='qa_tt_b',skin+': opening another thread during save survives old timer');
+    await t.release(false);await (await t.sent('QA navigate success '+skin))(); await p.waitForTimeout(450);
+    check((await t.state()).thread==='qa_tt_b',skin+': newer thread survives save and ACK');
+    await p.locator(t.root+' [data-chback]').click();
+    await t.newChat(); await t.holdSave(); await t.send('QA navigate failure '+skin); await t.openOther(); await t.release(true); await p.waitForTimeout(450);
+    st=await t.state(); check(st.thread==='qa_tt_b',skin+': delayed failure cannot take over newer thread',st);
+    const failedText='QA navigate failure '+skin;
+    const persisted=await p.evaluate(()=>JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}'));
+    check(persisted.new?.text===failedText,skin+': late failed draft persists exact text before fresh New chat',persisted);
+    await p.locator(t.root+' [data-chback]').click(); await t.newChat();
+    st=await t.state(); check(st.thread==='__new__'&&st.draft==='',skin+': fresh New chat stays empty after late failure',st);
+    // Fresh New chat intentionally rotates the recovered live slot. Resume the
+    // saved words through the real list row, not a product/debug state setter.
+    await p.locator(t.root+' [data-chback]').click();
+    const saved=await p.evaluate(text=>Object.entries(JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}')).filter(([key,d])=>/^new:[a-z0-9]{4,40}$/.test(key)&&d.text===text).map(([key])=>key),failedText);
+    // The cached desktop pane refreshes through the owner's real window control.
+    await p.keyboard.press('Alt+r');
+    await p.locator(t.list+' [data-chdraft="'+saved[0]+'"]').waitFor({state:'visible'});
+    const draftRow=p.locator(t.list+' [data-chdraft]').filter({has:p.getByText(failedText,{exact:true})});
+    const rowCount=await draftRow.count();
+    const rowKey=rowCount===1 ? await draftRow.getAttribute('data-chdraft') : null;
+    check(saved.length===1&&rowCount===1&&rowKey===saved[0],skin+': unique real saved-draft row matches exact persisted failed text',{saved,rowCount,rowKey});
+    await draftRow.click();
+    st=await t.state(); check(st.thread==='__new__'&&st.draft===failedText,skin+': late failed draft remains recoverable',st);
+    await p.evaluate(()=>WosSkin.set('obsidian')); await p.waitForTimeout(200);
+    check(await p.evaluate(()=>WosSkin.current==='obsidian'&&document.documentElement.dataset.skin==='obsidian'&&!!getComputedStyle(document.documentElement).getPropertyValue('--wz-base').trim()),skin+': live skin change retains Appearance tokens');
+    check(t.errors.length===0,skin+': no page errors',t.errors); await close(t.c);
+  } catch(e) { check(false,skin+': case exception',String(e.stack||e)); await closeAll(); }
+  }
+  // Neighbours: shared core API wide replies stay open; the wide shell's existing
+  // real-form shortcut still opens a fresh draft. Phone retains send-and-back.
+  try { const wide=await boot(false,'nebula');
+  check((await wide.state()).width>620,'wide desktop uses two-pane layout');
+  await wide.p.locator(wide.list+' [data-chopen="qa_tt_a"]').first().click();
+  await wide.p.evaluate(id=>__wux.chats.sendChat(id,'QA wide keep thread'),wide.id); await wide.p.waitForTimeout(250);
+  check((await wide.state()).thread==='qa_tt_a','wide desktop shared reply keeps thread');
+  await wide.p.locator(wide.list+' [data-chnew]').first().click(); await wide.send('QA wide real form'); await wide.p.waitForTimeout(450);
+  check((await wide.state()).thread==='__new__','wide desktop real-form fresh-draft shortcut unchanged'); wide.ack();
+  check(wide.errors.length===0,'wide desktop no page errors',wide.errors); await close(wide.c);
+  } catch(e) { check(false,'wide case exception',String(e.stack||e)); await closeAll(); }
+  try { const phone=await boot(true,'nebula');
+  check(await phone.p.evaluate(()=>document.documentElement.dataset.shell)==='phone','phone fixture uses real phone shell');
+  await phone.newChat(); await phone.holdSave(); const sync=await phone.send('QA phone new');
+  check(sync.thread===null,'phone new send immediately returns list',sync); await phone.release(false);await (await phone.sent('QA phone new'))(); await phone.p.waitForTimeout(450);
+  check((await phone.state()).thread===null,'phone new ACK retains list');
+  await phone.p.locator(phone.list+' [data-chopen="qa_tt_a"]').first().click(); await phone.send('QA phone reply');await (await phone.sent('QA phone reply'))(); await phone.p.waitForTimeout(450);
+  check((await phone.state()).thread===null,'phone reply still returns list');
+  await phone.p.locator(phone.list+' [data-chopen="qa_tt_b"]').first().click(); await phone.p.evaluate(()=>__wosNativeBack());
+  check((await phone.state()).thread===null,'phone Back returns list'); await phone.p.evaluate(()=>__wosNativeBack());
+  check(await phone.p.evaluate(()=>!!window.__wos&&document.visibilityState==='visible'),'phone root Back never exits');
+  check(phone.errors.length===0,'phone no page errors',phone.errors); await close(phone.c);
+  } catch(e) { check(false,'phone case exception',String(e.stack||e)); await closeAll(); }
+  } finally { await closeAll(); flush(); }
+}
+
 (async () => {
-  const b = await chromium.launch({ executablePath: fs.existsSync(EXEC) ? EXEC : undefined, args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
+  const b = await chromium.launch({ executablePath: EXEC && fs.existsSync(EXEC) ? EXEC : undefined, args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
+  if (process.env.QA_SEND_RETURN === '1') { try { await sendReturnChecks(b); } finally { await b.close(); } console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); }
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, serviceWorkers:'block' });
   await ctx.route('**/*', routeFor());
   const p = await ctx.newPage(); p.setDefaultTimeout(8000);

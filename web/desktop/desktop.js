@@ -591,6 +591,11 @@
   stage.addEventListener('submit', e => {
     const form = e.target.closest?.('[data-chform]'), ta = form?.querySelector('textarea'); if (!ta?.value.trim()) return;
     const wel = form.closest('.win'), wid = wel?.dataset.win, w = W[wid]; if (!mainChats(w)) return;
+    // In the single-pane layout, shared Chats already returns a new send to the
+    // list synchronously. Do not reopen __new__ 180 ms later (or steal a newer
+    // visit / a failed-save recovery). Match desktop.css's 620px container rule;
+    // full-width desktop and existing-thread / voice sends keep their behavior.
+    if (w.thread === '__new__' && wel.querySelector('.dchats')?.getBoundingClientRect().width <= 620) return;
     setTimeout(() => {
       if (W[wid] !== w || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
       toNewChat(wid, 'text');
