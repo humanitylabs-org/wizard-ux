@@ -12,7 +12,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
-import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import org.json.JSONException;
@@ -31,9 +30,10 @@ import ai.wizards.os.share.ShareStore;
 import ai.wizards.os.update.Updater;
 
 /**
- * Second JS bridge, "WizardOSDevice": the native-parity features (background recorder, share target, reply
- * notifications, in-app update). Its own class so MainActivity only gains a few hook lines.
- * Native → web events go to window.WosDevice.event(type, json) (web/device.js).
+ * The native-parity features the shell reaches as window.WizardOSDevice (background recorder, share target, reply
+ * notifications, in-app update). Not a JavaScript interface: the page facade (web/core/native-shell-port.js) calls
+ * {@link #call} through the main-frame-checked window.wizardShellPort, by the exact names in ShellPortPolicy.
+ * Native → web events go to window.WosDevice.event(type, json) (web/device.js), over the same port when bound.
  */
 public final class DeviceBridge implements RecorderService.Listener {
     static final String TAG = "WizardDevice";
@@ -157,9 +157,76 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     /* ------------------------------------------------------------------ events to the page */
 
+    /** Set by MainActivity: delivers a page hook over the bound shell port (after fresh state); false = not bound. */
+    public interface Hook { boolean run(String name, String argJson); }
+    private Hook hook;
+    public void setHook(Hook h) { hook = h; }
+
     public void emit(String type, String json) {
-        main.post(() -> web.evaluateJavascript("(window.WosDevice && window.WosDevice.event(" + ai.wizards.os.device.Json.quote(type) + "," + json + "))", null));
+        main.post(() -> {
+            String arg;
+            try { arg = new org.json.JSONArray().put(type).put(new JSONObject(json)).toString(); } catch (JSONException e) { arg = null; }
+            if (arg != null && hook != null && hook.run("WosDevice.event", arg)) return;
+            web.evaluateJavascript("(window.WosDevice && window.WosDevice.event(" + ai.wizards.os.device.Json.quote(type) + "," + json + "))", null);
+        });
     }
+
+    /* ------------------------------------------------------------------ shell port dispatch */
+
+    /** The reviewed WizardOSDevice command set (ShellPortPolicy.deviceMethods), by exact name: no reflection. */
+    public Object call(String method, org.json.JSONArray a) {
+        switch (method) {
+            case "version": return version();
+            case "recHandoffVersion": return recHandoffVersion();
+            case "recHandoffBegin": return recHandoffBegin(s(a, 0), s(a, 1));
+            case "recStartBorrowed": return recStartBorrowed(s(a, 0), s(a, 1));
+            case "recHandoffEnd": return recHandoffEnd(s(a, 0));
+            case "recHandoffEvents": return recHandoffEvents();
+            case "recStart": return recStart(s(a, 0));
+            case "recPause": recPause(a.optBoolean(0)); return null;
+            case "recLevel": return recLevel();
+            case "micRoute": return micRoute();
+            case "micPolicy": return micPolicy();
+            case "setMicPolicy": return setMicPolicy(s(a, 0));
+            case "recActive": return recActive();
+            case "recStop": return recStop(s(a, 0));
+            case "recCancel": recCancel(s(a, 0)); return null;
+            case "recClaim": return recClaim(s(a, 0));
+            case "recRead": return recRead(s(a, 0), a.optInt(1));
+            case "captureJournal": return captureJournal();
+            case "recDone": recDone(s(a, 0)); return null;
+            case "recPending": return recPending();
+            case "cancelledList": return cancelledList();
+            case "cancelledRead": return cancelledRead(s(a, 0), a.optInt(1));
+            case "cancelledDelete": cancelledDelete(s(a, 0)); return null;
+            case "clip": return clip(s(a, 0));
+            case "shareMeta": return shareMeta(s(a, 0));
+            case "shareRead": return shareRead(s(a, 0), a.optInt(1), a.optInt(2));
+            case "shareDone": shareDone(s(a, 0)); return null;
+            case "watchRun": watchRun(s(a, 0), s(a, 1), s(a, 2)); return null;
+            case "replyNotes": return replyNotes();
+            case "clearThread": return clearThread(s(a, 0));
+            case "notifications": return notifications();
+            case "updateCheck": updateCheck(); return null;
+            case "updateInstall": updateInstall(); return null;
+            case "updateState": return updateState();
+            default: throw new IllegalArgumentException("unknown method");
+        }
+    }
+
+    private static String s(org.json.JSONArray a, int i) { Object o = a.opt(i); return o instanceof String ? (String) o : null; }
+
+    /** Cached reads for the facade's synchronous getters. {@code full=false}: the ~100 ms recording tick only. */
+    public void state(JSONObject out, boolean full) throws JSONException {
+        out.put("recActive", recActive()).put("recLevel", recLevel());
+        if (!full) return;
+        out.put("version", version()).put("recHandoffVersion", recHandoffVersion())
+           .put("micPolicy", micPolicy()).put("captureJournal", captureJournal()).put("recPending", recPending())
+           .put("cancelledList", cancelledList()).put("recHandoffEvents", recHandoffEvents()).put("replyNotes", replyNotes())
+           .put("notifications", notifications()).put("updateState", updateState());
+    }
+
+    public boolean recording() { return RecorderService.active() != null; }
 
     @Override
     public void onRecorderEvent(String type, String id) {
@@ -168,36 +235,29 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     /* ------------------------------------------------------------------ JS API */
 
-    @JavascriptInterface
     public int version() { return 1; }
 
     /** Additive capability: older APKs keep refusing meeting/orb competition. */
-    @JavascriptInterface
     public int recHandoffVersion() { return 1; }
 
-    @JavascriptInterface
     public String recHandoffBegin(String eventId, String meetingId) {
         return ai.wizards.os.mizel.MeetingRecorderService.beginBorrow(eventId, meetingId);
     }
 
-    @JavascriptInterface
     public String recStartBorrowed(String kind, String eventId) {
         return RecorderService.start(activity, kind, eventId);
     }
 
-    @JavascriptInterface
     public String recHandoffEnd(String eventId) {
         return ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "cancelled");
     }
 
-    @JavascriptInterface
     public String recHandoffEvents() {
         return new JSONObject(activity.getSharedPreferences("meeting-handoffs-v1", Context.MODE_PRIVATE).getAll()).toString();
     }
 
     /* --- recorder --- */
 
-    @JavascriptInterface
     public String recStart(String kind) {
         askNotifications();
         String id = RecorderService.start(activity, kind);
@@ -205,31 +265,25 @@ public final class DeviceBridge implements RecorderService.Listener {
         return id;
     }
 
-    @JavascriptInterface
     public void recPause(boolean on) { RecorderService.pause(activity, on); }
 
-    @JavascriptInterface
     public int recLevel() { return RecorderService.level(); }
 
     /**
      * The route of the page's own browser recording: "builtin", "external", "system" or "unknown". The page calls it
      * right after getUserMedia and stops a take Android has put on a Bluetooth or external mic.
      */
-    @JavascriptInterface
     public String micRoute() { return ai.wizards.os.audio.MicRoute.browserVerdict(activity); }
 
     /**
      * Settings → Microphone: {"v":1,"policy":{…},"inputs":[{type,name,address}…]}. The policy shape is documented on
      * {@link ai.wizards.os.audio.MicPolicy}; the page can offer new choices (per-device order) without a native update.
      */
-    @JavascriptInterface
     public String micPolicy() { return ai.wizards.os.audio.MicRoute.settingsJson(activity); }
 
     /** Saves a microphone policy from Settings. Returns the policy actually stored (the default for bad input). */
-    @JavascriptInterface
     public String setMicPolicy(String json) { return ai.wizards.os.audio.MicPolicy.save(activity, json).json(); }
 
-    @JavascriptInterface
     public String recActive() {
         String id = RecorderService.active();
         if (id == null) return "null";
@@ -242,17 +296,14 @@ public final class DeviceBridge implements RecorderService.Listener {
     }
 
     /** Stops the take (blocking this bridge thread until the file is closed) and claims it for the page. */
-    @JavascriptInterface
     public String recStop(String id) {
         RecorderService.stopNow(id, "app");
         return claim(id);
     }
 
-    @JavascriptInterface
     public void recCancel(String id) { RecorderService.cancel(activity, id); }
 
     /** Claims a stopped/recovered take for this page and describes it. */
-    @JavascriptInterface
     public String recClaim(String id) { return claim(id); }
 
     private String claim(String id) {
@@ -265,15 +316,12 @@ public final class DeviceBridge implements RecorderService.Listener {
         catch (JSONException e) { return "null"; }
     }
 
-    @JavascriptInterface
     public String recRead(String id, int offset) { return readChunk(RecordingStore.get(activity).audio(id), offset); }
 
     /** Read-only native custody status; excludes paths and private receipt payloads. */
-    @JavascriptInterface
     public String captureJournal() { return CaptureJournal.get(activity).status(); }
 
     /** The page has the take safe in its durable outbox: release native custody (WEB_OUTBOX_CUSTODY), end the hold. */
-    @JavascriptInterface
     public void recDone(String id) {
         RecordingStore.get(activity).delete(id);
         RecorderService.done(id);
@@ -281,7 +329,6 @@ public final class DeviceBridge implements RecorderService.Listener {
     }
 
     /** Takes waiting for a home: stopped from the notification, or cut short by an app kill. */
-    @JavascriptInterface
     public String recPending() {
         List<JSONObject> l = RecordingStore.get(activity).pending(RecorderService.active());
         return RecordingStore.json(l);
@@ -290,17 +337,13 @@ public final class DeviceBridge implements RecorderService.Listener {
     /* --- cancelled recordings (Settings → Cancelled recordings) --- */
 
     /** Long takes that were cancelled, newest first: [{id, at, ms, source, mime, bytes}]. */
-    @JavascriptInterface
     public String cancelledList() { return CancelledTakes.listJson(activity); }
 
-    @JavascriptInterface
     public String cancelledRead(String id, int offset) { return readChunk(CancelledTakes.audio(activity, String.valueOf(id)), offset); }
 
-    @JavascriptInterface
     public void cancelledDelete(String id) { CancelledTakes.delete(activity, String.valueOf(id)); }
 
     /** Put text on the clipboard natively (the page's async clipboard needs a fresh tap, and transcribing takes seconds). */
-    @JavascriptInterface
     public boolean clip(String text) {
         final String t = String.valueOf(text);
         activity.runOnUiThread(() -> {
@@ -314,36 +357,29 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     /* --- share --- */
 
-    @JavascriptInterface
     public String shareMeta(String id) {
         String m = ShareStore.get(activity).meta(id);
         return m == null ? "null" : m;
     }
 
-    @JavascriptInterface
     public String shareRead(String id, int n, int offset) { return readChunk(ShareStore.get(activity).item(id, n), offset); }
 
-    @JavascriptInterface
     public void shareDone(String id) { ShareStore.get(activity).delete(id); }
 
     /* --- reply notifications --- */
 
     /** A message James sent from Wizard OS was accepted: tell him when the reply is ready if he has left the app. */
-    @JavascriptInterface
     public void watchRun(String sessionId, String runId, String title) {
         askNotifications();
         ReplyWatcher.watch(activity, sessionId, runId, title);
     }
 
     /** Reply notifications on the shade, so the page can clear the ones for threads James has since read. */
-    @JavascriptInterface
     public String replyNotes() { return ReplyWatcher.active(activity); }
 
     /** James read this thread in Wizard: remove its notifications even though he didn't open it from them. */
-    @JavascriptInterface
     public int clearThread(String sessionId) { return ReplyWatcher.clearThread(activity, sessionId); }
 
-    @JavascriptInterface
     public String notifications() {
         boolean ok = Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
         return obj("allowed", String.valueOf(ok), "watching", String.valueOf(ReplyWatcher.count(activity)));
@@ -351,13 +387,10 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     /* --- update --- */
 
-    @JavascriptInterface
     public void updateCheck() { Updater.check(activity); }
 
-    @JavascriptInterface
     public void updateInstall() { Updater.install(activity); }
 
-    @JavascriptInterface
     public String updateState() { return Updater.state(); }
 
     /* ------------------------------------------------------------------ helpers */

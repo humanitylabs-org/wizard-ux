@@ -16,7 +16,6 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
-import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
@@ -86,8 +85,50 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
     private ai.wizards.os.photos.PhotosBridge photos; // window.wizardPhotosPort: Settings › Photos backup (web page)
+    /** window.wizardShellPort: the main-document-only route to WizardOSNative / WizardOSDevice (no Java objects in frames). */
+    private ai.wizards.os.shellport.ShellNativePort shellPort;
 
     private String screenCaptureId;
+
+    /** Runs an allowlisted page hook over the bound shell port (fresh cache first); false = use evaluateJavascript. */
+    boolean pageHook(String name, String argJson) { return shellPort != null && shellPort.hook(name, argJson); }
+
+    /** The trusted top document: the shell on the persisted owner origin (QA builds: the loopback fake's shell path). */
+    boolean shellOnTop() {
+        WebView w = web;
+        String u = w == null ? null : w.getUrl();
+        if (u == null) return false;
+        Uri x = Uri.parse(u);
+        if (this instanceof AppSessionActivity && !((AppSessionActivity) this).acceptsUrl(u)) return false;
+        if (BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaPage(this, x)) return Origin.isShellPath(x.getPath());
+        return Origin.isShell(this, x);
+    }
+
+    /** WizardOSNative / WizardOSDevice for the shell's main document only (ShellPortPolicy has the exact command set). */
+    private void installShellPort(WebView target) {
+        if (shellPort != null) shellPort.detach();
+        final Bridge bridge = new Bridge();
+        final ai.wizards.os.device.DeviceBridge dev = device;
+        shellPort = ai.wizards.os.shellport.ShellNativePort.install(target, ai.wizards.os.device.AppState.primaryOrigin(this),
+                () -> ai.wizards.os.device.AppState.primaryOrigin(this), () -> web == target && shellOnTop(),
+                new ai.wizards.os.shellport.ShellNativePort.Commands() {
+                    @Override public Object call(String targetName, String method, org.json.JSONArray args) {
+                        return "device".equals(targetName) ? dev.call(method, args) : bridge.call(method, args);
+                    }
+                    @Override public org.json.JSONObject state(boolean full) throws org.json.JSONException {
+                        org.json.JSONObject device = new org.json.JSONObject();
+                        dev.state(device, full);
+                        org.json.JSONObject out = new org.json.JSONObject().put("device", device);
+                        if (full) out.put("native", bridge.state());
+                        return out;
+                    }
+                    @Override public boolean recording() { return dev.recording(); }
+                });
+        if (shellPort == null) {
+            android.util.Log.w("WizardShellPort", "no main-frame port on this WebView: shell device features are off (update Android System WebView)");
+            device.setHook(null);
+        } else device.setHook(this::pageHook);
+    }
 
     /** Same established main-frame/origin boundary as wizardAppsPort; hosted app frames cannot request captures. */
     private void installScreenPort(WebView target) {
@@ -177,7 +218,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         s.setUserAgentString(s.getUserAgentString() + UA_TAG + " WizardOS-DocScroll");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
-        web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        // No addJavascriptInterface: a Java object is reachable from EVERY frame, including hosted app frames.
+        // The shell reaches these features through installShellPort() below (main frame, trusted document only).
         if (this instanceof AppSessionActivity && androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
             androidx.webkit.WebViewCompat.addDocumentStartJavaScript(web,
                 "if(window!==top){try{top.WizHomeScreenPolicy?.installPresentationStorage(window)}catch(_){}}",
@@ -190,7 +232,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         ai.wizards.os.photos.BackupScheduler.schedule(this);
         if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
-        web.addJavascriptInterface(device, "WizardOSDevice");
+        installShellPort(web);
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
@@ -269,6 +311,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                if (shellPort != null) shellPort.onPageStarted(); // the old document's replies are void
                 if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
@@ -284,6 +327,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
                 // Never let a renderer crash take the app down: rebuild the WebView and go home.
+                if (shellPort != null) { shellPort.detach(); shellPort = null; }
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
@@ -698,6 +742,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         cutoutCss = Math.round(px / getResources().getDisplayMetrics().density);
         if (cutoutCss == cutoutSent || web == null) return;
         cutoutSent = cutoutCss;
+        if (pageHook("__wosCutout", String.valueOf(cutoutCss))) return;
         web.evaluateJavascript("(window.__wosCutout && window.__wosCutout(" + cutoutCss + "))", null);
     }
 
@@ -710,6 +755,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         topCss = Math.round(px / getResources().getDisplayMetrics().density);
         if (topCss == topSent || web == null) return;
         topSent = topCss;
+        if (pageHook("__wosTop", String.valueOf(topCss))) return;
         web.evaluateJavascript("(window.__wosTop && window.__wosTop(" + topCss + "))", null);
     }
 
@@ -745,7 +791,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         pushEverywhere();
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
         pushSideButton();
-        web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
+        if (!pageHook("__wosUsuals", null)) web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
+        if (shellPort != null) shellPort.setForeground(true);
         device.onResume();
         if (apps != null) apps.onResume();
         if (photos != null) photos.onResume();
@@ -770,6 +817,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      * (the assistant pick). Coming back, the shell is told the new state and the switch updates on its own. */
     void pushSideButton() {
         if (web == null) return;
+        if (pageHook("__wosSideButton", SideButton.status(this))) return;
         web.evaluateJavascript("(window.__wosSideButton && window.__wosSideButton(" + SideButton.status(this) + "))", null);
     }
 
@@ -800,6 +848,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
+        if (shellPort != null) shellPort.setForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
         if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
@@ -814,11 +863,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     public static void notifyUnsentChanged() {
         MainActivity a = current.get();
         if (a == null || a.web == null) return;
-        a.main.post(() -> a.web.evaluateJavascript("(window.__wosUnsent && window.__wosUnsent())", null));
+        a.main.post(() -> { if (a.web != null && !a.pageHook("__wosUnsent", null)) a.web.evaluateJavascript("(window.__wosUnsent && window.__wosUnsent())", null); });
     }
 
     void pushEverywhere() {
-        if (web != null) web.evaluateJavascript("(window.__wosEverywhere && window.__wosEverywhere())", null);
+        if (web != null && !pageHook("__wosEverywhere", null)) web.evaluateJavascript("(window.__wosEverywhere && window.__wosEverywhere())", null);
     }
 
     /** Switch on: ask for the mic and notifications in place, then Android's overlay page if needed. */
@@ -937,6 +986,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (apps != null) { apps.detach(); apps = null; }
         if (photos != null) { photos.detach(); photos = null; }
         if (audio != null) { audio.detach(); audio = null; }
+        if (shellPort != null) { shellPort.detach(); shellPort = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }
@@ -947,26 +997,72 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
-    /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
+    /**
+     * The shell's WizardOSNative features. Not a JavaScript interface: only {@link #call} reaches them, through the
+     * main-frame-checked window.wizardShellPort, by the exact names in ShellPortPolicy.nativeMethods().
+     */
     private final class Bridge {
+        Object call(String method, org.json.JSONArray a) {
+            switch (method) {
+                case "openInBrowser": openInBrowser(s(a, 0)); return null;
+                case "download": download(s(a, 0)); return null;
+                case "changeServer": changeServer(); return null;
+                case "platform": return platform();
+                case "usuals": return usuals();
+                case "usualsTeach": return usualsTeach(s(a, 0));
+                case "usualsRun": return usualsRun(s(a, 0));
+                case "usualsMatch": return usualsMatch(s(a, 0));
+                case "usualsSave": return usualsSave(s(a, 0), s(a, 1), s(a, 2));
+                case "usualsKeepName": usualsKeepName(s(a, 0)); return null;
+                case "usualsDelete": usualsDelete(s(a, 0)); return null;
+                case "usualsCancel": usualsCancel(); return null;
+                case "sideButton": return sideButton();
+                case "setupSideButton": setupSideButton(); return null;
+                case "sideButtonSettings": sideButtonSettings(); return null;
+                case "everywhere": return everywhere();
+                case "setEverywhere": setEverywhere(a.optBoolean(0)); return null;
+                case "voiceTypingSettings": voiceTypingSettings(); return null;
+                case "appVoice": appVoice(s(a, 0), a.optLong(1)); return null;
+                case "unsent": return unsent();
+                case "retryUnsent": retryUnsent(s(a, 0)); return null;
+                case "deleteUnsent": deleteUnsent(s(a, 0)); return null;
+                case "appUnsent": appUnsent(a.optInt(0), s(a, 1)); return null;
+                case "keepAwake": keepAwake(a.optBoolean(0)); return null;
+                case "immersive": immersive(a.optBoolean(0)); return null;
+                case "cutoutTop": return cutoutTop();
+                case "insetTop": return insetTop();
+                case "shareText": shareText(s(a, 0), s(a, 1)); return null;
+                case "shareFile": shareFile(s(a, 0), s(a, 1), s(a, 2)); return null;
+                case "selection": selection(a.optInt(0)); return null;
+                case "haptic": haptic(a.optInt(0)); return null;
+                default: throw new IllegalArgumentException("unknown method");
+            }
+        }
+        private String s(org.json.JSONArray a, int i) { Object o = a.opt(i); return o instanceof String ? (String) o : null; }
+
+        /** Cached reads for the facade's synchronous getters (re-sent after every command and native change). */
+        org.json.JSONObject state() throws org.json.JSONException {
+            return new org.json.JSONObject().put("platform", platform()).put("sideButton", sideButton())
+                    .put("everywhere", everywhere()).put("unsent", unsent()).put("usuals", usuals())
+                    .put("cutoutTop", cutoutTop()).put("insetTop", insetTop());
+        }
+
         /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
-        @JavascriptInterface public void openInBrowser(String url) {
+        public void openInBrowser(String url) {
             final Uri u = Uri.parse(String.valueOf(url));
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> openInOwnBrowser(u));
         }
         /** A file link (APK, PDF…) on this Wizard: Android's download manager, so it lands in Downloads with a notification. */
-        @JavascriptInterface public void download(String url) {
+        public void download(String url) {
             final Uri u = Uri.parse(String.valueOf(url));
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
         }
-        @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
-        @JavascriptInterface
+        public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
 
         /* ---- Usuals: James's regular Grab orders (usuals/*). Nothing here can place an order. ---- */
-        @JavascriptInterface
         public String usuals() {
             ai.wizards.os.usuals.UsualsRunner r = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this);
             try {
@@ -977,7 +1073,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             } catch (org.json.JSONException e) { return "{}"; }
         }
 
-        @JavascriptInterface
         public String usualsTeach(String name) {
             final String[] out = {""};
             java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
@@ -986,7 +1081,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             return out[0];
         }
 
-        @JavascriptInterface
         public String usualsRun(String id) {
             final String[] out = {""};
             java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
@@ -1000,13 +1094,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
 
         /** The usual whose name James said ("order my usual kra pao"), "+new" for "order something new", or "". */
-        @JavascriptInterface
         public String usualsMatch(String said) {
             String id = ai.wizards.os.usuals.UsualsVoice.match(MainActivity.this, String.valueOf(said));
             return id == null ? "" : id;
         }
 
-        @JavascriptInterface
         public boolean usualsSave(String id, String name, String script) {
             ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
             if (u == null) return false;
@@ -1021,27 +1113,21 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
 
         /** "Keep" on a new usual's suggested name. */
-        @JavascriptInterface
         public void usualsKeepName(String id) {
             ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
             if (u != null && u.needsName) { u.needsName = false; ai.wizards.os.usuals.UsualsStore.put(MainActivity.this, u); }
         }
-        @JavascriptInterface
         public void usualsDelete(String id) { ai.wizards.os.usuals.UsualsStore.delete(MainActivity.this, String.valueOf(id)); }
 
-        @JavascriptInterface
         public void usualsCancel() { main.post(() -> ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this).cancel()); }
 
         /** {"mic","assistant","used","samsung","step"}: what the side-button switch should show. */
-        @JavascriptInterface
         public String sideButton() { return SideButton.status(MainActivity.this); }
 
         /** The Turn on tap. Does the next missing step; the result comes back through window.__wosSideButton. */
-        @JavascriptInterface
         public void setupSideButton() { runOnUiThread(MainActivity.this::startSideButton); }
 
         /** Samsung's own Side button page (or Android's gesture page), for "not opening Wizard?". */
-        @JavascriptInterface
         public void sideButtonSettings() {
             runOnUiThread(() -> {
                 if (!SideButton.openSideKeyPage(MainActivity.this)) SideButton.openAssistantPage(MainActivity.this);
@@ -1049,10 +1135,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
 
         /** {"enabled","overlay","notifications","mic"} for the Wizard Everywhere switch in Settings. */
-        @JavascriptInterface
         public String everywhere() { return ai.wizards.os.everywhere.EverywhereService.status(MainActivity.this); }
 
-        @JavascriptInterface
         public void setEverywhere(boolean on) {
             runOnUiThread(() -> {
                 if (on) startEverywhere();
@@ -1062,44 +1146,34 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
         /** Messages from the floating button that Wizard has not accepted yet (no paths, no bodies). */
         /** Android's Accessibility page, to switch on voice typing + screenshots for Wizard Everywhere. */
-        @JavascriptInterface
         public void voiceTypingSettings() { runOnUiThread(() -> offerAccessibility(false)); }
 
         /** "listen" | "paused" | "think" | "idle" + elapsed ms: leaving Wizard OS mid-take shows the floating orb. */
-        @JavascriptInterface
         public void appVoice(String state, long elapsedMs) {
             ai.wizards.os.everywhere.EverywhereService.appVoiceState(MainActivity.this, String.valueOf(state), elapsedMs);
         }
 
-        @JavascriptInterface
         public String unsent() { return ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).unsentJson(); }
 
-        @JavascriptInterface
         public void retryUnsent(String id) { ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).retry(String.valueOf(id)); }
 
-        @JavascriptInterface
         public void deleteUnsent(String id) { ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).delete(String.valueOf(id)); }
 
         /** The web outbox's "not sent" count, so a notification is waiting if James leaves the app. */
-        @JavascriptInterface
         public void appUnsent(int failed, String firstText) {
             ai.wizards.os.everywhere.EverywhereService.appUnsent(MainActivity.this, failed, firstText == null ? "" : firstText);
         }
 
         /** The orb is recording (or transcribing): keep the screen from locking until it says otherwise. */
-        @JavascriptInterface
         public void keepAwake(boolean on) { runOnUiThread(() -> setKeepAwake(on)); }
 
         /** Full-screen window in the shell: hide Android's status and navigation bars too (edge swipe peeks them). */
-        @JavascriptInterface
         public void immersive(boolean on) { runOnUiThread(() -> applyImmersive(on)); }
 
         /** Camera cutout height in CSS px (0 when the phone has none). */
-        @JavascriptInterface
         public int cutoutTop() { return cutoutCss; }
 
         /** Status bar inset in CSS px the page draws under (0 in immersive full screen). */
-        @JavascriptInterface
         public int insetTop() { return topCss; }
 
         /** Explicit Screenshot in the in-app recording dock. Captures this WebView only, no permission dialog.
@@ -1176,7 +1250,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
 
         /* ---- Share (James, 12 Oct): Android's share sheet for a message, selected words or a file. ---- */
-        @JavascriptInterface
         public void shareText(String text, String title) {
             String t = SelectionPolicy.shareText(text);
             runOnUiThread(() -> {
@@ -1187,7 +1260,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             });
         }
 
-        @JavascriptInterface
         public void shareFile(String b64, String name, String mime) {
             try {
                 byte[] bytes = android.util.Base64.decode(b64 == null ? "" : b64, android.util.Base64.DEFAULT);
@@ -1213,10 +1285,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
 
         /** The page's selection state for SelectionWebView: 1 press on text, 2 press in a field, 3 own selection, 0 none. */
-        @JavascriptInterface
         public void selection(int state) { WebView w = web; if (w instanceof SelectionWebView) ((SelectionWebView) w).selectionState(state); }
 
-        @JavascriptInterface
         public void haptic(int ms) {
             Vibrator v = getSystemService(Vibrator.class);
             if (v == null || !v.hasVibrator()) return;

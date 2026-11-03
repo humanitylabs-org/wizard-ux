@@ -35,7 +35,10 @@
     const d = DEV(); if (!d) return null;
     const body = { v: 1, mode: policy.mode };
     if (policy.mode === 'prefer') body.prefer = policy.prefer.map(({ type, name, address }) => ({ type, name: name || '', address: address || '' }));
-    try { return JSON.parse(d.setMicPolicy(JSON.stringify(body))); } catch (_) { return null; }
+    // A string on older Android apps; a Promise on newer ones (main-document shell port, core/native-shell-port.js).
+    let r; try { r = d.setMicPolicy(JSON.stringify(body)); } catch (_) { return null; }
+    if (r && typeof r.then === 'function') return r.then(v => JSON.parse(v), () => null).catch(() => null);
+    try { return JSON.parse(r); } catch (_) { return null; }
   }
 
   function html() {
@@ -76,10 +79,15 @@
       next = rest.length ? { mode: 'prefer', prefer: rest } : { mode: 'phone', prefer: [] }; note = rest.length ? `Stopped using ${label(policy.prefer[i])}` : 'Phone mic only';
     }
     if (!next) return true;
+    const done = saved => {
+      const ok = saved && saved.mode === next.mode;
+      (ctx?.toast || ((...a) => (window.__wos || window.__wux)?.toast?.(...a)))(ok ? '🎙' : '!', ok ? note : 'Could not save the microphone choice', 2400);
+      ctx?.render?.();
+    };
     const saved = save(next);
-    const ok = saved && saved.mode === next.mode;
-    (ctx?.toast || ((...a) => (window.__wos || window.__wux)?.toast?.(...a)))(ok ? '🎙' : '!', ok ? note : 'Could not save the microphone choice', 2400);
-    ctx?.haptic?.(8); ctx?.render?.(); return true;
+    ctx?.haptic?.(8);
+    if (saved && typeof saved.then === 'function') saved.then(done); else done(saved);
+    return true;
   }
 
   window.WosMic = { html, act, summary: () => { const p = read()?.policy; return !p || p.mode === 'phone' ? 'default' : p.mode === 'any' ? 'any connected' : label(p.prefer[0] || {}); }, available: () => !!DEV(), read, same };

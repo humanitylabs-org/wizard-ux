@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * window.wizardMizelPort for pages (and iframes) on this Wizard's own origin only. AndroidX
+ * window.wizardMizelPort for main documents on this Wizard's own origin only (child frames are refused). AndroidX
  * addWebMessageListener injects the object solely into frames whose origin matches the allow-list, so a page on any
  * other origin never sees it. The page sends JSON command strings; replies and pushes come back on the same port.
  * Pages never pass URLs or tokens: native holds the base URL. Protocol: android/MIZEL_RECORDER.md.
@@ -64,13 +64,16 @@ public final class MizelBridge implements MizelHub.Listener {
         // Belt and braces: the allow-list already guarantees this.
         String src = sourceOrigin == null ? null : sourceOrigin.getScheme() + "://" + sourceOrigin.getAuthority();
         if (src == null || !MizelConfig.origin(app).equals(src)) return;
-        frames.remove(reply);
-        frames.add(reply);
-        while (frames.size() > MAX_FRAMES) { JavaScriptReplyProxy old = frames.iterator().next(); frames.remove(old); pcmFrames.remove(old); }
-        syncPcm();
-        String data = message == null ? null : message.getData();
+        String data = message == null || message.getType() != WebMessageCompat.TYPE_STRING ? null : message.getData();
         MizelProtocol.Cmd c = MizelProtocol.parse(data);
         Log.i(MizelHub.TAG, "page " + (isMainFrame ? "main" : "frame") + " → " + c.cmd + (c.meetingId != null ? " " + c.meetingId : "") + (c.error != null ? " (" + c.error + ")" : ""));
+        // Same-origin child frames see the injected object too: only a main document (the shell, or the live meeting
+        // page opened top-level) may command the recorder. Hosted frames use the shell's capture owner (app-capture.js).
+        if (!isMainFrame) { Log.w("WizardMeetingPort", "refused: child frame " + c.cmd); return; }
+        frames.remove(reply);
+        frames.add(reply); // pushes go only to main documents that have spoken
+        while (frames.size() > MAX_FRAMES) { JavaScriptReplyProxy old = frames.iterator().next(); frames.remove(old); pcmFrames.remove(old); }
+        syncPcm();
         if (MizelProtocol.PCM.equals(c.cmd) && c.error == null) {
             MeetingRecorderService.Live live = MeetingRecorderService.live();
             if (c.enabled && (live == null || !c.meetingId.equals(live.meetingId))) {

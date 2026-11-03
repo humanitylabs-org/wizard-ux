@@ -471,7 +471,7 @@
     if (s.row.native === 'wizard-meetings') {
       const d=W.WizardOSDevice;
       if(typeof d?.recHandoffVersion!=='function' || d.recHandoffVersion()<1 || typeof d.recStartBorrowed!=='function') throw fail('handoff_unavailable','Update Wizard Android to borrow the meeting microphone.');
-      const receipt=JSON.parse(d.recHandoffBegin(eventId,s.row.meta.meetingId)||'null');
+      const receipt=JSON.parse(await d.recHandoffBegin(eventId,s.row.meta.meetingId)||'null');
       if(receipt?.status!=='paused' || receipt.open!==true || receipt.id!==eventId || receipt.meetingId!==s.row.meta.meetingId) throw fail('handoff_unavailable','Native microphone release was not confirmed.');
       receipt.micReleased=true; // ABI v1 begin returns only after capture join, flush and mic release
       s.borrow=receipt;s.row.meta.handoffs ||= [];s.row.meta.handoffs.push({...receipt,status:'paused'});
@@ -527,7 +527,7 @@
     Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
     await put(s.row); // marker survives even if reacquiring the microphone fails
     if(s.row.native === 'wizard-meetings') {
-      const receipt=JSON.parse(W.WizardOSDevice.recHandoffEnd(eventId)||'null'); // stopped voice already returned the native lease
+      const receipt=JSON.parse(await W.WizardOSDevice.recHandoffEnd(eventId)||'null'); // stopped voice already returned the native lease
       if(receipt?.id!==eventId || receipt.open!==false)throw fail('handoff_unavailable','Native microphone return was not confirmed.');
       marker.pausedByHandoff=receipt.pausedByHandoff;marker.resumeStatus=receipt.status;await put(s.row);
       s.borrow=null;s.phase=receipt.status==='recording'?'recording':'paused';changed();
@@ -550,7 +550,7 @@
     async function read(id) {
       const blobs = []; let off = 0;
       for (let i = 0; i < 16384; i++) {
-        const c = parse(d.recRead(id, off));
+        const c = parse(await d.recRead(id, off));
         if (!c || typeof c.b64 !== 'string') throw fail('native_read_failed', 'Native capture audio could not be read.');
         const bin = atob(c.b64), bytes = new Uint8Array(bin.length);
         for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
@@ -566,16 +566,16 @@
         if (opts.systemAudio) throw fail('system_audio_unavailable', 'This native recorder does not capture computer audio.');
         let a = parse(d.recActive());
         if (a?.id && a.id !== previous?.nativeId) throw fail('busy', 'Microphone held by Wizard voice', { appId: 'wizard-voice' });
-        let id = previous?.nativeId || d.recStart(opts.kind || 'app');
+        let id = previous?.nativeId || await d.recStart(opts.kind || 'app');
         if (!id) {
           const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop());
-          id = d.recStart(opts.kind || 'app');
+          id = await d.recStart(opts.kind || 'app');
         }
         if (!id) throw fail('native_start_failed', 'Native recording could not start.');
         const timer = setInterval(() => hooks.level(Math.max(0, Math.min(1, Number(d.recLevel()) / 100))), 100);
         return { nativeId: id, mime: 'audio/aac', stop: async () => {
           clearInterval(timer); const current = parse(d.recActive());
-          const meta = parse(current?.id === id ? d.recStop(id) : d.recClaim(id));
+          const meta = parse(current?.id === id ? await d.recStop(id) : await d.recClaim(id));
           if (!meta) throw fail('native_stop_failed', 'Native capture is still recoverable; retry Stop.');
           return { blob: await read(id), durationMs: Number(meta.ms) || 0, meta };
         }, cancel: async () => {
@@ -587,7 +587,7 @@
       async recover(row) {
         const a = parse(d.recActive());
         if (a?.id === row.nativeId) return { live: true };
-        const meta = parse(d.recClaim(row.nativeId));
+        const meta = parse(await d.recClaim(row.nativeId));
         if (!meta) throw fail('native_claim_pending', 'Native capture is not ready to claim; restore the bridge and retry recovery.');
         return { blob: await read(row.nativeId), durationMs: Number(meta.ms) || 0, meta };
       },
@@ -679,7 +679,7 @@
     const d = W.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
     for (let i = 0; i < 4; i++) {
       await new Promise(r => setTimeout(r, 120));
-      let v = 'unknown'; try { v = String(d.micRoute()); } catch (_) { return false; }
+      let v = 'unknown'; try { v = String(await d.micRoute()); } catch (_) { return false; }
       if (v === 'external') return true;
       if (v !== 'unknown') return false;
     }

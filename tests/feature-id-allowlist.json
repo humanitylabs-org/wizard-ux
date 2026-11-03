@@ -6,7 +6,7 @@
   "android/app/src/main/java/ai/wizards/os/MainActivity.java:Usuals": 24,
   "android/app/src/main/java/ai/wizards/os/MainActivity.java:mizel": 15,
   "android/app/src/main/java/ai/wizards/os/MainActivity.java:photos": 16,
-  "android/app/src/main/java/ai/wizards/os/MainActivity.java:usuals": 30,
+  "android/app/src/main/java/ai/wizards/os/MainActivity.java:usuals": 47,
   "android/app/src/main/java/ai/wizards/os/MicOwner.java:Mizel": 1,
   "android/app/src/main/java/ai/wizards/os/Origin.java:mizel": 2,
   "android/app/src/main/java/ai/wizards/os/ServerSwitchGuard.java:mizel": 1,
@@ -171,5 +171,9 @@
   "web/store/store-status.js:android-apps": 4,
   "web/store/store-status.js:wizard-music": 4,
   "web/styles.css:Mizel": 2,
-  "web/styles.css:mizel": 3
+  "web/styles.css:mizel": 3,
+  "android/app/src/main/java/ai/wizards/os/shellport/ShellPortPolicy.java:usuals": 12,
+  "android/app/src/main/java/ai/wizards/os/shellport/ShellPortPolicy.java:Usuals": 1,
+  "web/core/native-shell-port.js:usuals": 16,
+  "web/core/native-shell-port.js:Usuals": 4
 }

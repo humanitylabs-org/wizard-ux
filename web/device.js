@@ -78,7 +78,25 @@
     if (off !== -1 || (expected !== undefined && size !== expected)) throw new Error('Incomplete native recording · original kept on device');
     return new Blob(parts, { type: type || 'application/octet-stream' });
   }
-  const readRecording = (id, expected) => readBlob(off => DEV().recRead(id, off), 'audio/aac', Number(expected));
+  /* Newer Android apps answer reads with a Promise (main-document shell port, core/native-shell-port.js). */
+  async function readBlobAsync(read, type, expected) {
+    const parts = []; let off = 0, size = 0;
+    if (expected !== undefined && (!Number.isSafeInteger(expected) || expected <= 0)) throw new Error('Native recording size unavailable · original kept on device');
+    for (let k = 0; k < 4000 && off >= 0; k++) {
+      const c = J(await read(off));
+      if (!c || typeof c.b64 !== 'string' || !Number.isInteger(c.next)) throw new Error('Incomplete native recording read · original kept on device');
+      const bin = atob(c.b64), u = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      size += u.length;
+      if (!u.length || (c.next !== -1 && c.next !== off + u.length) || (expected !== undefined && size > expected)) throw new Error('Invalid native recording chunk · original kept on device');
+      parts.push(u); off = c.next;
+    }
+    if (off !== -1 || (expected !== undefined && size !== expected)) throw new Error('Incomplete native recording · original kept on device');
+    return new Blob(parts, { type: type || 'application/octet-stream' });
+  }
+  const readRecording = (id, expected) => DEV()?.async
+    ? readBlobAsync(off => DEV().recRead(id, off), 'audio/aac', Number(expected))
+    : readBlob(off => DEV().recRead(id, off), 'audio/aac', Number(expected));
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
@@ -181,7 +199,7 @@
     }
     // Keep the native pending owner discoverable until durable handoff. recRead does not
     // require recClaim; claiming now hides it from recPending after a WebView reload.
-    const blob = readRecording(t.id, t.bytes);
+    const blob = await readRecording(t.id, t.bytes);
     if (blob.size < 600 || (Number(t.bytes) > 0 && blob.size !== Number(t.bytes))) throw new Error('Incomplete native recording · original kept on device');
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
     const snap = window.WosOrbHandoff?.takeSnap(t.id), target = snap?.view;
@@ -226,13 +244,15 @@
 
   /* ================= #20 share to Wizard ================= */
   async function onShare(id) {
-    const d = DEV(), m = J(d?.shareMeta(id));
+    const d = DEV(), m = J(await d?.shareMeta(id));
     if (!m) { toast('!', 'That share expired · share it again', 2400); return; }
     closeSheet();
     // durable: resolves 'sent' only after the message has a receipt, so the staged copy survives a mid-upload kill.
     const result = await window.WizShareWizard.open({durable: true,
       text: [m.subject, m.text].filter(Boolean).join('\n').trim(), skipped: m.skipped || 0,
-      items: (m.items || []).map(f => ({...f, read: () => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
+      // Older apps read lazily and synchronously; newer ones answer with Promises, so the files are read first.
+      items: d.async ? await Promise.all((m.items || []).map(async f => ({...f, blob: await readBlobAsync(off => d.shareRead(id, f.n, off), f.mime)})))
+        : (m.items || []).map(f => ({...f, read: () => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
     });
     if (result === 'sent' || result === 'cancelled') { try { d.shareDone(id); } catch (_) {} }
     log('share:result', id, result);
@@ -434,6 +454,8 @@
     });
   }
   addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); sweepReadNotes('resume'); } });
+  // Newer Android apps: cached reads fill after the main-document handshake (core/native-shell-port.js).
+  addEventListener('wos-native-ready', () => { const d = DEV(); if (api.ready && d) { upd = J(d.updateState()); renderUpdate(); } });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) saveDrafts();
     else if (api.ready) syncRecorder('visible');

@@ -11,8 +11,10 @@ All example hosts below are synthetic. In the app the origin is the persisted ow
 
 Installed with AndroidX `WebViewCompat.addWebMessageListener(web, "wizardMizelPort", {"https://box.example.ts.net"}, …)`.
 
-- Present in **every frame whose origin is exactly `https://box.example.ts.net`** — the Wizard OS shell, its
-  `/meetings/` iframe, `/mizel-live/` (main frame or iframe). Absent everywhere else (other origins, http, other
+- Present in **every frame whose origin is exactly `https://box.example.ts.net`**, but the receiver answers only the
+  **main frame**: the Wizard OS shell or a top-level `/mizel-live/`. Child frames (the `/meetings/` iframe, a framed
+  `/mizel-live/`) are refused and logged (`refused: child frame`); hosted meeting UIs go through the shell's capture
+  owner (`core/app-capture.js`). Absent everywhere else (other origins, http, other
   ports). If the WebView lacks `WEB_MESSAGE_LISTENER`, no port is installed at all (feature-detect
   `window.wizardMizelPort`).
 - All messages are **JSON strings** in both directions. Use `port.postMessage(JSON.stringify(cmd))` and

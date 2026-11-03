@@ -2195,7 +2195,7 @@
       // Preserve a reload-visible exact-ID recovery owner BEFORE a destructive native claim.
       try { dictationRecovery(id, { ms: V.acc, state: 'retained' }); }
       catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · dictation remains on the device'); return; }
-      try { meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosDictationRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id)); } catch (_) {}
+      try { meta = dev.fetched?.(id)?.meta || (stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosDictationRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id))); } catch (_) {}
       V.native = null; V.kind = 'dictation';
       if (!meta) { setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read recording'); return; }
       V.acc = Math.max(V.acc, Number(meta.ms) || 0);
@@ -2231,7 +2231,7 @@
     try { voiceRecovery(id, { kind: V.kind, ms: V.acc }); }
     catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · recording remains on device'); return; }
     try {
-      meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosVoiceRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id));
+      meta = dev.fetched?.(id)?.meta || (stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosVoiceRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id)));
       if (meta?.id === id) voiceRecovery(id, meta);
     } catch (e) { meta = null; }
     V.native = null;
@@ -2448,7 +2448,7 @@
     } catch (e) { return null; }
   }
   window.__wosReplyTake = id => replyTake(id);
-  let parkedReply=null, parking=false;
+  let parkedReply=null, parking=false, resumingNative=false;
   async function returnMeeting(detail) {
     const loan=V.meetingLoan;if(!loan)return;
     try{await window.WosOrbHandoff.end(loan,detail);V.meetingLoan=null;}
@@ -2563,7 +2563,7 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = (meetingLoan?.native ? dev.recStartBorrowed(kind === 'general' ? 'auto' : kind,meetingLoan.id) : dev.recStart(kind === 'general' ? 'auto' : kind)) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = V.snap?.route || CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Manager destination could not be saved · nothing sent'); return; } }
+    if (dev) { let id = ''; try { id = (await (meetingLoan?.native ? dev.recStartBorrowed(kind === 'general' ? 'auto' : kind,meetingLoan.id) : dev.recStart(kind === 'general' ? 'auto' : kind))) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = V.snap?.route || CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Manager destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
       if (id) { V.native = id;if (V.replyTo) replyTake(id, V.replyTo);try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} if (V.snap?.general) { try { voiceRecovery(id, { kind:'general', general:true, conversation:null }); saveVoiceRoute(id,V.snap.route); } catch (_) { V.stopAsked=true;pauseCommandCapture();toast('!','General destination could not be saved · recording kept');return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
       if(meetingLoan?.native){await cancelVoice(true);toast('!', 'Native handoff refused · meeting restored');return;}
@@ -2649,7 +2649,7 @@
     const d = window.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
     for (let i = 0; i < 4; i++) {
       await new Promise(r => setTimeout(r, 120));
-      let v = 'unknown'; try { v = String(d.micRoute()); } catch (_) { return false; }
+      let v = 'unknown'; try { v = String(await d.micRoute()); } catch (_) { return false; }
       if (v === 'external') return true;
       if (v !== 'unknown') return false;
     }
@@ -3062,10 +3062,13 @@
     if (V.state === 'listen' || V.state === 'command') { V.stopAsked = true; V.sendAsked = false; V.acc += performance.now() - V.t0; try { window.WosCaptureTools.setPaused(V.rec,true); } catch (e) {} if (V.native) pauseNativeTake(true); setVoice('paused'); vib(6); }
     else if (V.state === 'paused' && !V.native && !V.rec && V.parts.length) {
       if(V.resumeNative && DEV()){
-        const id=DEV().recStart(V.kind)||'';
+        // recStart answers with a Promise on newer Android apps (main-document shell port); await works for both.
+        if(resumingNative)return; resumingNative=true;
+        Promise.resolve(DEV().recStart(V.kind)).then(r=>r||'',()=>'').then(id=>{resumingNative=false;
         if(!id){toast('!','Could not resume · original reply remains paused');return;}
         V.nativeSegmentBase=V.acc;V.native=id;voiceTake(id,V.kind);replyTake(id,{...V.replyTo,custodyId:V.custodyCapture});if(V.snap?.route)saveVoiceRoute(id,V.snap.route);
-        V.stopAsked=false;V.sendAsked=false;V.t0=performance.now();setVoice('listen');V.raf=requestAnimationFrame(tick);vib(6);return;
+        V.stopAsked=false;V.sendAsked=false;V.t0=performance.now();setVoice('listen');V.raf=requestAnimationFrame(tick);vib(6);});
+        return;
       }
       V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part
       V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);

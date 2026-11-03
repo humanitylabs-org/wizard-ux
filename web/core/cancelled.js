@@ -106,10 +106,10 @@
     return l;
   }
 
-  function readNative(id, type) {
+  async function readNative(id, type) {
     const d = DEV(), parts = []; let off = 0;
     for (let k = 0; k < 8000 && off >= 0; k++) {
-      const c = J(d.cancelledRead(id, off)); if (!c) break;
+      const c = J(await d.cancelledRead(id, off)); if (!c) break; // a Promise on newer Android apps
       const bin = atob(c.b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
       parts.push(u); off = c.next;
@@ -133,7 +133,7 @@
     if (texts[id]) { const ok = await copy(texts[id]); open.add(id); repaint(); toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy · select the text below', 1800); return; }
     busy.add(id); delete errs[id]; repaint();
     try {
-      const blob = blobOf(t); if (!blob || blob.size < 1000) throw new Error('The recording is empty');
+      const blob = await blobOf(t); if (!blob || blob.size < 1000) throw new Error('The recording is empty');
       const prompt = window.WizConfig.voicePrompt?.() || '';
       const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }), window.WosOutbox.TRANSCRIBE_TIMEOUT_MS);
       const text = String(j.text || '').trim();

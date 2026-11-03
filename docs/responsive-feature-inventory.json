@@ -383,6 +383,13 @@
       ],
       "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
     },
+    "core/native-shell-port.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Android main-document shell port facade; no-op in browsers and child frames"
+    },
     "core/notif-bell.js": {
       "loadedBy": [
         "phone",
@@ -828,6 +835,7 @@
     "core/links.js",
     "core/mic.js",
     "core/my-skin.js",
+    "core/native-shell-port.js",
     "core/notif-bell.js",
     "core/os-updates.js",
     "core/own-views.css",
