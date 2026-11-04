@@ -156,12 +156,14 @@
       return `<span class="${cls} sgt" style="--c:${c}">${esc(initial(a))}</span>`;
     },
     title(a) {
-      const label = String(a?.label || 'Hermes').trim();
+      a = a || A.titleRecord('');
+      const label = String(a.label || a.id || 'Main').trim();
       if (/\bagent$/i.test(label)) return label;
       return `${label} ${a?.is_default ? 'Main Agent' : 'Agent'}`;
     },
     titleRecord(id) {
-      return A.get(id || A.defaultId()) || { id: id || 'hermes', label: id || 'Hermes', is_default: !id, appearance: {} };
+      const key = id || A.defaultId();
+      return A.get(key) || { id: key, label: id || 'Main Agent', is_default: !id || key === A.defaultId(), appearance: {} };
     },
     titleContent(id, iconClass, titleClass, label = '') {
       const a = A.titleRecord(id);
@@ -170,8 +172,9 @@
     titlebar(id = '', iconClass = 'ic', titleClass = 't') {
       return `<span class="agent-titlebar" data-agent-titlebar="${esc(id)}" data-icon-class="${iconClass}" data-title-class="${titleClass}">${A.titleContent(id, iconClass, titleClass)}</span>`;
     },
-    setTitlebarLabel(el, label = '') {
+    setTitlebarLabel(el, label = '', agentId = el?.dataset.agentTitlebar || '') {
       if (!el) return;
+      el.dataset.agentTitlebar = agentId;
       el.dataset.titleLabel = label;
       const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass, label);
       if (el.innerHTML !== html) el.innerHTML = html;
