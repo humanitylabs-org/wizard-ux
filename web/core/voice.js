@@ -16,7 +16,7 @@
   // computer's built-in mic instead, so headphones keep playing music. A USB/wired mic the
   // user plugged in still wins; no built-in mic → the system default, as before.
   const BLUETOOTH = /bluetooth|bluez|airpods|beats|buds|headset|hands-?free|\bh[fs]p\b|wh-1000|wf-1000|bose|jabra|soundcore|pixel buds/i;
-  const BUILT_IN = /built-?in|internal|digital mic|macbook|laptop|analog stereo|front mic|dmic/i;
+  const BUILT_IN = /built-?in|internal|digital mic|macbook|laptop|analog stereo|front mic|dmic|imac|studio display|display audio/i;
   const WIRED = /usb|yeti|rode|shure|scarlett|focusrite|audio interface|webcam|brio|c9[0-9]{2}/i;
   async function pickMic() {
     try {
@@ -26,11 +26,7 @@
       const wired = ins.find(d => WIRED.test(d.label) && !BLUETOOTH.test(d.label));
       if (wired) return wired.deviceId; // pick it explicitly: the system default may be a Bluetooth headset
       const builtIn = ins.find(d => BUILT_IN.test(d.label) && !BLUETOOTH.test(d.label));
-      if (builtIn) return builtIn.deviceId;
-      // A computer mic named outside the list above (iMac, Studio Display, a Mac mini's display): any input that is
-      // not Bluetooth still beats the system default, which follows AirPods and other headsets when they connect.
-      const other = ins.find(d => d.label && !BLUETOOTH.test(d.label));
-      return other ? other.deviceId : null;
+      return builtIn ? builtIn.deviceId : null;
     } catch (e) { return null; }
   }
   // Desktop: no echo cancellation. On macOS it switches the input to the system voice-processing path, which ducks
@@ -40,8 +36,10 @@
   const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
   // The Mac app (WKWebView) records the mono Mac mic as stereo Opus with the right channel silent (4 Nov 2026), so
   // every player and speech-to-text averages it down to half volume (-6 dB) and quiet takes lose words. When the
-  // track is not already mono, record a mono copy: both channels are summed (not averaged) into one, so a silent
-  // channel costs nothing. Anything off (no Web Audio, a context that will not run) records the raw stream as before.
+  // track is not already mono, record a mono copy: the left channel alone while the right one stays silent, the
+  // average of both (no clipping) as soon as the right one carries sound, as a real stereo mic does. Anything off
+  // (no Web Audio, a context that will not run) records the raw stream as before.
+  const SILENT = 1e-4;
   async function monoFor(stream, ac) {
     try {
       const t = stream.getAudioTracks()[0]; const n = t?.getSettings?.().channelCount;
@@ -49,9 +47,16 @@
       if (ac.state !== 'running') { try { await Promise.race([ac.resume(), new Promise(r => setTimeout(r, 300))]); } catch (_) {} }
       if (ac.state !== 'running') return null; // a suspended graph would record silence
       const src = ac.createMediaStreamSource(stream), split = ac.createChannelSplitter(2);
-      const sum = ac.createGain(); sum.channelCount = 1; sum.channelCountMode = 'explicit'; sum.channelInterpretation = 'discrete';
+      const left = ac.createGain(), right = ac.createGain(); left.gain.value = 1; right.gain.value = 0;
       const out = ac.createMediaStreamDestination(); out.channelCount = 1; out.channelCountMode = 'explicit'; out.channelInterpretation = 'discrete';
-      src.connect(split); split.connect(sum, 0); split.connect(sum, 1); sum.connect(out);
+      src.connect(split); split.connect(left, 0); split.connect(right, 1); left.connect(out); right.connect(out);
+      const probe = ac.createAnalyser(); probe.fftSize = 1024; split.connect(probe, 1);
+      const buf = new Float32Array(probe.fftSize);
+      const watch = setInterval(() => {
+        if (ac.state === 'closed') return clearInterval(watch);
+        probe.getFloatTimeDomainData(buf); let peak = 0; for (let k = 0; k < buf.length; k++) peak = Math.max(peak, Math.abs(buf[k]));
+        if (peak > SILENT) { left.gain.value = 0.5; right.gain.value = 0.5; clearInterval(watch); }
+      }, 100);
       return out.stream;
     } catch (_) { return null; }
   }
