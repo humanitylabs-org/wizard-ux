@@ -2058,7 +2058,11 @@
   function renderMoons() {
     const L = live();
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
-    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
+    const moons = $('#moons');
+    moons.dataset.needs = String(L.needs.length);
+    moons.dataset.working = String(L.working.length);
+    moons.dataset.ready = String(L.ready.length);
+    moons.innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
     // Notification badges reflect unread, independently of the Ready workflow. The orb shows the current desk.
     window.WizCore.workspaceNav.refreshChats(LIVE, CHATS_APP.id);

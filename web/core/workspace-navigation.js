@@ -24,10 +24,18 @@
     raw[id] = Math.max(0, n | 0);
     if (was !== !!plus) { counts[id] = -1; } apply(id);
   }
+  function chatUnreadCount(live) {
+    if (!live?.ok || typeof live.unified !== 'function' || typeof live.visibleUnread !== 'function' || typeof live.workGroups !== 'function') return 0;
+    try {
+      const rows = live.unified(), unread = live.visibleUnread(rows);
+      const working = new Set(live.workGroups(rows).working || []);
+      return Math.max(0, Array.isArray(unread) ? unread.filter(row => !working.has(row)).length : 0);
+    } catch (_) { return 0; }
+  }
   // One projection for every Chats notification badge; Ready remains a separate workflow count.
   // Reuse the loaded unified list and canonical visibility/read rules: no reads, receipts or migration here.
   function refreshChats(live, id = 'wizard') {
-    const threads = live?.ok ? live.visibleUnread(live.unified()).length : 0;
+    const threads = chatUnreadCount(live);
     // Preserve app notification routing, but never badge read/snoozed inbox items as Ready did.
     const inbox = window.WosBell?.unreadCount?.() || 0;
     setCount(id, threads + inbox, inbox > 0 && !!window.WosBell?.readyMore?.());
@@ -67,5 +75,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatUnreadCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
 })();

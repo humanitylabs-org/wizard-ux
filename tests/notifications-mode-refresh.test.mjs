@@ -24,7 +24,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
     return true;
   };
   const $ = key => {
-    if (!nodes.has(key)) nodes.set(key, { innerHTML: '', hidden: false, textContent: '',
+    if (!nodes.has(key)) nodes.set(key, { innerHTML: '', hidden: false, textContent: '', dataset: {},
       setAttribute() {}, classList: { contains: () => false } });
     return nodes.get(key);
   };
