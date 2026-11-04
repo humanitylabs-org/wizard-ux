@@ -16,9 +16,23 @@
   const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
   const isSystem = a => !!a && (SYSTEM_IDS.has(a.id) || a.system === true);
   const inDev = a => !isSystem(a) && (window.WizCore?.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
-  // Notifications shown in Chats (a package holds WosSkinHost.inboxThreads): its page is no longer the way in, so it
-  // sits with the agent apps (system ring, tap = its settings sheet) even while the app still serves a page.
+  // Inbox integration is additive: Notifications remains an owner-facing app even when Chats also shows its threads.
   const inChats = a => !!a && a.id === 'notifications' && !!window.WosSkinHost?.inboxThreads;
+  // The default agent is the owner's primary app. Other agents remain separate identities under Agents.
+  const isMainAgent = a => !!a && a.id === 'wizard' && a.kind === 'chats';
+  function mainAgentName(a) {
+    const AG = window.WosAgents;
+    const rec = AG?.get?.(AG.defaultId?.()) || AG?.list?.find?.(x => x?.is_default);
+    const configured = window.WizConfig?.agent?.();
+    const raw = String(rec?.label || configured || (a?.name === 'Chats' ? '' : a?.name) || 'Hermes').trim();
+    const name = raw.replace(/\s+(?:Main\s+)?Agent$/i, '').trim() || 'Hermes';
+    return `${name} Main Agent`;
+  }
+  const ownerTile = a => isMainAgent(a) ? { ...a, name: mainAgentName(a) } : a;
+  // Most Wizard-kind agent apps are screenless and open settings. An explicit screen keeps a built-in utility openable.
+  const opensScreen = a => !!a && (a.screen === true || a.kind !== 'wizard' || !!a.url);
+  // Screenless installed services stay on the agent shelf. A service with a working screen remains owner-facing.
+  const isAgentApp = a => !!a && a.kind === 'wizard' && !isConnector(a) && !opensScreen(a);
   const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
   // Section labels and the App Store section each "+ Get" tile opens (store/store.js KINDS ids).
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });
@@ -28,17 +42,17 @@
     const C = window.WizCore || {};
     const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !C.isMaintenanceApp?.(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
-    // Agents: each agent's chats, main agent first (as registered). The Agents app itself is the "Build agents" tile.
-    const agents = mine.filter(a => a.kind === 'chats').sort((x, y) => isSystem(y) - isSystem(x));
-    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a) && !inChats(a)).sort(byName);
+    // The default agent is the main owner app. Non-default agents remain in Agents; the Agents app is "Build agents".
+    const agents = mine.filter(a => a.kind === 'chats' && !isMainAgent(a)).sort((x, y) => isSystem(y) - isSystem(x));
+    const people = mine.filter(a => (a.kind !== 'chats' || isMainAgent(a)) && !conns.includes(a) && !isAgentApp(a)).map(ownerTile).sort(byName);
     // In development (James, 23 Oct 2026): launcher links and test copies fold under their own row.
     const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
-    const back = [...mine.filter(inChats), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
+    const back = [...mine.filter(isAgentApp), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
     return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];
-  /* The kinds as plain rows for layouts (the Orb and Apps views' app sheet, both shells): { apps, wiz, agents, conns,
-   * dev }, system apps first, the main agent left out (it is Chats); ico(a) draws the shell's own mark. */
+  /* The kinds as plain rows for layouts (the Orb and Apps views' app sheet, both shells): { apps, wiz (agent apps), agents,
+   * dev }, system apps first; ico(a) draws the shell's own mark. */
   function rows(APPS, APP, ico) {
     const K = kinds(APPS, APP), row = a => ({ id: a.id, name: a.name, icon: ico(a), system: isSystem(a) });
     const agents = K.agents.filter(a => a.id !== 'wizard').map(row);
@@ -49,8 +63,8 @@
    * its settings sheet. Returns false for an unknown id. */
   function openRow(APPS, APP, id, openApp) {
     const a = APP[id] || (window.WizCore?.backendApps?.() || []).find(x => x.id === id); if (!a) return false;
-    if (APP[id] && (a.url || a.kind !== 'wizard')) return openApp(id) !== false;
+    if (APP[id] && opensScreen(a)) return openApp(id) !== false;
     window.WosAppRoute?.open(a.id, { name: a.name }); return true;
   }
-  window.WosAppKinds = Object.freeze({ inChats, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, LABELS, GET, storeUrl });
+  window.WosAppKinds = Object.freeze({ inChats, isAgentApp, isMainAgent, opensScreen, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, LABELS, GET, storeUrl });
 })();

@@ -72,7 +72,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; named registry glyphs and HOUSE masks beat cached package pictures; unbranded apps keep package/catalog fallback; pin raster masks contain-fit. Tests: `app-icon-consumers.test.mjs`, `app-icon-harness.test.mjs` |
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
-| App groups | `WosAppKinds` (`app-kinds.js`) |
+| App groups | `WosAppKinds` (`app-kinds.js`): owner-facing Apps (including the dynamic main agent and screen-backed services/built-ins), screenless Agent apps, non-default Agents, Connectors; shared `rows`, `openRow`, `opensScreen` |
 | Brand hat | `WizBrand` (`brand.js`) |
 | Links: sheet/window (`asWindow`), images, long-press browser/Download/Copy | `WizLinks` (`links.js`; Android: `WizardOSNative.openInBrowser` / `download`) |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |

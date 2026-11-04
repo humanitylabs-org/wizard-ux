@@ -1478,15 +1478,15 @@
    * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
   const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
   const orbUpDesks = () => ['desks', 'pill'].includes(orbUpVar());
-  /* App kinds (core/app-kinds.js, shared with the desktop selector): Apps, Agent apps, Agents, Connectors, system apps
-   * first and ringed; every group ends with a "+ Get ..." tile for its App Store section, and Agents also has
-   * "+ Build agents" (the Agents app, where agents are made and managed). */
+  /* App kinds (core/app-kinds.js, shared with the desktop selector): owner-facing Apps (the main agent,
+   * Notifications and Pages included), screenless Agent apps, non-default Agents and Connectors. System apps lead
+   * their group; every group ends with a "+ Get ..." tile, and Agents also has "+ Build agents". */
   const AK = window.WosAppKinds;
   const { isSystem } = AK;
   const appKinds = () => AK.kinds(APPS, APP);
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
-  const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
+  const kindTile = a => AK.opensScreen(a) ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
   const plusTile = (attrs, label) => `<button class="lapp lapp-get" ${attrs}><span class="ic">+</span><span class="nm">${esc(label)}</span></button>`;
   const getTile = k => plusTile(`data-storekind="${AK.GET[k][0]}"`, AK.GET[k][1]);
   // System apps lead their group in the same grid; their purple tile (skin.css .lapp-sys) marks them, no label or box.
@@ -1496,7 +1496,7 @@
     const grp = (k, body) => `<div class="lgroup kg-${k}"><h4>${AK.LABELS[k]}</h4><div class="lgrid">${body}${getTile(k)}</div></div>`;
     const G = {
       apps: grp('apps', sysSplit(K.apps, kindTile)),
-      wiz: grp('wiz', sysSplit(K.wiz, backTile)),
+      wiz: grp('wiz', sysSplit(K.wiz, kindTile)),
       agents: grp('agents', sysSplit(K.agents, kindTile) + (K.builder ? plusTile('data-app="agents"', 'Build agents') : '')),
       conns: grp('conns', sysSplit(K.conns, kindTile)),
     };
