@@ -173,25 +173,32 @@
       const all = [...new Set([...(own ? catalog.tweaks : next ? next.tweaks : []), ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own).filter(id => !viewOf(id) || id === wornView(own)), slots, { teamAuthors: catalog.teamAuthors });
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
+  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps). They are ordinary switches
+   * but mutually exclusive: switching one on switches every other view off; all off = the stock shell (Desks). A device
+   * that somehow stores two on wears only the first in catalog order. */
+  const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
+  const viewIds = () => [...manifests.keys()].filter(viewOf);
+  const wornView = own => viewIds().find(id => enabled(id, own)) || '';
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, author: id.split('/')[0], builtin: globalIds().includes(id), name: m.name, description: m.description || '', on: groupOf(id) ? groupOn(id) : enabled(id) })) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, author: id.split('/')[0], builtin: globalIds().includes(id), name: m.name, description: m.description || '', view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, on: t.id === wornView(recipe()) } : t) });
     },
     installed, defaults,
     async authors() {
       return (await Promise.all((catalog?.profiles || []).map(async id => {
         const p = await profile(id);
         return { id, name: id === 'wizard' ? 'Wizard' : p.name || ({ miguel: 'Miguel', novaire: 'Novairecito' })[id] || id,
-          ids: id === owner ? experience.state.tweaks.filter(t => !t.builtin).map(t => t.id) : [] };
+          ids: id === owner ? experience.state.tweaks.filter(t => !t.builtin && !t.view).map(t => t.id) : [] };
       }))).filter(a => a.ids.length);
     },
     async chooseAuthor(who) {
       // Only the worn skin's offered tweaks; never turn on another skin's packages or release-wide defaults.
-      const mine = who === owner ? experience.state.tweaks.filter(t => !t.builtin) : [];
+      // shell views (manifest `view`) are one at a time: the quick button leaves them as they are
+      const mine = who === owner ? experience.state.tweaks.filter(t => !t.builtin && !t.view) : [];
       if (!mine.length) return;
       const on = !mine.every(t => t.on);
       const ids = [...new Set(mine.flatMap(t => groupOf(t.id) || [t.id]))];
@@ -207,6 +214,9 @@
     chooseSkin() { if (busy && targetOwner === wornOwner()) return inFlight; if (error || wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+      if (item.view) {  // one shell view at a time: on = this one only, off = every view off (Desks)
+        return changeChoices(Object.fromEntries(viewIds().map(v => [v, v === id && !item.on])));
+      }
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
       const choices = item.on ? { [id]: false } : Object.fromEntries((groupOf(id) || [id]).filter(m => m === id || explicitOff(m)).map(m => [m, true]));
       return changeChoices(choices);

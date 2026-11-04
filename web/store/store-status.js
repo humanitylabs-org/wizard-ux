@@ -16,6 +16,8 @@ export function architectureReason(a, architecture) {
   if (!architecture) return 'Compatibility unavailable. Refresh before installing.';
   return supported.includes(architecture) ? '' : `This release runs on ${supported.join(' · ')}, not this Wizard (${architecture}). Choose a compatible release.`;
 }
+// The shell registry id an App Index listing installs as, when a reviewed host alias renames it (else its own id).
+export const hostAppId = a => HOST_ALIASES[a?.id]?.id || a?.id || '';
 export const isUserApp = a => !['wizard-shell','wizard-ux'].includes(a.id) && a.category !== 'interface' && !(a.provides || []).includes('shell');
 const alphabetical = (a,b) => String(a || '').localeCompare(String(b || ''),'en');
 export const compareApps = (a,b) => Number(!!b.alpha_badge)-Number(!!a.alpha_badge) || alphabetical(a.name,b.name) || alphabetical(a.id,b.id) || alphabetical(a.repo,b.repo);

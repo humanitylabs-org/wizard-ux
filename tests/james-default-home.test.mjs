@@ -137,7 +137,7 @@ test('James: default Settings keeps the current AI page and has no "Your network
 
 test('James: desktop Home opens Settings as the centred panel over Home, never a window beside Chats', () => {
   const desk = read('web/desktop/desktop.js');
-  assert.match(desk, /    if \(homeOpen\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
+  assert.match(desk, /    if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
   assert.doesNotMatch(desk, /homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem/, 'no classic-Home window path');
   assert.match(read('web/core/settings.js'), /hasSystem: \(\) => PAGES\.some\(p => p\.group === 'System' && p\.available\(\)\)/);
 });

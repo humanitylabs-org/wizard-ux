@@ -25,7 +25,8 @@ test('openThread forwards an app-keyed reply item; foreign keys are refused', ()
   assert.match(client, /openThread: \(id, opts\) => service\?\.nav\?\.openThread\(id, opts\) === true/);
   assert.match(services, /if \(!key\.startsWith\(st\.appId \+ ':'\)\) throw fault\('Reply context must be keyed to this app'\);/);
   assert.match(services, /hostedThreadAuthorized\(st\) \|\| st\.isVisible/);
-  for (const src of [app, desktop]) assert.match(src, /openThread: \(sid, opts\) => CHATS\.openHosted\(w\.id, f, sid, opts\)/);
+  // (stock: over the app; a layout placing opens itself, apps.routeOpens, may take it to the main Chats instead)
+  for (const src of [app, desktop]) assert.match(src, /openThread: \(sid, opts\) => [^\n]{0,400}?CHATS\.openHosted\(w\.id, f, sid, opts\)/);
 });
 
 test('the item pins to the thread draft once and shows as the reply bubble', () => {

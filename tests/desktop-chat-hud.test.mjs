@@ -30,7 +30,7 @@ test('the HUD window lives outside the desks: never pruned at boot, never synced
 
 test('render keeps the HUD above every desk and Home; the open HUD counts as visible and keeps polling', () => {
   assert.match(js, /\$\$\('\.wsp', stage\)\.forEach\([^\n]+\n\s*hudMount\(\);/);
-  assert.match(js, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\), \.\.\.\(hud\?\.open \? \[hud\.id\] : \[\]\)\]/);
+  assert.match(js, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\), \.\.\.\(hud\?\.open \? \[hud\.id\] : \[\]\), \.\.\.\(globalThis\.WosSkinHost\?\.panelMode \? panelWins\(\)\.map\(w => w\.id\) : \[\]\)\]/);
   assert.match(js, /setInterval\(\(\) => \{ if \(document\.hidden\) return; for \(const id of \[\.\.\.ws\[cur\]\.wins, \.\.\.\(hud\?\.open \? \[hud\.id\] : \[\]\)\]\)/);
   assert.match(css, /\.hud-layer \{ position: absolute; inset: 0; z-index: 150; pointer-events: none; \}/);
 });
@@ -44,7 +44,8 @@ test('two controls only: float over every desk, and back to desktop 1 (Miguel: n
 });
 
 test('keys, voice and chat actions follow the keyboard into the HUD; desk routes never reuse it (Codex P1/P2)', () => {
-  assert.match(js, /const focused = \(\) => hudHasFocus\(\) \? W\[hud\.id\] : homeOpen \? null : W\[ws\[cur\]\.focus\] \|\| null;/);
+  // (with no desks — a layout holding the panel — the panel's one window is the one in front)
+  assert.match(js, /const focused = \(\) => hudHasFocus\(\) \? W\[hud\.id\] : \(globalThis\.WosSkinHost\?\.panelMode && panelWin\(\)\) \|\| \(homeOpen \? null : W\[ws\[cur\]\.focus\] \|\| null\);/);
   assert.match(js, /function closeWin\(id, internal = false\) \{\n(?:\s*if \(!internal && !canLeave\(id\)\) return;\n)?\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
   assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ hudFocus\(\); return; \}/);
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);

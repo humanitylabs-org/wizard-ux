@@ -269,7 +269,8 @@
     if (!own && s.owner && s.owner !== who) return '<div class="tw-group"><h4>Tweaks</h4><p role="status">Loading this skin’s tweaks…</p></div>';
     const groups = [who].map(who => {
       const mine = exp; if (!mine.length) return '';
-      const on = mine.filter(t => t.on).length, all = on === mine.length;
+      // shell views (manifest `view`) are one at a time, so the quick button counts as all on without them
+      const on = mine.filter(t => t.on).length, all = mine.every(t => t.on || t.view);
       const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(label(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
       return `<div class="tw-author" role="group" aria-label="${esc(label(who))}’s tweaks"><h5>${esc(label(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
     }).join('');

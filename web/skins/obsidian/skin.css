@@ -51,6 +51,8 @@ html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color
 /* App sigils and the brand mark go grey; each app keeps its silhouette. */
 html[data-skin^="obsidian"] :is(.sgi, .logo, .wic) { filter: grayscale(1); }
 html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
+/* The Orbs view is a night sky on every skin: its app glyphs stay light (monochrome), never the dark ink of light pages. */
+html[data-skin="obsidian-light"][data-layout="orb"] .ob-sat .sgi { filter: grayscale(1); }
 
 /* New chat greeting (moved from core/chats.css). */
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-empty.nc-classic { display: none; }

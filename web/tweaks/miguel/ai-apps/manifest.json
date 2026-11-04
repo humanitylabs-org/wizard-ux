@@ -1,0 +1,12 @@
+{
+  "id": "miguel/ai-apps",
+  "name": "Different shell view - AI apps",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Like the ChatGPT, Claude and Perplexity apps, on the phone and the desktop. Phone: a top bar (menu, Home, workspaces), a left drawer (menu or swipe from the left edge) with your chats, the chat and its composer as the main screen, and Home = your pinned apps, then your open apps, then + to add one. Desktop: your chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in one column on the right (pinned, then open, then +), an app opening as a panel beside the chat. Works with every skin. One shell view at a time: on turns Orb and Apps off; all off = Desks",
+  "view": "AI apps"
+}

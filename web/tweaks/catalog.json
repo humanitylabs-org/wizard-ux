@@ -21,7 +21,10 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
-    "wizard/orb-radial"
+    "wizard/orb-radial",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ],
   "defaults": [
     "wizard/unified-inbox"

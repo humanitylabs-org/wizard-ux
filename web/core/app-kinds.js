@@ -37,5 +37,20 @@
     return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];
-  window.WosAppKinds = Object.freeze({ inChats, isSystem, isConnector, inDev, byName, kinds, sysFirst, LABELS, GET, storeUrl });
+  /* The kinds as plain rows for layouts (the Orb and Apps views' app sheet, both shells): { apps, wiz, agents, conns,
+   * dev }, system apps first, the main agent left out (it is Chats); ico(a) draws the shell's own mark. */
+  function rows(APPS, APP, ico) {
+    const K = kinds(APPS, APP), row = a => ({ id: a.id, name: a.name, icon: ico(a), system: isSystem(a) });
+    const agents = K.agents.filter(a => a.id !== 'wizard').map(row);
+    if (K.builder) agents.push({ ...row(K.builder), name: 'Build agents' });
+    return { apps: sysFirst(K.apps).map(row), wiz: sysFirst(K.wiz).map(row), agents, conns: sysFirst(K.conns).map(row), dev: K.dev.map(row) };
+  }
+  /* Open any of those rows: an app with a screen (or an agent's chats) through openApp; an agent app (no screen) shows
+   * its settings sheet. Returns false for an unknown id. */
+  function openRow(APPS, APP, id, openApp) {
+    const a = APP[id] || (window.WizCore?.backendApps?.() || []).find(x => x.id === id); if (!a) return false;
+    if (APP[id] && (a.url || a.kind !== 'wizard')) return openApp(id) !== false;
+    window.WosAppRoute?.open(a.id, { name: a.name }); return true;
+  }
+  window.WosAppKinds = Object.freeze({ inChats, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, LABELS, GET, storeUrl });
 })();

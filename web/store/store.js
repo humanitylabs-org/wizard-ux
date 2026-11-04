@@ -407,7 +407,11 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
       if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
-      else say(successMessage(access), true);
+      else {
+        say(successMessage(access), true);
+        // Asked from the Orb / Apps views' "Get more" (?open=1): open it at once, in place of this Store window.
+        if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), replace: true }, location.origin);
+      }
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }

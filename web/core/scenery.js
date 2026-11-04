@@ -87,9 +87,13 @@
   function starLayer() {
     const c = document.getElementById('stars'); if (!c) return null;
     const x = c.getContext('2d'); let Wd = 0, H = 0, pts = [], t = 0;
+    // (the page's own size only: a layout's re-tiling resize keeps the same sky; a real one stretches it, never re-rolls)
     function size() {
-      const r = Math.min(devicePixelRatio || 1, 2); Wd = c.width = c.clientWidth * r; H = c.height = c.clientHeight * r;
-      pts = Array.from({ length: 170 }, () => ({ x: Math.random() * Wd * 1.4, y: Math.random() * H, r: Math.random() * 1.3 * r + .2, p: Math.random() * 6.28, s: .4 + Math.random() * 1.4, d: Math.random() }));
+      const r = Math.min(devicePixelRatio || 1, 2), w = c.clientWidth * r, h = c.clientHeight * r;
+      if (pts.length && w === Wd && h === H) return false;
+      if (pts.length && Wd && H) { const kx = w / Wd, ky = h / H; for (const p of pts) { p.x *= kx; p.y *= ky; } }
+      else pts = Array.from({ length: 170 }, () => ({ x: Math.random() * w * 1.4, y: Math.random() * h, r: Math.random() * 1.3 * r + .2, p: Math.random() * 6.28, s: .4 + Math.random() * 1.4, d: Math.random() }));
+      Wd = c.width = w; H = c.height = h; return true;
     }
     function paint(tw) {
       x.clearRect(0, 0, Wd, H);
@@ -110,7 +114,7 @@
       x.globalAlpha = 1;
     }
     size();
-    addEventListener('resize', () => { size(); still('stars'); });
+    addEventListener('resize', () => { if (size()) still('stars'); });
     const nebula = () => { const s = document.documentElement.dataset.skin; return !s || s === 'nebula'; };
     return {
       name: 'stars', fps: 20,

@@ -335,13 +335,15 @@
     },
     "core/home-screen-apps.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
     },
     "core/home-screen-policy.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
     },
@@ -730,21 +732,6 @@
       "reason": "Android shell foreground-service recorder; browsers retain their recorder.",
       "shell": "phone"
     },
-    "core/home-screen-apps.css": {
-      "classification": "native",
-      "reason": "Android Add to home screen sheet styling; native ShortcutManager only.",
-      "shell": "phone"
-    },
-    "core/home-screen-apps.js": {
-      "classification": "native",
-      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent.",
-      "shell": "phone"
-    },
-    "core/home-screen-policy.js": {
-      "classification": "native",
-      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning.",
-      "shell": "phone"
-    },
     "core/home-surfaces.css": {
       "classification": "adapter",
       "reason": "Phone Home geometry; desktop Home retained from PR22.",
@@ -859,6 +846,9 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/home-screen-apps.css",
+    "core/home-screen-apps.js",
+    "core/home-screen-policy.js",
     "core/incognito-chat.js",
     "core/launcher-defaults.js",
     "core/launcher.js",

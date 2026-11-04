@@ -1,0 +1,139 @@
+/* Apps view (layouts/apps/layout.js): Home as a standard home screen, one app icon per desk; phone (layout.js) and
+ * desktop (desktop.js, a launchpad). Loaded only while the Apps layout is worn (html[data-layout="apps"]); every rule is
+ * scoped to one shell. Colours are the wearing tweak's skin-layer tokens (--ap-*: miguel/apps-home tweak.css). The +
+ * sheet and the phone dock without its desk switcher are chrome.css (shared with the Orb view). No Back button. */
+
+/* Home: only its top stays (which Wizard, the switch, the AI fuel gauge, the gear): the tweak.css hides the rest from
+ * the first frame; the grid takes its place. */
+
+/* ---------- the grid: four columns, under Home's top and above the dock, inside the safe areas ---------- */
+/* Lives in the Home desk's section (it slides with Home). Vertical scroll only when there are more desks than fit;
+ * sideways swipes stay the desk strip's (touch-action: pan-y). */
+html[data-shell="phone"][data-layout="apps"] .ap-grid {
+  position: absolute; z-index: 1; left: max(var(--safe-l, 0px), 10px); right: max(var(--safe-r, 0px), 10px);
+  top: calc(var(--safe-t, 0px) + 128px); bottom: calc(var(--safe-b, 0px) + 100px);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start;
+  row-gap: 18px; column-gap: 4px; padding: 4px 4px 12px; box-sizing: border-box;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-grid::-webkit-scrollbar { display: none; }
+
+/* ---------- one icon: tile, count, name (a 72 x 90 target) ---------- */
+html[data-shell="phone"][data-layout="apps"] .ap-icon {
+  --c: var(--wz-accent, var(--ink));   /* the app's own colour comes inline from its mark */
+  position: relative; min-width: 0; min-height: 90px; padding: 4px 0 2px; margin: 0; border: 0; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer;
+  color: var(--ap-label); -webkit-tap-highlight-color: transparent; touch-action: pan-y; -webkit-touch-callout: none; user-select: none;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-tile {
+  width: 62px; height: 62px; flex: none; border-radius: 16px; overflow: hidden; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--c) 26%, var(--ap-tile)); box-shadow: inset 0 0 0 1px var(--ap-tile-line), var(--ap-tile-shadow);
+  transition: transform 120ms ease;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-icon.is-logo .ap-tile { background: var(--ap-tile-logo); }
+html[data-shell="phone"][data-layout="apps"] .ap-icon:active .ap-tile { transform: scale(.92); }
+html[data-shell="phone"][data-layout="apps"] .ap-icon:focus-visible { outline: none; }
+html[data-shell="phone"][data-layout="apps"] .ap-icon:focus-visible .ap-tile { box-shadow: 0 0 0 2px var(--ap-label); }
+/* the dock's own mark for the app (its sigil in its colour), sized for a home-screen tile */
+html[data-shell="phone"][data-layout="apps"] .ap-tile .ap-mark { width: 38px; height: 38px; opacity: 1; }
+html[data-shell="phone"][data-layout="apps"] .ap-tile .ap-mark .dn { display: none; }
+html[data-shell="phone"][data-layout="apps"] .ap-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-shell="phone"][data-layout="apps"] .ap-badge {
+  position: absolute; top: 0; left: calc(50% + 20px); min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 11px;
+  display: grid; place-items: center; pointer-events: none;
+  background: var(--ap-badge); color: var(--ap-badge-ink); box-shadow: 0 0 0 2px var(--ap-badge-ring);
+  font: 700 calc(var(--wz-text-sm, 0.8125rem) * .9) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-badge[hidden] { display: none; }
+html[data-shell="phone"][data-layout="apps"] .ap-label {
+  max-width: 100%; padding: 0 2px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 500 calc(var(--wz-text-sm, 0.8125rem) * .92) / 1.2 var(--wz-font-ui); color: var(--ap-label); text-shadow: var(--ap-label-shadow);
+}
+/* the grid's last tile: + (the sheet of every app not open yet, chrome.js) */
+html[data-shell="phone"][data-layout="apps"] .ap-plus .ap-tile { background: var(--ap-tile); color: var(--ap-label); }
+html[data-shell="phone"][data-layout="apps"] .ap-plus .vc-ico { width: 28px; height: 28px; }
+
+/* =================== desktop: the launchpad (desktop.js) =================== */
+/* The bar keeps the switch and the AI fuel gauge in its centre and the gear on the right; the desk numbers step aside
+ * (the grid is the desks) and so do the voice buttons (the orb floats at the bottom). */
+html[data-shell="desktop"][data-layout="apps"] #bar :is(#logo, #wsList, #searchBtn, #micBtn, #generalVoice, #commandBtn, #dictateBtn, #status, #keysBtn, .mh-root.is-wiz, .mh-bi, .mh-bar-sep) { display: none !important; }
+/* Windows end above the orb's row, so the floating orb never sits on a window's own buttons (Chats' composer)… */
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp { bottom: 76px; }
+/* …except an app alone on its desk (one app per desk), which is full screen like the phone's (Miguel, 1 Nov 2026): it
+ * fills the whole stage edge to edge (the 8 px tiling gap falls outside), no title bar (close it from the + sheet, ⌥W;
+ * a drag up on the orb or ⌥` goes Home), the orb floats over it and it fades out toward the bottom; the shell gives the
+ * app room under its last item (api.apps.inset) or lifts its own bottom tab bar clear of the orb (.wos-inset-bar). */
+html[data-shell="desktop"][data-layout="apps"] { --desktop-window-max-width: 100000px; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:has(> .win:not(.gone) iframe[data-own-app]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]) { border-radius: 0; border-color: transparent; box-shadow: none; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]) > .wbar { display: none; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]):not(.wos-inset-bar)::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 140px; z-index: 4; pointer-events: none;
+  background: linear-gradient(to top, var(--bg) 8px, color-mix(in srgb, var(--bg) 92%, transparent) 56px, color-mix(in srgb, var(--bg) 55%, transparent) 98px, transparent 100%);
+}
+html[data-shell="desktop"][data-layout="apps"][data-skin^="landscapes"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]):not(.wos-inset-bar)::after {
+  height: 120px; background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) 76px, transparent 100%);
+}
+/* Home is the launchpad: the stock Home's content (and an empty desk's) steps aside for the grid. */
+html[data-shell="desktop"][data-layout="apps"] #desktopHome > * { display: none !important; }
+html[data-shell="desktop"][data-layout="apps"] #desktopHome:focus { outline: none; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp > .home { display: none !important; }
+
+html[data-shell="desktop"][data-layout="apps"] .apd { position: absolute; inset: 0; z-index: 145; pointer-events: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-home {
+  position: absolute; inset: 0 0 76px; overflow-x: hidden; overflow-y: auto; pointer-events: auto; box-sizing: border-box;
+  display: flex; justify-content: center; align-items: flex-start; padding: max(6vh, 40px) 6vw 24px; scrollbar-width: thin;
+  animation: apd-in 200ms ease;
+}
+html[data-shell="desktop"][data-layout="apps"] .apd-home[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="apps"] .apd-grid {
+  width: 100%; max-width: 1040px; display: grid; grid-template-columns: repeat(auto-fill, 120px); justify-content: center;
+  grid-auto-rows: max-content; row-gap: 30px; column-gap: 20px;
+}
+html[data-shell="desktop"][data-layout="apps"] .apd-icon {
+  --c: var(--wz-accent);
+  position: relative; width: 120px; min-height: 112px; padding: 6px 0 4px; margin: 0; border: 0; border-radius: 18px; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: 9px; cursor: pointer; color: var(--ap-label); user-select: none;
+}
+html[data-shell="desktop"][data-layout="apps"] .apd-icon:focus-visible { outline: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-icon:focus-visible .apd-tile { box-shadow: 0 0 0 2px var(--ap-label); }
+html[data-shell="desktop"][data-layout="apps"] .apd-tile {
+  width: 76px; height: 76px; flex: none; border-radius: 20px; overflow: hidden; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--c) 26%, var(--ap-tile)); box-shadow: inset 0 0 0 1px var(--ap-tile-line), var(--ap-tile-shadow);
+  transition: transform 140ms ease;
+}
+html[data-shell="desktop"][data-layout="apps"] .apd-icon:hover .apd-tile { transform: translateY(-2px) scale(1.04); }
+html[data-shell="desktop"][data-layout="apps"] .apd-icon:active .apd-tile { transform: scale(.94); }
+html[data-shell="desktop"][data-layout="apps"] .apd-icon.is-logo .apd-tile { background: var(--ap-tile-logo); }
+html[data-shell="desktop"][data-layout="apps"] .apd-tile .sgi { width: 44px; height: 44px; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 82%, var(--ap-label)) !important; }
+html[data-shell="desktop"][data-layout="apps"] .apd-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-shell="desktop"][data-layout="apps"] .apd-plus .apd-tile { background: var(--ap-tile); color: var(--ap-label); }
+html[data-shell="desktop"][data-layout="apps"] .apd-plus .vc-ico { width: 32px; height: 32px; }
+html[data-shell="desktop"][data-layout="apps"] .apd-badge {
+  position: absolute; top: 0; left: calc(50% + 26px); min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box; border-radius: 12px;
+  display: grid; place-items: center; pointer-events: none;
+  background: var(--ap-badge); color: var(--ap-badge-ink); box-shadow: 0 0 0 2px var(--ap-badge-ring);
+  font: 700 calc(var(--wz-text-sm) * .92) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
+}
+html[data-shell="desktop"][data-layout="apps"] .apd-badge[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-label {
+  max-width: 100%; padding: 0 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 500 var(--wz-text-sm) / 1.25 var(--wz-font-ui); color: var(--ap-label); text-shadow: var(--ap-label-shadow);
+}
+
+/* the bottom row: the orb at the bottom centre on every screen (a drag up on it = Home) */
+html[data-shell="desktop"][data-layout="apps"] .apd-row { position: absolute; left: 50%; bottom: 8px; width: 60px; height: 60px; margin-left: -30px; pointer-events: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-orb { position: absolute; inset: 0; pointer-events: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-orbc { position: absolute; inset: -38%; width: 176%; height: 176%; display: block; pointer-events: none; transition: transform 180ms ease; }
+/* the orb floats over app windows now: only its round glow shows (the canvas corners never read as a square) */
+html[data-shell="desktop"][data-layout="apps"] .apd-orbc { -webkit-mask-image: radial-gradient(closest-side, currentColor 72%, transparent); mask-image: radial-gradient(closest-side, currentColor 72%, transparent); }
+html[data-shell="desktop"][data-layout="apps"] .apd-orbfb { position: absolute; inset: 4%; width: 92%; height: 92%; border-radius: 50%; pointer-events: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-orbfb[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="apps"] .apd-orb.is-pressed .apd-orbc { transform: scale(.94); }
+html[data-shell="desktop"][data-layout="apps"] .apd-orbbtn {
+  position: absolute; inset: 0; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; pointer-events: auto;
+  touch-action: none; user-select: none;
+}
+html[data-shell="desktop"][data-layout="apps"] .apd-orbbtn:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 3px; }
+@keyframes apd-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="apps"] .apd-home { animation: none; } }

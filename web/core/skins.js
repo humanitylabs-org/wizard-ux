@@ -166,14 +166,21 @@
         if (s.img[i]) return s.img[i];
         const slot = s.img[i] = { ready: false, c: null }, im = new Image();
         im.decoding = 'async';
-        im.onload = () => { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
-          w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
-          // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
-          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, `rgba(11,10,16,${scrim[0]})`); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, `rgba(11,10,16,${scrim[1]})`);
-          x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o; slot.ready = true; wake(); };
+        slot.im = im;
+        im.onload = () => { this.cover(slot, W, H); slot.ready = true; wake(); };
         im.src = `/wizard-os-home/core/skins/macos/${this.FILES[i]}.webp`;
         return slot;
       },
+      // the photo cover-fitted to the page once (again only when the page itself changes size: resize below)
+      cover(slot, W, H) {
+        const im = slot.im, o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
+          w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
+          // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
+          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, `rgba(11,10,16,${scrim[0]})`); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, `rgba(11,10,16,${scrim[1]})`);
+        x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o;
+      },
+      // the window itself changed size: the same photo (never the next one), cropped again for the new size
+      resize(s, W, H) { for (const slot of Object.values(s.img)) if (slot.ready && slot.im) this.cover(slot, W, H); },
       init(s, W, H) {
         const n = this.FILES.length; let at = 0;
         try { at = (parseInt(localStorage.getItem(this.KEY), 10) + 1) % n; if (!isFinite(at)) at = 0; localStorage.setItem(this.KEY, String(at)); } catch (e) {}
@@ -354,11 +361,18 @@
     landscapes: LANDSCAPES.dark,
     'landscapes-light': LANDSCAPES.light,
   };
+  /* The canvases follow the page's own size only (Miguel, 2 Nov 2026: the background jolted whenever a panel opened).
+   * Layouts and the desktop shell send \`resize\` for their own re-tiling while the page keeps its size: that is a no-op
+   * here (a canvas re-sized is wiped, and a fresh state re-picks: Landscapes moved to the next photo, every random scene
+   * re-rolled). A real size change keeps each scene's state where the skin can crop again (resize), else starts it over. */
   function size() {
-    const d = BGL.cv[0] && BGL.cv[0].parentElement; if (!d) return;
-    const r = d.getBoundingClientRect(); BGL.W = r.width; BGL.H = r.height; BGL.dpr = Math.min(devicePixelRatio || 1, 1.5);
+    const d = BGL.cv[0] && BGL.cv[0].parentElement; if (!d) return false;
+    const r = d.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 1.5);
+    if (r.width === BGL.W && r.height === BGL.H && dpr === BGL.dpr && BGL.cv.every(c => c.width === (r.width * dpr | 0) && c.height === (r.height * dpr | 0))) return false;
+    BGL.W = r.width; BGL.H = r.height; BGL.dpr = dpr;
     for (const c of BGL.cv) { c.width = BGL.W * BGL.dpr | 0; c.height = BGL.H * BGL.dpr | 0; }
-    BGL.st = {};
+    for (const id of Object.keys(BGL.st)) { const R = BG[id]; if (R && R.resize) R.resize.call(R, BGL.st[id], BGL.W, BGL.H); else delete BGL.st[id]; }
+    return true;
   }
   function drawLayer(k, i, op, dt) {
     const c = BGL.cv[k], x = BGL.cx[k];
@@ -385,7 +399,7 @@
     const device = document.getElementById('device') || (document.documentElement.dataset.shell === 'desktop' ? document.body : null); if (!device || BGL.cv.length) return;
     const ref = device.querySelector('.lean') || device.firstChild;
     ['skinA', 'skinB'].forEach(id => { const c = document.createElement('canvas'); c.id = id; c.className = 'skin-bg'; c.setAttribute('aria-hidden', 'true'); device.insertBefore(c, ref); BGL.cv.push(c); BGL.cx.push(c.getContext('2d')); });
-    size(); addEventListener('resize', () => { size(); wake(); });
+    size(); addEventListener('resize', () => { if (size()) wake(); });
     window.WosScenery?.layer(LAYER);
     paint(pos);
   }

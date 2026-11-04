@@ -49,7 +49,9 @@
        // A view James is looking at stays put for the reply it came from; a NEW reply that links somewhere else
        // replaces it (desktop shows it side by side, so it is always visible — James, 19 Oct 2026).
        if (b) { if (H.visible(b.id) && b.brk === t.rk) return; H.close(b.id); }
-       H.open({ ...t.win, from: Object.freeze({ ...H.from?.(wid), win: wid, sid, title: H.title(w), agent: w.agent || '' }), bound: wid, bsid: sid, bkey: t.key, brk: t.rk }, wid);
+       const go = () => H.open({ ...t.win, from: Object.freeze({ ...H.from?.(wid), win: wid, sid, title: H.title(w), agent: w.agent || '' }), bound: wid, bsid: sid, bkey: t.key, brk: t.rk }, wid);
+       // a layout placing the shell's opens (apps.routeOpens) may want no view beside the thread: links open when tapped
+       if (!window.WosSkinHost?.routeOpen?.('beside', { url: t.win.url || '', app: t.win.appId || '' }, go)) go();
      } finally { busy = false; H.changed?.(); }
    }
    return { shown, dismiss(w) { if (w?.bound) off.set(w.bound, w.bsid + '|' + w.bkey); } };

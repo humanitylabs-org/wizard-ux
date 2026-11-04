@@ -12,10 +12,16 @@
     "miguel/machines-home",
     "miguel/arrange-download",
     "miguel/refresh-button",
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ],
   "flags": {},
   "off": [
-    "wizard/pin-buttons"
+    "wizard/pin-buttons",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ]
 }

@@ -16,7 +16,7 @@ test('desktop Settings opens as a window and every way of closing the window hid
   assert.match(open, /if \(w\) focusWin\(w\.id\); else \{ settingsFocus = document\.activeElement; newWin\(\{ app: 'settings' \}\); \}/);
   assert.match(desk, /    const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\);\n  \}/, 'on a desk Settings is a window');
   // From Home (any skin) it is a centred panel over Home; Esc, ✕ or a click outside closes it (James, 31 Oct 2026).
-  assert.match(open, /if \(homeOpen\) \{  \/\/ from Home/);
+  assert.match(open, /if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/);
   assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
   assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
@@ -60,7 +60,8 @@ test('desktop page previews open as a window; images still use the viewer and fi
   const img = go.indexOf('viewImage(u, doc)'), file = go.indexOf('download(u, doc)'), win = go.indexOf('asWindow(');
   assert.ok(img > 0 && file > img && win > file, 'asWindow only after the image and file branches');
   assert.ok(win < go.indexOf('stack.push'), 'before the pane opens');
-  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\); newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
+  // (stock; a layout placing the shell's opens, apps.routeOpens, may put it in its own panel first)
+  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = \(\) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
   assert.match(desk, /if \(f\.preview\) \{ closeWin\(f\.id\); return 'preview'; \}/, 'Esc closes a preview window');
   assert.doesNotMatch(phone, /asWindow/, 'phone keeps its full-height link sheet');
 });

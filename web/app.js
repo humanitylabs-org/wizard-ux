@@ -162,7 +162,7 @@
     // A private-origin link in a message opens in a window on this desk: the shell never navigates away.
     openLink: (url, title) => openLinkDesk(url, null),
     // An installed app opened from a Chats row/card remembers this window, so Back (or the app's own done/dismiss) lands here.
-    openApp: (id, srcEl) => { const a = hostedOpenable(id); if (!a) return false; const srcId = srcEl?.closest?.('.win')?.dataset.win; return openApp(a, {}, srcId && W[srcId] ? { from: fromOf(srcId) } : {}); },
+    openApp: (id, srcEl) => { const a = hostedOpenable(id); if (!a) return false; const srcId = srcEl?.closest?.('.win')?.dataset.win; const go = () => openApp(a, {}, srcId && W[srcId] ? { from: fromOf(srcId) } : {}); return window.WosSkinHost?.routeOpen?.('app', { id, path: '' }, go) ? true : go(); },
     overlay: open => { if (open) { closeMenu(); armBack(); } },
     vib: ms => vib(ms),
     threadShown: (wid, el) => threadShown(wid, el),
@@ -1004,6 +1004,12 @@
     const targetApp = appAt(rel);
     if (targetApp && !setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(targetApp, () => openLinkDesk(href, fromEl, true));
+    // a layout placing the shell's opens (apps.routeOpens): an app's page where it shows that app
+    const routed = window.WosSkinHost?.routeOpen?.('link', { url: rel, title: '', app: targetApp ? targetApp.id : '' }, () => linkDesk(u, rel, srcId));
+    return routed ? routed.value !== false : linkDesk(u, rel, srcId);
+  }
+  function linkDesk(u, rel, srcId) {
+    const src = W[srcId];
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
@@ -1173,12 +1179,14 @@
   window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
   window.WizOpenApp = (id, path = '') => {
     const x = hostedOpenable(id); if (!x) return false;
-    if (!path) return openApp(x);
+    if (!path) { const r = window.WosSkinHost?.routeOpen?.('app', { id, path: '' }, () => openApp(x)); return r ? true : openApp(x); }
     let u; try { u = new URL(path, location.href); } catch (_) { return false; }
     const rel = u.pathname + u.search + u.hash;
     if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
     // An explicit repair action is an app workflow, not a page sent for review.
-    return !!openWin({ app: 'frame', appId: id, url: rel, from: { ...fromOf(desks[idx].focus), sid: '' }, workflow: true });
+    const go = () => !!openWin({ app: 'frame', appId: id, url: rel, from: { ...fromOf(desks[idx].focus), sid: '' }, workflow: true });
+    // a layout placing the shell's opens (apps.routeOpens): the app where it shows apps, at that page
+    return window.WosSkinHost?.routeOpen?.('app', { id, path: rel }, go) ? true : go();
   };
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
@@ -1188,7 +1196,7 @@
     // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
     if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
     if (!host.isConnected || W[host.dataset.win] !== w) return;
-    const a = hostedOpenable(d.id); if (a) openApp(a);
+    const a = hostedOpenable(d.id); if (a && openApp(a) !== false && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win, true);   // Get more: the app takes the Store's place
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; Agents frames may ask for an app's sheet. */
@@ -1277,6 +1285,15 @@
     const c = CHATS.ch(here); c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
     if (!CHATS.setFilter(w, '')) CHATS.renderChats(w);
     requestAnimationFrame(() => { const sc = winEl(here)?.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; });
+  }
+  // The Chats window in front as it is (its thread kept; opened if there is none): the AI apps view's main screen.
+  function showChats() {
+    closeSheets(true);
+    let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
+    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
+    if (!here) return null;
+    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    focusWin(here); return W[here];
   }
   /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
    * and returns to the desk the card was tapped on. */
@@ -1610,7 +1627,7 @@
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), isFront: () => desks[idx].focus === w.id && desks[idx].wins.includes(w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) && !device.classList.contains('st-parked'), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => { const r = window.WosSkinHost?.routeOpen?.('thread', { sid, from: a.id }, () => { if (!CHATS.prepThread(sid, opts)) return false; closeSheets(true); openWizardThread(sid); return true; }); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts); }, isFront: () => desks[idx].focus === w.id && desks[idx].wins.includes(w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) && !device.classList.contains('st-parked'), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { const go = () => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }; const r = window.WosSkinHost?.routeOpen?.('draft', { from: a.id }, go); if (r) { if (!r.value) throw new Error('Chats unavailable'); return r.value; } return go(); }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.remove('loading'); wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -2679,11 +2696,35 @@
     }
     return false;
   }
-  async function openRec(epoch = V.captureEpoch) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
+  async function openMic() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     // The phone's own mic only (18 Oct 2026): a take Android puts on a Bluetooth or external mic is refused.
     if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone."); e.code = 'external_mic'; throw e; }
+    micGranted = true;
+    return stream;
+  }
+  /* Pre-warmed microphone (Miguel, 31 Oct 2026: hold-for-command was slow to really listen). A press held still on the
+   * orb for MIC_WARM_MS opens the browser mic while the hold is still deciding, so by the time a hold becomes a command
+   * (or a slow tap becomes a message) the stream is already open and recording starts at once: the iPhone's
+   * getUserMedia (often 300-800 ms) leaves the critical path. Tap and hold mean exactly what they did; only the mic
+   * opens sooner. Never a permission prompt (only once the mic is known to be allowed), never with the native
+   * recorder, and released as the press ends unless that press started a take. */
+  const MIC_WARM_MS = 90;
+  let micGranted = false, MW = null;
+  try { navigator.permissions?.query?.({ name: 'microphone' })?.then(p => { micGranted = micGranted || p.state === 'granted'; p.onchange = () => { micGranted = p.state === 'granted'; }; }, () => {}); } catch (_) {}
+  function warmMic() {
+    if (MW || V.state !== 'idle' || !micGranted || DEV() || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+    // an app or meeting holding the mic is handed over by startVoice (WosOrbHandoff) first: never open a second stream
+    const shared = window.WizAppCapture?.getState?.(); if (V.admitting || shared?.active || shared?.recording || shared?.hold) return;
+    const w = MW = { p: openMic() };
+    w.p.catch(() => { if (MW === w) MW = null; });
+  }
+  // The take opening now takes the warm stream (synchronously, before its first await); a press that ends any other way drops it.
+  function takeWarm() { const w = MW; MW = null; return w ? w.p : null; }
+  function dropWarm() { const w = MW; MW = null; if (w) w.p.then(s => s.getTracks().forEach(t => t.stop()), () => {}); }
+  async function openRec(epoch = V.captureEpoch) {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
+    const stream = await (takeWarm() || openMic());
     if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
     V.stream = stream;
     const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
@@ -3492,13 +3533,39 @@
   // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
   function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); window.WosOrbSwitcher?.level(v); }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
+  /* A worn layout's own orb swipes (WosSkinHost.orbSwipes, e.g. the Orb and Apps views: up = Home, the rest nothing).
+   * 'stock' = the dock's own swipe below; Desks declares none, so it is always 'stock' there. Tap and hold never ask. */
+  function orbSwipeAct(g) {
+    const s = g && g.swipes, k = !g ? '' : g.mode === 'h' ? 'side' : g.mode === 'v' ? (g.dy < 0 ? 'up' : 'down') : '';
+    return !s || !k || !(k in s) ? 'stock' : s[k];
+  }
+  // Home from the orb: as a desk swipe it may be the iPhone's own swipe home in disguise (undoLastMove puts it back)
+  function orbSwipeHome() {
+    const from = desks[idx]?.id;
+    if (sheet) closeSheets(true);
+    if (pillOvOpen()) closeOverview();
+    if (idx !== HOME) goDesk(HOME);
+    if (desks[idx]?.id !== from) lastMove = { from, at: Date.now() };
+  }
+  /* A New chat to type in from the orb (the AI apps view, round 5: tap the orb to talk, swipe it up to type): the Chats
+   * window's New chat with the cursor in its composer, focused inside the swipe's own release so the phone's keyboard
+   * comes up (iOS raises it only for a focus made while handling the touch). */
+  function orbSwipeNew() {
+    if (sheet) closeSheets(true);
+    if (pillOvOpen()) closeOverview();
+    const w = showChats(); if (!w) return;
+    CHATS.openChat(w.id, '__new__');
+    const ta = winEl(w.id)?.querySelector('.ch-compose textarea');
+    if (ta) { ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
+  }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
     if (G || e.isPrimary === false) return;
     e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
-    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
+    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks(); G.swipes = window.WosSkinHost?.orbSwipes?.() || null;
+    if (V.state === 'idle') G.warm = setTimeout(() => { if (G && G.mode === 'pending') warmMic(); }, MIC_WARM_MS);
     // Hold = Orb switcher radial (James, 31 Oct 2026): a semicircle of wedges above the thumb. Slide onto one, release to
     // choose; the voice command lives in one wedge and needs a dwell. The corner orb (full-screen Chats) only talks:
     // there a hold stays the plain hold-command it always was.
@@ -3563,12 +3630,14 @@
       return;
     }
     // Swipes work in every voice state: recording or sending never locks navigation.
-    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner) { clearTimeout(G.hold); G.mode = 'still'; }
+    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner && !G.swipes) { clearTimeout(G.hold); G.mode = 'still'; }
     if (G.mode === 'still') return; // the corner orb only talks: a slid finger cancels, it never swipes the shell
     // A downward slide commits sooner (10 px): the orb sits near the bottom of the glass, so there is little room below it.
     if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
+    // A layout's own swipe (Orb / Apps): nothing follows the finger; only the hint for Home.
+    if (G.swipes && orbSwipeAct(G) !== 'stock') { orbWrap.dataset.dir = G.dy < -40 ? ({ home: '↑ Home', new: '↑ New chat' }[orbSwipeAct(G)] || '') : ''; return; }
     if (G.mode === 'h' && sheet === 'settings') liftSettings(); // swipe away from Settings: it stays on its desk
     if (G.mode === 'h' && !sheet) {
       let dx = G.dx; if ((idx === 0 && dx > 0) || (atPickerEnd() && dx < 0)) dx *= .28;
@@ -3608,11 +3677,15 @@
   }
   function endGesture(e, cancelled) {
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
-    clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
+    // a take this press starts has taken the warm mic by then (openRec claims it before its first await)
+    clearTimeout(g.hold); clearTimeout(g.warm); queueMicrotask(dropWarm); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
     // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
     if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
     if (g.ovOpened) { if (cancelled) closeOverview(); return; }
+    // A layout's own swipe (Orb / Apps): up far or fast enough = Home; a swipe it set to null does nothing.
+    const own = orbSwipeAct(g);
+    if (own !== 'stock') { if ((own === 'home' || own === 'new') && !cancelled && (g.dy < -70 || g.dy / vt < -.55)) { if (own === 'new') orbSwipeNew(); else orbSwipeHome(); } return; }
     if (g.upDesks && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();
@@ -4123,7 +4196,7 @@
     orbSwitcher: orbSwitcherHost,
     overview: overviewAdapter,
     windowRefresh: windowRefreshAdapter,
-    route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null, beside: device.classList.contains('bound-peeking') ? 1 : device.classList.contains('bound-view-peeking') ? -1 : 0 }; },
+    route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null, beside: device.classList.contains('bound-peeking') ? 1 : device.classList.contains('bound-view-peeking') ? -1 : 0, home: idx === HOME }; },
     back: () => backStep(),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
@@ -4154,6 +4227,56 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
+    /* Layouts on the phone (the Orbs view's Home, layouts/orb/phone.js): the apps (the same rows and kinds as the
+     * desktop's), opening one (its desk, or a new one), what is running (the app on each desk, one per app: the Orbs
+     * satellites), the Home desk's section and the dock orb's box. */
+    apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
+    openApp: id => !!APP[id] && openApp(APP[id]) !== false,
+    // The Orb and Apps views' app sheet: every app by kind (core/app-kinds.js rows) and opening any of them
+    appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a)) : null,
+    openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, open),
+    panelRunning: () => { const run = new Map(); desks.forEach((d, i) => { if (d.home || !d.wins.length) return; const w = W[d.focus] || W[d.wins[0]], id = w && (w.appId || winApp(w).id); if (id && !run.get(id)?.open) run.set(id, { id, open: i === idx, playing: false }); }); return [...run.values()]; },
+    // The Orb and Apps views' app sheet: close an app (every desk showing it), and an App Store page on a desk of its own.
+    closeApp: id => { let n = 0; for (let i = desks.length - 1; i >= 0; i--) { const d = desks[i]; if (!d.home && d.wins.some(x => W[x] && (W[x].appId || winApp(W[x]).id) === id) && closeDesk(i)) n++; } return n > 0; },
+    openStore: id => { const S = APP['app-store']; if (!S?.url) return false; Object.keys(W).filter(x => W[x]?.appId === 'app-store' && deskOf(x) >= 0).forEach(x => closeWin(x, true));
+      const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); return !!openWin({ app: 'frame', appId: 'app-store', url: u.pathname + u.search }); },
+    homeHost: () => secOf(HOME),
+    orbHost: () => orbWrap,
+    // The Apps view's Home grid: one entry per desk (each desk is one app), in desk order, with the app it shows.
+    // A layout placing the shell's opens (apps.routeOpens): the app's own window at one of its own pages
+    showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
+      if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
+      const mine = x => x?.app === 'frame' && x.appId === id && !x.from, w = mine(W[desks[idx].focus]) ? W[desks[idx].focus] : Object.values(W).find(x => mine(x) && deskOf(x.id) >= 0); if (!w) return false;
+      w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
+      let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
+      if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } } return true; },   // (replace: no Back step of its own)
+    phoneDesks: () => desks.map((d, i) => { if (d.home || !d.wins.length) return null; const w = W[d.focus] || W[d.wins[0]]; if (!w) return null; const a = winApp(w); return { desk: i, id: w.appId || a.id || '', name: a.name || w.title || '' }; }).filter(Boolean),
+    // An app's mark exactly as the dock draws it (its logo or sigil, its colour): the Apps view's icons.
+    phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },
+    /* The AI apps view (layouts/ai-apps): its drawer's chats (Working, Ready; the rest for its search), each with the
+     * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
+    sessionList: () => {
+      const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; if (!G) return null;
+      const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
+      const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
+        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', rank: Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
+          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
+          actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s, null).filter(a => KEEP.includes(a))] }; };
+      // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom
+      // under the snooze-someday tweak); a snoozed chat waiting on an approval stays in Ready, as in stock
+      const snoozed = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)) && !['waiting_for_approval', 'unknown'].includes(s.status);
+      const ready = G.ready || [];
+      return { working: (G.working || []).map(s => row(s, 'working')), ready: ready.filter(s => !snoozed(s)).map(s => row(s, 'ready')),
+        snoozed: [...(G.deferred || []), ...ready.filter(snoozed)].map(s => row(s, 'snoozed')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
+    },
+    sessionAct: (sid, act) => {
+      if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+      const w = showChats(); if (!w) return false;
+      if (act === 'rename') { CHATS.openRenameSheet(w.id, sid); return true; }
+      CHATS.threadAct(w.id, sid, act); return true;
+    },
+    showChats: () => !!showChats(),
+    newChat: () => { const w = showChats(); if (!w) return false; CHATS.openChat(w.id, '__new__'); return true; },
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });
