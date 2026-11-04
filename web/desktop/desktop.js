@@ -586,8 +586,11 @@
   }
   // ⌥↓ / ⌥↑ always walk Ready, wherever you are (Miguel, 27 Oct 2026: one key, no list/composer sides).
   function chatsUpDown(dir) { return stepReady(dir); }
-  // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
-  // type a new one straight away, or ⌥↓ to the next Ready chat.
+  // Existing-thread replies retain the desktop fresh-draft shortcut. A new-chat
+  // send already returns to the list in shared Chats; never undo that navigation.
+  function keepNewSendList(wid, sid) {
+    return sid === '__new__';
+  }
   function toNewChat(wid, why) {
     const w = W[wid]; if (hud?.id === wid || !mainChats(w) || homeOpen || focused()?.id !== wid) return; // the HUD stays on its chat
     CHATS.openNewDraft(wid, ''); syncChatsPane(wid); setTimeout(() => focusInside(wid), 30); log('send:new-chat:' + why);
@@ -595,11 +598,9 @@
   stage.addEventListener('submit', e => {
     const form = e.target.closest?.('[data-chform]'), ta = form?.querySelector('textarea'); if (!ta?.value.trim()) return;
     const wel = form.closest('.win'), wid = wel?.dataset.win, w = W[wid]; if (!mainChats(w)) return;
-    // In the single-pane layout, shared Chats already returns a new send to the
-    // list synchronously. Do not reopen __new__ 180 ms later (or steal a newer
-    // visit / a failed-save recovery). Match desktop.css's 620px container rule;
-    // full-width desktop and existing-thread / voice sends keep their behavior.
-    if (w.thread === '__new__' && wel.querySelector('.dchats')?.getBoundingClientRect().width <= 620) return;
+    // Capture the source thread/layout before shared Chats leaves it. No delayed
+    // fresh-draft shortcut may undo its list return, recovery or a newer visit.
+    if (keepNewSendList(wid, w.thread)) return;
     setTimeout(() => {
       if (W[wid] !== w || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
       toNewChat(wid, 'text');
@@ -1808,7 +1809,7 @@
       }
     }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
+    if (rp) { const stayOnList = keepNewSendList(rp.wid, rp.sid); CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); if (stayOnList) syncChatsPane(rp.wid); else setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });

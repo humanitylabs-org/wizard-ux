@@ -83,30 +83,60 @@ async function sendReturnChecks(b) {
   const close = async c => { const journal=evidence.find(x=>x.context===contexts.get(c)); if(journal) { journal.final=await Promise.race([c.pages()[0]?.evaluate(()=>({receipts:window.__qaReceipts,models:window.WosModels&&{ready:WosModels.ready,options:WosModels.options,error:WosModels.error,loading:!!WosModels.loading,defaultOption:WosModels.defaultOption()},items:[...(window.WosOutbox?._items?.values()||[])].map(x=>({id:x.id,sessionId:x.sessionId,state:x.state,text:x.text,error:x.error,runId:x.runId}))})).catch(()=>null),sleep(1500).then(()=>({diagnosticTimeout:true}))]); } clearTimeout(contexts.get(c)); contexts.delete(c); await c.close(); flush(); };
   const closeAll = async () => { for (const c of [...contexts.keys()]) await close(c).catch(()=>{}); };
   try {
-  async function boot(mobile, skin, half = false) {
-    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:1200,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+  async function boot(mobile, skin, half = false, desktopWidth = 1200, screenshotCase = '') {
+    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:desktopWidth,height:screenshotCase?(desktopWidth===595?945:1890):900},deviceScaleFactor:screenshotCase&&desktopWidth===595?2:1,userAgent:screenshotCase?'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36':undefined,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block',permissions:mobile?[]:['microphone']});
     contexts.set(c,setTimeout(()=>{void c.close().catch(()=>{});},60000)); // hard per-context case cap
     const intercepted = [], errors = [], heldRuns = [], receipts = [], requests = []; let holdAck = true;
-    const journal={mobile,skin,half,writes:intercepted,errors,receipts,requests,models:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
+    const journal={mobile,skin,half,desktopWidth,writes:intercepted,errors,receipts,requests,models:[],requestFailures:[],externalRequests:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
     await c.exposeBinding('__qaReceipt',(_source,value)=>{receipts.push(value);flush();});
     await c.exposeBinding('__qaModelState',(_source,value)=>{journal.models.push(value);flush();});
+    journal.lifecycle=[]; journal.phases=[];
+    await c.exposeBinding('__qaLifecycle',(_source,value)=>{journal.lifecycle.push(value);flush();});
+    await c.addInitScript(()=>{
+      const log=(event,detail={})=>{void window.__qaLifecycle({at:performance.now(),event,...detail});};
+      window.__qaRecorders=[];
+      // Observe the native fake-device recorder; never replace bytes or its timing.
+      const start=MediaRecorder.prototype.start;
+      MediaRecorder.prototype.start=function(...args){
+        const rec=this, row={started:performance.now(),bytes:0,chunks:0,stopped:false};
+        window.__qaRecorders.push(row);
+        for(const type of ['start','dataavailable','stop','error'])rec.addEventListener(type,e=>{
+          if(type==='dataavailable'){row.bytes+=e.data.size;row.chunks++;}
+          if(type==='stop')row.stopped=true;
+          log('recorder:'+type,{bytes:row.bytes,chunks:row.chunks,state:rec.state,mime:rec.mimeType,error:e.error?.message});
+        });
+        return start.apply(this,args);
+      };
+      addEventListener('wizard-voice-state',e=>log('voice-state',e.detail));
+      addEventListener('unhandledrejection',e=>log('unhandled-rejection',{error:String(e.reason?.stack||e.reason)}));
+      document.addEventListener('click',e=>{const b=e.target.closest('[data-chmic],#micBtn');if(b)log('mic-click',{target:b.id||'composer',pressed:b.getAttribute('aria-pressed')});},true);
+    });
     await c.route('**/*', async r => {
       const q = r.request(), u = new URL(q.url()); requests.push({method:q.method(),path:u.pathname}); flush();
       const json = (status, body) => r.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
-      if (u.origin !== origin) return r.abort();
+      if (u.origin !== origin) { journal.externalRequests.push(q.url()); flush(); return r.abort(); }
       if (!['GET','HEAD'].includes(q.method())) {
-        const write={method:q.method(),path:u.pathname,body:q.postData() || '',key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
+        const bytes=q.postDataBuffer(), media=/\/(?:transcribe|files\/upload)$/.test(u.pathname);
+        const write={method:q.method(),path:u.pathname,query:u.search,body:media?'[synthetic audio bytes]':q.postData() || '',bytes:bytes?.length||0,key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
         if (u.pathname.endsWith('/v1/runs')) {
           if (holdAck) await new Promise(resolve => heldRuns.push(resolve));
           write.ack={run_id:'qa_return_'+write.key,session_id:JSON.parse(write.body).session_id,status:'queued'}; flush(); return json(202,write.ack);
         }
         if (u.pathname === '/wizard/thread-seen') return json(200,{state:JSON.parse(q.postData() || '{}').state || {initializedAt:1,threads:{}}});
+        if (u.pathname.endsWith('/transcribe')) return json(200,{text:'QA tiled voice'});
+        if (u.pathname.endsWith('/files/upload')) { write.response={file:{id:'qa_tiled_voice',filename:'voice.webm',mime:'audio/webm',bytes:write.bytes}};flush();return json(200,write.response); }
+        if(screenshotCase && !['/wizard/hermes/api/sessions','/wizard/hermes/api/model/options','/wizard-os-home/api/ui-preferences'].includes(u.pathname)) {
+          journal.unlistedWrites=(journal.unlistedWrites||[]).concat(write);flush();return json(405,{error:'fixture write refused'});
+        }
         return json(200,{ok:true});
       }
       // chat-models.normalize/resolveRoute require a confirmed default. An empty
       // {} lets enqueue persist a durable FAILED item without ever posting a run.
       if (u.pathname === '/wizard/hermes/api/model/options') return json(200,{model:'qa-model',provider:'qa-provider',providers:[{slug:'qa-provider',authenticated:true,models:['qa-model']}]});
-      if (u.pathname === '/wizard/v1/agents') return json(200,{agents:[{id:'hermes',label:'QA Agent',is_default:true,status:'running',model:{model:'qa-model',provider:'qa-provider'}}]});
+      if (u.pathname === '/wizard/v1/setup') return json(200,{first_run:false});
+      if (u.pathname === '/wizard/v1/ui-preferences') return json(200,{migrations:{'launcher-seed-v1':true},launcher:{}});
+      if (u.pathname === '/wizard/v1/agents') return json(200,{agents:[{id:'hermes',label:screenshotCase?'Archimedes':'QA Agent',is_default:true,status:'running',privacy:'standard',runtime:'hermes',appearance:{},permissions:{wizard_apps:[],agent_apps:[]},bound_apps:[],model:{model:'qa-model',provider:'qa-provider',fallback:false}}]});
+      if (screenshotCase && u.pathname === '/wizard/v1/bootstrap') return json(200,{bootstrap:1,settings:{owner:{name:'Fixture owner'},agent:{name:'Archimedes'},clock:{timezone:'UTC'},voice:{language:'en',vocabulary:[]}},capabilities:{voice:true,files:true,router:true,steer:true},endpoints:{transcribe:'/wizard/transcribe',upload:'/wizard/files/upload',route:'/wizard/route'}});
       if (u.pathname === '/wizard/hermes/api/sessions') return json(200,{object:'list',data:!u.searchParams.get('agent')||u.searchParams.get('agent')==='hermes'?Object.keys(FIX).map(fixSession):[],has_more:false,limit:100,offset:0,snapshot:'synthetic-return'});
       const m = u.pathname.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/);
       if (m && FIX[m[1]]) return json(200,m[2] ? {object:'list',data:FIX[m[1]].rows().map(x=>({...x,session_id:m[1]})),pagination:{limit:500,offset:0}} : {session:fixSession(m[1])});
@@ -119,8 +149,16 @@ async function sendReturnChecks(b) {
       const mime = rel.endsWith('.html') ? 'text/html' : rel.endsWith('.css') ? 'text/css' : rel.endsWith('.json') ? 'application/json' : rel.endsWith('.svg') ? 'image/svg+xml' : rel.endsWith('.png') ? 'image/png' : 'application/javascript';
       return r.fulfill({status:200,contentType:mime,body:fs.readFileSync(file)});
     });
-    await c.addInitScript(skin => { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.done','1'); localStorage.setItem('wos.skin',skin); },skin);
+    await c.addInitScript(({skin,screenshotCase}) => {
+      localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.done','1'); localStorage.setItem('wos.tour.v1','true'); localStorage.setItem('wos.welcome.v1','done'); localStorage.setItem('wos.skin',skin);
+      if(screenshotCase==='saved-focus') {
+        // Source-supported saved Focus, not a guessed legacy w.agent window.
+        const id='qasaved';localStorage.setItem('wux.desk.wins',JSON.stringify({[id]:{id,app:'chats',thread:null,focus:{kind:'agent',key:'hermes'},chatsProvider:'wizard-chats'}}));
+        localStorage.setItem('wux.desk.ws',JSON.stringify([{id:'dqasaved',wins:[id],focus:id,mono:false}]));localStorage.setItem('wux.desk.cur','0');localStorage.setItem('wux.desk.homeOpen','false');
+      }
+    },{skin,screenshotCase});
     const p = await c.newPage(); p.setDefaultTimeout(8000); p.setDefaultNavigationTimeout(12000); p.on('pageerror',e=>{errors.push(String(e));flush();});
+    p.on('requestfailed',q=>{journal.requestFailures.push({method:q.method(),path:new URL(q.url()).pathname,error:q.failure()?.errorText});flush();});
     await p.goto(URL_+(URL_.includes('?')?'&':'?')+'shell='+(mobile?'phone':'desktop'),{waitUntil:'load'});
     await p.waitForFunction(mobile => mobile ? !!window.__wos?.live?.session('qa_tt_a') : !!window.__wux?.live?.session('qa_tt_a'),mobile);
     // The catalogue is lazy. Welcome's independent model/options fetch does not
@@ -139,13 +177,39 @@ async function sendReturnChecks(b) {
       if(!M.ready||M.error||M.loading||d?.value!=='qa-model'||d?.provider!=='qa-provider'||!M.options.some(o=>o.value===d.value&&o.provider===d.provider&&o.isGlobalDefault))
         throw new Error('Fixture model catalogue invalid: '+JSON.stringify(snapshot('invalid')));
     });
+    await p.evaluate(()=>{
+      const ob=WosOutbox;
+      const snapshot=x=>x&&({id:x.id,captureId:x.captureId,custodyId:x.custodyId,kind:x.kind,sessionId:x.sessionId,state:x.state,audioBytes:x.audio?.size,text:x.text,model:x.model,provider:x.provider,durable:x.durable,storageError:x.storageError});
+      for(const name of ['capture','stage','handOff','enqueue']){
+        const original=ob[name];
+        ob[name]=function(...args){
+          const spec=name==='capture'?{id:args[1],audioBytes:args[0]?.size}:name==='handOff'?{id:args[0]}:snapshot(args[0]);
+          void __qaLifecycle({at:performance.now(),event:'outbox:'+name+':enter',spec});
+          const result=original.apply(this,args);
+          return Promise.resolve(result).then(value=>{void __qaLifecycle({at:performance.now(),event:'outbox:'+name+':return',item:typeof value==='object'?snapshot(value):value});return value;},e=>{void __qaLifecycle({at:performance.now(),event:'outbox:'+name+':error',error:String(e.stack||e)});throw e;});
+        };
+      }
+    });
     await p.evaluate(mobile => {
-      document.getElementById('wosWelcome')?.remove(); if (mobile) __wos.goDesk(1); else __wux.openChatsList();
+      if (mobile) __wos.goDesk(1); else __wux.openChatsList();
       // done() persists sent before the hook; landed() may later compact text and
       // runId away. Bind this receipt to the exact idempotency key, not 'some sent'.
       window.__qaReceipts=[];
       WosOutbox.onSent((it,res)=>{const value={id:it.id,sessionId:it.sessionId,kind:it.kind,text:it.text,model:it.model,provider:it.provider,body:it.body,state:it.state,runId:res.runId};__qaReceipts.push(value);void window.__qaReceipt(value);});
     },mobile);
+    if(screenshotCase) {
+      await p.evaluate(async()=>{await WosAgents.load();await WizConfig.ready;});
+      // Both the actual main-agent launcher tile and saved Focus are supported.
+      // The screenshot title alone cannot tell them apart.
+      const name=await p.evaluate(()=>WizCore.apps('desktop').APP.wizard.name);
+      await p.keyboard.press('Alt+o');
+      await p.locator('#palette .pal-app .nm').first().waitFor({state:'visible'});
+      const exact=new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$');
+      const tile=p.locator('#palette .pal-app').filter({has:p.locator('.nm').filter({hasText:exact})});
+      journal.launcher={registryName:name,count:await tile.count(),tiles:await p.locator('#palette .pal-app').evaluateAll(xs=>xs.map(x=>({text:x.querySelector('.nm')?.textContent,title:x.title,index:x.dataset.i})))};flush();
+      if(journal.launcher.count!==1){await p.screenshot({path:path.join(OUT,'launcher-preflight-failed.png')});throw new Error('Registry-derived launcher tile missing or ambiguous: '+JSON.stringify(journal.launcher));}
+      await tile.click();
+    }
     if (half) await p.evaluate(()=>__wux.newWin({app:'settings'}));
     const id = await p.evaluate(mobile=>Object.values((mobile ? __wos : __wux).wins).find(w=>w.app==='chats'&&!w.agent).id,mobile);
     if (!mobile) await p.evaluate(id=>__wux.focusWin(id),id);
@@ -154,18 +218,20 @@ async function sendReturnChecks(b) {
     const state = () => p.evaluate(({id,mobile})=>{
       const w=(mobile ? __wos : __wux).wins[id], el=document.querySelector(`.win[data-win="${id}"]`);
       const box=el.querySelector('.dchats'), list=el.querySelector(mobile ? '.ch-list' : '.pane-list');
-      return {thread:w.thread ?? null,attr:box?.dataset.thread,width:box?.getBoundingClientRect().width,list:!!list&&list.getBoundingClientRect().width>0&&getComputedStyle(list).display!=='none',draft:el.querySelector('.ch-compose textarea')?.value || ''};
+      const desk=mobile?null:__wux.ws.find(d=>d.wins.includes(id));
+      return {thread:w.thread ?? null,attr:box?.dataset.thread,width:box?.getBoundingClientRect().width,viewport:innerWidth,height:innerHeight,dpr:devicePixelRatio,shell:document.documentElement.dataset.shell,focus:w.focus||null,legacyAgent:w.agent||'',sendAgent:mobile?'':__wux.chats.winAgent(w),title:el.querySelector('.agent-titlebar .t')?.textContent,hint:el.querySelector('.nc-classic')?.textContent,placeholder:el.querySelector('.ch-compose textarea')?.placeholder,back:!!el.querySelector('.pane-main .ch-back')&&getComputedStyle(el.querySelector('.pane-main .ch-back')).display!=='none',desktop:desk&&{wins:[...desk.wins],mono:desk.mono,split:desk.split??null},list:!!list&&list.getBoundingClientRect().width>0&&getComputedStyle(list).display!=='none',draft:el.querySelector('.ch-compose textarea')?.value || ''};
     },{id,mobile});
     const newChat = async () => { await p.locator(list+' [data-chnew]').first().click(); await p.waitForSelector(root+' .ch-compose textarea',{state:'visible'}); };
-    const send = async text => {
+    const send = async (text, enter = false) => {
       holdAck=true;
       await p.locator(root+' .ch-compose textarea').fill(text);
       // Bubble listener runs after the real form's handler, in the SAME task.
       await p.evaluate(({id,mobile})=>{document.addEventListener('submit',()=>{const w=(mobile ? __wos : __wux).wins[id],box=document.querySelector(`.win[data-win="${id}"] .dchats`); window.__qaSubmit={thread:w.thread??null,attr:box?.dataset.thread};},{once:true});},{id,mobile});
-      await p.locator(root+' .ch-send').click();
+      if (enter) await p.locator(root+' .ch-compose textarea').press('Enter'); else await p.locator(root+' .ch-send').click();
       journal.submission=await p.evaluate(()=>__qaSubmit);flush();return journal.submission;
     };
-    const holdSave = () => p.evaluate(()=>{const ob=WosOutbox,enqueue=ob.enqueue;window.__qaResume=null;ob.enqueue=async x=>{await new Promise((resolve,reject)=>{window.__qaResume={resolve,reject};});return enqueue.call(ob,x);};window.__qaUnhold=()=>{ob.enqueue=enqueue;};});
+    const phase = async name => {journal.phases.push({name,state:await state(),capture:await p.evaluate(()=>({voice:window.__wux?.voiceState,recorders:window.__qaRecorders,held:window.__qaHeld,items:[...WosOutbox._items.values()].map(x=>({id:x.id,kind:x.kind,state:x.state,audioBytes:x.audio?.size,durable:x.durable,storageError:x.storageError,sessionId:x.sessionId,text:x.text,error:x.error}))}))});flush();};
+    const holdSave = () => p.evaluate(()=>{const ob=WosOutbox,enqueue=ob.enqueue;window.__qaResume=null;window.__qaHeld=null;ob.enqueue=async x=>{window.__qaHeld={captureId:x.captureId,custodyId:x.custodyId,kind:x.kind,sessionId:x.sessionId,audioBytes:x.audio?.size,model:x.model,provider:x.provider};await new Promise((resolve,reject)=>{window.__qaResume={resolve,reject};});return enqueue.call(ob,x);};window.__qaUnhold=()=>{ob.enqueue=enqueue;};});
     const release = async reject => { await p.evaluate(reject=>{const r=__qaResume;__qaUnhold();reject ? r.reject(new Error('QA disk full')) : r.resolve();},reject); };
     const openOther = () => p.locator(list+' [data-chopen="qa_tt_b"]').first().click();
     const ack = () => {holdAck=false;heldRuns.splice(0).forEach(r=>r());};
@@ -180,7 +246,157 @@ async function sendReturnChecks(b) {
       check(!!item&&item.text===text&&body.input===text&&body.session_id===item.sessionId&&body.model===item.model&&body.provider===item.provider&&body.require_model_lock===true&&write.body===item.body,'held run bound to exact item, destination, text and model', {write,item});
       return async()=>{ack();await p.waitForFunction(key=>__qaReceipts.some(x=>x.id===key),write.key);const receipt=await p.evaluate(key=>__qaReceipts.find(x=>x.id===key),write.key);check(receipt.state==='sent'&&receipt.text===text&&receipt.sessionId===body.session_id&&receipt.runId===write.ack.run_id&&receipt.body===write.body,'persisted receipt bound to exact intercepted ACK',{receipt,write});};
     };
-    return {c,p,id,root,list,state,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors};
+    return {c,p,id,root,list,state,phase,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors,journal};
+  }
+  // Pixel dimensions do not establish CSS width or DPR. Cover both plausible
+  // single-OS-window interpretations, without claiming either is the real client.
+  if(process.env.QA_SCREENSHOT_NEW==='1') {
+    const cases=[];
+    for(const width of [1190,595]) for(const skin of ['nebula','grove']) for(const mode of ['enter','composer-mic']) cases.push({width,skin,mode,entry:'launcher',sid:'__new__'});
+    for(const mode of ['enter','composer-mic']) cases.push({width:1190,skin:'nebula',mode,entry:'saved-focus',sid:'__new__'});
+    for(const mode of ['enter','composer-mic']) cases.push({width:1190,skin:'nebula',mode,entry:'launcher',sid:'qa_tt_a'});
+    for(const sid of ['__new__','qa_tt_a']) cases.push({width:412,skin:'nebula',mode:'click',entry:'',sid,mobile:true});
+    const red=process.env.QA_SCREENSHOT_RED==='1';
+    for(const spec of red?cases.slice(0,1):cases) {
+      const {width,skin,mode,entry,sid,mobile=false}=spec;
+      const label=`${width}-${skin}-${entry||'phone'}-${mode}-${sid}`;
+      let t;
+      try {
+        t=await boot(mobile,skin,false,width,entry);const {p}=t;
+        t.journal.case=spec;flush();
+        if(sid==='__new__') await t.newChat(); else await p.locator(t.list+' [data-chopen="'+sid+'"]').first().click();
+        const before=await t.state();t.journal.before=before;flush();
+        check(before.thread===sid&&before.shell===(mobile?'phone':'desktop')&&before.viewport===width&&(mobile||(before.desktop.wins.length===1&&!before.desktop.mono&&before.dpr===(width===595?2:1))),`${label}: exact single-window preconditions`,before);
+        if(!mobile){
+          check(before.title==='Archimedes Main Agent'&&before.legacyAgent===''&&before.sendAgent===''&&(entry!=='saved-focus'||before.focus?.key==='hermes'),`${label}: actual main-agent Focus normalizes transport route`,before);
+          if(sid==='__new__')check(before.hint?.includes('Type below and press Enter')&&before.placeholder==='Message Archimedes'&&(width!==595||(!before.list&&before.back)),`${label}: real New chat surface (responsive Back only at narrow width)`,before);
+          check(await p.evaluate(skin=>WosSkin.current===skin&&document.documentElement.dataset.skin===skin,skin),`${label}: requested real shell skin`);
+        }
+        await p.screenshot({path:path.join(OUT,`before-${label}.png`)});
+        await t.holdSave();let text='QA screenshot '+label;
+        if(mode==='enter'||mode==='click') await t.send(text,mode==='enter');
+        else {
+          text='QA tiled voice';await p.locator(t.root+' [data-chmic]').click();
+          await p.waitForFunction(()=>__wux.voiceState==='listen');
+          await p.waitForFunction(()=>{const r=__qaRecorders.at(-1);return r&&!r.stopped&&performance.now()-r.started>=450&&r.bytes>=1200&&[...WosOutbox._items.values()].some(x=>x.kind==='capture'&&x.audio?.size>=1200);});
+          await t.phase('native-take-ready');await p.locator(t.root+' [data-chmic]').click();
+        }
+        await p.waitForFunction(()=>window.__qaResume);await t.phase('delivery-enqueue-held');await p.waitForTimeout(450);
+        const held=await t.state();t.journal.held=held;t.journal.reproduced=held.thread==='__new__';flush();
+        const expected=mobile||sid==='__new__'?null:'__new__';
+        const matches=s=>s.thread===expected&&(expected!==null||((mobile||s.attr==='')&&s.list));
+        check(matches(held),`${label}: navigation remains correct with save held`,held);
+        await p.screenshot({path:path.join(OUT,`held-${label}.png`)});
+        await t.release(false);await(await t.sent(text))();await p.waitForTimeout(450);
+        const after=await t.state();t.journal.after=after;flush();
+        check(matches(after),`${label}: exact persisted run ACK retains navigation`,after);
+        const create=t.intercepted.filter(x=>x.path==='/wizard/hermes/api/sessions'),runs=t.intercepted.filter(x=>x.path.endsWith('/v1/runs'));
+        check(create.length===(sid==='__new__'?1:0)&&runs.length===1&&[...create,...runs].every(x=>!new URLSearchParams(x.query).get('agent')&&!JSON.parse(x.body).agent&&JSON.parse(x.body).model==='qa-model'&&JSON.parse(x.body).provider==='qa-provider')&&(sid==='__new__'||JSON.parse(runs[0].body).session_id===sid),`${label}: exact create/reply destination and model route`,{create,runs});
+        if(mode==='composer-mic'){
+          const h=t.journal.phases.find(x=>x.name==='delivery-enqueue-held').capture.held,id=h.captureId||h.custodyId;
+          const stt=t.intercepted.filter(x=>x.path.endsWith('/transcribe')),uploads=t.intercepted.filter(x=>x.path.endsWith('/files/upload'));
+          const receipt=t.journal.receipts.find(x=>x.id===id),body=runs[0]&&JSON.parse(runs[0].body);
+          check(h.audioBytes>=1200&&stt.length===1&&uploads.length===1&&uploads[0].bytes===h.audioBytes&&receipt?.id===id&&body?.wizard_file_ids?.includes(uploads[0].response?.file?.id),`${label}: original native audio custody, one STT/upload/run/ACK`,{h,id,stt,uploads,receipt});
+        }
+        check(!t.errors.length&&!t.journal.externalRequests.length&&!t.journal.unlistedWrites?.length,`${label}: no errors, escaped traffic or unknown writes`,t.journal.unlistedWrites||t.errors);
+      }catch(e){if(t)await t.phase('exception').catch(()=>{});check(false,`${label}: exception`,String(e.stack||e));return;}
+      finally{if(t)await close(t.c);else await closeAll();}
+    }
+    return;
+  }
+  // Earlier regressions: two actual shell tiles, including at >620px.
+  if (process.env.QA_SEND_TILING === '1') {
+    const verifyVoice = async t => {
+      await t.phase('native-ack-persisted');
+      const held=t.journal.phases.find(x=>x.name==='delivery-enqueue-held').capture.held;
+      const id=held.captureId||held.custodyId;
+      const stt=t.intercepted.filter(x=>x.path.endsWith('/transcribe'));
+      const uploads=t.intercepted.filter(x=>x.path.endsWith('/files/upload'));
+      const runs=t.intercepted.filter(x=>x.path.endsWith('/v1/runs'));
+      const receipt=t.journal.receipts.find(x=>x.id===id);
+      const file=uploads[0]?.response?.file, body=runs[0]&&JSON.parse(runs[0].body);
+      check(stt.length===1&&uploads.length===1&&runs.length===1&&uploads[0].bytes===held.audioBytes&&receipt?.id===id&&body?.wizard_file_ids?.includes(file?.id),
+        `${t.journal.case.mode}: one STT/upload/run/ACK retains capture and audio receipt`,{id,held,stt,uploads,body,receipt});
+    };
+    const red = process.env.QA_EXPECT_TILING_RED === '1';
+    const modes = ['click','enter','composer-mic','composer-right-command','right-command','bar-mic'];
+    for (const skin of ['nebula','grove']) for (const width of [1280,1920,2560]) for (const mode of modes) {
+      if (process.env.QA_NATIVE_MIC_CANARY === '1' && (skin !== 'nebula' || width !== 1920 || mode !== 'composer-mic')) continue;
+      if (red && (skin !== 'nebula' || width !== 1920 || !['click','composer-mic'].includes(mode))) continue;
+      let t;
+      try {
+        t = await boot(false,skin,true,width); const {p}=t;
+        t.journal.case={skin,width,mode}; flush();
+        const geometry=await t.state();
+        check(geometry.viewport===width&&geometry.desktop?.wins.length===2&&!geometry.desktop.mono,
+          `${skin}/${width}/${mode}: actual desktop two-tile ownership`,geometry);
+        if (width >= 1920) check(geometry.width>620,`${skin}/${width}/${mode}: half tile is above old pixel guard`,geometry);
+        await t.newChat(); await t.holdSave();
+        let text='QA tiled '+mode;
+        if (mode==='click'||mode==='enter') {
+          const sync=await t.send(text,mode==='enter');
+          check(sync.thread===null&&sync.attr==='',`${skin}/${width}/${mode}: same-task return before durable save`,sync);
+        } else {
+          text='QA tiled voice';
+          const start = async () => {
+            if (mode.startsWith('composer')) await p.locator(t.root+' [data-chmic]').click();
+            else if (mode==='right-command') await p.keyboard.press('MetaRight');
+            else await p.locator('#micBtn').click();
+          };
+          await start(); await p.waitForFunction(()=>__wux.voiceState==='listen');
+          await p.waitForTimeout(600);
+          await t.phase('legacy-600ms');
+          // voice.start publishes listen BEFORE opening the stream. finish rejects
+          // <450ms OR <1200 bytes. A wall delay from listen isn't a valid take.
+          // Await the real recorder and its journal, never fabricate capture flags.
+          await p.waitForFunction(()=>{
+            const r=window.__qaRecorders.at(-1);
+            return r&&!r.stopped&&performance.now()-r.started>=450&&r.bytes>=1200&&
+              [...WosOutbox._items.values()].some(x=>x.kind==='capture'&&x.audio?.size>=1200);
+          });
+          await t.phase('native-take-ready');
+          if (mode==='composer-right-command'||mode==='right-command') await p.keyboard.press('MetaRight');
+          else if(mode==='composer-mic') await p.locator(t.root+' [data-chmic]').click();
+          else await p.locator('#micBtn').click();
+          await t.phase('stop-control-returned');
+          await p.waitForFunction(()=>window.__qaResume);
+          await t.phase('delivery-enqueue-held');
+          check((await t.state()).thread===null,`${skin}/${width}/${mode}: voice handoff leaves before delivery enqueue resumes`);
+          const pinned=await p.evaluate(()=>{
+            const h=__qaHeld, id=h.captureId||h.custodyId, x=WosOutbox._items.get(id), r=__qaRecorders.at(-1);
+            return {held:h,id,item:x&&{id:x.id,state:x.state,bytes:x.audio?.size,durable:x.durable},recorder:r};
+          });
+          check(pinned.recorder.stopped&&pinned.held.audioBytes>=1200&&pinned.item?.bytes>=1200&&pinned.id?.startsWith('capture-'),`${skin}/${width}/${mode}: native final audio retains original capture identity`,pinned);
+        }
+        await p.waitForTimeout(450); const st=await t.state(); t.journal.held=st; flush();
+        if (red) {
+          check(st.thread==='__new__',`${skin}/${width}/${mode}: RED old shell timer reopens New chat`,st);
+          t.journal.reproduced=st.thread==='__new__'; flush();
+          await p.screenshot({path:path.join(OUT,`red-${mode}.png`)});
+          if(process.env.QA_NATIVE_MIC_CANARY==='1'){await t.release(false);await (await t.sent(text))();await verifyVoice(t);}
+          continue;
+        }
+        check(st.thread===null&&st.attr===''&&st.list,`${skin}/${width}/${mode}: list survives delayed shortcut with save held`,st);
+        await t.release(false); await (await t.sent(text))(); await p.waitForTimeout(450);
+        if(mode!=='click'&&mode!=='enter')await verifyVoice(t);
+        const after=await t.state();
+        check(after.thread===null&&after.attr===''&&after.list,`${skin}/${width}/${mode}: exact run ACK retains list`,after);
+        if(width===1920&&mode==='click') {
+          await p.screenshot({path:path.join(OUT,`tiled-list-${skin}.png`)});
+          await t.newChat(); await t.holdSave(); await t.send('QA tiled failed save');
+          await t.release(true); await p.waitForTimeout(450);
+          const failed=await t.state();
+          check(failed.thread==='__new__'&&failed.draft==='QA tiled failed save',`${skin}: realistic tile restores unsaved words`,failed);
+          await t.send('QA tiled retry'); await (await t.sent('QA tiled retry'))();
+          await t.newChat(); await t.holdSave(); await t.send('QA tiled newer visit');
+          await t.openOther(); await t.release(false); await (await t.sent('QA tiled newer visit'))(); await p.waitForTimeout(450);
+          check((await t.state()).thread==='qa_tt_b',`${skin}: realistic tile never steals a newer visit`);
+        }
+        check(t.errors.length===0&&t.journal.externalRequests.length===0,`${skin}/${width}/${mode}: no page errors or external traffic`,t.errors);
+      } catch(e) { if(t){await t.phase('exception').catch(()=>{});await t.p.screenshot({path:path.join(OUT,`failure-${skin}-${width}-${mode}.png`)}).catch(()=>{});} check(false,`${skin}/${width}/${mode}: exception`,String(e.stack||e));return; }
+      finally { if(t) await close(t.c); else await closeAll(); }
+    }
+    return;
   }
   // Parent runner admits the full matrix only after the exact real form can
   // reach a held run and persist its matching ACK on every sealed source.
@@ -256,7 +472,7 @@ async function sendReturnChecks(b) {
   await wide.p.evaluate(id=>__wux.chats.sendChat(id,'QA wide keep thread'),wide.id); await wide.p.waitForTimeout(250);
   check((await wide.state()).thread==='qa_tt_a','wide desktop shared reply keeps thread');
   await wide.p.locator(wide.list+' [data-chnew]').first().click(); await wide.send('QA wide real form'); await wide.p.waitForTimeout(450);
-  check((await wide.state()).thread==='__new__','wide desktop real-form fresh-draft shortcut unchanged'); wide.ack();
+  check((await wide.state()).thread===null,'wide desktop new real-form send keeps shared list return'); wide.ack();
   check(wide.errors.length===0,'wide desktop no page errors',wide.errors); await close(wide.c);
   } catch(e) { check(false,'wide case exception',String(e.stack||e)); await closeAll(); }
   try { const phone=await boot(true,'nebula');
@@ -275,7 +491,7 @@ async function sendReturnChecks(b) {
 }
 
 (async () => {
-  const b = await chromium.launch({ executablePath: EXEC && fs.existsSync(EXEC) ? EXEC : undefined, args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
+  const b = await chromium.launch({ executablePath: EXEC && fs.existsSync(EXEC) ? EXEC : undefined, args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--disable-background-networking'] });
   if (process.env.QA_SEND_RETURN === '1') { try { await sendReturnChecks(b); } finally { await b.close(); } console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); }
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, serviceWorkers:'block' });
   await ctx.route('**/*', routeFor());

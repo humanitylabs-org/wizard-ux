@@ -8,17 +8,25 @@ export function privateApps(path=process.env.WAM_PRIVATE_CATALOG) {
   if(doc.schema!==1 || doc.scope!=='private-test' || !Array.isArray(doc.apps)) throw Error('invalid_private_catalog');
   return doc.apps.map(a=>{
     if(!/^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id) || !/^[0-9a-f]{40}$/.test(a.commit) || !/^[\w.-]+\/[\w.-]+$/.test(a.repo)) throw Error('invalid_private_pin');
-    return {...a,type:'view',category:'app',tags:['private-test'],uses:[],provides:[],private:true,source:'owner-private',source_name:'Private test',channel:'standard',publisher:'Private test',url:`https://github.com/${a.repo}/tree/${a.commit}`};
+    return {...a,type:a.type || 'view',category:a.category || 'app',tags:['private-test'],uses:[],provides:[],private:true,source:'owner-private',source_name:'Private test',channel:'standard',publisher:'Private test',url:`https://github.com/${a.repo}/tree/${a.commit}`};
   });
 }
 const text=(v,n)=>typeof v==='string'?v.replace(/[\x00-\x1f\x7f]/g,' ').slice(0,n):'';
 const words=v=>Array.isArray(v)?v.filter(x=>typeof x==='string' && x.length<=60).slice(0,32):[];
+// Presence only: never forward a manifest, a view build command or a private URL.
+const viewLocation=p=>{
+  if(typeof p!=='string' || /[\x00-\x20\x7f\\]/.test(p)) return false;
+  if(/^\/(?!\/)/.test(p)) return true;
+  try {const u=new URL(p);return ['http:','https:'].includes(u.protocol) && !!u.hostname && !u.username && !u.password && /^https?:\/\//.test(p);} catch {return false;}
+};
+const hasView=a=>a.has_view===true || [a.view,a.manifest?.view].some(v=>
+  (typeof v==='string'?[v]:[v?.path,v?.url,v?.open]).some(viewLocation));
 // An allowlist, not a spread: neither catalog extras nor local command/config values reach clients.
 export function projection(a) {
   return {id:text(a.id,64),name:text(a.name,80),summary:text(a.summary,400),repo:text(a.repo,201),version:text(a.version,40),
     source:text(a.source || 'standard',64),source_name:text(a.source_name || 'Standard',60),channel:a.channel==='alpha'?'alpha':'standard',
     commit:/^[a-f0-9]{40}$/.test(a.commit || a.install?.commit || '')?(a.commit || a.install.commit):'',
-    private:a.private===true,type:text(a.type,24),category:text(a.category,32),publisher:text(a.publisher,80),
+    private:a.private===true,type:text(a.type,24),has_view:hasView(a),category:text(a.category,32),publisher:text(a.publisher,80),
     tags:words(a.tags),uses:words(a.uses),needs:words(a.needs),provides:words(a.provides),architectures:words(a.architectures),
     release_notes:text(a.release_notes,2000),url:text(a.url,250),logo:text(a.logo,250),installs:Number.isSafeInteger(a.installs)?a.installs:0};
 }
@@ -70,7 +78,7 @@ export function withPrivateCatalog(upstream,read=privateApps,{home=stateDir(),so
     await publicSnapshot(q.get('refresh')==='1');
     try {legacy=read();legacyError=false;} catch {legacyError=true;}
     let installed={}; try {if(existsSync(join(home,'installed.json'))) installed=readJSON(join(home,'installed.json'));} catch {}
-    const alpha=(source?.snapshot?.apps || []).map(a=>({...a,source:source.snapshot.source.id,source_name:source.snapshot.source.name,channel:'alpha',private:true,type:'view',category:'app',tags:['alpha'],publisher:source.snapshot.source.name,url:`https://github.com/${a.repo}/tree/${a.commit}`}));
+    const alpha=(source?.snapshot?.apps || []).map(a=>({...a,source:source.snapshot.source.id,source_name:source.snapshot.source.name,channel:'alpha',private:true,type:a.type || 'view',category:a.category || 'app',tags:['alpha'],publisher:source.snapshot.source.name,url:`https://github.com/${a.repo}/tree/${a.commit}`}));
     const rows=mergeRows([...publicRows,...legacy,...alpha],installed);
     const statuses=[{id:'standard',name:'Standard',stale:publicError,error:publicError?'index_unavailable':null},{id:'owner-private',name:'Private test',stale:legacyError,error:legacyError?'private_catalog_unavailable':null},...(source?[{id:source.snapshot?.source.id || 'alpha',name:source.snapshot?.source.name || 'Wizard Alpha',...source.status}]:[])];
     if(path.startsWith('/apps/')) {

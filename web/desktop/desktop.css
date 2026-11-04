@@ -219,6 +219,8 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .pal-app:hover { background: rgba(205, 190, 255, .06); }
 .pal-app.sel { background: linear-gradient(140deg, rgba(122, 77, 255, .3), rgba(192, 77, 255, .18)); }
 .pal-app.sel .nm { color: var(--ink); }
+/* Selected system tiles keep their skin border/fill, but share the picker selection ring. */
+html:is([data-skin^="obsidian"], [data-skin^="landscapes"]) .pal-app.pal-sys.sel .ic,
 .pal-app.sel .ic { box-shadow: 0 0 0 2px rgba(225, 214, 255, .8), 0 10px 24px -10px color-mix(in oklab, var(--c, #8f63ff) 60%, transparent); }
 .pal-app:active .ic { transform: scale(.92); }
 .palette[data-mode="apps"] .pal-empty { grid-column: 1 / -1; line-height: 1.7; }

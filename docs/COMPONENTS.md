@@ -1,5 +1,6 @@
 # Shared components
 
+
 [Appearance rules](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
@@ -52,7 +53,7 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); `WizMorningWrite` Morning writes/held-list paint, stale-poll fence; paint first; alert hold; `WizLive.readyRank`/seq resume; `setFocus`/`migrateChatsFocus`; provider Errors; source-bound send/cache; desktop new-send shared leave ≤620px; Esc `CHATS.clearFilter(id::list)`; search: Archive last, `c.sOpen` only | duplicate Chats/Focus |
+| Chats: Focus/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); `WizMorningWrite` Morning writes/held-list paint, stale-poll fence; paint first; alert hold; `WizLive.readyRank`/seq resume; `setFocus`/`migrateChatsFocus`; provider Errors; send/cache; desktop new-send list return; Esc `CHATS.clearFilter(id::list)`; search: Archive last, `c.sOpen` only | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint without flicker | `WosMorph.morph` (`dom-morph.js`); changed nodes only | whole-view `innerHTML` on live ticks |
@@ -70,9 +71,9 @@ Reuse:
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings (shared pages/versions), instant Appearance receipt | `WosSettings.register/focus`, `lookAction` (rounded art + inline busy), `hasSystem`, `WosFeatures` | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
-| Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
+| Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | type ≠ UX |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); Store identity | PNG/emoji icons |
 | Desktop frame shortcuts | `watchFrame → onKey` (`desktop/desktop.js`); same-origin window capture + keyup/blur cleanup; no nested/opaque-frame relay | second dispatcher or postMessage key forwarding |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs+defaults, 1s boot cap | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |

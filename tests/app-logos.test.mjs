@@ -1,5 +1,4 @@
-// Apps that ship a logo wear it: the box lists real logos (never the template placeholder), serves them with a
-// hash-stamped URL, and the shell's one icon path (WizSigil) draws that picture instead of a sigil.
+// Unknown apps retain package-logo fallback. Existing designed identities remain masks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

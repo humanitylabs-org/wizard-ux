@@ -51,10 +51,12 @@ test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidd
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 
-test('after a text or voice reply is sent, the window goes back to a focused New chat', () => {
+test('text/voice replies retain focused New chat shortcut; tiled new sends keep the shared list return', () => {
   assert.match(js, /stage\.addEventListener\('submit', e => \{[\s\S]*?toNewChat\(wid, 'text'\)/);
   assert.match(js, /function toNewChat\(wid, why\) \{[\s\S]*?CHATS\.openNewDraft\(wid, ''\)[\s\S]*?focusInside\(wid\)/);
-  assert.match(js, /Voice reply · waiting to send', 1400\); setTimeout\(\(\) => toNewChat\(rp\.wid, 'voice'\)/);
+  assert.match(js, /if \(keepNewSendList\(wid, w\.thread\)\) return;/);
+  assert.match(js, /const stayOnList = keepNewSendList\(rp\.wid, rp\.sid\); CHATS\.sendVoiceTo/);
+  assert.match(js, /if \(stayOnList\) syncChatsPane\(rp\.wid\); else setTimeout\(\(\) => toNewChat\(rp\.wid, 'voice'\)/);
 });
 test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
   const { readFileSync: r } = await import('node:fs');

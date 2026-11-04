@@ -2,7 +2,7 @@
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts} from './store-status.js';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease} from './store-install.js';
 import {removalPlan, removeInstalledApp, canRemove, confirmView} from './store-remove.js';
@@ -24,8 +24,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run Wizard' },
     { id: 'connections', type: 'external', one: 'Connector', many: 'Connectors', blurb: 'Accounts your agents can use' },
   ];
-  const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
-  const kindOf = a => KIND_OF[a.type] || KINDS[1];
+  const KIND_OF = Object.fromEntries(KINDS.map(k => [k.id, k]));
+  const kindOf = a => KIND_OF[storeKind(a)];
   // Four quiet entry points; category lists and app details retain their existing layout.
   const KIND_ICONS = {
     apps: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -57,7 +57,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   function clean(a) {
     if (!a || typeof a !== 'object' || !ID.test(a.id || '')) return null;
     return { id: a.id, name: txt(a.name, 60) || a.id, summary: txt(a.summary, 280), publisher: txt(a.publisher, 60), version: txt(a.version, 40),
-      type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
+      type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', has_view: a.has_view === true, category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
       url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-fA-F0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
       releases: Array.isArray(a.releases) ? a.releases.slice(0,16).map(r => clean({...r,releases:null})).filter(Boolean) : [],
       alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), installed_app_id: txt(a.installed_app_id,64), update_available: a.update_available === true,
@@ -128,6 +128,13 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
 
   /* ---------------- pieces ---------------- */
   function icon(a, size = 'm') {
+    // Catalog pictures are not an alternate identity for already-designed apps.
+    // Hosted, reuse the registry-aware renderer; standalone uses the same source.
+    let sigils = window.WizSigil;
+    try { if (framed && parent.WizSigil) sigils = parent.WizSigil; } catch (_) {}
+    const identity = { id: openId(a) || a.id, name: a.name };
+    const mark = sigils?.of(identity);
+    if (mark && (mark.glyph || mark.img || Object.prototype.hasOwnProperty.call(sigils.brand, identity.id))) return sigils.box('span', `ic ic-${size}`, identity);
     const [c1, c2] = hue(a.id);
     const letter = esc((a.name || a.id).trim().charAt(0).toUpperCase());
     const img = a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" loading="lazy" decoding="async">` : '';
@@ -195,7 +202,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const usedBy = S.apps.filter(x => (x.uses || []).includes(a.id));
     const powers = usedBy.length ? `<section class="d-sec"><h3>Powers</h3><div class="dep">${usedBy.map(u => `<div class="dep-i" data-app="${esc(u.id)}" role="button" tabindex="0">${icon(u, 's')}<b>${esc(u.name)}</b><small>${esc(kindOf(u).one)}</small></div>`).join('')}</div></section>` : '';
     const gives = (a.provides || []).length ? `<section class="d-sec"><h3>Gives your agent</h3><div class="chips">${a.provides.map(p => `<span>${esc(p.replace(/-/g, ' '))}</span>`).join('')}</div></section>` : '';
-    const how = { view: 'Opens in its own Wizard window.', service: 'Runs in the background. Ask your agent to use it — no screen needed.', agent: 'An agent that lives on your Wizard.', external: 'Connect an account once; every agent can use it.' }[a.type] || '';
+    const how = { apps: 'Opens in its own Wizard window.', 'agent-apps': 'Runs in the background. Ask your agent to use it — no screen needed.', agents: 'An agent that lives on your Wizard.', connections: 'Connect an account once; every agent can use it.' }[k.id] || '';
     const info = [['Kind', k.one], ['Source', provenance(a).label + (provenance(a).detail ? ' · ' + provenance(a).detail : '')], ['Publisher', a.publisher], ['Version', a.version], ['Commit', a.commit], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
