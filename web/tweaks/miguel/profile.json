@@ -14,7 +14,8 @@
     "miguel/calm-offline",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "miguel/background-cards"
   ],
   "flags": {},
   "off": [
@@ -23,6 +24,7 @@
     "miguel/calm-offline",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "miguel/background-cards"
   ]
 }

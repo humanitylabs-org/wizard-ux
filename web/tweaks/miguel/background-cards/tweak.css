@@ -1,0 +1,3 @@
+/* Settings › Look: twinned skins (dark/light pairs) show Background cards + a Dark | Light Mode switch instead of a colour per mode
+ * (settings.js bgCardsOn/backgroundHtml). Colours only; the background choice reuses the #943/#950 wallpapers. */
+html[data-tweaks~="miguel/background-cards"] { --wos-look-bg-cards: on; }

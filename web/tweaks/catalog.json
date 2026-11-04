@@ -25,7 +25,8 @@
     "miguel/calm-offline",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "miguel/background-cards"
   ],
   "defaults": [
     "wizard/unified-inbox"

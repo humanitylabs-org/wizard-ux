@@ -1,0 +1,11 @@
+{
+  "id": "miguel/background-cards",
+  "name": "Background cards and Dark | Light",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Miguel's skin shows one Background row in Look (Plain, the landscape pictures and the Wizard OS scenes) and a separate Dark | Light switch, instead of a colour per mode"
+}

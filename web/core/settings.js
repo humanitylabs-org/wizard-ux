@@ -336,10 +336,40 @@
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
-    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
+    const colours = bgCardsOn() && !own && twinned(S, family) ? backgroundHtml(S, family, cur) : `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+  }
+  // Background cards + Mode (miguel/background-cards, off by default; Miguel, 4 Nov 2026). A tweak, skin or My skin that
+  // sets `--wos-look-bg-cards: on` turns a skin whose colours come in dark/light twins (Miguel's) into ONE Background row
+  // (Plain, then the same scenes as the PR 943/950 picker: S.wallpapers / wallpaperThumb / setWallpaper) plus a separate
+  // Dark | Light Mode switch, instead of a colour per mode. Same cards as Colors. Picking a background keeps the mode; the
+  // mode keeps the background. Off = stock Colors row and the stock 'wallpaper' picker below, byte for byte.
+  const bgCardsOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-look-bg-cards').trim() === 'on'; } catch (_) { return false; } };
+  const twinned = (S, family) => typeof S.setWallpaper === 'function' && typeof S.twin === 'function' && (family?.palettes || []).length > 1 && family.palettes.every(id => S.twin(id));
+  const isLight = id => /-light$/.test(id);
+  function backgroundHtml(S, family, cur) {
+    const light = isLight(cur), plain = family.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === light);
+    const scenic = family.palettes.find(id => /^landscapes/.test(id) && isLight(id) === light);
+    const onScene = /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
+    const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, var(--wz-overlay), transparent 34%, transparent 66%, var(--wz-overlay)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
+    const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === scenic);
+    const cards = [pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, w.id === 'landscapes' ? '' : S.wallpaperThumb(w.id))) : [])].join('');
+    const note = onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
+    const mode = `<div class="st-seg" role="radiogroup" aria-label="Mode">${[['dark', 'Dark'], ['light', 'Light']].map(([m, n]) => `<button type="button" role="radio" aria-checked="${(m === 'light') === light}" data-skinmode="${m}">${n}</button>`).join('')}</div>`;
+    return `<div class="skp-colours"><h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p><h4>Mode</h4>${mode}</div>`;
+  }
+  function backgroundAct(ctx, el, pick) {
+    const S = window.WosSkin, cur = S.current, light = isLight(cur);
+    const m = el.closest('[data-skinmode]');
+    if (m) { const want = m.dataset.skinmode === 'light'; if (want !== light) { const t = S.twin(cur); if (t) pick(t.id); } return true; }
+    const b = el.closest('[data-bgpick]'); if (!b) return false;
+    const fam = S.families.find(f => f.id === S.familyOf(cur)), id = b.dataset.bgpick;
+    const target = fam.palettes.find(p => isLight(p) === light && (id === 'plain' ? !/^landscapes/.test(p) : /^landscapes/.test(p)));
+    if (id !== 'plain') S.setWallpaper(id);
+    if (target && target !== cur) pick(target); else { ctx.render(); ctx.haptic?.(8); }
+    return true;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -362,6 +392,8 @@
     }
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
+    const pickPalette = id => skinAction(() => M?.active ? M.update({ base: id }) : S.set(id), () => { void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000));
+    if (backgroundAct(ctx, el, pickPalette)) return true;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
       if (ctx.skinSaving) return true; ctx.skinSaving = true;
@@ -434,6 +466,7 @@
   // Background: Landscapes can show its pictures or a Wizard OS hat background (Miguel, 4 Nov 2026). Per device.
   register({ id: 'wallpaper', aliases: ['background', 'wallpaper'], available: () => typeof window.WosSkin?.setWallpaper === 'function', html() {
     const S = window.WosSkin; if (!S.wallpaperable) return '';
+    if (bgCardsOn() && twinned(S, S.families?.find(f => f.id === S.familyOf?.(S.current)))) return ''; // the Background cards above carry it
     const cur = S.wallpapers.find(w => w.id === S.wallpaper) || S.wallpapers[0];
     return `<div class="st-group wp-section"><h4>Background</h4><div class="wp-grid" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" class="wp-tile" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}"><i style="background-image:url('${S.wallpaperThumb(w.id)}')" aria-hidden="true"></i><span>${w.name}</span></button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
   }, act(ctx, el) {
