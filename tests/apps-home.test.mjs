@@ -330,7 +330,8 @@ test('apps.kinds / openAny: the launcher kinds for layouts, shared by both shell
   const ak = read('web/core/app-kinds.js'), host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
   assert.match(ak, /const agents = K\.agents\.filter\(a => a\.id !== 'wizard'\)\.map\(row\);/, 'the main agent is Chats, never a tile');
   assert.match(ak, /window\.WosAppRoute\?\.open\(a\.id, \{ name: a\.name \}\); return true;/, 'an agent app without a screen shows its settings');
-  for (const s of [app, desk]) assert.match(s, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\)\) : null,/);
+  assert.match(app, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\), 'mobile'\) : null,/);
+  assert.match(desk, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\), 'desktop'\) : null,/);
   assert.match(app, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, open\),/);
   assert.match(desk, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, globalThis\.WosSkinHost\?\.panelMode \? x => openApp\(APP\[x\]\) !== false : open\),/, 'the Orb opens it in its panel, never a fresh empty desk');
   assert.match(host, /kinds: \(\) => \{ const k = live\(\) \? shell\.appKinds\?\.\(\) : null; return k \? structuredClone\(k\) : null; \},/);

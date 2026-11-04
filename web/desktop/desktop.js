@@ -1540,7 +1540,7 @@
   }
   function palBuild(q) {
     const n = norm(q), out = [];
-    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view' && a.id !== 'agents')).filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).slice(0, n ? 8 : 12)
+    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view' && a.id !== 'agents')).filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a, 'desktop')).slice(0, n ? 8 : 12)
       .map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
     const sessions = LIVE?.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
     let threads;
@@ -1580,7 +1580,7 @@
   const pickRank = a => a.kind === 'chats' ? 0 : SYS_APPS.includes(a.id) ? 3 : 1;
   function pickBuild(q) {
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
-    return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
+    return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a, 'desktop')).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
   function pickRender() {
     palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
@@ -3013,10 +3013,10 @@
     newChat: () => { const w = skinShowChats(); if (!w) return false; newChat(); return true; },
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
-      return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
+      return (AK ? AK.kinds(APPS, APP, 'desktop').apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
     openApp: id => !!APP[id] && openApp(APP[id]) !== false,
     // The Orb and Apps views' app sheet: every app by kind (core/app-kinds.js rows) and opening any of them
-    appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a)) : null,
+    appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a), 'desktop') : null,
     openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, globalThis.WosSkinHost?.panelMode ? x => openApp(APP[x]) !== false : open),   // the Orb: in its panel
     // The Apps view: one entry per desk (the app in front on it; a Chats desk is 'wizard'), and opening an app on a desk
     // of its own (the current desk when it is empty, else a fresh one), never tiled beside another app.
