@@ -26,14 +26,35 @@
       const wired = ins.find(d => WIRED.test(d.label) && !BLUETOOTH.test(d.label));
       if (wired) return wired.deviceId; // pick it explicitly: the system default may be a Bluetooth headset
       const builtIn = ins.find(d => BUILT_IN.test(d.label) && !BLUETOOTH.test(d.label));
-      return builtIn ? builtIn.deviceId : null;
+      if (builtIn) return builtIn.deviceId;
+      // A computer mic named outside the list above (iMac, Studio Display, a Mac mini's display): any input that is
+      // not Bluetooth still beats the system default, which follows AirPods and other headsets when they connect.
+      const other = ins.find(d => d.label && !BLUETOOTH.test(d.label));
+      return other ? other.deviceId : null;
     } catch (e) { return null; }
   }
   // Desktop: no echo cancellation. On macOS it switches the input to the system voice-processing path, which ducks
   // or briefly pauses whatever is playing (music in headphones dips each time a take starts). Speech is only
   // transcribed, and with headphones there is no echo to cancel. Phones keep it (speaker playback can echo).
   const PHONE = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-  const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true };
+  const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
+  // The Mac app (WKWebView) records the mono Mac mic as stereo Opus with the right channel silent (4 Nov 2026), so
+  // every player and speech-to-text averages it down to half volume (-6 dB) and quiet takes lose words. When the
+  // track is not already mono, record a mono copy: both channels are summed (not averaged) into one, so a silent
+  // channel costs nothing. Anything off (no Web Audio, a context that will not run) records the raw stream as before.
+  async function monoFor(stream, ac) {
+    try {
+      const t = stream.getAudioTracks()[0]; const n = t?.getSettings?.().channelCount;
+      if (!t || n === 1 || !ac || typeof ac.createMediaStreamDestination !== 'function') return null;
+      if (ac.state !== 'running') { try { await Promise.race([ac.resume(), new Promise(r => setTimeout(r, 300))]); } catch (_) {} }
+      if (ac.state !== 'running') return null; // a suspended graph would record silence
+      const src = ac.createMediaStreamSource(stream), split = ac.createChannelSplitter(2);
+      const sum = ac.createGain(); sum.channelCount = 1; sum.channelCountMode = 'explicit'; sum.channelInterpretation = 'discrete';
+      const out = ac.createMediaStreamDestination(); out.channelCount = 1; out.channelCountMode = 'explicit'; out.channelInterpretation = 'discrete';
+      src.connect(split); split.connect(sum, 0); split.connect(sum, 1); sum.connect(out);
+      return out.stream;
+    } catch (_) { return null; }
+  }
   async function openMic() {
     const id = await pickMic();
     if (id) {
@@ -70,8 +91,10 @@
         if (V.cancelled) { stop(); return false; }
         const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
         const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
+        const mono = await monoFor(V.stream, V.ac);
+        if (V.cancelled) { stop(); return false; }
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-        V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
+        V.rec = new MediaRecorder(mono || V.stream, mime ? { mimeType: mime } : undefined);
         const captureId = V.captureId, chunks = V.chunks;
         V.rec.ondataavailable = e => { if (e.data && e.data.size) { chunks.push(e.data); window.WosOutbox?.capture(new Blob(chunks, { type: V.rec?.mimeType || 'audio/webm' }), captureId); } };
         V.rec.start(250); V.raf = requestAnimationFrame(tick);
@@ -123,4 +146,5 @@
   window.WizCore = window.WizCore || {};
   window.WizCore.voice = voice;
   window.WizCore.voice.pickMic = pickMic;
+  window.WizCore.voice.monoFor = monoFor;
 })();
