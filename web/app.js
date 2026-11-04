@@ -1377,7 +1377,7 @@
       if (id === 'side') { closeSheets(true); sideButtonTap(true); }
     },
   });
-  let settingsReturn = '', settingsFocus = null;
+  let settingsReturn = '', settingsFocus = null, launcherFocus = null;
   function renderSettings() {
     if (!settingsView) settingsView = window.WosSettings.mount($('#settingsBody'), settingsContext());
     else settingsView.render();
@@ -1889,7 +1889,7 @@
     if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
     sheet = which; device.classList.add('sheet-open'); device.dataset.sheet = which; tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
-    if (which === 'launcher') { foldOpen.agents = foldOpen.dev = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; window.WizCore.refreshApps?.({afterPending:true}); }
+    if (which === 'launcher') { launcherFocus = launcher.contains(document.activeElement) ? null : document.activeElement; foldOpen.agents = foldOpen.dev = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; window.WizCore.refreshApps?.({afterPending:true}); }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
@@ -1906,6 +1906,11 @@
     if (was === 'settings' && settingsFocus?.isConnected) settingsFocus.focus({ preventScroll: true });
     window.WosResources?.sync();
     window.WosScenery?.update(); // scenery hook: sheet closed, Home may animate again
+  }
+  function closeLauncher() {
+    const focus = launcherFocus?.isConnected && launcherFocus !== document.body ? launcherFocus : $('#orb');
+    closeSheets();
+    focus?.focus({ preventScroll: true });
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
@@ -1975,6 +1980,7 @@
   // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
   window.WizHomeScreenApps?.attach(track, id => APP[id], { available: () => overviewMode().appHold !== false, rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
+    if (e.target.closest('[data-launcher-close]')) return closeLauncher();
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app], a);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }

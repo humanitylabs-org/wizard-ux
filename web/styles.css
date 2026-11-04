@@ -311,6 +311,9 @@ body {
 }
 .sheet.dragging { transition: none; }
 .sheet-grip { flex: 0 0 auto; width: 40px; height: 4px; border-radius: 99px; background: rgba(205, 190, 255, .3); margin: 9px auto; }
+/* Keep the visible launcher bar unchanged while giving it a full tap target and native keyboard activation. */
+#launcher > .sheet-grip { position: relative; z-index: 1; box-sizing: content-box; padding: 9px 48px 31px; margin: 0 auto -22px; border: 0; background: transparent; cursor: pointer; touch-action: manipulation; appearance: none; }
+#launcher > .sheet-grip::after { content: ""; position: absolute; top: 9px; left: 50%; width: 40px; height: 4px; transform: translateX(-50%); border-radius: 99px; background: var(--line-2); pointer-events: none; }
 /* Settings' grip is a drag handle: a larger invisible hit area, same 4px bar and spacing. */
 #settings > .sheet-grip { box-sizing: content-box; padding: 10px 48px; margin: -1px auto; background-clip: content-box; touch-action: none; cursor: grab; }
 .launcher { top: calc(44px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(100% + 160px)); opacity: 0; }
