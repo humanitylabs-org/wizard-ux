@@ -2951,7 +2951,7 @@
     /* Working / Ready rows (the rest too, for the AI apps view's search), each with the actions Chats' own row offers
      * (Pin, Rename, Mark unread, Snooze, Done, Restore), acted on through Chats' own paths; the Orb view reads the same. */
     sessionList: () => {
-      const G = LIVE?.ok ? LIVE.workGroups() : null; if (!G) return null;
+      const G = LIVE?.ok ? LIVE.workGroups(undefined, { flatReady: true }) : null; if (!G) return null;
       const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
       const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
         return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', rank: Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, snoozed: !!s.deferred, unread: fresh, pinned: !!P?.has(s.id),

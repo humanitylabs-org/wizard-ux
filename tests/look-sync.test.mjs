@@ -91,7 +91,7 @@ test('server wins on load: a device wears the box set and skin, without writing'
   assert.deepEqual(mac.on(), ['miguel/layout', 'miguel/swipe-strip']);
   assert.equal(mac.skin, 'obsidian-light');
   assert.equal(box.puts, 0, 'reading the shared set writes nothing');
-  assert.deepEqual(clone(mac.sync.state.pending), { version: 1, skin: null, tweaks: {} }, 'adopting the skin is not a new choice');
+  assert.deepEqual(clone(mac.sync.state.pending), { version: 1, skin: null, tweaks: {}, defaults: {} }, 'adopting the skin is not a new choice');
   await mac.sync.sync(); assert.equal(mac.adopted, 1, 'already in sync: nothing re-applied');
 });
 
@@ -256,7 +256,7 @@ test('a malformed box file never breaks the shell: unknown fields and bad ids ar
   assert.equal(L.parse('not json'), null);
   assert.equal(L.parse({ version: 2 }), null);
   assert.deepEqual(clone(L.parse(JSON.stringify({ version: 1, skin: { id: '../x' }, tweaks: { 'miguel/layout': { on: true, at: 3 }, bad: { on: true }, 'a/b': { on: 'yes' } }, extra: 1 }))),
-    { version: 1, skin: null, tweaks: { 'miguel/layout': { on: true, at: 3 } } });
+    { version: 1, skin: null, tweaks: { 'miguel/layout': { on: true, at: 3 } }, defaults: {} });
 });
 
 // The real experience.js: an owner's switch raises wos:tweak-choice; adopting the shared set writes the cached mix

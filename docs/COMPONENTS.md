@@ -52,7 +52,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host |
+| Chats/Ready | `WizLive.workGroups(..., {flatReady:true})` retains every day/error group in status-only shell views; `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
@@ -90,7 +90,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Home-screen declaration | `WizHomeScreenCapabilities` (`web/core/home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) |
 
-| Owner Look sync | `WosLookSync` (`web/core/look-sync.js`): one logical-clocked skin/tweak set per owner; seed legacy only once |
+| Owner Look sync | `WosLookSync` (`web/core/look-sync.js`): one logical-clocked colour/tweak/built-in-switch set per owner; foreground refresh; seed legacy only once |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 

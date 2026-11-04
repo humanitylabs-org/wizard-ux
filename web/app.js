@@ -4248,7 +4248,7 @@
     /* The AI apps view (layouts/ai-apps): its drawer's chats (Working, Ready; the rest for its search), each with the
      * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
     sessionList: () => {
-      const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; if (!G) return null;
+      const G = LIVE && LIVE.ok ? LIVE.workGroups(undefined, { flatReady: true }) : null; if (!G) return null;
       const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
       const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
         return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', rank: Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),

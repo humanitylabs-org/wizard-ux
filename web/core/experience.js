@@ -104,6 +104,8 @@
       const off = new Set(state.defaultsOff || []); on ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; Store.write(state);
       if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
+      // Safe appearance preference only: never the per-device personal-script approval.
+      try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on, scope: 'default' } })); } catch (_) {}
       return;
     }
     if (recipe()) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
@@ -204,14 +206,20 @@
     get installedReady() { return !!installedP?.settled; },
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
+    get defaultChoices() { return recipe() ? {} : Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
     // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
     async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
     // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
-    async adopt(mix) {
+    async adopt(mix, defaults = {}) {
       catalog ||= await read('tweaks/catalog.json');
       const grouped = new Set((catalog.oneOf || []).flat()), next = {};
       for (const id of catalog.tweaks) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
+      // Older look documents have no defaults: retain local choices until the upgrade seeds them.
+      const off = new Set(state.defaultsOff || []);
+      const shared = recipe() ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
+      for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
+      state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
       state.mix = next; state.preset = 'none'; delete state.carry; Store.write(state);
       return apply();
     },
