@@ -4251,13 +4251,16 @@
       const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; if (!G) return null;
       const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
       const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
-        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', rank: Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
+        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', rank: CHATS.stiKind?.(s) === 'failed' ? 1 : Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
           needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
           actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s, null).filter(a => KEEP.includes(a))] }; };
       // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom
       // under the snooze-someday tweak); a snoozed chat waiting on an approval stays in Ready, as in stock
       const snoozed = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)) && !['waiting_for_approval', 'unknown'].includes(s.status);
-      const ready = G.ready || [];
+      // Every chat not archived, working or snoozed is Ready here: this view has no Errors or day sections, so a failed /
+      // interrupted chat (stock Errors) and, under the By day layout, Yesterday / Past week join Ready (its Error group;
+      // its own time order). Leaving them out hid those chats from the sidebar and the rail altogether.
+      const ready = [...(G.errors || []), ...(G.ready || []), ...(G.yesterday || []), ...(G.pastWeek || [])];
       return { working: (G.working || []).map(s => row(s, 'working')), ready: ready.filter(s => !snoozed(s)).map(s => row(s, 'ready')),
         snoozed: [...(G.deferred || []), ...ready.filter(snoozed)].map(s => row(s, 'snoozed')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
     },

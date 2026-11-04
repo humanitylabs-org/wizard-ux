@@ -288,6 +288,22 @@ test('desktop core hooks: the adapter lists chats with Chats\' own actions, show
   assert.match(read('web/layouts/apps/chrome.js'), /const rawSpot = orb \|\| \(shell === 'phone' \? orbSpot : null\);/, 'a view drawing its own orb says where it is');
 });
 
+test('nothing hidden: failed / interrupted chats and By day\'s Yesterday / Past week are in Ready (both adapters)', () => {
+  // (Miguel, 4 Nov 2026: "the grouping and sorting doesn't always show everything"): this view has no Errors or day
+  // sections, so stock's errors / yesterday / pastWeek groups must land in Ready, a failed one ranked with Needs you.
+  for (const [file, re] of [['web/desktop/desktop.js', /sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    \/\/ The thread's own actions/], ['web/app.js', /sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    sessionAct/]]) {
+    const fn = read(file).match(re)[1];
+    const s = (id, extra = {}) => ({ id, title: id, status: 'completed', ...extra });
+    const LIVE = { ok: true, readyRank: () => 5, isNew: () => false, cardAt: () => '',
+      workGroups: () => ({ errors: [s('e', { status: 'interrupted' })], working: [s('w', { status: 'running' })], ready: [s('r')], yesterday: [s('y')], pastWeek: [s('p')], deferred: [], archive: [s('a')] }) };
+    const CHATS = { threadActions: () => [], stiKind: x => x.status === 'interrupted' ? 'failed' : 'none' };
+    const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: {} });
+    const all = ['working', 'ready', 'snoozed', 'archive'].flatMap(k => out[k].map(r => r.id)).sort();
+    assert.deepEqual(all, ['a', 'e', 'p', 'r', 'w', 'y'], file + ': every chat is listed somewhere');
+    assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.state, r.rank]))), [['e', 'failed', 1], ['r', 'none', 5], ['y', 'none', 5], ['p', 'none', 5]], file);
+  }
+});
+
 test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home only); the drawer: open apps, All apps, Archive / Working / Ready, Settings, New chat', async () => {
   const w = world();
   const off = (await layout()).default(w.api);
@@ -1671,7 +1687,7 @@ test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, t
   assert.match(host, /READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'the stock key (core/chats.js)');
   assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
   assert.match(read('web/core/chats.js'), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
-  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /rank: Number\.isFinite\(LIVE\.readyRank\?\.\(s\)\) \? LIVE\.readyRank\(s\) : undefined/, f + ': the stock rank on each row');
+  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /rank: CHATS\.stiKind\?\.\(s\) === 'failed' \? 1 : Number\.isFinite\(LIVE\.readyRank\?\.\(s\)\) \? LIVE\.readyRank\(s\) : undefined/, f + ': the stock rank on each row (a failed chat with Needs you)');
   assert.match(host, /note: true, rank: Number\(it\.priority\) >= 4 \? 1 : Number\(it\.priority\) === 3 \? 2 : 3/, 'notifications rank like stock Priority (4–5 / 3 / the rest)');
 });
 
