@@ -60,7 +60,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
   context.C = window.WizCore;
   vm.runInContext(process.env.NOTIF_SOURCE ? readFileSync(process.env.NOTIF_SOURCE, 'utf8') : read('web/core/notif-bell.js'), context);
   if (shell === 'phone') {
-    vm.runInContext(between(phone, '  function renderMoons() {', '  function paintOrbBadge() {'), context);
+    vm.runInContext(between(phone, '  function moonAngle(k, count) {', '  function paintOrbBadge() {'), context);
     vm.runInContext(phone.split('\n').find(line => line.includes("window.addEventListener('wizard:notifications'")), context);
   } else {
     vm.runInContext(between(desktop, '  function paintBar() {', '  function tickClock()'), context);

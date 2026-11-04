@@ -2055,10 +2055,24 @@
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
+  // Leave gaps around six o'clock for the scrub handle and around two o'clock for the count badge.
+  function moonAngle(k, count) {
+    if (count <= 1) return -Math.PI / 2;
+    const start = Math.PI * 3 / 4;
+    const badgeStart = Math.PI * 14 / 9;
+    const badgeEnd = Math.PI * 35 / 18;
+    const end = Math.PI * 9 / 4;
+    const firstArc = badgeStart - start;
+    const safeSpan = firstArc + end - badgeEnd;
+    const step = safeSpan / (count - 1);
+    const slot = (k + Math.floor((count - 1) / 2)) % count;
+    const offset = slot * step;
+    return offset <= firstArc ? start + offset : badgeEnd + offset - firstArc;
+  }
   function renderMoons() {
     const L = live();
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
-    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
+    $('#moons').innerHTML = m.map((c, k) => { const a = moonAngle(k, m.length), r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
     // Notification badges reflect unread, independently of the Ready workflow. The orb shows the current desk.
     window.WizCore.workspaceNav.refreshChats(LIVE, CHATS_APP.id);
