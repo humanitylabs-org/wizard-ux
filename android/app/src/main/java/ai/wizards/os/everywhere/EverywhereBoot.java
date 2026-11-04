@@ -14,6 +14,7 @@ public class EverywhereBoot extends BroadcastReceiver {
             ai.wizards.os.assist.TakeRecovery.recoverAfterRestart(c); // a side-button take cut off by the update/reboot
             EverywhereOutbox.get(c).pump();
             ai.wizards.os.mizel.MeetingRecorderService.recover(c); // finish uploading any meeting cut off by a reboot
+            ai.wizards.os.notify.AppNotifyService.ensure(c); // reconnect app notifications after a reboot or update
         }
     }
 }

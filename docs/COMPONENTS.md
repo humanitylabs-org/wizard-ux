@@ -16,7 +16,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 |---|---|---|---|
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own chat UI/retries | shell `[data-chats]`; 503: one outbox item/message |
-| App identity/root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | manifest wins; frames untouched |
+| App identity/root | `WizardAppIdentity` (`web/core/app-identity.js`), via SDK | manifest injectors | manifest wins; frames untouched |
 | Composer input | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
 | Photo/video viewer | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
@@ -82,9 +82,9 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 | Native mic recording | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start`: `MicRoute.NOTE_SOURCES` for notes, `MicRoute.SOURCES` for STT) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
 | Android shell capabilities | `WosDevicePort` (`device-port.js`), `WosDeviceRecording` (`device-recording.js`), `WosDeviceOrb` (`device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
-| Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; host owns cutout, child inset 0 | app CSS insets |
+| Home-screen apps, safe top, alerts | `WizHomeScreenApps.attach / offer / canOffer`; host owns cutout, child inset 0; `AppNotifyService` | app CSS insets |
 | Home-screen declaration | `WizHomeScreenCapabilities` (`web/core/home-screen-capabilities.js`): sanitize/matcher/replicaPrefix | per-app offline/storage switches | refresh/revoke |
-| Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
+| Long screenshot, selection | WebView doc scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (docs/android-document-scroll.md) | second capture path | long Chats capture |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 

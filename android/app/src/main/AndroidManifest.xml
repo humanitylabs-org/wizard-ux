@@ -27,6 +27,8 @@
     <!-- Share to Wizard: the background upload of shared files (ShareService, type dataSync). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- App notifications: the owner can let the one connection to his Wizard stay up in Doze (Android's own dialog). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Native parity (0.7.0): background orb recorder, in-app update. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -219,6 +221,21 @@
             android:name=".mizel.MizelUploadJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- App notifications without Google: one connection to the owner's Wizard (Notifications app's phone router,
+             Server-Sent Events over Tailscale); per-app channels; Reply/buttons post back to the app as the owner. -->
+        <service
+            android:name=".notify.AppNotifyService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent connection to the owner's own self-hosted server for instant app notifications without Google push" />
+        </service>
+        <service
+            android:name=".notify.AppNotifyJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver android:name=".notify.AppNotifyReceiver" android:exported="false" />
         <receiver
             android:name=".everywhere.EverywhereBoot"
             android:exported="true">

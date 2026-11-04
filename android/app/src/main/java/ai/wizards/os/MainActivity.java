@@ -747,6 +747,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         pushSideButton();
         web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
         device.onResume();
+        ai.wizards.os.notify.AppNotifyService.ensure(this, this); // instant app notifications from this Wizard (no Google)
         if (apps != null) apps.onResume();
         if (photos != null) photos.onResume();
         if (sideSetupActive) {
