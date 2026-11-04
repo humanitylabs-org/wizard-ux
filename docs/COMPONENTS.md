@@ -64,7 +64,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings in both shells | `WosSettings.register` (`settings.js`; separate Skin/Color; shared About version identities; fail-closed update status; package System: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
-| Agent identity, glyph, hue; Chats headers follow `WizCore.chats.titleAgent` (thread route or Focus), registry refresh preserves that route; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
+| Agent identity, appAgents, routed Chats titles | `WosAgents` (`agents.js`), `WizCore.chats.titleAgent` | privacy, needs_private_agent; no fixed names/colours |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | type ≠ UX |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; named registry glyphs and HOUSE masks beat cached package pictures; unbranded apps keep package/catalog fallback; pin raster masks contain-fit. Tests: `app-icon-consumers.test.mjs`, `app-icon-harness.test.mjs` | PNG/emoji icons |
