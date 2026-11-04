@@ -484,10 +484,10 @@
   const DESK1_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M10.6 9.6 12.6 8v8"/></svg>';
   function barHtml(w) {
     const a = appOf(w);
-    if (hud?.id === w.id) return `<div class="wbar" data-drag title="Drag to move">${window.WosAgents.titlebar(w.agent || '', 'ic', 't')}
+    if (hud?.id === w.id) return `<div class="wbar" data-drag title="Drag to move">${window.WosAgents.titlebar(CHATS.titleAgent(w), 'ic', 't')}
       <button data-wact="hud-home" title="Back to desktop 1 (${MOD}P)" aria-label="Back to desktop 1" aria-keyshortcuts="Alt+P">${DESK1_ICON}</button>
       <button data-wact="close" title="Close" aria-label="Close window">✕</button></div>`;
-    return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
+    return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(CHATS.titleAgent(w), 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       ${reloadable(w) ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
       ${w.app === 'chats' ? `<button data-wact="hud" title="Float over every desk (${MOD}P)" aria-label="Float over every desk" aria-keyshortcuts="Alt+P">${HUD_ICON}</button>` : ''}

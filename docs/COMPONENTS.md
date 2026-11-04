@@ -70,7 +70,7 @@ Reuse:
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings (shared pages/versions), instant Appearance receipt | `WosSettings.register/focus`, `lookAction` (rounded art + inline busy), `hasSystem`, `WosFeatures` | shell-only pages |
-| Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
+| Agent identity, glyph, hue; Chats headers follow `WizCore.chats.titleAgent` (thread route or Focus), registry refresh preserves that route; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | type ≠ UX |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); Store identity | PNG/emoji icons |
