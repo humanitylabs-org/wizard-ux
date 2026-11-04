@@ -306,7 +306,7 @@ export default function setup(api) {
   }
   /* ---------- badges: the shell's own app counts (desk marks, dock), live ---------- */
   const badgeOf = new WeakMap();
-  let badgeMap = api.apps.badges(m => { badgeMap = m; paintApps(); for (const s of sats) paintBadge(s.el, s.id); });
+  let badgeMap = api.apps.badges(m => { badgeMap = m; paintReady(); paintApps(); for (const s of sats) paintBadge(s.el, s.id); });
   function paintBadge(b, id) {
     const n = badgeMap[id] || 0, rec = badgeOf.get(b); if (!rec) return;
     const { node, name } = rec;
@@ -467,14 +467,13 @@ export default function setup(api) {
   }
 
   /* ---------- conversations: the stock Chats list, docked on the left (shell panel); folded = a slim strip ---------- */
-  let folded = api.storage.get('folded') === true, readyCount = -1;
+  let folded = api.storage.get('folded') === true, unreadCount = -1;
   function paintReady() {
-    const L = api.sessions.list();
-    const n = L ? L.ready.filter(s => !s.snoozed).length : 0;
-    if (readyCount >= 0 && n > readyCount) flash = Math.max(flash, .6);   // something new is ready: a soft ring
-    readyCount = n;
-    badge.textContent = n ? String(n) : ''; badge.hidden = !n;
-    strip.setAttribute('aria-label', n ? `Show conversations · ${n} ready` : 'Show conversations');
+    const n = badgeMap['wizard'] || 0, text = n ? (api.apps.badgeText?.('wizard') || String(n)) : '';
+    if (unreadCount >= 0 && n > unreadCount) flash = Math.max(flash, .6);   // new unread activity: a soft ring
+    unreadCount = n;
+    badge.textContent = text; badge.hidden = !n;
+    strip.setAttribute('aria-label', n ? `Show conversations · ${text} unread` : 'Show conversations');
   }
   function fold(on) {
     folded = !!on; api.storage.set('folded', folded); if (folded && maxed) { maxed = false; api.storage.set('listMax', false); }

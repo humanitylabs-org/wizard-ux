@@ -28,12 +28,17 @@ async function load(inboxList) {
 test('Notifications in Chats on: the items count on Chats only, the Notifications badge is empty', async () => {
   const { window, counts } = await load(true);
   assert.equal(window.WosBell.readyCount(), 3, 'Chats Ready counts its notification rows');
+  assert.equal(window.WosBell.unreadCount(), 2, 'only unread notification items contribute to the badge, not the read Ready row');
+  window.WizCore.workspaceNav.refreshChats(null);
+  assert.equal(counts.wizard, 2, 'the shared Chats badge preserves unread app notification routing');
   assert.equal(counts.notifications, 0, 'the Notifications app badge does not count them again');
 });
 
 test('Notifications in Chats off: the Notifications badge counts unread, Chats counts none', async () => {
   const { window, counts } = await load(false);
   assert.equal(window.WosBell.readyCount(), 0);
+  assert.equal(window.WosBell.unreadCount(), 0);
+  window.WizCore.workspaceNav.refreshChats(null); assert.equal(counts.wizard, 0);
   assert.equal(counts.notifications, 2);
 });
 

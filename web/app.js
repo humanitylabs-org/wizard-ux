@@ -2056,8 +2056,8 @@
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
-    window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0), !!window.WosBell?.readyMore?.());
+    // Notification badges reflect unread, independently of the Ready workflow. The orb shows the current desk.
+    window.WizCore.workspaceNav.refreshChats(LIVE, CHATS_APP.id);
     paintOrbBadge();
   }
   function paintOrbBadge() {

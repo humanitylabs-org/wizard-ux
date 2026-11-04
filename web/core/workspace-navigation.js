@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const C = window.WizCore = window.WizCore || {};
-  /* Per-app counts (Chats = Ready threads, Notifications = unread, later any app). The badge belongs to the
+  /* Per-app counts (Chats = visible unread threads, Notifications = unread, later any app). The badge belongs to the
    * app: each desk mark carries the count of the apps it holds, and the orb shows the desk in view. */
   /* An item counts in one place (Settings › Notifications): an app set to Chats shows no badge of its own, its items
    * wait in Chats and count in Chats' badge instead. `raw` keeps what the app reported, `counts` what is shown. */
@@ -23,6 +23,14 @@
     const was = more.has(id); if (plus) more.add(id); else more.delete(id);
     raw[id] = Math.max(0, n | 0);
     if (was !== !!plus) { counts[id] = -1; } apply(id);
+  }
+  // One projection for every Chats notification badge; Ready remains a separate workflow count.
+  // Reuse the loaded unified list and canonical visibility/read rules: no reads, receipts or migration here.
+  function refreshChats(live, id = 'wizard') {
+    const threads = live?.ok ? live.visibleUnread(live.unified()).length : 0;
+    // Preserve app notification routing, but never badge read/snoozed inbox items as Ready did.
+    const inbox = window.WosBell?.unreadCount?.() || 0;
+    setCount(id, threads + inbox, inbox > 0 && !!window.WosBell?.readyMore?.());
   }
   function carry(map) {
     const next = map && typeof map === 'object' ? map : {};
@@ -59,5 +67,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, carry, rerouted, deskCount, deskMore, fmt, label, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
 })();

@@ -416,6 +416,8 @@
   // Chats shows "50+" when an app routed here lists only its newest items (Mail: the newest 50 unread).
   const readyMore = () => !!window.WosSkinHost?.inboxList && Object.keys(FD.more).some(id => FD.more[id] && inChats(id));
   const readyCount = () => window.WosSkinHost?.inboxList ? IN.items.filter(i => !i.archived).length : 0;
+  // Badge only: keep Ready's full inventory and all other app routing/count policies unchanged.
+  const unreadCount = () => window.WosSkinHost?.inboxList ? IN.items.filter(i => !i.archived && !i.read).length : 0;
   async function mark(ids, marks) {
     ids = (ids || []).map(String).filter(Boolean); if (!ids.length) return false;
     const appIds = ids.filter(id => IN.items.some(i => i.id === id && i.app));
@@ -542,7 +544,7 @@
   const routing = Object.freeze({ version: PART.version, replace: replaceRouting, get owner() { return PART.live?.owner || null; } });
   /** The label of where this source goes now (its picker's choice: Chats, Badge, Morning report, Off). */
   function routeLabel(id) { id = String(id || ''); const now = route(id), got = P.choices(id, nameOf(id)), list = Array.isArray(got) ? got : STOCK.choices(id, nameOf(id)); const c = list.find(x => x && String(x.to) === now); return c ? String(c.label || now).slice(0, 40) : ''; }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, unreadCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
     entered: () => { P.entered(); }, left: () => { P.left(); },
     get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();

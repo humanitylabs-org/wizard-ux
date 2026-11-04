@@ -1288,7 +1288,7 @@
   function paintBar() {
     window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0), !!window.WosBell?.readyMore?.());
+    C.workspaceNav.refreshChats(LIVE, APP.wizard?.id || 'wizard');
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {

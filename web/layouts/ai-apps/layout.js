@@ -374,9 +374,9 @@ export default function setup(api) {
       const b = n.closest('.aa-gi'), nm = b?.querySelector('.aa-gn')?.textContent || '';
       if (b && nm) b.setAttribute('aria-label', nm + (n.textContent ? `, ${n.textContent} new` : ''));
     }
-    const ready = badgeMap[CHATS] || 0, rt = ready ? (api.apps.badgeText?.(CHATS) || (ready > 99 ? '99+' : String(ready))) : '';
-    menuCount.textContent = rt; menuCount.hidden = !ready;
-    menuBtn.setAttribute('aria-label', ready ? `Open menu, ${rt} ready` : 'Open menu');
+    const unread = badgeMap[CHATS] || 0, rt = unread ? (api.apps.badgeText?.(CHATS) || (unread > 99 ? '99+' : String(unread))) : '';
+    menuCount.textContent = rt; menuCount.hidden = !unread;
+    menuBtn.setAttribute('aria-label', unread ? `Open menu, ${rt} unread` : 'Open menu');
   }
 
   /* ---------- a chat row: tap opens it; a long press (or right click) opens its menu ---------- */

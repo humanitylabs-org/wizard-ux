@@ -918,7 +918,7 @@
         // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.
         logo: id => live() ? appLogo(id) : Promise.resolve(null),
         /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:
-         * Chats' Ready, Notifications, and what each running app reports through WizardApp badge). Read-only
+         * Chats' unread threads, Notifications, and what each running app reports through WizardApp badge). Read-only
          * { id: n } (n > 0 only); watch(fn) is called again whenever one changes and is released on teardown. */
         // The badge text as the shell shows it ('50+' for an app that lists only its newest items); '' when none.
         badgeText: id => live() && isDoc ? String(window.WizCore?.workspaceNav?.label?.(String(id)) || '') : '',
