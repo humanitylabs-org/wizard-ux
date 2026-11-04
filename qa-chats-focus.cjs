@@ -69,6 +69,42 @@ async function choose(p,v){
 }
 const activeFocus = p => p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText();
 async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({path:path.join(OUT,name+'.png'),animations:'disabled'});}
+// Focused regression for the shared Chats titlebar; all API data is synthetic.
+async function titleMatrix(b) {
+ for (const desktop of [false,true]) {
+  const {ctx,p}=await boot(b,desktop), mode=desktop?'desktop':'phone';
+  try {
+   const bar=p.locator('[data-win="wmain"] [data-agent-titlebar]:visible');
+   const title=()=>bar.locator('.t,.wt').innerText();
+   await choose(p,'agent:hermes');
+   ok(await title()==='Archimedes Main Agent',mode+' title keeps registry default label');
+   await choose(p,'agent:philosopher');
+   ok(await title()==='Philosopher Agent',mode+' picker updates the same window title');
+   ok(await bar.getAttribute('data-agent-titlebar')==='philosopher',mode+' registry-refresh target follows Focus');
+   for (const skin of ['obsidian','nebula']) {
+    await p.evaluate(skin=>WosSkin.set(skin),skin);
+    await p.waitForFunction(skin=>document.documentElement.dataset.skin===skin&&!document.querySelector('.mz-intro'),skin);
+    await p.waitForFunction(()=>!document.getAnimations().some(a=>{
+     const e=a.effect?.target; return e?.closest?.('.wbar')&&a.playState==='running'&&Number.isFinite(a.effect.getComputedTiming().endTime);
+    }));
+    await p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    ok(await title()==='Philosopher Agent',mode+' '+skin+' skin retains selected title');
+    await p.screenshot({path:path.join(OUT,mode+'-title-'+skin+'.png')});
+   }
+   await choose(p,'all:');
+   await p.locator('[data-chopen="phil_one"]:visible').click();
+   ok(await title()==='Philosopher Agent',mode+' foreign thread overrides All title');
+   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos)a.onBack();else a.escStep();});
+   await p.locator('[data-chopen="main_wos"]:visible').click();
+   ok(await title()==='Archimedes Main Agent',mode+' main thread restores default title');
+   const dest=new URL(desktop?'desktop.html':'./',origin);dest.searchParams.set('agent','philosopher');
+   await p.goto(dest.href,{waitUntil:'domcontentloaded'});
+   await p.waitForFunction(()=>{const a=window.__wos||window.__wux;return a&&Object.values(a.wins).some(w=>w.focus?.key==='philosopher');});
+   await p.waitForFunction(()=>[...document.querySelectorAll('[data-agent-titlebar="philosopher"] .t,[data-agent-titlebar="philosopher"] .wt')].some(e=>e.textContent==='Philosopher Agent'));
+   ok(await p.locator('[data-agent-titlebar="philosopher"]:visible').count()>0,mode+' agent deep link updates title');
+  } finally { await ctx.close(); }
+ }
+}
 // Archived threads are read, and agent/Space dots count only unread threads the list shows (James, 24 Oct 2026).
 async function archivedUnreadMatrix(b) {
  const saved=rows.slice(), t=now-10*86400;
@@ -362,6 +398,7 @@ async function soloAcceptance(b) {
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
+ if(process.env.QA_TITLE_ONLY){await titleMatrix(b);ok(errors.length===0,'no title-matrix page errors',errors);ok(!writes.some(w=>/\/v1\/runs$/.test(w.path)),'title navigation creates zero runs');console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  if(process.env.QA_SPACE_MEMBERS_ONLY){await spaceArchiveMatrix(b);ok(errors.length===0,'no page errors',errors);console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  await soloAcceptance(b);
  if(process.env.QA_SOLO_ONLY){console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
@@ -567,6 +604,7 @@ async function soloAcceptance(b) {
   }
  }
  ok(writes.slice(navigationAt).filter(w=>/\/v1\/runs$/.test(w.path)).length===0,'zero /v1/runs during navigation');
+ await titleMatrix(b);
  await sectionMatrix(b);
  await archivedUnreadMatrix(b);
  await spaceArchiveMatrix(b);

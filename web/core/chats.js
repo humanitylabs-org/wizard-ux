@@ -806,9 +806,17 @@ window.WizCore.chats = function createChats(H) {
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
   function listTitle(w) { return focusAgents().length === 1 && focusOf(w)?.kind === 'space' ? focusLabel(w) : ''; }
+  // An existing thread owns its route; Focus (or a new-chat model choice) owns a draft.
+  // Both shells use this same resolver at creation and on each subsequent Chats paint.
+  function titleAgent(w) {
+    const o = (w && W[owner(w.id)]) || w;
+    if (!o) return '';
+    if (o.thread && o.thread !== '__new__') return LIVE.agentOf?.(o.thread) || '';
+    return winAgent(o) || (o.thread === '__new__' && AGS()?.isOther(ch(o.id).newModel?.agent) ? ch(o.id).newModel.agent : '');
+  }
   function syncListTitle(w) {
     const o = W[owner(w.id)] || w;
-    AGS()?.setTitlebarLabel(track.querySelector(`[data-win="${o.id}"] [data-agent-titlebar]`), !o.thread ? listTitle(o) : '');
+    AGS()?.setTitlebarLabel(track.querySelector(`[data-win="${o.id}"] [data-agent-titlebar]`), !o.thread ? listTitle(o) : '', titleAgent(o));
   }
   // One stable option order for strip and Filter; the strip shows the level with a choice.
   function focusOptions() {
@@ -1904,12 +1912,13 @@ window.WizCore.chats = function createChats(H) {
     return { working, sub };
   }
   function renderThread(w, el, keep) {
+    syncListTitle(w);
     if (INC?.render(w.id, el)) return;
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : rowOf(w.id, w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
-    const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
+    const TAG = titleAgent(w);
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
     const incognitoAction = isNew && INC && window.WizCore.incognitoOptIn?.enabled(agentRec(TAG)) ? '<button type="button" class="pbtn ch-incog-toggle" role="switch" aria-checked="false" data-incog-start aria-label="Incognito"><span>Incognito</span><span class="sw" aria-hidden="true"><i></i></span></button>' : '';
     const privTag = !winAgent(w) && TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
@@ -3031,7 +3040,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, titleAgent, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
