@@ -146,6 +146,8 @@ BRAND = {
     'wizard-tinfoil':    'tinfoil',
     'hermes-agent':      'hermes',
     'hermes-frontend-3': 'hermes',
+    'wizard-google':     'google',
+    'wizard-youtube-music': 'youtube-music',
 }
 # Apps with no sigil yet get their initial on a hue picked from their id.
 FALLBACK_HUES = [20, 66, 112, 158, 196, 230, 268, 300, 334]

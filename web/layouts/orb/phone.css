@@ -41,7 +41,8 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-fac
   width: 40px; height: 40px; display: grid; place-items: center; pointer-events: none; transition: transform 120ms ease;
   filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 10px color-mix(in srgb, var(--c) 35%, transparent));
 }
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .sgi { width: 40px; height: 40px; flex: none; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 82%, var(--ob-white)) !important; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .sgi { width: 40px; height: 40px; flex: none; -webkit-mask-size: contain; mask-size: contain; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .sgi:not(:where(.sgb-google, .sgb-youtube-music)) { background: color-mix(in oklab, var(--c) 82%, var(--ob-white)) !important; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-logo { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 22%; }
 /* more open apps than the ring holds: +N opens the sheet (its Open level lists every open app) */
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-more .obp-more-n {

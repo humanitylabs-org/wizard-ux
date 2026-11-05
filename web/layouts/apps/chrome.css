@@ -135,7 +135,8 @@ html[data-view-chrome] .vc-tile {
 }
 html[data-view-chrome] .vc-app:active .vc-tile { transform: scale(.92); }
 html[data-view-chrome] .vc-tile.is-logo { background: color-mix(in srgb, var(--wz-text, var(--ink)) 4%, transparent); }
-html[data-view-chrome] .vc-tile .sgi { width: 34px; height: 34px; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 80%, var(--wz-text, var(--ink))) !important; }
+html[data-view-chrome] .vc-tile .sgi { width: 34px; height: 34px; -webkit-mask-size: contain; mask-size: contain; }
+html[data-view-chrome] .vc-tile .sgi:not(:where(.sgb-google, .sgb-youtube-music)) { background: color-mix(in oklab, var(--c) 80%, var(--wz-text, var(--ink))) !important; }
 html[data-view-chrome] .vc-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
 html[data-view-chrome] .vc-name {
   max-width: 100%; padding: 0 2px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;

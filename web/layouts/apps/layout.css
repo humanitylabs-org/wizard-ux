@@ -108,7 +108,8 @@ html[data-shell="desktop"][data-layout="apps"] .apd-tile {
 html[data-shell="desktop"][data-layout="apps"] .apd-icon:hover .apd-tile { transform: translateY(-2px) scale(1.04); }
 html[data-shell="desktop"][data-layout="apps"] .apd-icon:active .apd-tile { transform: scale(.94); }
 html[data-shell="desktop"][data-layout="apps"] .apd-icon.is-logo .apd-tile { background: var(--ap-tile-logo); }
-html[data-shell="desktop"][data-layout="apps"] .apd-tile .sgi { width: 44px; height: 44px; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 82%, var(--ap-label)) !important; }
+html[data-shell="desktop"][data-layout="apps"] .apd-tile .sgi { width: 44px; height: 44px; -webkit-mask-size: contain; mask-size: contain; }
+html[data-shell="desktop"][data-layout="apps"] .apd-tile .sgi:not(:where(.sgb-google, .sgb-youtube-music)) { background: color-mix(in oklab, var(--c) 82%, var(--ap-label)) !important; }
 html[data-shell="desktop"][data-layout="apps"] .apd-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
 html[data-shell="desktop"][data-layout="apps"] .apd-plus .apd-tile { background: var(--ap-tile); color: var(--ap-label); }
 html[data-shell="desktop"][data-layout="apps"] .apd-plus .vc-ico { width: 32px; height: 32px; }

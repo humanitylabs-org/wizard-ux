@@ -124,7 +124,11 @@
 .sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
 .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
 .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+.sgi.sgb-google { --sgb: url("/wizard-os-home/brand/apps/google.svg"); }
+.sgi.sgb-youtube-music { --sgb: url("/wizard-os-home/brand/apps/youtube-music.svg"); }
 .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat; }
+/* Multicolour product marks keep their source artwork in every consumer, including the white-icon orb and two-orb layout. */
+.sgi:is(.sgb-google, .sgb-youtube-music) { background: var(--sgb) center / contain no-repeat !important; filter: none !important; }
 /* An app's own logo (WizSigil.html → <i class="sglogo">): the picture fills its icon box as a rounded tile, in every
  * skin and every place a sigil sits. It is not a `.sgi`, so skin rules that tint, mask or recolour sigils never touch
  * it. Inside a tile the tile's own corners clip it, and the glass bloom behind it is not needed. */
