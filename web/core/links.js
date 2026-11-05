@@ -89,7 +89,7 @@
     return p.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null } = {}) {
+  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null, readerApp = () => null, readerOpen = null } = {}) {
     const el = document.createElement('section');
     el.className = `linksheet ${mode}`; el.setAttribute('aria-label', 'Link'); el.hidden = true;
     el.innerHTML = `<div class="ls-scrim" data-ls="close"></div><div class="ls-panel"><header class="ls-bar">
@@ -135,8 +135,17 @@
       const u = abs(href, base); if (!u) return false;
       if (!allowURL(u)) return true; // consumed, never navigate a forbidden shell/task
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
-      if (!inApp(u)) { external(u); return true; }
       if (isFile(u)) return download(u, doc);
+      if (!inApp(u)) {
+        const app = readerApp(), target = app?.url ? abs(app.url) : null;
+        if (target && inApp(target)) {
+          target.searchParams.set('url', u.href);
+          const path = target.pathname + target.search + target.hash;
+          if (readerOpen?.(path)) return true;
+          return go(path);
+        }
+        browse(u); return true;
+      }
       // Desktop: a page preview is a normal window (wizard-os#265 rule 7), not a side pane. Images and files stay above.
       if (asWindow && asWindow(u.pathname + u.search + u.hash, nice(u))) return true;
       if (cur() && cur().url === u.href) { show(); return true; }
@@ -181,7 +190,8 @@
         if (!/^https?:$/.test(u.protocol)) return; // mailto:, tel:, intent:, the page's own handling
         if (inApp(u) && (isFile(u) || a.hasAttribute('download'))) { e.preventDefault(); download(u, doc); return; }
         const t = (a.getAttribute('target') || '').toLowerCase();
-        if (!inApp(u)) { e.preventDefault(); external(u); return; }
+        if (a.hasAttribute?.('data-wizard-browse')) { e.preventDefault(); browse(u); return; }
+        if (!inApp(u)) { e.preventDefault(); go(u.href, null, doc); return; }
         if (!t || t === '_self') { const h = doc.location; if (u.pathname === h.pathname && u.search === h.search && u.hash) return; } // in-page anchor
         // Every step is a replace-load driven by the sheet, so browser history never fills with frame entries
         // and Back always means "the sheet's previous page".
@@ -262,11 +272,13 @@
       if (d0 && d0.session && !d0.video && a.closest('[data-chats]')) { e.preventDefault(); return; }
       e.preventDefault(); e.stopPropagation();
       if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
-      if (inApp(u) && isFile(u)) { download(u, a.ownerDocument); return; }
+      if (isFile(u)) { download(u, a.ownerDocument); return; }
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
       if (DL && DL.route(u.href, a)) return;
       // The phone shell can claim a link (sheet.route) to open it on a desk of its own instead of the sheet.
+      if (a.hasAttribute?.('data-wizard-browse')) return browse(u);
+      if (!inApp(u)) return sheet.open(u.href);
       if (sheet.route && sheet.route(u.href, a)) return;
       sheet.open(u.href);
     }, true);
@@ -288,15 +300,15 @@
       const DLm = window.WizCore && window.WizCore.deeplink;
       if (inApp(u) && DLm && DLm.isOwn && DLm.isOwn(u) && !isFile(u)) return false; // Wizard's own threads/apps open in place
       const items = (canBrowse(u) ? '<button type="button" role="menuitem" data-wl="mine">Open in your browser</button>' : '')
-        + (inApp(u) && isFile(u) ? '<button type="button" role="menuitem" data-wl="dl">Download</button>' : '')
+        + (isFile(u) ? '<button type="button" role="menuitem" data-wl="dl">Download</button>' : '')
         + '<button type="button" role="menuitem" data-wl="copy">Copy link</button>';
       shut();
       const doc = a.ownerDocument;
       menu = doc.createElement('div'); menu.className = 'wiz-linkmenu'; menu.setAttribute('role', 'menu');
       menu.innerHTML = `<div class="wl-host">${esc(inApp(u) ? decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname) : u.hostname)}</div>${items}`;
-      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:linear-gradient(rgba(22,14,46,.98),rgba(22,14,46,.98)),var(--wz-panel,var(--wz-base,var(--bg,#05030c)));color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.55);padding:6px;font:15px/1.3 system-ui,sans-serif';
+      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:var(--wz-base);color:var(--wz-text);border:1px solid var(--wz-border);border-radius:var(--wz-radius);box-shadow:0 14px 40px color-mix(in srgb,var(--wz-base) 65%,transparent);padding:6px;font:15px/1.3 var(--wz-font-ui)';
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
-      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#8a82a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:var(--wz-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
       doc.body.appendChild(menu); linkMenus.add(shut);
       doc.defaultView.addEventListener('pagehide', shut, { once: true });
       let freshPress = false;
@@ -341,10 +353,12 @@
   function guardFrame(win, base, sheet) {
     let doc; try { doc = win.document; } catch (e) { return; }
     if (!doc || doc.__wizLinkGuard) return; doc.__wizLinkGuard = true;
+    linkMenu(doc, 'body', win.location.href);
     const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
     const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
     const go = u => {
-      if (u.origin !== ORIGIN) return external(u);
+      if (isFile(u)) return download(u, doc);
+      if (u.origin !== ORIGIN) return sheet.open(u.href);
       let fe = null; try { fe = win.frameElement; } catch (e) {}
       // Hosted apps use the same canonical thread/app navigation as chat links.
       // Otherwise a Manager result opens a second Wizard inside the link viewer.
@@ -361,7 +375,9 @@
       const u = abs(a.getAttribute('href'), win.location.href); if (!u || !/^https?:$/.test(u.protocol)) return;
       if (u.origin === ORIGIN && isImage(u)) { if (viewImage(u, doc)) { e.preventDefault(); e.stopPropagation(); } return; }
       if (!leaves(u, a.getAttribute('target'))) return;
-      e.preventDefault(); e.stopPropagation(); go(u);
+      e.preventDefault(); e.stopPropagation();
+      if (a.hasAttribute?.('data-wizard-browse')) return browse(u);
+      go(u);
     }, true);
     // A form aimed at _top/_parent would replace the whole shell (desktop previews and kept pages are windows): it stays in its window.
     doc.addEventListener('submit', e => {

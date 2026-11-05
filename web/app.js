@@ -955,6 +955,7 @@
   function mountLinks() {
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
+      readerApp: () => APP.browser, readerOpen: href => openLinkDesk(href),
       parent: device, mode: 'sheet',
       onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else { const o = appAt(url); openWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },

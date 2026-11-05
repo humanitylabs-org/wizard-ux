@@ -15,7 +15,7 @@ function fixture(claim=true){
 }
 test('Manager result opens the existing shell thread route, never a nested Wizard',()=>{const f=fixture();f.click('/wizard-os-home/?session=wizard_qa');assert.equal(f.calls.length,1);assert.equal(f.calls[0][0],'deep');assert.equal(f.calls[0][2],f.frame);});
 test('ordinary app link retains the existing sheet fallback',()=>{const f=fixture(false);f.click('/other-app/');assert.deepEqual(f.calls.map(x=>x[0]),['deep','route','sheet']);});
-test('external links never reach the internal thread router',()=>{const f=fixture();f.click('https://outside.example/');assert.deepEqual(f.calls.map(x=>x[0]),['external']);});
+test('external links never reach the internal thread router',()=>{const f=fixture();f.click('https://outside.example/');assert.deepEqual(f.calls.map(x=>x[0]),['sheet']);});
 test('an app-local navigation stays app-local',()=>{const f=fixture();const e=f.click('/wizard-manager/detail','');assert.equal(f.calls.length,0);assert(!e.defaultPrevented);});
 test('a prevented or modified click keeps the existing browser/app handling',()=>{const f=fixture();f.click('/wizard-os-home/?session=wizard_qa','_top',{defaultPrevented:true});f.click('/wizard-os-home/?session=wizard_qa','_top',{ctrlKey:true});assert.equal(f.calls.length,0);});
 test('window.open uses the same canonical thread route',()=>{const f=fixture();f.win.open('/wizard-os-home/?session=wizard_qa','_top');assert.deepEqual(f.calls.map(x=>x[0]),['deep']);});
