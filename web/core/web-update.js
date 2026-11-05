@@ -111,7 +111,7 @@
     if (!p) { const b = !!svc?.busy?.(); p = { ok: !b, keeps: null, blocking: b ? [{ kind: 'work' }] : [], recording: false }; }
     return { ...p, host: hostBusy() };
   }
-  function busy() { const p = plan(); return p.host || !p.ok; }
+  function busy() { return !reloadAllowed(plan()); }
   function audioFreeReload(p) {
     // Never waive app-owned holds (including capture-labelled saves), native survival
     // preparation, or positive live-capture truth. Only durable-recovery uncertainty.
@@ -133,7 +133,8 @@
   }
   function reloadStatus() {
     const p = plan(), takes = window.WizAppCapture?.staleTakes?.() || [];
-    const take = !p.ok ? takes.find(t => p.blocking?.some(b => b.kind === 'capture' && (!b.appId || b.appId === t.appId))) : null;
+    const allowed = reloadAllowed(p);
+    const take = !allowed ? takes.find(t => p.blocking?.some(b => b.kind === 'capture' && (!b.appId || b.appId === t.appId))) : null;
     let reason = notice;
     if (!reason && checking) reason = 'Checking the recorder. Your audio is still kept.';
     if (!reason && take) {
@@ -141,7 +142,7 @@
       reason = appName(take.appId) + ' has an unsent recording from ' + date + ' holding the update.';
     }
     if (!reason && p.host) reason = 'Wizard is sending audio or saving your work. Finish that first, then tap Reload.';
-    if (!reason && !p.ok) {
+    if (!reason && !allowed) {
       const b = p.blocking?.[0];
       reason = b?.kind === 'work' ? appName(b.appId) + ' has an unsent draft or unsaved work. Save it in the app, then tap Reload.' :
         p.capture?.waitForEnd ? appName(b?.appId || p.capture?.appId) + ' is recording. Stop and save it first.' :

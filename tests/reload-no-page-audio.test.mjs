@@ -78,3 +78,19 @@ test('healthy durable path still reloads exactly once without recovery wait',asy
   const f=fixture({recoveryLease:null,ownershipLoaded:true});f.web.reload('tap');await f.fire(900);assert.equal(f.reloads,1);assert.equal(f.checks,0);assert.equal(f.releases,0);
 });
 test('host-only page proof and recovery cancellation are not in app RPC facade',()=>{const f=fixture();assert.equal(f.facade.capture.pageAudioFree,undefined);assert.equal(f.facade.capture.cancelReloadRecovery,undefined)});
+test('audio-free recovery uncertainty is not advertised as a Reload blocker',async()=>{
+  const f=fixture();assert.equal(f.web.plan().ok,false);
+  assert.equal(f.web.reloadStatus().reason,'');
+  assert.equal(f.web.busy(),false);assert.equal(f.window.WizAppUpdates.busy(),false);
+  f.web.reload('tap');assert.equal(f.web.reloadStatus().going,true);
+  assert.equal(f.web.reloadStatus().reason,'');
+  await f.fire(900);assert.equal(f.reloads,1);
+});
+test('status and busy keep app holds, host work and new page audio blocking',()=>{
+  const f=fixture(),hold=f.facade.update.hold('synthetic unsent draft');
+  assert.equal(f.web.busy(),true);assert.notEqual(f.web.reloadStatus().reason,'');
+  hold.release();assert.equal(f.web.busy(),false);assert.equal(f.web.reloadStatus().reason,'');
+  f.busy=true;assert.equal(f.web.busy(),true);assert.match(f.web.reloadStatus().reason,/sending audio|saving/);
+  f.busy=false;f.c.memoryTakes.set('new',{session:{row:{id:'new',appId:'messenger'}}});
+  assert.equal(f.web.busy(),true);assert.notEqual(f.web.reloadStatus().reason,'');
+});

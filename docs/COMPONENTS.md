@@ -87,7 +87,7 @@ Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/de
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); mono voice (`voice.js`); mic choice `WosMic` (`mic.js`) |
 | Local commands | `WosCommands` (`commands.js`) |
 | Screen capture | `WosScreenCapture` (`screen-capture.js`), `WosCaptureTools` (`capture-tools.js`) |
-| Update notices | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`); `WizAppCapture.rescueTake` / `pageAudioFree` |
+| Update notices | EXTEND `WizWebUpdate`/`WizAppUpdates` (`web-update.js`): status/admission; `WizAppVersions`, `WosUpdates`; `WizAppCapture.rescueTake`/`pageAudioFree` |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`web/core/media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic recording | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start`: `MicRoute.NOTE_SOURCES` for notes, `MicRoute.SOURCES` for STT) |
