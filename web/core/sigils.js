@@ -22,7 +22,7 @@
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries({"movies":"cinequeue","food":"usuals","meditate":"meditation"})) HOUSE[id] = HOUSE[old];
 
-  const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
+  const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes","wizard-google":"google","wizard-youtube-music":"youtube-music"};
   const FALLBACK = ["#FE9A9A", "#FFA332", "#D2D826", "#1DDC8D", "#07D4D6", "#4CCAFF", "#94B1FF", "#C7A8FE", "#FE8AEA"];
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
   // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).

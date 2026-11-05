@@ -125,6 +125,20 @@ test('every icon surface draws a shipped logo as a picture tile; no logo keeps t
   assert.equal(S2.html({ id: 'wizard-mail', name: 'Mail' }), '<i class="sgi sg-mail" aria-hidden="true"></i>');
 });
 
+test('Google and YouTube Music product marks always beat their cached package pictures', () => {
+  const logos = {
+    'wizard-google': '/wizard-os-home/store-data/app-logo/wizard-google?v=0123456789abcdef',
+    'wizard-youtube-music': '/wizard-os-home/store-data/app-logo/wizard-youtube-music?v=fedcba9876543210',
+  };
+  const S = sigils(logos);
+  for (const [id, mark] of Object.entries({ 'wizard-google': 'google', 'wizard-youtube-music': 'youtube-music' })) {
+    assert.equal(S.of({ id }).logo, undefined, `${id}: package picture is suppressed`);
+    assert.equal(S.brand[id], mark);
+    assert.match(S.html({ id }), new RegExp(`class="sgi sgb sgb-${mark} sg-`));
+    assert.doesNotMatch(S.html({ id }), /sglogo|--logo|<img/);
+  }
+});
+
 test('the logo tile is styled outside .sgi, so skins that recolour sigils never touch it', () => {
   const css = read('web/core/sigils.css');
   assert.match(css, /\.sglogo \{[^}]*background: var\(--logo\) center \/ cover no-repeat/);

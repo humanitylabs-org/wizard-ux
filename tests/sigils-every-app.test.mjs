@@ -4,6 +4,7 @@
 // know ships in the Wizard App Store has a designed HOUSE entry.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
@@ -20,7 +21,8 @@ function sigil() {
 const STORE_APPS = [
   'browser', 'card-benefits', 'movies', 'defleur-video', 'files', 'messenger', 'money', 'morning-report', 'notifications', 'profiles', 'secret-drop',
   'sniper', 'transcriber', 'wisdom', 'wizard-agent-service', 'wizard-calendar', 'wizard-chatgpt', 'wizard-claude',
-  'wizard-cloudflare', 'wizard-podcasts', 'wizard-search', 'wizard-shopping', 'wizard-notes', 'wizard-tinfoil', 'wizard-ux',
+  'wizard-cloudflare', 'wizard-google', 'wizard-podcasts', 'wizard-search', 'wizard-shopping', 'wizard-notes', 'wizard-tinfoil',
+  'wizard-ux', 'wizard-youtube-music',
 ];
 
 test('every known Wizard App Store app has a designed sigil (no letter fallback)', () => {
@@ -37,7 +39,10 @@ test('Cloudflare wears the warm cloud', () => {
 
 test('real products carry their brand mark; a skin opts in, every other skin keeps the house glyph', () => {
   const S = sigil();
-  const want = { 'wizard-cloudflare': 'cloudflare', 'wizard-claude': 'claude', 'wizard-chatgpt': 'chatgpt', 'wizard-tinfoil': 'tinfoil' };
+  const want = {
+    'wizard-cloudflare': 'cloudflare', 'wizard-claude': 'claude', 'wizard-chatgpt': 'chatgpt',
+    'wizard-google': 'google', 'wizard-tinfoil': 'tinfoil', 'wizard-youtube-music': 'youtube-music',
+  };
   for (const [id, mark] of Object.entries(want)) {
     assert.equal(S.brand[id], mark);
     assert.ok(fs.existsSync(root + `web/brand/apps/${mark}.svg`), `web/brand/apps/${mark}.svg`);
@@ -49,7 +54,30 @@ test('real products carry their brand mark; a skin opts in, every other skin kee
   const readme = read('tools/sigils/README.md');
   for (const mark of new Set(Object.values(S.brand))) assert.match(readme, new RegExp(`\\| \x60${mark}\x60 \\|`), `README source row for ${mark}`);
   // every skin shows them: the brand rules live in the generated sigils.css
-  assert.match(read('web/core/sigils.css'), /\.sgi\.sgb-cloudflare/);
+  const core = read('web/core/sigils.css');
+  assert.match(core, /\.sgi\.sgb-cloudflare/);
+  for (const mark of ['google', 'youtube-music']) {
+    assert.match(core, new RegExp(`\\.sgi\\.sgb-${mark} \\{ --sgb: url\\("/wizard-os-home/brand/apps/${mark}\\.svg"\\); \\}`));
+    for (const skin of ['landscapes', 'obsidian']) {
+      const css = read(`web/skins/${skin}/skin.css`);
+      assert.match(css, new RegExp(`\\.sgb-${mark}`), `${skin} preserves ${mark}'s product colours`);
+      assert.match(css, /background: var\(--sgb\) center \/ contain no-repeat !important/);
+    }
+  }
+  assert.match(core, /\.sgi:is\(\.sgb-google, \.sgb-youtube-music\) \{ background: var\(--sgb\) center \/ contain no-repeat !important; filter: none !important; \}/);
+
+  const pins = {
+    google: ['ed9087d76cdc6d1c53698f6068f79872e77e87c8d012c0cfdad13b05b6ccb37c', '1b7bd30cb301a8efb47eec40a03b21cfce6f7921cdc4a82c6abbf93019fb2d95'],
+    'youtube-music': ['f96c8a67f93717df8f9f57b0e96638b19e8fd80a165ddf83598592b5342612f5', '8adce35abe8685414ca53e58f3c2622bcba946e1ad0a1e220ad01f5fceb55e07'],
+  };
+  for (const [mark, [sourceHash, assetHash]] of Object.entries(pins)) {
+    const asset = fs.readFileSync(root + `web/brand/apps/${mark}.svg`);
+    assert.equal(createHash('sha256').update(asset).digest('hex'), assetHash, `${mark}: normalized asset stays pinned`);
+    assert.match(readme, new RegExp(sourceHash), `${mark}: source hash recorded`);
+    assert.match(readme, new RegExp(assetHash), `${mark}: normalized hash recorded`);
+  }
+  assert.match(read('web/brand/apps/google.svg'), /#4285F4.*#34A853.*#FBBC05.*#EA4335/);
+  assert.match(read('web/brand/apps/youtube-music.svg'), /fill="#FF0000"/);
 });
 
 test('an app with no sigil never shows a letter: it gets the house glyph its id and name call for', () => {
@@ -60,7 +88,7 @@ test('an app with no sigil never shows a letter: it gets the house glyph its id 
     'contacts|Contacts': 'social', 'carlos-crm-demo|Carlos CRM (demo)': 'social', 'maverick-command|Maverick Command': 'console',
     'pr-board|PR board': 'projects', 'setup|Setup': 'wrench', 'camera|Camera': 'image', 'messages|Messages': 'chats', 'spotify|Spotify': 'music',
     'telegram|Telegram': 'chats', 'line|LINE': 'chats', 'grab|Grab': 'pin', 'chrome|Chrome': 'globe', 'settings|Settings': 'wrench',
-    'wizard-twitterapi|TwitterAPI.io': 'social', 'wizard-youtube-music|YouTube Music': 'music', 'zz-unknown|Zebra': 'apps', 'x|': 'apps',
+    'wizard-twitterapi|TwitterAPI.io': 'social', 'zz-unknown|Zebra': 'apps', 'x|': 'apps',
     'private-thing|Private thing': 'apps', 'pipeline-tool|Pipeline': 'projects',
   };
   for (const [key, glyph] of Object.entries(want)) {

@@ -58,7 +58,9 @@ test('brand-only Hermes aliases with cached logos pin existing brand, not logo o
 test('every existing HOUSE+BRAND pin preserves house source, geometry and monochrome tint', async () => {
   const { window } = sigils();
   const ids = Object.keys(window.WizSigil.brand).filter(id => Object.hasOwn(window.WizSigil.house, id));
-  assert.deepEqual(ids, ['wizard-cloudflare', 'wizard-claude', 'wizard-chatgpt', 'wizard-tinfoil']);
+  assert.deepEqual(ids, [
+    'wizard-cloudflare', 'wizard-claude', 'wizard-chatgpt', 'wizard-tinfoil', 'wizard-google', 'wizard-youtube-music',
+  ]);
   for (const id of ids) {
     const a = { id, name: id }, f = fixture(a);
     await f.run();
