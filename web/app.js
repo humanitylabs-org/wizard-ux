@@ -1483,7 +1483,7 @@
    * "+ Build agents" (the Agents app, where agents are made and managed). */
   const AK = window.WosAppKinds;
   const { isSystem } = AK;
-  const appKinds = () => AK.kinds(APPS, APP);
+  const appKinds = () => AK.kinds(APPS, APP, 'mobile');
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
   const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
@@ -1935,15 +1935,15 @@
     };
     if (!q) {
       // Recent is a placement, not a second copy of the Apps catalogue. Resolve aliases before deduping.
-      const recentIds = [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => APP[id] && !['app-store', 'agents'].includes(id) && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
-      const remainingApps = APPS.filter(a => !recentIds.includes(a.id) && !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'));
+      const recentIds = [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => APP[id] && !['app-store', 'agents'].includes(id) && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id], 'mobile')).slice(0, 4);
+      const remainingApps = APPS.filter(a => !recentIds.includes(a.id) && !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a, 'mobile') && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'));
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Apps <span>${remainingApps.length}</span></h4><div class="lgrid">${remainingApps.map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
     // Android apps stay voice-only ("open Maps" still routes); they never clutter the launcher.
-    const hits = APPS.filter(a => a.kind !== 'native' && a.id !== 'agents' && !window.WizCore.isMaintenanceApp(a)).map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+    const hits = APPS.filter(a => a.kind !== 'native' && a.id !== 'agents' && !window.WizCore.isMaintenanceApp(a, 'mobile')).map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     // Bottom-anchored like the rest of the sheet: the best app match sits right above the search bar, so it stays
     // in sight when the keyboard shrinks the sheet (James, 11 Oct: "searched wisdom and it didn't pop up").
@@ -3568,7 +3568,7 @@
    * (openApp -> placeApp), the voice command is the ordinary startVoice('command') / finishVoice(). */
   const appGlyph = a => window.WizCore.workspaceNav.icon({ wins: ['_'], focus: '_' }, { _: {} }, () => a);
   const orbSwitcherHost = {
-    apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && a.kind !== 'view' && !window.WizCore.isMaintenanceApp(a))
+    apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && a.kind !== 'view' && !window.WizCore.isMaintenanceApp(a, 'mobile'))
       .map(a => ({ id: a.id, name: a.name, html: appGlyph(a) }))),
     // Exactly one entry per desktop, in strip order (including empty desktops). All app ids
     // on a split desktop suppress duplicate outer pins, not just its focused window's id.
@@ -4222,10 +4222,10 @@
     /* Layouts on the phone (the Orbs view's Home, layouts/orb/phone.js): the apps (the same rows and kinds as the
      * desktop's), opening one (its desk, or a new one), what is running (the app on each desk, one per app: the Orbs
      * satellites), the Home desk's section and the dock orb's box. */
-    apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
+    apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP, 'mobile').apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
     openApp: id => !!APP[id] && openApp(APP[id]) !== false,
     // The Orb and Apps views' app sheet: every app by kind (core/app-kinds.js rows) and opening any of them
-    appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a)) : null,
+    appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a), 'mobile') : null,
     openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, open),
     panelRunning: () => { const run = new Map(); desks.forEach((d, i) => { if (d.home || !d.wins.length) return; const w = W[d.focus] || W[d.wins[0]], id = w && (w.appId || winApp(w).id); if (id && !run.get(id)?.open) run.set(id, { id, open: i === idx, playing: false }); }); return [...run.values()]; },
     // The Orb and Apps views' app sheet: close an app (every desk showing it), and an App Store page on a desk of its own.

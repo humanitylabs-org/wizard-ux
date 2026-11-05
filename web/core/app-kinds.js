@@ -24,9 +24,9 @@
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });
   const GET = Object.freeze({ apps: ['apps', 'Get apps'], wiz: ['agent-apps', 'Get agent apps'], agents: ['agents', 'Get agents'], conns: ['connections', 'Get connectors'] });
   const storeUrl = kind => '/wizard-os-home/store/index.html?kind=' + encodeURIComponent(kind || 'apps');
-  function kinds(APPS, APP) {
+  function kinds(APPS, APP, shell) {
     const C = window.WizCore || {};
-    const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !C.isMaintenanceApp?.(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
+    const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !C.isMaintenanceApp?.(a, shell) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats, main agent first (as registered). The Agents app itself is the "Build agents" tile.
     const agents = mine.filter(a => a.kind === 'chats').sort((x, y) => isSystem(y) - isSystem(x));
@@ -39,8 +39,8 @@
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];
   /* The kinds as plain rows for layouts (the Orb and Apps views' app sheet, both shells): { apps, wiz, agents, conns,
    * dev }, system apps first, the main agent left out (it is Chats); ico(a) draws the shell's own mark. */
-  function rows(APPS, APP, ico) {
-    const K = kinds(APPS, APP), row = a => ({ id: a.id, name: a.name, icon: ico(a), system: isSystem(a) });
+  function rows(APPS, APP, ico, shell) {
+    const K = kinds(APPS, APP, shell), row = a => ({ id: a.id, name: a.name, icon: ico(a), system: isSystem(a) });
     const agents = K.agents.filter(a => a.id !== 'wizard').map(row);
     if (K.builder) agents.push({ ...row(K.builder), name: 'Build agents' });
     return { apps: sysFirst(K.apps).map(row), wiz: sysFirst(K.wiz).map(row), agents, conns: sysFirst(K.conns).map(row), dev: K.dev.map(row) };

@@ -179,6 +179,12 @@
     if (e.origin === location.origin && e.data && e.data.type === 'wizard:apps-changed') loadRemote();
   });
 
+  function nativeApps() {
+    return (window.WizLauncher?.get('nativeLinks') || []).filter(a => !ALL.some(b => b.id === a.id) && !REMOTE.some(b => b.id === a.id)).map(a => ({
+      ...a, kind: 'native', g: a.colors, sigil: { id: a.id, name: a.name, icon: a.icon },
+    }));
+  }
+
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.
     const APPS = [], APP = {};
@@ -201,9 +207,7 @@
       const agents = (AG?.visible?.() || AG?.list || []).filter(a => !a.is_default).map(agentTile);
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
       const views = window.WizChatsHost?.tiles() || [];
-      const native = (window.WizLauncher?.get('nativeLinks') || []).filter(a => !ALL.some(b => b.id === a.id) && !REMOTE.some(b => b.id === a.id)).map(a => ({
-        ...a, kind: 'native', g: a.colors, sigil: { id: a.id, name: a.name, icon: a.icon },
-      }));
+      const native = nativeApps();
       const tail = ALL.slice(chats + 1);
       // The Android settings shortcut historically followed the two built-in device tools.
       const ordinary = native.filter(a => !a.href.includes('action=android.settings.'));
@@ -319,8 +323,12 @@
     if (m) return { query: m[1].trim(), tab: 'all', strong: false };
     return null;
   }
-  // Maintenance stays addressable by deep link/voice, but is not an ordinary Apps entry.
-  window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor';
+  // Maintenance and a superseded provider stay addressable by deep link/voice, but are not ordinary Apps entries.
+  // Wizard Files remains the active files backend; when an owner-facing Files screen or native Files shortcut exists,
+  // showing both is a duplicate. If Files is ever removed, Wizard Files automatically returns to the launcher.
+  const ownerFacingFiles = shell => appsFor(shell, [...REMOTE, ...nativeApps()]).some(x => x.id === 'files' && (x.url || x.href));
+  const internalFilesProvider = (a, shell) => a?.id === 'wizard-files' && ownerFacingFiles(shell);
+  window.WizCore.isMaintenanceApp = (a, shell) => a?.id === 'wizard-supervisor' || internalFilesProvider(a, shell);
   window.WizCore.isInDevelopment = a => !!a && DEV.has(String(a.id));
   // One registry per shell, built once and shared. Building one dispatches 'wizard:apps' and subscribes it
   // forever, so a fresh registry per call looped (home-screen icon refresh → registry → event → refresh)
