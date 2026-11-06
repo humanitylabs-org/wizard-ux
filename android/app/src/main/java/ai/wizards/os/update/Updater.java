@@ -283,6 +283,16 @@ public final class Updater {
         return h == UpdatePolicy.Hold.TAKE || h == UpdatePolicy.Hold.MIC;
     }
 
+    /** Fresh recording facts for both the commit fence and the web banner; no microphone claim inference. */
+    public static boolean takeActive(Context c) {
+        return ai.wizards.os.recording.RecorderService.active() != null
+                || ai.wizards.os.everywhere.EverywhereService.appIsRecording()
+                || ai.wizards.os.everywhere.EverywhereService.captureActive()
+                || ai.wizards.os.assist.TakeRecovery.captureAlive()
+                || (ai.wizards.os.mizel.MeetingRecorderService.live() != null
+                    && !ai.wizards.os.mizel.MeetingRecorderService.updatePending(c));
+    }
+
     private static UpdatePolicy.Hold hold(Context c) {
         String holder = ai.wizards.os.MicOwner.holder();
         boolean alive = false;
@@ -290,10 +300,8 @@ public final class Updater {
         else if (ai.wizards.os.MicOwner.EVERYWHERE.equals(holder)) alive = ai.wizards.os.everywhere.EverywhereService.serviceAlive();
         else if (ai.wizards.os.MicOwner.MEETING.equals(holder)) alive = ai.wizards.os.mizel.MeetingRecorderService.serviceAlive();
         else if (ai.wizards.os.MicOwner.SIDE.equals(holder)) alive = ai.wizards.os.assist.TakeRecovery.captureAlive();
-        boolean take = ai.wizards.os.recording.RecorderService.active() != null
-                || ai.wizards.os.everywhere.EverywhereService.appIsRecording()
-                || (ai.wizards.os.mizel.MeetingRecorderService.live() != null
-                    && !ai.wizards.os.mizel.MeetingRecorderService.updatePending(c));
+        boolean take = takeActive(c);
+        Log.i(TAG, "hold holder=" + holder + " serviceAlive=" + alive + " recording=" + take);
         // Debug-only deterministic emulator holds. No override can hide an actual take.
         if (BuildConfig.DEBUG) {
             File fixture = new File(c.getFilesDir(), "qa_update_hold.txt");

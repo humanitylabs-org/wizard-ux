@@ -138,6 +138,11 @@
     layoutDiagnostic(a.id, 'callback-error', where, e);
     try { console.warn(`[skin ${a.id}] ${where}:`, e); } catch (_) {}
     const now = Date.now(); a.errs = a.errs.filter(t => now - t < ERR_WINDOW); a.errs.push(now);
+    // A layout is the owner's navigation, not an optional gesture script. Never
+    // tear down its Chats/sidebar, panel claims or routes for a callback failure.
+    // guard contains this invocation; the hook can recover on the next event.
+    // Keep the existing breaker for My skin, colour-skin scripts and tweaks.
+    if (String(a.id).startsWith('layout:')) { a.errs = a.errs.slice(-ERR_LIMIT); return; }
     if (a.errs.length >= ERR_LIMIT) {
       const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error', e, where); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
       try { shell && shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
@@ -371,6 +376,9 @@
     layoutDiagnostic('layout:' + id, 'load-failed', reason, error);
     layoutFailed = id; endBoot(); paintChatsOwner();
     try { shell?.ownsChatList?.(chatsClaimed()); } catch (_) {}
+    // Keep the selected layout/choice. The shell can mount its shared Chats
+    // sidebar without importing the failed bundle; never show Classic Desks.
+    if (layoutOf(id)?.ownsChats) try { shell?.layoutRecovery?.(true); } catch (e) { layoutDiagnostic('layout:' + id, 'recovery-error', reason, e); }
     return false;
   }
   function paintLayout(id) {
@@ -394,16 +402,38 @@
   async function loadLayoutNow(id) {
     const seq = ++layoutSeq;
     dispose(layoutRec, 'switch');
+    try { shell?.layoutRecovery?.(false); } catch (_) {}
     layoutFailed = null; paintChatsOwner();
     const L = layoutOf(id); const key = 'layout:' + id;
     if (!L || !L.js || !shell || disabled.has(key)) return layoutLoadFailed(id);
     const href = layoutUrl(id, 'layout.js'); requested.push(href);
     let mod;
-    try { mod = await importer(href); } catch (e) { try { console.warn('[layout] import failed:', id, e); } catch (_) {} return seq === layoutSeq ? layoutLoadFailed(id, 'import', e) : false; }
+    // Three retries after the first failure. A distinct URL avoids a cached
+    // rejected module entry; a superseded selection must never mount late.
+    let importError;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      if (attempt) {
+        await new Promise(resolve => setTimeout(resolve, [250, 750, 1500][attempt - 1]));
+        if (seq !== layoutSeq || layoutId !== id) return false;
+      }
+      const attemptHref = attempt ? href + (href.includes('?') ? '&' : '?') + 'layout-retry=' + seq + '-' + attempt + '-' + Date.now() : href;
+      if (attempt) requested.push(attemptHref);
+      try { mod = await importer(attemptHref); importError = null; break; }
+      catch (e) { importError = e; try { console.warn('[layout] import failed:', id, attempt, e); } catch (_) {} }
+      if (seq !== layoutSeq || layoutId !== id) return false;
+    }
+    if (importError) return seq === layoutSeq ? layoutLoadFailed(id, 'import', importError) : false;
     if (seq !== layoutSeq || layoutId !== id) return false;
     if (typeof mod?.default !== 'function') return layoutLoadFailed(id, 'missing setup');
     const a = record(key, L.name + ' layout'); layoutRec = a;
-    try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); } catch (e) { fault(a, 'setup', e); if (a.dead) return layoutLoadFailed(id); }
+    try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); }
+    catch (e) {
+      fault(a, 'setup', e);
+      // A partial mount has no usable navigation contract. Release only its
+      // resources, then show shared Chats under the unchanged selected layout.
+      dispose(a, 'setup-failed', e, 'setup');
+      return layoutLoadFailed(id, 'setup', e);
+    }
     lastRoute = ''; emitRoute();
     return layoutRec === a;
   }

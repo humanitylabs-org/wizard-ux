@@ -90,15 +90,17 @@ test('real mutation while delivering is deferred to a paint turn, not lost', () 
 test('companion membership follows host group identity/count, ignores inactive windows and settles once', () => {
   const source = read('web/layouts/ai-apps/desktop.js'), calls = [];
   const state = [{id:'video',desk:2,tiled:true},{id:'feedback',desk:2,tiled:false},{id:'other',desk:3,tiled:true}];
-  const context = vm.createContext({ host:{windows:()=>state}, pane:{desk:2,id:'video'}, applySizes:()=>calls.push('size'), retileSoon:()=>calls.push('tile') });
+  const context = vm.createContext({ host:{windows:()=>state}, pane:{desk:2,id:'video'}, wide:false, setWide:v=>{ context.wide=v; }, applySizes:()=>calls.push('size'), retileSoon:()=>calls.push('tile') });
   const membership = source.slice(source.indexOf('  const appWindows ='), source.indexOf('  let pane ='));
   const watcher = source.slice(source.indexOf('  let winsDesk ='), source.indexOf('  const NOTE ='));
   vm.runInContext(membership + watcher + '\nglobalThis.watch = watchPaneWins;', context);
   context.watch(); assert.deepEqual(calls, ['size','tile']); calls.length=0;
   context.watch(); assert.equal(calls.length,0,'unrelated render does not resize');
   state[1].tiled=true; context.watch(); assert.deepEqual(calls,['size','tile'],'late companion resizes once'); calls.length=0;
+  assert.equal(context.wide, true, 'an app with its companion goes full width (James, 6 Nov 2026)');
   context.watch(); assert.equal(calls.length,0);
   state[1].tiled=false; context.watch(); assert.deepEqual(calls,['size','tile'],'closing or monocle-hiding companion resizes'); calls.length=0;
+  assert.equal(context.wide, false, 'and goes back to the side when the companion closes');
   context.pane={desk:3,id:'other'}; context.watch(); assert.deepEqual(calls,['size','tile'],'same count on a new group is still a change'); calls.length=0;
   context.pane=null; context.watch(); assert.deepEqual(calls,['size','tile'],'minimize releases the group');
 });
@@ -110,4 +112,10 @@ test('desktop loads the adapter before boot; Classic controls and skin adapter r
   assert.match(desktop, /doc\.addEventListener\('pointerdown', \(\) => desktopHost\.focus\(el\.dataset\.win, \{ scroll: false \}\), true\)/);
   assert.match(desktop, /if \(act === 'close'\) return desktopHost\.close\(id\)/);
   assert.doesNotMatch(read('web/core/desktop-host.js'), /querySelector|localStorage|fetch\(/);
+});
+
+test('desktop host: layout toolbars never crash a shell whose app services lack titlebar.render (James, 6 Nov 2026)', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  assert.match(src, /renderTools: \(frame, slot\) => window\.WizAppServices\?\.titlebar\?\.render\?\.\(frame, slot\) === true/);
 });

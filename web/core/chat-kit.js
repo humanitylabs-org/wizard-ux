@@ -929,8 +929,8 @@
     const r = st.getBoundingClientRect(), ox = px - r.left - r.width / 2, oy = py - r.top;
     V.x = ox - (ox - V.x) * s / V.s; V.y = oy - (oy - V.y) * s / V.s; V.s = s; clampPan(); paint();
   }
-  // Phone long screenshots retain width-fit reading; desktop always initially
-  // contains both dimensions, including in narrow desktop windows.
+  // Every shell opens the whole image contained; long screenshots are read by zooming.
+  // James, 6 Nov 2026: never open an image taller than the phone's available stage.
   function dims() {
     const st = V.el?.querySelector('.mv-stage'), img = st?.querySelector('img');
     if (!img || !img.naturalWidth || !st.clientWidth) return null;
@@ -943,7 +943,7 @@
   }
   function fit() {
     const d = dims(); if (!d || !V.el) return;
-    const was = V.long; V.long = document.documentElement.dataset.shell !== 'desktop' && d.r > (d.H / d.W) * 1.15;
+    const was = V.long; V.long = false; // Initial fit is contain on phone and desktop, regardless of aspect ratio.
     V.el.classList.toggle('long', V.long);
     if (V.long !== was) { V.s = 1; V.x = 0; V.y = 0; }
     clampPan(); paint(true);

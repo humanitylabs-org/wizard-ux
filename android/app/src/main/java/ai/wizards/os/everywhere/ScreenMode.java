@@ -339,7 +339,8 @@ final class ScreenMode {
             String reply;
             if (img == null || img.length == 0) reply = "{\"error\":\"This screen blocked capture, so there is no picture to read\"}";
             else try {
-                JSONObject r = new JSONObject(post("/wizard-search/api/read-image", img, "image/jpeg"));
+                // geometry: where each line sits, so Translate paints picture text over it (older Search: lines only)
+                JSONObject r = new JSONObject(post("/wizard-search/api/read-image?geometry=1", img, "image/jpeg"));
                 reply = r.toString();
                 Log.i(TAG, "screen picture lines=" + (r.optJSONArray("lines") == null ? 0 : r.optJSONArray("lines").length()));
             } catch (Exception e) {

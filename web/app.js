@@ -401,7 +401,7 @@
     const wrap = $('#orbWrap'); if (!wrap || !desks[idx]) return;
     let el = document.getElementById('orbApp');
     if (!el) { el = document.createElement('span'); el.id = 'orbApp'; el.className = 'orb-app'; el.hidden = true; el.setAttribute('aria-hidden', 'true'); wrap.appendChild(el); }
-    const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
+    const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; window.WizSigil.orb(el); }
   }
   function renderDots() {
     window.WosBell?.paint?.();

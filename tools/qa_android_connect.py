@@ -25,6 +25,20 @@ FORUM = sys.platform == 'linux' and os.uname().nodename == 'forum'
 SDK = Path('/srv/work/android-sdk' if FORUM else '/opt/homebrew/share/android-commandlinetools')
 BASE = Path(os.environ.get('ANDROID_BUILDS_ROOT') or ('/srv/work/AndroidBuilds' if FORUM else Path.home() / 'AndroidBuilds'))
 SIGNER = '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
+# Emulator 37.2.12 no longer lists the old indirect SwiftShader mode and fell into SwiftShader Vulkan, then the host emulator
+# died with SIGSEGV after a successful install/start. Supported software GL with Vulkan off is the mitigation;
+# the exact crash stack is unproven (no minidump/core).
+EMULATOR_GRAPHICS = ('-gpu', 'swiftshader', '-feature', '-Vulkan')
+
+
+def emulator_exit(em, argv):
+    """The owned emulator's own exit state: returncode and, when a signal killed it, the signal name."""
+    code = em.poll() if em is not None else None
+    try:
+        name = signal.Signals(-code).name if code is not None and code < 0 else None
+    except ValueError:
+        name = 'signal ' + str(-code)
+    return dict(argv=argv, pid=em.pid if em is not None else None, returncode=code, signal=name)
 
 
 def choose_emulator_port(devices):
@@ -119,7 +133,7 @@ def main():
             (out / 'adb-failure.json').write_text(json.dumps(dict(serial=serial, port=port,
                 args=list(args), stdout=decoded(error.stdout), stderr=decoded(error.stderr),
                 devices=devices.stdout, devices_stderr=devices.stderr,
-                emulator_returncode=em.poll() if em is not None else None), indent=2))
+                emulator_returncode=em.poll() if em is not None else None, emulator=emulator_exit(em, em_argv)), indent=2))
             raise
     def shell(*args):
         return adb_run('shell', *args)
@@ -136,6 +150,8 @@ def main():
     lock_path = Path('/srv/work/heavy/production/worker.lock') if FORUM else BASE / 'worker.lock'
     lock = os.fdopen(int(inherited), 'a', closefd=False) if inherited else lock_path.open('a')
     em = None
+    em_argv = None
+    em_exit = None
     def interrupted(signum, frame):
         raise SystemExit('interrupted by signal ' + str(signum))
     signal.signal(signal.SIGTERM, interrupted)
@@ -154,10 +170,11 @@ def main():
             run([SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'connect', '-k',
                  'system-images;android-35;google_apis;' + ('x86_64' if FORUM else 'arm64-v8a'), '-d', 'pixel_7', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
             with (out / 'emulator.log').open('w') as log:
-                em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', str(port), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'] + (['-accel', 'on'] if FORUM else []), env=env, stdout=log, stderr=subprocess.STDOUT)
+                em_argv = [str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', str(port), '-no-window', '-no-snapshot', '-no-audio', *EMULATOR_GRAPHICS] + (['-accel', 'on'] if FORUM else [])
+                em = subprocess.Popen(em_argv, env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 240
             while time.monotonic() < deadline:
-                if em.poll() is not None: raise RuntimeError('emulator exited')
+                if em.poll() is not None: raise RuntimeError('emulator exited: ' + json.dumps(emulator_exit(em, em_argv)))
                 try:
                     if shell('getprop', 'sys.boot_completed').strip() == '1': break
                 except subprocess.CalledProcessError: pass
@@ -262,6 +279,8 @@ def main():
             check('no native crashes', 'FATAL EXCEPTION' not in crash)
             completed = True
         finally:
+            # Recorded before our own kill, so a host crash (e.g. -11 SIGSEGV) is not masked by cleanup.
+            em_exit = emulator_exit(em, em_argv)
             if em is not None:
                 subprocess.run([str(adb), '-s', serial, 'emu', 'kill'], env=env, capture_output=True)
                 try: em.wait(timeout=30)
@@ -275,7 +294,7 @@ def main():
                        'upgrade_network': 'offline, deliberately no owner traffic', 'published': False,
                        'pre_pref_baseline': config.get('pre_pref_baseline', False),
                        'upgrade_only': upgrade_only, 'host': os.uname().nodename,
-                       'emulator_serial': serial, 'console_port': port, 'adb_port': port + 1 if port is not None else None,
+                       'emulator_serial': serial, 'emulator_before_cleanup': em_exit, 'console_port': port, 'adb_port': port + 1 if port is not None else None,
                        'synthetic_pairing_fixture': config.get('baseline_origin_mode') == 'synthetic-fixture-paired',
                        'authenticated_owner_proof': False,
                        'baseline_origin_mode': config.get('baseline_origin_mode', 'baked-preference-migration'),

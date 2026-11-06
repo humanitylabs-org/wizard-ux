@@ -60,7 +60,7 @@ test('failed in-memory assembly keeps bytes and exposes retry/discard with mic r
 test('error detail rejects arbitrary content and preserves known DOMException names only',()=>{const f=fixture();for(const error of [{message:'private',detail:'private',name:'private'},{name:'QuotaExceededError',message:'private'}]){const e=f.c.storageFailure(error);assert.doesNotMatch(e.message,/private/);assert.ok(['UnknownError','QuotaExceededError'].includes(e.detail));assert.equal(e.cause,undefined);}});
 function opening(mode) {
   let request,closed=0;const db={close(){closed++;}};
-  const c=vm.createContext({DB_NAME:'synthetic',dbPromise:null,W:{indexedDB:{}},indexedDB:{open(){request={};queueMicrotask(()=>{if(mode==='ok'){request.result=db;request.onsuccess();}else if(mode==='blocked')request.onblocked();});return request;}},setTimeout,clearTimeout,fail:(code,message,extra)=>Object.assign(Error(message),{code},extra)});
+  const c=vm.createContext({DB_NAME:'synthetic',dbPromise:null,W:{indexedDB:{}},indexedDB:{open(){request={};queueMicrotask(()=>{if(mode==='ok'){request.result=db;request.onsuccess();}else if(mode==='blocked')request.onblocked({oldVersion:0,newVersion:1});});return request;}},setTimeout,clearTimeout,fail:(code,message,extra)=>Object.assign(Error(message),{code},extra)});
   load('  function storageFailure(', '  async function transaction(',c);
   return {c,db,get request(){return request;},get closed(){return closed;}};
 }
