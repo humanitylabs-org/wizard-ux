@@ -1,0 +1,14 @@
+{
+  "id": "wizard",
+  "name": "James",
+  "version": 1,
+  "tweaks": [
+    "wizard/two-orbs",
+    "wizard/app-borders",
+    "wizard/unified-inbox"
+  ],
+  "off": [
+    "wizard/two-orbs",
+    "wizard/app-borders"
+  ]
+}

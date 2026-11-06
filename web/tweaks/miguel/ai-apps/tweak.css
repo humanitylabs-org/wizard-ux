@@ -1,0 +1,12 @@
+/* AI apps view: the layout's rules live in web/layouts/ai-apps/layout.css. Only the first frame sits here: until the
+ * layout's script has drawn its top bar and moved to the chat, the stock Home steps aside and a quiet outline of the
+ * screen to come (the composer, above the orb's row) shows instead, so the phone never flashes the old Home first. */
+html[data-shell="phone"][data-layout="ai-apps"] .home-desk > .glance { visibility: hidden; }
+html[data-shell="phone"][data-layout="ai-apps"] .home-desk::before {
+  content: ""; position: absolute; z-index: 1; left: 16px; right: 16px; bottom: calc(var(--aa-orb-room, 72px) + 4px); height: 52px; border-radius: 26px;
+  background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent); pointer-events: none;
+}
+/* The open apps' count badges in the drawer grid: the Apps view's amber (the dock's count colour), dark figures on the
+ * dark skins; the light skins' amber is a deep gold, so figures in the skin's paper colour there. Tokens only. */
+html[data-shell="phone"][data-layout="ai-apps"] { --aa-badge: var(--amber, var(--wz-text, var(--ink))); --aa-badge-ink: color-mix(in srgb, black 88%, var(--aa-badge)); }
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) { --aa-badge-ink: var(--bg); }

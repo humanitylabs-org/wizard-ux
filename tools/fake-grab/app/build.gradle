@@ -1,0 +1,8 @@
+plugins { id 'com.android.application' }
+// QA fixture only: a stand-in with Grab's package id so the Usuals runner can be exercised on an emulator.
+android {
+    namespace 'com.grabtaxi.passenger'
+    compileSdk 35
+    defaultConfig { applicationId 'com.grabtaxi.passenger'; minSdk 28; targetSdk 35; versionCode 1; versionName 'fake-1' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}

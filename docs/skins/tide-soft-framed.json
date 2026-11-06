@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "extends": "tide",
+  "frame": {
+    "foundation": "framed",
+    "border": 1,
+    "radius": 22,
+    "gutter": 8,
+    "gap": 10
+  }
+}

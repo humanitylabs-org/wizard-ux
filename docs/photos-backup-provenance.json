@@ -1,0 +1,29 @@
+{
+  "components": [
+    {
+      "name": "Immich REST API",
+      "version": "3.3.3",
+      "kind": "external-service/protocol-reference",
+      "schema_sha256": "6c665f5d729a6c057385a187e33b8f1a9e86442caec2f5f0fc6ea483ccee3623",
+      "url": "https://github.com/immich-app/immich/tree/v3.3.3",
+      "copied_mobile_code": false
+    },
+    {
+      "name": "androidx.work:work-runtime",
+      "version": "2.10.1",
+      "kind": "linked-dependency",
+      "license": "Apache-2.0",
+      "source": "https://dl.google.com/dl/android/maven2/androidx/work/work-runtime/2.10.1/work-runtime-2.10.1-sources.jar",
+      "destination": "android/app/build.gradle"
+    },
+    {
+      "name": "androidx.browser:browser",
+      "version": "1.8.0",
+      "kind": "linked-dependency",
+      "license": "Apache-2.0",
+      "source": "https://dl.google.com/dl/android/maven2/androidx/browser/browser/1.8.0/browser-1.8.0-sources.jar",
+      "destination": "android/app/build.gradle"
+    }
+  ],
+  "notes": "No Immich mobile implementation read or copied. Server auth implementation consulted only to validate protocol state/PKCE and redirect behavior. Release dependency hashes and source jars retained with remote build cache/evidence; no contributor/payout inference."
+}

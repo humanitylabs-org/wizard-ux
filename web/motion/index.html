@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#05030c">
+<title>Wizard Motion Kit · demo</title>
+<link rel="stylesheet" href="wizard-motion.css">
+<style>
+  html, body { margin: 0; height: 100%; background: radial-gradient(120% 80% at 50% 20%, #1a0f3c, #05030c 70%); color: #f3efff; font-family: system-ui, sans-serif; overflow: hidden; }
+  .stage { position: fixed; inset: 0; --wm-bottom: 170px; }
+  header { position: absolute; top: 16px; left: 18px; right: 18px; display: flex; justify-content: space-between; align-items: center; z-index: 5; }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: .08em; margin: 0; color: #b9b0d8; }
+  .orb { position: absolute; left: 50%; bottom: 60px; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; z-index: 3;
+    background: radial-gradient(circle at 35% 30%, #fff 0, #c9b5ff 8%, #7c4dff 38%, #2a0f6e 70%, #0b0420 100%); box-shadow: 0 0 40px rgba(143, 99, 255, .6); }
+  .controls { position: absolute; left: 0; right: 0; top: 56px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 0 12px; z-index: 5; }
+  .controls button { border: 1px solid rgba(185, 168, 255, .25); background: rgba(18, 12, 38, .7); color: #e9e2ff; border-radius: 999px; padding: 8px 13px; font: 500 13px system-ui; }
+  .wm-layer { z-index: 8; } .wm-hint { z-index: 9; } .wm-zoom { z-index: 7; padding: 90px 8vw 160px; }
+  .x { position: absolute; top: 10px; right: 12px; border: 0; background: none; color: #7d74a3; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas class="wm-words" id="words"></canvas>
+  <header><h1>WIZARD MOTION KIT</h1><span class="wm-pill" id="pill"><i></i><span>Live</span></span></header>
+  <div class="controls">
+    <button data-a="word">word</button><button data-a="notice">notice → card</button><button data-a="moon">moon</button>
+    <button data-a="done">moons done</button><button data-a="zoom">zoom list</button><button data-a="live">ambient on/off</button>
+  </div>
+  <section class="wm-zoom" id="zoom"><h2 style="font-weight:300">Today</h2>
+    <button class="wm-zi" style="--c:#b99bff"><span class="t">Send the sigil board → Miguel</span><small>Noticed in Live Mode</small></button>
+    <button class="wm-zi" style="--c:#3fe0ff"><span class="t">Desk dots and the scrubber</span><small>Thread · 01:12</small></button>
+  </section>
+  <div class="wm-layer" id="layer">
+    <div class="wm-card" id="card">
+      <button class="x" id="dismiss">✕</button>
+      <div class="wm-k">Wizard noticed</div><div class="wm-m">Send the sigil board → Miguel</div><div class="wm-s">“send Miguel the sigil board”</div>
+      <button id="print" aria-label="Touch the print to send"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(185,168,255,.18)" stroke-width="3"/>
+        <circle id="ring" cx="50" cy="50" r="46" fill="none" stroke="#b9a8ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289" transform="rotate(-90 50 50)"/>
+        <g fill="none" stroke="#9d7bff" stroke-width="2.4" stroke-linecap="round"><path d="M36 62c0-12 5-22 14-22s14 10 14 22"/><path d="M42 66c0-10 2-18 8-18s8 8 8 18"/><path d="M50 56v14"/><path d="M30 56c1-16 9-26 20-26s19 10 20 26"/></g></svg></button>
+    </div>
+  </div>
+  <div class="wm-hint" id="hint"></div>
+  <div class="orb" id="orb"></div>
+</div>
+<script src="wizard-motion.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>

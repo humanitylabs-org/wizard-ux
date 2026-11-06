@@ -1,0 +1,25 @@
+{
+  "appId": "ai.wizards.os",
+  "appName": "Wizard",
+  "webDir": "www",
+  "server": {
+    "errorPath": "index.html"
+  },
+  "ios": {
+    "path": "native",
+    "contentInset": "never",
+    "backgroundColor": "#05030c",
+    "allowsLinkPreview": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": true,
+      "backgroundColor": "#05030c",
+      "showSpinner": false
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "app": "wizard-recorder",
+  "agent_binding": null,
+  "models": [
+    {
+      "feature": "live-summary",
+      "tier": "fast",
+      "tested_on": "deepseek-v4-1-flash",
+      "swap": "ask",
+      "private_data": true,
+      "abilities": [
+        "text",
+        "streaming"
+      ],
+      "purpose": "Live outline while you record",
+      "required": true,
+      "route": {
+        "app": "wizard-recorder",
+        "feature": "live-summary",
+        "provider": "wizard-tinfoil",
+        "model": "deepseek-v4-1-flash",
+        "tested_on": "deepseek-v4-1-flash",
+        "chosen": "match",
+        "at": 1792861874
+      },
+      "fix_url": "/wizard-os-home/?open=wizard-connection-router",
+      "status": "ready"
+    },
+    {
+      "feature": "recap",
+      "tier": "fast",
+      "tested_on": "deepseek-v4-1-flash",
+      "swap": "ask",
+      "private_data": true,
+      "abilities": [
+        "text",
+        "streaming"
+      ],
+      "purpose": "Summary when a recording ends",
+      "required": true,
+      "route": {
+        "app": "wizard-recorder",
+        "feature": "recap",
+        "provider": "wizard-tinfoil",
+        "model": "deepseek-v4-1-flash",
+        "tested_on": "deepseek-v4-1-flash",
+        "chosen": "match",
+        "at": 1792861874
+      },
+      "fix_url": "/wizard-os-home/?open=wizard-connection-router",
+      "status": "ready"
+    }
+  ],
+  "services": [
+    {
+      "slot": "live-transcription",
+      "recommend": "wizard-tinfoil",
+      "private_data": true,
+      "purpose": "Words appear as you speak",
+      "required": true,
+      "provider": "wizard-tinfoil",
+      "status": "ready",
+      "fix_url": "/wizard-os-home/?open=wizard-tinfoil"
+    }
+  ],
+  "ready_to_open": true,
+  "providers": [
+    {
+      "id": "wizard-tinfoil",
+      "name": "Tinfoil",
+      "status": "connected",
+      "error": null,
+      "fix_url": "/wizard-os-home/?open=wizard-tinfoil",
+      "models": [
+        {
+          "id": "decision-large",
+          "label": "decision-large",
+          "tier": "standard"
+        },
+        {
+          "id": "decision-medium",
+          "label": "decision-medium",
+          "tier": "standard"
+        },
+        {
+          "id": "decision-small",
+          "label": "decision-small",
+          "tier": "standard"
+        },
+        {
+          "id": "deepseek-v4-1-flash",
+          "label": "DeepSeek V4.1 Flash",
+          "tier": "fast"
+        },
+        {
+          "id": "gemma4-31b",
+          "label": "gemma4-31b",
+          "tier": "standard"
+        },
+        {
+          "id": "glm-5-3",
+          "label": "GLM 5.3",
+          "tier": "standard"
+        },
+        {
+          "id": "gpt-oss-120b",
+          "label": "GPT OSS 120B",
+          "tier": "standard"
+        },
+        {
+          "id": "gpt-oss-safeguard-120b",
+          "label": "gpt-oss-safeguard-120b",
+          "tier": "standard"
+        },
+        {
+          "id": "kimi-k3",
+          "label": "Kimi K3",
+          "tier": "standard"
+        },
+        {
+          "id": "llama3-3-70b",
+          "label": "Llama 3.3 70B",
+          "tier": "standard"
+        }
+      ]
+    }
+  ]
+}

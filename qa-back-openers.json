@@ -1,0 +1,183 @@
+{
+  "wisdom": {
+    "open": [
+      ".wb-pick"
+    ],
+    "nested": ".wisdom-reader",
+    "returned": ".wb-book",
+    "closed": ".wisdom-reader"
+  },
+  "stories": {
+    "open": [
+      "a.cover"
+    ],
+    "returned": "a.cover"
+  },
+  "reference": {
+    "open": [
+      "button.wz-row"
+    ],
+    "returned": "button.wz-row"
+  },
+  "voice-outline": {
+    "open": [
+      "#menu"
+    ],
+    "returned": "#menu"
+  },
+  "outline-streaming-demo": {
+    "open": [
+      "#menu"
+    ],
+    "returned": "#menu"
+  },
+  "wizard-files": {
+    "open": [
+      "a[href='#/my']"
+    ],
+    "returned": "a[href='#/my']"
+  },
+  "wizard-shopping": {
+    "open": [
+      "#affOn",
+      "button.info"
+    ],
+    "returned": "button.info"
+  },
+  "wizard-connectors": {
+    "open": [
+      "#google-row"
+    ],
+    "returned": "#google-row"
+  },
+  "wizard-supervisor": {
+    "open": [
+      "button.card"
+    ],
+    "returned": "button.card"
+  },
+  "cinequeue": {
+    "open": [
+      "#addOpen"
+    ],
+    "nested": "#addRequestPanel",
+    "closed": "#addRequestPanel"
+  },
+  "app-store": {
+    "open": [
+      "button.kind"
+    ],
+    "returned": "button.kind"
+  },
+  "agents": {
+    "open": [
+      "button.ag-row"
+    ],
+    "returned": "button.ag-row"
+  },
+  "system": {
+    "open": [
+      "button[data-node]"
+    ],
+    "nested": "#focus",
+    "closed": "#focus"
+  },
+  "cinequeue-next": {
+    "open": [
+      "#addOpen"
+    ],
+    "nested": "#addRequestPanel",
+    "closed": "#addRequestPanel"
+  },
+  "meditate-next": {
+    "open": [
+      "button.row"
+    ],
+    "returned": "button.row"
+  },
+  "meditation": {
+    "open": [
+      "button.row"
+    ],
+    "returned": "button.row"
+  },
+  "mizel": {
+    "open": [
+      "button.w-row"
+    ],
+    "returned": "button.w-row"
+  },
+  "topics": {
+    "open": [
+      "button.sec-h"
+    ],
+    "returned": "button.sec-h"
+  },
+  "projects": {
+    "open": [
+      ".rw"
+    ],
+    "routedThread": true
+  },
+  "calendar": {
+    "open": [
+      "button.blk"
+    ],
+    "returned": "button.blk"
+  },
+  "trackhunt": {
+    "open": [
+      "button.linkbtn"
+    ],
+    "returned": "button.linkbtn"
+  },
+  "video-editor": {
+    "open": [
+      "button.wz-row"
+    ],
+    "returned": "button.wz-row"
+  },
+  "files-legacy": {
+    "open": [
+      "a[href='#/my']"
+    ],
+    "returned": "a[href='#/my']"
+  },
+  "iching": {
+    "open": [
+      "button.header-link"
+    ],
+    "returned": "button.header-link"
+  },
+  "console": {
+    "open": [
+      "button.diag-card"
+    ],
+    "returned": "button.diag-card"
+  },
+  "android-apps": {
+    "open": [
+      "button.more"
+    ],
+    "returned": "button.more"
+  },
+  "wizard-manager": {
+    "open": [
+      "button.mgr-text-action:visible"
+    ],
+    "nested": ".mgr-card.is-target",
+    "closed": ".mgr-card.is-target"
+  },
+  "shopping": {
+    "open": [
+      "#affOn",
+      "button.info"
+    ],
+    "returned": "button.info"
+  },
+  "wizard-music": {
+    "open": [
+      "button.music-tile"
+    ]
+  }
+}

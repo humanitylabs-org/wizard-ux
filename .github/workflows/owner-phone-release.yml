@@ -1,0 +1,29 @@
+name: Owner phone release guard
+on:
+  pull_request:
+    paths:
+      - 'tools/apk_build_config.py'
+      - 'tools/publish_owner_phone.py'
+      - 'tools/test_owner_phone_release.py'
+      - 'tools/qa_android_connect.py'
+      - '.github/workflows/owner-phone-release.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/apk_build_config.py'
+      - 'tools/publish_owner_phone.py'
+      - 'tools/test_owner_phone_release.py'
+      - 'tools/qa_android_connect.py'
+      - '.github/workflows/owner-phone-release.yml'
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Controller-only publication regressions (no SDK, signing or publication)
+        run: python3 -m unittest discover -s tools -p test_owner_phone_release.py -v
+      - name: Compile-check offline handset rehearsal without executing it
+        run: python3 -m py_compile tools/qa_android_connect.py

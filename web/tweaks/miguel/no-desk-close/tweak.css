@@ -1,0 +1,2 @@
+/* Miguel closes desks from the right-click menu (Close desktop); the hover ✕ on each top-bar desk is hidden. */
+html[data-tweaks~="miguel/no-desk-close"] .ws-close { display: none !important; }

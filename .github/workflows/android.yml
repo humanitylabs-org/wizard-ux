@@ -1,0 +1,40 @@
+name: Android
+# Compiles the Android shell and runs its unit tests and lint on every change to android/.
+# Debug build only: no signing secrets, no owner origin (debug falls back to https://wizard.invalid).
+on:
+  pull_request:
+    paths: ['android/**', '.github/workflows/android.yml']
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests, lint, debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Native size report
+        if: always()
+        run: |
+          echo "### Android native size" >> "$GITHUB_STEP_SUMMARY"
+          echo "Java lines: $(find android/app/src/main/java -name '*.java' -exec cat {} + | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+          echo "JS bridge methods: $(grep -r -c '@JavascriptInterface' android/app/src/main/java | awk -F: '{s+=$2} END {print s}')" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-reports
+          path: android/app/build/reports
+          retention-days: 7

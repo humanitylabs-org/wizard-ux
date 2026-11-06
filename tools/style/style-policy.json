@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "assets": {
+    "ui.css": {
+      "source": "style/ui.css",
+      "sha256": "ba3ad8c73da43b0a2a25517168f9a021429e1087f5338d54fd8c8bc0425dc24d"
+    },
+    "wizard-ui.css": {
+      "source": "style/ui.css",
+      "sha256": "ba3ad8c73da43b0a2a25517168f9a021429e1087f5338d54fd8c8bc0425dc24d"
+    },
+    "tokens.css": {
+      "source": "style/tokens.css",
+      "sha256": "958ee7a4d70d7dc3dff3e0172b94cff3caf41999fa1c68b1cde68b57cba4177d"
+    },
+    "wizard-tokens.css": {
+      "source": "style/tokens.css",
+      "sha256": "958ee7a4d70d7dc3dff3e0172b94cff3caf41999fa1c68b1cde68b57cba4177d"
+    },
+    "sheet.js": {
+      "source": "style/sheet.js",
+      "sha256": "6062134676fda28ec09419bc14e962b77dce905a0d57b0882d9ec960f67ea167"
+    },
+    "wizard-sheet.js": {
+      "source": "style/sheet.js",
+      "sha256": "6062134676fda28ec09419bc14e962b77dce905a0d57b0882d9ec960f67ea167"
+    },
+    "standalone-tokens.css": {
+      "source": "style/standalone-tokens.css",
+      "sha256": "5e1c57ca8338052e066bd487054ef85e0693fc64ecbf7589335b85bae63353de"
+    },
+    "shell-tokens.css": {
+      "source": "style/shell-tokens.css",
+      "sha256": "7a646df6a033334bc9901247a407bafcc028674f8c182a3945411954e114bd2c"
+    },
+    "wizard-controls.css": {
+      "source": "style/controls.css",
+      "sha256": "dd3f01c7c9f02f19a5d9f342c7a33b11ada5e029c8c54f9d7d34f81eada2caa9"
+    },
+    "controls.css": {
+      "source": "style/controls.css",
+      "sha256": "dd3f01c7c9f02f19a5d9f342c7a33b11ada5e029c8c54f9d7d34f81eada2caa9"
+    }
+  },
+  "skin_layers": [
+    "web/skins/",
+    "web/tweaks/"
+  ],
+  "exceptions": [
+    {
+      "path": "web/core/skins.css",
+      "sha256": "a7a09e969a6d55b6d879fda794d8a913370f0b40eeb01f9f584d4d5eead0e899",
+      "reason": "Robert/James: approved shell skin definitions (not app chrome); appearance transport remains independent."
+    },
+    {
+      "path": "web/core/skins.js",
+      "sha256": "32b009431870b5976efd989c91dc6a1ed7416fd79215ca18d670963611ebbca4",
+      "reason": "Robert/James: approved shell skin definitions (not app chrome); appearance transport remains independent."
+    }
+  ]
+}
