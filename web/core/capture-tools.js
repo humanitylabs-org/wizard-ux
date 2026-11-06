@@ -30,7 +30,7 @@
   function take(upload, changed = () => {}) {
     const files = [], abort = new AbortController(); let closed = false;
     const active = row => !closed && files.includes(row);
-    const row = file => { if(closed)return null;if(files.length>=8)throw Error('Up to 8 files per message');const r={name:file.name,mime:file.type,bytes:file.size,uploading:true};files.push(r);changed(files);return r; };
+    const row = file => { if(closed)return null;const r={name:file.name,mime:file.type,bytes:file.size,uploading:true};files.push(r);changed(files);return r; };
     const put = (file,r) => uploadRow(upload,file,r,{signal:abort.signal,active:()=>active(r),changed:()=>changed(files)});
     async function add(file) { const r=row(file);if(r)await put(file,r); }
     return { files, add, async screenshot(conceal) {

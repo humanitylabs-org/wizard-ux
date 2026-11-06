@@ -10,6 +10,8 @@
   // Agent Service allows 180 seconds of STT; leave time for upload/response transit.
   const TRANSCRIBE_TIMEOUT_MS = 195000;
   const LATE_MESSAGE_MS = 6 * 60 * 60 * 1000;
+  const COUNT_CAP = /^Too many attachments including the recording\b/;
+  const countReadmits = new Set(); // re-admitted on this load; persisted before the first pump so it happens once
   // Consent belongs to this saved message, not the current screen or a bulk retry.
   const lateMessage = it => ['new', 'reply'].includes(it.kind) && it.intent !== 'command' &&
     !it.runId && !it.sentAt && !it.lateSendApproved && Number.isFinite(it.createdAt) && now() - it.createdAt > LATE_MESSAGE_MS;
@@ -259,6 +261,17 @@
          [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
       it.state = 'waiting'; it.nextAt = 0;
     }
+    // James, 6 Nov 2026: "This message failed. This shouldn't have failed. Please allow it to go through." Older builds
+    // refused more than eight attachments before any request left the device (no run, no body, no dispatch). That
+    // cap is gone; a message whose only failure was it is re-admitted once, exactly as a Retry tap would (same item,
+    // same Idempotency-Key, same frozen route), and its owner's explicit send stands even if it is now old. Every
+    // other failure kind is left alone.
+    if (it.state === 'failed' && COUNT_CAP.test(it.error || '') && !it.countCapReadmitted && !it.body && !it.steerBody &&
+        !it.runId && !it.sentAt && eligible(it, ['failed']) && !lostAudio(it)) {
+      Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1),
+        useServerCopy: true, lateSendApproved: true, countCapReadmitted: true, error: '' });
+      delete it.errorStatus; countReadmits.add(it.id);
+    }
     /* Reload during a voice send (James, 22 Oct 2026: "I have to wait like five, maybe even ten seconds before it lets me
      * reload"). A tap take whose destination and model route were fixed at stage time is handed to the outbox
      * (handOff): a reload no longer waits for upload + transcription, and the new page finishes the same send under
@@ -296,6 +309,8 @@
         for (const x of JSON.parse(localStorage.getItem(LS) || '[]')) { const it = items.get(x.id); if (it && (quarantine.has(it.id) || !(await put(it)).durable)) migrated = false; }
         if (migrated) { try { localStorage.removeItem(LS); } catch (_) {} }
       } catch (_) { recovered = false; for (const id of recoveredIds) quarantine.add(id); }
+      for (const id of countReadmits) { const it = items.get(id); if (it && it.state === 'queued') await put(it); }
+      countReadmits.clear();
       // Only this version's explicit completion receipt qualifies. Old generic
       // 'handled' labels also covered pending music/app work, so keep those.
       for (const it of [...items.values()]) {
@@ -467,7 +482,6 @@
     const fileIds = [...new Set((it.files || []).filter(f => !(noFiles && f.id === it.audioFile?.id)).map(f => f.id).filter(Boolean))];
     // A run the service refused for files was never admitted: rebuild it without the recording.
     if (noFiles && it.body && /agent_files_disabled/.test(it.error || '')) it.body = '';
-    if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
     const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
     const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
