@@ -14,6 +14,7 @@
  *   openLink(url, title) → (optional) open a private-origin link in a window of this shell; return true if it did
  *   openApp(id, srcEl) → (optional) open an installed app, remembering the source window so Back returns to it
  *   keepThreadOpen   → (optional) desktop retains existing threads on sends and state actions
+ *   keepNewOpen(id)  → (optional) a new chat sent from this window stays open (a chat docked beside an app panel)
  *   owner(id)        → (optional) the window a pane belongs to (the desktop's list pane id::list → id)
  *   overlay(open)         → (optional) the media viewer opened/closed (the phone arms its Back guard)
  *   vib(ms)               → (optional) haptic tick
@@ -2862,7 +2863,8 @@ window.WizCore.chats = function createChats(H) {
     }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
   }
   function leaveAfterSend(wid, sid, isNew, how = '') {
-    if (H.keepThreadOpen && !isNew) return false;
+    // A new chat docked beside an app (AI apps: Resolve this / a reply from a notification) stays in its column.
+    if (H.keepThreadOpen && (!isNew || H.keepNewOpen?.(wid))) return false;
     const w = W[wid];
     if (w && sid && w.thread === sid && hosted.has(wid)) {
       const entry = hosted.get(wid); closeHosted(wid);

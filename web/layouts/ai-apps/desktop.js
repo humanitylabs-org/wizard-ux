@@ -472,7 +472,7 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { draftWant = false; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
@@ -1724,6 +1724,9 @@ export default function desktop(api) {
     frontApp = h.app;
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
+    // A notification in the chat column that becomes a chat (Resolve this / Have Wizard handle it, or a reply sent from
+    // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
+    if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
     // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
     // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
