@@ -1,0 +1,126 @@
+/* Desktop-style Chats list (phone). Opt-in look for the stock phone Chats list: same rows, sections, search, filters,
+ * swipes and long-press menu; only their drawing changes, to the AI apps desktop sidebar's (layouts/ai-apps/desktop.css):
+ * one 14-15 px line per chat, no icon tile or preview, time + an accent dot for unread, 12 px muted section labels with an
+ * amber count pill, 12 px row radius, ink-tinted hover/held, a round ink-filled New chat. Colours are the skin's own tokens
+ * (--wz-*, --ink, --bg, --amber), so every skin and its light/dark reads; no literal colours. Phone only. */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] {
+  --dc-ink: var(--wz-text, var(--ink));
+  --dc-ink-2: var(--wz-text-secondary, var(--ink-2, var(--dc-ink)));
+  --dc-ink-3: var(--ink-3, color-mix(in srgb, var(--dc-ink) 55%, transparent));
+  --dc-main: var(--sk-win, var(--wz-base, var(--bg)));
+  --dc-line: color-mix(in srgb, var(--dc-ink) 10%, transparent);
+  --dc-hover: color-mix(in srgb, var(--dc-ink) 7%, transparent);
+  --dc-held: color-mix(in srgb, var(--dc-ink) 11%, transparent);
+  --dc-accent: var(--wz-accent, var(--violet-2));
+}
+/* the list sits on the window's own opaque material, like the sidebar */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list { background: color(from var(--dc-main) srgb r g b / 1); font-family: var(--wz-font-ui, inherit); }
+
+/* ---------- top: the search is a quiet full pill (the desktop's search is one round icon) ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-top { padding: 10px 12px 4px; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-search { height: 44px; padding: 0 14px; gap: 10px; border: 0; border-radius: 22px; background: color-mix(in srgb, var(--dc-ink) 6%, transparent); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-search svg { width: 18px; height: 18px; stroke: var(--dc-ink-3); stroke-width: 1.8; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-search input { font-size: 0.9375rem; color: var(--dc-ink); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-search input::placeholder { color: var(--dc-ink-3); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-fbtn { width: 36px; height: 36px; margin-right: -8px; border-radius: 50%; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-fbtn svg { stroke: var(--dc-ink-2); stroke-width: 1.8; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-fbtn:active { background: var(--dc-held); }
+
+/* ---------- sections: muted sentence-case labels, a count pill only on Ready (the desktop's amber) ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-scroll { padding: 2px 8px 96px; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec { margin: 0; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec + .ch-sec { border-top: 0; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h {
+  min-height: 40px; margin-top: 8px; padding: 0 10px; gap: 8px; border-radius: 10px;
+  color: var(--dc-ink-3); font: 400 0.8125rem / 1 var(--wz-font-ui, inherit); letter-spacing: .01em; text-transform: none;
+}
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h:active { background: var(--dc-hover); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h small { font: 400 0.75rem / 1 var(--wz-font-ui, inherit); letter-spacing: 0; color: var(--dc-ink-3); font-variant-numeric: tabular-nums; }
+/* the stock order is count-then-chevron; the chevron folds in after the label like the sidebar's and the count stays on the right */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h span { order: 0; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h i { order: 1; margin-left: 0; width: 6px; height: 6px; border-width: 0 1.5px 1.5px 0; border-color: var(--dc-ink-3); opacity: .8; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h small { order: 3; margin-left: auto; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec[data-sec="ready"] .ch-sec-h small {
+  min-width: 22px; height: 18px; padding: 0 6px; box-sizing: border-box; border-radius: 9px; display: inline-grid; place-items: center; margin-left: 2px; order: 2;
+  color: color-mix(in srgb, black 88%, var(--amber, var(--dc-ink))); background: var(--amber, var(--dc-ink)); font: 700 0.6875rem / 1 var(--wz-font-ui, inherit);
+}
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec[data-sec="ready"] .ch-sec-h b { order: 4; margin-left: auto; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h b { padding: 2px 7px; border-radius: 9px; font: 600 0.6875rem / 1 var(--wz-font-ui, inherit); letter-spacing: 0; color: color-mix(in srgb, black 88%, var(--dc-accent)); background: var(--dc-accent); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec-h b.wait { color: color-mix(in srgb, black 88%, var(--amber, var(--dc-ink))); background: var(--amber, var(--dc-ink)); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec[data-sec="archive"] .ch-sec-h { font-size: 0.75rem; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec[data-sec="errors"] .ch-sec-h { color: var(--wz-danger, #ff8f8f); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-working-sort { padding: 0 10px 4px; font-size: 0.75rem; color: var(--dc-ink-3); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-working-sort select { padding: 4px 6px; border: 0; background: var(--dc-hover); color: var(--dc-ink-2); border-radius: 10px; font-size: 0.75rem; }
+
+/* ---------- rows: one line, 48 px (the sidebar's 36 px grown to a thumb), 12 px radius ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row {
+  align-items: center; gap: 10px; height: 48px; min-height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; position: relative;
+}
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:active { background: var(--dc-held); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .bd { gap: 1px; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp { align-items: center; gap: 8px; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp b,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.att-needs .tp b,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.att-check .tp b,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread .tp b {
+  color: var(--dc-ink); font: 400 0.9375rem / 1.4 var(--wz-font-ui, inherit);
+}
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp time,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread .tp time { color: var(--dc-ink-2); font: 400 0.6875rem / 1 var(--wz-font-ui, inherit); font-weight: 400; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list[style*="--agc"] .ch-row.unread .tp time { color: var(--dc-ink-2); }
+/* one line per chat, always: no preview or "Your call" sub-line, so every row has the same height (the desktop sidebar shows none) */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .pv, html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-search-status { display: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-privtag { height: 18px; margin-left: 0; font-weight: 500; color: var(--dc-ink-2); background: var(--dc-hover); }
+/* no emoji tile and no status glyph (flask, hand, ring): the desktop sidebar has none; the section says Working or Ready and the dot says unread */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-topic-mark, html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .emo.sti, html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-boom { display: none; }
+/* the sidebar has no pin icon on rows; pinning stays in the hold menu, and a pinned row is still sorted first */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row-wrap .ch-pin-toggle { display: none; }
+/* unread: the accent dot after the time, as in the sidebar (the title keeps its weight) */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { content: ""; order: 6; flex: none; width: 8px; height: 8px; margin: 0 4px 0 -2px; border-radius: 50%; background: var(--dc-accent); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.quiet,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-sec[data-sec="archive"] .ch-row .tp b { color: var(--dc-ink-2); }
+
+/* ---------- agent focus strip: quiet segments, not coloured pills ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-strip { gap: 4px; padding: 4px 12px; background: color(from var(--dc-main) srgb r g b / 1); border-top: 1px solid var(--dc-line); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-tab,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-tab[style*="--ch-agent-colour"]:not(.on) { color: var(--dc-ink-2); font-size: 0.8125rem; font-weight: 400; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-tab::before,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-tab[style*="--ch-agent-colour"]:not(.on)::before { inset: 6px 0; border: 0; background: transparent; box-shadow: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-tab.on { color: var(--dc-ink); font-weight: 500; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-tab.on::before { background: var(--dc-held); box-shadow: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-focus-dot { background: var(--amber); }
+
+/* ---------- New chat: the sidebar's round ink button ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-fab,
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list[style*="--agc"] .ch-fab {
+  width: 52px; height: 52px; border-radius: 50%; background: var(--dc-ink); color: var(--wz-base, var(--bg)); box-shadow: 0 4px 14px color-mix(in srgb, black 24%, transparent);
+}
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-fab svg { width: 24px; height: 24px; stroke-width: 2.2; }
+
+/* ---------- header row (tweak.js): the agent's name + chevron, search, filter; the stock search folds away until wanted ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-head { display: flex; align-items: center; gap: 2px; min-height: 56px; padding: calc(var(--safe-t, 0px) * 0) 8px 0 16px; box-sizing: border-box; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 44px; margin: 0 0 0 -8px; padding: 0 8px; border: 0; border-radius: 22px; background: none; color: var(--dc-ink); text-align: left; -webkit-tap-highlight-color: transparent; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-name b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 1.125rem / 1.2 var(--wz-font-ui, inherit); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-chev { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--dc-ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-name:active { background: var(--dc-hover); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-name.dc-static .dc-chev { display: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-ib { position: relative; flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; display: grid; place-items: center; background: none; color: var(--dc-ink); -webkit-tap-highlight-color: transparent; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-ib:active, html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-ib[aria-pressed="true"] { background: var(--dc-held); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .dc-filter.on::after { content: ""; position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--dc-accent); box-shadow: 0 0 0 2px color(from var(--dc-main) srgb r g b / 1); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list:has(.dc-head):not(.dc-search) > .ch-top { display: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list:has(.dc-head) > .ch-top { padding-top: 0; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list:has(.dc-head) .ch-fbtn { display: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-list:has(.dc-head) .ch-search { padding-right: 14px; }
+
+/* ---------- rhythm: title left, time at one fixed right edge, dot after it ---------- */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .bd { flex: 1; min-width: 0; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp { justify-content: space-between; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp b { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp time { flex: none; min-width: 34px; text-align: right; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { margin: 0 2px 0 -2px; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:not(.unread)::after { content: ""; order: 6; flex: none; width: 8px; height: 8px; margin: 0 2px 0 -2px; }
+/* Newest / Priority / By subject: quiet text segments, not three outlined pills */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-rdy-bar { display: flex; gap: 2px; padding: 0 8px 6px; border: 0; background: none; }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-rdy-bar button { height: 30px; padding: 0 12px; border: 0; border-radius: 15px; background: none; box-shadow: none; color: var(--dc-ink-3); font: 400 0.8125rem / 1 var(--wz-font-ui, inherit); }
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-rdy-bar button.on, html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-rdy-bar button[aria-pressed="true"] { background: var(--dc-held); color: var(--dc-ink); font-weight: 500; }
