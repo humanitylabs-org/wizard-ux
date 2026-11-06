@@ -870,6 +870,7 @@
     return null;
   }
   function meetingBridge() { return attachedMeetingBridge || W.wizardNative?.meetings || (W.wizardMizelPort ? nativeMeetingPort() : null); }
+  const MEETING_APP = 'mizel'; // the app that owns native Android meetings
   let recoveryLease = null;
   function yieldRecovery() {
     if (!recoveryLease) return;
@@ -895,7 +896,7 @@
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
       if (st?.recording && st.meetingId && !all.some(r=>r.native==='wizard-meetings' && r.nativeId===st.meetingId)) {
-        const row={id:crypto.randomUUID(),appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
+        const row={id:crypto.randomUUID(),appId:MEETING_APP,kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
           status:'recoverable',partial:true,startedAt:Date.now()-(st.mediaMs||0),durationMs:st.mediaMs||0,seq:0,bytes:0,pcm:true,mime:'audio/wav',meta:{meetingId:st.meetingId}};
         recoveryLive.add(row.id);await put(row);all=await rows();
       }
@@ -1070,7 +1071,9 @@
       const recoverable = (live(await softStore(s, rows)) || []).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
-        const row = (live(await softStore(s, rows)) || []).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
+        const mem = ownedRows.get(opts.resumeId);
+        const row = (live(await softStore(s, rows)) || []).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable') ||
+          (mem?.memoryOnly && mem.appId === appId && mem.status === 'recoverable' ? mem : null);
         if (!row) throw fail('not_recoverable', 'No native recording is available to resume.');
         s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row); s.meetingNative = native?.name === 'wizard-meetings';
         if (!native) throw fail('native_unavailable', 'Restore the native bridge before resuming this take.');
@@ -1187,12 +1190,34 @@
     // Busy/yielded recovery is not a settled take. Never offer a live orphan for upload/ack.
     return Promise.all((await rows()).filter(r => r.appId === appId && r.status === 'pending').map(result));
   }
+  // Phone storage broken, but the Android meeting service is still recording (it uploads by itself): hand the
+  // app a resumable in-memory take so it reattaches after a reload instead of asking the owner to Resume here
+  // (James, 6 Nov 2026: reload must be seamless mid-meeting). Nothing is invented: the service names the meeting.
+  async function nativeLiveTake(appId) {
+    if (active || appId !== MEETING_APP) return null;
+    const b = meetingBridge(); if (!b?.status) return null;
+    let st; try { st = await bounded(Promise.resolve(b.status()), 3000, 'native_timeout'); } catch (_) { return null; }
+    if (st?.recording !== true || typeof st.meetingId !== 'string' || !st.meetingId || active) return null;
+    let row = [...ownedRows.values()].find(r => r.native === 'wizard-meetings' && r.nativeId === st.meetingId && r.status === 'recoverable');
+    if (!row) {
+      row = { id: 'live-' + st.meetingId, appId, kind: 'meeting', native: 'wizard-meetings', nativeId: st.meetingId, status: 'recoverable',
+        partial: true, startedAt: Date.now() - (st.mediaMs || 0), durationMs: st.mediaMs || 0, seq: 0, bytes: 0, pcm: true, mime: 'audio/wav',
+        meta: { meetingId: st.meetingId }, memoryOnly: true };
+      ownedRows.set(row.id, row);
+    }
+    recoveryLive.add(row.id); ownershipLoaded = true; changed();
+    return { id: row.id, blob: new Blob([], { type: 'audio/wav' }), mime: 'audio/wav', startedAt: row.startedAt, durationMs: row.durationMs || 0,
+      meta: { ...row.meta, captureRecovery: { resumable: true, error: null } }, streamChunks: [], partial: true };
+  }
   async function pending(appId) {
     validate(appId, {});
     const memory = [...memoryTakes.values()].filter(t => t.session.row.appId === appId).map(t => t.result);
     if (memory.length) return memory; // keep a retry usable even while the store is unavailable
-    await ready; await recover();
-    const selected = (await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    let all;
+    try { await bounded(ready, 3000, 'storage_failed'); await recover(); all = await bounded(rows(), 3000, 'storage_failed'); }
+    catch (e) { const t = await nativeLiveTake(appId); if (t) return [t]; throw e; }
+    const selected = all.filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    if (!selected.length) { const t = recoveryError && await nativeLiveTake(appId); if (t) return [t]; }
     // Expose safely repaired browser takes even if an unrelated native bridge is indeterminate.
     // But [] is used by app owners as positive empty-custody proof: never forge that proof from unknown truth.
     if (!selected.length && (recoveryError || unknownMeetingActive || !ownershipLoaded ||
@@ -1266,7 +1291,33 @@
     yieldRecovery(); return true;
   }
   function reloadCheck() {
+    // The Android app's meeting port (MeetingRecorderService) records and uploads on its own through a page reload.
+    const androidMeetingPort = () => !!W.wizardMizelPort;
+    // A steady Android meeting (MeetingRecorderService) that records and uploads on its own through a reload.
+    function steadyLiveMeeting() {
+      const s = active;
+      if (!s || attachedMeetingBridge || W.wizardNative?.meetings || !androidMeetingPort()) return false;
+      const isMeeting = r => r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
+      if (!isMeeting(s.row) || !s.engine || !['recording', 'paused'].includes(s.phase) || s.borrow || s.borrowWork ||
+        s.finishPromise || s.error || s.engineDetached || s.interrupted || s.discard) return false;
+      return ![...recoveryLive].map(id => ownedRows.get(id)).some(r => r && r.id !== s.row.id && !isMeeting(r));
+    }
+    // James, 6 Nov 2026 ("make reloads work live"): with the Android meeting port, the meeting service records
+    // and uploads on its own through a reload, and phone storage / native takes survive a reload by definition.
+    // Only audio held by this page (a starting take, page-memory takes, a browser engine, a mic loan) can be lost,
+    // so custody doubt about stored takes never forces the owner to stop a meeting.
+    const androidLive = () => {
+      if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !androidMeetingPort() || preparations.size || memoryTakes.size) return null;
+      if (active && !steadyLiveMeeting()) return null;
+      // Only meetings survive a reload: an active or unreadable device recorder (orb note) keeps blocking.
+      try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return null; } catch (_) { return null; }
+      const r = active?.row?.native === 'wizard-meetings' ? active.row :
+        [...ownedRows.values()].filter(x => x.native === 'wizard-meetings').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
+      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : { appId: MEETING_APP },
+        recheck: true, durable: false, nativeMeeting: true };
+    };
     const no = reason => {
+      if (['capture_custody_uncertain', 'native_owner_uncertain'].includes(reason)) { const ok = androidLive(); if (ok) return ok; }
       const row = active?.row || [...memoryTakes.values()][0]?.session?.row || [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean) || [...ownedRows.values()].find(r => r.status !== 'pending');
       return { safe: false, reason, keeps: null, appId: row?.appId || null, startedAt: row?.startedAt || null, recheck: !active && preparations.size === 0 };
     };
@@ -1276,15 +1327,21 @@
     if (memoryTakes.size) return no('capture'); // this page still owns audio until the app acknowledges handoff
     let uncertain = !ownershipLoaded || recoveryError ? 'capture_custody_uncertain' : null;
     if (!uncertain && (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status)))) uncertain = 'native_owner_uncertain';
-    if (uncertain && !pageHoldsNoAudio) return no(uncertain);
+    if (uncertain && !pageHoldsNoAudio && !(uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())) return no(uncertain);
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
-    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && !!W.wizardMizelPort;
+    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && androidMeetingPort();
     const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
     if (!uncertain && [...ownedRows.values()].some(r => r.status !== 'pending' && !(active && r.id === active.row.id) && !recoveryLive.has(r.id))) uncertain = 'capture_custody_uncertain';
+    // A steady Android meeting records and uploads on its own through a reload, and anything stored on the
+    // phone survives a reload by definition. Phone-storage doubt (a broken/slow backup store, an older take
+    // still waiting for Retry save) is therefore no reason to make the owner stop the meeting to reload
+    // (James, 6 Nov 2026: "make reloads work live"). Page-memory audio (memoryTakes) still blocks above.
+    if (uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())
+      return { safe: true, reason: null, keeps: keep(active.row), recheck: true, durable: false, uncertain };
     if (uncertain && !pageHoldsNoAudio) return no(uncertain);
     if (active) {
       const s = active;
@@ -1303,11 +1360,14 @@
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
     // IndexedDB rows and Android services survive reload. Unknown custody is not page-held audio;
     // retain the uncertainty (never a durable/empty-custody proof) and leave recovery to the next boot.
+    // The meeting service may record with no stored row (phone storage broken); the shell keeps that app's frame
+    // only if it is the one holding a recording.
+    const port = survives ? { nativeMeeting: true, meetingApp: MEETING_APP } : {};
     if (uncertain && pageHoldsNoAudio) return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
-      recheck: true, durable: false, uncertain };
+      recheck: true, durable: false, uncertain, ...port };
     return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
       recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
-        [...ownedRows.values()].every(r => r.status === 'pending') };
+        [...ownedRows.values()].every(r => r.status === 'pending'), ...port };
   }
   /* Host-only rescue. Metadata exposed to notices is app + date only, never a title/content.
    * A stored browser row belongs to a previous page unless it is the active session. Native

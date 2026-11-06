@@ -692,7 +692,13 @@
     let cap;
     try { cap = window.WizAppCapture?.reloadCheck?.(); } catch (_) { cap = { safe: false, reason: 'capture' }; }
     if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
-    const keeps = cap.safe ? cap.keeps || null : null, blocking = [];
+    let keeps = cap.safe ? cap.keeps || null : null; const blocking = [];
+    // A live Android meeting with no stored row (phone storage broken): keep only the meeting app's own frame,
+    // and only while it holds a recording. Every other app's capture holds keep blocking.
+    if (cap.safe && !keeps && cap.meetingApp) {
+      const st = [...frames.values()].find(f => f.appId === cap.meetingApp && [...f.holds.values()].some(r => CAPTURE_HOLD.test(r)));
+      if (st) keeps = { appId: st.appId };
+    }
     if (!cap.safe) blocking.push({ source: 'capture', appId: cap.appId || null, kind: 'capture', reason: cap.reason || 'capture', startedAt: cap.startedAt || null });
     for (const st of frames.values()) for (const [id, reason] of st.holds) {
       if (st.drafts?.get(id)?.kept) continue;

@@ -8,7 +8,7 @@ const read = name => readFileSync(process.env.QA_REVIEW_CORE ? `${process.env.QA
 function capture(patch={}) {
   const source=read('app-capture'),start=source.indexOf('  function reloadCheck()'),end=source.indexOf('  // Last moment before the shell reloads',start);
   assert(start>=0&&end>start);
-  const c={active:null,memoryTakes:new Map(),preparations:new Map(),recoveryLease:null,configuredNative:null,attachedMeetingBridge:null,
+  const c={MEETING_APP:'mizel',active:null,memoryTakes:new Map(),preparations:new Map(),recoveryLease:null,configuredNative:null,attachedMeetingBridge:null,
     ownedRows:new Map(),recoveryLive:new Set(),ownershipLoaded:true,recoveryError:null,unknownMeetingActive:false,
     W:{wizardMizelPort:{}},ready:Promise.resolve(),recover:async()=>{},...patch};
   vm.runInNewContext(source.slice(start,end),c);return c;
