@@ -1742,7 +1742,9 @@ export default function desktop(api) {
     shows: desk => (!!secondEl && Number(secondEl.dataset.ws) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
-  api.on('render', () => { readSessions(); paintTop(); });
+  // Separate guarded parts: a failed session refresh must not block pane chrome.
+  api.on('render', readSessions);
+  api.on('render', () => paintTop());
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   // Settings opens as the centred panel over the page (Claude's settings modal), never as a window beside the chat
   root.dataset.settingsOver = '';

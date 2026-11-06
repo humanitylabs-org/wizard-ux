@@ -1,6 +1,6 @@
 # Shared components
 
-Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push share recency. `WosSkinHost` boots default AI apps (`wos.desktop-view.v1`, `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`); sessions.ownList excludes legacy lists. `WizAppServices.back` retains root apps; unowned frames yield Back.
+Back: `WizEscapeBack`/`WosBack`, `WizChatsHost.registerBack`/layout back.push (recency), `WizAppServices.back` (retain root; unowned yield). `WosSkinHost`: default AI apps; guarded render parts; shared Chats recovery, never Classic. sessions.ownList excludes legacy.
 
 [Contracts](component-contract-details.md).
 
@@ -54,7 +54,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); desktop `keepThreadOpen`; sent reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` shares notification actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; device-local |
-| Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frame/readiness, tools, open/focus/close, onChange, panes; Chats mounts pending |
+| Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frame/readiness, tools, open/focus/close, onChange, panes; desktop adapter reuses Chats list/thread for layout recovery; Chats mounts pending |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chat state | `WizLive` (`web/live.js`): rename/read fences; `WizCore.chats`: dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `miguel/group-by-day` opt-in; Pins/compact independent |

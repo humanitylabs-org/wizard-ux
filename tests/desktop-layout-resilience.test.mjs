@@ -4,23 +4,49 @@ import vm from 'node:vm';
 import { fixture, read } from './fixtures/tweaks.mjs';
 
 const key = 'wos.layout-fault.v1';
-test('layout callback threshold preserves the original stack and reports the disabled layout, not tweaks', async () => {
-  const f = fixture({ shell: 'desktop', desktopView: null });
+test('layout callback threshold preserves the stack AND the owner navigation (never disables layouts)', async () => {
+  const f = fixture({ shell: 'desktop', initialStorage: { 'wos.desktop-view.v1': 'ai-apps' } });
   await f.host.whenLayoutReady();
   const errors = []; f.ctx.console = { warn() {}, error: (...args) => errors.push(args) };
+  let tornDown = 0, healthy = 0, failing = true;
   f.host._test.setImporter(async () => ({ default: api => {
-    api.on('render', () => { throw new Error('late layout hook failed'); });
-    return () => {};
+    api.mount(f.doc.createElement('aside'));
+    api.on('render', () => { if (failing) throw new Error('late layout hook failed'); healthy++; });
+    api.on('render', () => { healthy++; });
+    return () => { tornDown++; };
   } }));
   await f.host._test.loadLayout('ai-apps');
-  for (let i = 0; i < 3; i++) f.host.rendered('thread', f.thread);
+  for (let i = 0; i < 20; i++) f.host.rendered('thread', f.thread);
   const record = JSON.parse(f.lsMap.get(key));
-  assert.equal(record.layout, 'ai-apps'); assert.equal(record.reason, 'error');
+  assert.equal(record.layout, 'ai-apps'); assert.equal(record.reason, 'callback-error');
   assert.match(record.stack, /late layout hook failed/); assert.match(record.where, /render/);
-  assert.ok(f.host.state.disabled.includes('layout:ai-apps'));
-  assert.equal(f.toasts.filter(t => t.includes('turned off')).length, 1);
-  assert.ok(errors.some(args => args[0] === '[layout] error:'));
-  assert.equal(f.lsMap.get('wos.desktop-view.v1'), undefined, 'never persists the failure as a new view choice');
+  assert.equal(f.host.layoutState.active, true); assert.equal(f.host.layoutState.disabled, false);
+  assert.equal(f.host.layoutState.mounts, 1); assert.equal(f.host.chatsClaimed(), true);
+  assert.equal(tornDown, 0); assert.equal(healthy, 20, 'healthy hooks still run');
+  failing = false; f.host.rendered('thread', f.thread);
+  assert.equal(healthy, 22, 'the failing hook can recover on a later render');
+  assert.equal(f.toasts.filter(t => t.includes('turned off')).length, 0);
+  assert.ok(errors.some(args => args[0] === '[layout] callback-error:'));
+  assert.equal(f.lsMap.get('wos.desktop-view.v1'), 'ai-apps');
+  const reload = fixture({ shell: 'desktop', initialStorage: Object.fromEntries(f.lsMap) });
+  await reload.host.whenLayoutReady();
+  assert.equal(reload.boot.layout, 'ai-apps'); assert.equal(reload.host.layoutState.active, true);
+  assert.equal(reload.host.layoutState.disabled, false); assert.equal(reload.host.chatsClaimed(), true);
+});
+test('rejected async layout hooks are contained without losing later hooks or navigation', async () => {
+  const f = fixture({ shell: 'desktop', desktopView: null }); await f.host.whenLayoutReady();
+  f.ctx.console = { warn() {}, error() {} };
+  let calls = 0;
+  f.host._test.setImporter(async () => ({ default: api => {
+    api.on('render', async () => { throw new Error('async hook failed'); });
+    api.on('render', () => { calls++; });
+  } }));
+  await f.host._test.loadLayout('ai-apps');
+  for (let i = 0; i < 10; i++) f.host.rendered('thread', f.thread);
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(calls, 10); assert.equal(f.host.layoutState.active, true);
+  assert.equal(f.host.layoutState.disabled, false);
+  assert.match(JSON.parse(f.lsMap.get(key)).stack, /async hook failed/);
 });
 test('import failure is diagnosable and a normal switch cannot erase the last failure', async () => {
   const f = fixture({ shell: 'desktop', desktopView: null }); await f.host.whenLayoutReady();
@@ -48,6 +74,18 @@ test('tweak disposal never writes the layout diagnostic', async () => {
   f.host._test.setImporter(async () => ({ default: () => () => {} }));
   await f.mount('wizard/pin-buttons'); assert.ok(f.host.tweakState.includes('wizard/pin-buttons'), JSON.stringify(f.toasts)); await f.clear();
   assert.equal(f.lsMap.has(key), false);
+});
+
+test('AI apps render parts isolate session refresh from pane tools/chrome', () => {
+  const src = read('web/layouts/ai-apps/desktop.js');
+  const start = src.indexOf("  api.on('render', readSessions);");
+  assert.ok(start >= 0, 'session refresh is an independent guarded render part');
+  const code = src.slice(start, src.indexOf("  api.on('home'", start));
+  const hooks = []; let chrome = 0;
+  vm.runInNewContext(code, { api: { on: (name, fn) => hooks.push(fn) }, readSessions: () => { throw new Error('session refresh fault'); }, paintTop: () => chrome++ });
+  assert.equal(hooks.length, 2);
+  for (let i = 0; i < 12; i++) for (const hook of hooks) { try { hook(); } catch (_) {} }
+  assert.equal(chrome, 12, 'pane chrome still paints while refresh fails persistently');
 });
 
 test('iframe focus refusal retries the browser only, not host focus (61 attempts)', () => {

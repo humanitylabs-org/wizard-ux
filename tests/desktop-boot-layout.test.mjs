@@ -54,17 +54,36 @@ test('the phone never adopts the desktop default', () => {
   assert.equal(f.host.chatsClaimed(), false);
 });
 
-test('a layout that cannot load gives Classic its list back and clears the boot veil (never a blank desktop)', async () => {
+test('a layout that cannot load mounts shared Chats without changing the selected AI apps view', async () => {
   const f = fixture({ shell: 'desktop', desktopView: null });
   await f.host.whenLayoutReady();
   assert.equal(f.host.chatsClaimed(), true, 'claimed while the layout is healthy');
-  f.ctx.console = { warn() {} };
+  const recovery = []; f.adapter.layoutRecovery = on => recovery.push(on);
+  f.ctx.console = { warn() {}, error() {} };
   f.host._test.setImporter(async () => { throw new Error('layout bundle missing'); });
   f.host.setLayout('ai-apps', false);
   await f.host.whenLayoutReady();
-  assert.equal(f.host.chatsClaimed(), false);
+  assert.equal(f.host.chatsClaimed(), false, 'shared Chats renderer is allowed to fill the recovery sidebar');
   assert.equal(f.doc.documentElement.dataset.chatsOwner, undefined);
   assert.equal(f.doc.documentElement.dataset.layoutBooting, undefined);
+  assert.equal(f.host.layout, 'ai-apps'); assert.equal(f.doc.documentElement.dataset.layout, 'ai-apps');
+  assert.equal(recovery.at(-1), true);
+  f.host._test.setImporter(async () => ({ default: () => () => {} }));
+  await f.host._test.loadLayout('ai-apps');
+  assert.equal(recovery.at(-1), false); assert.equal(f.host.chatsClaimed(), true);
+});
+
+test('partial layout setup failure uses shared Chats immediately, without a disabled layout or saved Classic', async () => {
+  const f = fixture({ shell: 'desktop', initialStorage: { [VIEW]: 'ai-apps' } });
+  await f.host.whenLayoutReady(); f.ctx.console = { warn() {}, error() {} };
+  const recovery = []; f.adapter.layoutRecovery = on => recovery.push(on);
+  f.host._test.setImporter(async () => ({ default: api => {
+    api.mount(f.doc.createElement('div')); throw new Error('partial layout setup');
+  } }));
+  await f.host._test.loadLayout('ai-apps');
+  assert.equal(f.host.layout, 'ai-apps'); assert.equal(f.host.layoutState.disabled, false);
+  assert.equal(f.doc.documentElement.dataset.layoutBooting, undefined);
+  assert.equal(f.lsMap.get(VIEW), 'ai-apps'); assert.equal(recovery.at(-1), true);
 });
 
 test('layout CSS keeps Classic hidden through boot and the layout clears the veil when its sheet applies', () => {

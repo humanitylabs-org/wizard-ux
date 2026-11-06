@@ -3051,6 +3051,24 @@
       window.WizAppServices?.back(winEl(w.id)?.querySelector('iframe'));
       return true; // atRoot/notReady never means close the app
     },
+    layoutRecovery(on) {
+      // Reuse the real Chats window, list renderer, delegates and live updates.
+      // This is a minimal sidebar, not a switch to the Classic desktop. No
+      // workspace, Look, thread, draft or layout choice is rewritten here.
+      const root = document.documentElement;
+      for (const el of document.querySelectorAll('[data-layout-recovery-chat]')) delete el.dataset.layoutRecoveryChat;
+      if (!on) { delete root.dataset.layoutRecovery; return; }
+      root.dataset.layoutRecovery = 'chats';
+      let w = findWin(mainChats);
+      if (!w) w = newWin({ app: 'chats', thread: null });
+      if (!w) return;
+      focusWin(w.id);
+      const el = winEl(w.id); if (!el) return;
+      el.dataset.layoutRecoveryChat = '';
+      CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
+      if (w.thread) CHATS.renderChats(w);
+      syncChatsPane(w.id);
+    },
     ownsChatList(on) {
       if (ownsChatList === !!on) return;
       ownsChatList = !!on;
