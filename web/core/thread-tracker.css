@@ -25,6 +25,11 @@ html.wos-doc-scroll .wos-doc-thread .tt-strip { position: sticky; top: calc(var(
 .tt-caret svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tt-strip.open .tt-caret { transform: rotate(180deg); }
 .tt-strip.open .tt-h { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* Stopped rows exist: the header and its one Resume share the header's frame. */
+.tt-hrow { display: flex; align-items: center; gap: 4px; padding-right: 6px; border-radius: 14px; border: 1px solid var(--wz-border);
+  background-color: var(--wz-base); background-image: linear-gradient(var(--wz-surface), var(--wz-surface)); }
+.tt-hrow .tt-h { flex: 1; min-width: 0; width: auto; border: 0; background: none; }
+.tt-strip.open .tt-hrow { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .tt-panel { position: absolute; left: 0; right: 0; top: calc(100% - 1px); max-height: min(60vh, 440px); overflow-y: auto; overscroll-behavior: contain; border-radius: 0 0 14px 14px; border: 1px solid var(--wz-border);
   background-color: var(--wz-base); background-image: linear-gradient(var(--wz-surface), var(--wz-surface)); box-shadow: 0 14px 34px color-mix(in srgb, black 45%, transparent); }
 .tt-panel[hidden] { display: none; }
@@ -39,6 +44,7 @@ html.wos-doc-scroll .wos-doc-thread .tt-strip { position: sticky; top: calc(var(
 .tt-btn { all: unset; box-sizing: border-box; flex: none; min-height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 999px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;
   border: 1px solid var(--wz-border); color: var(--wz-text); background: var(--wz-surface-raised); }
 .tt-btn.go { background: var(--tt-you); color: color-mix(in srgb, black 85%, var(--tt-you)); border-color: transparent; font-weight: 600; }
+.tt-btn.resume { background: var(--tt-run); color: var(--wz-on-accent); border-color: transparent; font-weight: 600; }
 .tt-btn.ok { border-color: color-mix(in srgb, var(--tt-done) 45%, transparent); }
 .tt-more { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 10px 12px; cursor: pointer; font-size: 0.75rem; color: var(--wz-text-muted); border-top: 1px solid var(--wz-border); }
 .tt-none { padding: 14px 12px; font-size: 0.7812rem; color: var(--wz-text-muted); }

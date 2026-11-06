@@ -584,6 +584,19 @@
       focusWin(id, opts); return focused()?.id === id;
     },
     close: id => { closeWin(id); return !W[id]; },
+    chats: id => CHATS.surface(id),
+    settings: () => ({ isOpen: !setEl.hidden && setEl.parentNode === document.body, closePart: setEl.querySelector('.st-close') }),
+    closeSettings: () => { const open = !setEl.hidden; if (open) closeSettings(); return open && setEl.hidden; },
+    settingsOverlay: () => {
+      const had = document.documentElement.hasAttribute('data-settings-over');
+      document.documentElement.setAttribute('data-settings-over', ''); hostSettings();
+      let released = false;
+      return () => {
+        if (released) return; released = true;
+        if (!had) document.documentElement.removeAttribute('data-settings-over');
+        hostSettings();
+      };
+    },
     panes: C.panes,
   });
   const desktopHost = desktop.host;
@@ -728,6 +741,9 @@
     el.className = 'win'; el.dataset.win = w.id; el.tabIndex = -1; el.setAttribute('aria-label', winTitle(w));
     el.innerHTML = winHtml(w); host.appendChild(el);
     if (w.app === 'chats') {
+      const surface = CHATS.surface(w.id);
+      surface.mount(el.querySelector('.pane-main'));
+      CHATS.surface(w.id + '::list').mount(el.querySelector('.pane-list'));
       CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
       if (w.thread) CHATS.renderChats(w);
       syncChatsPane(w.id);

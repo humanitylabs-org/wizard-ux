@@ -3,6 +3,13 @@
   'use strict';
   const VERSION = 'wizard.chats-view/1', DEFAULT = 'wizard-chats';
   const providers = new Map(), installed = new Map(), loads = new Map();
+  // Shared notification placement; both layout adapters use the same retained
+  // route node. Quiet notifications deliberately keep their line under the note.
+  function placeNotificationRoute(thread) {
+    const route = thread?.querySelector('.ch-notif-route'), acts = thread?.querySelector('.ch-tacts');
+    if (!route || !acts || route.parentNode === acts || route.classList?.contains?.('is-quiet')) return false;
+    acts.insertBefore(route, acts.firstChild); return true;
+  }
   let selected = DEFAULT;
   const fixture = (() => { try { return new URLSearchParams(location.search).get('chatsview') === 'fixture' || localStorage.getItem('wos.chatsview.fixture') === '1'; } catch (_) { return false; } })();
   function register(p) {
@@ -139,6 +146,41 @@
     const forget = core.forget;
     core.forget = id => { release(id); release(id + '::list'); return forget(id); };
     core.views = Object.freeze({ providerFor, defaultId: () => selected, name: id => installed.get(id)?.name || 'Chats' });
+    // Retained shared Chats bodies, not a shell's window/desk markup. A layout
+    // may supply another slot under the same event root without losing drafts,
+    // selection, reading state or the existing provider instance.
+    core.surface = id => {
+      if (typeof id !== 'string' || !H.win(id)) return null;
+      const root = () => H.win(id) ? [...(H.root()?.querySelectorAll('[data-chats]') || [])].find(n => n.dataset.chats === id) || null : null;
+      const part = selector => root()?.querySelector(selector) || null;
+      return Object.freeze({
+        get root() { return root(); },
+        get slot() { return root()?.parentElement || null; },
+        get composer() { return part('.ch-compose'); },
+        get notification() { return part('.ch-thread.ch-notif-thread'); },
+        get notificationTitle() { return part('.ch-thread.ch-notif-thread .ch-head .ti b')?.textContent || 'Notification'; },
+        get routeButton() { return part('[data-notify-menu]'); },
+        placeNotificationRoute: () => placeNotificationRoute(part('.ch-thread.ch-notif-thread')),
+        action: action => ['snooze', 'done', 'resolve', 'restore'].includes(action) ? part(`[data-chact="${action}"]`) : null,
+        mount(slot) {
+          if (!H.win(id) || !slot?.appendChild || !H.root()?.contains(slot)) return null;
+          let node = root(), fresh = !node;
+          if (node?.contains(slot)) return null;
+          if (fresh) { node = document.createElement('div'); node.className = 'chats'; node.dataset.chats = id; }
+          if (node.parentNode !== slot) {
+            const active = document.activeElement, keep = active && node.contains(active);
+            const range = keep && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd, active.selectionDirection] : null;
+            const scroll = [node, ...node.querySelectorAll('*')].filter(n => n.scrollTop || n.scrollLeft).map(n => [n, n.scrollTop, n.scrollLeft]);
+            slot.appendChild(node);
+            if (keep && document.activeElement !== active) active.focus({ preventScroll: true });
+            if (range) active.setSelectionRange(...range);
+            for (const [n, top, left] of scroll) { n.scrollTop = top; n.scrollLeft = left; }
+          }
+          if (fresh) core.renderChats(H.win(id));
+          return node;
+        },
+      });
+    };
     return core;
   }
   // EXTEND the shared Chats host for shells without an orb recorder. Capture,
@@ -205,7 +247,7 @@
     }
     return {recordReply, recordingFor:() => take?.sid || pending?.meta?.sessionId || '', busy:() => !!(take || work), back};
   }
-  window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL, lint, replyRecorder,
+  window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL, lint, replyRecorder, placeNotificationRoute,
     defaultId: () => selected, installed: () => [...installed.values()].map(a => ({ ...a })),
     tiles: () => [...installed.values()].filter(a => a.id !== DEFAULT || installed.size > 1).map(a => ({ id: a.id, name: a.id === DEFAULT ? 'Chats (standard)' : a.name, kind: 'chats', chatsProvider: a.id, icon: '✦', g: ['var(--violet-2)', 'var(--violet-2)'], desc: 'Chats view · same conversations' })),
   });

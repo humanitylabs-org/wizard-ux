@@ -289,39 +289,48 @@
   /* ================= #22 updates: native APK banner ================= */
   let upd = null, updHidden = 0;
   // Installation stays with the native updater, including older APKs without hold reasons.
-  let updateConfirmUntil = 0, updateConfirmTimer = 0;
-  const deferredText = u => ({ take: 'Update ready · installs after this recording', music: 'Update ready · installs when music stops', mic: 'Update ready · microphone in use' }[u.reason] || 'Installs by itself once music or recording stops');
+  let updateAction = '', updateActionTimer = 0;
+  const readyText = u => `Wizard OS ${u.version || 'update'} is ready`;
   function knownTakeLive() {
     try {
       const w = W$(), c = window.WizAppCapture?.getState?.();
-      return !!J(DEV()?.recActive?.())?.id || (w && w.voice !== 'idle') || !!c?.recording;
+      // A processing/sent take, a deferred reason and an old APK's updateRecording() (which can report a stale or generic
+      // mic claim) are not live recording evidence: native still fences genuine takes, and its refusal gets a recovery path.
+      return !!J(DEV()?.recActive?.())?.id || ['listen', 'paused'].includes(w?.voice) || !!c?.recording;
     } catch (_) { return true; } // never bypass an unreadable recorder
   }
+  const readyMessage = u => `${readyText(u)}${knownTakeLive() ? ' · Finish your recording first' : updateAction ? ' · ' + updateAction : ''}`;
+  function refreshUpdate() { renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }
   function installUpdate() {
     const d = DEV(); if (!d) return;
-    if (upd?.state === 'deferred' && upd.reason && (upd.reason === 'take' || knownTakeLive())) {
-      if (Date.now() >= updateConfirmUntil) {
-        updateConfirmUntil = Date.now() + 4000;
-        clearTimeout(updateConfirmTimer);
-        updateConfirmTimer = setTimeout(() => { updateConfirmUntil = 0; renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }, 4000);
-        renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings();
-        return;
-      }
-      // Native still fences live takes. Never cancel/delete/send a recording just to install.
+    if (knownTakeLive()) {
+      updateAction = 'Finish your recording first, then tap Install now'; refreshUpdate();
+      return; // Never stop, cancel or send somebody’s take for an update.
     }
-    updateConfirmUntil = 0; clearTimeout(updateConfirmTimer);
-    d.updateInstall(); log('update:install'); renderUpdate();
+    clearTimeout(updateActionTimer);
+    updateAction = 'Opening installer…'; refreshUpdate(); // feedback on this frame, not after native I/O
+    try { d.updateInstall(); log('update:install'); }
+    catch (_) { updateAction = 'Couldn’t open the installer · tap Install now to retry'; refreshUpdate(); return; }
+    // Older APKs may refuse a stale in-process mic claim. Explain a real recovery path, never open an APK URL.
+    updateActionTimer = setTimeout(() => {
+      const latest = J(d.updateState?.());
+      if (latest) upd = latest;
+      updateAction = upd?.state === 'deferred' && !knownTakeLive()
+        ? 'If no recording is active, force stop Wizard OS in Android’s App info, reopen it, then tap Install now'
+        : '';
+      refreshUpdate();
+    }, 2500);
   }
   const UPD_TEXT = {
     available: u => [`Wizard OS ${u.version} is available`, 'Update'],
-    // Downloaded + verified in the background; installs by itself once Wizard OS is in the background, or now on tap.
-    ready: () => ['Update ready · tap to restart', 'Restart'],
+    // Ready/deferred share one owner action. Never promise an automatic restart.
+    ready: u => [readyMessage(u), 'Install now'],
     downloading: u => [`Downloading ${u.version}… ${u.progress || 0}%`, ''],
     verifying: u => [`Checking ${u.version}…`, ''],
     installing: () => ['Restarting into the update…', ''],
     confirm: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
     installer: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
-    deferred: u => [Date.now() < updateConfirmUntil ? (u.meetingResumeAfterUpdate && window.WizAppCapture?.getState?.()?.meetingId ? 'Tap again to pause the meeting and update' : 'The update waits until this recording ends') : deferredText(u), 'Install now'],
+    deferred: u => [readyMessage(u), 'Install now'],
     permission: () => ['Allow Wizard OS to install updates, then come back', 'Allow'],
     error: u => [u.message || 'Update failed', 'Retry'],
   };
@@ -334,15 +343,15 @@
       ($('#device') || document.body).appendChild(el);
       el.addEventListener('click', e => {
         if (e.target.closest('[data-upd="later"]')) { updHidden = upd?.versionCode || 1; renderUpdate(); return; }
-        // The whole "Update ready · tap to restart" banner is the button; elsewhere only the button acts.
-        if (e.target.closest('[data-upd="go"]') || upd?.state === 'ready') { installUpdate(); }
+        // Only Install now starts installation; reading the banner is not consent.
+        if (e.target.closest('[data-upd="go"]')) { installUpdate(); }
       });
     }
     const [msg, btn] = t(u);
     el.hidden = false; el.dataset.state = u.state;
     el.innerHTML = `<span class="dv-ui">↻</span><span class="dv-um">${esc(msg)}</span>${btn ? `<button data-upd="go">${esc(btn)}</button>` : ''}${u.state === 'available' || u.state === 'ready' ? '<button class="later" data-upd="later" aria-label="Later">×</button>' : ''}`;
   }
-  function onUpdate(u) { if (u.state !== 'deferred' || u.versionCode !== upd?.versionCode || u.reason !== upd?.reason) { updateConfirmUntil = 0; clearTimeout(updateConfirmTimer); } upd = u; log('update:' + u.state, u.version || '', u.message || ''); renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }
+  function onUpdate(u) { if (u.state !== 'deferred' || u.versionCode !== upd?.versionCode) { updateAction = ''; clearTimeout(updateActionTimer); } upd = u; log('update:' + u.state, u.version || '', u.message || ''); renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }
 
   /* ================= #22 web hot-reload that keeps drafts =================
    * Detection, thread attribution, the banner and the guarded reload live in core/web-update.js, shared with
@@ -420,7 +429,7 @@
       const n = J(d.notifications()) || {};
       const u = upd || J(d.updateState()) || {};
       const ver = u.installed || (J(d.updateState()) || {}).installed || '';
-      const sub = u.state === 'ready' ? `${u.version} is ready · tap to restart` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${UPD_TEXT.deferred(u)[0]} · Install now` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
+      const sub = u.state === 'ready' ? `${UPD_TEXT.ready(u)[0]} · Install now` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${UPD_TEXT.deferred(u)[0]} · Install now` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
       return { notificationsAllowed: !!n.allowed, installed: ver, updateDescription: sub };
     },
     readRecording,

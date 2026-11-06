@@ -2366,9 +2366,7 @@
     // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
     // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
     // arrived). Adding one row per finished upload left later files out of a send that happened in between.
-    const room = Math.max(0, 8 - files.length);
-    if (list.length > room) toast('!', 'Up to 8 files per message', 2400);
-    const rows = list.slice(0, room).map(file => {
+    const rows = list.map(file => {
       const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
       window.WizUploads?.pending?.track(f, file);
       files.push(f); return [file, f];
@@ -2384,7 +2382,6 @@
   $('#arcScreen').addEventListener('click', async () => {
     if (!sameTake(V.files) || $('#arcScreen').disabled) return;
     const files = V.files;
-    if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
     // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
     const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
     files.push(f); renderVoiceFiles();

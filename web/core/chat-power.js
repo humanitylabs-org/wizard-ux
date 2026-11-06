@@ -649,7 +649,6 @@ window.WosChatPower = function chatPower(A) {
     const c = ch(sh.wid); c.files = c.files || [];
     const had = c.files.findIndex(x => x.id === f.id);
     if (had >= 0) { c.files.splice(had, 1); toast('✕', 'Removed from this message', 1200); }
-    else if (c.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
     else { c.files.push({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes, key: Math.random().toString(36).slice(2), preview: f.kind === 'image' ? F.media(f).url : '' }); toast('📎', `Attached · ${f.kind === 'voice' ? 'Voice note' : clip(f.name, 32)}`, 1400); }
     A.saveDraft(sh.wid); A.refreshCompose(sh.wid);
     paint(sh.pane, A.elOf(sh.pane));

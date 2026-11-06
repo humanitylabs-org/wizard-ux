@@ -24,7 +24,7 @@
         }
       } catch (e) { /* a malformed marker is hidden, not shown */ }
     }
-    return out.slice(0, 8);
+    return out;
   }
   // <helm_attachments>{"items":[…]}</helm_attachments>: port of normalizers.ts helmPresentation.
   const HELM = /<\s*(\/?)\s*helm_attachments\s*>/gi;
@@ -52,7 +52,6 @@
           const mime = typeof it.mime === 'string' ? it.mime.trim().toLowerCase().slice(0, 160) : '';
           if (!HELM_ID.test(id) || !name || !mime) continue;
           const prior = attachments.find(a => a.id === id);
-          if (!prior && attachments.length >= 16) continue;
           // The same envelope is understood by old clients as a bottom attachment.
           // Only validated image IDs become positioned Markdown, never raw paths/HTML.
           if (p.inline === true && (prior ? prior.kind === 'image' : mime.startsWith('image/')) && !placed.has(id)) {
@@ -64,7 +63,6 @@
           if (attachments.some(a => a.id === id)) continue;
           attachments.push({ id, name, mime, kind: kindOf(mime, typeof it.kind === 'string' ? it.kind : ''), bytes: Number(it.bytes) || 0, url: `/wizard/attachments/${id}`,
             transcript: mime.startsWith('audio/') && typeof it.transcript === 'string' ? it.transcript.replace(/\s+/g, ' ').trim().slice(0, 4000) : '' });
-          if (attachments.length === 16) break;
         }
       } catch (e) { /* malformed metadata stays hidden */ }
     }
@@ -92,7 +90,7 @@
       else if (p.type === 'image') { if (p.source?.type === 'base64' && p.source.data) add(`data:${p.source.media_type || 'image/png'};base64,${p.source.data}`); else add(p.url ?? p.image_url ?? p.image); }
     }
     for (const k of ['image_urls', 'imageUrls', 'images']) if (Array.isArray(m?.[k])) m[k].forEach(add);
-    return urls.slice(0, 8);
+    return urls;
   }
   const cleanText = s => reply.strip(String(s || ''))
     .replace(/\[WIZARD_FILES_V1\][\s\S]*?\[\/WIZARD_FILES_V1\]/g, '')
@@ -455,13 +453,13 @@
     all() { try { const v = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } },
     get(k) {
       const d = this.all()[k];
-      return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files.filter(f => f && SAFE_ID.test(String(f.id || ''))).slice(0, 8) : [], reply: reply.clean(d?.reply) };
+      return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files.filter(f => f && SAFE_ID.test(String(f.id || ''))) : [], reply: reply.clean(d?.reply) };
     },
     // Typing never touches a draft's reply (the notification it answers): only setReply or clear does.
     set(k, text, files) {
       if (!k) return;
       const all = this.all();
-      const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })).slice(0, 8);
+      const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
       text = String(text || '');
       const rp = reply.clean(all[k]?.reply);
       if (!text.trim() && !fs.length && !rp) delete all[k];

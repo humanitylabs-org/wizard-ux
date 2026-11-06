@@ -24,6 +24,21 @@ const report = { synthetic: true, source: process.env.QA_SOURCE_SHA || null, mod
 function save() { fs.writeFileSync(path.join(out, 'boot-report.json'), JSON.stringify(report, null, 2) + '\n'); }
 async function interaction(p, row) {
  const started = Date.now(); row.interaction = { steps: [], seconds: 0 };
+ row.mountRetention = await p.evaluate(() => {
+  const surface = WizDesktop.host.chats('restored'), root = surface?.root, slot = surface?.slot;
+  const field = surface?.composer?.querySelector('textarea'), reading = root?.querySelector('.ch-msgs');
+  if (!root || !slot || !field || !reading) return { pass: false, reason: 'shared restored Chats parts missing' };
+  field.value = 'mount retention draft'; field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.focus({ preventScroll: true }); field.setSelectionRange(4, 9);
+  const scroll = reading.scrollTop, fieldScroll = field.scrollTop, probe = document.createElement('div');
+  probe.style.cssText = 'display:flex;flex-direction:column;width:100%;height:100%;min-height:0;min-width:0'; slot.appendChild(probe);
+  const moved = surface.mount(probe) === root, sameField = surface.composer?.querySelector('textarea') === field;
+  const stayed = document.activeElement === field && field.selectionStart === 4 && field.selectionEnd === 9 && field.value === 'mount retention draft' && reading.scrollTop === scroll && field.scrollTop === fieldScroll;
+  const returned = surface.mount(slot) === root; probe.remove();
+  return { pass: moved && sameField && stayed && returned && document.activeElement === field, moved, sameField, stayed, returned };
+ });
+ assert.equal(row.mountRetention.pass, true, 'real shared Chats mount retains provider/body, draft, focus, selection and reading state: ' + JSON.stringify(row.mountRetention));
+ row.interaction.steps.push('shared Chats supplied-slot mount and return; retained draft/focus/selection/reading state');
  await p.evaluate(() => {
   window.__interaction = { samples: 0, failures: [], panelModes: [] };
   window.__interactionTimer = setInterval(() => {
@@ -71,6 +86,7 @@ async function interaction(p, row) {
   }
   const state = await p.evaluate(() => ({ failures: __interaction.failures, state: WosSkinHost.layoutState, diagnostic: localStorage.getItem('wos.layout-fault.v1') }));
   assert.deepEqual(state.failures, [], 'layout stays mounted throughout app/chat/tool interaction: ' + JSON.stringify(state));
+  assert.equal(state.diagnostic, null, 'no saved layout fault during interaction');
   await p.waitForTimeout(6500);
  }
  await notes.evaluate(() => WizardApp.shell.closeCompanion());
@@ -79,6 +95,7 @@ async function interaction(p, row) {
   ...await p.evaluate(() => { clearInterval(__interactionTimer); return { ...__interaction, diagnostic: localStorage.getItem('wos.layout-fault.v1') }; }) };
  assert.ok(row.interaction.seconds >= 120); assert.ok(row.interaction.samples > 600);
  assert.deepEqual(row.interaction.failures, []);
+ assert.equal(row.interaction.diagnostic, null, 'no saved layout fault after interaction');
  assert.equal(await p.locator('#wsList').isVisible(), false);
  assert.equal(await p.locator('.aad-side').isVisible(), true);
  row.checks.push('120s real dock/app/chat/SDK tools/companion interaction; two live skins; no layout off toast');
@@ -215,6 +232,8 @@ async function interaction(p, row) {
       assert.deepEqual([writes, runs], [[], []], 'no writes, no sends');
       assert.deepEqual(errors, [], 'no uncaught browser errors');
       assert.equal(logs.some(m => /\[skin layout:ai-apps\]|\[layout\].*(failed|error)/.test(m.text)), false, 'no caught layout fallback errors');
+      row.layoutFault = await p.evaluate(() => localStorage.getItem('wos.layout-fault.v1'));
+      assert.equal(row.layoutFault, null, 'boot/reload leaves no saved layout fault');
       row.pass = true;
      } catch (e) {
       row.pass = false; row.error = e.stack; report.failures.push({ mode, pass, error: e.stack });

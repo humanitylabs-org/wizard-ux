@@ -35,6 +35,21 @@ test('retained iframe handles are not recreated; chats and closed windows have n
   const f = fixture(), frame = f.host.frame('app'); assert.ok(frame); assert.equal(f.host.frame('app'), frame); assert.equal(f.host.frame('chat'), null);
   assert.equal(f.host.close('app'), true); assert.equal(f.host.frame('app'), null); assert.equal(f.host.frame('missing'), null);
 });
+test('Chats bodies and Settings parts delegate without renderer selectors or another lifecycle store', () => {
+  const f = fixture(), surface = { mount() {}, composer: {} }, closePart = {};
+  let open = true, overlays = 0;
+  f.adapter.chats = id => { assert.equal(id, 'chat'); return surface; };
+  f.adapter.settings = () => ({ isOpen: open, closePart });
+  f.adapter.closeSettings = () => { if (!open) return false; open = false; return true; };
+  f.adapter.settingsOverlay = () => { overlays++; return () => overlays--; };
+  assert.equal(f.host.chats('chat'), surface);
+  assert.equal(f.host.chats('app'), null); assert.equal(f.host.chats('missing'), null);
+  assert.equal(f.host.settings.isOpen(), true); assert.equal(f.host.settings.closePart(), closePart);
+  const release = f.host.settings.overlay(); assert.equal(overlays, 1); release(); assert.equal(overlays, 0);
+  assert.equal(f.host.settings.close(), true); assert.equal(f.host.settings.isOpen(), false); assert.equal(f.host.settings.close(), false);
+  f.host.close('chat'); assert.equal(f.host.chats('chat'), null);
+  assert.equal(f.jobs.length, 0, 'part reads/mount leases do not create a focus/notification echo');
+});
 test('changes coalesce after synchronous paint; teardown and broken listeners do not affect the shell', () => {
   const f = fixture(), seen = []; const off = f.host.onChange(state => seen.push(state));
   f.host.onChange(() => { throw Error('broken layout'); }); f.controller.changed(); f.host.focus('app'); f.controller.changed();

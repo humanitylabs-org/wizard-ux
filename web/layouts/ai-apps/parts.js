@@ -105,10 +105,7 @@ export function noteThread(doc, scope = '') {
  * (.ch-tacts), first, so the note reads like a chat with one action row. Chats' click handler finds it there too
  * (.ch-notif-route [data-notify-route]); a repaint puts it back above the message, so call again on renders. */
 export function noteRouteIntoActions(doc, scope = '') {
-  const t = noteThread(doc, scope); if (!t) return false;
-  const route = t.querySelector('.ch-notif-route'), acts = t.querySelector('.ch-tacts');
-  if (!route || !acts || route.parentNode === acts || route.classList?.contains?.('is-quiet')) return false;   // (round 20: the quiet line stays under the note)
-  acts.insertBefore(route, acts.firstChild); return true;
+  return globalThis.WizChatsHost.placeNotificationRoute(noteThread(doc, scope));
 }
 /** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
  * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)

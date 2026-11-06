@@ -1,22 +1,7 @@
 {
   "desktop.js": [
     "#stage > .wsp:not([hidden])",
-    ".win .dchats .pane-main .ch-compose",
-    ".win .dchats .pane-main .ch-compose",
-    ".win .dchats .pane-main .ch-compose",
-    ".win",
-    "#stage > .wsp",
-    ".dchats",
-    ".dchats",
-    ".win .dchats .pane-main",
-    ".win .dchats .pane-main",
-
-    "#dsettings .st-close",
-    ".win .dchats .pane-main [data-notify-menu]",
-    ".win .dchats .pane-main [data-chact=\"${act}\"]",
-    "dsettings",
-    "#dsettings .st-close",
-    ".win .dchats .pane-main"
+    "#stage > .wsp"
   ],
   "layout.js": [
     ".win.app-chats .ch-compose",

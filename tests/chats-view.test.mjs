@@ -64,3 +64,55 @@ test('fixture uses only the host API, including skin-package banned API rules', 
   for (const token of ['addEventListener', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'fetch(', 'XMLHttpRequest', '__wos', '__wux', 'localStorage', 'sessionStorage', 'innerHTML', 'outerHTML', 'history.', 'document.cookie', 'eval(', 'new Function', 'import(', 'WebSocket']) assert.ok(!text.includes(token), token);
   for (const bad of ['fetch("/secret")', 'import x from "./child.js"', 'import ("/child.js")', 'window.__wos.reset()']) assert.throws(() => h.api.lint(bad), /banned|import/);
 });
+
+function surfaceFixture() {
+  const h = harness(); let live = true, paints = 0, moves = 0;
+  function node() {
+    return { dataset: {}, children: [], parentNode: null, parts: new Map(),
+      get parentElement() { return this.parentNode; },
+      contains(n) { return this === n || this.children.some(c => c.contains(n)); },
+      appendChild(n) {
+        moves++; if (n.parentNode) n.parentNode.children.splice(n.parentNode.children.indexOf(n), 1);
+        if (n.contains(h.s.document.activeElement)) h.s.document.activeElement = null;
+        this.children.push(n); n.parentNode = this; return n;
+      },
+      querySelector(selector) { return this.parts.get(selector) || null; },
+      querySelectorAll(selector) { return this.children.flatMap(c => [...(selector === '*' || c.dataset.chats ? [c] : []), ...c.querySelectorAll(selector)]); },
+    };
+  }
+  h.s.document.createElement = node;
+  const stage = node(), first = node(), second = node(), outside = node(); stage.appendChild(first); stage.appendChild(second);
+  const core = h.api.create({ win: id => live && id === h.w.id ? h.w : null, root: () => stage });
+  core.renderChats = () => paints++;
+  return { ...h, core, stage, first, second, outside, node, get paints() { return paints; }, get moves() { return moves; }, close: () => { live = false; } };
+}
+test('Chats mounts create once, retain identity and focus/read/composer state in another supplied slot', () => {
+  const h = surfaceFixture(), s = h.core.surface('a');
+  assert.ok(Object.isFrozen(s)); assert.equal(s.root, null); assert.equal(h.core.surface('missing'), null);
+  const root = s.mount(h.first); assert.equal(s.root, root); assert.equal(s.slot, h.first); assert.equal(root.dataset.chats, 'a'); assert.equal(h.paints, 1);
+  const field = h.node(); field.value = 'unsent draft'; field.selectionStart = 3; field.scrollTop = 19;
+  field.setSelectionRange = (start, end) => { field.selectionStart = start; field.selectionEnd = end; };
+  field.focus = () => { h.s.document.activeElement = field; }; root.appendChild(field); field.focus(); root.scrollTop = 91;
+  const moves = h.moves; assert.equal(s.mount(h.first), root); assert.equal(h.moves, moves, 'same slot is a no-op');
+  assert.equal(s.mount(h.second), root); assert.equal(s.root, root); assert.equal(s.slot, h.second);
+  assert.equal(h.s.document.activeElement, field); assert.equal(field.value, 'unsent draft'); assert.equal(field.selectionStart, 3); assert.equal(field.scrollTop, 19); assert.equal(root.scrollTop, 91);
+  assert.equal(h.paints, 1, 'adopting a retained body never rerenders its provider');
+  assert.equal(s.mount(root), null, 'cannot mount a body inside itself'); assert.equal(s.mount(field), null, 'cannot mount into its own descendant');
+  assert.equal(s.mount(h.outside), null, 'event-root escape refused'); assert.equal(s.mount(null), null);
+  h.close(); assert.equal(s.root, null); assert.equal(s.mount(h.first), null); assert.equal(h.core.surface('a'), null);
+});
+test('Chats exposes live owned parts only; notification actions share one placement implementation', () => {
+  const h = surfaceFixture(), s = h.core.surface('a'), root = s.mount(h.first);
+  const composer = h.node(), thread = h.node(), route = h.node(), acts = h.node(), title = { textContent: 'Review this' }, button = h.node();
+  root.parts.set('.ch-compose', composer); root.parts.set('.ch-thread.ch-notif-thread', thread);
+  root.parts.set('.ch-thread.ch-notif-thread .ch-head .ti b', title); root.parts.set('[data-notify-menu]', button); root.parts.set('[data-chact="done"]', button);
+  thread.parts.set('.ch-notif-route', route); thread.parts.set('.ch-tacts', acts); route.parentNode = thread;
+  let quiet = true; route.classList = { contains: () => quiet };
+  acts.insertBefore = n => { n.parentNode = acts; };
+  assert.equal(s.composer, composer); assert.equal(s.notification, thread); assert.equal(s.notificationTitle, 'Review this'); assert.equal(s.routeButton, button);
+  assert.equal(s.action('done'), button); assert.equal(s.action('unknown'), null); assert.equal(s.action('done"] *'), null);
+  assert.equal(s.placeNotificationRoute(), false, 'quiet route stays under notification'); quiet = false;
+  assert.equal(s.placeNotificationRoute(), true); assert.equal(route.parentNode, acts); assert.equal(s.placeNotificationRoute(), false, 'no re-entrant mutation echo');
+  root.parts.set('.ch-compose', button); assert.equal(s.composer, button, 'handles follow live repaints');
+  h.close(); assert.equal(s.composer, null); assert.equal(s.action('done'), null); assert.equal(s.placeNotificationRoute(), false);
+});

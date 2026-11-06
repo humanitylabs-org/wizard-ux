@@ -64,6 +64,13 @@
         } finally { focusing = false; }
       },
       close: id => has(id) ? adapter.close(id) === true : false,
+      chats: id => find(id)?.kind === 'chats' ? adapter.chats?.(id) || null : null,
+      settings: Object.freeze({
+        isOpen: () => adapter.settings?.().isOpen === true,
+        closePart: () => adapter.settings?.().closePart || null,
+        close: () => adapter.closeSettings?.() === true,
+        overlay: () => adapter.settingsOverlay?.() || (() => {}),
+      }),
       panes: adapter.panes,
       onChange(fn) {
         if (typeof fn !== 'function') return () => {};
