@@ -129,6 +129,8 @@
 .wos-reload-detail { background: transparent; color: var(--wz-text, var(--ink)); }
 .wos-reload-dot { display: inline-block; width: 5px; height: 5px; margin: 0 6px 2px 0; border-radius: 50%; background: var(--wz-accent, var(--violet)); }
 #dvWeb[data-shell="desktop"]:has(.wos-reload-detail) { height: auto; min-height: 26px; flex-direction: column; align-items: stretch; padding: 4px 7px 6px 10px; border-radius: 14px; }
+/* An expanded alert grows down from the bar, never above the viewport. */
+#bar:has(#dvWeb .wos-reload-detail) .bar-r { align-self: start; align-items: flex-start; padding-top: 3px; }
 #dvWeb[data-shell="desktop"] .wos-reload-detail { position: static; width: auto; max-width: none; padding: 0; border: 0; }
 .dv-update .wos-reload-rescue button { min-height: 44px; }
 .dv-update .wos-reload-rescue button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 2px; }

@@ -60,5 +60,6 @@ test('shared reason has no separate panel; rescue controls retain pill shape and
   const css = readFileSync(new URL('../web/core/update-banner.css', import.meta.url), 'utf8');
   assert.match(css, /\.wos-reload-detail \{ background: transparent/);
   assert.match(css, /\.wos-reload-rescue button \{ min-height: 44px;[^}]*border-radius: 99px/);
+  assert.match(css, /#bar:has\(#dvWeb \.wos-reload-detail\) \.bar-r \{ align-self: start/);
   assert.match(css, /background: var\(--wz-panel/); assert.match(css, /color: var\(--wz-text-secondary/);
 });
