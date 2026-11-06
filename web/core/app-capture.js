@@ -66,18 +66,65 @@
       timer = setTimeout(() => reject(fail(code, code === 'storage_failed' ? 'On-device audio storage timed out (timeout).' : code === 'recovery_timeout' ? 'Recorder recovery timed out. Your audio is kept (RECOVERY_TIMEOUT).' : 'Audio stop timed out; the take is kept. Retry Send or Discard.', { detail: 'timeout' })), ms);
     })]).finally(() => clearTimeout(timer));
   }
+  // Use the existing append-only private diagnostics collector (no backend/APK restart).
+  // Build every field here: never forward exceptions, rows, blobs, metadata or lock client IDs.
+  function storageDiagnostic(operation, error, started, info = {}) {
+    try {
+      if (!W.WizardOSNative || typeof W.fetch !== 'function') return;
+      const code = error ? storageFailure(error).detail : 'ok';
+      const mode = ['readonly', 'readwrite'].includes(info.mode) ? info.mode : null;
+      const phase = ['lock', 'rows', 'native_status', 'native_recover', 'save', 'complete'].includes(info.phase) ? info.phase : null;
+      const key = [operation, code, mode, phase].join(':');
+      const seen = storageDiagnostic.seen ||= new Set();
+      if (seen.has(key) || seen.size >= 24) return;
+      seen.add(key);
+      const number = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+      const result = { db: DB_NAME, requestedVersion: 1, code, mode, phase,
+        elapsedMs: number(Math.max(0, Math.round(Date.now() - started))), blocked: info.blocked === true,
+        oldVersion: number(info.oldVersion), newVersion: number(info.newVersion), actualVersion: number(info.actualVersion),
+        sessionCount: number(info.sessionCount) };
+      // These are aggregate control metadata only. A hung estimate/query must not delay the report.
+      const metadata = Promise.allSettled([
+        Promise.resolve().then(() => navigator.storage?.estimate?.()).then(v => {
+          result.quota = number(v?.quota); result.usage = number(v?.usage);
+        }),
+        Promise.resolve().then(() => W.indexedDB?.databases?.()).then(list => {
+          const db = list?.find(v => v.name === DB_NAME); if (db) result.actualVersion = number(db.version);
+        }),
+        Promise.resolve().then(() => navigator.locks?.query?.()).then(v => {
+          if (v) { result.heldLocks = v.held?.filter(l => l.name === LOCK).length || 0;
+            result.pendingLocks = v.pending?.filter(l => l.name === LOCK).length || 0; }
+        })
+      ]);
+      let timer;
+      void Promise.race([metadata, new Promise(resolve => { timer = setTimeout(resolve, 300); })]).then(() => {
+        clearTimeout(timer);
+        let platform = ''; try { platform = W.WizardOSNative.platform?.() || ''; } catch (_) {}
+        const version = /^android:([0-9]+\.[0-9]+\.[0-9]+)$/.exec(platform)?.[1];
+        const model = /\b(SM-[A-Z0-9-]{1,20})\b/.exec(navigator.userAgent || '')?.[1] || 'Android-WebView';
+        const payload = { schema: 1, session: { id: 'web-storage', model, ...(version ? { appVersion: version } : {}) },
+          events: [{ method: 'storage.' + operation, data: { result } }] };
+        return W.fetch('/wizard-os-home/api/diagnostics/scroll-capture', { method: 'POST', credentials: 'same-origin',
+          redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(3000), keepalive: true });
+      }).catch(() => {}); // Diagnostics never alter capture custody or admission.
+    } catch (_) {}
+  }
   function openDB() {
     if (!dbPromise) dbPromise = new Promise((resolve, reject) => {
-      if (!W.indexedDB) return reject(fail('storage_unavailable', 'Durable capture storage is unavailable.', { detail: 'unavailable' }));
+      const started = Date.now(), info = { blocked: false };
+      if (!W.indexedDB) { const e = fail('storage_unavailable', 'Durable capture storage is unavailable.', { detail: 'unavailable' }); storageDiagnostic('open', e, started, info); return reject(e); }
       let settled = false, req;
       const finish = (error, db) => {
         if (settled) { db?.close(); return; }
         settled = true; clearTimeout(timer);
+        storageDiagnostic('open', error, started, { ...info, actualVersion: db?.version });
         if (error) reject(storageFailure(error)); else resolve(db);
       };
       const timer = setTimeout(() => finish({ detail: 'timeout' }), 1500);
       try { req = indexedDB.open(DB_NAME, 1); } catch (e) { finish(e); return; }
-      req.onupgradeneeded = () => {
+      req.onupgradeneeded = e => {
+        info.oldVersion = e.oldVersion; info.newVersion = e.newVersion;
         if (settled) { req.transaction?.abort(); return; }
         req.result.createObjectStore('sessions', { keyPath: 'id' });
         req.result.createObjectStore('chunks', { keyPath: ['id', 'seq'] }).createIndex('id', 'id');
@@ -88,20 +135,29 @@
         finish(null, db);
       };
       req.onerror = () => finish(req.error);
-      req.onblocked = () => finish({ detail: 'blocked' });
+      req.onblocked = e => { info.blocked = true; info.oldVersion = e.oldVersion; info.newVersion = e.newVersion; finish({ detail: 'blocked' }); };
     });
     const opening = dbPromise;
     opening.catch(() => { if (dbPromise === opening) dbPromise = null; });
     return opening;
   }
   async function transaction(stores, mode, work) {
-    const db = await openDB();
+    const db = await openDB(), started = Date.now();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(stores, mode); let result;
-      const timer = setTimeout(() => { try { tx.abort(); } catch (_) {} reject(fail('storage_failed', 'On-device audio storage timed out (timeout).')); }, 1500);
-      tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
-      tx.onerror = tx.onabort = () => { clearTimeout(timer); reject(tx.error || fail('storage_failed', 'Capture could not be saved.')); };
-      try { result = work(tx); } catch (e) { tx.abort(); reject(e); }
+      let tx, settled = false, timer;
+      const finish = error => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        // Report failures and the first successful write only, not every audio chunk/read.
+        if (error || mode === 'readwrite') storageDiagnostic('transaction', error, started, { mode, actualVersion: db.version });
+        if (error) reject(error); else resolve(result);
+      };
+      let result;
+      try { tx = db.transaction(stores, mode); } catch (e) { finish(e); return; }
+      timer = setTimeout(() => { finish(fail('storage_failed', 'On-device audio storage timed out (timeout).', { detail: 'timeout' })); try { tx.abort(); } catch (_) {} }, 1500);
+      tx.oncomplete = () => finish();
+      tx.onerror = tx.onabort = () => finish(tx.error || fail('storage_failed', 'Capture could not be saved.'));
+      try { result = work(tx); } catch (e) { finish(e); try { tx.abort(); } catch (_) {} }
     });
   }
   async function rows() {
@@ -793,11 +849,12 @@
   async function recoverLocked(lease) {
     const check = () => { if (lease?.cancelled) throw fail('recovery_yielded', 'Recovery yielded to microphone start.'); };
     check();
-    let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
+    if (lease) lease.phase = 'rows';
+    let all = await rows(); if (lease) lease.sessionCount = all.length; check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
     const meeting = meetingBridge(); let meetingStatus = null;
     const readMeetingStatus = async () => {
       let st;
-      try { st = await meeting.status(); }
+      try { if (lease) lease.phase = 'native_status'; st = await meeting.status(); }
       catch (_) { st = null; }
       check();
       if (typeof st?.recording !== 'boolean') recoveryError = fail('native_owner_uncertain', 'Native recorder status is unknown.');
@@ -829,6 +886,7 @@
       try {
       if (row.native && row.nativeId) {
         const a = adapter({ kind: row.kind }, row);
+        if (lease) lease.phase = 'native_recover';
         const recovered = await a.recover?.(row); check();
         if (recovered?.live) { recoveryLive.add(row.id); await put({ ...row, status: 'recoverable', partial: true, recoveryError: null }); continue; }
         recoveryLive.delete(row.id);
@@ -841,6 +899,7 @@
       }
       // No assumption that an empty take succeeded: expose even zero-byte partial
       // metadata so the task can show interrupted start rather than silently erase it.
+      if (lease) lease.phase = 'save';
       await put({ ...row, status: 'pending', partial: true });
       } catch (e) {
         check(); recoveryError = e;
@@ -868,12 +927,13 @@
     finally { expired = true; }
   }
   async function recover() {
-    let unlock, lease;
+    let unlock, lease; const started = Date.now();
     try { unlock = await acquireBounded();
       if (active?.instant) return;
-      lease = { unlock, cancelled: false }; recoveryLease = lease;
-      recoveryError = null; await bounded(recoverLocked(lease), 4500, 'recovery_timeout'); }
-    catch (e) { if (e.code === 'recovery_yielded') return; if (e.code !== 'busy') { recoveryError = e; throw e; }
+      lease = { unlock, cancelled: false, phase: 'rows' }; recoveryLease = lease;
+      recoveryError = null; await bounded(recoverLocked(lease), 4500, 'recovery_timeout');
+      storageDiagnostic('recovery', recoveryError, started, { phase: 'complete', sessionCount: lease.sessionCount }); }
+    catch (e) { if (e.code === 'recovery_yielded') return; storageDiagnostic('recovery', e, started, { phase: lease?.phase || 'lock', sessionCount: lease?.sessionCount }); if (e.code !== 'busy') { recoveryError = e; throw e; }
       const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
     finally { if (lease) lease.cancelled = true; if (recoveryLease === lease) recoveryLease = null; unlock?.(); changed(); }
   }
