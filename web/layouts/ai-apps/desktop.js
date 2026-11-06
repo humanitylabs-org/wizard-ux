@@ -2,7 +2,7 @@
  * measured at 1440 × 900 and 1280 × 800 (~/.hermes/cache/screenshots/ai-apps-ref/REPORT.md §6), with Wizard's own
  * pieces in it. Worn by the same miguel/ai-apps tweak as the phone (layout.js hands the desktop shell here).
  *
- *   - Sidebar on the left, 288 px (Claude's width, ChatGPT's panel): the Wizard's name, 🔍 (searches chats and apps)
+ *   - Sidebar on the left, 288 px (Claude's width, ChatGPT's panel): the Wizard's name, 🔍 (searches chats only)
  *     and the collapse toggle ◫ in its header; where they list Projects / GPTs / Spaces, the open apps as a grid of
  *     small icons with their names (every open app = desks, badged first then desk order, the badge on the icon; the
  *     same list as the phone drawer, the Apps icons and the Orb satellites), ending in All apps = the three-level
@@ -185,11 +185,11 @@ export default function desktop(api) {
   // round 8 (Miguel): text only and a small chevron, no disc before the name
   const wsName = el('span', 'aad-wsn');
   wsBtn.append(wsName, icon('down', 'aad-ico aad-wsc'));
-  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); findBtn.append(icon('search'));
+  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
   // (round 18 item 4a, Miguel: the Ready count sits on Ready's own header, as on the rail; none on ◫ any more)
   const searchBox = el('label', 'aad-search'); searchBox.hidden = true;
-  const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off' });
+  const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats', 'aria-label': 'Search chats', autocomplete: 'off' });
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
   const cancelBtn = el('button', 'aad-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
   // (round 16: no ⌂ here any more; Home = a chat's ✕, Esc, ⌥`)
@@ -206,7 +206,7 @@ export default function desktop(api) {
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
-  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); rFind.append(icon('search'));
+  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); rFind.append(icon('search'));
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); rSet.append(icon('cog'));
   const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
   rail.append(rTog, rNew, rFind, rList, rSet);
@@ -438,7 +438,7 @@ export default function desktop(api) {
   api.listen(globalThis, 'resize', () => applySizes());
   scene.append(grips);
 
-  /* ---------- search (a field over the same lists, as on the phone) ---------- */
+  /* ---------- contextual Chats search (apps stay in the global launcher) ---------- */
   let q = '';
   function setSearch(on) {
     if (on && root.dataset.aadSide === 'rail') { if (narrow()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } else { folded = false; api.storage.set('folded', false); } paintSide(); }
@@ -511,16 +511,6 @@ export default function desktop(api) {
     if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1)); return; }
     focusWant = ''; focusing = false;
   }
-  function appCell(a) {
-    const b = el('button', 'aad-gi', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, ...(a.id === here().app ? { 'aria-current': 'page' } : {}) });
-    const ic = el('span', 'aad-gt'), n = el('b', 'aad-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
-    ic.append(appTile(a.id), n);
-    b.append(ic, el('span', 'aad-gn', { text: a.name }));
-    b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
-    api.listen(b, 'click', () => { if (q) setSearch(false); goApp(a.id); });
-    return b;
-  }
-  const grid = (label, cells) => { const g = el('div', 'aad-grid', { role: 'list', 'aria-label': label }); g.append(...cells); return g; };
 
   /* ---------- round 15: All apps (round 16: the right column's last row, ⌥T) ----------
    * A sheet over the main area: every app as a big icon with its name (the open ones, then every installed app, then
@@ -703,22 +693,19 @@ export default function desktop(api) {
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
-    const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
-    // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
-    // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
-    const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
+    const s = sessions || readSessions(), h = here();
+    // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
+    const sig = JSON.stringify([q,
       secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
-      const hitsA = apps.filter(a => a.id !== CHATS && !a.agent && !a.connector && !a.dev && matches(a, q));
       const seen = new Set(), hitsC = KINDS.flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
-      if (hitsA.length) out.push(label('Apps'), grid('Apps', hitsA.map(appCell)));
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
-      if (!hitsA.length && !hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chat or app by that name.' }));
+      if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else {
-      // the sidebar is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
+      // The sidebar and its search are Chats only; app search belongs to the global launcher.
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
         const rows = s[k] || [], on = !!secOpen[k];

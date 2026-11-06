@@ -375,7 +375,52 @@ test('top bar: ☰ (the unread badge) · Home · the workspace switcher (Home on
   assert.equal(w.q('.aa-top'), null); assert.equal(w.html.dataset.aiApps, undefined); assert.equal(w.html.dataset.viewChrome, undefined);
 });
 
-test('search covers chats (archive too) and apps; a chat row opens its thread; a long press opens its menu, mapped to Chats\' own actions', async () => {
+test('desktop contextual Chats search never recommends apps; local input, rail, Back and thread actions stay intact', async () => {
+  const w = world({ shell: 'desktop' }), keys = [];
+  Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n,
+    keys: { on: h => { keys.push(h); return () => {}; }, guide: () => () => {} },
+    orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} },
+    voice: { state: () => ({ state: 'idle' }), talk() {}, command() {} } });
+  const ordinaryApps = w.api.apps.list;
+  w.api.apps.list = () => [...ordinaryApps(), { id: 'browser', name: 'Browser' }, { id: 'app-only', name: 'Apponlycounterexample' }];
+  w.st.sessions.ready[0].title = 'Browser research';
+  w.st.sessions.archive[0].title = 'Old browser discussion';
+  w.st.sessions.archive.push({ ...w.st.sessions.ready[0] }); // same thread in two buckets: one result
+  const off = (await layout()).default(w.api);
+  const ids = () => w.qa('.aad-scroll .aad-rw').map(n => n.dataset.sid);
+  const sections = () => w.qa('.aad-sec').map(n => [n.dataset.sec, n.getAttribute('aria-expanded')]);
+  const originalSections = sections(), originalIds = ids();
+  const input = q => { const f = w.q('.aad-q'); f.value = q; f.dispatchEvent(new FakePointerEvent('input')); };
+  for (const s of ['.aad-find', '.aad-rfind', '.aad-q']) assert.equal(w.q(s).getAttribute('aria-label'), 'Search chats');
+  assert.equal(w.q('.aad-q').getAttribute('placeholder'), 'Search chats');
+  w.q('.aad-find').dispatchEvent(new FakePointerEvent('click'));
+  const readSessions = w.api.sessions.list;
+  w.api.sessions.list = () => { throw Error('typing must use the existing local projection'); };
+  input('browser');
+  w.api.sessions.list = readSessions;
+  assert.deepEqual(ids(), ['r1', 'a1'], 'synchronous current + archive thread matches, deduplicated');
+  assert.equal(w.q('.aad-scroll [data-app]'), null, 'installed Browser never enters contextual results');
+  assert.deepEqual(w.qa('.aad-scroll .aad-lab').map(n => n.textContent), ['Chats']);
+  for (const term of ['Apponlycounterexample', 'no-such-chat']) {
+    input(term); assert.deepEqual(ids(), []); assert.equal(w.q('.aad-scroll [data-app]'), null);
+    assert.equal(w.q('.aad-empty').textContent, 'No chats by that name.');
+    w.q('.aad-q').dispatchEvent(new FakePointerEvent('keydown', { key: 'Enter' }));
+    assert.deepEqual(w.st.opened, [], 'Enter on empty results must not open an app or thread');
+  }
+  input(''); assert.deepEqual(sections(), originalSections); assert.deepEqual(ids(), originalIds);
+  input('browser'); w.q('.aad-cancel').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.q('.aad-search').hidden, true); assert.deepEqual(sections(), originalSections);
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'rail');
+  w.q('.aad-rfind').dispatchEvent(new FakePointerEvent('click')); input('browser'); assert.deepEqual(ids(), ['r1', 'a1']);
+  assert.equal(w.escape(), true); assert.equal(w.q('.aad-search').hidden, true); assert.deepEqual(sections(), originalSections);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyK' }), true); input('browser');
+  w.q('.aad-rw[data-sid="a1"] .aad-row').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.st.opened, ['thread:a1'], 'exact archive thread clicked, no app open');
+  assert.deepEqual(w.st.acts, []); assert.equal(w.q('.aad-search').hidden, true);
+  off();
+});
+
+test('phone search still covers chats (archive too) and apps; a chat row opens its thread; a long press opens its menu, mapped to Chats\' own actions', async () => {
   const w = world();
   (await layout()).default(w.api);
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
