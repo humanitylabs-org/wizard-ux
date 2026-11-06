@@ -214,7 +214,8 @@
     const card = el.querySelector('.wl-card');
     card.classList.toggle('wide', (step === 'ai' && !!provider) || (step === 'bring' && bringOpen));
     el.classList.toggle('wl-peek', step === 'look');
-    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
+    const cancel = `<button type="button" class="wl-cancel" data-wl="cancel" aria-label="Cancel setup" title="Cancel setup"${saving || sending ? ' disabled' : ''}>&times;</button>`;
+    card.innerHTML = cancel + (step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello());
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
     if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); back(); } }, true); } catch (e) {} });
@@ -291,6 +292,7 @@
     else if (act === 'next') { step = nextStep(); bringOpen = false; log('step:' + step); paint(); }
     else if (act === 'bring' && step === 'bring') { bringOpen = true; log('bring:open'); paint(); }
     else if (act === 'skip-name' && step === 'name' && !saving) { log('name:skipped'); fromName(); }
+    else if (act === 'cancel' && !saving && !sending) { write('done'); markSeen(); close(); log('cancel'); }
   }
 
   async function onSubmit(e) {
@@ -336,8 +338,12 @@
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
+      // A configured Wizard wins over stale per-browser progress left by an older Welcome. Existing owners should
+      // never be asked to set up this browser again, and a local cancellation remains closed while its seen write retries.
+      if (setup?.first_run === false) { if (state !== 'done') write('done'); return; }
+      if (state === 'done') return;
       if (ok === false) return open('ai');
-      if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
+      if (ok === true && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
   }
 

@@ -11,8 +11,8 @@ const welcome = readFileSync(new URL('../web/core/welcome.js', import.meta.url),
 const config = readFileSync(new URL('../web/core/config.js', import.meta.url), 'utf8')
 const wait = async (n = 12) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 2)) }
 
-function fakeBox({ name = 'Wizard', authenticated = false, failPut = false, live = true } = {}) {
-  const box = { settings: { agent: { name, adapter: 'hermes-plugin' }, owner: { name: '' } }, puts: [] }
+function fakeBox({ name = 'Wizard', authenticated = false, failPut = false, live = true, firstRun = true } = {}) {
+  const box = { settings: { agent: { name, adapter: 'hermes-plugin' }, owner: { name: '' } }, puts: [], seen: 0 }
   const ok = (body, status = 200) => ({ ok: status < 300, status, json: async () => JSON.parse(JSON.stringify(body)) })
   box.fetch = async (url, init = {}) => {
     const u = String(url), method = init.method || 'GET'
@@ -23,7 +23,8 @@ function fakeBox({ name = 'Wizard', authenticated = false, failPut = false, live
       box.settings = { ...box.settings, ...input }; return ok({ settings: box.settings })
     }
     if (u.endsWith('/wizard/v1/settings')) return ok({ settings: box.settings })
-    if (u.endsWith('/wizard/v1/setup')) return ok({ first_run: true })
+    if (u.endsWith('/wizard/v1/setup/seen') && method === 'POST') { box.seen++; return ok({ ok: true }) }
+    if (u.endsWith('/wizard/v1/setup')) return ok({ first_run: firstRun })
     if (u.endsWith('/wizard/hermes/api/model/options')) return ok({ providers: [{ slug: 'anthropic', authenticated }] })
     return ok({})
   }
@@ -31,8 +32,8 @@ function fakeBox({ name = 'Wizard', authenticated = false, failPut = false, live
 }
 
 // A small DOM: the overlay keeps its handlers and the card keeps its HTML, so a test can read the copy and press buttons.
-function device(box, { pointer = 'fine' } = {}) {
-  const handlers = {}, store = new Map()
+function device(box, { pointer = 'fine', initial = {} } = {}) {
+  const handlers = {}, store = new Map(Object.entries(initial))
   const input = { value: '', disabled: false, focus() {}, select() {} }
   const card = { _html: '', classList: { toggle() {} }, focus() {},
     set innerHTML(h) { card._html = h; const m = /<input[^>]*value="([^"]*)"/.exec(h); if (m) input.value = m[1].replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') },
@@ -61,7 +62,7 @@ function device(box, { pointer = 'fine' } = {}) {
   const press = act => handlers.click({ target: { closest: s => (s === '[data-wl]' ? { dataset: { wl: act } } : null) } })
   const submit = () => handlers.submit({ preventDefault() {} })
   const boot = async () => { W.boot({ app: () => null, deeplinked: () => false, busy: () => false, send: async () => ({ sessionId: 's1' }) }); await wait() }
-  return { W, ctx, card, input, press, submit, boot, html: () => card._html }
+  return { W, ctx, card, input, press, submit, boot, store, html: () => card._html }
 }
 
 test('Name your Wizard: first step, only while the agent has the default name', async () => {
@@ -186,4 +187,29 @@ test('two devices: simultaneous saves settle on one name that both devices read 
 
 test('Name your Wizard: the name field is in the keyboard focus trap', () => {
   assert.match(welcome, /querySelectorAll\('button:not\(\[disabled\]\),input:not\(\[disabled\]\),textarea/)
+})
+
+test('Welcome: an already configured Wizard ignores stale local onboarding progress even without a connected AI', async () => {
+  const d = device(fakeBox({ authenticated: false, firstRun: false }), { initial: { 'wos.welcome.v1': 'ai' } })
+  await d.boot()
+  assert.equal(d.W.active, false)
+  assert.equal(d.store.get('wos.welcome.v1'), 'done')
+})
+
+test('Welcome: Cancel setup is always visible and permanently dismisses the flow without renaming', async () => {
+  const box = fakeBox(), d = device(box)
+  await d.boot()
+  assert.match(d.html(), /data-wl="cancel"[^>]*aria-label="Cancel setup"/)
+  d.press('skip-name'); await wait()
+  assert.match(d.html(), /Connect your AI/)
+  assert.match(d.html(), /data-wl="cancel"[^>]*aria-label="Cancel setup"/)
+  d.press('cancel'); await wait()
+  assert.equal(d.W.active, false)
+  assert.equal(d.store.get('wos.welcome.v1'), 'done')
+  assert.equal(box.seen, 1)
+  assert.equal(box.puts.length, 0)
+
+  const reloaded = device(fakeBox({ authenticated: false, firstRun: true }), { initial: { 'wos.welcome.v1': 'done' } })
+  await reloaded.boot()
+  assert.equal(reloaded.W.active, false)
 })

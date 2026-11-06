@@ -11,11 +11,12 @@ test('Welcome: Claude is listed first and recommended, then ChatGPT', () => {
   assert.match(js, /app: 'wizard-claude', name: 'Claude', note: 'Recommended'/);
 });
 
-test('Welcome: opens only without a signed-in provider, resumes after sign-in, never on a deep link', () => {
+test('Welcome: opens only while setup remains unseen, resumes after sign-in, never on a deep link', () => {
   const js = read('web/core/welcome.js');
   assert.match(js, /return aiConnected\(j, slug\);/); // what counts: tests/welcome-ai-ready.test.mjs
-  assert.match(js, /if \(ok === false\) return open\('ai'\)/);
-  assert.match(js, /if \(ok === true && state !== 'done' && \(state === 'ai' \|\|/);
+  assert.match(js, /if \(setup\?\.first_run === false\) \{ if \(state !== 'done'\) write\('done'\); return; \}/);
+  assert.match(js, /if \(state === 'done'\) return;\s+if \(ok === false\) return open\('ai'\)/);
+  assert.match(js, /if \(ok === true && \(state === 'ai' \|\| setup\?\.first_run === true\)\) return open\('look'\)/);
   assert.match(js, /if \(h\.deeplinked\?\.\(\)\) \{ log\('deeplink'\); return; \}/);
 });
 
