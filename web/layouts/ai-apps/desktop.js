@@ -345,13 +345,17 @@ export default function desktop(api) {
   const clampTo = (v, lo, hi) => Math.round(Math.min(Math.max(v, lo), Math.max(lo, hi)));
   /** each panel's width now (the owner's, else the default) within its limits: [now, lo, hi]; the app panel always
    * leaves the middle 320 px (the composer and the orb) */
+  // (sizes() first runs while the view is still being built, before `pane` below exists)
+  const paneWins = () => { try { return pane?.el?.querySelectorAll?.(':scope > .win:not(.gone)').length || 0; } catch (_) { return 0; } };
   function sizes() {
     const W = vw(), hi = Math.round(Math.min(SIZE_LIMITS.side[1], W * .32));
     const side = clampTo(sized.side ?? SIDE, SIZE_LIMITS.side[0], hi);
     const tabs = clampTo(sized.tabs ?? COLS.tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25));
     const sideNow = root.dataset.aadSide === 'open' ? side : RAIL, tabsNow = root.dataset.aadTabs === 'rail' ? COLS.tabsRail : tabs;
     const appHi = Math.min(SIZE_LIMITS.app[1], W - sideNow - tabsNow - 320);
-    const app = clampTo(sized.app ?? Math.round(Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
+    // an app shown with its companion pane (Video Editor's video + Feedback) needs room for both columns: wider by
+    // default until the owner sizes the panel himself (James, 6 Nov 2026)
+    const app = clampTo(sized.app ?? Math.round(paneWins() > 1 ? Math.max(900, W * .62) : Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
     return { side: [side, SIZE_LIMITS.side[0], hi], tabs: [tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25)], app: [app, SIZE_LIMITS.app[0], appHi] };
   }
   /* round 10 (Miguel: dragging felt laggy): a drag writes only what changed, once a frame. While a grip is held
@@ -1215,6 +1219,16 @@ export default function desktop(api) {
     api.after(120, () => { paintVt(true); paintTop(); });
   }
 
+  /* a window joining or leaving the shown app's desk (a companion pane) re-sizes the panel once */
+  let winsMo = null, winsEl = null, winsN = 0;
+  function watchPaneWins() {
+    const host = pane?.el || null; if (host === winsEl) return;
+    winsMo?.disconnect(); winsMo = null; winsEl = host; winsN = paneWins();
+    if (host && globalThis.MutationObserver) winsMo = new MutationObserver(() => { const n = paneWins(); if (n !== winsN) { winsN = n; applySizes(); retileSoon(); } });
+    // direct children only: a window added or removed, or one marked gone
+    winsMo?.observe(host, { childList: true });
+    for (const w of host?.querySelectorAll?.(':scope > .win') || []) winsMo?.observe(w, { attributes: true, attributeFilter: ['class'] });
+  }
   /* the app's title-bar tools in the panel's header (round 7's), following the app's changes */
   let toolsMo = null, toolsSrc = null, toolsHost = null;
   const srcTools = () => pane?.el?.querySelector(':scope > .win:not(.gone) > .wbar > .wtools') || null;
@@ -1282,7 +1296,7 @@ export default function desktop(api) {
     };
     if (!docked && !wasDocked && !!(pane && chat) !== !!root.dataset.aadSplit) flip([homeComposer(), orbBox], setState); else setState();
     if (docked && !wasDocked) anim('dock');
-    applySizes();
+    applySizes(); watchPaneWins();
     if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
     // One physical pane owns both the layout header and the app window. Moving
     // the header (not cloning it) preserves its tools/listeners and iframe state.
@@ -1775,6 +1789,7 @@ export default function desktop(api) {
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
+    winsMo?.disconnect();
     toolsMo?.disconnect();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'settingsOver', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
     for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; }
