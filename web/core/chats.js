@@ -3119,7 +3119,11 @@ window.WizCore.chats = function createChats(H) {
     const w = H.win(id); if (!w) return false;
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
     if (globalThis.WosThreadTracker?.on()) {
-      if (globalThis.WosThreadTracker.click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a) })) return true;
+      // Resume = an ordinary owner message through this same send path; it never takes the composer's draft,
+      // quote or files and never leaves the thread (the spinner flips here).
+      const resume = text => { const sid = w.thread, how = 'tapping Resume in the thread tracker';
+        const it = sendChat(id, text, how, null, { sid, away: true, instructions: viewContext(id, how) }); PW?.follow(id); return it; };
+      if (globalThis.WosThreadTracker.click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a), resume })) return true;
       const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; }
     }
     const qj = e.target.closest('[data-ttjump]'); if (qj) { jumpToMessage(id, { message_id: qj.dataset.ttjump || null, at: +qj.dataset.ttjumpAt || 0 }); return true; }

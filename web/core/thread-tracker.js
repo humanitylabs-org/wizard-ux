@@ -12,7 +12,9 @@
  * Everything paints from local state first (a tap never waits on the box); the box then confirms.
  *
  *   WosThreadTracker.on() · load(sid, agent) · stripHtml(sid, agent) · dots(sid, agent) · dotsNode(sid, agent) · loadCounts()
- *   · click(e, { sid, agent, jump }) · itemFor(message) · isOpen() · close() · repaint()
+ *   · click(e, { sid, agent, jump, resume }) · itemFor(message) · isOpen() · close() · repaint()
+ * Stopped rows (marked running, nothing behind them) carry Resume: resume(text) is the host's ordinary owner send,
+ * the row spins on the tap's frame and goes back to stopped only if that send was refused.
  */
 (() => {
   'use strict';
@@ -32,6 +34,16 @@
   const pendingSeen = new Map(); // key → seen writes in flight
   const sendCutoffs = new Map(); // explicit send/steer, scoped to this thread and visit
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
+  // Resume taps: key → { ids:Set, at, started }. The tapped rows spin from the tap until the thread itself reports
+  // work (then the live row owns the spinner) or 30 s pass; a refused send drops the hold at once.
+  const RESUME_MS = 30000;
+  const resuming = new Map();
+  function resumeHeld(k, working) {
+    const r = resuming.get(k); if (!r) return null;
+    if (working) r.started = true;
+    if (r.started || Date.now() - r.at > RESUME_MS) { resuming.delete(k); return null; }
+    return r.ids;
+  }
 
   const isSeen = i => i.seen === true;
   // Same read-time projection as Agent Service: a reply is one thing to check, not one row per ask.
@@ -142,13 +154,15 @@
   };
   function rowHtml(i) {
     const kind = kindOf(i);
-    const act = kind === 'ack' || kind === 'run' || kind === 'stopped' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
+    const act = kind === 'stopped' ? '<button type="button" class="tt-btn resume" data-tt-resume aria-label="Resume: ask the agent to continue this">Resume</button>'
+      : kind === 'ack' || kind === 'run' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
       : i.try ? '<button type="button" class="tt-btn" data-tt-seen aria-label="Looks good">Looks good</button>' : '<button type="button" class="tt-btn go" data-tt-open>Open</button>';
     return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i))}</span></span>${act}</div>`;
   }
   function innerHtml(sid, agent) {
     const k = key(sid, agent), raw = threads.get(k)?.items || [], working = listWorking(sid, agent);
-    const items = groupsOf(raw).map(i => i.kind === 'run' && !working ? { ...i, kind: 'stopped' } : i);
+    const held = resumeHeld(k, working);
+    const items = groupsOf(raw).map(i => i.kind === 'run' && !working && !held?.has(i.id) ? { ...i, kind: 'stopped' } : i);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
     // Keep work in progress visible; only acknowledged history has no strip.
@@ -157,15 +171,18 @@
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
-    const run = live.filter(i => i.state === 'running');
+    const run = live.filter(i => i.state === 'running' && kindOf(i) !== 'stopped');
+    const stopped = live.filter(i => kindOf(i) === 'stopped');
     const fin = live.filter(i => i.state === 'done');
     const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(rowHtml).join('')}</div>` : '';
     const tl = (n, kind) => n ? `<span class="tt-tally" title="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}" aria-label="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}">${dot(kind)}${n}</span>` : '';
-    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, working ? 'run' : 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
-    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group(working ? 'Running' : 'Stopped', run)}${group('Finished · not seen', fin)}`
+    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running - stopped.length, 'run')}${tl(stopped.length, 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+    // One Resume for every stopped row sits beside the header (never inside its toggle button).
+    const headRow = stopped.length ? `<div class="tt-hrow">${head}<button type="button" class="tt-btn resume" data-tt-resume-all aria-label="Resume ${stopped.length} stopped">Resume</button></div>` : head;
+    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Stopped', stopped)}${group('Finished · not seen', fin)}`
       + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
-    return head + body;
+    return headRow + body;
   }
   function stripHtml(sid, agent = '') {
     if (!on() || !sid || sid === '__new__') return '';
@@ -179,8 +196,9 @@
     const k = key(sid, agent), loaded = threads.get(k);
     const c = loaded?.items.length ? tally(loaded.items) : counts[k];
     if (!c) return '';
+    const lw = listWorking(sid, agent), spin = lw || !!resumeHeld(k, lw);
     const n = (v, kind, label) => v ? `<span class="tt-d" title="${v} ${label}" aria-label="${v} ${label}">${dot(kind)}${v > 1 ? `<b>${v}</b>` : ''}</span>` : '';
-    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, listWorking(sid, agent) ? 'run' : 'stopped', listWorking(sid, agent) ? 'running' : 'stopped') + n(c.done_unseen, 'done', 'finished, not seen');
+    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, spin ? 'run' : 'stopped', spin ? 'running' : 'stopped') + n(c.done_unseen, 'done', 'finished, not seen');
     return html ? `<span class="tt-dots" data-tt-dots="${esc(key(sid, agent))}">${html}</span>` : '';
   }
   // The same dots as a node, for a list that builds its rows with the DOM (the AI apps sidebar).
@@ -339,7 +357,28 @@
   }
   function close() { if (!opened) return false; openKeys.delete(opened); opened = null; repaint(); return true; }
   // Returns true when the tap belonged to the tracker.
-  function click(e, { sid, agent = '', jump } = {}) {
+  // Stopped rows as the strip shows them right now (the same projection as innerHtml).
+  function stoppedOf(sid, agent) {
+    const k = key(sid, agent), working = listWorking(sid, agent), held = resumeHeld(k, working);
+    if (working) return [];
+    return groupsOf(threads.get(k)?.items || []).filter(i => i.kind === 'run' && !held?.has(i.id));
+  }
+  // Paint first: the rows spin on this frame; the host's ordinary send follows. A refused send puts them back
+  // (the host's send path shows its own error).
+  function resumeRows(sid, agent, rows, resume) {
+    if (!rows.length || typeof resume !== 'function') return null;
+    const k = key(sid, agent), prev = resuming.get(k);
+    const hold = { ids: new Set([...(prev && !prev.started ? prev.ids : []), ...rows.map(i => i.id)]), at: Date.now(), started: false };
+    resuming.set(k, hold); changedEvent();
+    setTimeout(() => { if (resuming.get(k) === hold) repaint(); }, RESUME_MS + 50);
+    const text = `Continue the stopped items: ${rows.map(i => i.title).join('; ')}`;
+    const undo = () => { if (resuming.get(k) === hold) { resuming.delete(k); changedEvent(); } };
+    let sent;
+    try { sent = resume(text); } catch (_) { undo(); return null; }
+    Promise.resolve(sent).then(it => { if (!it) undo(); }, undo);
+    return text;
+  }
+  function click(e, { sid, agent = '', jump, resume } = {}) {
     const t = e.target;
     const strip = t.closest?.('[data-tt-strip]');
     if (!strip) { if (opened && !t.closest?.('[data-tt-strip]')) close(); return false; }
@@ -349,10 +388,12 @@
       repaint(); return true;
     }
     if (t.closest('[data-tt-ack]')) { ackKeys.has(k) ? ackKeys.delete(k) : ackKeys.add(k); repaint(); return true; }
+    if (t.closest('[data-tt-resume-all]')) { resumeRows(s, a, stoppedOf(s, a), resume); return true; }
     const row = t.closest('[data-tt-row]');
     if (!row) return true;
     const item = groupsOf(threads.get(k)?.items || []).find(i => i.id === row.dataset.ttRow);
     if (!item) return true;
+    if (t.closest('[data-tt-resume]')) { resumeRows(s, a, stoppedOf(s, a).filter(i => i.id === item.id), resume); return true; }
     if (t.closest('[data-tt-seen]')) { markSeen(s, a, item.ids); return true; }
     // Opening is not seeing: close the list and jump; the visible dwell acknowledges green replies.
     openKeys.delete(k); opened = null; repaint();
