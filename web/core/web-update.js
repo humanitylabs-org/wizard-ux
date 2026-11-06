@@ -7,8 +7,9 @@
  * thread(s) that made it (ux-changes.json), the banner with Thread / Threads ▾ beside Reload, Back/Esc folding
  * the list, and the guarded reload. A shell supplies only the host: where the banner mounts, how to open a
  * thread, when a reload is unsafe, what to save first. Layout lives in each shell's CSS (#dvWeb):
- * phone = glass strip under the status bar, desktop = pill in the top bar. Reloads only when tapped; a tap
- * made while a recording would be lost waits for that recording to end (see reload()). */
+ * phone = glass strip under the status bar, desktop = pill in the top bar. Reloads when tapped; a tap
+ * made while a recording would be lost waits for that recording to end (see reload()). The desktop also reloads by
+ * itself once its window is hidden or quiet (see quietReady()). */
 (() => {
   'use strict';
   const BASE = new URL('../', document.currentScript.src);
@@ -102,7 +103,7 @@
    * and recorders are in play. A native meeting (Android foreground service) keeps recording through a reload
    * and Mizel reattaches to it, so it no longer blocks. A recording that lives in this page (browser mic) or a
    * save in progress turns Reload into "Reload when recording ends": the reload then happens by itself, once,
-   * right after the recording stops and saves. Nothing else ever reloads on its own. */
+   * right after the recording stops and saves. Otherwise only a quiet desktop (quietReady) reloads on its own. */
   function hostBusy() { try { return !!H?.busy?.(); } catch (_) { return true; } }
   function plan() {
     const svc = window.WizAppServices?.update;
@@ -226,8 +227,50 @@
     if (p.host || !p.ok) { if (!!p.recording !== armed.recording) { armed.recording = !!p.recording; render(); } return; }
     disarm('ready'); void go('deferred', p);
   }
+  /* Quiet update (James, 7 Nov 2026: his desktop sat on a build from the afternoon through ten releases because
+   * Reload only happens on a tap). A host that opts in (autoApply: the desktop) reloads by itself into a pending
+   * update, but only when nobody is using it: the window is hidden, or nothing was typed, clicked or moved for
+   * QUIET_IDLE_MS. Never while typing into a field with text, and never past any hold a tap would wait on (voice,
+   * sending, a recording, unsaved app work, a kept meeting). Drafts, windows and desks are saved as for a tap.
+   * Once per build: a reload that lands on the same build again does not retry for QUIET_RETRY_MS. */
+  const QUIET_IDLE_MS = 10 * 60e3, QUIET_RETRY_MS = 15 * 60e3, QUIET_KEY = 'wos.web.quiet';
+  let lastInput = Date.now();
+  const touched = () => { lastInput = Date.now(); };
+  function typing() {
+    const a = document.activeElement;
+    if (!a || !(a.isContentEditable || /^(INPUT|TEXTAREA)$/.test(a.tagName || ''))) return false;
+    return !!String((a.isContentEditable ? a.textContent : a.value) || '').trim();
+  }
+  function quietReady() {
+    if (!pending || !H?.autoApply || going || checking || rescuing || armed || !printNow) return false;
+    if (!document.hidden && (Date.now() - lastInput < QUIET_IDLE_MS || typing())) return false;
+    const p = plan(); if (p.host || !p.ok || p.keeps) return false;
+    try { if (H.quietHold?.()) return false; } catch (_) { return false; }
+    try { const last = JSON.parse(sessionStorage.getItem(QUIET_KEY) || 'null'); if (last?.v === printNow && Date.now() - last.at < QUIET_RETRY_MS) return false; } catch (_) {}
+    return true;
+  }
+  function maybeQuiet() {
+    if (!quietReady()) return false;
+    try { sessionStorage.setItem(QUIET_KEY, JSON.stringify({ v: printNow, at: Date.now() })); } catch (_) {}
+    log('web:quiet', document.hidden ? 'hidden' : 'idle'); void go('quiet', plan()); return true;
+  }
   async function go(why, p) {
     if (going) return false; going = true; notice = '';
+    // A quiet reload that meets a hold just stands down: no toast, no notice; the banner stays as it was.
+    if (why === 'quiet') {
+      const ok = q => !q.host && q.ok && !q.keeps;
+      try {
+        if (!ok(plan())) { going = false; render(); return false; }
+        try { H?.beforeReload?.(); } catch (_) {}
+        window.WizAppReadingPosition?.flush();
+        const committed = plan();
+        if (!ok(committed) || typing()) { going = false; render(); return false; }
+        window.WizAppServices?.update.commitReload?.(committed);
+        log('web:reload', why); window.__wosReloading = why; location.reload();
+        setTimeout(() => { going = false; render(); }, 4500);
+        return true;
+      } catch (_) { going = false; render(); return false; }
+    }
     try {
     // A tapped reload bursts across the screen and says "Reloading..." until the new build paints, so the
     // tap visibly worked instead of the banner looking frozen (every skin).
@@ -364,7 +407,14 @@
     polling = true;
     setTimeout(() => check(true), 1500);
     setInterval(() => { if (!document.hidden) check(false); }, 60e3); // one tiny text file a minute
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { check(false); refreshReason(); } });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { check(false); refreshReason(); } else maybeQuiet(); });
+    if (H.autoApply) {
+      for (const n of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'input', 'compositionstart'])
+        document.addEventListener(n, touched, { capture: true, passive: true });
+      // A hidden window keeps noticing releases (the same tiny file, at most once a minute) so it is current before anyone
+      // comes back to it; a visible one is looked at every 30 s for having gone quiet.
+      setInterval(() => { if (document.hidden) check(false).then(maybeQuiet, () => {}); else maybeQuiet(); }, 30e3);
+    }
     addEventListener('wos-native-resume', () => { check(false); refreshReason(); });
     addEventListener('wizard-voice-state', refreshReason);
     window.WosOutbox?.onChange?.(() => { Promise.resolve().then(refreshReason); });
