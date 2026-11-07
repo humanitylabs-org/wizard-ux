@@ -55,7 +55,7 @@ The normal `npm test` command includes a tracked-file portability guard. Only ex
 | Component | Repo | Role |
 |---|---|---|
 | **Wizard UX** | `humanitylabs-org/wizard-ux` (this repo) | The front end: web shell and Android app |
-| **Wizard Agent Service** | currently `server/` in `humanitylabs-org/wizard-mobile`; moving to its own `wizard-agent-service` repo | The back end Wizard UX talks to. It sits in front of Hermes and owns threads, runs, steers, approvals, files, read state and voice recovery |
+| **Wizard Agent Service** | `humanitylabs-org/wizard-agent-service` | The back end Wizard UX talks to. It sits in front of Hermes and owns threads, runs, steers, approvals, files, read state and voice recovery |
 | **Hermes Agent** | `humanitylabs-org/hermes-agent` (fork of NousResearch) | The agent itself |
 | **Legacy Wizard Mobile** | `humanitylabs-org/wizard-mobile` | The previous React client. A porting reference that will be retired once its features are ported |
 | **Wizard OS installer** | `humanitylabs-org/wizardos` | Installs Hermes plus the supporting stack on a host |
