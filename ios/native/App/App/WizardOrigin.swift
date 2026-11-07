@@ -207,3 +207,27 @@ enum TailscaleNet {
         return false
     }
 }
+
+/// Where the app keeps the saved Wizard address: its own UserDefaults suite. Capacitor plugins that Wizard pages can call
+/// only reach `UserDefaults.standard` (the Preferences plugin, removed, wrote there with no key prefix), so a page can't
+/// point the app, and its microphone and camera, at another server; only Connect saves, after the shell check.
+/// An address saved in `.standard` by an older build moves over once and is removed there.
+enum SavedWizard {
+    static let key = "wizardOrigin"
+    static let suite = "ai.wizards.os.saved-wizard"
+
+    static func load(store: UserDefaults, legacy: UserDefaults) -> String? {
+        if store !== legacy, let old = legacy.string(forKey: key) {
+            if store.string(forKey: key) == nil, WizardOrigin.typed(old) != nil || WizardOrigin.parse(old) != nil {
+                store.set(old, forKey: key)
+            }
+            legacy.removeObject(forKey: key)
+        }
+        return store.string(forKey: key)
+    }
+
+    static func save(_ origin: String, store: UserDefaults, legacy: UserDefaults) {
+        store.set(origin + "/", forKey: key)
+        if store !== legacy { legacy.removeObject(forKey: key) }
+    }
+}
