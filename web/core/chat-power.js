@@ -342,7 +342,43 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11/#12 failure recovery ================= */
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s.id));
+  /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread. Off by default:
+   * only while the wizard/background-continue tweak is on. Showing the panel starts nothing; only the tap does. */
+  const BG_TWEAK = 'wizard/background-continue';
+  const backgroundOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(BG_TWEAK); } catch (_) { return false; } };
+  function backgroundHtml(w, s) {
+    const busy = ch(w.id)?.continuing === s.backgroundResult.id;
+    return `<section class="ch-fail ch-bg-result" role="status" data-bg-result="${esc(s.backgroundResult.id)}"><span class="lb">Background result ready</span>
+        <p>This work finished while Wizard wasn’t available. Continue from its saved result when you’re ready.</p>
+        <div class="ch-fail-b"><button type="button" data-background-continue="${esc(s.backgroundResult.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button></div></section>`;
+  }
+  async function continueBackground(id, sid, rid, button) {
+    const c = ch(id);
+    const own = LIVE.session(sid);
+    if (c.continuing || !own || own.agent || own.backgroundResult?.id !== rid) return;
+    c.continuing = rid; if (button) { button.disabled = true; button.textContent = 'Continuing…'; }
+    const ended = ['failed', 'cancelled', 'interrupted'];
+    try {
+      const r = await fetch(`/wizard/background-results/${encodeURIComponent(rid)}/continue`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid }),
+      });
+      const outcome = await r.json().catch(() => ({}));
+      if (!r.ok || ended.includes(outcome.status)) {
+        // 409: the thread moved on (a newer message, a gate, a live run). Its latest request stays in charge.
+        const stale = r.status === 409 || ended.includes(outcome.status);
+        if (stale) { const s = LIVE.session(sid); if (s) s.backgroundResult = null; LIVE.backgroundSettled?.(rid); }
+        toast('!', stale ? 'This thread changed · its latest request stays in charge' : 'Couldn’t continue · tap again', 2600);
+        LIVE.refresh?.(); return;
+      }
+      const s = LIVE.session(sid); if (s) s.backgroundResult = null; LIVE.backgroundSettled?.(rid);
+      toast('↻', outcome.status === 'completed' ? 'Already continued from the saved result' : 'Continuing from the saved result', 1600);
+      LIVE.refresh?.();
+    } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
+    finally { c.continuing = ''; rerenderAll(); }
+  }
   function failureHtml(w, s) {
+    // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
+    if (s?.backgroundResult && !s.agent && backgroundOn()) return backgroundHtml(w, s);
     if (!M || !failedShown(s)) return '';
     const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
     const req = requestOf(w, s);
@@ -684,6 +720,8 @@ window.WosChatPower = function chatPower(A) {
     }
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
     const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0', rc.dataset.recoveryRun || ''); return true; }
+    const bg = t.closest('[data-background-continue]');
+    if (bg) { if (w?.thread && backgroundOn()) void continueBackground(w.id, w.thread, bg.dataset.backgroundContinue, bg); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }

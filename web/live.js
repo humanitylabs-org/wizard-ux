@@ -107,6 +107,10 @@
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
       background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
+      // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs). Only the
+      // off-by-default wizard/background-continue tweak shows it (chat-power.js) or discovers more (below).
+      backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '') && item.wizard_background_result?.session_id === id
+        ? { id: item.wizard_background_result.id } : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -290,6 +294,44 @@
     })().catch(e=>{if(e.status===403) clearTitleIndex();}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
     TITLE_LOADING.set(scope,task); return task;
   }
+  /* Saved background results (Agent Service GET /wizard/background-results, wizard-agent-service #14).
+   * Off by default: runs only while the wizard/background-continue tweak is on. Read-only discovery merged into
+   * Chats; it never starts a model. A result older than the normal list window adds its original thread once.
+   * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
+  function backgroundOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/background-continue'); } catch (_) { return false; } }
+  let backgroundPollTimer = null, backgroundPollUntil = 0;
+  // Results this device already continued (or found stale). A discovery read that started before the tap can land
+  // after it; it must never bring the Continue panel back. Ids are per result, so this only ever grows a little.
+  const BACKGROUND_SETTLED = new Set();
+  function scheduleBackgroundPoll() {
+    if (backgroundPollTimer || document.hidden) return;
+    if (!backgroundPollUntil) backgroundPollUntil = Date.now() + 60000;
+    if (Date.now() > backgroundPollUntil) return;
+    backgroundPollTimer = setTimeout(() => { backgroundPollTimer = null; if (!document.hidden) L.refresh(); }, 1000);
+  }
+  async function mergeBackgroundResults(sessions, isCurrent = () => true) {
+    if (!backgroundOn()) { for (const s of sessions) if (s.backgroundResult) s.backgroundResult = null; return; }
+    let p;
+    try { p = await (await req('/wizard/background-results', listSignal())).json(); }
+    catch (e) { return; } // an older Agent Service lacks this route; normal Chats still works
+    if (!isCurrent()) return;
+    if (!backgroundOn()) { for (const s of sessions) s.backgroundResult = null; return; }
+    if (p?.scanning) scheduleBackgroundPoll();
+    else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
+    const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(id => id && !BACKGROUND_SETTLED.has(id)));
+    // The listing is authoritative: a result continued elsewhere (another device) clears here too.
+    for (const s of sessions) if (s.backgroundResult && (WORKING.has(s.status) || !pending.has(s.backgroundResult.id))) s.backgroundResult = null;
+    // Only the main agent's threads: the Service route is scoped to the main agent (agent_id hermes).
+    const byId = new Map(sessions.map(row => [row.id, row]));
+    for (const raw of Array.isArray(p?.sessions) ? p.sessions : []) {
+      const s = normalize(raw); if (!s || !s.backgroundResult || !pending.has(s.backgroundResult.id)) continue;
+      const current = byId.get(s.id);
+      // A thread that is working again keeps its own run in charge; never replace it with a manufactured state.
+      if (current) { if (WORKING.has(current.status)) continue; current.backgroundResult = s.backgroundResult; current.attention = s.attention; }
+      else { sessions.push(s); byId.set(s.id, s); }
+    }
+  }
+  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/background-continue') setTimeout(() => L.refresh(), 0); });
   const FULL_EVERY = 3 * 60 * 1000;
   const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
   const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
@@ -845,6 +887,8 @@
       for (const g of [needs, ready, working]) g.sort((a, b) => t(b) - t(a));
       return { needs, ready, working };
     },
+    // chat-power.js: a Continue tap settled this saved background result (#14); hide it for good on this device.
+    backgroundSettled(id) { if (typeof id === 'string' && id) BACKGROUND_SETTLED.add(id); for (const s of this.sessions || []) if (s.backgroundResult?.id === id) s.backgroundResult = null; },
     async refresh() {
       if (this.loading) return this.loading;
       this.loading = (async () => {
@@ -893,6 +937,14 @@
           const got = await fetchSessions(full, '', early);
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
+          const backgroundSessions = this.sessions;
+          if (backgroundOn()) {
+            // Paint the ordinary list and start routed reads without waiting for optional discovery.
+            void mergeBackgroundResults(backgroundSessions, () => this.sessions === backgroundSessions).then(() => {
+              if (this.sessions !== backgroundSessions) return;
+              writeSnap(this); this.emit();
+            }).catch(() => {});
+          } else { void mergeBackgroundResults(backgroundSessions); }
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
           // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.

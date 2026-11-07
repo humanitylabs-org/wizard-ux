@@ -56,7 +56,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; AI apps headers/keys; device-local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
-| Chat state | `WizLive` (`web/live.js`): rename/read fences; `WizCore.chats`: dispose |
+| Chat state | `WizLive` (`web/live.js`): read fences/background discovery; `WizCore.chats`: dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `miguel/group-by-day` opt-in; Pins/compact independent |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, notification placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New chat open after send (`WosSkinHost.routeShows`); single-app host; pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
