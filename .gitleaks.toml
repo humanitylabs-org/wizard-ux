@@ -3,8 +3,8 @@
 useDefault = true
 
 [[allowlists]]
-description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names, Android test certificate digests"
-regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^(wos|wux)\.[a-z0-9-]+\.v[0-9]+$''']
+description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names (wos./wux. dotted segments ending .vN, e.g. wos.notify.route.v1), Android test certificate digests"
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^(wos|wux)\.[a-z0-9-]+(\.[a-z0-9-]+)*\.v[0-9]+$''']
 paths = ['''^android/app/src/test/''']
 
 [[allowlists]]
