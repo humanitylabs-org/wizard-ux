@@ -26,7 +26,8 @@
     "miguel/apps-home",
     "miguel/ai-apps",
     "wizard/thread-tracker",
-    "wizard/desktop-chats"
+    "wizard/desktop-chats",
+    "wizard/background-continue"
   ],
   "defaults": [
     "wizard/unified-inbox"

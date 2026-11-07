@@ -943,7 +943,6 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
-
     "/wizard-os-home/core/skins/macos/{}.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
@@ -1021,6 +1020,18 @@
       "source": "web/core/thread-tracker.js",
       "kind": "read",
       "note": "Thread tracker is an off-by-default tweak; none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/background-results": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/background-results/{}/continue": {
+      "status": "not-exercised",
+      "source": "web/core/chat-power.js",
+      "kind": "write-or-stream",
+      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
     }
   }
 }
