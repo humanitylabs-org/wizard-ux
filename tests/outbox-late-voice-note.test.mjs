@@ -173,10 +173,12 @@ for (const route of [
 function uiHarness(api) {
   const w = { id: 'test', thread: 'original-thread' }, c = { readNav: 1, trail: ['parent-thread'] }, opened = [], notices = [];
   const H = { win: () => w, toast: (...args) => notices.push(args) };
-  const ctx = { OUTBOX: api, H, ch: () => c, LIVE: { session: sid => sid === 'parent-thread' },
+  const ctx = { INC: null, OUTBOX: api, H, ch: () => c, LIVE: { session: sid => sid === 'parent-thread' },
     openChat: (_, sid) => { w.thread = sid; opened.push(sid); }, chatsBack: () => { w.thread = null; opened.push('list'); },
+    // Phone with the 'back to the list' After-actions setting: Discard steps back one screen.
+    PHONE: () => true, keepThreadOpen: () => false,
     Promise, window: {}, esc: s => s, reach: () => ({}), troubleshoot: '' };
-  const back = chats.slice(chats.indexOf('  function threadBack(w) {'), chats.indexOf('  /* Send steps back'));
+  const back = chats.slice(chats.indexOf('  function threadBack(w) {'), chats.indexOf('  /* Opt-in Send and go steps back'));
   const click = chats.slice(chats.indexOf('  function click(e, id) {'), chats.indexOf("    const recovery = e.target.closest('[data-obrecover]');")) + '\n return false; }';
   const pending = chats.slice(chats.indexOf('  function pendingState(p, s) {'), chats.indexOf('  function pendingHtml('));
   vm.runInNewContext(back + click + pending + '\nthis.click = click; this.pendingState = pendingState; this.threadBack = threadBack;', ctx);

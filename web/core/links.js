@@ -68,6 +68,8 @@
     // Browsers: an <a download> click.
     const d = doc || document, a = d.createElement('a');
     a.href = u.href; a.download = decodeURIComponent(u.pathname.split('/').pop() || ''); a.rel = 'noopener';
+    // Cross-origin inline responses may ignore download; never let them replace the shell or a hosted app.
+    if (!inApp(u)) a.target = '_blank';
     d.body.appendChild(a); a.click(); a.remove(); return true;
   }
   // Images never load as a raw page (Android shows them at full pixel size, wider than the screen, no zoom).
@@ -84,12 +86,47 @@
     if (!seen.has(u.href)) list.unshift(u);
     return V.open(list.map(item), Math.max(0, list.findIndex(x => x.href === u.href)));
   }
+  // Wizard's own servers never go into Browser Reader (James, 7 Nov 2026: clips-pipeline links failed there).
+  // They open the way they did before Reader: this origin in-app, every other origin in the owner's browser.
+  // Reader cannot sign in to them, and its render browser is refused private/tailnet hosts anyway.
+  const WIZARD_HOSTS = /(^|\.)(ts\.net|wizard\.aiwizards\.com|wizard001\.com)$/;
+  const PRIVATE_HOST = /(^|\.)(localhost|local|internal|lan|home|home\.arpa)$|^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)|^\[|^[^.]+$/;
+  function wizardHost(u) {
+    const host = String(u?.hostname || '').toLowerCase().replace(/\.$/, '');
+    if (!host || host === location.hostname.toLowerCase() || WIZARD_HOSTS.test(host) || PRIVATE_HOST.test(host)) return true;
+    try { return host === new URL(window.WizConfig?.raw?.settings?.network?.base_url).hostname.toLowerCase(); } catch (_) { return false; }
+  }
+  // Hosts Reader could not read because they block it or need a sign-in open straight in the owner's browser on
+  // the next tap (one tap, never "Reader could not read this page" first). Owner-local, hostname and time only.
+  const DIRECT_KEY = 'wos.readerDirect.v1', DIRECT_TTL = 14 * 864e5, DIRECT_MAX = 200, DIRECT_REASONS = new Set(['blocked', 'signin', 'private']);
+  function directHosts() { try { const v = JSON.parse(localStorage.getItem(DIRECT_KEY) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } }
+  function direct(u) { const at = directHosts()[String(u?.hostname || '').toLowerCase()]; return typeof at === 'number' && Date.now() - at < DIRECT_TTL; }
+  function rememberDirect(u, reason) {
+    if (!DIRECT_REASONS.has(reason) || !u?.hostname) return;
+    const now = Date.now(), all = directHosts(); all[u.hostname.toLowerCase()] = now;
+    const kept = Object.entries(all).filter(([h, t]) => /^[a-z0-9.-]{1,253}$/.test(h) && typeof t === 'number' && now - t < DIRECT_TTL).sort((a, b) => b[1] - a[1]).slice(0, DIRECT_MAX);
+    try { localStorage.setItem(DIRECT_KEY, JSON.stringify(Object.fromEntries(kept))); } catch (_) {}
+  }
+  // Reader asks for this when it cannot read a page it was just sent to. The phone hands it to its browser natively;
+  // a desktop browser only opens a tab while the owner's tap is still fresh (a popup blocker otherwise drops it), so
+  // without one this declines and Reader keeps its visible "Open in your browser" button.
+  let readerHome = () => '';
+  function handoff(u, reason) {
+    rememberDirect(u, reason);
+    const b = bridge();
+    if (NATIVE) { if (typeof b?.openInBrowser !== 'function') return false; try { b.openInBrowser(u.href); return true; } catch (_) { return false; } }
+    if (navigator.userActivation && !navigator.userActivation.isActive) return false;
+    // Open from this window's own task: the request arrives from the Reader frame's script.
+    setTimeout(() => external(u), 0); return true;
+  }
   function nice(u) {
     const p = decodeURIComponent(u.pathname.replace(/\/+$/, '').split('/').filter(Boolean).pop() || u.hostname);
     return p.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null } = {}) {
+  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null, readerApp = () => null, readerOpen = null } = {}) {
+    // Only a mount that names its Reader (the shell's) owns the identity; auxiliary mounts (App Setup) must not replace it.
+    if (arguments[0]?.readerApp) readerHome = () => { const app = readerApp(), t = app?.url ? abs(app.url) : null; return t && inApp(t) ? t.pathname.replace(/[^/]*$/, '') : ''; };
     const el = document.createElement('section');
     el.className = `linksheet ${mode}`; el.setAttribute('aria-label', 'Link'); el.hidden = true;
     el.innerHTML = `<div class="ls-scrim" data-ls="close"></div><div class="ls-panel"><header class="ls-bar">
@@ -135,8 +172,18 @@
       const u = abs(href, base); if (!u) return false;
       if (!allowURL(u)) return true; // consumed, never navigate a forbidden shell/task
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
-      if (!inApp(u)) { external(u); return true; }
       if (isFile(u)) return download(u, doc);
+      if (!inApp(u)) {
+        if (wizardHost(u) || direct(u)) { browse(u); return true; }
+        const app = readerApp(), target = app?.url ? abs(app.url) : null;
+        if (target && inApp(target)) {
+          target.searchParams.set('url', u.href);
+          const path = target.pathname + target.search + target.hash;
+          if (readerOpen?.(path)) return true;
+          return go(path);
+        }
+        browse(u); return true;
+      }
       // Desktop: a page preview is a normal window (wizard-os#265 rule 7), not a side pane. Images and files stay above.
       if (asWindow && asWindow(u.pathname + u.search + u.hash, nice(u))) return true;
       if (cur() && cur().url === u.href) { show(); return true; }
@@ -181,7 +228,8 @@
         if (!/^https?:$/.test(u.protocol)) return; // mailto:, tel:, intent:, the page's own handling
         if (inApp(u) && (isFile(u) || a.hasAttribute('download'))) { e.preventDefault(); download(u, doc); return; }
         const t = (a.getAttribute('target') || '').toLowerCase();
-        if (!inApp(u)) { e.preventDefault(); external(u); return; }
+        if (a.hasAttribute?.('data-wizard-browse')) { e.preventDefault(); browse(u); return; }
+        if (!inApp(u)) { e.preventDefault(); go(u.href, null, doc); return; }
         if (!t || t === '_self') { const h = doc.location; if (u.pathname === h.pathname && u.search === h.search && u.hash) return; } // in-page anchor
         // Every step is a replace-load driven by the sheet, so browser history never fills with frame entries
         // and Back always means "the sheet's previous page".
@@ -189,7 +237,7 @@
       }, true);
       // Keyboard inside the page: Esc steps back / closes; ⌘/Ctrl+Enter keeps; ⌘/Ctrl+⇧+Enter opens in the browser.
       doc.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const V = window.WosChat && window.WosChat.viewer; if (V && V.isOpen()) V.close(); else back(); return; }
+        if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); e.stopPropagation(); const V = window.WosChat && window.WosChat.viewer; if (V && V.isOpen()) V.close(); else back(); return; }
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); el.querySelector(e.shiftKey ? '[data-ls="out"]' : '[data-ls="keep"]')?.click(); }
       }, true);
       doc.addEventListener('submit', e => {
@@ -262,11 +310,13 @@
       if (d0 && d0.session && !d0.video && a.closest('[data-chats]')) { e.preventDefault(); return; }
       e.preventDefault(); e.stopPropagation();
       if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
-      if (inApp(u) && isFile(u)) { download(u, a.ownerDocument); return; }
+      if (isFile(u)) { download(u, a.ownerDocument); return; }
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
       if (DL && DL.route(u.href, a)) return;
       // The phone shell can claim a link (sheet.route) to open it on a desk of its own instead of the sheet.
+      if (a.hasAttribute?.('data-wizard-browse')) return browse(u);
+      if (!inApp(u)) return sheet.open(u.href);
       if (sheet.route && sheet.route(u.href, a)) return;
       sheet.open(u.href);
     }, true);
@@ -288,15 +338,15 @@
       const DLm = window.WizCore && window.WizCore.deeplink;
       if (inApp(u) && DLm && DLm.isOwn && DLm.isOwn(u) && !isFile(u)) return false; // Wizard's own threads/apps open in place
       const items = (canBrowse(u) ? '<button type="button" role="menuitem" data-wl="mine">Open in your browser</button>' : '')
-        + (inApp(u) && isFile(u) ? '<button type="button" role="menuitem" data-wl="dl">Download</button>' : '')
+        + (isFile(u) ? '<button type="button" role="menuitem" data-wl="dl">Download</button>' : '')
         + '<button type="button" role="menuitem" data-wl="copy">Copy link</button>';
       shut();
       const doc = a.ownerDocument;
       menu = doc.createElement('div'); menu.className = 'wiz-linkmenu'; menu.setAttribute('role', 'menu');
       menu.innerHTML = `<div class="wl-host">${esc(inApp(u) ? decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname) : u.hostname)}</div>${items}`;
-      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:linear-gradient(rgba(22,14,46,.98),rgba(22,14,46,.98)),var(--wz-panel,var(--wz-base,var(--bg,#05030c)));color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.55);padding:6px;font:15px/1.3 system-ui,sans-serif';
+      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:var(--wz-base);color:var(--wz-text);border:1px solid var(--wz-border);border-radius:var(--wz-radius);box-shadow:0 14px 40px color-mix(in srgb,var(--wz-base) 65%,transparent);padding:6px;font:var(--wz-font-size)/1.3 var(--wz-font-ui)';
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
-      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#8a82a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:var(--wz-text-sm);color:var(--wz-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
       doc.body.appendChild(menu); linkMenus.add(shut);
       doc.defaultView.addEventListener('pagehide', shut, { once: true });
       let freshPress = false;
@@ -341,10 +391,12 @@
   function guardFrame(win, base, sheet) {
     let doc; try { doc = win.document; } catch (e) { return; }
     if (!doc || doc.__wizLinkGuard) return; doc.__wizLinkGuard = true;
+    linkMenu(doc, 'body', win.location.href);
     const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
     const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
     const go = u => {
-      if (u.origin !== ORIGIN) return external(u);
+      if (isFile(u)) return download(u, doc);
+      if (u.origin !== ORIGIN) return sheet.open(u.href);
       let fe = null; try { fe = win.frameElement; } catch (e) {}
       // Hosted apps use the same canonical thread/app navigation as chat links.
       // Otherwise a Manager result opens a second Wizard inside the link viewer.
@@ -361,7 +413,14 @@
       const u = abs(a.getAttribute('href'), win.location.href); if (!u || !/^https?:$/.test(u.protocol)) return;
       if (u.origin === ORIGIN && isImage(u)) { if (viewImage(u, doc)) { e.preventDefault(); e.stopPropagation(); } return; }
       if (!leaves(u, a.getAttribute('target'))) return;
-      e.preventDefault(); e.stopPropagation(); go(u);
+      // Reader's automatic hand-off: declined (not prevented) when the original cannot open without a fresh tap.
+      // Only the installed Reader's own frame may hand off and remember a host; any other app's link is an ordinary one.
+      const auto = a.getAttribute?.('data-wizard-browse') === 'auto' && home !== '/' && home === readerHome();
+      if (auto && (u.origin === ORIGIN || !handoff(u, a.getAttribute('data-wizard-reason') || ''))) return;
+      e.preventDefault(); e.stopPropagation();
+      if (auto) return;
+      if (a.hasAttribute?.('data-wizard-browse')) return browse(u);
+      go(u);
     }, true);
     // A form aimed at _top/_parent would replace the whole shell (desktop previews and kept pages are windows): it stays in its window.
     doc.addEventListener('submit', e => {
@@ -379,5 +438,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, backMenu, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();

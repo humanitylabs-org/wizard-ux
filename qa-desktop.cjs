@@ -119,8 +119,9 @@ async function ctxFor(b, kind) {
 
   // Keyboard window management.
   await p.keyboard.press('Alt+ArrowLeft'); await sleep(150);
-  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) !== top?.trim(), '⌥←: focus moves to the left window');
+  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) === top?.trim(), '⌥←: native chord never moves window focus');
   await p.keyboard.press('Alt+ArrowRight'); await sleep(150);
+  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) === top?.trim(), '⌥→: native chord never moves window focus');
   await p.keyboard.press('Alt+Shift+Digit3'); await sleep(300);
   let st = await p.evaluate(() => ({ cur:__wux.cur, w0:__wux.ws[0].wins.length, w1:__wux.ws[1]?.wins.length }));
   ok(st.w0 === 1 && st.w1 === 1 && st.cur === 0, '⇧⌥3: sends the window to the next app desktop (Home is slot 1)', JSON.stringify(st));

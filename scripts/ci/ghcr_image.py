@@ -134,6 +134,7 @@ def build(args):
                "--platform", "linux/" + args.platform, "--provenance=false",
                "--label", "org.opencontainers.image.source=https://github.com/" + CANONICAL[args.image],
                "--label", "org.opencontainers.image.revision=" + args.sha,
+               "--build-arg", "WIZARD_UX_COMMIT=" + args.sha,
                "--tag", local_tag, "--load", "."]
     try:
         docker(command, env)
@@ -202,6 +203,7 @@ def publish(args):
                 "--platform", "linux/amd64,linux/arm64", "--provenance=false",
                 "--label", "org.opencontainers.image.source=https://github.com/" + CANONICAL[args.image],
                 "--label", "org.opencontainers.image.revision=" + args.sha,
+                "--build-arg", "WIZARD_UX_COMMIT=" + args.sha,
                 "--metadata-file", str(metadata),
                 "--output", "type=image,name=" + args.image +
                 ",push-by-digest=true,name-canonical=true,push=true", "."], env)

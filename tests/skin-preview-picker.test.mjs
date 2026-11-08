@@ -8,7 +8,11 @@ test('skin picker renders preview cards for every skin, names in each skin\'s ow
   const s = read('web/core/settings.js');
   assert.match(s, /class="skp-all\$\{facesReady \? '' : ' skp-wait'\}"/);
   assert.doesNotMatch(s, /class="sk-dot"/, 'no dot swatches left');
-  assert.doesNotMatch(s, /data-skinfamily=/, 'colors are one list; tweaks are chosen separately');
+  // James, 31 Oct / 1 Nov 2026 (#801/#803): a skin and its color are separate choices; #755 flattening is superseded.
+  assert.match(s, /data-skinfamily=/, 'Skin has its own family controls');
+  assert.match(s, /aria-label="Skins"/);
+  assert.match(s, /<h4>Colors<\/h4>/, 'Color has its own scoped group');
+  assert.doesNotMatch(s, /S\.list\.map\(k => skinCard/, 'never flatten colors into skins');
   const k = read('web/core/skins.js');
   assert.match(k, /face: FACES\[s\.id\] \|\| null, t: \{ \.\.\.s\.t \}/);
   for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.match(k, new RegExp(`\\n    ${id}: \\{ family:`));

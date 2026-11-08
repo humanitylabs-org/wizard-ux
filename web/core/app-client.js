@@ -13,7 +13,7 @@
   try { if (parent === window && !window.WizardAppIdentity) { const s = document.createElement('script'); s.src = '/wizard-os-home/core/app-identity.js'; (document.head || document.documentElement).appendChild(s); } } catch (_) {}
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
-  const requests = new Map(), companionMessages = new Set();
+  const requests = new Map(), companionMessages = new Set(), keepCallbacks = new Map();
   let toolHandler = null, orbHandler = null;
   const guardPush = history.pushState.bind(history);
   let guardBase = null, standaloneIsRoot = null;
@@ -41,12 +41,12 @@
   const detached = () => !service;
   const localHolds = new Map();
   const notify = (set, value) => { for (const fn of set) try { fn(value); } catch (e) { console.warn('WizardApp subscriber', e); } };
-  function request(op, args, timeout = 15000) {
+  function request(op, args, timeout = 15000, onAdmitted) {
     if (!framed || requests.size >= 32) return Promise.reject(new Error('Shared app transport unavailable'));
     const id = 'wa-' + (++requestId) + '-' + Math.random().toString(36).slice(2);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { requests.delete(id); reject(new Error('Shared app transport timed out')); }, timeout);
-      requests.set(id, { resolve, reject, timer });
+      const timer = setTimeout(() => { requests.delete(id); reject(Object.assign(new Error('Shared app transport timed out'), op === 'ready.write' ? {uncertain:true} : {})); }, timeout);
+      requests.set(id, { resolve, reject, timer, onAdmitted, op });
       try { parent.postMessage({ type: 'wizard:app:request', version: VERSION, id, op, args }, ORIGIN); }
       catch (e) { clearTimeout(timer); requests.delete(id); reject(e); }
     });
@@ -153,6 +153,50 @@
     let did = false; try { did = back(); } catch (_) {}
     if (did) e.preventDefault();
   });
+  /* App keys (docs/ai-apps-view.md › App keys; one anchor, Miguel 4 Nov 2026): an app marks a control with
+   * data-wz-key="<key>" (optional data-wz-key-label) and ⌥ + that key clicks the first live match (a field is focused as
+   * well). Keys: one lower-case letter a–z or / , . ; — never Wizard's own: ⌥H ⌥W ⌥S and the voice keys ⌥D ⌥V ⌥C (the
+   * digits, [ ], arrows, ` and Space are not app keys at all). Plain keys are the app's own business again. Read from
+   * e.code (macOS ⌥ turns e.key letters into symbols). Framed in Wizard the shell presses them (it knows what is in
+   * front and what is Wizard's), so a framed SDK never acts itself; opened on its own (a browser tab) the SDK does.
+   * WizardApp.keys.list() = the live targets ({ el, key, label }), which the shell marks and presses. */
+  const RESERVED_LETTERS = 'hwsdvc';
+  const keyOk = k => typeof k === 'string' && /^[a-z/,.;]$/.test(k) && !RESERVED_LETTERS.includes(k);
+  const KEY_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
+  const keyOfCode = code => { const m = /^Key([A-Z])$/.exec(String(code || '')); const k = m ? m[1].toLowerCase() : KEY_PUNCT[code] || ''; return keyOk(k) ? k : ''; };
+  const keyBox = n => typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
+  const keyLive = n => keyBox(n) && !n.closest('[hidden], [inert], [aria-hidden="true"]') && !n.disabled && n.getAttribute('aria-disabled') !== 'true';
+  function keyScope(doc) {
+    const open = [...doc.querySelectorAll('[aria-modal="true"], [role="dialog"]:not([hidden]), dialog[open]')].filter(m => keyBox(m) && !m.closest('[hidden], [inert]'));
+    return open.length ? open[open.length - 1] : doc;   // the topmost (the last one opened sits last in the page)
+  }
+  function keyList(doc = document) {
+    const scope = keyScope(doc), out = [];
+    for (const el of scope.querySelectorAll('[data-wz-key]')) {
+      const key = el.getAttribute('data-wz-key');
+      if (keyOk(key) && keyLive(el)) out.push(Object.freeze({ el, key, label: String(el.getAttribute('data-wz-key-label') || el.getAttribute('aria-label') || el.title || '').slice(0, 64) }));
+    }
+    return out;
+  }
+  // ⌥ + key, nothing else held (⇧ / Ctrl / ⌘ are other keys); typing in a field is fine (⌥ types nothing we keep)
+  function keyMatch(e, doc = document) {
+    if (!e || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented || e.isComposing) return null;
+    const name = keyOfCode(e.code); if (!name) return null;
+    return keyList(doc).find(k => k.key === name) || null;
+  }
+  function keyPress(key) {
+    const hit = keyOk(key) ? keyList(document).find(k => k.key === key) : null; if (!hit) return false;
+    // a field as the target ('/' to search): it takes the typing too (a click alone never focuses a field)
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(hit.el.tagName || '') || hit.el.isContentEditable) hit.el.focus?.({ preventScroll: true });
+    hit.el.click();
+    return true;
+  }
+  if (!framed) addEventListener('keydown', e => {
+    const hit = keyMatch(e); if (!hit) return;
+    e.preventDefault();
+    if (!e.repeat) keyPress(hit.key);   // held down: once
+  });
+  const keys = Object.freeze({ list: () => keyList(document), match: e => keyMatch(e)?.el || null });
   function ready(meta = {}) {
     if (framed) {
       try { service = parent.WizAppServices?.connect(window, conversationClient) || null; } catch (_) { service = null; }
@@ -291,10 +335,22 @@
   addEventListener('message', e => {
     if (!framed || e.source !== parent || e.origin !== ORIGIN || !e.data) return;
     const d = e.data;
+    if (d.type === 'wizard:app:keep' && d.version === VERSION && typeof d.id === 'string') {
+      Promise.resolve().then(() => keepCallbacks.get(d.keepId)?.()).then(result => parent.postMessage({type: 'wizard:app:kept', version: VERSION, id: d.id, result: result === 'kept' ? 'kept' : false}, ORIGIN), () => parent.postMessage({type: 'wizard:app:kept', version: VERSION, id: d.id, result: false}, ORIGIN));
+    }
     if (d.type === 'wizard:app:companion' && d.version === VERSION) notify(companionMessages, { from: d.from, data: d.data });
+    if (d.type === 'wizard:app:admitted' && d.version === VERSION && requests.has(d.id) && e instanceof MessageEvent && e.isTrusted) {
+      const pending = requests.get(d.id), fn = pending.onAdmitted; pending.onAdmitted = null;
+      try { fn?.(); } catch (_) {}
+    }
     if (d.type === 'wizard:app:reply' && d.version === VERSION && requests.has(d.id)) {
+      if (requests.get(d.id).op === 'ready.write' && (!(e instanceof MessageEvent) || !e.isTrusted)) return;
       const pending = requests.get(d.id); clearTimeout(pending.timer); requests.delete(d.id);
-      if (d.error) pending.reject(new Error(String(d.error))); else pending.resolve(d.value);
+      if (d.error) {
+        const error = new Error(String(d.error));
+        if (pending.op === 'ready.write' && d.details && typeof d.details === 'object') for (const [key,value] of Object.entries(d.details)) if (!['__proto__','prototype','constructor'].includes(key)) error[key] = value;
+        pending.reject(error);
+      } else pending.resolve(d.value);
     }
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
     if (d.type === 'wizard:app:orb' && d.version === VERSION && orbHandler) { try { orbHandler(); } catch (err) { console.warn('WizardApp orb', err); } }
@@ -302,12 +358,14 @@
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
     if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
   });
-  function hold(reason) {
-    if (service) return service.update.hold(reason);
+  function hold(reason, options = {}) {
+    if (service) return service.update.hold(reason, options);
     if (transportReady) {
-      const pending = request('update.hold', { reason }); let released = false;
+      const keepId = typeof options.keep === 'function' ? 'keep-' + (++requestId) : null;
+      if (keepId) keepCallbacks.set(keepId, options.keep);
+      const pending = request('update.hold', { reason, keepId }); let released = false;
       pending.catch(() => {});
-      return { release() { if (released) return; released = true; pending.then(id => request('update.release', { id })).catch(() => {}); } };
+      return { release() { if (released) return; released = true; keepCallbacks.delete(keepId); pending.then(id => request('update.release', { id })).catch(() => {}); } };
     }
     const id = {}; localHolds.set(id, String(reason || 'Unsaved work'));
     return { release() { localHolds.delete(id); } };
@@ -406,6 +464,7 @@
   }
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
+    readyExtension: Object.freeze({write: (kind,input,before,options={}) => request('ready.write',{kind,input,before},120000,options.onAdmitted)}),
     identity: Object.freeze({
       info: () => framed ? request('identity.info') : Promise.resolve({ unavailable: true }),
       sign: event => framed ? request('identity.sign', { event }, 190000) : Promise.resolve({ unavailable: true }),
@@ -423,7 +482,7 @@
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
-    nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
+    nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, get threadDrafts() { return service?.nav?.threadDrafts === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
       // Call after a finishing action (dismiss, archive, delete, save-and-close): returns the owner to the screen before the app.
       back: () => { try { return service?.nav?.back?.() === true; } catch (_) { return false; } }, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
@@ -473,7 +532,8 @@
         forget: () => call('vault.forget'),
       };
     })()),
-    badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
+    keys, // Live app-key targets while Option is held.
+    badge: Object.freeze({ set: (n, o) => { const more = !!(o && o.more === true); return service ? service.badge.set(n, { more }) : transportReady ? request('badge.set', { n, more }).then(() => true, () => false) : Promise.resolve(false); } }),
     attachChip: Object.freeze({ node: chipNode, paint: (el, c) => window.WizAttachChip?.paint(el, c), ready: () => chipModule().then(m => !!m) }),
     composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
@@ -482,6 +542,7 @@
       capabilities: opts => { if(service) return service.capture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
       attach: () => { if(service) return service.capture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
       current: () => { if(service) return service.capture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
+      settle: keepId => { if(service) return service.capture.settle(keepId); if(framed) throw new Error('Capture cleanup needs the verified host connection'); return captureModule().settle(standaloneId(),keepId); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
   ready();

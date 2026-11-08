@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Two devices, one box: the test every feature that syncs state across devices ships with (AGENTS.md).
 // sharedBox() is a fake Agent Service ui-preferences store (PUT = shallow top-level merge, last write wins per key,
 // like wizard-agent-service server/ui-preferences.mjs). box.race(n) holds the next n requests until all n arrived,
@@ -46,7 +47,7 @@ export function liveDevice(box, local = {}, { pulled = true } = {}) {
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     addEventListener() {} }
   ctx.window = { dispatchEvent: e => events.push(e.type), addEventListener() {} }
-  vm.createContext(ctx)
+  modelContext(ctx)
   const live = read('web/live.js')
   vm.runInContext(live.slice(live.indexOf('  const PREFS_URL ='), live.indexOf('  const sectionTime =')) + '\nthis.api = { pullPrefs, putPrefs, prefOps, applyPrefOps };', ctx)
   box.apply ||= ctx.api.applyPrefOps

@@ -20,7 +20,10 @@ function sigil() {
 const STORE_APPS = [
   'browser', 'card-benefits', 'movies', 'defleur-video', 'files', 'messenger', 'money', 'morning-report', 'notifications', 'profiles', 'secret-drop',
   'sniper', 'transcriber', 'wisdom', 'wizard-agent-service', 'wizard-calendar', 'wizard-chatgpt', 'wizard-claude',
-  'wizard-cloudflare', 'wizard-search', 'wizard-shopping', 'wizard-notes', 'wizard-tinfoil', 'wizard-ux',
+  'wizard-cloudflare', 'wizard-podcasts', 'wizard-search', 'wizard-shopping', 'wizard-notes', 'wizard-tinfoil', 'wizard-ux',
+  // Launch set: every other app a stock Wizard ships with, so none can fall back to a letter.
+  'messages', 'recorder', 'sasquatch', 'tasks', 'knowledge', 'setup', 'settings', 'agents', 'wizard-connection-router',
+  'wizard-simplefin', 'wizard-google', 'wizard-youtube-music', 'wizard-voice-service',
 ];
 
 test('every known Wizard App Store app has a designed sigil (no letter fallback)', () => {
@@ -112,15 +115,24 @@ test('real products carry their brand mark; a skin opts in, every other skin kee
   assert.match(read('web/core/sigils.css'), /\.sgi\.sgb-cloudflare/);
 });
 
-test('an app with no sigil gets a masked disc with its initial cut out, never painted text', () => {
+test('an app with no sigil never shows a letter: it gets the house glyph its id and name call for', () => {
   const S = sigil();
-  for (const a of [{ id: 'zz-unknown', name: 'Zebra' }, { id: 'x', name: '' }, { id: 'q', name: '<b>"Quote"' }, { id: 'e', name: 'émile' }]) {
-    const h = S.html(a);
-    assert.match(h, /^<i class="sgi sgl" aria-hidden="true" style="--sg:url\(&#39;data:image\/svg\+xml,/, h);
-    assert.doesNotMatch(h, /<(?!i |\/i>)/, 'no extra markup injected: ' + h);
-    const s = S.of(a);
-    assert.match(s.color, /^#[0-9A-F]{6}$/i);
+  const want = {
+    'wizard-mail|Mail': 'mail', 'smart-home|Home Assistant': 'home', 'wizard-health|Health': 'heart', 'wizard-microsoft|Microsoft': 'mail',
+    'wizard-monarch|Monarch': 'dollar', 'wizard-simplefin|SimpleFIN': 'bank', 'wizard-brightdata|Bright Data': 'globe', 'backup|Backup': 'cloud',
+    'contacts|Contacts': 'social', 'carlos-crm-demo|Carlos CRM (demo)': 'social', 'maverick-command|Maverick Command': 'console',
+    'pr-board|PR board': 'projects', 'setup|Setup': 'setup', 'camera|Camera': 'image', 'messages|Messages': 'chats', 'spotify|Spotify': 'music',
+    'telegram|Telegram': 'chats', 'line|LINE': 'chats', 'grab|Grab': 'pin', 'chrome|Chrome': 'globe', 'settings|Settings': 'setup',
+    'wizard-twitterapi|TwitterAPI.io': 'social', 'wizard-youtube-music|YouTube Music': 'music', 'zz-unknown|Zebra': 'apps', 'x|': 'apps',
+    'private-thing|Private thing': 'apps', 'pipeline-tool|Pipeline': 'projects',
+  };
+  for (const [key, glyph] of Object.entries(want)) {
+    const [id, name] = key.split('|'), h = S.html({ id, name, icon: name.charAt(0) || '?' });
+    const brand = S.brand[id] ? ` sgb sgb-${S.brand[id]}` : '';
+    assert.equal(h, `<i class="sgi${brand} sg-${glyph}" aria-hidden="true"></i>`, key);
+    assert.match(S.of({ id, name }).color, /^#[0-9A-F]{6}$/i);
   }
+  for (const a of [{ id: 'q', name: '<b>"Quote"' }, { id: 'e', name: 'émile' }]) assert.doesNotMatch(S.html(a), /sgl|<(?!i |\/i>)/, a.id);
   // the hue is stable per id, so the same app keeps the same colour everywhere
   assert.equal(S.of({ id: 'zz-unknown' }).color, S.of({ id: 'zz-unknown', name: 'Other' }).color);
 });
@@ -151,7 +163,7 @@ test('the generated files are in sync with the template (rebuild with tools/sigi
   const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*BRAND\*\/|\/\*FALLBACK\*\//g, '');
   for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|BRAND = |FALLBACK/.test(l)))
     assert.ok(js.includes(line), 'web/core/sigils.js is stale; rerun tools/sigils/build.py. Missing: ' + line.trim());
-  const house = JSON.parse(js.match(/const HOUSE = Object\.fromEntries\(Object\.entries\((\{.*?\})\)\.map/)[1]);
+  const house = JSON.parse(js.match(/const HOUSE = [^{]*(\{.*?\})[);]/)[1]);
   const src = read('tools/sigils/build.py');
   for (const id of Object.keys(house)) assert.ok(src.includes(`'${id}'`), `HOUSE ${id} not in build.py`);
 });

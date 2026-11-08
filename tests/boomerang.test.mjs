@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Boomerang on the one Wizard scheduler (kind "return"). Picker design: Novaire, wizard-ux #255.
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -14,7 +15,7 @@ function load(schedules = [], extra = {}) {
     fetch: async (url, init = {}) => { calls.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null }); return { ok: true, status: 200, json: async () => init.method === 'POST' ? { id: 'j1', kind: 'return', thread: 'wizard_t', when: { once: JSON.parse(init.body).when.once }, timezone: 'Asia/Bangkok', prompt: '', target: JSON.parse(init.body).target } : { schedules } } },
     ...extra }
   sandbox.window = sandbox
-  vm.runInNewContext(read('web/core/scheduled-reminders.js'), sandbox)
+  runWithChatsModel(read('web/core/scheduled-reminders.js'), sandbox)
   return { B: sandbox.WosBoomerang, calls, sandbox }
 }
 
@@ -90,9 +91,8 @@ test('wall-clock time in the chosen zone becomes the right instant', () => {
 
 test('Back closes the picker before anything under it, on phone and desktop', () => {
   const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js')
-  const order = (src, first, then) => { const a = src.indexOf(first); assert.ok(a > 0, first); assert.ok(src.indexOf(then, a) > a, then) }
-  order(phone, "if (window.WosBoomerang?.back()) return 'boomerang'", 'const ov = CHATS.closeOverlay()')
-  order(desktop, "if (window.WosBoomerang?.back()) return 'boomerang'", 'if (!pal.hidden)')
+  for (const src of [phone,desktop]) assert.match(src, /WizEscapeBack\.installOwners\(/)
+  assert.match(read('web/core/escape-back.js'), /add\('reminder',[^\n]+WosBoomerang.back\(\)/)
 })
 
 test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {

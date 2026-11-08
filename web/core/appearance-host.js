@@ -42,8 +42,9 @@
   // excludes cross-origin and unregistered pages.
   // Settings embeds (.st-embed, e.g. Settings › Connections) take the theme too, so they follow the skin like the page
   // around them; they never mark the Settings window .wz-themed (that window is the shell's own).
-  const winFrames = () => [...document.querySelectorAll('.win iframe, .linksheet iframe, .st-embed iframe')];
-  const themedWin = f => f.closest('.st-embed') ? null : f.closest('.win');
+  // The Welcome's Bring your AI step (.wl-embed) shows the Importer app's own screen: it takes the theme too.
+  const winFrames = () => [...document.querySelectorAll('.win iframe, .linksheet iframe, .st-embed iframe, .wl-embed iframe')];
+  const themedWin = f => f.closest('.st-embed') || f.closest('.wl-embed') ? null : f.closest('.win');
   const frameOf = src => src ? winFrames().find(f => f.contentWindow === src) || null : null;
 
   function tokens() {
@@ -69,7 +70,7 @@
   }
   // Distraction-free (swipe down on the orb) hides the title bar of a sole or full-screen window, so the host presents
   // that window edge to edge too: apps hide their own in-app headers the same way they do in full screen (James, 20 Oct).
-  const IMMERSIVE = '.device.immersive .win.full, body.desktop-fullscreen .win.full, .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full';
+  const IMMERSIVE = '.device.immersive .win.full, .wsp .win.full, .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full';
   const presentation = f => f.closest(IMMERSIVE) ? 'immersive' : 'window';
   function context(f) { const t = tokens(); return { version: VERSION, revision, skin: t.skin, family: window.WosSkin?.familyOf?.(t.skin) || 'wizard', colorScheme: t.colorScheme, presentation: presentation(f), tokens: t.tokens }; }
 

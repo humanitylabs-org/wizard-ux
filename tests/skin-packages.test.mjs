@@ -240,7 +240,9 @@ test('the API hands a skin no shell internals', async () => {
   P.host._test.setImporter(async () => ({ default: api => { seen = api; } }));
   P.host.attach(P.adapter); P.host.commit('fixture'); await settle();
   // Layout hooks (22 Oct 2026): timers, own controls, agents, the orb's recorder and its idle tap. Still no internals.
-  assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'app', 'asset', 'env', 'frame', 'gesture', 'listen', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
+  // Now playing (4 Nov 2026): api.media lists and pauses what the apps play; it reaches no frame or element.
+  assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'app', 'asset', 'env', 'frame', 'gesture', 'listen', 'media', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
+  assert.ok(Object.isFrozen(seen.media)); assert.deepEqual(Object.keys(seen.media).sort(), ['icon', 'list', 'open', 'pause', 'pauseAll', 'play', 'toggle', 'watch']);
   assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb));
   assert.deepEqual(Object.keys(seen.voice).sort(), ['cancel', 'dictate', 'state', 'talk', 'tap']);
   // The app in front may lend the orb its main button (WizardApp.orb.claim): a frozen snapshot and a tap, nothing else.

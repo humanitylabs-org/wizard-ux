@@ -3,7 +3,7 @@ import json, os, re, sys, html
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 lib = json.load(open(os.path.join(ROOT, 'tools', 'sigils', 'sigils.json')))
 js = open(os.path.join(ROOT, 'web', 'core', 'sigils.js')).read()
-HOUSE = json.loads(re.search(r'const HOUSE = (\{.*?\});', js).group(1))
+HOUSE = {k: [g, '#' + c.lstrip('#')] for k, (g, c) in json.loads(re.search(r'const HOUSE = [^{]*(\{.*?\})[);]', js).group(1)).items()}
 css = open(os.path.join(ROOT, 'web', 'core', 'sigils.css')).read()
 
 NAMES = {'wizard': 'Chats', 'wizard-signal': 'Signal', 'wizard-search': 'Search', 'wisdom': 'Wisdom', 'wizard-music': 'Music',

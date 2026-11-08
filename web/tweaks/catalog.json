@@ -8,18 +8,26 @@
     "miguel"
   ],
   "tweaks": [
-    "miguel/swipe-strip",
     "miguel/send-and-go",
-    "miguel/model-pills",
-    "miguel/hidden-pin",
     "wizard/pin-buttons",
     "miguel/snooze-someday",
     "wizard/two-orbs",
     "miguel/machines-home",
-    "miguel/arrange-download",
     "wizard/app-borders",
-    "miguel/refresh-button",
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "wizard/new-send-list",
+    "miguel/no-desk-close",
+    "miguel/archive-top",
+    "miguel/group-by-day",
+    "miguel/reply-summary",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps",
+    "wizard/thread-tracker",
+    "wizard/desktop-chats",
+    "wizard/background-continue"
   ],
   "defaults": [
     "wizard/unified-inbox"

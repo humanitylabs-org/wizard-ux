@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -35,7 +36,7 @@ function client(origin, transcribe = async () => ({ text: 'hello there' })) {
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
     WizConfig: { transcribe, voicePrompt: () => '' },
   };
-  ctx.window = ctx; vm.runInNewContext(outboxSrc, ctx);
+  ctx.window = ctx; runWithChatsModel(outboxSrc, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
 }
 async function until(fn) {
@@ -156,7 +157,7 @@ function liveCtx() {
     if (it.admitted) { it.state = 'sent'; return { outcome: 'started', runId: it.admitted, item: it }; }
     it.state = 'held'; it.cancelled = true; return { outcome: 'cancelled', item: it };
   } } };
-  vm.runInNewContext(body + '\nthis.applyStopMarks = applyStopMarks;', ctx); return ctx;
+  runWithChatsModel(body + '\nthis.applyStopMarks = applyStopMarks;', ctx); return ctx;
 }
 const item = (id, sid, agent, extra = {}) => ({ id, sessionId: sid, agent, kind: 'reply', state: 'sending', createdAt: Date.now() - 1000, ...extra });
 

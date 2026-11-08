@@ -1,0 +1,10 @@
+{
+  "id": "wizard/desktop-chats",
+  "name": "Desktop-style Chats list",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": ["layout"],
+  "shells": ["phone"],
+  "description": "The phone Chats list drawn like the desktop sidebar: one quiet line per chat, a dot for unread, muted section headers with an amber Ready count, round New chat. Same chats, same actions; switch it off to get today's list back."
+}

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -19,21 +20,21 @@ const rows = [
   { id: 'h', status: 'waiting_for_approval', updatedAt: at(0) },
 ];
 function liveCtx() {
-  const c = vm.createContext({ snoozeLast: () => false, needsApproval: s => ['waiting_for_approval', 'unknown'].includes(s.status), newestFirst: (l, r) => Date.parse(r.updatedAt) - Date.parse(l.updatedAt) });
+  const c = modelContext({ snoozeLast: () => false, needsApproval: s => ['waiting_for_approval', 'unknown'].includes(s.status), cardAt: s => s.updatedAt, window: {}, newestFirst: (l, r) => Date.parse(r.updatedAt) - Date.parse(l.updatedAt) });
   vm.runInContext(block(live, '  const isDeferred =', '  // Oldest (James') + '\nthis.readyRank = readyRank; this.byPriority = byPriority;', c);
   return c;
 }
 test('Priority ranks needs you, your call, FYI, Done, then no status (newest first inside each)', () => {
   const c = liveCtx();
-  assert.deepEqual(c.byPriority(rows).map(s => s.id), ['h', 'g', 'd', 'b', 'f', 'a', 'e', 'c']);
+  assert.deepEqual(Array.from(c.byPriority(rows), s => s.id), ['h', 'g', 'd', 'b', 'f', 'a', 'e', 'c']);
   assert.ok(c.readyRank({ attention: { state: 'fyi' } }) < c.readyRank({ attention: { state: 'done' } }));
   assert.ok(c.readyRank({ attention: { state: 'done' } }) < c.readyRank({}));
   assert.equal(c.readyRank({ deferred: true, deferredAt: at(1) }), 9, 'snoozed stays last');
 });
 test('Priority renders one header per group with its count; Newest/Oldest stay ungrouped', () => {
   const L = liveCtx();
-  const c = vm.createContext({ LIVE: { readyRank: L.readyRank }, esc: String, attOf: s => s.attention, deferredOf: () => false, readyOrder: 'priority' });
-  vm.runInContext(block(chats, '  const noteAt =', '  const noteOrder =') + block(chats, '  function noteBefore(', '  const notePlain') + block(chats, '  function withNotes(', '  /* Android Back') + '\nthis.priorityGroups = priorityGroups;', c);
+  const c = modelContext({ LIVE: { readyRank: L.readyRank }, esc: String, attOf: s => s.attention, deferredOf: () => false, window: {}, snoozeLast: () => false, stiKind: () => 'none', readyOrder: 'priority' });
+  vm.runInContext(block(chats, '  const sesRank =', '  const notePlain =') + block(chats, '  function withNotes(', '  /* Android Back') + '\nthis.priorityGroups = priorityGroups;', c);
   c.LIVE.cardAt = s => s.updatedAt;
   const html = c.priorityGroups(L.byPriority(rows), [], s => `<row ${s.id}>`, 'ready');
   const heads = [...html.matchAll(/<span>([^<]+)<\/span><small>(\d+)<\/small>/g)].map(m => `${m[1]} ${m[2]}`);

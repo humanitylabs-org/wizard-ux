@@ -17,13 +17,24 @@
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
     { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
   ];
+  // Native compatibility grants describe one legacy surface, not every web app sharing its id.
+  function deviceSurface(a) {
+    return window.WizDeviceLegacy?.find(d => {
+      if (d.appId !== a.id) return false;
+      if (!d.path) return true; // old declarations without a path retain their capability gate
+      try {
+        const url = new URL(a.originalUrl || a.url, location.href);
+        return url.origin === location.origin && (url.pathname === d.path || url.pathname.startsWith(d.path.endsWith('/') ? d.path : d.path + '/'));
+      } catch (_) { return false; }
+    });
+  }
   // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents.
   function appsFor(shell, list = ALL) {
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
     return list.filter(a => {
       if (a.id === 'pages' && !window.WosPages?.available) return false;
       if (a.id === 'side-button' && !nativeSide) return false;
-      const device = window.WizDeviceLegacy?.find(d => d.appId === a.id);
+      const device = deviceSurface(a);
       if (device && typeof window.WizardOSNative?.[device.probe] !== 'function') return false;
       if (shell === 'desktop') return a.kind !== 'native' && !a.phoneOnly;
       return !a.desktopOnly;
@@ -41,8 +52,10 @@
   let DEV = (() => { try { return new Set(JSON.parse(localStorage.getItem(DEV_KEY) || '[]')); } catch (_) { return new Set(); } })();
   // Reviewed legacy migrations, not supplied by apps or guessed from cache prefixes.
   // Never migrate /sw.js at scope / (Social's historical root worker is not app-owned).
+  // An app that declares home_screen.offline owns its worker (app-services.js skips these ids).
   window.WizCore.appMigrations = Object.freeze({
     'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
+    // Cross-repository rollout: retain exact legacy cleanup until the installed declaration arrives.
     wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
     'wisdom-next': { scope: '/wisdom-next/', scripts: ['/wisdom-next/sw.js'], caches: [] },
     social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
@@ -63,9 +76,14 @@
       (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}),
-    phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
+    phoneOnly: a.phone_only === true || deviceSurface(a)?.phoneOnly === true, source: a.source || '', system: a.system === true,
     status: a.status,
+    // Declared by the installed app itself (wizard.md home_screen); sanitized, never keyed by app id.
+    homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    voice_routes: Array.isArray(a.voice_routes) ? a.voice_routes : [],
+    // Only a read of the box's own list confirms them; the device cache is a fallback when that read fails (commands.js).
+    voice_routes_confirmed: trusted === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
@@ -78,6 +96,8 @@
   // never turn a stale or mistaken page declaration into a launcher tile, search result or deep-link target.
   const SHELL_HIDDEN = new Set(['wizard-agent-service', 'wizard-connection-router']);
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(toTile); } catch (e) { return []; } })();
+  // The installed app's own home-screen declaration (or null), for shell code that has no registry handle.
+  window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
@@ -128,12 +148,12 @@
     try {
       if (window.WizConfig?.ready) await window.WizConfig.ready;
       const url = window.WizConfig?.endpoint('apps');
-      if (!url) return;
+      if (!url) return false;
       if (window.WizLauncher?.ready) await window.WizLauncher.ready;
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
-      if (!r.ok) return;
+      if (!r.ok) return false;
       const snapshot = await r.json();
-      if (!snapshot || !Array.isArray(snapshot.apps)) return;
+      if (!snapshot || !Array.isArray(snapshot.apps)) return false;
       window.WizChatsHost?.configure(snapshot);
       // Owner's In development list (launcher.json in_development, James 23 Oct 2026): any app id, built-ins included.
       DEV = new Set(Array.isArray(snapshot.in_development) ? snapshot.in_development.map(String) : []);
@@ -144,9 +164,12 @@
       const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      // The pinned-app worker learns which installed apps declared an offline pin (no per-app list in the shell).
+      window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
-    } catch (e) {}
+      return true;   // a fresh list from the box (refreshApps resolves true; false = the read failed, cache kept)
+    } catch (e) { return false; }
   }
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;

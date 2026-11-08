@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const block = source.slice(source.indexOf("    let ex = document.getElementById('exitFull');"), source.indexOf('    const W_ = host.clientWidth'));
+const block = source.slice(source.indexOf("    let ex = document.getElementById('exitFull');"), source.indexOf('    const configuredMax', source.indexOf("let ex = document.getElementById('exitFull')")));
 function harness() {
   let button, exits = 0;
   const ctx = { full: false, MOD: 'Ctrl+', ws: [{ mono: true }], cur: 0, toggleMono: () => { exits++; ctx.ws[0].mono = false; },

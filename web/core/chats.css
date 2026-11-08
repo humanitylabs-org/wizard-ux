@@ -1,4 +1,15 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+.ch-incognito { border: 2px dashed var(--wz-accent, var(--accent)); border-radius: 12px; overflow: hidden; }
+.ch-incog-note { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--wz-panel, var(--card)); color: var(--wz-text, var(--ink)); font-size: .75rem; line-height: 1.5; border-bottom: 1px solid var(--wz-border, var(--line)); }
+.ch-incog-note b { font-size: .8125rem; }
+.ch-incog-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; color: var(--wz-text); background: var(--wz-surface); border-radius: 12px; flex: 0 0 auto; }
+.ch-incog-toggle:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+.ch-incognito .ch-head .pbtn { flex: 0 0 auto; }
+.ch-incognito .ch-head .ti { flex-direction: column; align-items: flex-start; gap: 2px; }
+.ch-incognito .ch-incog-toggle > span:first-child { display: none; }
+.ch-incognito .ch-compose { flex: 0 0 auto; }
+.ch-incognito .ch-msgs { min-height: 0; overflow-y: auto; }
+
 /* Native app only: a real root-scrolling WebView for Android's built-in capture.
  * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
 html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }
@@ -171,6 +182,33 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .steps summary { list-style: none; cursor: pointer; padding: 4px 2px; display: flex; gap: 6px; align-items: center; }
 .steps summary::-webkit-details-marker { display: none; }
 .steps.live summary { color: var(--cyan); }
+/* Reply summary (--wos-reply-summary: on): the short answer is one tappable block; tapping it shows the full reply in
+ * its place, and Show less folds it back. */
+/* A tweak a reply carries (WIZARD_TWEAK_V1, core/settings.js tweakCard): Settings › Look's own switch row on an opaque card. */
+.msg.a .ch-tweak { max-width: 520px; margin: 10px 0 4px; padding: 0 12px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px);
+  background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text); }
+.msg.a .ch-tweak > .st-row:last-child { border-bottom: 0; }
+.msg.a .ch-tweak .st-row { min-height: 56px; padding: 10px 0; }
+.msg.a .ch-tweak .st-row:not(:disabled):not(.static) { cursor: pointer; }
+.msg.a .ch-tweak .st-row:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; border-radius: 8px; }
+.msg.a .ch-tweak .tw-gone small { color: var(--wz-text-muted); }
+.msg.a .rsum { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--glass, transparent); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.msg.a .rsum:hover { border-color: var(--line-2); }
+.msg.a .rsum:focus-visible, .msg.a .rless:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+.msg.a .rsum-t { flex: 1; min-width: 0; }
+.msg.a .rsum-chev { flex: none; width: 16px; height: 16px; margin-top: 3px; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.msg.a .rsum[hidden], .msg.a .rdet[hidden] { display: none; }
+.msg.a .rtools { display: flex; justify-content: flex-end; align-items: center; gap: 2px; margin: 0 0 4px; }
+.msg.a .rless { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--wz-text-sm); cursor: pointer; }
+.msg.a .rcog { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-3); cursor: pointer; }
+.msg.a .rcog svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.msg.a .rcog:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+.ch-rlen [role="radio"] { align-items: flex-start; }
+.ch-rlen-dot { width: 20px; text-align: center; color: var(--ink-2); }
+.ch-rlen-tx { display: grid; gap: 2px; }
+.ch-rlen-tx small { font-size: var(--wz-text-sm); font-weight: 500; color: var(--ink-3); }
+.msg.a .rless .rsum-chev { width: 14px; height: 14px; margin: 0; transform: rotate(180deg); }
 .note-line { margin: 4px 0 4px 16px; padding-left: 10px; border-left: 1px solid var(--line-2); font-size: 13px; color: var(--ink-3); }
 .note-line p { margin: 0; }
 .dots { display: inline-flex; gap: 3px; } .dots b { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: typing 1.2s infinite; }
@@ -258,8 +296,6 @@ a.fchip { color: inherit; text-decoration: none; }
 /* On a narrow list column the buttons stack; they then stretch to one shared width instead of ragged right edges.
    The 14px row gap keeps each button's 44px hit area its own. */
 .ch-pill.wait:has([data-chtroubleshoot]) .pbtn { flex: 1 0 auto; height: 30px; padding: 0 13px; line-height: 28px; white-space: nowrap; }
-.ch-sync.off { flex-wrap: wrap; }
-.ch-sync [data-chtroubleshoot] { min-height: 44px; padding: 4px 10px; border-radius: 99px; font: inherit; }
 [data-chtroubleshoot] { color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); }
 
 .ch-pill.sent { gap: 6px; padding: 0 14px 0 12px; color: #8fe3b5; pointer-events: none; animation: ch-pill-out 1.5s ease-in forwards; }
@@ -373,9 +409,10 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-compose .ch-stop svg { fill: var(--red); stroke: none; }
 /* Media viewer: full-screen overlay inside the app (Back closes it). */
 .mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; transition: opacity 180ms var(--ease); touch-action: none; }
-/* The viewer is always a dark backdrop, so its chrome keeps the default light ink on every skin
- * (a light skin's black --ink made Close, the title and Download vanish into it). */
+/* Stage/file text keeps light ink on the dark photo backdrop; only opaque
+ * chrome adopts Appearance tokens. Standalone chrome falls back to dark UA ink. */
 .mviewer { --ink: color-mix(in srgb, white 94%, violet); --ink-2: color-mix(in srgb, var(--ink) 72%, transparent); --ink-3: color-mix(in srgb, var(--ink) 50%, transparent); --line: color-mix(in srgb, var(--ink) 13%, transparent); --line-2: color-mix(in srgb, var(--ink) 24%, transparent); color: var(--ink); color-scheme: dark; }
+.mviewer .mv-top, .mviewer .mv-bar, .mviewer .mv-menu-b { --ink: var(--wz-text, CanvasText); --ink-2: var(--wz-text-secondary, CanvasText); --ink-3: var(--wz-text-muted, CanvasText); --line: var(--wz-border, currentColor); --line-2: var(--wz-border, currentColor); background: var(--wz-panel, var(--bg)); color: var(--ink); }
 .mviewer.open { opacity: 1; }
 .mviewer[hidden] { display: none; }
 .mv-top { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 8px) 10px 6px 6px; }
@@ -673,10 +710,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.compact .ch-row .pv { display: none; }
 /* Archive reads as a different place: a light tinted panel. */
 .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-/* Archive on top, then Working, then Ready uninterrupted at the bottom, on desktop and phone alike (By status layout;
-   James, 31 Oct 2026). Skins that arrange the phone list themselves (obsidian, landscapes) outrank these rules. */
+/* Working first, then Ready uninterrupted, Archive last, on desktop and phone alike (By status layout). Archive went
+   back to the bottom (James, 6 Nov 2026); Miguel's "Archive on top" tweak (miguel/archive-top) is the only way to put
+   it first, and its higher-specificity rule outranks this one. */
 .ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
-.ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
+.ch-list.by-status .ch-sec[data-sec="archive"] { order: 1; }
 .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
 .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
@@ -717,27 +755,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-unsent .tx small { font-size: 12.5px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-unsent .go { flex: none; font-size: 13px; font-weight: 700; color: var(--violet-2, #b99bff); }
 
-/* Morning: the daily check-in pinned at the top of Ready (core/chats.js morningCard). */
-.ch-morning { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
-  border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
-.ch-morning:active { transform: scale(.99); }
-.ch-morning-w { position: relative; margin: 4px 0 10px; }
-.ch-morning-w > .ch-morning { margin: 0; padding-right: 52px; }
-.ch-morning-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 22px; line-height: 1; opacity: .6; cursor: pointer; }
-.ch-morning-x:hover, .ch-morning-x:focus-visible { opacity: 1; background: rgba(255, 255, 255, .08); }
-.ch-morning .sun { flex: none; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 70%, #fff3d6, #ffb86b 40%, #ff6f91 75%); box-shadow: 0 0 18px rgba(255, 184, 107, .4); }
-.ch-morning .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ch-morning .hd { display: flex; align-items: center; gap: 8px; }
-.ch-morning .hd b { font-size: 16px; }
-.ch-morning .hd i { font-style: normal; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: #ffb86b; border: 1px solid rgba(255, 184, 107, .4); border-radius: 999px; padding: 0 7px; }
-.ch-morning small { color: var(--wz-text-secondary, rgba(239, 234, 255, .7)); font-size: 13px; }
-.ch-morning .dots { display: flex; gap: 5px; margin-top: 4px; }
-.ch-morning .dots i { width: 24px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .12); }
-.ch-morning .dots i.on { background: linear-gradient(90deg, #ffb86b, #ff6f91); }
-.ch-morning .go { flex: none; font-size: 22px; opacity: .6; }
-.ch-morning.done { padding: 9px 14px; border-color: var(--wz-border, rgba(205, 190, 255, .13)); background: rgba(255, 255, 255, .03); }
-.ch-morning.done .sun { width: 26px; height: 26px; opacity: .7; }
-.ch-morning.done .hd i { color: #4fe0a8; border-color: rgba(79, 224, 168, .4); }
+
 
 /* Unified Chats (18 Oct 2026): a private agent's thread in the owner's main list wears a small lock; its header says
    Private; a private chat continuing a standard thread shows what goes with its first message. */
@@ -746,7 +764,6 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .tp b .ch-plock .ag-lock { width: 12px; height: 12px; stroke-width: 2.2; }
 .ch-head .ti { min-width: 0; }
 .ch-privtag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 20px; margin-left: 6px; padding: 0 7px 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ch-priv); background: color-mix(in oklab, var(--ch-priv) 16%, transparent); vertical-align: 2px; }
-.ch-background { margin-left: 0; align-self: center; white-space: nowrap; color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface, var(--glass)); font-weight: 400; letter-spacing: normal; }
 .ch-privtag .ag-lock { width: 11px; height: 11px; stroke-width: 2.3; }
 .ch-carry { margin: 14px auto 0; max-width: 520px; display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--ch-priv) 35%, transparent); background: color-mix(in oklab, var(--ch-priv) 8%, transparent); text-align: left; font-size: 13px; line-height: 1.4; }
 .ch-carry b { display: inline-flex; align-items: center; gap: 6px; color: var(--ch-priv); }
@@ -756,6 +773,18 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* Opened on the stored list snapshot: a quiet "Updating…" line with a spinner until the fresh read lands. */
 .ch-sync { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 16px 6px; font-size: 12px; color: var(--ink-3); animation: ch-fade .2s ease; }
 .ch-sync.off { color: var(--ink-2); }
+/* Every state is one line (James, 7 Nov 2026): long text ends in an ellipsis, the full line is the text's title. */
+.ch-sync > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Not up to date: one quiet row no taller than a section header, dot + line on the left, a text action on the right.
+   The action is not a pill: no fill or border, the quiet violet text of "Show all" (.ch-more); its 44px touch target
+   comes from padding, pulled back by a negative block margin so the row itself stays 32px; it paints above the list
+   below (position + z-index) so a tap on its lower edge still reaches it. */
+.ch-sync:has(.ch-sync-act) { justify-content: flex-start; gap: 7px; min-height: 32px; padding: 0 6px 0 16px; }
+.ch-sync-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--wz-warning, var(--amber)); }
+.ch-sync.stale .ch-sync-dot { background: var(--wz-text-muted, var(--ink-3)); }
+.ch-sync .ch-sync-act { position: relative; z-index: 1; flex: none; margin: -6px 0 -6px auto; height: 44px; padding: 0 10px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  font: inherit; font-weight: 650; white-space: nowrap; color: var(--violet-2, var(--wz-accent, var(--ink))); cursor: pointer; }
+.ch-sync .ch-sync-act:hover, .ch-sync .ch-sync-act:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
 @media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; } }
 
@@ -832,3 +861,8 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 .ch-boom.due { opacity: 1; filter: drop-shadow(0 0 4px var(--violet-2)); }
 .ch-boom-ic { display: inline-block; width: 18px; font-size: 14px; line-height: 18px; text-align: center; }
 .msg.boom-flash > .bub { box-shadow: 0 0 0 2px var(--violet-2); transition: box-shadow .3s ease; }
+
+/* Pins off (Filter › View › Pins): rows reclaim the pin's room (was the miguel/hidden-pin tweak). */
+html[data-pins="off"] .ch-row-wrap > .ch-row.ch-row { padding-right: 12px; }
+html[data-pins="off"] .ch-row-wrap.diagnosed > .ch-row.ch-row { padding-right: 90px; }
+html[data-pins="off"] .ch-row-wrap .ch-row-signin { right: 10px; }

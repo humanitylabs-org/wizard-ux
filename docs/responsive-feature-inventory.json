@@ -1,5 +1,13 @@
 {
   "coreModules": {
+    "core/desktop-host.js": {
+      "loadedBy": ["desktop"],
+      "note": "Desktop-only lifecycle adapter boundary; no second window state or rendering. Phone adapter unchanged."
+    },
+    "core/pane-layout.js": {
+      "loadedBy": ["desktop"],
+      "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Desktop only: the phone has no pane consumer, so it no longer downloads it."
+    },
     "core/agents.js": {
       "loadedBy": [
         "phone",
@@ -56,6 +64,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared connection checklist and required-needs admission"
+    },
     "core/app-versions.js": {
       "loadedBy": [
         "phone",
@@ -104,6 +119,13 @@
         "desktop"
       ],
       "note": "Generic registry-granted background audio; native port optional."
+    },
+    "core/media-watch.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Now playing: same-origin app media seen and paused for api.media; inert until watched."
     },
     "core/bound-view.js": {
       "loadedBy": [
@@ -207,12 +229,28 @@
       "loadedBy": [],
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
+    "core/chats-list-model.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Pure row projection, Sort/Group and visible-ID walk; all shells/layouts"
+    },
     "core/chats-view.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Versioned in-document Chats provider admission and lifecycle"
+    },
+    "core/incognito-chat.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
     "core/chats.js": {
       "loadedBy": [
@@ -257,7 +295,10 @@
       "note": "Direct entrypoint import"
     },
     "core/context-menu.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared pointer/keyboard action menu; desktop tiles supply actions"
     },
     "core/core.js": {
@@ -299,12 +340,26 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/downloads.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "In-app Downloads banner and sheet; shows only where the Android bridge exists"
+    },
     "core/edge-peek.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Skin host built-in: tap or swipe the edge beside a chat thread; no-op on desktop"
+    },
+    "core/escape-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared back recency primitive; desktop keyboard adapter only. Phone navigation unchanged."
     },
     "core/experience.js": {
       "loadedBy": [
@@ -336,13 +391,21 @@
     },
     "core/home-screen-apps.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
     },
-    "core/home-screen-policy.js": {
+    "core/home-screen-capabilities.js": {
       "loadedBy": [
         "phone"
+      ],
+      "note": "Validates app-declared home_screen capabilities (offline, position_keys, route_state); no per-app table"
+    },
+    "core/home-screen-policy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
       ],
       "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
     },
@@ -369,12 +432,19 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/look-sync.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/mic.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
+      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
     },
     "core/my-skin.js": {
       "loadedBy": [
@@ -391,8 +461,20 @@
       "note": "Direct entrypoint import"
     },
     "core/offline-kit.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); apps load it themselves, the phone shell loads it for pinned-app presentation journals"
+    },
+    "core/offline-session-config.js": {
       "loadedBy": [],
-      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+      "note": "Generated worker config for pinned app sessions (tools/build-offline-session.py); importScripts from web/sw.js, not either shell"
+    },
+    "core/offline-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Publishes the apps that declared home_screen.offline to the pinned-app worker; prepares the offline host"
     },
     "core/offline-sw.js": {
       "loadedBy": [],
@@ -404,12 +486,32 @@
       ],
       "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
     },
+    "core/box-source.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → About: base main commit and how far ahead/behind main"
+    },
+    "core/disk-status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → Network & security: one disk encryption line from wam disk status"
+    },
+    "core/orb-switcher.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Core phone dock hold: pins-only radial, loaded by index.html and initialized with app.js shell adapter. Desktop and full-screen corner orbs unchanged; open desktops remain on swipe up."
+    },
     "core/os-updates.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
       "loadedBy": [
@@ -472,7 +574,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
+      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/screen-capture.js": {
       "loadedBy": [
@@ -522,6 +624,13 @@
         "desktop"
       ],
       "note": "Extracted native/app internal share sheet"
+    },
+    "core/sheetback.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared imported-share chooser/double-Back custody policy."
     },
     "core/shell.js": {
       "loadedBy": [
@@ -584,6 +693,13 @@
         "desktop"
       ],
       "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
+    },
+    "core/thread-tracker.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Thread tracker tweak (off by default): ask strip, Chats row dots, quote Reply; shared by both shells"
     },
     "core/tour.js": {
       "loadedBy": [
@@ -653,16 +769,29 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
-    },
-    "core/app-setup.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Shared connection checklist and required-needs admission"
     }
   },
   "exceptions": {
+    "core/pane-layout.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Pane geometry for the desktop's tiled/centred/side-by-side/full-screen windows (Classic and AI apps). The phone has no panes; it loads only its own layout code."
+    },
+    "core/desktop-host.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop lifecycle API for pluggable desktop layouts; delegates existing windows and frames. Not a cross-platform feature implementation."
+    },
+    "core/orb-switcher.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Existing phone dock hold adapter promoted from a phone-only tweak. Desktop orb and full-screen phone corner orb keep their different input contracts."
+    },
+    "core/orb-switcher.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Paint for the phone dock hold adapter; no desktop radial is mounted."
+    },
     "pwa-install.js": {
       "shell": "phone",
       "classification": "native",
@@ -738,20 +867,20 @@
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
     },
-    "core/home-screen-policy.js": {
+    "core/home-screen-capabilities.js": {
       "shell": "phone",
       "classification": "native",
-      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
     },
-    "core/home-screen-apps.css": {
+    "core/offline-session.js": {
       "shell": "phone",
       "classification": "native",
-      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
     },
-    "core/home-screen-apps.js": {
+    "core/offline-kit.js": {
       "shell": "phone",
       "classification": "native",
-      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
     },
     "core/single-app-session.js": {
       "shell": "phone",
@@ -788,6 +917,7 @@
     "core/background-audio.js",
     "core/base.css",
     "core/bound-view.js",
+    "core/box-source.js",
     "core/brand.css",
     "core/brand.js",
     "core/bridge.js",
@@ -803,6 +933,7 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-list-model.js",
     "core/chats-view.css",
     "core/chats-view.js",
     "core/chats.css",
@@ -816,16 +947,26 @@
     "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/disk-status.js",
     "core/dom-morph.js",
+    "core/downloads.css",
+    "core/downloads.js",
     "core/edge-peek.js",
+    "core/escape-back.js",
     "core/experience.js",
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/home-screen-apps.css",
+    "core/home-screen-apps.js",
+    "core/home-screen-policy.js",
+    "core/incognito-chat.js",
     "core/launcher-defaults.js",
     "core/launcher.js",
     "core/links.css",
     "core/links.js",
+    "core/look-sync.js",
+    "core/media-watch.js",
     "core/mic.js",
     "core/my-skin.js",
     "core/notif-bell.js",
@@ -856,6 +997,7 @@
     "core/share-sheet.js",
     "core/share-wizard.css",
     "core/share-wizard.js",
+    "core/sheetback.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -866,6 +1008,8 @@
     "core/skins.js",
     "core/status.js",
     "core/thread-swipe-back.js",
+    "core/thread-tracker.css",
+    "core/thread-tracker.js",
     "core/tour.css",
     "core/tour.js",
     "core/update-banner.css",

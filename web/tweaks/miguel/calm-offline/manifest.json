@@ -1,0 +1,11 @@
+{
+  "id": "miguel/calm-offline",
+  "name": "Calm offline card",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "The can't-reach-your-Wizard card shows one dotted path (Internet \u00b7 Tailscale \u00b7 Wizard), one short next step and a small Check again with the automatic re-check time"
+}

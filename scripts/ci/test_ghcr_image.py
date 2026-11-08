@@ -163,6 +163,7 @@ class ImageContract(unittest.TestCase):
         self.assertIn('type=image,name=' + IMAGE + ',push-by-digest=true,name-canonical=true,push=true', command)
         self.assertNotIn('--tag', command)
         self.assertNotIn(IMAGE + ':sha-' + SHA, command)
+        self.assertIn('WIZARD_UX_COMMIT=' + SHA, command)  # Settings › About reads the stamped commit
         platforms.assert_called_once()
 
 

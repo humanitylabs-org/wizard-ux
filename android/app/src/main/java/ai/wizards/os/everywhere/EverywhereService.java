@@ -101,6 +101,13 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     private static volatile EverywhereService liveService;
     public static boolean serviceAlive() { return liveService != null; }
+    /** Takes between Send and durable outbox custody (stop, fsync, outbox save). Static: survives a service teardown. */
+    private static final java.util.concurrent.atomic.AtomicInteger saving = new java.util.concurrent.atomic.AtomicInteger();
+    /** Includes paused takes/startup and a sent take until the outbox holds it; an idle foreground orb service is not recording. */
+    public static boolean captureActive() {
+        EverywhereService s = liveService;
+        return ai.wizards.os.update.UpdatePolicy.captureHeld(s != null && s.listening, saving.get());
+    }
     private static boolean appInFront;
     /** The side-button surface is showing: it has its own orb, so the floating one steps aside. */
     private static boolean surfaceInFront;
@@ -132,7 +139,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private EverywhereOutbox outbox;
     private NoteRecorder.Take recorder;
     private boolean stagedAudio;
-    private boolean listening, paused, dictating;
+    private volatile boolean listening;
+    private boolean paused, dictating;
     private long startedAt;
     private int size, ctl, fan, margin;
     private float density;
@@ -1211,6 +1219,12 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!listening) return;
         if (shotPending) { finishAfterShot = true; return; } // the screenshot being taken rides along
         if (paused && recorder != null) try { recorder.resume(); } catch (IllegalStateException ignored) { }
+        // Still a take for the updater until the outbox holds it: an install landing between stop and save loses it.
+        saving.incrementAndGet();
+        try { finishIntoOutbox(); } finally { saving.decrementAndGet(); }
+    }
+
+    private void finishIntoOutbox() {
         listening = false; paused = false; micLost = false;
         main.removeCallbacks(meter);
         main.removeCallbacks(qaAutoFinish);

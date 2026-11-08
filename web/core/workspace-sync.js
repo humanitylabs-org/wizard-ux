@@ -27,7 +27,10 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   // Bound views and review peeks belong to the chat that opened them; device-only apps stay on their device.
-  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview;
+  // An app the shell opened by itself (`seed`: a new device's starter apps) is not the owner's choice, so it never
+  // reaches the box: a fresh phone or test browser joining must not pop Topics open on every device (James, 6 Nov 2026).
+  // It travels once the owner opens it himself (the shell clears `seed`).
+  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview && !w.seed;
   function pick(w) {
     const o = { id: w.id, app: w.app };
     for (const k of FIELDS) { const v = w[k]; if (v != null && v !== '' && !(k === 'thread' && v === '__new__')) o[k] = v; }
@@ -140,6 +143,7 @@
     // survive a reload and are merged and pushed when the box answers again.
     let st = ls.get(key, null) || { rev: -1, base: null, last: null };
     let lastLocal = st.last || null;
+    let absent = false;
     let closed = [], info = { device: '', at: '' }, ok = null, timer = 0, busy = false, again = false, applying = false, alive = true;
     const off = () => ls.get(OFF, false) === true;
     const persist = () => { st.last = lastLocal; ls.set(key, st); };
@@ -244,7 +248,7 @@
         } catch (e) {
           if (!alive) break;
           if (controller.woken) continue;
-          if (e.absent) { ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
+          if (e.absent) { absent = true; ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
           ok = false; emit(); fails++;
           await pause(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
         } finally {
@@ -274,7 +278,7 @@
         for (const type of ['pageshow', 'focus', 'online']) window.removeEventListener?.(type, wake);
         for (const type of ['visibilitychange', 'resume']) document.removeEventListener?.(type, wake);
       },
-      get on() { return !off(); }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
+      get on() { return !off(); }, get absent() { return absent; }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
     };
     window.WosWorkspaceSync.current = api;
     return api;

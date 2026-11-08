@@ -44,7 +44,8 @@ test('old companion without capability hides unsupported controls; full app reta
 });
 test('shared app microphone admission and reload checks see the shell recorder', () => {
   const s = read('web/core/app-capture.js');
-  assert.equal((s.match(/\(W\.WizardOSDevice \|\| W\.WosDeviceRecording\?\.device\(\)\)\?\.recActive/g) || []).length, 5);
+  // The host-only pageAudioFree proof adds one safety check through the same shell bridge.
+  assert.equal((s.match(/\(W\.WizardOSDevice \|\| W\.WosDeviceRecording\?\.device\(\)\)\?\.recActive/g) || []).length, 9);
   const app = read('web/app.js');
   const finish = app.slice(app.indexOf('function nativeFinish('), app.indexOf('const releasedTakes'));
   assert.ok(finish.indexOf('nativeTakeAppOwned(id)') < finish.indexOf('shell.fetch(id)'));

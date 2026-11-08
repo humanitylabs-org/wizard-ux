@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')
 // The read-state functions only (thread-seen block), with the helpers they lean on.
 function api() {
   const ctx = { otherAgent: a => !!a && a !== 'hermes', READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']) };
-  vm.createContext(ctx);
+  modelContext(ctx);
   vm.runInContext(live.slice(live.indexOf('  const vis = v =>'), live.indexOf('  function later(')) + '\nthis.api = { hasNew, recordFor, assistantAt };', ctx);
   return ctx.api;
 }

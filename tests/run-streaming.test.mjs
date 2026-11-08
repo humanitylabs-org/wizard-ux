@@ -5,6 +5,56 @@ import { readFileSync } from 'node:fs';
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const settle = () => new Promise(r => setImmediate(r));
+
+// James, 1 Nov 2026. EXTEND WizCore's existing stream/transcript ownership; no second renderer.
+// A whole-module jsdom reproduction lives in chats-old-reply-stream.dom.mjs (optional QA toolchain).
+for (const agent of ['', 'philosopher']) test(`an earlier run replay retires even with a newer final answer already in its baseline (${agent || 'main'})`, () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = { status: 'running', runId: 'old-run' };
+  let callback, closed = 0;
+  const ctx = { LIVE: { pendingRun: () => '', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }),
+    isWorking: s => s.status === 'running', esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive() {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout() {} };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  const old = 'It is a 48 KB file of login keys and settings from Buzz.', newest = 'Noted: the Buzz keys file stays.';
+  const turns = [{ notes: ['I checked the file.'], a: { at: 1, text: old, final: true } }, { notes: [], a: { at: 2, text: newest, final: true } }];
+  ctx.syncStream(w, c, turns, agent);
+  const baseline = c.stream.baseline;
+  callback({ text: 'I checked the file.\n\n' + old, steps: [], terminal: true });
+  assert.equal(ctx.syncStream(w, c, turns, agent), '', 'old answer must not appear again below the new one');
+  assert.equal(c.stream.baseline, baseline, 'newest answer was present before opening the old stream');
+  assert.equal(c.stream.landed, true); assert.equal(closed, 1);
+  assert.equal(ctx.syncStream(w, c, turns, agent), ''); assert.equal(closed, 1);
+});
+
+test('earlier-turn replay matching keeps the existing per-turn length, final and media guards', () => {
+  const ctx = {};
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.shown = streamShown;', ctx);
+  const turn = (text, notes = [], final = true) => ({ notes, a: { text, final } });
+  const newer = turn('A different, newer answer.', ['Notes from another run must not enlarge the old answer budget.']);
+  assert.equal(ctx.shown({ text: 'Yes.' }, [turn('Yes.'), newer]), true);
+  assert.equal(ctx.shown({ text: 'Extra new words. Yes.' }, [turn('Yes.'), newer]), false);
+  assert.equal(ctx.shown({ text: 'Working note.' }, [turn('Working note.', [], false), newer]), false);
+  assert.equal(ctx.shown({ text: '' }, [turn(''), newer]), false);
+  assert.equal(ctx.shown({ text: 'Checking. Answer.' }, [turn('Answer.', ['Checking.']), newer]), true);
+  assert.equal(ctx.shown({ text: 'New words after Answer.' }, [turn('Answer.'), newer]), false);
+  assert.equal(ctx.shown({ text: 'Before.\nMEDIA:/synthetic/image.png\nAfter.\n[WIZARD_STATUS_V1]{}' },
+    [turn('Before.\n![Image](/wizard/attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "wizard-inline-0")\nAfter.'), newer]), true);
+});
+
+// A fresh run can begin with the complete text of any older answer. The
+// subscriber must stay open for its later tokens, even if a newer answer is
+// already in the transcript baseline. Replay dedupe only earns terminal scope.
+for (const agent of ['', 'host-profile', 'container', 'restricted']) test(`live matching old words never closes a new stream (${agent || 'main'})`, () => {
+ const w={id:'w',thread:'sid'},c={},row={status:'running',runId:'fresh-run'};let callback,closed=0;
+ const ctx={LIVE:{pendingRun:()=>'',session:()=>row,openRunStream:(_s,_a,_r,cb)=>(callback=cb,{close:()=>closed++})},W:{w},elOf:()=>({}),agentRec:()=>({privacy:'standard'}),isWorking:()=>true,esc:s=>s,md:s=>s,renderThreadLive(){},loadThread:async()=>{},setTimeout:()=>1,clearTimeout(){}};
+ vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='),chats.indexOf('  function renderThread(w, el, keep)')),ctx);
+ const turns=[{notes:[],a:{at:1,text:'Yes.',final:true}},{notes:[],a:{at:2,text:'A different newest answer.',final:true}}];
+ ctx.syncStream(w,c,turns,agent);const baseline=c.stream.baseline;
+ callback({text:'Yes.',terminal:false});assert.match(ctx.syncStream(w,c,turns,agent),/Yes\./);assert.equal(c.stream.landed,false);assert.equal(closed,0);
+ callback({text:'Yes. And here is the important new explanation.',terminal:false});assert.match(ctx.syncStream(w,c,turns,agent),/important new explanation/);assert.equal(c.stream.baseline,baseline);assert.equal(closed,0);
+});
+
+// Continue exercising all neighbouring stream lifecycle cases below.
 function harness() {
   const sources = [], frames = [], timers = [], calls = [];
   class ES {
@@ -20,6 +70,20 @@ function harness() {
   vm.runInNewContext(live.slice(live.indexOf('  const RUN_STREAMS ='), live.indexOf('  function attachOutbox() {')), c);
   return { c, L, sources, frames, timers, calls, paint: () => { for (const fn of frames.splice(0)) fn(); } };
 }
+test('Incognito reuses the shared stream with a scoped ephemeral target and no normal read route', async () => {
+  const h = harness(), sid = 'incog_' + 'a'.repeat(32), base = '/wizard/v1/agents/private/incognito/' + sid, reads = [];
+  let snapshot;
+  const handle = h.L.openRunStream(sid, 'private', 'rid', s => snapshot = s, { base, read: async url => { reads.push(url); return { json: async () => ({ run_id: 'rid', session_id: sid, status: 'completed', output: 'final' }) }; } });
+  assert.equal(h.sources[0].url, base + '/v1/runs/rid/events');
+  h.sources[0].emit({ event: 'message.delta', delta: 'RAM-only answer' });
+  h.sources[0].emit({ event: 'tool.started', tool: 'memory', tool_call_id: 'one' }); h.paint();
+  assert.equal(snapshot.steps[0].tool, 'memory'); assert.equal(snapshot.text, 'RAM-only answer');
+  h.sources[0].emit({ event: 'run.completed' }); await settle(); h.paint();
+  assert.equal(snapshot.terminal, true); assert.equal(snapshot.status, 'completed');
+  assert.deepEqual(reads, [base + '/v1/runs/rid']); assert.deepEqual(h.calls, []);
+  handle.close(); assert.equal(h.sources[0].closed, true);
+  assert.equal(h.L.openRunStream(sid, 'private', 'rid', () => {}, { base: '/wizard/hermes' }), null);
+});
 test('hidden main thread retains its accepted outbox run when absent from session lists', () => {
   const h = harness(), now = Date.now();
   h.c.window.WosOutbox = { forThread: sid => sid === 'sid' ? [

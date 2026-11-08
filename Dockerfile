@@ -12,6 +12,10 @@ RUN sh /tmp/stamp-assets.sh /usr/share/nginx/wizard-ux && rm /tmp/stamp-assets.s
 # Ship empty placeholders so a fresh box answers JavaScript instead of an HTML 404; never overwrite a real one.
 RUN for f in /usr/share/nginx/wizard-ux/data.js /usr/share/nginx/wizard-ux/summaries.js; do [ -e "$f" ] || printf '// owner-generated at runtime; empty on a fresh box\n' > "$f"; done
 COPY packaging/nginx.conf.template packaging/static.conf packaging/proxy.conf packaging/proxy-mcp.conf /etc/wizard-shell/
+# Settings › About names the commit this shell was built from (core/box-source.js); CI passes it (scripts/ci).
+# Left out (a local build): no build.json, and About says the build carries no stamp.
+ARG WIZARD_UX_COMMIT=
+RUN if printf '%s' "$WIZARD_UX_COMMIT" | grep -Eqx '[0-9a-f]{40}'; then printf '{"commit":"%s"}\n' "$WIZARD_UX_COMMIT" > /usr/share/nginx/wizard-ux/build.json; fi
 COPY packaging/entrypoint.sh /usr/local/bin/wizard-shell-entrypoint
 COPY packaging/health.sh /usr/local/bin/wizard-shell-health
 ENV WIZARD_AGENT_SERVICE_ORIGIN=http://wizard-agent-service:8787 WIZARD_SHELL_LISTEN=8788

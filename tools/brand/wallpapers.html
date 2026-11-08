@@ -1,0 +1,234 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<canvas id="out"></canvas>
+<script>
+const Q = new URLSearchParams(location.search), W = +Q.get('w') || 2560, H = +Q.get('h') || 1600, C = Q.get('c') || 'lake';
+const out = document.getElementById('out'); out.width = W; out.height = H; const X = out.getContext('2d');
+const mk = (w = W, h = H) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const FRAG = {
+common: `#version 300 es
+precision highp float; uniform vec2 R; uniform float M; out vec4 o;
+float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<6;i++){v+=a*n2(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}
+float stars(vec2 u,float d){vec2 g=u*d,i=floor(g),f=fract(g);float r=h21(i);if(r<.92)return 0.;vec2 c=vec2(h21(i+3.1),h21(i+7.7));float s=smoothstep(.05,0.,length(f-c));return s*(r-.92)*12.5*(.4+.6*h21(i+1.3));}
+`,
+sky: `void main(){vec2 u=gl_FragCoord.xy/R;float a=R.x/R.y;vec2 p=vec2(u.x*a,u.y);float L=M;
+vec3 col;
+if(L<.5){col=mix(vec3(.05,.03,.11),vec3(.015,.012,.04),smoothstep(.3,1.,u.y));
+ float st=stars(p,220.)+stars(p+5.,110.)*1.3+stars(p+9.,55.)*1.6;col+=vec3(.92,.92,1.)*st*smoothstep(.36,.6,u.y);
+ for(int k=0;k<2;k++){float fk=float(k);float x=p.x;
+  float y0=.47+fk*.07+.07*sin(x*1.15+fk*2.3)+.05*sin(x*2.7+1.)+.06*(fbm(vec2(x*.9,fk*4.))-.5);
+  float d=u.y-y0;float rays=.55+.45*fbm(vec2(x*38.+fk*7.,fk));rays*=.6+.4*fbm(vec2(x*7.,3.+fk));
+  float b=smoothstep(-.004,.012,d)*exp(-max(d,0.)*(7.+fk*4.))*rays*(.8-fk*.35);
+  b*=.5+.5*fbm(vec2(x*1.4+fk,1.));
+  vec3 c=mix(vec3(.25,1.,.68),vec3(.47,.37,1.),smoothstep(.0,.12,d));c=mix(c,vec3(.95,.35,.82),smoothstep(.1,.3,d)*.7);
+  col+=c*b*1.15;}
+ col+=vec3(.47,.37,1.)*.06*exp(-abs(u.y-.42)*9.);
+}else{col=mix(vec3(1.,.82,.72),vec3(.80,.78,1.),smoothstep(.36,.75,u.y));col=mix(col,vec3(.62,.70,.98),smoothstep(.7,1.,u.y));
+ float sun=exp(-length((p-vec2(.5*a,.43))*vec2(1.,1.6))*5.);col+=vec3(1.,.85,.6)*sun*.5;
+ col+=vec3(1.)*.18*pow(fbm(vec2(p.x*2.,u.y*9.)),3.)*smoothstep(.45,.8,u.y);}
+o=vec4(col,1);}`,
+mesh: `void main(){vec2 u=gl_FragCoord.xy/R;float a=R.x/R.y;vec2 p=vec2(u.x*a,u.y);float L=M;
+vec2 q=p*1.1+.6*vec2(fbm(p*1.3+2.),fbm(p*1.3+8.));float f=fbm(q*1.2);float g=fbm(q*.9+5.);
+vec3 A=L<.5?vec3(.05,.03,.12):vec3(.97,.96,1.),B=vec3(.48,.36,1.),Cc=vec3(.98,.38,.76),D=vec3(.25,.72,1.),E=vec3(1.,.66,.36);
+vec3 col=A;col=mix(col,B,smoothstep(.35,.7,f)*(L<.5?.9:.75));col=mix(col,Cc,smoothstep(.5,.78,g)*(L<.5?.75:.6));
+col=mix(col,D,smoothstep(.55,.8,fbm(q+11.))*(L<.5?.7:.55));col=mix(col,E,smoothstep(.62,.85,fbm(q*.8+17.))*(L<.5?.45:.5));
+if(L<.5)col*=.55+.6*smoothstep(1.1,.1,length(u-vec2(.5,.5)));
+col+=(h21(gl_FragCoord.xy)-.5)*.025;o=vec4(col,1);}`,
+sky2: `uniform vec3 T,Mi,B,SC,MC;uniform vec2 SP;uniform float HZ,ST,SR,MW,MD,MT;
+void main(){vec2 u=gl_FragCoord.xy/R;float a=R.x/R.y;vec2 p=vec2(u.x*a,u.y);
+float t=clamp((u.y-HZ)/(1.-HZ),0.,1.);vec3 col=mix(B,Mi,smoothstep(0.,.4,t));col=mix(col,T,smoothstep(.3,1.,t));
+float st=stars(p,260.)+stars(p+5.,130.)*1.2+stars(p+9.,65.)*1.5;
+if(MW>0.){vec2 q=p-vec2(.15*a,.25);vec2 dir=normalize(vec2(1.,.55));float d=abs(q.x*dir.y-q.y*dir.x);
+ float band=exp(-d*d*28.);float dust=exp(-d*d*260.)*smoothstep(.45,.75,fbm(p*5.+3.));
+ col+=mix(vec3(.55,.5,.85),vec3(.9,.75,.85),fbm(p*2.))*band*(fbm(p*3.5)*.9)*MW*smoothstep(0.,.25,t);
+ col-=vec3(.10,.09,.13)*dust*MW;st+=(stars(p+21.,420.)*1.2+stars(p+31.,700.))*band*2.;}
+col+=vec3(.92,.92,1.)*st*ST*smoothstep(0.,.35,t);
+vec2 sp=vec2(SP.x*a,SP.y);float sd=length(p-sp);col+=SC*exp(-sd/max(SR,.001))*.9;
+if(MD>0.){float m=smoothstep(MD,MD-.002,sd);vec2 mq=(p-sp)/MD;float mar=smoothstep(.5,.62,fbm(mq*1.6+7.)),cr=fbm(mq*10.);
+ vec3 mc=MC*mix(1.,(.93-.22*mar+.1*(cr-.5)),MT)*(1.-.28*MT*pow(length(mq),3.));col=mix(col,mc,m);col+=MC*.35*exp(-max(sd-MD,0.)*9.)*(1.-m);}
+col+=(h21(gl_FragCoord.xy)-.5)*.012;o=vec4(max(col,0.),1);}`,
+plane: `uniform float HZ,MODE,SCL;uniform vec3 C1,C2,C3,C4;uniform vec2 LD;
+float F(vec2 q){if(MODE<.5)return fbm(q*.7)*.75+fbm(q*2.1+4.)*.35;
+ return fbm(q*vec2(.55,2.2))*.7+fbm(q*vec2(1.6,5.)+3.)*.3;}
+void main(){vec2 u=gl_FragCoord.xy/R;float a=R.x/R.y;float dy=HZ-u.y;
+ float MB=MODE<.5?.09:.035;if(dy<-MB){o=vec4(0);return;}
+ if(dy<0.){float m=(1.+dy/MB);m=m*m*(MODE<.5?.92:.5);o=vec4(C3*m,m);return;}
+ float e=max(dy,.0008),z=.11/e,x=(u.x-.5)*a*z;vec2 q=vec2(x,z)*SCL;
+ float h=F(q),hx=F(q+vec2(.03,0))-h,hz=F(q+vec2(0,.03))-h;
+ vec3 n=normalize(vec3(-hx,.03*(MODE<.5?.6:.35),-hz));vec3 L=normalize(vec3(LD.x,.55,LD.y));float di=clamp(dot(n,L),0.,1.);
+ vec3 col;
+ if(MODE<.5){float c=smoothstep(.32,.58,h);col=mix(C4,mix(C2,C1,pow(di,.6)),c);col=mix(col,C1,pow(smoothstep(.45,.85,h),1.5)*.55);}
+ else{col=mix(C2,C1,smoothstep(.15,.75,di));col=mix(col,C4,smoothstep(.04,0.,abs(hz))*0.);}
+ float far=exp(-e*(MODE<.5?22.:16.));col=mix(col,C3,far);
+ col+=(h21(gl_FragCoord.xy)-.5)*.015;o=vec4(col,1);}`,
+blobs: `void main(){vec2 u=gl_FragCoord.xy/R;float a=R.x/R.y;vec2 p=vec2(u.x*a,u.y);float L=M;
+vec3 col=mix(vec3(.03,.02,.07),vec3(.95,.94,.99),L);
+vec3 cs[4]=vec3[4](vec3(.48,.36,1.),vec3(1.,.36,.75),vec3(.22,.75,1.),vec3(.98,.68,.30));
+vec2 ps[4]=vec2[4](vec2(.25*a,.7),vec2(.78*a,.78),vec2(.7*a,.18),vec2(.2*a,.15));
+float rs[4]=float[4](.55,.45,.5,.35);
+for(int i=0;i<4;i++){float d=length(p-ps[i]+.08*vec2(fbm(p*2.+float(i)),fbm(p*2.-float(i))));col=mix(col,cs[i]*mix(.85,1.,L),smoothstep(rs[i],0.,d)*mix(.85,.7,L));}
+col+= (h21(gl_FragCoord.xy)-.5)*.02;
+o=vec4(col,1);}`};
+function shader(name, light, U = {}) {
+  const c = mk(), g = c.getContext('webgl2', { preserveDrawingBuffer: true });
+  const sh = (t, s) => { const o = g.createShader(t); g.shaderSource(o, s); g.compileShader(o); if (!g.getShaderParameter(o, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(o)); return o; };
+  const pr = g.createProgram(); g.attachShader(pr, sh(g.VERTEX_SHADER, '#version 300 es\nin vec2 v;void main(){gl_Position=vec4(v,0,1);}'));
+  g.attachShader(pr, sh(g.FRAGMENT_SHADER, FRAG.common + FRAG[name])); g.linkProgram(pr); g.useProgram(pr);
+  const b = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, b); g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), g.STATIC_DRAW);
+  const l = g.getAttribLocation(pr, 'v'); g.enableVertexAttribArray(l); g.vertexAttribPointer(l, 2, g.FLOAT, false, 0, 0);
+  g.uniform2f(g.getUniformLocation(pr, 'R'), W, H); g.uniform1f(g.getUniformLocation(pr, 'M'), light ? 1 : 0);
+  for (const [k, v] of Object.entries(U)) { const L = g.getUniformLocation(pr, k); if (!L) continue; const a = [].concat(v); g['uniform' + a.length + 'f'](L, ...a); }
+  g.viewport(0, 0, W, H); g.drawArrays(g.TRIANGLES, 0, 3); return c;
+}
+const hat = new Image(); hat.src = 'wizard-mark-white.png'; const AR = 1394 / 1876;
+function tint(img, w, h, fill) { const c = mk(w, h), x = c.getContext('2d'); x.drawImage(img, 0, 0, w, h); x.globalCompositeOperation = 'source-in'; x.fillStyle = fill; x.fillRect(0, 0, w, h); return c; }
+function outline(img, w, h, n) { // points on the hat's outer edge
+  const c = mk(w, h), x = c.getContext('2d'); x.drawImage(img, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data, pts = [];
+  const A = (i, j) => i < 0 || j < 0 || i >= w || j >= h ? 0 : d[(j * w + i) * 4 + 3];
+  for (let j = 0; j < h; j += 2) for (let i = 0; i < w; i += 2) if (A(i, j) > 128 && (A(i - 3, j) < 60 || A(i + 3, j) < 60 || A(i, j - 3) < 60 || A(i, j + 3) < 60)) pts.push([i, j]);
+  const pick = []; for (let k = 0; k < n; k++) pick.push(pts[Math.floor(rnd() * pts.length)]);
+  const res = []; for (const p of pick) if (res.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > w * .07)) res.push(p); return res;
+}
+const KEY = [[0,1],[.12,.74],[.25,.42],[.33,.24],[.375,.13],[.32,.005],[.45,.06],[.52,.17],[.59,.27],[.78,.62],[1,1],[.627,1],[.627,.82],[.505,.75],[.38,.82],[.38,1]];
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const S = W / 2560; // scale for pixel sizes
+function hatFill(hw, hh, stops, x0 = .2, y0 = 0, x1 = .9, y1 = 1) { const c = mk(hw, hh), x = c.getContext('2d'); x.drawImage(hat, 0, 0, hw, hh); x.globalCompositeOperation = 'source-in';
+  const g = x.createLinearGradient(hw * x0, hh * y0, hw * x1, hh * y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); x.fillStyle = g; x.fillRect(0, 0, hw, hh); return c; }
+function hatRim(x0, y0, hw, hh, col, a, dx = .006, dy = .004) { const r = mk(hw, hh), rx = r.getContext('2d'); rx.drawImage(tint(hat, hw, hh, col), 0, 0); rx.globalCompositeOperation = 'destination-out'; rx.drawImage(hat, hw * dx, hh * dy, hw, hh); X.save(); X.globalAlpha = a; X.drawImage(r, x0, y0); X.restore(); }
+const doorRect = (x0, y0, hw, hh) => [x0 + hw * .38, y0 + hh * .74, hw * .247, hh * .26];
+function doorLight(x0, y0, hw, hh, k = 1) { const [dx, dy, dw, dh] = doorRect(x0, y0, hw, hh);
+  const dg = X.createLinearGradient(0, dy, 0, dy + dh); dg.addColorStop(0, '#ffd9a0'); dg.addColorStop(1, '#ff9a48'); X.fillStyle = dg; X.fillRect(dx, dy, dw, dh); }
+function doorBloom(x0, y0, hw, hh, k = 1) { const [dx, dy, dw, dh] = doorRect(x0, y0, hw, hh);
+  X.save(); X.globalCompositeOperation = 'screen'; X.filter = `blur(${hh * .03}px)`; X.globalAlpha = .55 * k; X.fillStyle = '#ffb05a'; X.fillRect(dx, dy, dw, dh); X.filter = `blur(${hh * .1}px)`; X.globalAlpha = .4 * k; X.fillRect(dx - dw * .4, dy - dh * .2, dw * 1.8, dh * 1.25); X.restore(); }
+function wave(k) { const ph = Array.from({ length: 6 }, () => rnd() * 6.28), fr = [2.1, 4.7, 9.3, 19, 41, 87]; return t => fr.reduce((v, f, i) => v + Math.sin(t * f + ph[i] + k) / Math.pow(1.85, i), 0); }
+function ridge(base, amp, fill, k, flat = null) { const f = wave(k); X.fillStyle = fill; X.beginPath(); X.moveTo(-10, H + 10);
+  for (let x = -10; x <= W + 10; x += W / 500) { const t = x / W; let y = base - amp * H * (.5 + .35 * f(t)); if (flat) y = base - (base - y) * flat(t); X.lineTo(x, y); }
+  X.lineTo(W + 10, H + 10); X.fill(); return t => base - amp * H * (.5 + .35 * f(t)) * (flat ? flat(t) : 1); }
+function pine(x, y, h, fill) { const w = h * .32; X.fillStyle = fill; X.beginPath(); X.moveTo(x, y - h); const n = 5;
+  for (let i = 1; i <= n; i++) { const yy = y - h + h * i / n, ww = w * (i / n) * (.85 + rnd() * .3); X.lineTo(x + ww, yy); if (i < n) X.lineTo(x + ww * .45, yy - h * .02); }
+  X.lineTo(x + w * .08, y); X.lineTo(x - w * .08, y);
+  for (let i = n; i >= 1; i--) { const yy = y - h + h * i / n, ww = w * (i / n) * (.85 + rnd() * .3); if (i < n) X.lineTo(x - ww * .45, yy - h * .02); X.lineTo(x - ww, yy); }
+  X.closePath(); X.fill(); }
+function haze(y, h, col) { const g = X.createLinearGradient(0, y - h, 0, y + h * .3); g.addColorStop(0, col.replace('A', '0')); g.addColorStop(.7, col.replace('A', '.55')); g.addColorStop(1, col.replace('A', '0')); X.fillStyle = g; X.fillRect(0, y - h, W, h * 1.3); }
+function cloudBank(y, r, n, top, bot, jitter) { X.save();
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * (W + r * 2) - r + (rnd() - .5) * r * .8, rr = r * (.55 + rnd() * .7), yy = y + (rnd() - .3) * r * jitter;
+    const g = X.createLinearGradient(0, yy - rr, 0, yy + rr); g.addColorStop(0, top); g.addColorStop(.75, bot); X.fillStyle = g; X.beginPath(); X.arc(x, yy, rr, 0, 6.29); X.fill(); }
+  X.fillStyle = bot; X.fillRect(0, y + r * .3, W, H); X.restore(); }
+const portrait = () => H > W;
+const R = {
+  lake(light) {
+    const hz = H * .64; X.drawImage(shader('sky', light), 0, 0);
+    const hh = Math.min(H * .46, W * .42 / AR), hw = hh * AR, cx = W * .5;
+    const ridge = (base, amp, col, k) => { X.fillStyle = col; X.beginPath(); X.moveTo(0, hz + 2);
+      for (let x = 0; x <= W; x += W / 240) { const t = x / W; X.lineTo(x, base - amp * H * (Math.abs(Math.sin(t * 5.3 + k)) * .55 + Math.sin(t * 17 + k * 2) * .18 + Math.sin(t * 43 + k) * .06) * (.4 + .6 * Math.abs(t - .5) * 2)); }
+      X.lineTo(W, hz + 2); X.fill(); };
+    ridge(hz - H * .02, .09, light ? '#a99bd8' : '#160f2c', 1); ridge(hz, .05, light ? '#8a78c8' : '#0c0819', 4);
+    // the hat as the mountain, lit from the aurora / dawn
+    const body = mk(hw, hh), bx = body.getContext('2d'); bx.drawImage(hat, 0, 0, hw, hh); bx.globalCompositeOperation = 'source-in';
+    const g = bx.createLinearGradient(hw * .2, 0, hw * .9, hh); if (light) { g.addColorStop(0, '#7a62d8'); g.addColorStop(1, '#3a2780'); } else { g.addColorStop(0, '#3a2a70'); g.addColorStop(.4, '#140e28'); g.addColorStop(1, '#07050e'); }
+    bx.fillStyle = g; bx.fillRect(0, 0, hw, hh);
+    X.save(); X.filter = `blur(${hh * .05}px)`; X.globalAlpha = light ? .35 : .55; X.drawImage(tint(hat, hw, hh, light ? '#fff2dc' : '#7a5cff'), cx - hw / 2, hz - hh); X.restore();
+    if (!light) { // a warm light inside: the doorway glows
+      const dx = cx - hw / 2 + hw * .38, dw = hw * .247, dy = hz - hh + hh * .74, dh = hh * .26;
+      const lg = X.createRadialGradient(cx, hz, 0, cx, hz, hh * .45); lg.addColorStop(0, 'rgba(255,190,110,.35)'); lg.addColorStop(1, 'rgba(255,170,90,0)'); X.fillStyle = lg; X.fillRect(cx - hh * .5, hz - hh * .5, hh, hh * .5);
+      const dg = X.createLinearGradient(0, dy, 0, dy + dh); dg.addColorStop(0, '#ffd59a'); dg.addColorStop(1, '#ff9f4a'); X.fillStyle = dg; X.fillRect(dx, dy, dw, dh); }
+    X.drawImage(body, cx - hw / 2, hz - hh);
+    if (!light) { const dx = cx - hw / 2 + hw * .38, dw = hw * .247, dy = hz - hh + hh * .74, dh = hh * .26;
+      X.save(); X.globalCompositeOperation = 'screen'; X.filter = `blur(${hh * .03}px)`; X.globalAlpha = .55; X.fillStyle = '#ffb05a'; X.fillRect(dx, dy, dw, dh); X.filter = `blur(${hh * .09}px)`; X.globalAlpha = .35; X.fillRect(dx - dw * .3, dy - dh * .1, dw * 1.6, dh * 1.1); X.restore();
+      const ig = X.createLinearGradient(dx, 0, dx + dw, 0); ig.addColorStop(0, 'rgba(255,240,210,.0)'); ig.addColorStop(.5, 'rgba(255,245,225,.45)'); ig.addColorStop(1, 'rgba(255,240,210,0)'); X.save(); X.globalCompositeOperation = 'screen'; X.fillStyle = ig; X.fillRect(dx, dy + dh * .25, dw, dh * .75); X.restore(); }
+    X.save(); X.globalAlpha = light ? .5 : .8; const rim = mk(hw, hh), rx = rim.getContext('2d'); rx.drawImage(tint(hat, hw, hh, light ? '#fff' : '#c9b8ff'), 0, 0); rx.globalCompositeOperation = 'destination-out'; rx.drawImage(hat, hw * .006, hh * .004, hw, hh); X.drawImage(rim, cx - hw / 2, hz - hh); X.restore();
+    // the still lake: everything above the horizon, mirrored, darker, with soft ripples
+    const top = mk(); top.getContext('2d').drawImage(out, 0, 0);
+    X.save(); X.translate(0, hz * 2); X.scale(1, -1); X.filter = `blur(${2 * S}px)`; X.drawImage(top, 0, 0, W, hz, 0, 0, W, hz); X.restore();
+    const wg = X.createLinearGradient(0, hz, 0, H); wg.addColorStop(0, light ? 'rgba(240,236,255,.25)' : 'rgba(5,4,12,.35)'); wg.addColorStop(1, light ? 'rgba(200,190,240,.7)' : 'rgba(5,4,12,.85)'); X.fillStyle = wg; X.fillRect(0, hz, W, H - hz);
+    for (let i = 0; i < 260; i++) { const y = hz + Math.pow(rnd(), 1.6) * (H - hz), w = (20 + rnd() * 160) * W / 1440 * (1 + (y - hz) / (H - hz) * 3);
+      X.fillStyle = light ? `rgba(255,255,255,${.08 + rnd() * .14})` : `rgba(${rnd() < .5 ? '170,150,255' : '120,240,200'},${.04 + rnd() * .08})`; X.fillRect(cx - W * .45 + rnd() * W * .9, y, w, Math.max(1, H / 1400)); }
+    X.fillStyle = light ? 'rgba(255,255,255,.5)' : 'rgba(190,175,255,.35)'; X.fillRect(0, hz, W, Math.max(1, H / 1600));
+  },
+  valley(light) {
+    const hz = H * .7, P = light
+      ? { sky: { T: hex('#7fb8e8'), Mi: hex('#ffd2b0'), B: hex('#ffe8c8'), SC: hex('#ffd9a0'), SP: [.7, .36], SR: .12, ST: 0 }, L: ['#e9a99a', '#c97f8a', '#9c5f86', '#6e4479', '#3f2a5a', '#22173a'], fog: 'rgba(255,214,190,A)', hat: [[0, '#f0b7a4'], [1, '#d69094']] }
+      : { sky: { T: hex('#160c33'), Mi: hex('#7a2f6e'), B: hex('#ff8a4c'), SC: hex('#ff9a55'), SP: [.7, .33], SR: .1, ST: .7 }, L: ['#8a3b6c', '#6a2a62', '#4c1f55', '#331745', '#1f0f33', '#0f0820'], fog: 'rgba(255,120,110,A)', hat: [[0, '#a2457a'], [1, '#7a3168']] };
+    X.drawImage(shader('sky2', light, { ...P.sky, HZ: .3, MW: 0, MD: 0, MT: 0, MC: [0, 0, 0] }), 0, 0);
+    const sx = W * P.sky.SP[0], sy = H * (1 - P.sky.SP[1]), sr = Math.min(W, H) * .06; X.fillStyle = light ? '#fff4d8' : '#ffd08a'; X.beginPath(); X.arc(sx, sy, sr, 0, 6.29); X.fill();
+    const hh = Math.min(H * .62, W * .5 / AR) * (portrait() ? .8 : 1), hw = hh * AR, x0 = W * (portrait() ? .42 : .36) - hw / 2, y0 = H * .78 - hh;
+    X.drawImage(hatFill(hw, hh, P.hat), x0, y0); hatRim(x0, y0, hw, hh, light ? '#fff1dc' : '#ffb27a', .7, -.005, .003);
+    haze(H * .74, H * .12, P.fog);
+    const bases = [.72, .78, .83, .88, .93, 1.0], amps = [.10, .11, .12, .13, .14, .16];
+    bases.forEach((b, i) => { const yf = ridge(H * b, amps[i], P.L[i], i * 3.1 + 1); if (i < bases.length - 1) haze(H * b, H * .05, P.fog.replace(/[\d.]+\)/, 'A)'));
+      if (i >= 3) { const n = Math.round((i - 1) * 26 * W / 2560 * 1.4); for (let k = 0; k < n; k++) { const tx = rnd(); const th = H * (.03 + (i - 3) * .035) * (.6 + rnd() * .6); pine(tx * W, yf(tx) + th * .1, th, P.L[i]); } } });
+    X.strokeStyle = light ? 'rgba(60,30,60,.55)' : 'rgba(20,8,30,.7)'; X.lineWidth = 2.2 * S; X.lineCap = 'round';
+    for (let i = 0; i < 7; i++) { const bx = W * (.55 + rnd() * .3), by = H * (.2 + rnd() * .15), bw = W * .006 * (.6 + rnd()); X.beginPath(); X.moveTo(bx - bw, by - bw * .4); X.quadraticCurveTo(bx - bw * .4, by - bw * .6, bx, by); X.quadraticCurveTo(bx + bw * .4, by - bw * .6, bx + bw, by - bw * .4); X.stroke(); }
+  },
+  clouds(light) {
+    const P = light
+      ? { sky: { T: hex('#3d74cc'), Mi: hex('#9cc2ee'), B: hex('#ffe2c6'), SC: hex('#fff2d6'), SP: [.8, .5], SR: .14, ST: 0 }, C1: '#ffffff', C2: '#c9c3e6', C3: '#f6e2d8', C4: '#9d93c8', hat: [[0, '#8a73e0'], [.6, '#5a43b8'], [1, '#3a2a86']], LD: [.6, -.3] }
+      : { sky: { T: hex('#04031a'), Mi: hex('#1a1550'), B: hex('#6a4aa0'), SC: hex('#a68cff'), SP: [.5, .40], SR: .22, ST: 1.1 }, C1: '#c4b6ff', C2: '#3a3080', C3: '#7a62b8', C4: '#120e30', hat: [[0, '#2e2466'], [.5, '#120d2a'], [1, '#07050f']], LD: [0, -1] };
+    const HZ = .4; X.drawImage(shader('sky2', light, { ...P.sky, HZ, MW: light ? 0 : .9, MD: 0, MT: 0, MC: [0, 0, 0] }), 0, 0);
+    const hh = Math.min(H * .66, W * .5 / AR) * (portrait() ? .75 : 1), hw = hh * AR, x0 = W * .5 - hw / 2, y0 = H * (1 - HZ) + hh * .3 - hh;
+    X.save(); X.filter = `blur(${hh * .07}px)`; X.globalAlpha = light ? .45 : .65; X.drawImage(tint(hat, hw, hh, light ? '#fff6e0' : '#8f70ff'), x0, y0); X.restore();
+    X.drawImage(hatFill(hw, hh, P.hat), x0, y0); hatRim(x0, y0, hw, hh, light ? '#ffffff' : '#c8b6ff', .85, -.006, .004);
+    X.drawImage(shader('plane', light, { HZ, MODE: 0, SCL: 1.2, C1: hex(P.C1), C2: hex(P.C2), C3: hex(P.C3), C4: hex(P.C4), LD: P.LD }), 0, 0);
+  },
+  moonrise(light) {
+    const hz = H * .72, P = light
+      ? { sky: { T: hex('#f2a77e'), Mi: hex('#ffc89a'), B: hex('#ffe6c2'), SC: hex('#fff1d6'), SP: [.5, .48], SR: .1, ST: 0, MC: hex('#fff3d2') }, hill: ['#c97a5e', '#9c5a52', '#6d3d46'], hat: [[0, '#7a3e4e'], [1, '#4c2236']] }
+      : { sky: { T: hex('#04061a'), Mi: hex('#0f1a44'), B: hex('#2a3a74'), SC: hex('#b8c8ff'), SP: [.5, .5], SR: .18, ST: 1, MC: hex('#f1ecdf') }, hill: ['#141a3c', '#0b0f26', '#05060f'], hat: [[0, '#1a1f45'], [1, '#05060f']] };
+    const MR = portrait() ? .17 : .27; X.drawImage(shader('sky2', light, { ...P.sky, HZ: .3, MW: 0, MD: MR, MT: light ? 0 : 1 }), 0, 0);
+    const hh = H * MR * 1.25, hw = hh * AR, x0 = W * .5 - hw / 2, y0 = H * .76 - hh;
+    ridge(H * .80, .07, P.hill[0], 2, t => 1 - .55 * Math.exp(-Math.pow((t - .5) * 5, 2)));
+    doorLight(x0, y0, hw, hh); X.drawImage(hatFill(hw, hh, P.hat), x0, y0); doorBloom(x0, y0, hw, hh, light ? .6 : 1);
+    X.fillStyle = P.hill[0]; X.beginPath(); X.ellipse(W * .5, H * .78, hw * .9, H * .035, 0, 0, 6.29); X.fill();
+    ridge(H * .9, .08, P.hill[1], 7); const yf = ridge(H * 1.0, .1, P.hill[2], 11);
+    X.strokeStyle = P.hill[2]; X.lineWidth = 2 * S; for (let i = 0; i < 2600 * W / 2560; i++) { const t = rnd(), x = t * W, y = yf(t) + 3 * S, h = H * (.012 + rnd() * .03); X.beginPath(); X.moveTo(x, y); X.quadraticCurveTo(x + (rnd() - .5) * h * .3, y - h * .6, x + (rnd() - .5) * h * .6, y - h); X.stroke(); }
+    if (!light) for (let i = 0; i < 34; i++) { const x = rnd() * W, y = H * (.8 + rnd() * .18), r = (1.2 + rnd() * 1.8) * S; const g = X.createRadialGradient(x, y, 0, x, y, r * 6); g.addColorStop(0, 'rgba(255,240,160,.95)'); g.addColorStop(.2, 'rgba(230,255,140,.5)'); g.addColorStop(1, 'rgba(200,255,120,0)'); X.fillStyle = g; X.fillRect(x - r * 6, y - r * 6, r * 12, r * 12); }
+  },
+  sea(light) {
+    const P = light
+      ? { sky: { T: hex('#2f74cf'), Mi: hex('#86bdf0'), B: hex('#e6f2f6'), SC: hex('#ffffff'), SP: [.8, .78], SR: .07, ST: 0 }, C1: '#b8ebf2', C2: '#3a9cbc', C3: '#d3ecf2', C4: '#000000', hat: [[0, '#8a73e0'], [1, '#3e2a96']], LD: [.3, -.8] }
+      : { sky: { T: hex('#02030c'), Mi: hex('#0a0f2c'), B: hex('#1f2a58'), SC: hex('#5868b8'), SP: [.2, .3], SR: .25, ST: 1.2 }, C1: '#5a68a8', C2: '#0b0e24', C3: '#26305e', C4: '#000000', hat: [[0, '#2a2e5e'], [1, '#0c0e22']], LD: [-.7, .5] };
+    const HZ = .34; X.drawImage(shader('sky2', light, { ...P.sky, HZ, MW: light ? 0 : 1.4, MD: 0, MT: 0, MC: [0, 0, 0] }), 0, 0);
+    const hh = Math.min(H * .26, W * .22 / AR), hw = hh * AR, cxt = portrait() ? .5 : .63, x0 = W * cxt - hw / 2, y0 = H * (1 - HZ) + hh * .04 - hh;
+    if (!light) doorLight(x0, y0, hw, hh); X.drawImage(hatFill(hw, hh, P.hat), x0, y0); hatRim(x0, y0, hw, hh, light ? '#ffffff' : '#8a96e0', .7, -.006, .003); if (!light) doorBloom(x0, y0, hw, hh, .9);
+    X.drawImage(shader('plane', light, { HZ, MODE: 1, SCL: .9, C1: hex(P.C1), C2: hex(P.C2), C3: hex(P.C3), C4: hex(P.C4), LD: P.LD }), 0, 0);
+    // the light on the water: the lit door by night, the hat's reflection by day
+    const [dx, dy, dw, dh] = doorRect(x0, y0, hw, hh), top = H * (1 - HZ), cx = light ? x0 + hw / 2 : dx + dw / 2;
+    X.save(); X.globalCompositeOperation = light ? 'multiply' : 'screen';
+    for (let y = top + 1; y < H * .97; y += (1.5 + rnd() * 3) * S * (1 + (y - top) / H * 6)) { const d = (y - top) / (H - top), w = (light ? hw * .55 : dw * 1.3) * (1 + d * 2.2) * (.3 + rnd() * .9), a = Math.pow(1 - d, 1.6) * (.35 + rnd() * .6);
+      X.fillStyle = light ? `rgba(90,70,190,${a * .35})` : `rgba(255,${170 + rnd() * 50 | 0},100,${a * .55})`; X.fillRect(cx - w / 2 + (rnd() - .5) * w * .3, y, w, (1 + d * 3) * S * 1.5); }
+    X.restore();
+  },
+  glass(light) {
+    const bg = shader('mesh', light); X.drawImage(bg, 0, 0);
+    const hh = Math.min(H * .6, W * .55 / AR), hw = hh * AR, x = W / 2 - hw / 2, y = H * .48 - hh / 2;
+    X.save(); X.filter = `blur(${hh * .06}px)`; X.globalAlpha = light ? .22 : .55; X.drawImage(tint(hat, hw, hh, light ? '#4a3a9a' : '#000'), x + hh * .015, y + hh * .05); X.restore();
+    const g = mk(hw, hh), gx = g.getContext('2d'), k = 1.08; // magnified, frosted view of what is behind
+    gx.filter = `blur(${hh * .07}px) saturate(1.15) brightness(${light ? 1.08 : 1.12})`;
+    gx.drawImage(bg, x + hw * (1 - 1 / k) / 2, y + hh * (1 - 1 / k) / 2, hw / k, hh / k, 0, 0, hw, hh); gx.filter = 'none';
+    const sheen = gx.createLinearGradient(0, 0, hw, hh); sheen.addColorStop(0, light ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.22)'); sheen.addColorStop(.5, 'rgba(255,255,255,0)'); sheen.addColorStop(1, light ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.08)'); gx.fillStyle = sheen; gx.fillRect(0, 0, hw, hh);
+    // inner rim light: the outside, blurred, kept only inside the hat
+    const e = mk(hw, hh), ex = e.getContext('2d'); ex.fillStyle = '#fff'; ex.fillRect(0, 0, hw, hh); ex.globalCompositeOperation = 'destination-out'; ex.drawImage(hat, 0, 0, hw, hh);
+    const e2 = mk(hw, hh), e2x = e2.getContext('2d'); e2x.filter = `blur(${hh * .012}px)`; e2x.drawImage(e, 0, 0); e2x.filter = 'none';
+    gx.globalAlpha = light ? .9 : .75; gx.drawImage(e2, 0, 0); gx.globalAlpha = 1;
+    gx.globalCompositeOperation = 'destination-in'; gx.drawImage(hat, 0, 0, hw, hh); X.drawImage(g, x, y);
+    const rim = (dx, dy, col, a) => { const r = mk(hw, hh), rx = r.getContext('2d'); rx.drawImage(tint(hat, hw, hh, col), 0, 0); rx.globalCompositeOperation = 'destination-out'; rx.drawImage(hat, dx, dy, hw, hh); X.save(); X.globalAlpha = a; X.drawImage(r, x, y); X.restore(); };
+    rim(hh * .004, hh * .005, '#ffffff', .95); rim(-hh * .003, -hh * .004, '#ffffff', .3);
+  },
+};
+hat.onload = () => {
+  const light = Q.get('light') === '1';
+  // A query string selects only the six actual scenes, never an Object/prototype method.
+  switch (C) {
+    case 'lake': R.lake(light); break;
+    case 'valley': R.valley(light); break;
+    case 'moonrise': R.moonrise(light); break;
+    case 'sea': R.sea(light); break;
+    case 'clouds': R.clouds(light); break;
+    case 'glass': R.glass(light); break;
+    default: document.title = 'Invalid scene'; return;
+  }
+  document.title = 'done';
+};
+</script></body></html>

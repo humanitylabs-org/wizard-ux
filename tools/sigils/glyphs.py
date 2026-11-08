@@ -335,6 +335,12 @@ def g_scope():
     ticks = U(rrect(242, 92, 28, 110, 14), rrect(242, 310, 28, 110, 14), rrect(92, 242, 110, 28, 14), rrect(310, 242, 110, 28, 14))
     return U(ring, ticks, circle(256, 256, 30))
 
+@glyph('heart', 'A heart with a pulse line cut through it: your health, read from your devices.')
+def g_heart():
+    heart = P("M256 412 C200 368 92 300 92 196 C92 140 134 100 186 100 C218 100 242 116 256 142 C270 116 294 100 326 100 C378 100 420 140 420 196 C420 300 312 368 256 412 Z")
+    pulse = stroke("M70 246 H178 L212 196 L252 300 L290 222 L310 246 H442", 28)
+    return D(heart, pulse)
+
 @glyph('card', 'A payment card with its stripe and chip cut out: the benefits each card still owes you.')
 def g_card():
     card = rrect(114, 164, 284, 184, 34)
@@ -342,12 +348,28 @@ def g_card():
     chip = rrect(148, 270, 62, 44, 11)
     return D(card, stripe, chip)
 
+@glyph('tag', 'A price tag with its eyelet punched out: things you sell and buy second-hand.')
+def g_tag():
+    # Upright tag (point up, eyelet near the point), then turned 45 degrees like a tag hanging on a string.
+    body = P("M256 72 L352 168 V408 A32 32 0 0 1 320 440 H192 A32 32 0 0 1 160 408 V168 Z")
+    body = U(body, stroke(body, 28))
+    return R(D(body, circle(256, 176, 34)), 45, 256, 256)
+
 @glyph('dollar', 'A dollar sign cut through a coin: what you spent, what you own.')
 def g_dollar():
     coin = circle(256, 256, 170)
     s_curve = stroke("M318 196 C306 168 282 158 256 158 C222 158 196 176 196 206 C196 238 226 248 256 256 C288 264 318 274 318 306 C318 336 290 354 256 354 C226 354 200 342 192 314", 36)
     bar = U(rrect(238, 118, 36, 46, 12), rrect(238, 348, 36, 46, 12))
     return D(coin, U(s_curve, bar))
+
+@glyph('podcast', 'A broadcast disc with a microphone cut out of it: shows that talk to you.')
+def g_podcast():
+    disc = circle(256, 256, 160)
+    capsule = rrect(212, 128, 88, 150, 44)
+    yoke = stroke("M170 232 A86 86 0 0 0 342 232", 28)
+    stem = rrect(242, 316, 28, 50, 0)
+    base = rrect(196, 356, 120, 28, 14)
+    return D(disc, U(capsule, yoke, stem, base))
 
 @glyph('clip', 'A film frame with play cut out: a video to edit.')
 def g_clip():
@@ -367,6 +389,13 @@ def g_gauge():
     needle = U(stroke("M256 330 L330 222", 34), circle(256, 330, 34))
     ticks = U(*[R(rrect(248, 186, 16, 40, 8), a, 256, 330) for a in (-60, -30, 0, 30, 60)])
     return D(dial, needle, ticks)
+
+@glyph('news', 'A folded newspaper with its headline and picture cut out: the day\u2019s stories, picked for you.')
+def g_news():
+    sheet = rrect(152, 108, 264, 300, 40)
+    back = rrect(96, 196, 96, 212, 34)
+    seam = stroke('M152 210V368', 30, cap='round')          # the fold between the back page and the front one
+    return D(U(D(back, rrect(140, 150, 300, 300, 52)), sheet), rrect(196, 156, 176, 44, 14), rrect(196, 236, 80, 124, 14), rrect(300, 236, 72, 28, 10), rrect(300, 286, 72, 28, 10), rrect(300, 336, 72, 24, 10))
 
 @glyph('letter', 'Placeholder ring for apps without a sigil yet.')
 def g_letter():

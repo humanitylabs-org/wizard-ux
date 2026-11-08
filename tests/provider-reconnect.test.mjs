@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Regression (20 Oct 2026): Opus failed because the Claude sign-in had expired, and the thread only showed
 // Hermes' generic "Your request was not processed." with a Retry that can't work. The Agent Service now names the
 // connection app (wizard_reconnect); the failed-thread panel says so plainly and opens that app.
@@ -12,7 +13,7 @@ const FIELD = { kind: 'provider_signed_out', provider: 'claude', app_id: 'wizard
 
 function models() {
   const window = { WosAgents: { lock: () => '' } };
-  vm.runInContext(read('web/core/chat-models.js'), vm.createContext({ window, localStorage: { getItem: () => null, setItem() {} }, fetch: async () => ({}), console }));
+  vm.runInContext(read('web/core/chat-models.js'), modelContext({ window, localStorage: { getItem: () => null, setItem() {} }, fetch: async () => ({}), console }));
   return window.WosModels;
 }
 function kit() {
@@ -20,7 +21,7 @@ function kit() {
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: {},
     document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) },
     addEventListener() {}, setTimeout, clearTimeout, console, URL, Intl, Date };
-  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(read('web/core/chat-kit.js'), ctx);
+  ctx.window = ctx; modelContext(ctx); vm.runInContext(read('web/core/chat-kit.js'), ctx);
   return ctx.WosChat;
 }
 function live() {

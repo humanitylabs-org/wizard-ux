@@ -64,7 +64,10 @@ window.WosChatPower = function chatPower(A) {
   const latestId = turns => { for (let i = turns.length - 1; i >= 0; i--) if (turns[i].a) return `${i}:${turns[i].a.at ?? ''}`; return ''; };
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
   const onScreen = A.threadOnScreen;
-  const relTop = (nb, el) => el.getBoundingClientRect().top - (scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom);
+  const relTop = (nb, el) => {
+    const base = scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom;
+    return el.getBoundingClientRect().top - (A.threadViewportTop ? A.threadViewportTop(nb, base) : base);
+  };
   const bottomGap = nb => { const s = scrollBox(nb); return s.scrollHeight - s.scrollTop - s.clientHeight; };
   function anchorOf(nb) {
     if (!onScreen(nb)) return null;
@@ -98,7 +101,7 @@ window.WosChatPower = function chatPower(A) {
     return true;
   }
   function capture(nb) {
-    if (!onScreen(nb)) return;
+    if (!onScreen(nb) || nb.closest('[data-incog-thread]')) return;
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
     if (c?.placeOptions?.notification) { c.placeOptions.notificationScroll = scrollBox(nb).scrollTop; return; }
     if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;
@@ -339,7 +342,43 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11/#12 failure recovery ================= */
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s.id));
+  /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread. Off by default:
+   * only while the wizard/background-continue tweak is on. Showing the panel starts nothing; only the tap does. */
+  const BG_TWEAK = 'wizard/background-continue';
+  const backgroundOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(BG_TWEAK); } catch (_) { return false; } };
+  function backgroundHtml(w, s) {
+    const busy = ch(w.id)?.continuing === s.backgroundResult.id;
+    return `<section class="ch-fail ch-bg-result" role="status" data-bg-result="${esc(s.backgroundResult.id)}"><span class="lb">Background result ready</span>
+        <p>This work finished while Wizard wasn’t available. Continue from its saved result when you’re ready.</p>
+        <div class="ch-fail-b"><button type="button" data-background-continue="${esc(s.backgroundResult.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button></div></section>`;
+  }
+  async function continueBackground(id, sid, rid, button) {
+    const c = ch(id);
+    const own = LIVE.session(sid);
+    if (c.continuing || !own || own.agent || own.backgroundResult?.id !== rid) return;
+    c.continuing = rid; if (button) { button.disabled = true; button.textContent = 'Continuing…'; }
+    const ended = ['failed', 'cancelled', 'interrupted'];
+    try {
+      const r = await fetch(`/wizard/background-results/${encodeURIComponent(rid)}/continue`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid }),
+      });
+      const outcome = await r.json().catch(() => ({}));
+      if (!r.ok || ended.includes(outcome.status)) {
+        // 409: the thread moved on (a newer message, a gate, a live run). Its latest request stays in charge.
+        const stale = r.status === 409 || ended.includes(outcome.status);
+        if (stale) { const s = LIVE.session(sid); if (s) s.backgroundResult = null; LIVE.backgroundSettled?.(rid); }
+        toast('!', stale ? 'This thread changed · its latest request stays in charge' : 'Couldn’t continue · tap again', 2600);
+        LIVE.refresh?.(); return;
+      }
+      const s = LIVE.session(sid); if (s) s.backgroundResult = null; LIVE.backgroundSettled?.(rid);
+      toast('↻', outcome.status === 'completed' ? 'Already continued from the saved result' : 'Continuing from the saved result', 1600);
+      LIVE.refresh?.();
+    } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
+    finally { c.continuing = ''; rerenderAll(); }
+  }
   function failureHtml(w, s) {
+    // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
+    if (s?.backgroundResult && !s.agent && backgroundOn()) return backgroundHtml(w, s);
     if (!M || !failedShown(s)) return '';
     const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
     const req = requestOf(w, s);
@@ -460,7 +499,8 @@ window.WosChatPower = function chatPower(A) {
 
   }
   async function dismissThread(sid) {
-    const ok = await E?.dismissFailure(sid);
+    const pending = E?.dismissFailure(sid); rerenderAll();
+    const ok = await pending;
     toast(ok ? '✓' : '!', ok ? 'Dismissed · history kept' : 'Couldn’t dismiss · try again', ok ? 1400 : 2600);
     rerenderAll();
   }
@@ -514,7 +554,7 @@ window.WosChatPower = function chatPower(A) {
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
     // later parts of an interrupted take, so nothing goes twice.
     const sealed = seal === true ? A.takeComposer(wid, sid) : seal || { text: '', files: [], done() {}, putBack() {} };
-    const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i); // no count cap (James, 6 Nov 2026)
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
     follow(wid);
@@ -522,6 +562,7 @@ window.WosChatPower = function chatPower(A) {
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
+    const navAtSend = c.readNav;
     const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
     if (w) A.renderChats(w);
     let it;
@@ -537,6 +578,7 @@ window.WosChatPower = function chatPower(A) {
       throw e;
     }
     sealed.done(it);
+    if (isNew && !left && it?.sessionId && H.win(wid) === w && w.thread === sid && c.readNav === navAtSend) { A.openChat(wid, it.sessionId); A.renderChats(w); }
     return it;
   }
   function paintMic(on, sid) {
@@ -645,7 +687,6 @@ window.WosChatPower = function chatPower(A) {
     const c = ch(sh.wid); c.files = c.files || [];
     const had = c.files.findIndex(x => x.id === f.id);
     if (had >= 0) { c.files.splice(had, 1); toast('✕', 'Removed from this message', 1200); }
-    else if (c.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
     else { c.files.push({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes, key: Math.random().toString(36).slice(2), preview: f.kind === 'image' ? F.media(f).url : '' }); toast('📎', `Attached · ${f.kind === 'voice' ? 'Voice note' : clip(f.name, 32)}`, 1400); }
     A.saveDraft(sh.wid); A.refreshCompose(sh.wid);
     paint(sh.pane, A.elOf(sh.pane));
@@ -679,6 +720,8 @@ window.WosChatPower = function chatPower(A) {
     }
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
     const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0', rc.dataset.recoveryRun || ''); return true; }
+    const bg = t.closest('[data-background-continue]');
+    if (bg) { if (w?.thread && backgroundOn()) void continueBackground(w.id, w.thread, bg.dataset.backgroundContinue, bg); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
@@ -691,7 +734,7 @@ window.WosChatPower = function chatPower(A) {
     const ad = t.closest('[data-attdismiss]'); if (ad) { E.dismissAttention(ad.dataset.attdismiss).then(ok => toast(ok ? '✓' : '!', ok ? 'Dismissed' : 'Couldn’t dismiss · try again', ok ? 1400 : 2400)); return true; }
     const od = t.closest('[data-obdismiss]'); if (od) {
       const oid = od.dataset.obdismiss;
-      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid).then(ok => toast(ok ? '✕' : '!', ok ? 'Recording deleted' : 'Deletion not saved · keep Wizard open', 2400)); }
+      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { if (od.disabled) return true; od.disabled = true; od.textContent = 'Deleting…'; confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid).then(ok => { rerenderLists(); toast(ok ? '✕' : '!', ok ? 'Recording deleted' : 'Deletion not saved · keep Wizard open', 2400); }, () => { od.disabled = false; od.textContent = 'Delete'; toast('!', 'Deletion not saved · original kept', 2400); }); }
       else { confirmDel = { id: oid, at: Date.now() }; rerenderLists(); setTimeout(() => { if (confirmDel.id === oid) { confirmDel = { id: '', at: 0 }; rerenderLists(); } }, 4100); }
       return true;
     }
@@ -741,5 +784,5 @@ window.WosChatPower = function chatPower(A) {
     return sameTarget() ? tweakModel(wid) : null;
   }
   return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
-    paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
+    paint, closeSheet, sheetOpen: () => !!sheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

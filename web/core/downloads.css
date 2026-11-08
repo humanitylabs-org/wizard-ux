@@ -1,0 +1,81 @@
+/* Wizard in-app Downloads (core/downloads.js): the "Downloaded · Open" banner and the Downloads sheet.
+ * Skin: only --wz-* roles. Floating text-bearing panels are FULLY OPAQUE (--wz-panel / --wz-panel-raised, never
+ * translucent or blurred); only the sheet's scrim dims. The role aliases below resolve through the live skin in the
+ * shell (--ink / --bg / --violet-2 follow the worn palette) and fall back to the dark standalone look. */
+.wdl {
+  --wdl-ink: var(--wz-text);
+  --wdl-ink-2: var(--wz-text-secondary);
+  --wdl-ink-3: var(--wz-text-muted);
+  --wdl-line: var(--wz-border, color-mix(in srgb, var(--wz-text) 22%, transparent));
+  --wdl-accent: var(--wz-accent);
+  --wdl-panel: var(--wz-panel);
+  --wdl-raised: var(--wz-panel-raised, color-mix(in srgb, var(--wdl-ink) 8%, var(--wdl-panel)));
+  --wdl-on-accent: var(--wz-on-accent, var(--wdl-panel));
+  --wdl-soft: color-mix(in srgb, var(--wdl-accent) 16%, var(--wdl-raised));
+  --wdl-danger: var(--wz-danger);
+  font: inherit; color: var(--wdl-ink); -webkit-tap-highlight-color: transparent;
+}
+:where(.wdl) button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; text-align: left; }
+:where(.wdl) svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- banner ---- */
+.wdl-banner {
+  position: fixed; z-index: 190; left: 10px; right: 10px; margin: 0 auto; max-width: 440px;
+  /* phone: just above the bottom bar (orb), or above the chat composer when one shows (--wdl-lift from JS) */
+  bottom: calc(max(var(--wdl-lift, 0px), var(--dock-h, 124px)) + var(--safe-b, 0px) + 8px);
+  display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 6px; border-radius: 18px;
+  background: var(--wdl-raised); border: 1px solid var(--wdl-line); box-shadow: 0 10px 30px color-mix(in srgb, black 30%, transparent);
+  opacity: 0; translate: 0 12px; transition: opacity 150ms ease, translate 180ms var(--ease, ease);
+}
+.wdl-banner.on { opacity: 1; translate: 0 0; }
+.wdl-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 14px; min-height: 44px; }
+.wdl-main:active { background: var(--wdl-soft); }
+.wdl-ic { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--wdl-soft); color: var(--wdl-accent); }
+.wdl-tx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wdl-tx b { font-size: .9rem; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--wdl-ink); }
+.wdl-tx small { font-size: .78rem; line-height: 1.3; color: var(--wdl-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wdl-open, .wdl-act {
+  flex: 0 0 auto; min-width: 64px; min-height: 40px; padding: 0 16px; border-radius: 99px; text-align: center; font-weight: 700; font-size: var(--wz-text-md);
+  background: var(--wdl-accent); color: var(--wdl-on-accent); position: relative;
+}
+.wdl-open::after, .wdl-act::after { content: ''; position: absolute; inset: -4px -2px; } /* a real touch target */
+.wdl-open:active, .wdl-act:active { filter: brightness(.88); scale: .97; }
+.wdl-open:disabled, .wdl-act:disabled { opacity: .7; }
+.wdl-act.ghost { background: transparent; color: var(--wdl-ink-2); border: 1px solid var(--wdl-line); font-weight: 600; }
+.wdl-act.ghost:active { background: var(--wdl-soft); }
+
+/* desktop-width: top-right corner, under the top bar, never over the content centre */
+html[data-shell="desktop"] .wdl-banner { left: auto; right: 14px; top: 44px; bottom: auto; width: 380px; margin: 0; translate: 0 -8px; }
+html[data-shell="desktop"] .wdl-banner.on { translate: 0 0; }
+
+/* ---- sheet ---- */
+.wdl-sheet { position: fixed; inset: 0; z-index: 200; display: flex; align-items: flex-end; justify-content: center; opacity: 0; transition: opacity 150ms ease; }
+.wdl-sheet.on { opacity: 1; }
+.wdl-scrim { position: absolute; inset: 0; background: color-mix(in srgb, black 50%, transparent); }
+.wdl-panel {
+  position: relative; width: 100%; max-width: 560px; max-height: min(78vh, 640px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px 12px calc(14px + var(--safe-b, 0px)); border-radius: 22px 22px 0 0;
+  background: var(--wdl-raised); border: 1px solid var(--wdl-line); border-bottom: 0; box-shadow: 0 -12px 40px color-mix(in srgb, black 30%, transparent);
+  translate: 0 24px; transition: translate 190ms var(--ease, ease);
+}
+.wdl-sheet.on .wdl-panel { translate: 0 0; }
+.wdl-grip { width: 38px; height: 4px; margin: 2px auto 6px; border-radius: 99px; background: var(--wdl-line); }
+.wdl-title { margin: 4px 6px 8px; font-size: 1.06rem; font-weight: 750; color: var(--wdl-ink); }
+.wdl-list { display: flex; flex-direction: column; }
+.wdl-row { display: flex; align-items: center; gap: 12px; padding: 10px 6px; border-top: 1px solid var(--wdl-line); min-height: 64px; }
+.wdl-row:first-child { border-top: 0; }
+.wdl-row.bad .wdl-ic { color: var(--wdl-danger); background: color-mix(in srgb, var(--wdl-danger) 14%, var(--wdl-raised)); }
+.wdl-row .wdl-tx b { font-size: .94rem; font-weight: 650; }
+.wdl-bar { display: block; height: 4px; margin-top: 6px; border-radius: 99px; background: var(--wdl-line); overflow: hidden; }
+.wdl-bar i { display: block; height: 100%; border-radius: 99px; background: var(--wdl-accent); transition: width 300ms linear; }
+.wdl-bar.indet i { animation: wdl-slide 1.2s ease-in-out infinite; }
+@keyframes wdl-slide { from { translate: -100% 0; } to { translate: 250% 0; } }
+.wdl-empty { margin: 14px 8px 18px; font-size: var(--wz-text-md); line-height: 1.4; color: var(--wdl-ink-2); }
+html[data-shell="desktop"] .wdl-sheet { align-items: center; }
+html[data-shell="desktop"] .wdl-grip { display: none; }
+html[data-shell="desktop"] .wdl-panel { border-radius: 18px; border-bottom: 1px solid var(--wdl-line); max-width: 480px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wdl-banner, .wdl-sheet, .wdl-panel { transition: opacity 120ms ease; translate: 0 0; }
+  .wdl-bar.indet i { animation: none; width: 100% !important; opacity: .5; }
+}

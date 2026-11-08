@@ -35,7 +35,7 @@ async function boot(b, { slowDisk = 0, cpu = 1, netDelay = 0 } = {}) {
   const errs = [];
   p.on('pageerror', e => { const st = String(e.stack || ''); if (/wizard-os-home\//.test(st) || !/https?:\/\//.test(st)) errs.push(String(e)); });
   await p.addInitScript(([slow]) => {
-    try { localStorage.setItem('wos.coached', 'true'); } catch (e) {}
+    try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.chats.afterAction.v1', 'list'); } catch (e) {}
     if (!slow) return;
     // A slow phone disk: every IndexedDB readwrite transaction completes `slow` ms late.
     const orig = IDBDatabase.prototype.transaction;

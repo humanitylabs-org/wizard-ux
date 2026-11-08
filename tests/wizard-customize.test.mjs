@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { setBlock, blocks, accentCss, run } from '../skills/wizard-customize/scripts/wizard-customize.mjs'
@@ -23,10 +23,11 @@ test('blocks: replace, append and remove only the marked block; owner text stays
 
 async function box(t, opts) {
   const root = mkdtempSync(join(tmpdir(), 'wcz-')), home = join(root, '.agent')
+  let b
+  t.after(async () => { try { await b?.close() } finally { rmSync(root, { recursive: true, force: true }) } }) // owns the directory even if setup throws
   mkdirSync(join(root, 'Skins/My skin'), { recursive: true })
   writeFileSync(join(root, 'Skins/My skin/skin.css'), OWNER)
-  const b = await startBox({ root, ...opts })
-  t.after(async () => { await b.close(); b.wipe() })
+  b = await startBox({ root, ...opts })
   const env = { base: b.url, filesRoot: root, home }
   return { b, root, cli: (...a) => run(a, env) }
 }

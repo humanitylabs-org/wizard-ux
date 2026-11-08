@@ -4,17 +4,76 @@
  * Each queued write needs server-side idempotency for a lost-response retry. */
 (() => {
   'use strict';
+  // Presentation belongs in the app's existing replica, not a new database.
+  function openReplica(prefix) {
+    if(!/^[a-z][a-z0-9-]*-$/.test(prefix))throw Error('App cache prefix required');
+    return new Promise((resolve,reject)=>{
+      const r=indexedDB.open(prefix+'offline-v1',1);
+      r.onupgradeneeded=()=>{r.result.createObjectStore('outbox',{keyPath:'seq',autoIncrement:true});r.result.createObjectStore('meta')};
+      r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+      r.onblocked=()=>reject(Error('Storage blocked'));
+    });
+  }
+  function strictTransaction(db,name) {
+    // Older engines may silently ignore transaction options. Never call that saved.
+    const tx=db.transaction(name,'readwrite',{durability:'strict'});
+    if(tx.durability!=='strict'){tx.abort();throw Error('Crash-durable storage unavailable')}
+    return tx;
+  }
+  function presentation({prefix,slot,initial,onFailure}) {
+    if(typeof slot!=='string'||slot.length>512)throw Error('Presentation slot required');
+    const dbp=openReplica(prefix), storageKey='presentation:'+slot;
+    let value,revision=0,chain=Promise.resolve(),failed=false;
+    function validate(v) {
+      if(!v||v.v!==1||!Number.isSafeInteger(v.revision)||v.revision<0||!v.positions||typeof v.positions!=='object'||Array.isArray(v.positions))throw Error('Invalid presentation');
+      const entries=Object.entries(v.positions);
+      if(entries.length>80||entries.some(([k,n])=>k.length>1500||!Number.isFinite(n)||n<0||n>1))throw Error('Invalid reading fraction');
+      if(v.route!==null&&(!v.route||v.route.v!==1||typeof v.route.href!=='string'||typeof v.route.base!=='string'))throw Error('Invalid presentation route');
+      return v;
+    }
+    function failure(e){failed=true;onFailure?.(e);throw e}
+    const ready=(async()=>{
+      const db=await dbp;
+      const saved=await new Promise((resolve,reject)=>{
+        const tx=db.transaction('meta','readonly'),req=tx.objectStore('meta').get(storageKey);let result;
+        req.onsuccess=()=>{result=req.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Storage unavailable'));
+      });
+      // Only migrate the synchronous cache when there is NO authoritative journal.
+      value=structuredClone(validate(saved===undefined?{v:1,revision:0,route:null,positions:{},...initial()}:saved));
+      revision=value.revision;return structuredClone(value);
+    })().catch(failure);
+    ready.catch(()=>{});
+    function commit(change) {
+      // The host awaits ready BEFORE mounting: late boot reads cannot win a write.
+      if(!value||failed)return Promise.reject(Error('Presentation storage not ready'));
+      const positions={...value.positions};
+      for(const [k,n] of Object.entries(change.positions||{})){delete positions[k];if(n!==null)positions[k]=n}
+      const next=structuredClone(validate({...value,...change,positions:Object.fromEntries(Object.entries(positions).slice(-80)),revision:++revision}));
+      value=next;
+      const result=chain.then(async()=>{
+        const db=await dbp;
+        return new Promise((resolve,reject)=>{
+          const tx=strictTransaction(db,'meta');
+          const store=tx.objectStore('meta'),check=store.get(storageKey);
+          check.onsuccess=()=>{
+            if(check.result && check.result.revision >= next.revision){tx.abort();return}
+            store.put(next,storageKey);
+          };
+          tx.oncomplete=()=>resolve(next.revision);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Storage unavailable'));
+        });
+      }).catch(failure);
+      // A failed commit cannot be concealed by a later success.
+      chain=result;return result;
+    }
+    return Object.freeze({ready,commit,flush:()=>chain,snapshot:()=>value&&structuredClone(value)});
+  }
   function create(c) {
     if(!/^[a-z][a-z0-9-]*-$/.test(c.prefix))throw Error('App cache prefix required');
     const base=new URL(c.base||'./',location.href), absolute=p=>new URL(p,base).href;
-    const dbp=new Promise((resolve,reject)=>{
-      const r=indexedDB.open(c.prefix+'offline-v1',1);
-      r.onupgradeneeded=()=>{r.result.createObjectStore('outbox',{keyPath:'seq',autoIncrement:true});r.result.createObjectStore('meta')};
-      r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
-    });
+    const dbp=openReplica(c.prefix);
     async function store(name,mode,fn) {
       const db=await dbp;return new Promise((resolve,reject)=>{
-        const tx=db.transaction(name,mode);let result;
+        const tx=mode==='readwrite'&&c.crashDurable?strictTransaction(db,name):db.transaction(name,mode);let result;
         const req=fn(tx.objectStore(name));if(req)req.onsuccess=()=>{result=req.result};
         tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Storage unavailable'));
       });
@@ -154,5 +213,5 @@
     }
     return Object.freeze({request,flush,retry,discard,status,started,warm,projected,clear,dispose});
   }
-  globalThis.WizOffline=Object.freeze({version:1,create});
+  globalThis.WizOffline=Object.freeze({version:1,create,presentation});
 })();

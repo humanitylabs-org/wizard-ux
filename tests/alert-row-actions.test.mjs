@@ -40,7 +40,7 @@ async function harness({ read = false, fail = false, nid = 'sample-alert', kind 
   const actionClick = src.match(/    const rsa = e.target.closest\('\[data-rsact\]'\);[^\n]+/)[0];
   const tapClick = cut("    if (justPressed() &&", "    const o = e.target.closest('[data-chopen]');");
   vm.runInContext(cut('  const ACT = {', '  // Notification-thread only:') + cut('  const actionLabel =', '  const owner =') + cut('  function winAgent(w) {', '  function agentRec(id) {') + cut('  const ROW_MENU =', '  const emojiCategoryHtml')
-    + '\nfunction closeRowSheet() { rowSheet = null; sheets.length = 0; }\n'
+    + '\nfunction paintListsNow() {}\nfunction closeRowSheet() { rowSheet = null; sheets.length = 0; }\n'
     + cut('  let notesOff =', '  const noteAt =') + cut('  let lp =', '  /* Gmail-style swipe') + '\nlet swipeOpen = null;\n'
     + src.slice(pointerStart, pointerEnd) + cut('  function justPressed()', '  // A list must not re-render')
     + `\nthis.tap = e => { ${tapClick} }; this.action = e => { ${actionClick} }; this.api = { notes, openRowSheet, justPressed, closeRowSheet, noteRowAct };`, Object.assign(ctx, { sheets }));

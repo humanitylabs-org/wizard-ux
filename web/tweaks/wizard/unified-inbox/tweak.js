@@ -31,7 +31,7 @@ export default function setup(api) {
     tp.append(el('b', null, plain(titleOf(it))), el('time', null, ago(it.time)));
     const pv = el('span', 'pv');
     if (kind === 'snoozed') pv.append(el('em', 'att ui-snz', 'Snoozed:'), document.createTextNode(' '));
-    pv.append(document.createTextNode((it.source === 'cron' ? 'Scheduled job · ' : '') + plain(it.message).slice(0, 160)));
+    pv.append(document.createTextNode((it.source === 'cron' ? 'Scheduled job · ' : it.app ? (it.appName || it.app) + ' · ' : '') + plain(it.message).slice(0, 160)));
     bd.append(tp, pv); b.append(mark, bd);
     api.listen(b, 'click', () => open(it.id));
     const wrap = el('div', 'ui-item ' + kind); wrap.setAttribute('role', 'listitem'); wrap.append(b);
@@ -61,6 +61,8 @@ export default function setup(api) {
   // Done / Snooze / Restore / Resolve this in the chat window (buttons and keys) land here.
   api.inbox.threads({ list: true, act(action, id) {
     if (action === 'open') open(id);
+    // An app's item (that app set to Chats in Settings › Notifications): Open shows it in the app itself.
+    else if (action === 'app') { if (!api.inbox.open?.(id)) api.toast('Couldn’t open that app here'); }
     else if (action === 'done') api.inbox.done(id);
     else if (action === 'snooze') api.inbox.set(id, { read: true });
     else if (action === 'restore') api.inbox.set(id, { archived: false, read: false });

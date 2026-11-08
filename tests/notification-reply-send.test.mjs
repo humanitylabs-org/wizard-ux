@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Notifications Reply, send side: the real outbox delivers his words FIRST (so the thread title comes from them)
 // and then the notification as framed, quoted, untrusted reference DATA, for typed and voice sends. The thread
 // read back shows a reply card above his words and none of the framing.
@@ -23,7 +24,7 @@ function kitCtx() {
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     navigator: {}, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) },
     addEventListener() {}, setTimeout, clearTimeout, console, URL, Intl, Date };
-  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(kitSrc, ctx); return ctx.WosChat;
+  ctx.window = ctx; modelContext(ctx); vm.runInContext(kitSrc, ctx); return ctx.WosChat;
 }
 const K = kitCtx();
 
@@ -50,7 +51,7 @@ async function harness(t, { transcript = '' } = {}) {
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
     WosChat: K, WizConfig: { transcribe: async () => ({ text: transcript }), voicePrompt: () => '' } };
-  ctx.window = ctx; vm.runInNewContext(outboxSrc, ctx);
+  ctx.window = ctx; runWithChatsModel(outboxSrc, ctx);
   t.after(async () => { for (const x of timers) clearTimeout(x); server.closeAllConnections(); await new Promise(r => server.close(r)); });
   return { api: ctx.WosOutbox, calls };
 }
@@ -106,7 +107,7 @@ test('read back: the shell turns its own block into a reply card and keeps the f
 });
 test('chat list preview/title text drops the framed block', () => {
   const m = liveSrc.match(/const clean = s => String\(s \|\| ''\)([\s\S]*?\.trim\(\));/);
-  const clean = vm.runInNewContext(`(chipLabel => s => String(s || '')${m[1]})(() => ' ')`);
+  const clean = runWithChatsModel(`(chipLabel => s => String(s || '')${m[1]})(() => ' ')`);
   assert.equal(clean(K.reply.attach('Can you clean this up?', item)), 'Can you clean this up?');
 });
 test('every voice path carries the reply taken from the composer', () => {

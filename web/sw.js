@@ -4,6 +4,8 @@
 // into one cache as they arrive, so Wizard still opens with no connection or on spotty wifi (a plane, a tunnel); the
 // shell then shows its saved chat list and threads. Nothing outside the scope is cached here: chats, files, apps and
 // every /wizard/* API stay network-only.
+// Compose the pinned-app shell worker with, never replace, the workspace cache.
+importScripts('./core/offline-session-config.js');
 const CACHE = 'wos-shell-v1', PREFIX = 'wos-shell-', MAX_ENTRIES = 800;
 // A page from a new release waits here until every file it loaded is saved too (the page's 'wos-shell-warm' after
 // load): a spotty link that drops mid-update never leaves a new page without its files, nor deletes the old set.
@@ -120,6 +122,7 @@ self.addEventListener('message', event => {
 
 self.addEventListener('fetch', event => {
   const req = event.request;
+  if (self.WizOfflineWorker?.handles(req)) return; // pin/shared assets already have one respondWith owner
   if (req.method !== 'GET' || req.headers.has('range')) return;
   const u = new URL(req.url);
   if (u.origin !== self.location.origin || PRIVATE_MEDIA.test(u.pathname)) return;

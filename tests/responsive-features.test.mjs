@@ -9,7 +9,8 @@ const inventory = JSON.parse(read('docs/responsive-feature-inventory.json'));
 test('both entrypoints load shared feature surface, skin engine and CSS exactly once and in dependency order', () => {
   for (const file of ['index.html', 'desktop.html']) {
     const assets = assetList(read('web/' + file));
-    for (const asset of ['core/settings.js', 'core/settings.css', 'core/skin-frame.js', 'core/skin-frame.css', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
+    for (const asset of ['core/settings.js', 'core/settings.css', 'core/skin-frame.js', 'core/skin-frame.css', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js', 'core/chats-list-model.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
+    assert.ok(assets.indexOf('core/chats-list-model.js') < assets.indexOf('live.js'), 'list model before live data');
     assert.ok(assets.indexOf('core/skin-frame.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/scenery.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/settings.js') < assets.indexOf(file === 'index.html' ? 'app.js' : 'desktop/desktop.js'));
@@ -43,7 +44,7 @@ test('shell adapters cannot retain a second Settings renderer, picker, or hardco
   assert.doesNotMatch(read('web/core/polish.css'), /html\[data-shell="desktop"\] \.st-/);
   const settings = read('web/core/settings.js');
   assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
-  assert.doesNotMatch(settings, /data-skinfamily=/, 'colors are one list, not grouped by skin');
+  assert.match(settings, /data-skinfamily=/, 'skin families and their colours stay separate in the shared renderer');
   assert.match(settings, /<h4>Skin<\/h4>/);
   assert.match(settings, /data-newskin/);
   assert.match(read('web/core/deeplink.js'), /WosSettings\?\.features\.some/);
@@ -144,13 +145,36 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
   assert.equal(sandbox.WosSettings.moveDraft(opts), false); assert.deepEqual(removed, ['fixture']); assert.equal(notices.length, 1);
 });
 
+// Switches live in Settings (For testers only) and in the Wizard OS Tracker app, one state (Miguel, 7 Nov 2026).
+test('Settings › Look shows "Try new features" on For testers and hides it on For everyone, in both mounts', () => {
+  const { sandbox, roots } = harness();
+  sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
+  const tweak = { id:'miguel/snooze-someday', name:'One-tap Snooze', description:'Snooze is one tap', author:'miguel', on:true };
+  const view = { id:'miguel/orb-shell', name:'Orb', author:'miguel', view:'Orb', on:false };
+  for (const channel of ['latest', 'stable']) {
+    const t = channel === 'stable' ? { ...tweak, on:false, locked:true } : tweak;
+    sandbox.WosExperience = { state:{ owner:'miguel', busy:false, error:'', channel, locked: channel === 'stable', tweaks:[t, view], active:[] } };
+    for (const { root, view: v } of roots) {
+      v.focus('look'); assert.equal(v.page, 'appearance');
+      const html = root.innerHTML;
+      assert.match(html, /data-tweak-toggle="miguel\/orb-shell"/, channel + ': views stay');
+      assert.doesNotMatch(html, /Wizard OS Tracker/, 'Settings is self-contained: no pointer to the Tracker');
+      if (channel === 'latest') {
+        assert.match(html, /data-try-features><h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p>[^]*data-tweak-toggle="miguel\/snooze-someday"[^]*class="tw-by">by miguel</);
+      } else {
+        assert.doesNotMatch(html, /Try new features|data-try-features|data-tweak-toggle="miguel\/snooze-someday"/, 'For everyone: hidden');
+      }
+    }
+  }
+});
 // Look's new controls stay in the shared Settings stack; Back never navigates out of Wizard.
 test('nested Look / skin tweaks Back returns to Settings before shell root Back, in both mounts', () => {
   const { sandbox, roots } = harness();
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
-  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/swipe-strip',name:'Swipe strip',description:'Swipe left to reopen the last chat',author:'miguel',on:true}],active:['miguel/swipe-strip']} };
+  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/snooze-someday',name:'One-tap Snooze',description:'Snooze is one tap and the lowest priority',author:'miguel',on:true}],active:['miguel/snooze-someday']} };
   for (const { root, view } of roots) {
-    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>Tweaks<\/h4>[^]*data-tweakauthor="miguel"[^]*1 of 1 on[^]*data-tweak-toggle="miguel\/swipe-strip"/);
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.doesNotMatch(root.innerHTML,/Try new features|data-tweak-toggle="miguel\/snooze-someday"/, 'channel not read yet: no switches');
+    assert.doesNotMatch(root.innerHTML,/data-tweakauthor|All of /);
     assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
     assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
   }

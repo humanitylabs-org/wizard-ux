@@ -11,9 +11,9 @@ function fixture(id,save,utilities={}){
  const data=new Map(),key='wos.single.v1:'+JSON.stringify(['https://box.test',id]);
  if(save)data.set(key,JSON.stringify(save));
  const storage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};
- const listeners={},frames=[],apps={APP:{[id]:{id,name:id==='wisdom'?'Wisdom':'Wizard Signal',kind:'wizard',url:id==='wisdom'?'/wisdom/':'/wizard-signal/'}}};
+ const listeners={},frames=[],apps={APP:{[id]:{id,name:id==='wisdom'?'Wisdom':'Wizard Signal',kind:'wizard',url:id==='wisdom'?'/wisdom/':'/wizard-signal/',...(id==='wisdom'?{homeScreen:{offline:true,positionKeys:['wisdom:*:pos:*'],routeState:'wisdom'}}:{})}}};
  const device={classList:{add(){}},appendChild(){}};
- const win={dataset:{},style:{setProperty(){}},replaceChildren(){},append(){},appendChild(f){f.isConnected=true;frames.push(f)},innerHTML:''};
+ const win={dataset:{},style:{setProperty(){}},addEventListener(){},replaceChildren(){},append(){},appendChild(f){f.isConnected=true;frames.push(f)},innerHTML:''};
  const rootDoc={documentElement:{style:{setProperty(){}}},styleSheets:[],querySelector:()=>null};
  const document={documentElement:{setAttribute(){},style:{setProperty(){}}},getElementById:n=>n==='device'?device:{classList:{add(){},remove(){}}},addEventListener(){},createElement(tag){
   if(tag==='article')return win;
@@ -25,7 +25,7 @@ function fixture(id,save,utilities={}){
  }};
  const window={WizCore:{apps:()=>apps,appsLoaded:()=>Promise.resolve()},WizAppServices:{attach:()=>()=>{},guardBack(){},back:()=> 'root'},WizAppReadingPosition:{flush(){}},...utilities};
  const ctx=vm.createContext({window,document,localStorage:storage,location:{origin:'https://box.test',search:'?app-session='+id},URL,URLSearchParams,JSON,Date,Object,Math,setTimeout(){},setInterval(fn){listeners.interval=fn},addEventListener(t,fn){listeners[t]=fn}});
- launcherFixture(ctx); vm.runInContext(read('home-screen-policy.js'),ctx);vm.runInContext(read('single-app-session.js'),ctx);
+ launcherFixture(ctx); vm.runInContext(read('home-screen-capabilities.js'),ctx);vm.runInContext(read('home-screen-policy.js'),ctx);vm.runInContext(read('single-app-session.js'),ctx);
  return {data,key,apps,frames,listeners,window,async ready(){await Promise.resolve();await Promise.resolve();return frames.at(-1)}};
 }
 test('Signal hash route reconstructs saved domain/filter state with fresh SDK history mark',async()=>{
@@ -54,10 +54,10 @@ test('Wisdom hash startup is not synthetically rerendered after scoped reader re
 });
 test('removed registry entry can recover and stale frame loads cannot reset the new task',async()=>{
  const f=fixture('wisdom');const first=await f.ready();first.events.load();
- delete f.apps.APP.wisdom;f.listeners['wizard:apps']();
+ delete f.apps.APP.wisdom;await f.listeners['wizard:apps']();
  assert.equal(first.isConnected,false);
  f.apps.APP.wisdom={id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'};
- f.listeners['wizard:apps']();const second=f.frames.at(-1);second.events.load();
+ await f.listeners['wizard:apps']();const second=f.frames.at(-1);second.events.load();
  const saved=f.data.get(f.key);first.events.load();first.wEvents.pagehide();
  assert.equal(f.data.get(f.key),saved);second.contentWindow.location.href='https://box.test/wisdom/#/collection/real';
  f.listeners.interval();assert.equal(JSON.parse(f.data.get(f.key)).href,second.contentWindow.location.href);

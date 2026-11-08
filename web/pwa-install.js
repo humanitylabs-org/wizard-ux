@@ -7,6 +7,9 @@
   if (!script || (script.dataset.pwaOrigin && location.origin !== script.dataset.pwaOrigin)) return;
   const base = new URL('.', script.src);
   if (!location.pathname.startsWith(base.pathname) || window.top !== window.self) return;
+  // Android home-screen app sessions prepare their scoped shell independently;
+  // never advertise a separate browser installation from a pinned app window.
+  if (window.WizHomeScreenPolicy?.mode) return;
   const name = script.dataset.pwaName || document.title;
   const key = `wizard-pwa-install:${base.origin}${base.pathname}`;
 

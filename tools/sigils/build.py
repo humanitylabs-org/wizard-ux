@@ -73,6 +73,7 @@ HOUSE = {
     'system':        ('gauge',    200, 0.07),
     'notifications': ('bell',     70,  None),
     'morning-report':('coffee',   46,  None),
+    'news':          ('news',     18,  None),
     'wizard-calendar':('calendar', 8,  None),
     'secret-drop':   ('secret',   190, None),
     'browser':       ('globe',    220, None),
@@ -86,8 +87,10 @@ HOUSE = {
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
     'money':         ('dollar',   152, 0.13),
+    'second-hand':   ('tag',      118, None),   # Second Hand: a price tag, green-gold between Maps (114) and Trackhunt (128)
     'profiles':      ('profile',  '#7A5CFF', None),
     'defleur-video': ('clip',     268, None),
+    'wizard-podcasts':('podcast', 89,  None),   # Podcasts: amber, in the widest free gap (Wisdom 78 / Cinequeue 100)
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),
     'morning':       ('coffee',   46,  None),   # Morning (installed id) wears Morning report's cup
@@ -111,7 +114,32 @@ HOUSE = {
     'wizard-google': ('search',   250, None),
     'wizard-youtube-music': ('music', 352, None),
     'wizard-voice-service': ('voice', 318, None),
+    # Every app on a Wizard box wears a house sigil (Miguel, 1 Nov 2026): a designed sigil beats a shipped picture, so
+    # the launcher, dock, Desks and Orbs all show one family of marks.
+    'wizard-mail':    ('mail',     214, None),
+    'wizard-microsoft':('mail',    236, 0.09),
+    'smart-home':     ('home',     188, None),
+    'wizard-health':  ('heart',    12,  None),
+    'wizard-apple-health':('heart', 2,  0.12),
+    'wizard-whoop':   ('heart',    24,  0.06),
+    'wizard-oura':    ('heart',    290, 0.07),
+    'wizard-garmin':  ('heart',    226, 0.08),
+    'wizard-polar':   ('heart',    350, 0.08),
+    'wizard-coros':   ('heart',    40,  0.08),
+    'wizard-fitbit':  ('heart',    170, 0.08),
+    'wizard-withings':('heart',    200, 0.06),
+    'wizard-monarch': ('dollar',   120, 0.08),
+    'wizard-brightdata':('globe',  238, 0.08),
+    'wizard-twitterapi':('social', 210, 0.07),
+    'backup':         ('cloud',    224, 0.10),
+    'contacts':       ('social',   336, None),
+    'carlos-crm-demo':('social',   300, 0.08),
+    'maverick-command':('console', 60,  0.10),
+    'pr-board':       ('projects', 160, 0.08),
 }
+# Approved identities that keep their house mask over a legacy package picture.
+# Scoped to Notes (style/ICONS.md); other apps retain shipped-logo precedence.
+HOUSE_ONLY = ['notes', 'wizard-notes']
 # Brand-mask sigils: drawn from web/brand assets in style.css, not from glyphs.py.
 #   hat          supplied company hat (Home and non-default standard agents)
 #   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
@@ -159,6 +187,8 @@ def main():
     js = js.replace('/*NAMES*/', json.dumps(sorted(lib.keys())))
     js = js.replace('/*HOUSE*/', json.dumps(house, separators=(',', ':')))
     js = js.replace('/*HOUSE_ALIASES*/', json.dumps(house_aliases, separators=(',', ':')))
+    assert all(k in HOUSE for k in HOUSE_ONLY)
+    js = js.replace('/*HOUSE_ONLY*/', json.dumps(HOUSE_ONLY))
     js = js.replace('/*BRAND*/', json.dumps(BRAND, separators=(',', ':')))
     for k, m in BRAND.items():
         assert os.path.exists(os.path.join(ROOT, 'web', 'brand', 'apps', m + '.svg')), (k, m)

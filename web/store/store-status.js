@@ -5,23 +5,53 @@ const HOST_ALIASES = {
   'android-apps': {repo:'humanitylabs-org/android-apps', id:'android-apps', url:'/android-apps/'},
   'wizard-calendar': {repo:'humanitylabs-org/wizard-calendar', id:'calendar', url:'/wizard-calendar/'},
   'wizard-music': {repo:'humanitylabs-org/wizard-music', id:'wizard-music', url:'/wizard-music/'},
-  'wizard-search': {repo:'humanitylabs-org/wizard-search', id:'wizard-search', url:'/wizard-search/'},
+  'wizard-search': {repo:'humanitylabs-org/wizard-search', id:'search-preview', url:'/wizard-search/'},
+  photos: {repo:'humanitylabs-org/wizard-photos-app', id:'photos', url:'/photos/'},
+  console: {repo:'humanitylabs-org/vps-terminal', id:'console', url:'/console/'},
 };
-const repo = s => typeof s === 'string' ? s.replace(/^(?:https:\/\/)?github\.com\//,'').toLowerCase() : '';
+// Reviewed repository equivalence: forks, renames and private mirrors that publish the same app. Never inferred from names.
+const REPO_GROUPS = [
+  ['oscarhenrycollins/chatgpt-connection','humanitylabs-org/chatgpt-connection'],
+  ['oscarhenrycollins/claude-connection','humanitylabs-org/claude-connection'],
+  ['oscarhenrycollins/wizard-tinfoil','humanitylabs-org/wizard-tinfoil'],
+  ['oscarhenrycollins/profiles','humanitylabs-org/profiles'],
+  ['oscarhenrycollins/browser','humanitylabs-org/browser'],
+  ['oscarhenrycollins/wizard-mail','defleur-agents/wizard-mail'],
+  ['humanitylabs-org/wizard-food-app','humanitylabs-org/food'], // one GitHub repository, renamed
+  ['humanitylabs-org/wizard-shopping','humanitylabs-org/wizard-shopping-history'], // same pinned commit
+  ['humanitylabs-org/wizard-search','local/search-preview'],
+  ['humanitylabs-org/wizard-notes','local/notes'],
+];
+const CANON = new Map(REPO_GROUPS.flatMap(g => g.map(r => [r, g[0]])));
+// Reviewed installed ids: the same app installed under a staging or earlier id (catalog id -> installed ids).
+const INSTALLED_IDS = {'wizard-search':['search-preview'], usuals:['food'], 'wizard-notes':['notes']};
+const repo = s => { const r = typeof s === 'string' ? s.replace(/^(?:https:\/\/)?github\.com\//,'').toLowerCase() : ''; return CANON.get(r) || r; };
 const sameRepo = (a,b) => !!repo(a) && repo(a) === repo(b);
-const identity = (a,i) => (i.app_id || i.id) === a.id;
+const identity = (a,i) => { const id = i.app_id || i.id; return id === a.id || (INSTALLED_IDS[a.id] || []).includes(id); };
+// One installed registry entry is this catalog listing (same id or reviewed alias, same or equivalent repository).
+export const sameInstalled = (a,i) => !!i && identity(a,i) && sameRepo(a.repo,i.repo);
 export function architectureReason(a, architecture) {
   const supported = a.architectures || [];
   if (!supported.length) return '';
   if (!architecture) return 'Compatibility unavailable. Refresh before installing.';
   return supported.includes(architecture) ? '' : `This release runs on ${supported.join(' · ')}, not this Wizard (${architecture}). Choose a compatible release.`;
 }
+// The shell registry id an App Index listing installs as, when a reviewed host alias renames it (else its own id).
+export const hostAppId = a => HOST_ALIASES[a?.id]?.id || a?.id || '';
 export const isUserApp = a => !['wizard-shell','wizard-ux'].includes(a.id) && a.category !== 'interface' && !(a.provides || []).includes('shell');
+// Store kinds describe the owner's experience, not the runtime packaging tier.
+// Explicit Agents/Connectors keep their roles; only screenless apps are Agent apps.
+export function storeKind(a) {
+  if (a.type === 'agent' || a.category === 'agent') return 'agents';
+  if (a.type === 'external' || a.category === 'connector') return 'connections';
+  return a.type === 'view' || a.has_view === true ? 'apps' : 'agent-apps';
+}
 const alphabetical = (a,b) => String(a || '').localeCompare(String(b || ''),'en');
 export const compareApps = (a,b) => Number(!!b.alpha_badge)-Number(!!a.alpha_badge) || alphabetical(a.name,b.name) || alphabetical(a.id,b.id) || alphabetical(a.repo,b.repo);
 export function resolveInstalled(a, snapshot, runtipi) {
   const matches = (snapshot.wam || []).filter(i => identity(a,i));
-  const same = matches.filter(i => sameRepo(a.repo,i.repo));
+  // An installed-only row is the registry entry itself: nothing to compare it with.
+  const same = matches.filter(i => sameRepo(a.repo,i.repo) || (a.installed_only === true && !a.repo && !i.repo));
   if (same.length) {
     const i = same.find(i => i.commit && i.commit === a.commit) || same.find(i => (a.releases || []).some(r => r.commit && r.commit === i.commit)) || same[0];
     // A source is proved only by an exact catalog pin (or the matching local sidecar).
@@ -54,7 +84,11 @@ export function mergeConflicts(apps, installedOf = () => null) {
   const out = [];
   for (const byRepo of groups.values()) {
     const sources = [...byRepo.values()].map(rows => { const exact = rows.find(a => exactInstall(a, installedOf(a))); return {row:exact || rows[0], installed:!!exact}; });
-    if (sources.length < 2) { out.push(sources[0].row); continue; }
+    if (sources.length < 2) {
+      // Listings spelled with different but equivalent repositories (a fork or mirror) were flagged by the index; they are one source.
+      const r = sources[0].row, mirrored = new Set([...byRepo.values()].flat().map(x => String(x.repo || '').replace(/^(?:https:\/\/)?github\.com\//,'').toLowerCase())).size > 1;
+      out.push(r.conflict && mirrored ? {...r, conflict:false} : r); continue;
+    }
     const installed = sources.filter(s => s.installed), one = installed.length === 1 ? installed[0] : null;
     const ordered = one ? [one, ...sources.filter(s => s !== one)] : sources;
     out.push({...(one || sources[0]).row, conflict:true, sources:ordered.map(({row:a}) => ({repo:a.repo, version:a.version, publisher:a.publisher, source:a.source,

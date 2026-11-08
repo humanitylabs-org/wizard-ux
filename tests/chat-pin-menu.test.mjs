@@ -32,15 +32,11 @@ test('right-click, long-press and swipe share the row menu: Pin/Unpin, never Ope
   assert.match(src, /contextmenu/); assert.match(src, /openRowSheet\(/);
 });
 
-test('Miguel keeps his pin-free chats: his tweak hides the menu Pin and row pins; Show pin buttons stays opt-in', () => {
-  const cat = json('web/tweaks/catalog.json');
-  assert.ok(cat.tweaks.includes(PIN)); assert.ok(cat.tweaks.includes('miguel/hidden-pin'));
-  assert.ok(json('web/tweaks/miguel/profile.json').tweaks.includes('miguel/hidden-pin'));
-  const css = read('web/tweaks/miguel/hidden-pin/tweak.css');
-  assert.match(css, /html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-sheet \[data-part="pin-action"\], html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-row-wrap \.ch-pin-toggle \{ display:none; \}/, 'outranks Show pin buttons');
-  assert.match(css, /\.ch-row-wrap\.diagnosed > \.ch-row\.ch-row \{ padding-right:90px; \}/); assert.match(css, /\.ch-row-wrap \.ch-row-signin \{ right:10px; \}/);
-  assert.ok(!(cat.defaults || []).includes(PIN));
-  for (const who of cat.profiles) assert.ok(!json(`web/tweaks/${who}/profile.json`).tweaks.includes(PIN), 'new features are not legacy preset defaults');
+test('Pins off gives rows back the pin room (the retired hidden-pin tweak, now a setting)', () => {
+  const css = read('web/core/chats.css');
+  assert.match(css, /html\[data-pins="off"\] \.ch-row-wrap > \.ch-row\.ch-row \{ padding-right: 12px; \}/);
+  assert.match(css, /html\[data-pins="off"\] \.ch-row-wrap\.diagnosed > \.ch-row\.ch-row \{ padding-right: 90px; \}/);
+  const cat = json('web/tweaks/catalog.json'); assert.ok(cat.tweaks.includes(PIN)); assert.ok(!(cat.defaults || []).includes(PIN));
 });
 
 test('Novairecito and Sepia retain pins as skin styling, not as a device tweak/preset change', () => {
@@ -67,7 +63,7 @@ function experience(skin, saved) {
 
 test('Show pin buttons starts off for fresh, saved mix and unflattened legacy devices; an explicit opt-in persists', async () => {
   for (const skin of ['nebula','obsidian','novairecito','sepia']) {
-    for (const saved of [undefined, {version:1,off:{},preset:'none',mix:{'miguel/model-pills':true}}, {version:1,off:{wizard:[],miguel:[]}}, {version:1,off:{},preset:'miguel'}]) {
+    for (const saved of [undefined, {version:1,off:{},preset:'none',mix:{'miguel/send-and-go':true}}, {version:1,off:{wizard:[],miguel:[]}}, {version:1,off:{},preset:'miguel'}]) {
       let f = experience(skin,saved); await f.E.refresh();
       assert.equal(f.E.state.error,''); assert.ok(!f.active().includes(PIN),skin);
       assert.equal(f.E.state.tweaks.find(t=>t.id===PIN)?.on,false);

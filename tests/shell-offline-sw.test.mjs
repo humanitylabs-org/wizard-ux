@@ -6,7 +6,10 @@ import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../web/sw.js', import.meta.url), 'utf8');
 const ORIGIN = 'https://box.example';
 
-function harness() {
+// Classic importScripts URLs resolve against sw.js, including nested imports.
+const WORKER_URL = ORIGIN + '/wizard-os-home/sw.js';
+const IMPORTS = new Set(['core/offline-session-config.js', 'core/offline-sw.js']);
+function harness(readScript = readFileSync) {
   const stores = new Map(), on = {}, pending = [];
   let online = true, fetched = [];
   const key = k => typeof k === 'string' ? k : k.url;
@@ -50,20 +53,37 @@ function harness() {
     if (!f) return { ok: false, status: 404, type: 'basic', headers: { get: () => null }, clone() { return this; } };
     return response(url, f.body, f.headers);
   };
+  const imported = [];
   const ctx = {
-    self: { registration: { scope: ORIGIN + '/wizard-os-home/' }, location: { origin: ORIGIN }, skipWaiting() {}, clients: { claim: async () => {} },
-      addEventListener: (n, fn) => { on[n] = fn; } },
-    caches, fetch, URL, Set, Promise, TypeError, setTimeout, clearTimeout,
+    registration: { scope: ORIGIN + '/wizard-os-home/' }, location: new URL(WORKER_URL),
+    navigator: { get onLine() { return online; } }, skipWaiting() {}, clients: { claim: async () => {} },
+    addEventListener(n, fn) { (on[n] ||= []).push(fn); },
+    caches, fetch, URL, Set, Promise, TypeError, Response, setTimeout, clearTimeout,
   };
-  vm.runInNewContext(src, ctx);
+  ctx.self = ctx; // WorkerGlobalScope: self and globalThis share imported globals.
+  const context = vm.createContext(ctx);
+  ctx.importScripts = (...specifiers) => {
+    for (const specifier of specifiers) {
+      const url = new URL(specifier, WORKER_URL);
+      const path = url.pathname.slice('/wizard-os-home/'.length);
+      assert.ok(url.origin === ORIGIN && url.pathname.startsWith('/wizard-os-home/') &&
+        !url.search && !url.hash && IMPORTS.has(path), 'Unsupported worker import: ' + specifier);
+      const local = new URL('../web/' + path, import.meta.url);
+      const source = readScript(local, 'utf8'); // Missing files throw; never stub imports.
+      imported.push(path);
+      vm.runInContext(source, context, { filename: local.pathname });
+    }
+  };
+  vm.runInContext(src, context, { filename: 'web/sw.js' });
+  const dispatch = (name, event) => { for (const fn of on[name] || []) fn(event); };
   const request = (path, init = {}) => {
     const headers = new Map(Object.entries(init.headers || {}));
     return { url: ORIGIN + path, method: init.method || 'GET', mode: init.mode || 'cors', cache: init.cache || 'default', headers: { has: n => headers.has(n) } };
   };
   async function get(path, init) {
-    let answer = null;
-    const event = { request: request(path, init), respondWith(p) { answer = p; }, waitUntil(p) { pending.push(p); } };
-    on.fetch(event);
+    let answer = null, owners = 0;
+    const event = { request: request(path, init), respondWith(p) { assert.equal(++owners, 1, 'one fetch owner'); answer = p; }, waitUntil(p) { pending.push(p); } };
+    dispatch('fetch', event);
     if (!answer) return { passthrough: true };
     let settled = false, out;
     Promise.resolve(answer).then(v => { out = v; }, error => { out = { error }; }).finally(() => { settled = true; });
@@ -71,10 +91,10 @@ function harness() {
     return out;
   }
   async function drain() { let all = false; Promise.all(pending.splice(0)).finally(() => { all = true; }); await pump(() => all); }
-  return { on, stores, files, get, drain, clock: () => now, setDelay: ms => { delay = ms; }, setOnline: v => { online = v; }, fetched: () => fetched, cached: () => [...(stores.get('wos-shell-v1') || new Map()).keys()],
+  return { on, dispatch, imported, importScripts: ctx.importScripts, stores, files, get, drain, clock: () => now, setDelay: ms => { delay = ms; }, setOnline: v => { online = v; }, fetched: () => fetched, cached: () => [...(stores.get('wos-shell-v1') || new Map()).keys()],
     page: (release) => ({ body: `<meta charset="utf-8"><meta name="wos-release" content="${release}"><script src="live.js?v=${release}"></script>`, headers: { 'cache-control': 'no-cache' } }),
     flush: () => Promise.all(pending.splice(0)),
-    async message(data) { let done = false; on.message({ data, waitUntil: p => pending.push(p) }); Promise.all(pending.splice(0)).finally(() => { done = true; }); await pump(() => done); },
+    async message(data) { let done = false; dispatch('message', { data, waitUntil: p => pending.push(p) }); Promise.all(pending.splice(0)).finally(() => { done = true; }); await pump(() => done); },
     // A page load as the browser does it: the page, its files, then the page's after-load hand-over (pwa-install.js).
     async visit(path, files = []) {
       const page = await get(path, { mode: 'navigate' });
@@ -83,6 +103,24 @@ function harness() {
       return page;
     } };
 }
+
+test('real composed imports share worker globals and reject missing or unreviewed source', async () => {
+  const h = harness();
+  assert.deepEqual(h.imported, ['core/offline-session-config.js', 'core/offline-sw.js']);
+  assert.equal(h.on.fetch.length, 2, 'retain both worker listeners, not just the last');
+  h.files.set(ORIGIN + '/wizard-os-home/?app-session=wisdom', h.page('pin'));
+  assert.match((await h.get('/wizard-os-home/?app-session=wisdom', { mode: 'navigate' })).body, /pin/);
+  assert.deepEqual(h.cached(), [], 'reviewed pin is owned by imported worker, not workspace');
+  for (const path of ['https://foreign.example/core/offline-sw.js', 'data:text/javascript,0', './core/unsupported.js', './core/offline-sw.js?other=1', '../outside.js']) {
+    assert.throws(() => h.importScripts(path), /Unsupported worker import/);
+  }
+  assert.throws(() => harness((url, encoding) => {
+    if (url.pathname.endsWith('/offline-sw.js')) {
+      return readFileSync(new URL('../web/core/missing-worker-test-source.js', import.meta.url), encoding);
+    }
+    return readFileSync(url, encoding);
+  }), { code: 'ENOENT' }, 'a missing real import aborts worker load');
+});
 
 test('online reads always go to Wizard; the shell files are kept for later', async () => {
   const h = harness();
@@ -171,7 +209,7 @@ test('activate clears only this worker\'s older caches', async () => {
   const h = harness();
   for (const n of ['wos-shell-v0', 'wos-shell-v1', 'wos-shell-v1-next', 'trackhunt-v1-20260711d']) h.stores.set(n, new Map());
   const pending = [];
-  h.on.activate({ waitUntil: p => pending.push(p) }); await Promise.all(pending);
+  h.dispatch('activate', { waitUntil: p => pending.push(p) }); await Promise.all(pending);
   assert.deepEqual([...h.stores.keys()].sort(), ['trackhunt-v1-20260711d', 'wos-shell-v1', 'wos-shell-v1-next']);
 });
 

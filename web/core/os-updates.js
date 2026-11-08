@@ -1,30 +1,36 @@
-/* Wizard OS · Settings → About & updates: one update card, Automatic / Ask me, release channel; the Home pop-up.
+/* Wizard OS · Settings → About & updates: one update card, always-automatic updates, release channel; the Home pop-up.
  *
  * Two kinds of update, two names (Miguel, 27 Oct 2026). "Wizard OS" is only the box (App Manager, Agent Service,
  * apps): a 10–20 minute install that waits for a quiet moment, like a macOS update. The screens you use are the
  * "Interface": a new one is already on the box and only needs a Reload, so its notice never says "Wizard OS".
  *
  * The box updates the one documented way: the App Manager reruns the installer (`os.sh | bash -s start`) onto the
- * release `releases/stable` names. Automatic (the default) does that overnight, skipping while a chat run is
- * active; Ask me waits for a tap on Update.
+ * release the box's channel names. Updates are always automatic (Miguel + James, Nov 2026): overnight, skipping
+ * while a chat run is active; Install now is the "now" escape. There is no Automatic / Ask me choice any more.
+ * Channels keep their ids (stable / latest) but are shown as "For everyone" and "For testers": every merge to main
+ * reaches For testers; a For testers release moves to For everyone after about 3 days with no release blocker.
+ * New work ships behind off-by-default feature switches, which testers turn on in Settings › Appearance ("Try new
+ * features") or in the Wizard OS Tracker app: one shared state (look.json `tweaks`).
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
- *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing,
+ *   GET                       {mode, chosen, always_auto (App Managers where updates are always automatic),
+ *                              installed, latest, update_available, unpinned, checked, installing,
  *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried),
  *                              quick (the release only swaps the interface image in place: about 2 minutes, not
  *                              the 10–20 minute installer; App Managers without it never send it)}
- *   POST {"mode":"auto"|"ask"} the owner's choice (kept across installer reruns)
- *   POST {"channel":"stable"|"latest"} release channel (DECISIONS #75): stable = promoted releases (default),
- *                              latest = every release, for testers. GET then also returns {channel, stable};
- *                              `latest` is this box's channel release. Automatic installs stable only, either way.
+ *   POST {"mode":"auto"}       only on an older App Manager that still has a saved Ask me: "Turn on automatic
+ *                              updates". The shell never offers Ask me.
+ *   POST {"channel":"stable"|"latest"} release channel (DECISIONS #75): stable = "For everyone" (default),
+ *                              latest = "For testers". GET then also returns {channel, stable};
+ *                              `latest` is this box's channel release, and what Automatic installs (#458).
  *                              An App Manager without channels returns no `channel`, so the picker stays hidden.
  *   POST {"action":"apply"}    start the update now
- * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
+ * An unavailable route is reported in About; no install/policy controls are enabled without a valid response.
  *
  * One card, same look in every state; only the words change. Nothing to do = no card:
- *   behind    "Wizard OS update" · Automatic: "Installs tonight when it’s quiet" · Install now
- *                                         Ask me:    "Takes 10–20 minutes" · Install
+ *   behind    "Wizard OS update" · "Installs tonight when it’s quiet" · Install now
+ *             (an older App Manager with a saved Ask me: "Takes 10–20 minutes" · Install)
  *   building  "Updating Wizard OS…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Install (disabled)
  *             (quick: "Takes about 2 minutes" in both; the new interface then offers its own Reload)
  *   failed    "Wizard OS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
@@ -32,7 +38,7 @@
  *
  *   WosUpdates.card()       → {state, title, line, action, label, disabled} or null
  *   WosUpdates.cardHtml()   → the card's markup ('' when there is nothing to do); Settings puts it on top
- *   WosUpdates.html()       → the About & updates group ('' while unknown or unavailable)
+ *   WosUpdates.html()       → the About & updates group, including loading/unavailable status
  *   WosUpdates.act(el, ctx) → handles a [data-osu] tap; true if handled
  *   WosUpdates.load(force)  → refresh the status (cached 60 s here; the App Manager caches stable ~10 min)
  *   WosUpdates.popup()      → show / hide the Home pop-up now
@@ -48,9 +54,12 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const API = new URL('../store-install/_updates', document.currentScript?.src || location.href).href;
   const FRESH = 60e3;
-  let st = null, at = 0, inflight = null, busy = '', off = false;
+  let st = null, at = 0, inflight = null, busy = '', off = false, issue = '';
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
+  // Updates install by themselves: always on App Managers that say so, and on older ones unless Ask me is saved.
+  const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
+  const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
@@ -60,8 +69,16 @@
       try {
         const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
         const d = r.ok ? await r.json().catch(() => null) : null;
-        if (valid(d)) { st = d; off = false; } else if (!st) off = true;
-      } catch (_) { if (!st) off = true; }
+        if (valid(d)) {
+          st = d; off = false; issue = '';
+          // core/experience.js: For everyone keeps feature switches off; tell it the channel this box is on.
+          // Persist first: experience.js is deferred and reads wos.channel.v1 when it starts, so the channel holds even
+          // if this answer lands before its wos:channel listener exists.
+          if (['stable', 'latest'].includes(d.channel)) try { localStorage.setItem('wos.channel.v1', d.channel); } catch (_) {}
+          if (['stable', 'latest'].includes(d.channel)) try { window.dispatchEvent(new CustomEvent('wos:channel', { detail: { channel: d.channel } })); } catch (_) {}
+        }
+        else { off = true; issue = r.status === 404 ? 'Update controls are not available on this Wizard.' : r.status === 401 || r.status === 403 ? 'Sign in as this Wizard’s owner to manage server updates.' : 'Could not check server updates.'; }
+      } catch (_) { off = true; issue = 'Could not reach server updates.'; }
       at = Date.now(); inflight = null; changed(); return st;
     })();
     return inflight;
@@ -77,9 +94,13 @@
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
     // The interface: already on the box, a Reload away. Never called Wizard OS.
-    if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
-    if (!st) return null;
-    const auto = st.mode === 'auto';
+    if (window.WizWebUpdate?.pending) {
+      const s = window.WizWebUpdate.reloadStatus?.() || {};
+      const c = { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
+      return { ...c, line: s.reason || c.line, label: s.rescuing ? 'Saving…' : s.checking ? 'Getting ready…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : c.label, disabled: !!(s.rescuing || s.checking || s.going) };
+    }
+    if (!st || issue) return null;
+    const auto = isAuto();
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
     if (st.installing) return { state: 'building', title: 'Updating Wizard OS…', line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
@@ -90,23 +111,28 @@
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
-    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button></div>`;
+    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
   }
   const seg = (name, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(name)}">${items.map(([key, text, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(text)}</button>`).join('')}</div>`;
-  // With no card, one quiet line says what is installed.
+  // Always retain the installed server version, including when an update card is present.
   function quietHead() {
-    if (!st || card()) return '';
-    const have = st.installed ? `Wizard OS ${st.installed}` : 'Wizard OS';
-    const sub = st.unpinned ? 'Updated by hand · not on a release' : !st.checked ? 'Couldn’t check for updates' : 'Up to date';
-    return `<div class="st-row static osu-head"><span class="st-tx"><b data-osu-title>${esc(have)}</b></span><span class="st-val">${esc(sub)}</span></div>`;
+    if (!st) return '';
+    const have = st.installed ? `Wizard OS (server) ${st.installed}` : 'Wizard OS (server) · version unavailable';
+    const sub = issue ? 'Last checked · previously verified' : st.unpinned ? 'Updated by hand · not on a release' : card() ? 'Installed on your Wizard' : !st.checked ? 'Couldn’t check for updates' : 'Up to date';
+    return `<div class="st-row static osu-head" data-settings-version="server"><span class="st-tx"><b data-osu-title>${esc(have)}</b></span><span class="st-val">${esc(sub)}</span></div>`;
   }
   function html() {
-    if (!st) { if (!off) load(); return ''; }
+    if (!st || issue) {
+      if (!off && !inflight) load();
+      return `<div class="st-group" data-osu-group><h4>Wizard OS (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? `${quietHead()}${st?.installing ? '<p class="st-note" role="status" data-osu-last-progress>Last checked: Updating Wizard OS… Connection lost; latest progress unverified.</p>' : ''}<p class="st-hint">The current server version and update preference could not be verified.${st ? ' The information above was previously verified, not a live update.' : ' No update preference was changed by this check.'}</p><button type="button" class="st-wide wz-button secondary" data-osu="retry" ${inflight ? 'disabled aria-busy="true"' : ''}>${inflight ? 'Checking…' : 'Try again'}</button>` : ''}</div>`;
+    }
     if (Date.now() - at > FRESH) load();
-    const auto = st.mode === 'auto';
+    const auto = isAuto();
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
-    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-stable', 'Stable', ch === 'stable'], ['ch-latest', 'Latest', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'Tested releases only.' : `Every release, for testers.${auto ? ' Automatic installs Stable only.' : ''}`}</p></div>` : '';
-    const install = `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
+    // An App Manager from before the channel fix (wizard-app-manager issue 458) installs only For everyone releases by itself, even on For testers: say so.
+    const oldAuto = auto && st.always_auto !== true && ch === 'latest' ? ' Updates install by themselves only for For everyone releases until your Wizard is updated.' : '';
+    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.${oldAuto}`}</p></div>` : '';
+    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${auto ? '<p class="st-hint">Install by themselves overnight, never during a chat.</p>' : `<button type="button" class="st-wide wz-button secondary" data-osu="auto" ${busy ? 'disabled' : ''}>Turn on automatic updates</button><p class="st-hint">Nothing installs until you tap Install.</p>`}</div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
   function pick(chan, ctx) {
@@ -114,7 +140,8 @@
     busy = 'ch'; ctx?.render?.(); ctx?.haptic?.(8);
     post({ channel: chan }).then(d => {
       st = valid(d) ? d : { ...st, channel: chan };
-      ctx?.toast?.('✓', chan === 'latest' ? (st.mode === 'auto' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Latest') : 'Channel: Stable', 2200);
+      try { window.dispatchEvent(new CustomEvent('wos:channel', { detail: { channel: st.channel || chan } })); } catch (_) {}
+      ctx?.toast?.('✓', `Channel: ${CHANNEL_NAME[chan]}`, 2200);
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
       .finally(() => { busy = ''; changed(); });
@@ -129,10 +156,12 @@
   function act(el, ctx) {
     const b = el.closest('[data-osu]'); if (!b) return false;
     const what = b.dataset.osu;
+    if (what === 'rescue-save' || what === 'rescue-discard') { void window.WizWebUpdate?.rescue?.(what.slice(7)); return true; }
     if (what === 'reload') { ctx?.haptic?.(8); reload(); return true; }
-    if (busy || !st) return true;
+    if (what === 'retry') { if (!inflight) { off = false; void load(true); ctx?.render?.(); } return true; }
+    if (busy || !st || issue) return true;
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
-    if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
+    if (what === 'ask' || (what === 'auto' && isAuto())) return true;   // Ask me is retired; auto only turns it on
     if (what === 'apply' && card()?.disabled) return true;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };
@@ -142,7 +171,7 @@
         else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
       } else {
         st = valid(d) ? d : { ...st, mode: what, chosen: true };
-        ctx?.toast?.('✓', what === 'auto' ? 'Updates: Automatic' : 'Updates: Ask me', 1800);
+        ctx?.toast?.('✓', 'Updates: automatic', 1800);
       }
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
@@ -195,7 +224,7 @@
         document.body.appendChild(popEl);
       }
       const armed = c.state === 'reload' && window.WizWebUpdate?.armed;
-      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(armed ? 'Waiting…' : c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>`;
+      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}`;
       if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; }
       place();
     }
@@ -206,7 +235,7 @@
     if (k && k !== store.get() && typeof setInterval === 'function') { popTimer = setInterval(popup, 1000); popTimer?.unref?.(); }
   }
   window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, get state() { return st; } };
-  window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => !!st, html: () => html(), act: (ctx, el) => act(el, ctx) });
+  window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
   // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
   // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.

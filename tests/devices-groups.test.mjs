@@ -15,9 +15,11 @@ test('registry keeps group and powershell shell; unknown values fall back', () =
   assert.equal(peerGroup('iOS', 'localhost', reg), 'human'); assert.equal(peerGroup('linux', 'carlos-demo', reg), 'client'); assert.equal(peerGroup('linux', 'demo', reg), 'other');
 });
 
-test('reader passes the shell to the probe and tags peers with their group', async () => {
+test('reader passes the shell to the probe and tags peers with their group', async t => {
   const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
-  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dev-')), 'devices.json');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const f = path.join(dir, 'devices.json');
   fs.writeFileSync(f, JSON.stringify({ devices: [{ id: 'sniper', connect: { type: 'ssh', host: 'sniper', shell: 'powershell' } }], groups: { 'carlos-demo': 'client' } }));
   const seen = [];
   const read = createDevicesReader({ registryPath: f, probeLocalImpl: async () => ({ platform: 'linux', disks: [] }), probeSshImpl: async (h, sh) => { seen.push([h, sh]); return { platform: 'windows', disks: [] }; },
@@ -28,14 +30,16 @@ test('reader passes the shell to the probe and tags peers with their group', asy
   assert.deepEqual(out.network.peers.map(p => [p.name, p.group]), [['carlos-demo', 'client'], ['Pixel', 'human']]);
 });
 
-test('registry keeps a device\'s Machines use and the managed Wizards list; the reader passes both through', async () => {
+test('registry keeps a device\'s Machines use and the managed Wizards list; the reader passes both through', async t => {
   const reg = cleanRegistry({ devices: [{ id: 'vps', connect: { type: 'ssh', host: 'vps' }, use: 'standby' }, { id: 'pc', connect: { type: 'ssh', host: 'pc' }, use: 'main' }],
     managed: [{ id: 'acme', name: 'Acme', org: 'Acme Inc', where: 'wizard.acme.example', peer: 'Acme-Demo', peerName: 'Acme demo box' }, { id: 'bad id', name: 'X' }, { id: 'nowhere', name: 'N', where: 'not a host; rm -rf' }] });
   assert.equal(reg.devices[0].use, 'standby'); assert.equal(reg.devices[1].use, undefined);
   assert.deepEqual(reg.managed, [{ id: 'acme', name: 'Acme', org: 'Acme Inc', where: 'wizard.acme.example', peer: 'acme-demo', peerName: 'Acme demo box' }, { id: 'nowhere', name: 'N' }]);
   assert.equal(cleanRegistry({}).managed, undefined, 'stock registries stay as they were');
   const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
-  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dev-')), 'devices.json');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const f = path.join(dir, 'devices.json');
   fs.writeFileSync(f, JSON.stringify({ devices: [{ id: 'vps', connect: { type: 'ssh', host: 'vps' }, use: 'standby' }], managed: [{ id: 'acme', name: 'Acme', peer: 'acme-demo' }, { id: 'solo', name: 'Solo' }] }));
   const read = createDevicesReader({ registryPath: f, probeLocalImpl: async () => ({ platform: 'linux', disks: [] }), probeSshImpl: async () => ({ platform: 'linux', disks: [] }),
     tailnetImpl: async () => ({ self: { name: 'box', dns: 'box' }, peers: [{ name: 'acme-demo', dns: 'acme-demo', os: 'linux', online: true }] }) });

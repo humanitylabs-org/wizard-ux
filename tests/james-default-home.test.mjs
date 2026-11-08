@@ -56,11 +56,11 @@ test('James: Miguel\'s network Home is his tweak, a separate switch any skin can
 });
 
 test('James: a device that ran the network Home keeps it only if it already wears Miguel\'s tweaks', async () => {
-  const miguel = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/swipe-strip': true }, defaultsMigrated: true }); await miguel.E.refresh();
+  const miguel = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/snooze-someday': true }, defaultsMigrated: true }); await miguel.E.refresh();
   assert.ok(miguel.active().includes('miguel/machines-home'), 'Miguel keeps his Home after the move');
   const james = experience('nebula', { version: 1, off: {}, preset: 'none', mix: {}, defaultsMigrated: true }); await james.E.refresh();
   assert.ok(!james.active().includes('miguel/machines-home'), 'James gets the classic Home back');
-  const optedOut = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/swipe-strip': true }, defaultsMigrated: true, defaultsOff: ['wizard/machines-home'] }); await optedOut.E.refresh();
+  const optedOut = experience('landscapes', { version: 1, off: {}, preset: 'none', mix: { 'miguel/snooze-someday': true }, defaultsMigrated: true, defaultsOff: ['wizard/machines-home'] }); await optedOut.E.refresh();
   assert.ok(!optedOut.active().includes('miguel/machines-home'), 'a device that had switched it off stays off');
   // Once only: switching it off afterwards sticks.
   await miguel.E.toggle('miguel/machines-home'); await miguel.E.refresh();
@@ -98,16 +98,17 @@ test('James: default Settings keeps the current AI page and has no "Your network
   for (const file of core) assert.doesNotMatch(read(file), /page: '(overview|ai|network|storage)'/, file + ' fills no System page');
   assert.match(s, /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \}/, 'the current AI usage / Resources page stays');
   assert.match(s, /const effectivePage = \(\) => page \|\| \(desktop \? \(filled\('overview'\)\(\) \? 'overview' : 'appearance'\) : ''\);/, 'desktop opens on Appearance as before');
-  // Order unchanged from the classic list: Appearance first, then Chats, Voice, Phones…
+  // Order unchanged from the classic list: Appearance first, then Chats, Voice, Phones… (Notifications, where each
+  // app's notifications go, sits right after Chats since 1 Nov 2026.)
   const order = [...between(s, 'const PAGES = [', '];').matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]).filter(id => !['overview', 'ai', 'network', 'storage'].includes(id));
-  assert.deepEqual(order, ['appearance', 'chats', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about']);
+  assert.deepEqual(order, ['appearance', 'chats', 'notifications', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about']);
   // Group labels (System / Preferences) appear only when there is more than one group.
   assert.match(s, /pages\.some\(q => q\.group && q\.group !== p\.group\)/);
 });
 
 test('James: desktop Home opens Settings as the centred panel over Home, never a window beside Chats', () => {
   const desk = read('web/desktop/desktop.js');
-  assert.match(desk, /    if \(homeOpen\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
+  assert.match(desk, /    if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
   assert.doesNotMatch(desk, /homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem/, 'no classic-Home window path');
   assert.match(read('web/core/settings.js'), /hasSystem: \(\) => PAGES\.some\(p => p\.group === 'System' && p\.available\(\)\)/);
 });
@@ -130,9 +131,11 @@ test('James: the default desktop bar has no AI fuel, security, backup or machine
   assert.match(s, /<b>Show every voice button<\/b>/);
 });
 
-test('#755 stays: tweaks are their own switches, by author, in every skin; Welcome never switches skin', () => {
+test('#755 stays: tweaks are their own switches, labelled by author, in every skin; Welcome never switches skin', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /data-tweakauthor=/, 'one quick button per author');
+  // Miguel, 1 Nov 2026: one flat list, no per-author "All of …" quick buttons.
+  assert.doesNotMatch(s, /data-tweakauthor=|All of \$\{/, 'no per-author quick button');
+  assert.match(s, /<small class="tw-by">\$\{t\.where \? esc\(t\.where\) \+ ' · ' : ''\}by \$\{esc\(by\(t\.author\)\)\}<\/small>/, 'each tweak says who made it (a view also says which device type it is for)');
   assert.match(read('web/core/experience.js'), /A color pick never changes tweaks/);
   assert.ok(existsSync(new URL('../web/core/welcome.js', import.meta.url)));
 });

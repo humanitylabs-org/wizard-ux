@@ -1,0 +1,4 @@
+/* Phone Orb entry sheet (skin-host LAYOUTS files.phone): only the wearing tweak's tokens and first-frame Home rules
+ * (--ob-* palette, night background, stock-Home hiding), so a ?layout=orb preview or a saved wos.layout=orb hint paints
+ * right without the tweak package; the phone never downloads the desktop scene in layout.css. */
+@import url("../../tweaks/miguel/orb-shell/tweak.css");

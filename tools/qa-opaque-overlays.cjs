@@ -11,7 +11,7 @@ const {chromium} = require('playwright');
 const root = path.resolve(process.env.QA_WEB_DIR || path.join(__dirname, '..'));
 const read = f => fs.readFileSync(path.join(root, 'web', f), 'utf8');
 const skins = ['nebula', 'grove', 'tide', 'ember', 'signal'];
-const phoneCSS = ['core/base.css', 'styles.css', 'core/chats.css', 'core/chat-power.css', 'core/desks.css', 'core/tour.css', 'core/polish.css', 'core/update-banner.css', 'core/home-surfaces.css', 'core/home-screen-apps.css', 'core/scheduled-reminders.css', 'core/app-route.css', 'core/share-wizard.css', 'core/sel-menu.css', 'core/skins.css'];
+const phoneCSS = ['core/base.css', 'styles.css', 'core/chats.css', 'core/chat-power.css', 'core/desks.css', 'core/tour.css', 'core/polish.css', 'core/update-banner.css', 'core/home-surfaces.css', 'core/home-screen-apps.css', 'core/scheduled-reminders.css', 'core/app-route.css', 'core/attach-chip.css', 'core/share-wizard.css', 'core/sel-menu.css', 'core/skins.css'];
 const groups = {
  phone: phoneCSS,
  desktop: ['core/base.css', 'core/chats.css', 'desktop/desktop.css', 'core/update-banner.css', 'core/skins.css'],
@@ -30,7 +30,9 @@ const cases = [
  {group:'phone',name:'corner-timer',cls:'timer',wrap:'device orb-corner'},
  {group:'phone',name:'dock',cls:'dock',wrap:'device'},
  {group:'phone',name:'scrub-label',cls:'sc-label',wrap:'scrub'},
- {group:'phone',name:'share-wizard',cls:'dv-sheet',wrap:'wz-share'},
+ {group:'phone',name:'share-wizard',cls:'dv-sheet',wrap:'wz-share dv-wrap open'},
+ ...[['share-compose','dv-compose'],['share-destination','dv-dest'],['share-agent-row','dv-row dv-agent'],['share-chat-row','dv-row dv-chat'],['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],['share-backhint','dv-backhint']].map(([name,cls])=>({group:'phone',name,cls,wrap:'wz-share dv-wrap open'})),
+ {group:'phone',name:'share-option',tag:'button',wrap:'wz-share dv-wrap open',middle:'dv-picker'},
  {group:'phone',name:'message-popover',cls:'ch-sheet-b',wrap:'ch-mpop'},
  {group:'phone',name:'reminder-footer',cls:'',tag:'footer',wrap:'boom-card'},
  {group:'phone',name:'tour-step-three',cls:'tr-copy',wrap:'tour',attrs:'data-step="3"'},
@@ -50,17 +52,19 @@ function html(test, skin, hosted) {
  const css = [...new Set(['kit/wizard-tokens.css',...groups[test.group]])].map(read).join('\n');
  const tag=test.tag||'section';
  const panel=`<${tag} id="${test.id||'qa-panel'}" class="${test.cls||''}" data-qa-panel><strong>Readable ${test.name}</strong><p>Nothing behind this panel should show through.</p></${tag}>`;
- const wrap=`<div ${test.wrapId?`id="${test.wrapId}"`:''} class="${test.wrap||''}" ${test.attrs||''}>${panel}</div>`;
+ const wrap=`<div ${test.wrapId?`id="${test.wrapId}"`:''} class="${test.wrap||''}" ${test.attrs||''}>${test.middle?`<div data-qa-middle class="${test.middle}">${panel}</div>`:panel}</div>`;
  return `<!doctype html><html data-skin="${skin}" data-shell="${test.group==='desktop'?'desktop':'phone'}" class="${hosted?'wz-hosted':''}"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><style>
  * {animation:none!important;transition:none!important;caret-color:transparent!important}
  html,body {margin:0;width:390px;height:844px;overflow:hidden}
  body {background:var(--wz-base,#05030c)}
  #behind {position:fixed;inset:0;z-index:0;font:900 26px/30px sans-serif}
  #fixture {position:fixed;inset:0;z-index:1;isolation:isolate;background:none}
- #fixture > div {position:absolute;inset:0;background:none;opacity:1;transform:none;pointer-events:auto}
+ #fixture > div {position:absolute;inset:0;margin:0;background:none;opacity:1;transform:none;pointer-events:auto}
+ /* Normalize only nested fixture placement; preserve production material/cascade. */
+ [data-qa-middle] {position:absolute!important;inset:0!important;max-height:none!important;margin:0!important;padding:0!important}
  /* A retained raster layer prevents gradient dithering from changing on an unrelated repaint.
   * This does not supply an opaque backing: the old translucent materials still fail. */
- [data-qa-panel] {will-change:transform;position:absolute!important;display:block!important;inset:220px auto auto 16px!important;width:358px!important;height:240px!important;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:24px!important;box-sizing:border-box!important;transform:none!important;scale:1!important;visibility:visible!important;overflow:hidden!important}
+ [data-qa-panel] {will-change:transform;position:absolute!important;display:block!important;inset:220px auto auto 16px!important;width:358px!important;height:240px!important;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:24px!important;box-sizing:border-box!important;transform:none!important;translate:none!important;rotate:none!important;scale:1!important;visibility:visible!important;overflow:hidden!important}
  </style></head><body><div id="behind">${loud}</div><main id="fixture">${wrap}</main></body></html>`;
 }
 async function realShell(browser, results) {
@@ -123,6 +127,7 @@ async function realShell(browser, results) {
  const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-lcd-text','--disable-gpu']});
  const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
  const results=[];
+ try {
  for(const skin of skins) for(const hosted of [true,false]) for(const test of cases.filter(t=>!process.env.QA_FILTER || t.name===process.env.QA_FILTER)) {
   await page.setContent(html(test,skin,hosted));
   const panel=page.locator('[data-qa-panel]');
@@ -131,6 +136,7 @@ async function realShell(browser, results) {
   const b=await panel.boundingBox(); assert(b&&b.width>40&&b.height>40,`${test.name} rendered`);
   // Stay inside pill/elliptical corners as well as ordinary rounded cards.
   const clip={x:b.x+64,y:b.y+64,width:b.width-128,height:b.height-128};
+  assert(clip.x>=0&&clip.y>=0&&clip.width>0&&clip.height>0&&clip.x+clip.width<=390&&clip.y+clip.height<=844,JSON.stringify({skin,hosted,test:test.name,box:b,clip}));
   const over=await page.screenshot({clip});
   if(skin==='nebula'&&hosted&&process.env.QA_SHOTS&&test.group==='phone'&&['sheet','wmenu','share-wizard'].includes(test.name)) {
    fs.mkdirSync(process.env.QA_SHOTS,{recursive:true});
@@ -141,7 +147,7 @@ async function realShell(browser, results) {
   results.push({skin,hosted,group:test.group,panel:test.name,opaque:over.equals(bare),material:await panel.evaluate(e=>({color:getComputedStyle(e).backgroundColor,image:getComputedStyle(e).backgroundImage,opacity:getComputedStyle(e).opacity}))});
  }
  if(!process.env.QA_FILTER || process.env.QA_FILTER==='real')await realShell(browser,results);
- await browser.close();
+ } finally { await browser.close(); }
  const failed=results.filter(r=>!r.opaque);
  const result={checked:results.length,failures:failed.length,see_through:failed};
  if(process.env.QA_RESULT)fs.writeFileSync(process.env.QA_RESULT,JSON.stringify(result,null,2)+'\n');

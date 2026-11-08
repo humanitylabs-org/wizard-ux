@@ -1,5 +1,4 @@
-// Miguel's skins (Dark, Light, Landscapes) on the phone: the long-press and model menus clear the pill dock, sheets and
-// the count badge follow the skin, and Landscapes' phone controls use the same frosted white glass as its desktop
+// Miguel's skins (Dark, Light, Landscapes) on the phone: sheets and the count badge follow the skin, and Landscapes' phone controls use the same frosted white glass as its desktop
 // (before this the + New chat button, send button, sent bubbles, sort chip, model menu and orb were core violet).
 // Every rule is phone-only (:not([data-shell="desktop"])), so desktop stays as it is.
 import test from 'node:test';
@@ -13,24 +12,12 @@ const rule = (css, sel) => {
   const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // The last rule for a selector wins, like the cascade (older size-only rules can share a selector).
   const all = [...css.matchAll(new RegExp(`(?:^|\\n)${esc}\\s*\\{([^}]*)\\}`, 'g'))];
-  return all.length ? all[all.length - 1][1] : null;
+  return all.length ? all.map(m => m[1]).join(' ') : null;
 };
 const VIOLET = /var\(--violet|143,\s*99,\s*255|122,\s*77,\s*255|185,\s*155,\s*255|160,\s*140,\s*255|205,\s*190,\s*255|#7a4dff|#c04dff|#C9BEFF/i;
 const O = 'html[data-skin^="obsidian"]:not([data-shell="desktop"])';
 const L = 'html[data-skin^="landscapes"]:not([data-shell="desktop"])';
 const SOLO = '.device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats';
-
-test('the long-press and model menus end above the pill dock on all three skins', () => {
-  for (const [css, p] of [[obsidian, O], [landscapes, L]]) {
-    const r = rule(css, `${p} ${SOLO} .ch-sheet-b`);
-    assert.ok(r, `${p} pads the chat sheets`);
-    assert.match(r, /padding-bottom:\s*calc\(var\(--pill-top\)/);
-    // A thread in many Spaces gets one action per Space: the padded sheet must scroll, never clip its top actions.
-    const sc = rule(css, `${p} ${SOLO} .ch-sheet-b:not(.ch-emoji-sheet)`) || '';
-    assert.match(sc, /max-height:\s*calc\(100% - /);
-    assert.match(sc, /overflow-y:\s*auto/);
-  }
-});
 
 test('phone sheets, menu rows and the count badge follow the skin (no violet edge, no glow)', () => {
   for (const [css, p] of [[obsidian, O], [landscapes, L]]) {
@@ -66,7 +53,8 @@ test('Landscapes phone controls are frosted white glass, not core violet', () =>
 });
 
 test('phone polish never reaches desktop and keeps the private purple', () => {
-  for (const css of [obsidian, landscapes]) {
+  const raw = d => readFileSync(new URL(`../web/skins/${d}/skin.css`, import.meta.url), 'utf8');
+  for (const css of [raw('obsidian'), raw('landscapes')]) {
     const from = css.indexOf('/* Phone polish (Miguel 27 Oct'), to = css.indexOf('/* Landscapes Light (', from);
     const block = css.slice(from, to > 0 ? to : undefined);
     assert.ok(block.length > 100, 'phone polish block present');

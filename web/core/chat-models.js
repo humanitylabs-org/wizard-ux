@@ -36,7 +36,7 @@
   // A quota-limited grant is still installed in Hermes' pool. Dropping its route
   // from the picker would silently steer the owner onto the single-login legacy route.
   const hasNativeClaude = connection => nativeClaudeAccounts(connection).some(a =>
-    ['ready', 'ok', 'exhausted', 'rate_limited'].includes(a.status));
+    ['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status));
   const accountAtLimit = a => {
     if (!a || !['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) return false;
     if (['exhausted', 'rate_limited'].includes(a.status)) return true;
@@ -57,11 +57,10 @@
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
-  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }, { family: 'tinfoil', name: '' }];
+  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'claude:sonnet', name: 'Sonnet' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }, { family: 'tinfoil', name: '' }];
   const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
-   * switch. James's skins keep the stock three-model menu, so none of this shows there (team rule: taste lives in your skin). */
-  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
+   * switch. James's skins keep the stock compact menu, so none of this shows there (team rule: taste lives in your skin). */
   const ours = () => typeof document !== 'undefined' && (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/model-pills');
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
@@ -401,9 +400,9 @@
       const privList = !own && Array.isArray(priv) ? priv : [];
       const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '').filter(o => keepMainOption(o, privList, isCur));
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
-      const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Sonnet, Haiku, Terra, Luna)
+      const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Haiku, Terra, Luna)
       const curPriv = privList.some(isCur);
-      // Primary rows read Opus · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
+      // Primary rows read Opus · Sonnet · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
       const label = (o, p) => own || p ? o.name : isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider);
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv'); if (isTinfoil(o.provider)) cls += ' secure';
         return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p || isTinfoil(o.provider) ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };

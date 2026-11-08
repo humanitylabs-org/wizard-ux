@@ -1,5 +1,5 @@
 /* In-document Appearance v1 aliases: live CSS references, never a copied palette. */
-.chats-view {
+.chats-view, .ch-incog-toggle, .ch-incognito {
   --wz-canvas: transparent; --wz-base: var(--bg, #05030c);
   --wz-chrome: var(--sk-win); --wz-overlay: var(--glass-2);
   --wz-text: var(--ink, #f3efff); --wz-text-secondary: var(--ink-2); --wz-text-muted: var(--ink-3);

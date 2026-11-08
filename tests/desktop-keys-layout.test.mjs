@@ -10,7 +10,7 @@ test('holding ⌥ is the one keys guide: speak keys named and explained, no sepa
   assert.doesNotMatch(js, /const KEYS = \[/);
   for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice']) assert.ok(js.includes(name), name);
   assert.match(js, /function toggleKeys\(on\) \{[^\n]*keyHints\.show\(true\)/);
-  assert.match(js, /if \(keyHints\.pinned\(\)\) \{ toggleKeys\(false\)/);
+  assert.match(js, /watchEscape\('keys', \(\) => keyHints\.pinned\(\), \(\) => \{ toggleKeys\(false\)/);
 });
 
 test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
@@ -23,8 +23,8 @@ test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () =>
 test('holding left ⌥ alone shows key hints; any other key or release hides them', () => {
   assert.match(js, /if \(pinned \|\| e\.repeat \|\| e\.code !== 'AltLeft'/);
   assert.match(js, /keyHints\.down\(e\)/);
-  assert.match(js, /addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
-  assert.match(js, /doc\.addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
+  assert.match(js, /addEventListener\('keyup', e => \{ keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\); \}, true\)/);
+  assert.match(js, /frameWindow\.addEventListener\('keyup', e => \{ keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\); \}, true\)/);
 });
 
 test('⌥S only sends its own kind of take', () => {
@@ -40,21 +40,19 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
   assert.ok(js.includes("'Next ready chat'"));
 });
 
-test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidden ⌥E/⌥Z; the guide shows chat keys', () => {
+test('plain ⌥←/⌥→ never act on a chat; standard ⌥Z stays Back and no hidden ⌥E is added', () => {
   assert.doesNotMatch(js, /code === 'KeyE'/);
   assert.doesNotMatch(js, /code === 'KeyZ'\) return hit\(\(\) => \{[^\n]*chatAct/); // ⌥Z is Back to where you were, never Snooze
-  assert.match(js, /const midText = typing\(e\.target\) && String\(e\.target\.value \?\? e\.target\.textContent \?\? ''\)\.trim\(\) !== '';/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
-  assert.match(js, /\['\[data-chact="done"\]', '→', 'Archive'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
+  assert.doesNotMatch(js, /chatAct\(code === 'ArrowRight'/);
+  assert.doesNotMatch(js, /\['\[data-chact="(?:done|snooze)"\]', '[←→]'/);
+  assert.match(js, /code === 'KeyZ'\) return hit\(\(\) => \{ if \(!e\.repeat\) jumpBack\(\)/);
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 
-test('after a text or voice reply is sent, the window goes back to a focused New chat', () => {
-  assert.match(js, /stage\.addEventListener\('submit', e => \{[\s\S]*?toNewChat\(wid, 'text'\)/);
-  assert.match(js, /function toNewChat\(wid, why\) \{[\s\S]*?CHATS\.openNewDraft\(wid, ''\)[\s\S]*?focusInside\(wid\)/);
-  assert.match(js, /Voice reply · waiting to send', 1400\); setTimeout\(\(\) => toNewChat\(rp\.wid, 'voice'\)/);
+test('desktop replies never schedule a new chat after sending', () => {
+  assert.doesNotMatch(js, /toNewChat|keepNewSendList|send:new-chat/);
+  assert.match(js, /keepThreadOpen: true/);
 });
 test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
   const { readFileSync: r } = await import('node:fs');
@@ -78,13 +76,14 @@ test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk'
 
 test('⌥G Pick anything: letter chips on every clickable, typed letters click it, guide lists it', () => {
   assert.match(js, /code === 'KeyG'\) return hit\(\(\) => \{ if \(!e\.repeat\) pick\.start\(\); \}\)/);
-  // Pick still owns ordinary keys; the search-only IME/repeat guard is permitted before it.
+  // Pick owns ordinary keys; Escape is dispatched once by core (repeat/IME inert).
   const start = js.indexOf('  function onKey(e, fromFrame = false)');
   const head = js.slice(start, js.indexOf('    keyHints.down(e);', start));
-  const context = { pick: { active: () => true, key: () => 'picked' }, window: {} };
+  const context = { pick: { active: () => true, key: () => 'picked' }, window: {}, desktopBack:()=>{context.escaped++;return 'pick';}, escaped:0, log(){} };
   vm.createContext(context); vm.runInContext(head + ' return "shell"; }', context);
   for (const flags of [{}, {repeat:true}, {isComposing:true}, {keyCode:229}]) {
-    assert.equal(context.onKey({key:'Escape',target:{matches:()=>false},...flags}), 'picked');
+    const n=context.escaped; context.onKey({key:'Escape',target:{matches:()=>false},...flags});
+    assert.equal(context.escaped,n+(Object.keys(flags).length ? 0 : 1));
     assert.equal(context.onKey({key:'g',target:{matches:()=>true},...flags}), 'picked');
   }
   assert.match(js, /\[data-chopen\],\[data-chdraft\]/);
@@ -100,7 +99,7 @@ test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F 
   assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
 })
 
-test('guide: → ← sit above Done / Snooze; no "/" chip on chat search', () => {
+test('guide: Resolve stays above its button; no removed action arrows or "/" chip on chat search', () => {
   assert.match(js, /filter\(vis\)\.map\(n => chip\(n, l, 'above'\)\)/);
   assert.doesNotMatch(js, /chip\(srch, '\/'/);
 });
@@ -191,7 +190,8 @@ test('⌥N opens a New chat on this desk beside the app in front, and holding �
   assert.match(js, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*newChat\(\); \}\);/);
   assert.doesNotMatch(js, /newChat\(\{ fresh: true \}\)/);
   // Guide: N on this desk's New chat button, or with its word on the right edge of the app in front.
-  assert.match(js, /else if \(f && f\.app !== 'chats'\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
+  // (not when a view puts N on its own New chat button: the AI apps view's sidebar, so N shows once)
+  assert.match(js, /else if \(f && f\.app !== 'chats' && !\(window\.WosSkinHost\?\.keyChips\?\.\(\) \|\| \[\]\)\.some\(c => c\.key === 'N'\)\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
 });
 
 test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back, each shown where it acts', () => {
@@ -207,8 +207,8 @@ test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back
 });
 
 test('resize keeps the stock split until asked, and is kept per desk', () => {
-  const start = js.indexOf('  function splitOf('), body = js.slice(start, js.indexOf('\n', start));
-  const splitOf = vm.runInNewContext(`const SPLIT = [0.25, 0.75]; (${body.trim().replace(/^function splitOf/, 'function')})`);
+  assert.match(js, /const splitOf = C\.panes\.splitOf;/);
+  const splitOf = vm.runInNewContext(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8') + '\nWizCore.panes.splitOf;');
   assert.equal(splitOf({}, 2), 0.5); assert.equal(splitOf({}, 3), 0.56); assert.equal(splitOf({ split: 0.66 }, 2), 0.66); assert.equal(splitOf({ split: 0.9 }, 2), 0.5);
 });
 

@@ -121,14 +121,34 @@ test('no skin suggests a Chats app: Look and Chats show no pairing on any skin',
   assert.doesNotMatch(source, /recommendation\(|suggestionHtml|data-chats-dismiss/);
   assert.equal(h.posts.length, 0);
 });
-test('Look: every color in one grid whoever made it, no skin tiles, and Layout is gone', () => {
+// #803 supersedes #755's flat all-colours grid; colour and family remain independent.
+test('twinned Look keeps independent Skin and Colors with Background and Mode in both shells', () => {
+  for (const shell of ['phone', 'desktop']) {
+    const h = harness({ shell }), S = h.s.WosSkin;
+    const ids = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'];
+    S.current = 'obsidian-light'; S.families[1].palettes = ids;
+    S.list = [S.list[0], ...ids.map(id => ({ id, name: id }))];
+    S.twin = id => ({ id: id.endsWith('-light') ? id.replace('-light', '') : id + '-light' });
+    S.setWallpaper = () => {}; S.wallpaper = 'landscapes';
+    S.wallpapers = [{ id: 'landscapes', name: 'Landscapes' }]; S.wallpaperThumb = () => '';
+    h.view.focus('look');
+    assert.match(h.root.innerHTML, /<h4>Skin<\/h4>[^]*<h4>Colors<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"[^]*<h4>Mode<\/h4>[^]*data-skinmode="light"[^]*<h4>Background<\/h4>[^]*data-bgpick="plain"/);
+    assert.doesNotMatch(h.root.innerHTML, /data-skinpick="nebula"/, 'Colors remain scoped to the chosen family');
+  }
+});
+
+test('Look: separate family tiles and scoped Colors, with Layout gone', () => {
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
-  assert.doesNotMatch(html, /data-skinfamily/);
-  assert.match(html, /<h4>Skin<\/h4>[^]*aria-label="All skins"[^]*data-skinpick="nebula"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.match(html, /data-skinfamily="wizard" aria-pressed="false"/);
+  assert.match(html, /data-skinfamily="mizel" aria-pressed="true"/);
+  assert.match(html, /<h4>Colors<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.doesNotMatch(html, /data-skinpick="nebula"/, 'only the selected family supplies colours');
   assert.doesNotMatch(html, /data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
-  assert.match(h.root.innerHTML, /data-skinpick="nebula" aria-pressed="true"[^]*data-skinpick="obsidian-light" aria-pressed="false"/);
+  assert.match(h.root.innerHTML, /data-skinfamily="wizard" aria-pressed="true"/);
+  assert.match(h.root.innerHTML, /data-skinpick="nebula" aria-pressed="true"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-skinpick="obsidian-light"/);
 });
 test('index: one update card on top when there is something to do, nothing otherwise; desktop does not repeat it beside About', () => {
   const h = harness();
@@ -174,7 +194,8 @@ test('New skin is last; nested Back returns to Look on both shells, never leaves
     h.s.WosMySkin = { recipes: [], state: { empty: true, script: {} } };
     h.s.WosExperience = { installed: async()=>[], defaults: async()=>({}), state: {tweaks:[]} };
     h.view.focus('look');
-    assert.match(h.root.innerHTML, /data-skinpick="obsidian-light"[^]*<h4>Your skins<\/h4>[^]*data-newskin[^]*\+ New skin/);
+    // #803: New skin is last in the family row, before the scoped Colors grid.
+    assert.match(h.root.innerHTML, /aria-label="Skins"[^]*data-skinfamily="mizel"[^]*data-newskin[^]*\+ New skin<\/span><\/button><\/div><div class="skp-colours">/);
     h.act('data-newskin'); await tick();
     assert.match(h.root.innerHTML, /data-newskin-sheet/);
     assert.match(h.root.innerHTML, /aria-label="Back to Look"/);
@@ -204,7 +225,7 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
   h.view.focus('look');
   assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Quiet skins"/);
+  assert.match(h.root.innerHTML,/aria-label="Quiet colors"/); // #803 separates Skin from Colors.
   assert.match(h.root.innerHTML,/change my Quiet skin so…/);
   h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
   assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');

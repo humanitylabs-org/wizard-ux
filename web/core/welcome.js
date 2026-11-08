@@ -38,6 +38,14 @@
   let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
   // The name step: asked = this Welcome starts with it; after = the step it hands over to.
   let asked = false, after = 'ai', saving = false, nameError = '', prefill = '';
+  // Bring your AI (wizard-ux issue 898, Miguel 4 Nov 2026): an optional step before Say hello, only on a Wizard that has the
+  // Importer app. It embeds that app's own screen, like the provider sign-in step, so there is one Importer, two ways in.
+  const IMPORTER = 'importer';
+  let bringOpen = false;
+  const bringOn = () => { try { return isInstalled(IMPORTER); } catch (e) { return false; } };
+  const order = () => (asked ? ['name'] : []).concat(['ai', 'look'], bringOn() ? ['bring'] : [], ['hello']);
+  const nextStep = () => { const all = order(), i = all.indexOf(step); return all[Math.min(all.length - 1, i + 1)] || 'hello'; };
+  const prevStep = () => { const all = order(), i = all.indexOf(step); return i > 0 ? all[i - 1] : step; };
   const DEFAULT_NAME = 'Wizard', NAME_MAX = 40;
   // Plain text, one line, at most 40 characters (the Agent Service trims the same way).
   const cleanName = v => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX).trim();
@@ -121,10 +129,12 @@
     if (!isInstalled(id)) throw Error('Installed. It is still starting; try again in a moment.');
   }
   const signinUrl = u => { try { const x = new URL(u, location.href); x.searchParams.set('connect', '1'); return x.href; } catch (e) { return u; } };
+  // The Importer drops its own title inside the Welcome card, which already says "Bring your AI".
+  const embedUrl = u => { try { const x = new URL(u, location.href); x.searchParams.set('embedded', '1'); return x.href; } catch (e) { return u; } };
   const agent = () => { try { return window.WizConfig?.agent?.() || 'Wizard'; } catch (e) { return 'Wizard'; } };
 
   function dots() {
-    const all = (asked ? ['name'] : []).concat(['ai', 'look', 'hello']), i = all.indexOf(step);
+    const all = order(), i = all.indexOf(step);
     return `<div class="wl-dots" aria-hidden="true">${all.map((x, n) => `<i class="${n === i ? 'on' : n < i ? 'done' : ''}"></i>`).join('')}</div>`;
   }
 
@@ -181,6 +191,18 @@
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
 
+  function paintBring() {
+    if (bringOpen) {
+      const a = H.app(IMPORTER);
+      return `${BRAND}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Bring your AI</h2></header>
+        <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}" title="Importer"></iframe></div>
+        <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
+    }
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Bring your AI</h2><p>Optional. Used ChatGPT, Claude or another agent? Bring your memories, chats and skills so ${esc(agent())} knows you from day one.</p></header>
+      <button type="button" class="wl-primary" data-wl="bring">Bring my AI</button>
+      <button type="button" class="wl-skip" data-wl="next">Not now</button>`;
+  }
+
   function paintHello() {
     return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
       <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="Hi! What can you help me with?" aria-label="First message"></textarea>
@@ -190,12 +212,12 @@
   function paint(focus = true) {
     if (!el) return;
     const card = el.querySelector('.wl-card');
-    card.classList.toggle('wide', step === 'ai' && !!provider);
+    card.classList.toggle('wide', (step === 'ai' && !!provider) || (step === 'bring' && bringOpen));
     el.classList.toggle('wl-peek', step === 'look');
-    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : paintHello();
+    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
-    if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); back(); } }, true); } catch (e) {} });
+    if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); back(); } }, true); } catch (e) {} });
     // The name field takes focus with a mouse and keyboard; on a phone the keyboard waits for a tap on the field.
     const fine = (() => { try { return matchMedia('(pointer: fine)').matches; } catch (e) { return false; } })();
     if (focus) requestAnimationFrame(() => { const nm = fine && card.querySelector('.wl-naming input:not([disabled])');
@@ -223,7 +245,7 @@
   function open(at = 'ai') {
     if (el) return;
     asked = unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
-    step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = '';
+    step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = '<div class="wl-card" role="dialog" aria-modal="true" aria-label="Welcome"></div>';
@@ -262,10 +284,12 @@
       install(id).then(() => { if (el !== mine || installing !== id) return; installing = ''; if (step === 'ai') { provider = id; connected = false; paint(); poll(); } },
         err => { if (el !== mine || installing !== id) return; installing = ''; installError = err?.message || 'Install failed.'; paint(false); });
     }
+    else if (act === 'back' && step === 'bring') { bringOpen = false; paint(); }
     else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
     else if (act === 'palette') { window.WosSkin?.set(t.dataset.id); paint(false); }
-    else if (act === 'next') { step = 'hello'; paint(); }
+    else if (act === 'next') { step = nextStep(); bringOpen = false; log('step:' + step); paint(); }
+    else if (act === 'bring' && step === 'bring') { bringOpen = true; log('bring:open'); paint(); }
     else if (act === 'skip-name' && step === 'name' && !saving) { log('name:skipped'); fromName(); }
   }
 
@@ -290,7 +314,8 @@
     if (sending) return 'welcome'; // a send settles in a moment; an install keeps going in the background if Back closes
     if (saving) return 'welcome'; // the name is being saved; it settles in a moment
     if (step === 'ai' && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
-    if (step === 'hello') { step = 'look'; paint(); return 'welcome'; }
+    if (step === 'bring' && bringOpen) { bringOpen = false; paint(); return 'welcome'; }
+    if (step === 'hello' || step === 'bring') { step = prevStep(); bringOpen = false; paint(); return 'welcome'; }
     if (asked && step === after && !saving) { clearTimeout(pollT); step = 'name'; paint(); return 'welcome'; } // back to the name
     close(); log('back:close'); return 'welcome';
   }

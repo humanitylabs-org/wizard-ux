@@ -2,7 +2,7 @@
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts} from './store-status.js';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease} from './store-install.js';
 import {removalPlan, removeInstalledApp, canRemove, confirmView} from './store-remove.js';
@@ -24,8 +24,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run Wizard' },
     { id: 'connections', type: 'external', one: 'Connector', many: 'Connectors', blurb: 'Accounts your agents can use' },
   ];
-  const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
-  const kindOf = a => KIND_OF[a.type] || KINDS[1];
+  const KIND_OF = Object.fromEntries(KINDS.map(k => [k.id, k]));
+  const kindOf = a => KIND_OF[storeKind(a)];
   // Four quiet entry points; category lists and app details retain their existing layout.
   const KIND_ICONS = {
     apps: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -37,7 +37,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -57,7 +57,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   function clean(a) {
     if (!a || typeof a !== 'object' || !ID.test(a.id || '')) return null;
     return { id: a.id, name: txt(a.name, 60) || a.id, summary: txt(a.summary, 280), publisher: txt(a.publisher, 60), version: txt(a.version, 40),
-      type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
+      type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', has_view: a.has_view === true, category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
       url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-fA-F0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
       releases: Array.isArray(a.releases) ? a.releases.slice(0,16).map(r => clean({...r,releases:null})).filter(Boolean) : [],
       alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), installed_app_id: txt(a.installed_app_id,64), update_available: a.update_available === true,
@@ -126,7 +126,17 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const canOpen = a => { if (!framed) return false; const id=openId(a); try { if (typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(id)) return true; } catch (_) {} return (S.snapshot?.shell || []).some(x => x?.id === id && x.url); };
 
   /* ---------------- pieces ---------------- */
+  // The App Manager reports only installing / installed, so the bar is indeterminate; the elapsed time shows it is alive.
+  const progressText = id => { const t = Math.max(0, Math.floor((Date.now() - (S.busyAt.get(id) || Date.now())) / 1000)); return t < 2 ? 'Installing…' : `Installing… ${t}s`; };
+  setInterval(() => { if (S.busy.size) document.querySelectorAll('[data-prog]').forEach(el => { const t = progressText(el.dataset.prog); if (el.textContent !== t) el.textContent = t; }); }, 1000);
   function icon(a, size = 'm') {
+    // Catalog pictures are not an alternate identity for already-designed apps.
+    // Hosted, reuse the registry-aware renderer; standalone uses the same source.
+    let sigils = window.WizSigil;
+    try { if (framed && parent.WizSigil) sigils = parent.WizSigil; } catch (_) {}
+    const identity = { id: openId(a) || a.id, name: a.name };
+    const mark = sigils?.of(identity);
+    if (mark && ((mark.glyph && !mark.guessed) || mark.img || Object.prototype.hasOwnProperty.call(sigils.brand, identity.id) || !a.logo)) return sigils.box('span', `ic ic-${size}`, identity);
     const [c1, c2] = hue(a.id);
     const letter = esc((a.name || a.id).trim().charAt(0).toUpperCase());
     const img = a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" loading="lazy" decoding="async">` : '';
@@ -134,7 +144,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   function action(a, cls = '') {
     const state=status(a);
-    if (S.busy.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Installing…</span>`;
+    if (S.busy.has(a.id)) return `<span class="get wait ${cls}" data-installing role="status" aria-live="polite"><span class="prog-bar" aria-hidden="true"></span><span class="prog-tx" data-prog="${esc(a.id)}">${progressText(a.id)}</span></span>`;
     if (S.removing?.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Removing…</span>`;
     // A source conflict is shown by the "Source conflict" badge beside the name; nothing here pretends to resolve it.
     if(state==='conflict') return '';
@@ -194,7 +204,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const usedBy = S.apps.filter(x => (x.uses || []).includes(a.id));
     const powers = usedBy.length ? `<section class="d-sec"><h3>Powers</h3><div class="dep">${usedBy.map(u => `<div class="dep-i" data-app="${esc(u.id)}" role="button" tabindex="0">${icon(u, 's')}<b>${esc(u.name)}</b><small>${esc(kindOf(u).one)}</small></div>`).join('')}</div></section>` : '';
     const gives = (a.provides || []).length ? `<section class="d-sec"><h3>Gives your agent</h3><div class="chips">${a.provides.map(p => `<span>${esc(p.replace(/-/g, ' '))}</span>`).join('')}</div></section>` : '';
-    const how = { view: 'Opens in its own Wizard window.', service: 'Runs in the background. Ask your agent to use it — no screen needed.', agent: 'An agent that lives on your Wizard.', external: 'Connect an account once; every agent can use it.' }[a.type] || '';
+    const how = { apps: 'Opens in its own Wizard window.', 'agent-apps': 'Runs in the background. Ask your agent to use it — no screen needed.', agents: 'An agent that lives on your Wizard.', connections: 'Connect an account once; every agent can use it.' }[k.id] || '';
     const info = [['Kind', k.one], ['Source', provenance(a).label + (provenance(a).detail ? ' · ' + provenance(a).detail : '')], ['Publisher', a.publisher], ['Version', a.version], ['Commit', a.commit], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
@@ -393,7 +403,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || S.removing.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     if(a.install_link && S.link) S.link.error='';
-    S.busy.add(a.id); refresh();
+    S.busy.add(a.id); S.busyAt.set(a.id, Date.now()); refresh();
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       await installRelease({ ...a, operation });
@@ -406,9 +416,13 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
       if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
-      else say(successMessage(access), true);
+      else {
+        say(successMessage(access), true);
+        // Asked from the Orb / Apps views' "Get more" (?open=1): open it at once, in place of this Store window.
+        if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), replace: true }, location.origin);
+      }
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
-    finally { S.busy.delete(a.id); refresh(); }
+    finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
   }
 
   document.addEventListener('click', e => {

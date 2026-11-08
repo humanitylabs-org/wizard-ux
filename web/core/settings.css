@@ -1,3 +1,4 @@
+[data-settings-working-order] { font: inherit; font-size: 0.8125rem; max-width: 48%; color: var(--wz-text); background: var(--wz-surface); border: 1px solid var(--wz-border); border-radius: 8px; padding: 6px; }
 /* Schedules uses the existing Settings cards and confirmation sheet in both shells. */
 .sc-group > .st-actions { margin: 0 0 16px; }
 .sc-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }
@@ -115,23 +116,29 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-confirm h3 { font-size:var(--wz-text-heading); margin: 0 0 12px; }
 .st-confirm p { color: var(--wz-text-secondary); font-size:var(--wz-text-md); }
 .dsettings .st-root { overflow: hidden; padding-bottom: 16px; }
-.st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; gap: 24px; }
+.st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100%; gap: 24px; }
 .st-desktop .st-index { overflow-y: auto; padding-right: 16px; border-right: 1px solid var(--wz-border); }
-.st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
+.st-desktop .st-page { overflow-y: auto; min-height: 0; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
-@media (max-width: 700px) {
-  .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+/* A desktop window/app panel can be narrow on a wide screen. Use the existing
+ * Settings container, not the viewport, and the same category → page → Back
+ * stack as the phone. Each visible pane owns its scroll inside the clipped host. */
+@container settings (max-width: 700px) {
+  .st-desktop { display: block; }
+  .st-desktop .st-index { height: 100%; padding-right: 0; border-right: 0; }
+  .st-desktop .st-page { height: 100%; padding-right: 0; }
+  .st-desktop.st-in-page .st-index { display: none; }
+  .st-desktop:not(.st-in-page) .st-page { display: none; }
+  .st-desktop .st-page-head button { display: block; }
 }
 
 .st-title:focus, .st-page-head h3:focus { outline: none; }
 
 
-/* Tweaks, separate from skin: one section per author, an "All of theirs" switch, then each tweak. */
+/* Tweaks, separate from skin: one flat list, a switch per tweak, each with a small "by <author>" line. */
 .tw-group { margin-top: 20px; }
-.tw-author { margin-top: 14px; }
-.tw-author > h5 { margin: 0 0 6px; font-size: var(--wz-text-sm); font-weight: 600; color: var(--wz-text-2, var(--wz-text)); }
-.tw-author > .tw-row:not(.tw-all) { padding-left: 18px; }
+.tw-row .tw-by { font-weight: 600; }
 .skp-own { margin-top: 20px; }
 /* About & updates: flat on the page. One update card when there is something to do, then two segmented choices.
  * Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
@@ -153,14 +160,52 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size:var(--wz-text-lg); font-weight: 600; touch-action: manipulation; }
 .st-seg button[aria-checked="true"] { background: var(--wz-accent); color: var(--wz-base); font-weight: 700; }
 .st-seg button:disabled { opacity: .6; }
+/* Settings › Notifications: one line per app, its name on the left and Badge | Chats on the right. */
+.st-nr { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.st-nr .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-nr .st-tx b { font-size: var(--wz-text-lg); font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.st-nr .st-tx small { font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+/* The Badge | Chats picker (WosBell.picker): the same control in Settings › Notifications and in every notification
+ * opened in Chats, so it is styled once here (settings.css loads in both shells), not per place. */
+.st-nr-seg.wos-route { flex: none; width: 184px; }
+/* Four choices (Chats · Badge · Morning report · Off): columns sized to their words so every label stays whole;
+ * outranks the desktop cap on segmented controls (.st-desktop .st-seg) and the equal columns of .st-seg. */
+.st-seg.st-nr-seg.wos-route { width: auto; max-width: none; grid-auto-columns: auto; }
+.st-nr-seg.wos-route button span { white-space: nowrap; }
+.st-nr-seg.wos-route button:disabled { opacity: .35; }
+.st-nr-seg.wos-route button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 6px 10px; font-size: var(--wz-font-size); }
+.st-nr-seg.wos-route .wos-route-ic { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.st-nr-seg.wos-route [data-notify-to="badge"] .wos-route-ic { fill: currentColor; stroke: none; }
+/* The Morning Report's coffee cup is a filled glyph (512 grid), not a line icon. */
+.st-nr-seg.wos-route svg.wos-route-ic.wos-route-mr { fill: currentColor; stroke: none; width: 16px; height: 16px; }
+/* Narrow: words only, so the four choices stay whole on one row. Narrow means the page or the chat column, not only
+ * the screen: Settings in a desktop window or a notification in a slim Chats column is narrow too. */
+[data-settings-feature="notification-routing"], .ch-notif-route { container-type: inline-size; }
+@container (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; justify-content: stretch; } .st-nr-seg.wos-route button { padding: 6px 8px; } .st-nr-seg.wos-route .wos-route-ic { display: none; } }
+/* Narrower than the four words (a slim desktop Settings window): two by two. */
+@container (max-width: 320px) { .st-seg.st-nr-seg.wos-route { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; justify-content: stretch; } .st-nr-seg.wos-route button { padding: 6px 8px; } .st-nr-seg.wos-route .wos-route-ic { display: none; } }
+/* Settings › Notifications › System › Recent: notices about Wizard itself, newest first; unseen ones carry a dot. */
+.st-sys-list { list-style: none; margin: 0; padding: 0; }
+.st-sys-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.st-sys-list li .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-sys-list li b { font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.st-sys-list li small { color: var(--wz-text-secondary); font-size: var(--wz-text-sm); overflow-wrap: anywhere; }
+.st-sys-list li time { flex: none; color: var(--wz-text-secondary); font-size: var(--wz-text-sm); }
+.st-sys-list li.new b::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--wz-accent); vertical-align: middle; }
+/* In Chats: one line above the notification, the question on the left and the picker on the right. */
+.ch-notif-route { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 0 0 12px; padding: 0 2px; }
+.ch-notif-route > span { flex: 1 1 140px; min-width: 0; font-size: var(--wz-text-sm); color: var(--wz-text-secondary); overflow-wrap: anywhere; text-wrap: balance; }
 /* Look: the skin picker sits flat on the page under a plain heading. */
 .st-root .sk-row { padding: 0; margin: 0 0 8px; }
 .st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }
 .st-root .sk-row .sk-head small { font-size:var(--wz-text-md); font-weight: 500; color: var(--wz-text-secondary); }
-/* Phone: the dock floats over the sheet's foot, so the last line must scroll clear of it. */
-.st-phone { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+/* The sheet already ends above the dock and browser/native safe inset.
+ * Only edge spacing belongs inside its actual scroll owner. */
+.settings-body.st-root { padding-bottom: var(--wz-space-5); }
 .st-desktop .st-seg { max-width: 360px; }
-.st-desktop .st-page { padding-bottom: 32px; }
+/* A shrinkable grid track keeps this padded scroller inside the clipped panel. */
+.st-desktop .st-page { padding-bottom: var(--wz-space-5); }
 
 /* Minimal: feature modules keep their own markup, but nothing reads as a box on the page. */
 .st-root .us-row { padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; }
@@ -238,6 +283,8 @@ a.st-row { color: inherit; text-decoration: none; }
 .dsettings-scrim { position: fixed; inset: 0; z-index: 39; background: color-mix(in srgb, var(--wz-base) 38%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: st-fade 180ms ease both; }
 .dsettings-scrim[hidden] { display: none; }
 .dsettings.is-modal { inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(980px, calc(100vw - 64px)); height: min(720px, calc(100vh - 96px)); border: 1px solid var(--wz-border); border-radius: 22px; overflow: hidden; box-shadow: 0 30px 80px -24px color-mix(in srgb, var(--wz-base) 60%, transparent); animation: st-pop 200ms cubic-bezier(.2, .8, .2, 1) both; }
+/* Moving an already-open root between hosts must not replay an opacity-zero entrance. */
+.dsettings.is-modal.is-rehosted { animation: none; }
 @keyframes st-fade { from { opacity: 0; } }
 @keyframes st-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(.98); } }
 @media (prefers-reduced-motion: reduce) { .dsettings.is-modal, .dsettings-scrim { animation: none; } }
@@ -246,6 +293,8 @@ a.st-row { color: inherit; text-decoration: none; }
 .wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--wz-text)); }
 .wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, var(--wz-accent))); cursor: pointer; }
 .wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--wz-text-secondary); font: inherit; font-size:var(--wz-text-sm); cursor: pointer; }
+/* Background + Mode (twinned skins): the Background cards reuse the skin cards (core/skins.css); Mode is a .st-seg. */
+.st-root .skp-colours .st-seg { margin: var(--wz-space-2) 0 var(--wz-space-4); max-width: 20rem; }
 
 /* Settings › Connections: the App Manager's view, framed edge to edge under the page title. */
 /* The desktop shell positions every window's iframe over its whole body (.wbody iframe); this one fills its own box. */

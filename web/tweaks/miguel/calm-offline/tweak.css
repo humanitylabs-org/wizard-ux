@@ -1,0 +1,28 @@
+/* Calm offline card (core/status.js calmCard): one dotted path, one next step, quiet retry. Colours come from the skin. */
+html[data-tweaks~="miguel/calm-offline"] { --wos-calm-offline: on; }
+html[data-tweaks~="miguel/calm-offline"] .wx-off { background: color-mix(in srgb, var(--wz-base) 40%, transparent); backdrop-filter: blur(0.5rem); -webkit-backdrop-filter: blur(0.5rem); }
+html[data-tweaks~="miguel/calm-offline"] .wz-card.wx-calm { width: min(22rem, 100%); padding: var(--wz-space-4) var(--wz-space-4) var(--wz-space-3); background: var(--wz-base); backdrop-filter: none; -webkit-backdrop-filter: none; border: 1px solid color-mix(in srgb, var(--wz-text) 10%, transparent); box-shadow: 0 0.75rem 2.5rem color-mix(in srgb, var(--wz-base) 30%, transparent); outline: none; }
+html[data-tweaks~="miguel/calm-offline"] .wx-calm > h2 { margin: 0 0 var(--wz-space-3); font-size: var(--wz-text-md); font-weight: 600; }
+html[data-tweaks~="miguel/calm-offline"] .wx-calm .wx-off-x { top: var(--wz-space-1); right: var(--wz-space-1); color: var(--wz-text-muted); font-size: var(--wz-text-md); }
+html[data-tweaks~="miguel/calm-offline"] .wx-calm .wx-off-x:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+html[data-tweaks~="miguel/calm-offline"] .wx-path { display: flex; align-items: center; gap: var(--wz-space-2); margin: 0 0 var(--wz-space-3); padding: 0; list-style: none; font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+html[data-tweaks~="miguel/calm-offline"] .wx-step { display: inline-flex; align-items: center; gap: 0.4em; white-space: nowrap; }
+html[data-tweaks~="miguel/calm-offline"] .wx-step + .wx-step::before { content: ""; width: 1.25em; height: 1px; margin-right: var(--wz-space-1); background: color-mix(in srgb, var(--wz-text) 22%, transparent); }
+html[data-tweaks~="miguel/calm-offline"] .wx-step > i { width: 0.5em; height: 0.5em; border-radius: 50%; background: color-mix(in srgb, var(--wz-text) 28%, transparent); }
+html[data-tweaks~="miguel/calm-offline"] .wx-step.ok > i { background: var(--wz-success, var(--wz-accent)); }
+html[data-tweaks~="miguel/calm-offline"] .wx-step.slow > i { background: var(--wz-warning, var(--wz-accent)); }
+html[data-tweaks~="miguel/calm-offline"] .wx-step.bad { color: var(--wz-text); font-weight: 600; }
+html[data-tweaks~="miguel/calm-offline"] .wx-step.bad > i { background: var(--wz-danger); box-shadow: 0 0 0 0.2em color-mix(in srgb, var(--wz-danger) 22%, transparent); }
+html[data-tweaks~="miguel/calm-offline"] .wx-step:is(.wait, .skip) { opacity: 0.55; }
+html[data-tweaks~="miguel/calm-offline"] .wx-step.run > i { animation: wx-calm-pulse 1.2s ease-in-out infinite; }
+html[data-tweaks~="miguel/calm-offline"] .wx-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+html[data-tweaks~="miguel/calm-offline"] .wx-fix { margin: 0 0 var(--wz-space-3); font-size: var(--wz-text-sm); line-height: 1.45; color: var(--wz-text); }
+html[data-tweaks~="miguel/calm-offline"] .wx-fix > small { display: block; margin-top: 0.15em; color: var(--wz-text-secondary); font-size: inherit; }
+html[data-tweaks~="miguel/calm-offline"] .wx-calm-act { display: flex; align-items: center; gap: var(--wz-space-3); flex-wrap: wrap; }
+html[data-tweaks~="miguel/calm-offline"] .wx-link { min-height: 2.25rem; padding: 0 var(--wz-space-3); border: 1px solid color-mix(in srgb, var(--wz-text) 16%, transparent); border-radius: 999px; background: transparent; color: var(--wz-text); font: inherit; font-size: var(--wz-text-sm); font-weight: 500; cursor: pointer; }
+html[data-tweaks~="miguel/calm-offline"] .wx-link:hover { background: color-mix(in srgb, var(--wz-text) 7%, transparent); }
+html[data-tweaks~="miguel/calm-offline"] .wx-link:disabled { opacity: 0.5; cursor: default; }
+html[data-tweaks~="miguel/calm-offline"] .wx-next { margin-left: auto; color: var(--wz-text-muted, var(--wz-text-secondary)); font-size: var(--wz-text-sm); font-variant-numeric: tabular-nums; }
+html[data-tweaks~="miguel/calm-offline"] .wx-calm-note { margin: var(--wz-space-3) 0 0; color: var(--wz-text-muted, var(--wz-text-secondary)); font-size: var(--wz-text-sm); }
+@keyframes wx-calm-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { html[data-tweaks~="miguel/calm-offline"] .wx-step.run > i { animation: none; } }

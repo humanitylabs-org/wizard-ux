@@ -22,6 +22,7 @@ function shell(V) {
     cancelVoice: q => { calls.push('cancel:' + !!q); V.state = 'idle'; }, setVoice: s => { calls.push('setVoice:' + s); V.state = s; },
     txPill: () => {}, onRecStop: () => calls.push('onRecStop'), pauseCommandCapture: () => calls.push('pause'), finishDictation: () => calls.push('dictation'),
     nativeFinish: () => calls.push('nativeFinish'), saveVoiceRoute() {}, shock() {},
+    quickTake: () => false, // Orb switcher > "Short takes run as commands" is off by default: a tap is always a message
   });
   // finishVoice as shipped, plus the helper it calls (absent on the old code, where the latch path never reaches it).
   vm.runInContext(fn('  function finishVoice() {', '  async function cancelVoice(') + '\n' + fn('  async function returnMeeting(', '  async function parkReply(') + '\n' +

@@ -26,18 +26,20 @@ test('row, thread header and swipe use Archive with the archive-box icon, not Do
   assert.match(src, /Archived · still watching/); assert.match(src, /Couldn’t archive/);
   assert.doesNotMatch(src, /Marked done|Couldn’t mark done|['"]Done for now/);
 });
-test('agent status and Morning completion badges still say Done', () => {
+test('agent completion status still says Done', () => {
   for (const name of ['ATT', 'STI_LAB', 'STI_TIP', 'PRI_LABEL']) {
     const statement = src.match(new RegExp('  const ' + name + ' = [^\\n]+'))?.[0]; assert.ok(statement, name);
     const ctx = vm.createContext({}); vm.runInContext(statement + '; this.value = ' + name, ctx);
     assert.equal(name === 'ATT' ? ctx.value.done.label : name === 'PRI_LABEL' ? ctx.value[4] : ctx.value.done, 'Done', name);
   }
-  assert.match(src, /all \? 'Done' : 'Pinned'/);
 });
-test('keyboard guide, hints and shortcut fallback name the Archive action', () => {
+test('remaining action labels say Archive; removed arrow hints stay absent and AI apps keeps E', () => {
   const desktop = read('web/desktop/desktop.js');
-  assert.match(desktop, /\['\[data-chact="done"\]', '→', 'Archive'\]/);
+  const layout = read('web/layouts/ai-apps/desktop.js');
+  assert.doesNotMatch(desktop, /\['\[data-chact="done"\]', '→', 'Archive'\]/);
+  assert.match(layout, /KeyZ: 'snooze', KeyE: 'done'/);
+  assert.match(layout, /\['done', 'E'\]/);
   assert.match(desktop, /act === 'done' \? 'Archive'/);
-  assert.match(desktop, /'Archive \/ Snooze'/);
+  assert.doesNotMatch(desktop, /'Archive \/ Snooze'/);
   assert.doesNotMatch(desktop, /\['\[data-chact="done"\]', '→', 'Done'\]|act === 'done' \? 'Done'/);
 });

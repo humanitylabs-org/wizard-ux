@@ -1,3 +1,4 @@
+import {sameInstalled} from './store-status.js';
 // Installed provenance wins over catalog availability. Only one source chip per app.
 export function sourceLabel(app = {}, installed) {
   const a = installed && (installed.source || installed.repo || installed.local) ? {...installed, publisher:installed.publisher || app.publisher, from:installed.from || app.from, ...(installed.source ? {} : {private:app.private,channel:app.channel})} : app;
@@ -8,8 +9,7 @@ export function sourceLabel(app = {}, installed) {
 }
 // Keep unmatched installed apps discoverable without inventing catalog releases or install actions.
 export function installedOnlyApps(catalog, registry = []) {
-  const repo = r => String(r || '').replace(/^(?:https:\/\/)?github\.com\//,'').toLowerCase();
-  return registry.filter(i => !catalog.some(a => a.id === (i.app_id || i.id) && repo(a.repo) === repo(i.repo))).map(i => ({
+  return registry.filter(i => !catalog.some(a => sameInstalled(a,i))).map(i => ({
     id:i.app_id || i.id, name:i.name || i.app_id || i.id, summary:i.summary || 'Installed on this Wizard',
     type:i.type || 'service', repo:i.repo || '', commit:i.commit || '', version:i.version || '', source:i.source,
     installed_only:true,

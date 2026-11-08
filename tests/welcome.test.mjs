@@ -57,9 +57,11 @@ test('Welcome: branded, offers Claude (recommended), ChatGPT and Tinfoil, and op
 
 test('Welcome: Back peels the sign-in, then steps back, and both shells ask it first', () => {
   const js = read('web/core/welcome.js');
-  assert.match(js, /function back\(\)[^]*?provider = null[^]*?step === 'hello'\) \{ step = 'look'/);
-  assert.match(read('web/app.js'), /function backStep\(skipHosted\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
-  assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
+  assert.match(js, /function back\(\)[^]*?provider = null[^]*?step === 'hello' \|\| step === 'bring'\) \{ step = prevStep\(\)/);
+  assert.match(js, /const order = \(\) => \(asked \? \['name'\] : \[\]\)\.concat\(\['ai', 'look'\], bringOn\(\) \? \['bring'\] : \[\], \['hello'\]\)/);
+  // Welcome is a registered transient before surface navigation on both shells.
+  for (const p of ['web/app.js','web/desktop/desktop.js']) assert.match(read(p),/WizEscapeBack\.installOwners\(/);
+  assert.match(read('web/core/escape-back.js'), /add\('welcome',[^\n]+WosWelcome.back\(\)/);
 });
 
 test('Welcome: finishes only after the first message is queued', () => {
@@ -75,7 +77,7 @@ test('Welcome: never covers work already started, keeps keys and focus, Back can
   // Exercise ownership instead of requiring Welcome at a fixed source line before IME guards.
   const desktop = read('web/desktop/desktop.js'), start = desktop.indexOf('  function onKey(e, fromFrame = false)');
   const head = desktop.slice(start, desktop.indexOf('    keyHints.down(e);', start)), calls = [];
-  const context = { pick: { active: () => false }, window: { WosWelcome: { active: true, back: () => calls.push('back') } } };
+  const context = { pick: { active: () => false }, window: { WosWelcome: { active: true, back: () => calls.push('back') } }, desktopBack:()=>{context.window.WosWelcome.back();return 'welcome';},log(){} };
   vm.createContext(context); vm.runInContext(head + ' calls.push("shell"); }', Object.assign(context,{calls}));
   context.onKey({key:'Escape',target:{matches:()=>false},preventDefault:()=>calls.push('prevent'),stopPropagation:()=>calls.push('stop')});
   assert.deepEqual(calls,['prevent','stop','back']);
@@ -108,7 +110,11 @@ test('Welcome: a stale install completion never takes over a reopened Welcome', 
 });
 
 test('Welcome: Escape inside the embedded sign-in page steps back', () => {
-  assert.match(read('web/core/welcome.js'), /fr\.contentDocument\.addEventListener\('keydown', e => \{ if \(e\.key === 'Escape'\) \{ e\.preventDefault\(\); back\(\); \} \}, true\)/);
+  const handler=read('web/core/welcome.js').match(/fr\.contentDocument\.addEventListener\('keydown', (e => \{[^\n]+?\}), true\)/);
+  assert.ok(handler);const calls=[],window={WosBack:{escape:()=>calls.push('shared')}};
+  const cb=vm.runInNewContext('('+handler[1]+')',{window,back:()=>calls.push('local')});
+  cb({key:'Escape',preventDefault(){}});assert.deepEqual(calls,['shared']);
+  delete window.WosBack;cb({key:'Escape',preventDefault(){}});assert.deepEqual(calls,['shared','local']);
 });
 
 test('Welcome: a readiness reply for an earlier provider choice is ignored', () => {

@@ -49,3 +49,25 @@ test('a page Settings embeds (.st-embed) follows the skin but never marks the Se
   events.get('message')({ origin:'https://box.test', source:other.contentWindow, data:{ type:'wizard:appearance:ready', version:1 } });
   assert.equal(messages.length, n);
 });
+
+test('the Welcome Bring your AI frame (.wl-embed) takes the skin when it shows a registered app, and marks no window', async () => {
+  const events = new Map(), messages = [], root = { dataset:{ skin:'landscapes-light' } }, marks = [];
+  const win = { classList:{ add:c => marks.push('+' + c), remove:c => marks.push('-' + c) } };
+  const f = { src:'/importer/?embedded=1', isConnected:true, contentDocument:{}, closest:s => s === '.wl-embed' ? {} : s === '.win' ? win : null,
+    contentWindow:{ location:{ origin:'https://box.test', pathname:'/importer/' }, postMessage:m => messages.push(m) } };
+  const stranger = { ...f, contentWindow:{ location:{ origin:'https://box.test', pathname:'/not-an-app/' }, postMessage:m => messages.push({ stranger:m }) } };
+  const document = { documentElement:root, readyState:'loading', querySelectorAll:sel => sel.includes('.wl-embed iframe') ? [f, stranger] : [],
+    addEventListener:(name, fn) => events.set('doc:' + name, fn) };
+  const window = { WizCore:{ apps:() => ({ APPS:[{ url:'/importer/', source:'apps.json' }] }) } };
+  vm.runInNewContext(source, { window, WizCore:window.WizCore, document, URL, location:{ origin:'https://box.test' },
+    getComputedStyle:() => ({ colorScheme:'light', getPropertyValue:() => '' }),
+    addEventListener:(name, fn) => events.set(name, fn), queueMicrotask });
+  events.get('message')({ origin:'https://box.test', source:f.contentWindow, data:{ type:'wizard:appearance:ready', version:1 } });
+  const a = messages.at(-1).appearance;
+  assert.equal(a.skin, 'landscapes-light'); assert.equal(a.colorScheme, 'light');
+  events.get('message')({ origin:'https://box.test', source:f.contentWindow, data:{ type:'wizard:appearance:ack', version:1, revision:a.revision } });
+  assert.deepEqual(marks, []);
+  const n = messages.length; // an unregistered page in the same frame slot still gets nothing
+  events.get('message')({ origin:'https://box.test', source:stranger.contentWindow, data:{ type:'wizard:appearance:ready', version:1 } });
+  assert.equal(messages.length, n);
+});

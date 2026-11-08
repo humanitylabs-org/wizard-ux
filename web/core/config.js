@@ -134,6 +134,30 @@
       const names = [C.agent(), C.owner(), ...C.vocabulary(), ...extra].filter(Boolean);
       return names.length ? `Names: ${[...new Set(names)].join(', ')}.` : '';
     },
+    // Phone action navigation. Desktop keeps its reader pane (it already has a list beside it).
+    chatAfterAction() {
+      try { return localStorage.getItem('wos.chats.afterAction.v1') === 'list' ? 'list' : 'stay'; } catch (_) { return 'stay'; }
+    },
+    async setChatAfterAction(value) {
+      if (!['stay', 'list'].includes(value)) throw Error('Choose where to go after an action');
+      const key = 'wos.chats.afterAction.v1', before = C.chatAfterAction();
+      localStorage.setItem(key, value);
+      window.dispatchEvent(new Event('wos:prefs'));
+      try {
+        const r = await fetch('/wizard/v1/ui-preferences', { credentials: 'same-origin', cache: 'no-store' });
+        if (r.status === 404) return 'device';
+        if (!r.ok) throw Error('Could not read chat settings');
+        const prefs = await r.json();
+        // Older services reject unknown keys. Keep the explicit device choice without sending an invalid PUT.
+        if (!Object.hasOwn(prefs, 'chatAfterAction')) return 'device';
+        if (!(await window.WizLive?.putPrefs?.({ chatAfterAction: value }, { requireShared: true }))) throw Error('Could not save chat settings');
+        const back = await fetch('/wizard/v1/ui-preferences', { credentials: 'same-origin', cache: 'no-store' });
+        if (!back.ok || (await back.json()).chatAfterAction !== value) throw Error('Your Wizard has not confirmed this setting. Try again.');
+        return 'owner';
+      } catch (e) {
+        localStorage.setItem(key, before); window.dispatchEvent(new Event('wos:prefs')); throw e;
+      }
+    },
     // The Service owns this preference across devices; the cache is display-only.
     async responseStyle(value) {
       if (value !== undefined) {
@@ -201,6 +225,7 @@
     return B;
   }
   C.ready = load();
+  window.addEventListener?.('storage', e => { if (e.key === 'wos.chats.afterAction.v1') window.dispatchEvent(new Event('wos:prefs')); });
   // Settings can change while the app is open (the owner renames the agent): refresh on focus.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
   // Clock text in the owner's zone (settings timezone, else the device's own).

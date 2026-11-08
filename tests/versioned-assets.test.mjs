@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, cpSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
@@ -10,16 +10,18 @@ import vm from 'node:vm';
 // The image build stamps every local script/stylesheet with its file hash so a release only ever loads its own files.
 const STAMP = new URL('../tools/stamp-assets.sh', import.meta.url).pathname;
 const WEB = new URL('../web', import.meta.url).pathname;
-function stamped() {
-  const d = mkdtempSync(join(tmpdir(), 'stamp-')); cpSync(WEB, d, { recursive: true });
+function stamped(t) {
+  const d = mkdtempSync(join(tmpdir(), 'stamp-'));
+  t.after(() => rmSync(d, { recursive: true, force: true }));
+  cpSync(WEB, d, { recursive: true });
   execFileSync('sh', [STAMP, d]); return d;
 }
 
 const RE = /^[0-9a-f]{12}$/;
 const tokenOf = h => h.match(/<meta name="wos-release" content="([0-9a-f]+)">/)?.[1];
 
-test('every local script and stylesheet in both shells carries the release token', () => {
-  const d = stamped();
+test('every local script and stylesheet in both shells carries the release token', t => {
+  const d = stamped(t);
   for (const page of ['index.html', 'desktop.html']) {
     const h = readFileSync(join(d, page), 'utf8'), v = tokenOf(h);
     assert.match(v || '', RE, `${page} has its release meta`);
@@ -32,8 +34,8 @@ test('every local script and stylesheet in both shells carries the release token
   }
 });
 
-test('module imports carry the token too, so a changed dependency gets a new URL (Codex, #428)', () => {
-  const d = stamped(), v = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
+test('module imports carry the token too, so a changed dependency gets a new URL (Codex, #428)', t => {
+  const d = stamped(t), v = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
   const swipe = readFileSync(join(d, 'core/thread-swipe-back.js'), 'utf8');
   assert.ok(swipe.includes(`from './swipe-intent.js?v=${v}'`), 'thread-swipe-back imports a stamped swipe-intent');
   const store = readFileSync(join(d, 'store/store.js'), 'utf8');
@@ -44,9 +46,11 @@ test('module imports carry the token too, so a changed dependency gets a new URL
   assert.ok(land.includes(`from '../obsidian/intro.js?v=${v}'`));
 });
 
-test('any change anywhere in web/ moves the token; rerunning the stamp is a no-op', () => {
-  const a = stamped();
-  const b = mkdtempSync(join(tmpdir(), 'stamp-')); cpSync(WEB, b, { recursive: true });
+test('any change anywhere in web/ moves the token; rerunning the stamp is a no-op', t => {
+  const a = stamped(t);
+  const b = mkdtempSync(join(tmpdir(), 'stamp-'));
+  t.after(() => rmSync(b, { recursive: true, force: true }));
+  cpSync(WEB, b, { recursive: true });
   writeFileSync(join(b, 'core/swipe-intent.js'), readFileSync(join(b, 'core/swipe-intent.js'), 'utf8') + '\n// next release\n');
   execFileSync('sh', [STAMP, b]);
   const once = readFileSync(join(b, 'index.html'), 'utf8'), onceImp = readFileSync(join(b, 'core/thread-swipe-back.js'), 'utf8');
@@ -57,8 +61,8 @@ test('any change anywhere in web/ moves the token; rerunning the stamp is a no-o
   assert.equal((readFileSync(join(b, 'index.html'), 'utf8').match(/name="wos-release"/g) || []).length, 1);
 });
 
-test('a layered hotfix restamps an already-stamped tree with one new release token', () => {
-  const d = stamped();
+test('a layered hotfix restamps an already-stamped tree with one new release token', t => {
+  const d = stamped(t);
   const before = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
   writeFileSync(join(d, 'core/agents.js'), readFileSync(join(d, 'core/agents.js'), 'utf8') + '\n// layered hotfix\n');
   execFileSync('sh', [STAMP, d]);

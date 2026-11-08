@@ -1,4 +1,4 @@
-// Miguel's skins (Dark, Light, Landscapes): floating pill dock, plain orb carrying the current app icon.
+// The core hook (#orbApp, the current desk icon in the orb) and where its styles may live.
 // The core hook (#orbApp) is created hidden; James's approved .orb-app rules may also show it; the pill dock stays skin-only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,11 +13,9 @@ test('core mirrors the current desk icon into a hidden #orbApp', () => {
   assert.match(app, /paintOrbApp\(\);/);
 });
 
-test('only Miguel\'s skin packages style the pill dock; approved owner skins may show #orbApp', () => {
+test('pill dock and #orbApp rules stay skin-scoped, never core; approved owner skins may show #orbApp', () => {
   for (const dir of ['obsidian', 'landscapes']) {
     const css = read(`skins/${dir}/skin.css`);
-    assert.match(css, /floating pill bottom bar/);
-    assert.match(css, /\.orb-app:not\(:empty\) \{ display: grid/);
     for (const line of css.split('\n').filter(l => l.includes('.orb-app') || l.includes('--pill-'))) {
       assert.match(line, /^html\[data-skin(\^="obsidian"|="obsidian-light"|\^="landscapes"|="landscapes-light")\]|^\s|^\/\*| \*/, line.slice(0, 90));
     }

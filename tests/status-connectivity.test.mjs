@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,13 +19,47 @@ function setup(online = true, fetch = failedProbe) {
   ctx.WizReach = { calls: 0, opened: 0, checked: 0, failure() { this.calls++; return { message: 'Wizard’s Agent Service isn’t responding.', short: 'Reconnecting…' }; }, open() { this.opened++; },
     async checks() { this.checked++; return { tailnet: true, internet: { state: 'ok', detail: 'Working · 80 ms' }, tailscale: { state: 'bad', detail: 'Can’t reach your Wizard' }, wizard: { state: 'wait', detail: 'Waiting for the connection' } }; } };
   ctx.WosOutbox = { waiting: false, retries: 0, listeners: [], unsent() { return this.waiting ? [{ state: 'waiting' }] : []; }, onChange(fn) { this.listeners.push(fn); }, retryAll() { this.retries++; } };
-  vm.runInNewContext(source, ctx); ctx.WizCore.status.attach({});
-  return { ctx, L, state: () => ctx.WizCore.status.state.net, event(name) { events[name].forEach(fn => fn()); }, success() { L.at++; L.ok = true; L.error = ''; L.emit(); }, settle() { const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); },
+  runWithChatsModel(source, ctx); ctx.WizCore.status.attach({});
+  return { ctx, L, state: () => ctx.WizCore.status.state.net, event(name, event = {}) { (events[name] || []).forEach(fn => fn(event)); }, advance(ms) { clock += ms; }, tap(selector = '[data-app]') { (events.click || []).forEach(fn => fn({ type: 'click', isTrusted: true, button: 0, target: { closest: sel => sel.split(',').includes(selector) ? {} : null } })); }, openPill() { this.banner().handlers.click({ target: { closest: sel => sel === '[data-wxoffopen]' ? {} : null } }); }, success() { L.at++; L.ok = true; L.error = ''; L.emit(); }, settle() { const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); },
     // The pop-up's grace: a failure must last this long before anything covers the screen.
-    grace() { clock += 3100; const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); ctx.WizCore.status.refresh(); },
+    grace() { clock += 8100; const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); ctx.WizCore.status.refresh(); },
     pop: () => nodes.get('wxOffline'), banner: () => nodes.get('wxBanners'), clickPop(attr) { nodes.get('wxOffline').handlers.click({ target: { closest: sel => sel === attr } }); } };
 }
 
+test('idle background outage lasting 20 seconds shows only the existing pill', () => {
+  const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace();
+  h.advance(20000); h.L.emit(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.pop(), undefined); assert.equal(h.ctx.WizReach.checked, 0);
+  assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+  assert.match(h.banner().innerHTML, /Reconnecting…/); assert.match(h.banner().innerHTML, /data-wxoffopen/);
+  h.success(); assert.equal(h.state(), 'restored'); assert.match(h.banner().innerHTML, /Back online/);
+});
+test('capture, recording, mic holds and shell voice keep the pill from opening the checks, with no deferred reopening', () => {
+  for (const state of [{ active: true }, { recording: true }, { hold: true }, { voice: 'listen' }, { voice: 'paused' }]) {
+    const h = setup(); h.success();
+    if (state.voice) h.ctx.__wos = { voice: state.voice };
+    else h.ctx.WizAppCapture = { getState: () => state };
+    h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill(); h.event('wizreachexplain');
+    assert.equal(h.pop(), undefined);
+    h.ctx.__wos = { voice: 'idle' }; h.ctx.WizAppCapture = { getState: () => ({}) };
+    h.ctx.WizCore.status.refresh(); assert.equal(h.pop(), undefined);
+  }
+});
+test('starting shared or shell voice capture immediately tucks open checks into the pill', () => {
+  for (const event of ['wizard-app-capture-state', 'wizard-voice-state']) {
+    const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill();
+    assert.equal(h.pop().hidden, false);
+    h.ctx.WizAppCapture = { getState: () => ({ active: event === 'wizard-app-capture-state' }) };
+    h.event(event, { detail: { state: 'listen' } });
+    assert.equal(h.pop().hidden, true); assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+    h.ctx.WizAppCapture = { getState: () => ({}) }; h.event(event, { detail: { state: 'idle' } });
+    assert.equal(h.pop().hidden, true);
+  }
+});
+test('an outside tap closes the nonblocking checks without consuming the underlying navigation', () => {
+  const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill();
+  h.tap('[data-app]'); assert.equal(h.pop().hidden, true);
+});
 test('fresh Wizard reads override a false offline flag at boot and remain online', () => {
   const h = setup(false); assert.equal(h.state(), 'offline');
   h.grace(); h.success(); assert.equal(h.state(), 'restored');
@@ -63,17 +98,19 @@ test('a short blip shows nothing and comes back silently', () => {
   h.success(); assert.equal(h.state(), 'online', 'no "Back online" for a blip nobody was told about');
   assert.equal(h.banner().hidden, true);
 });
-test('a lasting failure covers the screen with the three checks; X tucks it into a pill that brings it back', async () => {
+test('owner navigation during a lasting failure opens checks; X tucks them into a pill that brings them back', async () => {
   const h = setup(); h.success(); assert.equal(h.ctx.WizReach.calls, 0);
   h.L.error = 'offline'; h.L.emit(); h.grace();
-  assert.equal(h.pop().hidden, false); assert.equal(h.pop().attrs['aria-modal'], 'true');
+  assert.equal(h.pop(), undefined, 'background failure is pill-only');
+  h.openPill();
+  assert.equal(h.pop().hidden, false); assert.equal(h.pop().attrs['aria-modal'], 'false');
   assert.equal(h.ctx.WizCore.status.state.offline, 'open');
   await turn(); await turn();
   assert.equal(h.ctx.WizReach.checked, 1);
   const html = h.pop().innerHTML;
   assert.match(html, /Can’t reach your Wizard/); assert.match(html, /data-wxck="internet"/); assert.match(html, /data-wxck="tailscale"/); assert.match(html, /data-wxck="wizard"/);
   assert.match(html, /wx-ck bad" data-wxck="tailscale"/); assert.match(html, /Open the Tailscale app/);
-  assert.match(html, /saved on this device still open/); assert.doesNotMatch(html, /data-wxoffhelp/, 'no Troubleshooter while it can’t load');
+  assert.match(html, /saved on this device still open/); assert.match(html, /data-wxoffhelp/, 'local Troubleshooter is always available');
   assert.equal(h.ctx.WizCore.status.back(), 'offline', 'Back/Esc hides it');
   assert.equal(h.pop().hidden, true); assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
   assert.match(h.banner().innerHTML, /data-wxnet="reconnecting"/); assert.match(h.banner().innerHTML, /data-wxoffopen/);
@@ -89,15 +126,15 @@ test('opening moves focus to an enabled control inside the dialog; hiding return
   h.ctx.document.activeElement = before;
   const x = { focused: 0, focus() { this.focused++; } };
   h.ctx.document.querySelector = sel => sel === '#wxOffline [data-wxoffx]' ? x : null;
-  h.L.error = 'offline'; h.L.emit(); h.grace(); h.settle();
+  h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill(); h.settle();
   assert.equal(x.focused, 1, 'the always-enabled close button, not the busy Check again');
   h.ctx.WizCore.status.back();
   assert.equal(before.focused, 1, 'focus goes back where it was');
 });
-test('any Troubleshoot button while Wizard can’t be reached opens the same pop-up', () => {
+test('an explicit Troubleshoot request opens the real app, never the checks pop-up', () => {
   const h = setup(); h.success();
   h.ctx.dispatch = null; h.event('wizreachexplain');
-  assert.equal(h.pop().hidden, false);
+  assert.equal(h.ctx.WizReach.opened, 1); assert.equal(h.pop(), undefined);
 });
 test('a retryable saved message never turns healthy chat reads into a connection warning', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
@@ -108,7 +145,9 @@ test('a retryable saved message never turns healthy chat reads into a connection
   assert.equal(O.waiting, true, 'the saved message is not dismissed, sent or otherwise changed');
   assert.equal(O.retries, 0, 'rendering never replays a saved message');
   O.waiting = false; O.listeners.forEach(fn => fn());
-  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  const banner = h.ctx.document.getElementById('wxBanners');
+  assert.equal(banner.hidden, true); assert.equal(banner.innerHTML, '');
+  assert.equal(h.ctx.WizReach.calls, 0);
 });
 test('connection failure still warns with a saved message, until fresh recovery evidence', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
@@ -131,7 +170,7 @@ test('Retry queues a fresh verification when a stale degraded probe is still in 
   };
   const h = setup(true, fetch); h.success(); h.ctx.navigator.onLine = false; h.event('offline');
   assert.equal(calls, 1); assert.equal(h.state(), 'offline');
-  h.grace(); h.clickPop('[data-wxoffcheck]');
+  h.grace(); h.openPill(); h.clickPop('[data-wxoffcheck]');
   assert.equal(calls, 1);
   resolveFirst({ ok: true, json: async () => ({ overall: 'degraded' }) });
   await turn(); await turn();
@@ -179,4 +218,76 @@ test('the probe works without AbortSignal.timeout (iOS 16.0-16.3)', async () => 
   h.success(); h.ctx.navigator.onLine = false; h.event('offline');
   await turn(); await turn();
   assert.ok(opts); assert.equal(h.state(), 'online');
+});
+test('the checks never open by themselves: idle outage, navigation taps, Enter on links and scrolling show only the pill', () => {
+  const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace();
+  for (const selector of ['[data-chopen]', '[data-app]', '#logo', '[data-goto]', 'a[href]']) { h.tap(selector); h.advance(500); h.L.emit(); }
+  h.event('keydown', { type: 'keydown', key: 'Enter', isTrusted: true, target: { closest: () => ({}) } });
+  h.settle(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.pop(), undefined); assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+  assert.match(h.banner().innerHTML, /data-wxoffopen/);
+});
+test('a short outage shows nothing: the pill waits 8 s on a slow server and 3 s when the device says it is offline', () => {
+  const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.advance(3500); h.settle(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.ctx.WizCore.status.state.offline, '', 'slow server: nothing yet at 3.5 s');
+  h.advance(5000); h.settle(); h.ctx.WizCore.status.refresh(); assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+  const d = setup(false); d.advance(3500); d.settle(); d.ctx.WizCore.status.refresh();
+  assert.equal(d.ctx.WizCore.status.state.offline, 'pill', 'device offline: short wait');
+});
+test('an alerted device outage stays visible when the browser hint becomes online, then resets for a new outage', () => {
+  const h = setup(false); h.advance(3500); h.settle(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+  h.ctx.navigator.onLine = true; h.event('online');
+  assert.equal(h.ctx.WizCore.status.state.offline, 'pill', 'online hint cannot retract the pill');
+  h.success(); assert.equal(h.state(), 'restored', 'confirmed recovery still reports Back online');
+  h.L.error = 'offline'; h.L.emit(); h.advance(3500); h.settle(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.ctx.WizCore.status.state.offline, '', 'a new server outage gets a fresh grace');
+});
+test('tapping the pill opens the checks; an outside tap, X and capture tuck them back; recovery clears them', () => {
+  const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace();
+  h.openPill(); assert.equal(h.pop().hidden, false);
+  h.tap('[data-app]'); assert.equal(h.pop().hidden, true); assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+  h.openPill(); assert.equal(h.pop().hidden, false);
+  h.ctx.WizAppCapture = { getState: () => ({ active: true }) }; h.event('wizard-app-capture-state', { detail: { state: 'listen' } });
+  assert.equal(h.pop().hidden, true);
+  h.openPill(); assert.equal(h.pop().hidden, true, 'no checks while capturing');
+});
+test('calm offline card (miguel/calm-offline): one dotted path, one short next step, quiet retry; stock card unchanged', async () => {
+  const stock = setup(); stock.success(); stock.L.error = 'offline'; stock.L.emit(); stock.grace(); stock.openPill(); await turn(); await turn();
+  assert.match(stock.pop().innerHTML, /wz-list/); assert.doesNotMatch(stock.pop().innerHTML, /wx-calm/, 'off by default: the stock rows and pills');
+  const h = setup(); h.ctx.clearInterval = () => {}; h.ctx.getComputedStyle = () => ({ getPropertyValue: k => k === '--wos-calm-offline' ? ' on' : '' });
+  h.success(); h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill(); await turn(); await turn();
+  const html = h.pop().innerHTML;
+  assert.match(html, /class="wz-card wx-off-card wx-calm"/);
+  assert.equal((html.match(/class="wx-step /g) || []).length, 3, 'Internet · Tailscale · Wizard as three steps');
+  assert.match(html, /wx-step ok" data-wxck="internet"/); assert.match(html, /wx-step bad" data-wxck="tailscale"/); assert.match(html, /wx-step wait" data-wxck="wizard"/);
+  assert.doesNotMatch(html, /wz-pill|wz-list|>[^<]*\d+ ms/, "no pills, rows or visible timings (timing stays in the hover title)");
+  assert.match(html, /Turn on Tailscale on this device\.<small>/, 'one short step, detail muted');
+  assert.match(html, /data-wxoffcheck/); assert.match(html, /data-wxoffnext/);
+  h.clickPop('[data-wxoffcheck]'); assert.equal(h.ctx.WosOutbox.retries, 1, 'Check again still retries saved messages');
+});
+
+test('calm offline opt-in stays off in author presets and its text panel is fully opaque', () => {
+  const profile = JSON.parse(readFileSync(new URL('../web/tweaks/miguel/profile.json', import.meta.url), 'utf8'));
+  assert.ok(profile.off.includes('miguel/calm-offline'));
+  const css = readFileSync(new URL('../web/tweaks/miguel/calm-offline/tweak.css', import.meta.url), 'utf8');
+  const panel = css.match(/\.wz-card\.wx-calm\s*\{([^}]+)\}/)[1];
+  assert.match(panel, /background: var\(--wz-base\)/);
+  assert.match(panel, /backdrop-filter: none/);
+  assert.doesNotMatch(panel.match(/background: ([^;]+)/)[1], /--sk-win|transparent|blur\(/);
+});
+
+test('calm card keeps keyboard focus when its asynchronous check repaints it', async () => {
+ const h=setup();h.ctx.clearInterval=()=>{};h.ctx.getComputedStyle=()=>({getPropertyValue:k=>k==='--wos-calm-offline'?'on':''});
+ let finish;h.ctx.WizReach.checks=()=>new Promise(resolve=>{finish=resolve});
+ h.success();h.L.error='offline';h.L.emit();h.grace();h.openPill();
+ const pop=h.pop();let html=pop.innerHTML,focused=0;
+ const card={attributes:[],classList:{contains:n=>n==='wx-calm'},focus(){focused++;h.ctx.document.activeElement=card}};
+ pop.contains=n=>n===card;pop.querySelector=sel=>sel==='.wx-calm'?card:null;
+ Object.defineProperty(pop,'innerHTML',{get:()=>html,set(v){html=v;h.ctx.document.activeElement=h.ctx.document.body}});
+ h.ctx.document.activeElement=card;
+ finish({internet:{state:'ok'},tailscale:{state:'bad'},wizard:{state:'wait'}});
+ await turn();await turn();
+ assert.ok(focused>0,'the replacement production card receives focus');
+ assert.equal(h.ctx.document.activeElement,card,'focus never falls back to the document');
 });

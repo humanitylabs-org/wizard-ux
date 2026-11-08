@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Pinned chats, synced per owner through the shared shell preferences. Design: Novaire, wizard-ux #250.
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -19,7 +20,7 @@ function load({ local = {}, server = [], status = 200, box = null } = {}) {
     },
   }
   sandbox.window = sandbox
-  vm.runInNewContext(read('web/core/chat-pins.js'), sandbox)
+  runWithChatsModel(read('web/core/chat-pins.js'), sandbox)
   // Another device editing the shared list directly.
   return { P: sandbox.WosChatPins, m, puts, events, shared: () => shared, setShared: v => { shared = v.slice() } }
 }
@@ -35,7 +36,7 @@ function loadOn(box, m) {
     },
   }
   sandbox.window = sandbox
-  vm.runInNewContext(read('web/core/chat-pins.js'), sandbox)
+  runWithChatsModel(read('web/core/chat-pins.js'), sandbox)
   return { P: sandbox.WosChatPins, m }
 }
 // Both devices read before either writes (GET, GET, PUT, PUT), then everything flows.

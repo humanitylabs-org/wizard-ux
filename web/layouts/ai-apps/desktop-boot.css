@@ -1,0 +1,5 @@
+/* AI apps desktop, first frames (core/skin-host.js: the host's blocking sheet for this layout on the desktop; the
+ * phone's layout.css is never requested here). Classic's chat list never shows under this layout, and nothing else of
+ * Classic shows before desktop.css (mounted by desktop.js) applies. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-chats-owner] :is(.pane-list, .pane-split, .pane-empty) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-layout-booting] body { opacity: 0 !important; pointer-events: none; }

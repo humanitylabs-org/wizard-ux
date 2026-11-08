@@ -61,6 +61,8 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 
 ### Tweaks / experiences (James, 24 Oct 2026; wizard-os #186)
 
+**Settings › Look keeps Skin and Color as separate controls — James, 31 Oct and 1 Nov 2026 (#801/#803): pick a skin, then its color; never flatten colors into skins.** Regression: `tests/look-skin-colour-separation.test.mjs` and `tests/skin-preview-picker.test.mjs`. This is the shared design for everyone, not a personal tweak.
+
 Skins are look only. New behaviour is a tweak package or an approved core flag; never a skin script. Extend `core/skin-host.js`, mount only at `slots.json` names, declare capabilities, ship a CI contract, and preserve My skin on top. One-tap Snooze stays a tweak. Profiles use `core/experience.js` until Agent Service exposes a dedicated owner Files route. No WAM rebases or owner release builds.
 
 ### Historical skins contract (superseded for new behaviour)

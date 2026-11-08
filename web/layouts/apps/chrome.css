@@ -1,0 +1,208 @@
+/* View chrome (layouts/apps/chrome.js): the + sheet (Open · Installed · Get more) and the full-screen app windows the
+ * Orb and Apps views share (no Back button: a swipe up on the orb goes Home). Loaded by that script only; every rule is scoped to html[data-view-chrome] (set only while the Orb or the Apps view wears it), so
+ * the Desks view never sees a rule of it. Colours are the skin's own tokens (--wz-*), so it reads on every skin. */
+
+/* ---------- phone: the stock desk switcher goes on EVERY screen; the dock orb stays exactly where it is ---------- */
+/* Only the orb is left of the dock row (same place; tap talks, hold commands, a swipe up goes Home); its dots, its
+ * scrub handle and its pill glass step aside. The empty row no longer takes touches. */
+html[data-view-chrome="phone"] #dock > :is(#dotsL, #dotsR, .scrub) { display: none !important; }
+html[data-view-chrome="phone"] #dock {
+  background: none !important; border-color: transparent !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; pointer-events: none !important;
+}
+html[data-view-chrome="phone"] #dock::before { display: none !important; }
+html[data-view-chrome="phone"] #dock > #orbWrap { pointer-events: auto; }
+/* round 6 (Miguel, 2 Nov 2026): the orb's compact spot. A view's composer (the slot where the mic was) or the app in front
+ * (the end of its bottom row of controls) gives it a spot; it moves there and takes that size. Never animated: the
+ * bars around it read its own spot through the move. */
+html[data-view-chrome="phone"][data-vc-orb] #dock > #orbWrap { translate: var(--vc-orb-dx, 0px) var(--vc-orb-dy, 0px); scale: var(--vc-orb-k, 1); }
+/* the orb IS the microphone: a small mic in it wherever the view shows it (resting only; a take shows the orb's own state) */
+html[data-view-chrome="phone"] #orbWrap > .vc-mic { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: none; color: white; transition: opacity 150ms ease; }
+html[data-view-chrome="phone"] #orbWrap > .vc-mic .vc-mic-i { width: 40%; height: 40%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px color-mix(in srgb, black 55%, transparent)); }
+html[data-view-chrome="phone"] #orbWrap[data-mode]:not([data-mode="idle"]) > .vc-mic { opacity: 0; }
+
+/* ---------- icons (the + and the sheet's ✕) ---------- */
+html[data-view-chrome] .vc-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+
+/* ---------- the + sheet: every app not open yet ---------- */
+html[data-view-chrome] .vc-sheet { position: fixed; inset: 0; z-index: 400; display: grid; pointer-events: auto; }
+html[data-view-chrome] .vc-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--wz-base, var(--bg)) 46%, transparent); animation: vc-fade 160ms ease; }
+html[data-view-chrome] .vc-card {
+  position: relative; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0;
+  color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-panel, var(--wz-base, var(--bg))) 94%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 12%, transparent), 0 24px 60px color-mix(in srgb, var(--wz-base, var(--bg)) 55%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.3); backdrop-filter: blur(26px) saturate(1.3); animation: vc-up 180ms ease;
+}
+html[data-view-chrome="phone"] .vc-card {
+  align-self: end; width: 100%; max-height: 88%; border-radius: 28px 28px 0 0; padding: 8px 12px calc(var(--safe-b, 0px) + 14px);
+}
+html[data-view-chrome="desktop"] .vc-card {
+  place-self: center; width: min(760px, calc(100vw - 64px)); max-height: min(720px, calc(100vh - 120px)); border-radius: 18px; padding: 10px 16px 18px;
+}
+html[data-view-chrome] .vc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 0 2px 0 6px; flex: none; }
+/* one search field for all three levels */
+html[data-view-chrome] .vc-find {
+  flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 14px; box-sizing: border-box; border-radius: 22px;
+  background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 10%, transparent);
+  color: var(--wz-text-secondary, var(--ink-2, var(--wz-text)));
+}
+html[data-view-chrome] .vc-find:focus-within { box-shadow: inset 0 0 0 2px var(--wz-accent, var(--ink)); }
+html[data-view-chrome] .vc-find-i { width: 18px; height: 18px; flex: none; }
+html[data-view-chrome] .vc-q {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; padding: 0; color: var(--wz-text, var(--ink));
+  font: 500 1rem / 1.2 var(--wz-font-ui); -webkit-appearance: none; appearance: none;
+}
+html[data-view-chrome] .vc-q::placeholder { color: var(--wz-text-secondary, var(--ink-2, var(--wz-text))); opacity: 1; }
+html[data-view-chrome] .vc-q::-webkit-search-cancel-button { -webkit-appearance: none; }
+html[data-view-chrome] .vc-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 2px 4px; }
+/* a level's heading: Open · Installed · Get more, with its count */
+html[data-view-chrome] .vc-sec-h {
+  display: flex; align-items: center; gap: 8px; margin: 14px 4px 8px; color: var(--wz-text-secondary, var(--ink-2, var(--wz-text)));
+  font: 750 calc(var(--wz-text-sm, 0.8125rem) * .86) / 1.2 var(--wz-font-ui); letter-spacing: .12em; text-transform: uppercase;
+}
+html[data-view-chrome] .vc-count { font: inherit; letter-spacing: .04em; opacity: .8; }
+html[data-view-chrome] .vc-x {
+  width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: var(--wz-text-secondary, var(--ink-2, var(--wz-text))); background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent);
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-view-chrome] .vc-x:hover { color: var(--wz-text, var(--ink)); }
+html[data-view-chrome] .vc-x .vc-ico { width: 18px; height: 18px; }
+html[data-view-chrome] .vc-list { display: grid; grid-auto-rows: max-content; row-gap: 14px; column-gap: 4px; padding: 2px 2px 4px; }
+html[data-view-chrome="phone"] .vc-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+html[data-view-chrome="desktop"] .vc-list { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); row-gap: 18px; }
+html[data-view-chrome] .vc-app {
+  min-width: 0; min-height: 88px; padding: 4px 0 2px; margin: 0; border: 0; border-radius: 14px; background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--wz-text, var(--ink));
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+html[data-view-chrome] .vc-open { position: relative; min-width: 0; color: var(--wz-text, var(--ink)); }
+html[data-view-chrome] .vc-hit {
+  width: 100%; min-height: 88px; padding: 4px 0 2px; margin: 0; border: 0; border-radius: 14px; background: none; cursor: pointer; color: inherit;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+html[data-view-chrome] .vc-hit:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: -2px; }
+html[data-view-chrome] .vc-hit:active .vc-tile { transform: scale(.92); }
+/* ✕ on an open app: closes it (a 44 px target; the visible disc is 26 px on the tile's corner) */
+html[data-view-chrome] .vc-close {
+  position: absolute; top: -10px; left: calc(50% + 10px); width: 44px; height: 44px; padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; color: var(--wz-text, var(--ink)); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+html[data-view-chrome] .vc-close::before {
+  content: ""; position: absolute; width: 26px; height: 26px; border-radius: 50%; background: var(--wz-panel, var(--wz-base, var(--bg)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 22%, transparent), 0 2px 6px color-mix(in srgb, var(--wz-base, var(--bg)) 50%, transparent);
+}
+html[data-view-chrome] .vc-close .vc-ico { position: relative; width: 14px; height: 14px; stroke-width: 2.6; }
+html[data-view-chrome] .vc-close:hover::before { background: color-mix(in srgb, var(--wz-text, var(--ink)) 14%, var(--wz-panel, var(--wz-base, var(--bg)))); }
+html[data-view-chrome] .vc-close:focus-visible { outline: none; }
+html[data-view-chrome] .vc-close:focus-visible::before { box-shadow: 0 0 0 2px var(--wz-accent, var(--ink)); }
+/* Get more: one row per App Store app (logo, name, a line of what it does, Get) */
+html[data-view-chrome] .vc-rows { display: grid; gap: 4px; }
+html[data-view-chrome="desktop"] .vc-rows { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); column-gap: 8px; }
+html[data-view-chrome] .vc-get {
+  min-width: 0; min-height: 64px; margin: 0; padding: 8px 8px; border: 0; border-radius: 14px; background: none; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 12px; color: var(--wz-text, var(--ink)); -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+html[data-view-chrome] .vc-get:hover { background: color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent); }
+html[data-view-chrome] .vc-get:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: -2px; }
+html[data-view-chrome] .vc-tile.vc-tile-s { width: 46px; height: 46px; border-radius: 12px; }
+html[data-view-chrome] .vc-tile.vc-tile-s .sgi { width: 28px; height: 28px; }
+html[data-view-chrome] .vc-get-w { flex: 1; min-width: 0; display: grid; gap: 2px; }
+html[data-view-chrome] .vc-get-n { font: 650 var(--wz-text-sm, 0.8125rem) / 1.25 var(--wz-font-ui); font-size: calc(var(--wz-text-sm, 0.8125rem) * 1.08); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-view-chrome] .vc-get-s {
+  color: var(--wz-text-secondary, var(--ink-2, var(--wz-text))); font: 500 calc(var(--wz-text-sm, 0.8125rem) * .92) / 1.3 var(--wz-font-ui);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+html[data-view-chrome] .vc-get-b {
+  flex: none; min-width: 58px; height: 32px; padding: 0 14px; box-sizing: border-box; border-radius: 16px; display: grid; place-items: center;
+  font: 750 var(--wz-text-sm, 0.8125rem) / 1 var(--wz-font-ui); color: var(--wz-accent, var(--ink));
+  background: color-mix(in srgb, var(--wz-accent, var(--ink)) 14%, transparent);
+}
+html[data-view-chrome] .vc-store {
+  display: block; width: 100%; min-height: 48px; margin: 14px 0 2px; padding: 0 12px; border: 0; border-radius: 14px; cursor: pointer;
+  color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent);
+  font: 600 var(--wz-text-sm, 0.8125rem) / 1.2 var(--wz-font-ui); font-size: calc(var(--wz-text-sm, 0.8125rem) * 1.04);
+}
+html[data-view-chrome] .vc-store:hover { background: color-mix(in srgb, var(--wz-text, var(--ink)) 10%, transparent); }
+html[data-view-chrome] .vc-store:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: -2px; }
+html[data-view-chrome] .vc-app:hover { background: color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent); }
+html[data-view-chrome] .vc-app:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: -2px; }
+html[data-view-chrome] .vc-tile {
+  --c: var(--wz-accent, var(--ink));
+  width: 56px; height: 56px; flex: none; border-radius: 15px; overflow: hidden; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--c) 24%, color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 10%, transparent); transition: transform 120ms ease;
+}
+html[data-view-chrome] .vc-app:active .vc-tile { transform: scale(.92); }
+html[data-view-chrome] .vc-tile.is-logo { background: color-mix(in srgb, var(--wz-text, var(--ink)) 4%, transparent); }
+html[data-view-chrome] .vc-tile .sgi { width: 34px; height: 34px; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 80%, var(--wz-text, var(--ink))) !important; }
+html[data-view-chrome] .vc-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-view-chrome] .vc-name {
+  max-width: 100%; padding: 0 2px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 500 calc(var(--wz-text-sm, 0.8125rem) * .92) / 1.2 var(--wz-font-ui);
+}
+html[data-view-chrome] .vc-empty { grid-column: 1 / -1; margin: 6px 0 10px; text-align: center; color: var(--wz-text-secondary, var(--ink-2, var(--wz-text))); font: 500 var(--wz-text-sm, 0.8125rem) / 1.4 var(--wz-font-ui); }
+@keyframes vc-fade { from { opacity: 0; } }
+@keyframes vc-up { from { opacity: 0; transform: translateY(12px); } }
+/* ---------- full screen (Miguel, 1 Nov 2026: "like Chats") ----------
+ * An open app uses the whole screen: its window reaches every edge (its content stays inside the safe areas), no window
+ * title bar, the orb floats over it at its usual spot, and the app fades out toward the bottom with the same fade the
+ * Chats list wears under the orb (the dark skins' Chats rule; the Landscapes skins' lighter one). Hosted apps get room
+ * under their last item (chrome.js api.apps.inset), so a list still scrolls clear of the orb; an app with its own
+ * bottom tab bar gets that bar lifted clear of the orb instead (.wos-inset-bar: no fade then). Chats keeps its own. */
+html[data-view-chrome="phone"] { --vc-fade-top: var(--pill-top, calc(var(--safe-b, 0px) + 74px)); --vc-fade-b: var(--pill-b, calc(var(--safe-b, 0px) + 8px)); }
+html[data-view-chrome="phone"] .device:not(.orb-corner) .tiles[data-n="1"]:not(.has-full):has(> .win.solo.app-frame) { top: 0; left: 0; right: 0; bottom: 0; }
+html[data-view-chrome="phone"] .device:not(.orb-corner) .tiles[data-n="1"]:not(.has-full) > .win.solo.app-frame { border-radius: 0; border-color: transparent; box-shadow: none; }
+html[data-view-chrome="phone"] .device:not(.orb-corner) .tiles[data-n="1"]:not(.has-full) > .win.solo.app-frame > .wbar { display: none; }
+html[data-view-chrome="phone"] .device:not(.orb-corner) .tiles[data-n="1"]:not(.has-full) > .win.solo.app-frame > .wbody { padding-top: var(--safe-t, 0px); }
+html[data-view-chrome="phone"] .device:not(.orb-corner) .tiles[data-n="1"]:not(.has-full) > .win.solo.app-frame:not(.wos-inset-bar)::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--vc-fade-top) + 64px); z-index: 4; pointer-events: none;
+  background: linear-gradient(to top, var(--bg) var(--vc-fade-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--vc-fade-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--vc-fade-top) + 22px), transparent 100%);
+}
+html[data-view-chrome="phone"][data-skin^="landscapes"] .device:not(.orb-corner) .tiles[data-n="1"]:not(.has-full) > .win.solo.app-frame:not(.wos-inset-bar)::after {
+  height: calc(var(--vc-fade-top) + 44px);
+  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) var(--vc-fade-top), transparent 100%);
+}
+@media (prefers-reduced-motion: reduce) { html[data-view-chrome] :is(.vc-scrim, .vc-card) { animation: none; } }
+
+/* Already open (the kinds layout): one quiet folded row; open, it shows the open apps with their ✕ */
+html[data-view-chrome] .vc-fold {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 10px 0 2px; padding: 0 10px; min-height: 44px; box-sizing: border-box; border: 0; border-radius: 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--wz-text, var(--ink)) 5%, transparent); color: var(--wz-text-secondary, var(--ink-2, var(--wz-text)));
+  font: 650 var(--wz-text-sm, 0.8125rem) / 1.2 var(--wz-font-ui); text-align: left; -webkit-tap-highlight-color: transparent;
+}
+html[data-view-chrome] .vc-fold:hover { background: color-mix(in srgb, var(--wz-text, var(--ink)) 9%, transparent); }
+html[data-view-chrome] .vc-fold:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: 1px; }
+html[data-view-chrome] .vc-fold .vc-chev { width: 16px; height: 16px; margin-left: auto; transition: transform 160ms ease; }
+html[data-view-chrome] .vc-fold.open .vc-chev { transform: rotate(180deg); }
+html[data-view-chrome] .vc-list-open { margin-top: 8px; }
+/* system apps lead their group with the accent ring the launcher gives them */
+html[data-view-chrome] .vc-app.vc-sys .vc-tile { box-shadow: 0 0 0 2px var(--wz-accent, var(--ink)); }
+/* For agents: a fold like Already open; open, its kinds show as quieter sub-headings */
+html[data-view-chrome] .vc-fold-agents { margin-top: 18px; }
+html[data-view-chrome] .vc-sec-h.vc-sub-h { margin-top: 10px; font-size: calc(var(--wz-text-sm, 0.8125rem) * .78); opacity: .8; }
+/* a newly opened app grows into its place in the Apps grid (layouts/apps: bornIf) */
+html[data-view-chrome] .vc-born { animation: vc-born 640ms cubic-bezier(.2, .9, .25, 1.25) both; }
+@keyframes vc-born { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html[data-view-chrome] .vc-born { animation: none; } }
+/* an open app's menu (right-click / long press on its icon): Open · Close (stays installed) */
+html[data-view-chrome] .vc-menu { position: fixed; inset: 0; z-index: 420; }
+html[data-view-chrome] .vc-menu-scrim { position: absolute; inset: 0; background: transparent; }
+html[data-view-chrome="phone"] .vc-menu-scrim { background: color-mix(in srgb, var(--wz-base, var(--bg)) 30%, transparent); }
+html[data-view-chrome] .vc-menu-card {
+  position: absolute; min-width: 200px; display: flex; flex-direction: column; gap: 2px; padding: 6px; box-sizing: border-box; border-radius: 14px;
+  color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-panel, var(--wz-base, var(--bg))) 96%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 12%, transparent), 0 16px 44px color-mix(in srgb, var(--wz-base, var(--bg)) 55%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3); animation: vc-up 140ms ease;
+}
+html[data-view-chrome] .vc-menu-h { padding: 6px 10px 4px; color: var(--wz-text-secondary, var(--ink-2, var(--wz-text))); font: 650 calc(var(--wz-text-sm, 0.8125rem) * .85) / 1.2 var(--wz-font-ui); }
+html[data-view-chrome] .vc-menu-i {
+  min-height: 40px; padding: 0 10px; border: 0; border-radius: 9px; background: none; color: inherit; text-align: left; cursor: pointer;
+  font: 550 var(--wz-text-sm, 0.8125rem) / 1.2 var(--wz-font-ui); -webkit-tap-highlight-color: transparent;
+}
+html[data-view-chrome="phone"] .vc-menu-i { min-height: 46px; font-size: 1rem; }
+html[data-view-chrome] .vc-menu-i:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--wz-text, var(--ink)) 9%, transparent); outline: none; }
+/* the picker's + Get more tile (AI apps round 16): a plain tile with a +, the App Store as it is */
+html[data-view-chrome] .vc-tile.vc-tile-plus { color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 14%, transparent); }
+html[data-view-chrome] .vc-tile.vc-tile-plus .vc-ico { width: 26px; height: 26px; }
+html[data-view-chrome] .vc-list.vc-list-more { margin-top: 8px; }

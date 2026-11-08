@@ -7,7 +7,8 @@ import {resolve} from 'node:path';
 import vm from 'node:vm';
 const root = process.env.QA_SOURCE_ROOT || new URL('../', import.meta.url).pathname;
 const read = p => readFileSync(resolve(root, p), 'utf8');
-const provider = (paid = {}, fields = {}) => ({id:'claude:fixture', provider:'claude', name:'Claude', status:'ok', fetchedAt:new Date().toISOString(), limits:[{id:'weekly', label:'Weekly', remainingPercent:0}], paid:{type:'spend', enabled:true, currency:'USD', exponent:2, usedMinor:100176, limitMinor:null, balanceMinor:null, unlimited:false, ...paid}, ...fields});
+// Preserve generic spend/cap regressions below; Claude's purchased-credit cases follow them.
+const provider = (paid = {}, fields = {}) => ({id:'claude:fixture', provider:'legacy-spend', name:'Claude', status:'ok', fetchedAt:new Date().toISOString(), limits:[{id:'weekly', label:'Weekly', remainingPercent:0}], paid:{type:'spend', enabled:true, currency:'USD', exponent:2, usedMinor:100176, limitMinor:null, balanceMinor:null, unlimited:false, ...paid}, ...fields});
 function boot({bars=false, memo={}} = {}) {
   const storage = new Map([['wos.res.extra', JSON.stringify(memo)]]);
   const ctx = {document:{documentElement:{dataset:{tweaks:bars?'miguel/home-bars':''}}, hidden:false, addEventListener(){}, querySelectorAll:()=>[]}, localStorage:{getItem:k=>storage.get(k)||null, setItem:(k,v)=>storage.set(k,v)}, queueMicrotask(){}, setTimeout, clearTimeout, AbortController, console};
@@ -122,4 +123,34 @@ test('provider names, currency and spend descriptions remain escaped in every re
       assert.doesNotMatch(h,/<img|<svg onload/);assert.match(h,/&lt;svg onload=&quot;attack\(\)&quot;&gt;/);
     }
   }
+});
+
+const claude = (paid={},fields={}) => provider({balanceMinor:12345,usedMinor:87500,limitMinor:100000,...paid},{provider:'claude',...fields});
+test('Claude purchased credits, never spend or cap-minus-spend, appear on Home, shared bars and details',()=>{
+ for(const bars of [false,true]){const b=boot({bars});b.set(claude());const x=b.r.extraOf(claude());assert.equal(x.left,12345);assert.equal(x.pct,null);assert.equal(x.limit,null);
+  for(const h of [bars?extraRow(b.home()):extraCell(b.home()),extraRow(b.r.barsHtml()),b.details()]){assert.match(h,/\$123\.45/);assert.doesNotMatch(h,/\$875|\$125|spent|data-w=/);}
+  assert.match(b.details(),/\$123\.45 remaining/);assert.match(b.home(),/Usage credits remaining/);assert.match(b.details(),/100% used/);
+ }
+});
+test('Claude zero credit is real and unknown credit is never cap-minus-spend',()=>{
+ const b=boot();b.set(claude({balanceMinor:0}));assert.match(extraCell(b.home()),/\$0 left/);assert.match(b.details(),/\$0\.00 remaining/);
+ for(const balance of [null,undefined,'',NaN]){b.set(claude({balanceMinor:balance}));for(const h of [extraCell(b.home()),extraRow(b.r.barsHtml()),b.details()]){assert.match(h,/Balance unavailable/);assert.doesNotMatch(h,/\$875|\$125|spent|unlimited/);}}
+});
+test('Claude real balance survives outage visibly stale; fresh unknown replaces it',()=>{
+ const b=boot();b.set(claude());b.home();b.set(claude({}, {status:'unavailable',paid:null}));for(const h of [extraCell(b.home()),extraRow(b.r.barsHtml())]){assert.match(h,/123\.45/);assert.match(h,/Last known reading/);}
+ const memo=JSON.parse(b.storage.get('wos.res.extra')),reload=boot({memo});reload.set(claude({}, {status:'unavailable',paid:null}));assert.match(extraCell(reload.home()),/123\.45/);
+ b.set(claude({balanceMinor:null}));assert.match(extraCell(b.home()),/Balance unavailable/);assert.doesNotMatch(extraCell(b.home()),/123\.45/);
+ b.set(claude({}, {status:'unavailable',paid:null}));assert.doesNotMatch(extraCell(b.home()),/123\.45/);
+});
+test('Claude legacy cap memo is not relabelled purchased credits on cold outage',()=>{
+ const b=boot({memo:{'claude:fixture':{enabled:true,left:25000,used:75000,limit:100000,pct:75,exp:2,cur:'USD'}}});b.set(claude({}, {status:'unavailable',paid:null}));for(const h of [extraCell(b.home()),extraRow(b.r.barsHtml())]){assert.match(h,/Balance unavailable/);assert.doesNotMatch(h,/250|75%|data-w=/);}
+});
+test('Claude disabled clears purchased credit and refresh changes the value without touching weekly',()=>{
+ const b=boot({bars:true});b.set(claude());const before=b.home();b.set(claude({balanceMinor:100}));assert.notEqual(b.home(),before);assert.match(extraRow(b.home()),/\$1 left/);assert.match(b.details(),/100% used/);b.set(claude({enabled:false}));assert.equal(extraRow(b.home()),'');assert.doesNotMatch(b.details(),/Usage credits:/);
+});
+test('Claude identity from raw id normalizes consistently in Home and details',()=>{
+ const b=boot();b.set(claude({}, {provider:undefined}));assert.match(extraCell(b.home()),/123\.45/);assert.match(b.details(),/123\.45 remaining/);
+});
+test('Claude currency and provider names stay escaped when balance is rendered',()=>{
+ const b=boot();b.set(claude({currency:'<svg onload="attack()">'},{name:'<img src=x onerror="attack()">'}));for(const h of [b.home(),b.r.barsHtml(),b.details()]){assert.doesNotMatch(h,/<img|<svg/);assert.match(h,/&lt;svg/);}
 });

@@ -74,7 +74,8 @@ async function statusBanner(api) {
   ctx.window = ctx; vm.runInNewContext(read('web/core/status.js'), ctx); ctx.WizCore.status.attach({});
   L.at++; L.ok = true; L.listeners.forEach(fn => fn()); // healthy first, with no pending message
   L.error = 'offline'; L.ok = false; L.listeners.forEach(fn => fn()); // then a failed read
-  clock += 3100; ctx.WizCore.status.refresh(); // it lasts: the pop-up opens
+  // ad9aa2f22 gives a slow server 8 s and never opens checks automatically.
+  clock += 8100; ctx.WizCore.status.refresh(); // it lasts: the connection pill appears
   ctx.WizCore.status.back(); // tucked away: the pill
   const html = ctx.document.getElementById('wxBanners')?.innerHTML || '';
   assert.match(html, /data-wxnet="reconnecting"/, 'a failed read raises the connection banner');

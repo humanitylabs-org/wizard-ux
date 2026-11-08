@@ -16,14 +16,15 @@ test('desktop Settings opens as a window and every way of closing the window hid
   assert.match(open, /if \(w\) focusWin\(w\.id\); else \{ settingsFocus = document\.activeElement; newWin\(\{ app: 'settings' \}\); \}/);
   assert.match(desk, /    const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\);\n  \}/, 'on a desk Settings is a window');
   // From Home (any skin) it is a centred panel over Home; Esc, ✕ or a click outside closes it (James, 31 Oct 2026).
-  assert.match(open, /if \(homeOpen\) \{  \/\/ from Home/);
+  assert.match(open, /if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/);
   assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
-  assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
+  assert.match(desk, /if \(settingsModal && !settingsOver\(\)\) closeSettings\(\);\n    homeOpen = false;/, 'only an everywhere-modal view keeps Settings while preparing its page');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
   assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
   assert.match(desk, /afterRender = hostSettings;/);
   const host = slice(desk, '  function hostSettings() {', '  afterRender = hostSettings;');
-  assert.match(host, /if \(host\) \{ if \(setEl\.parentNode !== host\) host\.appendChild\(setEl\); setEl\.hidden = false; return; \}/);
+  assert.match(host, /if \(host\) \{ moveSettingsTo\(host\); setEl\.hidden = false; return; \}/);
+  assert.match(desk, /host\.appendChild\(setEl\);\n    if \(keep && document\.activeElement !== active\) active\.focus\(\{ preventScroll: true \}\);/, 'rehosting preserves the focused descendant');
   assert.match(host, /setEl\.hidden = true;/);
   assert.match(desk, /if \(w\.app === 'settings'\) return '<div class="settings-host"><\/div>';/);
   assert.match(desk, /if \(w\.app === 'settings'\) return \{ id: 'settings', name: 'Settings'/, 'title bar names it Settings');
@@ -33,7 +34,7 @@ test('desktop Settings opens as a window and every way of closing the window hid
 test('desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings window, ⌥ window keys are not swallowed', () => {
   assert.equal((desk.match(/return hit\(toggleSettings\)/g) || []).length, 2);
   assert.match(desk, /function toggleSettings\(\) \{ if \(settingsFocused\(\)\) closeSettings\(\); else openSettings\(\); \}/);
-  assert.match(desk, /if \(settingsFocused\(\)\) \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
+  assert.match(desk, /watchEscape\('settings', \(\) => settingsFocused\(\), \(\) => \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
   assert.match(desk, /if \(settingsFocused\(\) && !e\.altKey\) return;/);
   assert.doesNotMatch(desk, /setEl && !setEl\.hidden && !\(e\.altKey && code === 'Comma'\)/, 'the old modal swallow of every ⌥ key is gone');
   assert.equal((desk.match(/setEl\.setAttribute\('aria-modal'/g) || []).length, 1, 'only the Home panel is a dialog, never the window');
@@ -60,7 +61,8 @@ test('desktop page previews open as a window; images still use the viewer and fi
   const img = go.indexOf('viewImage(u, doc)'), file = go.indexOf('download(u, doc)'), win = go.indexOf('asWindow(');
   assert.ok(img > 0 && file > img && win > file, 'asWindow only after the image and file branches');
   assert.ok(win < go.indexOf('stack.push'), 'before the pane opens');
-  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\); newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
+  // (stock; a layout placing the shell's opens, apps.routeOpens, may put it in its own panel first)
+  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = (?:\(\)|desk) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
   assert.match(desk, /if \(f\.preview\) \{ closeWin\(f\.id\); return 'preview'; \}/, 'Esc closes a preview window');
   assert.doesNotMatch(phone, /asWindow/, 'phone keeps its full-height link sheet');
 });

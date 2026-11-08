@@ -1,0 +1,1049 @@
+{
+  "version": 1,
+  "harnesses": [
+    "qa-instant-ui-taps.cjs",
+    "qa-offline-popup.cjs",
+    "qa-search-archive-routed.cjs"
+  ],
+  "policy": "Every discovered network path in web/ is classified. Existing shell files are served locally by staticResponse; absent/generated assets, relative shell fetches and literal skin-host app reads require explicit catalogue entries. Unknown paths fail closed and are collected. Dynamic URL construction still requires the runtime fence.",
+  "transports": {
+    "fetch": "every catalogued path above",
+    "XMLHttpRequest": "none in the three flows (refused if issued)",
+    "EventSource": "run event streams only start after a send; none of the flows send, so /wizard/hermes/v1/runs/{}/events is not-exercised and any stream is refused",
+    "WebSocket": "every socket is closed by routeWebSocket; none catalogued"
+  },
+  "apps": {
+    "morning": {
+      "provides": "ready-extension",
+      "note": "Pinned checkout is loaded only by qa-instant-ui-taps (serves ready.json, shell.js, shell.css, /morning/api/status|hide inline with the pinned bytes). Other harnesses see the declaration as unavailable."
+    },
+    "wisdom": {
+      "note": "Registry record only; no ready-extension, no frame opened."
+    }
+  },
+  "browser": {
+    "/favicon.ico": "204 empty"
+  },
+  "paths": {
+    "/wizard-os-home/api/diagnostics/scroll-capture": {
+      "status": "not-exercised",
+      "source": "web/core/app-capture.js",
+      "kind": "write-or-stream",
+      "note": "Android-native storage diagnostics only; these three browser flows have no native bridge. Privacy projection and collector transport are covered by capture-storage-diagnostics.test.mjs and an explicit synthetic private-collector probe. Refuse and collect any unexpected attempt here."
+    },
+    "/wizard/v1/agents": {
+      "status": "catalogued",
+      "source": "web/agents/agents.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/agents"
+        }
+      ]
+    },
+    "/wizard/v1/agents/{}": {
+      "status": "not-exercised",
+      "source": "web/agents/agents.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/agents/{}/{}": {
+      "status": "not-exercised",
+      "source": "web/agents/agents.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/agent-options": {
+      "status": "catalogued",
+      "source": "web/core/agents.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/agent-options"
+        }
+      ]
+    },
+    "/wizard/v1/app-bindings": {
+      "status": "catalogued",
+      "source": "web/core/agents.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/app-bindings"
+        }
+      ]
+    },
+    "/wizard/v1/apps/{}/binding": {
+      "status": "not-exercised",
+      "source": "web/core/agents.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/apps/{}/agents": {
+      "status": "catalogued",
+      "source": "web/core/agents.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/apps/morning/agents"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/v1/apps/wisdom/agents"
+        }
+      ],
+      "note": "Exact fixture IDs only (sessions: tap-thread, qa_s_*, qa_r_*; apps: morning, wisdom); any other ID is refused."
+    },
+    "/wizard-os-home/store-data/wizard/v1/index/search": {
+      "status": "not-exercised",
+      "source": "web/core/app-setup.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-data/wizard/v1/installed-apps": {
+      "status": "catalogued",
+      "source": "web/core/app-setup.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-os-home/store-data/wizard/v1/installed-apps"
+        }
+      ]
+    },
+    "/troubleshoot": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-signal": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-signal/sw.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wisdom": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wisdom/sw.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wisdom-next": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wisdom-next/sw.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-social": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-social/sw.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/trackhunt": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/trackhunt/sw.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/trackhunt/__pwa/service-worker.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/cinequeue": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/cinequeue/__pwa/service-worker.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/files": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/files/__pwa/service-worker.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/iching": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/iching/__pwa/service-worker.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/console": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/console/__pwa/service-worker.js": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/views/{}": {
+      "status": "not-exercised",
+      "source": "web/core/apps.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_disk": {
+      "status": "not-exercised",
+      "source": "web/core/disk-status.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_main-compare": {
+      "status": "not-exercised",
+      "source": "web/core/box-source.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/attention": {
+      "status": "catalogued",
+      "source": "web/core/chat-errors.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/attention"
+        }
+      ]
+    },
+    "/wizard/attention/{}/{}": {
+      "status": "not-exercised",
+      "source": "web/core/chat-errors.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/session-failure/{}/dismiss": {
+      "status": "not-exercised",
+      "source": "web/core/chat-errors.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/attachments/{}": {
+      "status": "not-exercised",
+      "source": "web/core/chat-kit.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/movies": {
+      "status": "not-exercised",
+      "source": "web/core/chat-kit.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard": {
+      "status": "not-exercised",
+      "source": "web/core/chat-kit.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-tinfoil/api/status": {
+      "status": "catalogued",
+      "source": "web/core/chat-models.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-tinfoil/api/status"
+        }
+      ]
+    },
+    "/wizard-claude/api/accounts": {
+      "status": "catalogued",
+      "source": "web/core/chat-models.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-claude/api/accounts"
+        }
+      ]
+    },
+    "/wizard/hermes/api/model/options": {
+      "status": "catalogued",
+      "source": "web/core/chat-models.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/model/options"
+        }
+      ]
+    },
+    "/wizard/hermes/api/sessions/{}/model": {
+      "status": "not-exercised",
+      "source": "web/core/chat-models.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-tinfoil": {
+      "status": "not-exercised",
+      "source": "web/core/chat-models.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/ui-preferences": {
+      "status": "catalogued",
+      "source": "web/core/chat-pins.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/ui-preferences"
+        }
+      ]
+    },
+    "/wizard-claude": {
+      "status": "not-exercised",
+      "source": "web/core/chat-power.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-chatgpt": {
+      "status": "not-exercised",
+      "source": "web/core/chat-power.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/api/sessions": {
+      "status": "catalogued",
+      "source": "web/core/chat-search.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ]
+    },
+    "/wizard/files/{}/content": {
+      "status": "not-exercised",
+      "source": "web/core/chats.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/files/upload": {
+      "status": "not-exercised",
+      "source": "web/core/chats.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/preview/helper-continue": {
+      "status": "not-exercised",
+      "source": "web/core/chats.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/helper-continue": {
+      "status": "not-exercised",
+      "source": "web/core/chats.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/video-editor": {
+      "status": "not-exercised",
+      "source": "web/core/companion-legacy.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/settings": {
+      "status": "not-exercised",
+      "source": "web/core/config.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/bootstrap": {
+      "status": "catalogued",
+      "source": "web/core/config.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/bootstrap"
+        }
+      ]
+    },
+    "/wizard/files": {
+      "status": "catalogued",
+      "source": "web/core/files.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/files"
+        }
+      ]
+    },
+    "/wizard/v1/agents/{}/incognito": {
+      "status": "not-exercised",
+      "source": "web/core/incognito-chat.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/v1/runs": {
+      "status": "not-exercised",
+      "source": "web/core/incognito-chat.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/ui-preferences/seed": {
+      "status": "catalogued",
+      "source": "web/core/launcher.js",
+      "kind": "write",
+      "examples": [
+        {
+          "method": "POST",
+          "path": "/wizard/v1/ui-preferences/seed"
+        }
+      ],
+      "note": "Launcher seed. Synthetic in-memory answer; nothing forwarded, nothing persisted."
+    },
+    "/wizard/v1/my-skin": {
+      "status": "catalogued",
+      "source": "web/core/my-skin.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/my-skin"
+        }
+      ]
+    },
+    "/wizard/v1/skins": {
+      "status": "catalogued",
+      "source": "web/core/my-skin.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/skins"
+        }
+      ]
+    },
+    "/notifications/api/items": {
+      "status": "catalogued",
+      "source": "web/core/notif-bell.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/notifications/api/items"
+        }
+      ]
+    },
+    "/notifications/api/mark": {
+      "status": "not-exercised",
+      "source": "web/core/notif-bell.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/notifications/api/count": {
+      "status": "catalogued",
+      "source": "web/core/notif-bell.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/notifications/api/count"
+        }
+      ]
+    },
+    "/mizel-live/orb-events": {
+      "status": "not-exercised",
+      "source": "web/core/orb-handoff.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_updates": {
+      "status": "catalogued",
+      "source": "web/core/os-updates.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-os-home/store-install/_updates"
+        }
+      ]
+    },
+    "/wizard/views/_boot.js": {
+      "status": "not-exercised",
+      "source": "web/core/own-views.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_views": {
+      "status": "not-exercised",
+      "source": "web/core/own-views.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/pages": {
+      "status": "catalogued",
+      "source": "web/core/pages.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/pages"
+        }
+      ]
+    },
+    "/pages/{}": {
+      "status": "not-exercised",
+      "source": "web/core/pages.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/setup/phone": {
+      "status": "not-exercised",
+      "source": "web/core/phone-connect.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/troubleshoot/api/ping": {
+      "status": "catalogued",
+      "source": "web/core/reach.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/troubleshoot/api/ping"
+        }
+      ]
+    },
+    "/troubleshoot/api/status": {
+      "status": "catalogued",
+      "source": "web/core/reach.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/troubleshoot/api/status"
+        }
+      ]
+    },
+    "/api/system/load": {
+      "status": "catalogued",
+      "source": "web/core/resources.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/api/system/load"
+        }
+      ]
+    },
+    "/api/system/devices": {
+      "status": "catalogued",
+      "source": "web/core/resources.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/api/system/devices"
+        }
+      ]
+    },
+    "/api/system/health": {
+      "status": "catalogued",
+      "source": "web/core/resources.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/api/system/health"
+        }
+      ]
+    },
+    "/wizard/ai-usage": {
+      "status": "catalogued",
+      "source": "web/core/resources.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/ai-usage"
+        }
+      ]
+    },
+    "/wizard/v1/schedules": {
+      "status": "catalogued",
+      "source": "web/core/scheduled-reminders.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/schedules"
+        }
+      ]
+    },
+    "/wizard-os-home/store-install/_connections": {
+      "status": "not-exercised",
+      "source": "web/core/settings.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/setup": {
+      "status": "catalogued",
+      "source": "web/core/setup-launch.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/setup"
+        }
+      ]
+    },
+    "/wizard/v1/uploads": {
+      "status": "not-exercised",
+      "source": "web/core/uploads.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/food": {
+      "status": "not-exercised",
+      "source": "web/core/voice-legacy.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/usuals": {
+      "status": "not-exercised",
+      "source": "web/core/voice-legacy.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/voice/transcribe": {
+      "status": "not-exercised",
+      "source": "web/core/voice-status.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/api/sessions/{}/messages": {
+      "status": "catalogued",
+      "source": "web/core/welcome.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/tap-thread/messages"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/qa_s_live/messages"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/qa_s_old/messages"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/qa_r_live/messages"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/qa_r_old/messages"
+        }
+      ],
+      "note": "Exact fixture IDs only (sessions: tap-thread, qa_s_*, qa_r_*; apps: morning, wisdom); any other ID is refused."
+    },
+    "/wizard-os-home/store-install": {
+      "status": "not-exercised",
+      "source": "web/core/welcome.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/workspaces": {
+      "status": "catalogued",
+      "source": "web/core/workspace-sync.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/workspaces"
+        }
+      ]
+    },
+    "/wizard/thread-dispositions": {
+      "status": "catalogued",
+      "source": "web/live.js",
+      "kind": "read+write",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/thread-dispositions"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-dispositions"
+        }
+      ]
+    },
+    "/wizard/thread-seen": {
+      "status": "catalogued",
+      "source": "web/live.js",
+      "kind": "read+write",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ]
+    },
+    "/wizard/hermes/api/sessions/{}": {
+      "status": "catalogued",
+      "source": "web/live.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/tap-thread"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/qa_s_live"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/hermes/api/sessions/qa_r_live"
+        }
+      ],
+      "note": "Exact fixture IDs only (sessions: tap-thread, qa_s_*, qa_r_*; apps: morning, wisdom); any other ID is refused."
+    },
+    "/wizard/hermes/v1/runs": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}/steer": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/filings": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/filings/{}/status": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/follow-ups/stop": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/capabilities": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}/approval": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}/clarify": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}/resolve-unknown": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}/stop": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/hermes/v1/runs/{}/events": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_remove": {
+      "status": "not-exercised",
+      "source": "web/store/store-remove.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-data/router/v1": {
+      "status": "not-exercised",
+      "source": "web/store/store-router.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/notes": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/photos": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/android-apps": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-calendar": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-music": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-search": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/apps": {
+      "status": "catalogued",
+      "source": "web/store/store.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/apps"
+        }
+      ]
+    },
+    "/wizard-os-home/store-data": {
+      "status": "not-exercised",
+      "source": "web/store/store.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/{app}/ready.json": {
+      "status": "catalogued",
+      "source": "web/core/chats-view.js",
+      "kind": "app-declaration",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/morning/ready.json"
+        }
+      ],
+      "note": "Registry apps that provide ready-extension. Shared catalogue answers 404 (no app bytes); the instant-taps proof serves the pinned Morning declaration itself."
+    },
+    "/wizard-os-home/install/at": {
+      "status": "not-exercised",
+      "source": "web/core/app-identity.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/offline-apps.json": {
+      "status": "not-exercised",
+      "source": "web/core/offline-session.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/store-install/_slots/chats": {
+      "status": "not-exercised",
+      "source": "web/core/settings.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/core/skins/wizard/{}{}-{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Orientation-specific built-in image; exercised in background browser proofs, not these three request proofs. Refused and collected if reached."
+    },
+    "/wizard-os-home/core/skins/wizard/{}{}-thumb.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/skins/landscapes/preview{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/core/skins/macos/{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/ux-version.txt": {
+      "status": "catalogued",
+      "source": "web/core/web-update.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-os-home/ux-version.txt"
+        }
+      ],
+      "note": "v11 refusal: explicit synthetic stable text/plain web-tree fingerprint. No upstream or mutation."
+    },
+    "/wizard-os-home/ux-changes.json": {
+      "status": "not-exercised",
+      "source": "web/core/web-update.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/install": {
+      "status": "not-exercised",
+      "source": "web/install.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/backup/api/overview": {
+      "status": "catalogued",
+      "source": "web/tweaks/miguel/machines-home/tweak.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/backup/api/overview"
+        }
+      ],
+      "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
+    },
+    "/wizard/v1/pages/wizard-look/look.json": {
+      "status": "catalogued",
+      "source": "web/core/look-sync.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/pages/wizard-look/look.json"
+        }
+      ],
+      "note": "These three synthetic flows deliberately expose no owner Look file (GET/HEAD answer explicit 403 fixture_look_unavailable). Sync stops absent, preserving device-local choices. PUT is not exercised, always refused and collected; it is never forwarded or answered as a successful save."
+    },
+    "/notifications/api/marks": {
+      "status": "not-exercised",
+      "source": "web/core/notif-bell.js",
+      "kind": "write-or-stream",
+      "note": "These three proofs serve no notification items, so no mark operation is reached. POST is refused and collected, never forwarded."
+    },
+    "/notifications/api/routes": {
+      "status": "catalogued",
+      "source": "web/core/notif-bell.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/notifications/api/routes"
+        }
+      ],
+      "note": "Only GET is admitted by the proof fixture. Route writes remain refused."
+    },
+    "/wizard/v1/thread-items": {
+      "status": "not-exercised",
+      "source": "web/core/thread-tracker.js",
+      "kind": "read",
+      "note": "Thread tracker is an off-by-default tweak; none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/background-results": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/background-results/{}/continue": {
+      "status": "not-exercised",
+      "source": "web/core/chat-power.js",
+      "kind": "write-or-stream",
+      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    }
+  }
+}

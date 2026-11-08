@@ -16,7 +16,7 @@
   // computer's built-in mic instead, so headphones keep playing music. A USB/wired mic the
   // user plugged in still wins; no built-in mic → the system default, as before.
   const BLUETOOTH = /bluetooth|bluez|airpods|beats|buds|headset|hands-?free|\bh[fs]p\b|wh-1000|wf-1000|bose|jabra|soundcore|pixel buds/i;
-  const BUILT_IN = /built-?in|internal|digital mic|macbook|laptop|analog stereo|front mic|dmic/i;
+  const BUILT_IN = /built-?in|internal|digital mic|macbook|laptop|analog stereo|front mic|dmic|imac|studio display|display audio/i;
   const WIRED = /usb|yeti|rode|shure|scarlett|focusrite|audio interface|webcam|brio|c9[0-9]{2}/i;
   async function pickMic() {
     try {
@@ -33,7 +33,33 @@
   // or briefly pauses whatever is playing (music in headphones dips each time a take starts). Speech is only
   // transcribed, and with headphones there is no echo to cancel. Phones keep it (speaker playback can echo).
   const PHONE = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-  const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true };
+  const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
+  // The Mac app (WKWebView) records the mono Mac mic as stereo Opus with the right channel silent (4 Nov 2026), so
+  // every player and speech-to-text averages it down to half volume (-6 dB) and quiet takes lose words. When the
+  // track is not already mono, record a mono copy: the left channel alone while the right one stays silent, the
+  // average of both (no clipping) as soon as the right one carries sound, as a real stereo mic does. Anything off
+  // (no Web Audio, a context that will not run) records the raw stream as before.
+  const SILENT = 1e-4;
+  async function monoFor(stream, ac) {
+    try {
+      const t = stream.getAudioTracks()[0]; const n = t?.getSettings?.().channelCount;
+      if (!t || n === 1 || !ac || typeof ac.createMediaStreamDestination !== 'function') return null;
+      if (ac.state !== 'running') { try { await Promise.race([ac.resume(), new Promise(r => setTimeout(r, 300))]); } catch (_) {} }
+      if (ac.state !== 'running') return null; // a suspended graph would record silence
+      const src = ac.createMediaStreamSource(stream), split = ac.createChannelSplitter(2);
+      const left = ac.createGain(), right = ac.createGain(); left.gain.value = 1; right.gain.value = 0;
+      const out = ac.createMediaStreamDestination(); out.channelCount = 1; out.channelCountMode = 'explicit'; out.channelInterpretation = 'discrete';
+      src.connect(split); split.connect(left, 0); split.connect(right, 1); left.connect(out); right.connect(out);
+      const probe = ac.createAnalyser(); probe.fftSize = 1024; split.connect(probe, 1);
+      const buf = new Float32Array(probe.fftSize);
+      const watch = setInterval(() => {
+        if (ac.state === 'closed') return clearInterval(watch);
+        probe.getFloatTimeDomainData(buf); let peak = 0; for (let k = 0; k < buf.length; k++) peak = Math.max(peak, Math.abs(buf[k]));
+        if (peak > SILENT) { left.gain.value = 0.5; right.gain.value = 0.5; clearInterval(watch); }
+      }, 100);
+      return out.stream;
+    } catch (_) { return null; }
+  }
   async function openMic() {
     const id = await pickMic();
     if (id) {
@@ -70,8 +96,10 @@
         if (V.cancelled) { stop(); return false; }
         const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
         const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
+        const mono = await monoFor(V.stream, V.ac);
+        if (V.cancelled) { stop(); return false; }
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-        V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
+        V.rec = new MediaRecorder(mono || V.stream, mime ? { mimeType: mime } : undefined);
         const captureId = V.captureId, chunks = V.chunks;
         V.rec.ondataavailable = e => { if (e.data && e.data.size) { chunks.push(e.data); window.WosOutbox?.capture(new Blob(chunks, { type: V.rec?.mimeType || 'audio/webm' }), captureId); } };
         V.rec.start(250); V.raf = requestAnimationFrame(tick);
@@ -123,4 +151,5 @@
   window.WizCore = window.WizCore || {};
   window.WizCore.voice = voice;
   window.WizCore.voice.pickMic = pickMic;
+  window.WizCore.voice.monoFor = monoFor;
 })();

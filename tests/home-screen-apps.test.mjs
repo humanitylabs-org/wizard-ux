@@ -37,14 +37,16 @@ test('saved route remains within current registered view',()=>{
   assert.equal(p.within('/','/'),false); assert.equal(p.within('/wisdom/','https://evil.example/wisdom/'),false);
 });
 test('Wisdom page presentation is durable and isolated; preferences/content remain shared',()=>{
-  const shared=storage(), {p}=policy('?app-session=wisdom');
+  const shared=storage(), {p,ctx}=policy('?app-session=wisdom');
+  // The app declares which keys hold screen position; the shell names no app (home_screen.position_keys).
+  vm.runInContext(read('core/home-screen-capabilities.js'),ctx); ctx.window.WizHomeScreenCapabilities=ctx.WizHomeScreenCapabilities; p.configure({position_keys:['wisdom:*:pos:*']});
   shared.setItem('wisdom:/wisdom/:pos:chapter','.7'); shared.setItem('wisdom:/wisdom/:size','2'); shared.setItem('content:read:chapter','1');
   const frame={localStorage:shared,location:{origin:'https://box.example'}}; p.installPresentationStorage(frame);
   assert.equal(frame.localStorage.getItem('wisdom:/wisdom/:pos:chapter'),null,'never copy normal desk position');
   frame.localStorage.setItem('wisdom:/wisdom/:pos:chapter','.2');
   assert.equal(shared.getItem('wisdom:/wisdom/:pos:chapter'),'.7'); assert.equal(frame.localStorage.getItem('wisdom:/wisdom/:pos:chapter'),'.2');
   assert.equal(frame.localStorage.getItem('wisdom:/wisdom/:size'),'2'); frame.localStorage.setItem('content:read:chapter','0'); assert.equal(shared.getItem('content:read:chapter'),'0');
-  const recreated={localStorage:shared,location:{origin:'https://box.example'}}; policy('?app-session=wisdom').p.installPresentationStorage(recreated); assert.equal(recreated.localStorage.getItem('wisdom:/wisdom/:pos:chapter'),'.2');
+  const recreated={localStorage:shared,location:{origin:'https://box.example'}}; (()=>{const r=policy('?app-session=wisdom');vm.runInContext(read('core/home-screen-capabilities.js'),r.ctx);r.ctx.window.WizHomeScreenCapabilities=r.ctx.WizHomeScreenCapabilities;r.p.configure({position_keys:['wisdom:*:pos:*']});r.p.installPresentationStorage(recreated);})(); assert.equal(recreated.localStorage.getItem('wisdom:/wisdom/:pos:chapter'),'.2');
 });
 test('single-app entry never initializes workspace or honors sticky desktop preference',()=>{
   const {p,ctx}=policy('?app-session=wisdom&shell=desktop'); ctx.localStorage=storage(); ctx.localStorage.setItem('wux.shell','desktop'); ctx.window.WizHomeScreenPolicy=p; ctx.document.documentElement.dataset={shell:'phone'};
@@ -174,7 +176,7 @@ test('mounted session Back consumes app overlay, safe in-app history and forever
   const w={location:{href:'https://box.example/wisdom/#/read/chapter'},history:{state:{wisdom:true},back(){traversals++;w.location.href='https://box.example/wisdom/';}},navigation:{currentEntry:{index:1},entries:()=>[{url:'https://box.example/wisdom/'}]},document:rootDoc,WizardApp:{ready(){}},addEventListener(){}};
   const window={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{wisdom:app}}),appsLoaded:()=>Promise.resolve()},WosSelMenu:{back:()=>false},WizAppReadingPosition:{flush(){flushes++;}},WizAppServices:{attach:()=>()=>{},guardBack(){},back:()=>serviceStep}};
   const ctx=vm.createContext({window,document,localStorage:store,location:{origin:'https://box.example'},URL,addEventListener(){},setInterval(){},setTimeout(){}});
-  vm.runInContext(read('core/single-app-session.js'),ctx);await Promise.resolve();frame.contentWindow=w;frame.contentDocument=rootDoc;frame.events.load();
+  vm.runInContext(read('core/single-app-session.js'),ctx);await new Promise(setImmediate);frame.contentWindow=w;frame.contentDocument=rootDoc;frame.events.load();
   assert.equal(window.__wosNativeBack(),'app');assert.equal(traversals,0);
   serviceStep='atRoot';assert.equal(window.__wosNativeBack(),'root');assert.equal(window.__wosNativeBack(),'root');assert.equal(traversals,0,'connected app root is authoritative even with older history');
   serviceStep='notReady';assert.equal(window.__wosNativeBack(),'history');assert.equal(traversals,1,'generic history is only a fallback without a connected client');
@@ -232,11 +234,11 @@ test('Pinned home-screen apps keep the floating orb', async () => {
   }
  });
 
-// Miguel's release (25 Oct 2026): hold = arrange (drag to reorder, ✕ to close), never the copy-link sheet. A small
-// download button beside ✕ (one-app desks only) opens the same Add to home screen flow.
-test('Arrange/download tweak: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
+// Overview arrange mode (a package holds api.overview.use({hold:'arrange', appAction:'home-screen'})): hold = arrange
+// (drag to reorder, ✕ to close), never the copy-link sheet. A small download button beside ✕ (one-app desks only)
+// opens the same Add to home screen flow. The shared shell owns this; no shipped package asks for it now.
+test('Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
   const app = read('app.js');
-  assert.doesNotMatch(app, /miguel\/arrange-download/);
   assert.match(app, /if \(arrangeDesks\(\) && OV\.drag && !OV\.reordered\) \{ endDrag\(false\); el\.classList\.add\('editing'\);[^\n]*return; \}/);
   const releaseHold = app.indexOf("if (arrangeDesks() && OV.drag && !OV.reordered)"), stockOffer = app.lastIndexOf('if (a) window.WizHomeScreenApps?.offer(a);');
   assert.ok(releaseHold > 0 && releaseHold < stockOffer, 'release hold returns before the stock hold-to-offer path');
@@ -250,10 +252,6 @@ test('Arrange/download tweak: hold arranges desks; download button beside ✕ op
   assert.match(app, /!e\.target\.closest\('\.ov-x, \.ov-dl'\)\) OV\.hold/);
   const click = app.slice(app.indexOf("const dl = e.target.closest('[data-ovdl]')"));
   assert.ok(click.indexOf('offer(a); return; }') < click.indexOf("closest('[data-ovx]')"), 'download handled before ✕');
-  const css = fs.readFileSync(root + '/web/tweaks/miguel/arrange-download/tweak.css', 'utf8');
-  assert.match(css, /\.ov \.ov-dl \{[^}]*display: none;/); assert.match(css, /\.ov\.editing \.ov-dl \{ display: grid; \}/);
-  assert.match(css, /\.ov\.ov-pill\.editing \.ov-cell \.ov-ic \.dbg \{ display: none; \}/);
-  assert.match(css, /\.ov \.ov-dl::before \{[^}]*width: 44px; height: 44px;/);
   assert.match(read('core/home-screen-apps.js'), /canOffer: a => pinnable\(a\)/);
 });
 test('canOffer accepts registered frontends only (multi-app/system/shell items get no download button)', () => {

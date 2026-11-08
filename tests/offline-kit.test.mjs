@@ -9,10 +9,12 @@ const source = readFileSync(new URL('../web/core/offline-kit.js', import.meta.ur
 const tick = () => new Promise(r => setTimeout(r, 0));
 const settle = async () => { for (let i = 0; i < 40; i++) await tick(); };
 
-function fakeIDB() {
+function fakeIDB({ strictSupported = true } = {}) {
   const dbs = new Map(), clone = v => v === undefined ? undefined : structuredClone(v);
-  function transaction(db, name) {
-    const t = {}, st = db.stores.get(name); let pending = 0;
+  const transactions = [];
+  function transaction(db, name, mode, options) {
+    transactions.push({name,mode,options});
+    const t = {durability:strictSupported ? options?.durability || 'default' : 'default',abort(){}}, st = db.stores.get(name); let pending = 0;
     const done = () => setTimeout(() => { if (pending === 0) t.oncomplete?.(); });
     const op = fn => { pending++; const r = {}; setTimeout(() => { r.result = fn(); pending--; r.onsuccess?.(); done(); }); return r; };
     t.objectStore = () => ({
@@ -25,13 +27,13 @@ function fakeIDB() {
     return t;
   }
   return {
-    dbs,
+    dbs, transactions,
     open(name) {
       const req = {};
       setTimeout(() => {
         let db = dbs.get(name); const fresh = !db;
         if (!db) { db = { stores: new Map() }; dbs.set(name, db); }
-        req.result = { createObjectStore: (n, opts = {}) => db.stores.set(n, { opts, data: new Map(), next: 1 }), transaction: n => transaction(db, n), close() {} };
+        req.result = { createObjectStore: (n, opts = {}) => db.stores.set(n, { opts, data: new Map(), next: 1 }), transaction: (n,mode,options) => transaction(db, n,mode,options), close() {} };
         if (fresh) req.onupgradeneeded?.();
         req.onsuccess?.();
       });
@@ -41,8 +43,8 @@ function fakeIDB() {
   };
 }
 
-function boot({ server, online = true, worker = true } = {}) {
-  const net = { online, calls: [] }, stores = new Map(), indexedDB = fakeIDB();
+function boot({ server, online = true, worker = true, crashDurable = false, strictSupported = true } = {}) {
+  const net = { online, calls: [] }, stores = new Map(), indexedDB = fakeIDB({strictSupported});
   const caches = {
     keys: async () => [...stores.keys()], delete: async k => stores.delete(k),
     open: async n => { if (!stores.has(n)) stores.set(n, new Map()); const m = stores.get(n); return { put: async (u, r) => m.set(String(u), r), match: async u => m.get(String(u)) }; },
@@ -59,7 +61,7 @@ function boot({ server, online = true, worker = true } = {}) {
     structuredClone, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, addEventListener() {}, document: { hidden: false, addEventListener() {} }, Promise, Error, Object, Array, Set, JSON, Math, Date });
   vm.runInContext(source, ctx);
   const kit = ctx.WizOffline.create({
-    prefix: 'reader-', base: 'https://box.test/wisdom/', data: ['api/library'], writes: ['api/note'], assetURLs: () => [],
+    prefix: 'reader-', crashDurable, base: 'https://box.test/wisdom/', data: ['api/library'], writes: ['api/note'], assetURLs: () => [],
     project: (s, i) => ({ notes: [...(s?.notes || []), i.body.text] }),
     reconcile: (s, r) => ({ notes: [...(s?.notes || []), r?.text ?? 'null-result'] }),
     queuedResult: () => ({ queued: true }),
@@ -68,6 +70,16 @@ function boot({ server, online = true, worker = true } = {}) {
 }
 const json = (v, status = 200) => ({ status, ok: status >= 200 && status < 300, redirected: false, json: async () => v });
 const html = (status = 200) => ({ status, ok: status >= 200 && status < 300, redirected: false, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+
+test('strict opt-in journals existing outbox/data writes, unsupported engines cannot report queued', async () => {
+  const b=boot({online:false,crashDurable:true});await settle();
+  assert.deepEqual(await b.kit.request('api/note',{text:'highlight-equivalent'}),{queued:true});
+  assert(b.indexedDB.transactions.filter(x=>x.mode==='readwrite').every(x=>x.options?.durability==='strict'));
+  assert.equal((await b.kit.status()).pending,1);
+  const old=boot({online:false,crashDurable:true,strictSupported:false});await settle();
+  await assert.rejects(old.kit.request('api/note',{text:'must-not-claim-saved'}),/Crash-durable storage unavailable/);
+  assert.equal((await old.kit.status()).pending,0);
+});
 
 test('an expired session keeps offline edits pending, then replays them after sign-in', async () => {
   let mode = 'login';

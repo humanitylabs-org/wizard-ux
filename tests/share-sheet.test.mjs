@@ -4,11 +4,16 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const src = readFileSync(new URL('../web/core/share-sheet.js', import.meta.url), 'utf8');
 const store = () => { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
-function load({ apps = { messenger: { kind: 'wizard', name: 'Messenger' } }, open = () => true } = {}) {
+function load({ apps = { messenger: { kind: 'wizard', name: 'Messenger' } }, open = () => true, agents = null } = {}, recent = null) {
   const events = [];
   let ops = null;
   const window = { WizCore: { apps: () => ({ APP: apps }) }, WizOpenApp: open, dispatchEvent: e => events.push(e), WizAppServices: { claimShare: o => (ops ? false : (ops = o, true)) } };
+  if (agents) {
+    window.WizOpenAgentChats = async () => false;
+    window.WosAgents = { list: agents, visible: () => agents.filter(a => !a.hidden), get: id => agents.find(a => a.id === id), defaultId: () => (agents.find(a => a.is_default) || {}).id || 'hermes', isPrivate: a => a?.privacy === 'private' };
+  }
   const storage = store();
+  if (recent) storage.setItem('wos.share.recent.v1', JSON.stringify(recent));
   const ctx = { window, localStorage: storage, sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } }, document: {}, requestAnimationFrame: f => f(), setTimeout };
   vm.runInNewContext(src, ctx);
   return { S: Object.assign({}, window.WosShareSheet, ops), G: window.WosShareSheet, events, storage, claim: window.WizAppServices.claimShare };
@@ -111,4 +116,48 @@ test('generic files without receivers keep the old path; oversized files never r
   assert.equal(await S.show({file: new Blob(['pdf'], {type: 'application/pdf'})}, () => { calls++; return 'shared'; }), 'shared');
   assert.equal(await S.show({file: new Blob([new Uint8Array(32 * 1024 * 1024 + 1)])}, () => { calls++; }), 'unsupported');
   assert.equal(calls, 1);
+});
+
+const AGENTS = [
+  { id: 'hermes', label: 'Archimedes', is_default: true, privacy: 'standard', status: 'running', permissions: {} },
+  { id: 'philosopher', label: 'Philosopher', privacy: 'standard', status: 'running', permissions: { files: 'none' } },
+  { id: 'vault', label: 'Vault', privacy: 'private', status: 'running', permissions: {} },
+  { id: 'ghost', label: 'Ghost', privacy: 'standard', status: 'running', hidden: true, permissions: {} },
+];
+
+test('Agents row: every visible agent, main agent first, hidden ones never; recent use reorders', () => {
+  const { G, storage } = load({ agents: AGENTS });
+  assert.deepEqual([...G._agents('text')], ['hermes', 'philosopher', 'vault']);
+  assert.ok(storage); // recent order is read at load: seed it through a fresh context
+  const src2 = { agents: AGENTS };
+  const { G: G2 } = load(src2, ['agent:vault', 'agent:philosopher']);
+  assert.deepEqual([...G2._agents('text')], ['vault', 'philosopher', 'hermes']);
+});
+
+test('Agents row privacy: a private chat offers only its own agent; Incognito offers none', () => {
+  const { G } = load({ agents: AGENTS });
+  assert.deepEqual([...G._agents('text', { chat: true, agent: 'vault', private: true })], ['vault']);
+  assert.deepEqual([...G._agents('text', { chat: true, agent: 'hermes', private: true, incognito: true })], []);
+  assert.deepEqual([...G._agents('text', { chat: true, agent: 'philosopher', private: false })], ['hermes', 'philosopher', 'vault']);
+});
+
+test('Agents row: an agent with file access off is not offered images or files', () => {
+  const { G } = load({ agents: AGENTS });
+  assert.deepEqual([...G._agents('image')], ['hermes', 'vault']);
+  assert.deepEqual([...G._agents('url')], ['hermes', 'philosopher', 'vault']);
+});
+
+test('quote: attribution line stays as is above a Markdown quote, with room for his note', () => {
+  const { G } = load({ agents: AGENTS });
+  assert.equal(G._quote({ text: 'From Archimedes:\n\nLine one\n\nLine two' }), 'From Archimedes:\n> Line one\n>\n> Line two\n\n');
+  assert.equal(G._quote({ text: 'plain words' }), '> plain words\n\n');
+  assert.equal(G._quote({ url: 'https://x.test/a', title: 'A page' }), '> [A page](https://x.test/a)\n\n');
+  assert.equal(G._quote({ text: 'see https://x.test/a', url: 'https://x.test/a' }), '> see https://x.test/a\n\n');
+  assert.equal(G._quote({ file: {} }), '');
+});
+
+test('no app receivers but agents present: the sheet still opens (Agents row) instead of going straight out', () => {
+  const { G } = load({ apps: {}, agents: AGENTS });
+  assert.equal(G.wants('text'), false);
+  assert.ok(G._agents('text').length > 0);
 });

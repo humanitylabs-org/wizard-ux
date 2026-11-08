@@ -386,6 +386,8 @@ body {
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .toast .ti { font-size: 15px; }
 .toast button { margin-left: 4px; font-weight: 800; color: var(--violet-2); }
+/* A toast with Undo (WosBell.movedToast) keeps its line: absolute at left:50% would otherwise wrap it at half width. */
+.toast:has(.wos-undo) { width: max-content; }
 
 /* Coach */
 .coach { position: absolute; inset: 0; z-index: 90; display: grid; place-items: end center; background: radial-gradient(80% 60% at 50% 85%, rgba(20, 10, 50, .7), rgba(2, 1, 8, .92)); padding-bottom: calc(var(--safe-b) + 6px); animation: fade 500ms both; }
@@ -612,8 +614,9 @@ body {
 .device:not(.orb-corner) .voice .arc {
   bottom: calc(var(--safe-b) + 38px); width: 44px; height: 44px;
   margin: 0 0 -22px -22px; backdrop-filter: none; -webkit-backdrop-filter: none;
-  box-shadow: none; background: rgba(25, 15, 49, .9); transform: scale(.6);
+  box-shadow: none;  transform: scale(.6);
 }
+:where(.device:not(.orb-corner) .voice) .arc { background: rgba(25, 15, 49, .9); }
 .device:not(.orb-corner) .voice.on .arc-left { transform: translate(-124px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
@@ -668,7 +671,7 @@ body {
 .unsent-card.fail { border-color: rgba(255, 190, 85, .45); }
 
 /* ---------- Settings sheet ---------- */
-.settings { top: calc(40px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(-100% - 60px)); opacity: 0; }
+.settings { --wz-settings-nav-clearance: calc(var(--dock-h) + var(--safe-b)); top: calc(40px + var(--safe-t)); bottom: calc(var(--wz-settings-nav-clearance) + var(--wz-space-2)); transform: translateY(calc(-100% - 60px)); opacity: 0; }
 .settings.open { transform: none; opacity: 1; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 14px; scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain; }
 .settings-body::-webkit-scrollbar { display: none; }

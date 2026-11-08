@@ -1,0 +1,11 @@
+{
+  "id": "wizard/background-continue",
+  "name": "Continue saved background results",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Work that finished while Wizard was down shows in its own thread with one Continue button. Nothing resumes until you tap it."
+}

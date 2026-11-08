@@ -11,22 +11,22 @@ function setup({ online = true, fetch = async () => response(), hostname = 'wiza
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { ctx, api: ctx.WizReach, calls, timers, opened, events: () => events, advance: ms => { now += ms; } };
 }
-test('offline device is diagnosed only after the Wizard probe fails', async () => {
+test('a false browser offline hint never proves absent internet', async () => {
   const h = setup({ online: false, fetch: async () => { throw Error('network'); } });
-  assert.equal((await h.api.diagnose()).layer, 'device-offline'); assert.equal(h.calls.length, 1);
+  assert.equal((await h.api.diagnose()).layer, 'tailscale'); assert.equal(h.calls.length, 2);
   const falseOffline = setup({ online: false }); assert.equal((await falseOffline.api.diagnose()).layer, 'send');
 });
-test('an unreachable Wizard on a Tailscale address names Tailscale and the Wizard computer, and never probes another site', async () => {
+test('an unreachable Wizard names actionable Tailscale guidance even when the public check is blocked', async () => {
   // Wizard's CSP (connect-src 'self') blocks cross-site requests, so a public-internet probe always "fails".
   const h = setup({ fetch: async url => { if (!url.startsWith('/')) throw Error('blocked by CSP'); throw Error('network'); } });
   const d = await h.api.diagnose();
   assert.equal(d.layer, 'tailscale'); assert.equal(d.short, 'Can’t reach Wizard · retrying');
-  assert.match(d.message, /Tailscale is on/); assert.match(d.message, /computer running your Wizard is on/);
+  assert.match(d.message, /Tailscale app/); assert.match(d.message, /computer running your Wizard is on/);
   assert.equal(d.action, 'troubleshoot');
-  assert.deepEqual(h.calls.map(c => c[0]), ['/troubleshoot/api/ping']);
+  assert.deepEqual(h.calls.map(c => c[0]), ['/troubleshoot/api/ping', 'https://derp1.tailscale.com/generate_204']);
   const local = setup({ hostname: '127.0.0.1', fetch: async () => { throw Error('network'); } });
   const l = await local.api.diagnose();
-  assert.equal(l.layer, 'unreachable'); assert.doesNotMatch(l.message, /Tailscale/); assert.equal(local.calls.length, 1);
+  assert.equal(l.layer, 'unreachable'); assert.doesNotMatch(l.message, /Tailscale/); assert.equal(local.calls.length, 2);
 });
 test('HTTP ping errors do not blame the device or Tailscale', async () => {
   const h = setup({ fetch: async () => response({}, 503) });
@@ -72,10 +72,30 @@ test('failure consumers throttle diagnosis to 15s; healthy module never polls', 
 test('4s deadline handles hung fetch and status bodies, without hanging consumers', async () => {
   const h = setup({ online: false, fetch: () => new Promise(() => {}) });
   const work = h.api.diagnose(); [...h.timers.values()][0]();
-  assert.equal((await work).layer, 'device-offline'); assert.equal(h.timers.size, 0);
+  for (let i = 0; i < 12; i++) await Promise.resolve(); [...h.timers.values()][0]();
+  assert.equal((await work).layer, 'tailscale'); assert.equal(h.timers.size, 0);
   const b = setup({ fetch: async url => url.endsWith('ping') ? response() : { ok: true, json: () => new Promise(() => {}) } });
   const bodyWork = b.api.diagnose(); for (let i = 0; i < 10; i++) await Promise.resolve();
-  [...b.timers.values()][0](); assert.equal((await bodyWork).layer, 'diagnosis');
+  [...b.timers.values()][0](); assert.equal((await bodyWork).layer, 'busy');
+});
+test('status deadline with a working ping reports busy, and the Wizard check is slow not a problem', async () => {
+  for (const bodyHung of [false, true]) {
+    const h = setup({ fetch: async url => !url.includes('/status') ? response() : bodyHung ? { ok: true, json: () => new Promise(() => {}) } : new Promise(() => {}) });
+    const work = h.api.checks();
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+    assert.equal(h.timers.size, 1); [...h.timers.values()][0]();
+    const rows = await work, d = await h.api.diagnose();
+    assert.equal(d.layer, 'busy'); assert.equal(d.short, 'Reconnecting…');
+    assert.match(d.message, /busy and answering slowly/); assert.match(d.message, /kept on this device and send by themselves/);
+    assert.equal(rows.wizard.state, 'slow'); assert.equal(rows.wizard.detail, 'Busy · answering slowly');
+    assert.doesNotMatch(rows.wizard.detail, /Problem|health report/); assert.equal(h.timers.size, 0);
+  }
+});
+test('real status HTTP and JSON failures retain the unavailable-health-report diagnosis', async () => {
+  for (const reply of [{ ok: false, status: 503, json: () => new Promise(() => {}) }, { ok: true, json: async () => { throw Error('bad JSON'); } }]) {
+    const h = setup({ fetch: async url => url.endsWith('ping') ? response() : reply });
+    const d = await h.api.diagnose(); assert.equal(d.layer, 'diagnosis'); assert.match(d.message, /health report isn’t available/);
+  }
 });
 test('Troubleshooter navigation is same-tab on phone and a safe new tab on desktop', async () => {
   const h = setup(); await h.api.open(); assert.deepEqual(h.opened[0], ['same', '/troubleshoot/']);
@@ -106,24 +126,39 @@ test('repair-chat engine probes (Tinfoil, Claude, ChatGPT) never become the conn
   const both = setup({ fetch: async () => response({ checks: [...checks, { id: 'hermes', label: 'Hermes', ok: false }], overall: 'down' }) });
   assert.equal((await both.api.diagnose()).layer, 'hermes');
 });
-test('Troubleshoot on an unreachable Wizard opens the offline pop-up everywhere, the phone app included', async () => {
-  const h = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
-  const before = h.events();
-  assert.equal(await h.api.open(), false, 'Troubleshooter is served by the Wizard it can’t reach');
-  assert.deepEqual(h.opened, []);
-  assert.ok(h.events() > before, 'asks the offline pop-up to open (any caller)');
-  let restarted = 0;
-  h.ctx.Capacitor = { Plugins: { WizardShell: { retry: async () => { restarted++; } } } };
-  assert.equal(await h.api.open(), false);
-  assert.equal(restarted, 0, 'no second, native troubleshoot screen');
-  assert.deepEqual(h.opened, []);
+test('James: internet working + Tailscale disconnected + navigator.onLine=false opens real Troubleshooter immediately', async () => {
+  const h = setup({ online: false, fetch: async url => { if (url.startsWith('https://')) return { type: 'opaque' }; throw Error('Tailscale disconnected'); } });
+  h.ctx.WizOpenApp = id => { h.opened.push(id); return true; };
+  assert.equal(h.api.open(), true);
+  assert.deepEqual(h.opened, ['troubleshooter']); assert.equal(h.calls.length, 0, 'window opens before any network');
+  assert.match(h.api.recoveryHtml(), /Connection help/); assert.doesNotMatch(h.api.recoveryHtml(), /src=/);
+  const c = await h.api.checks(); assert.equal(c.internet.state, 'ok'); assert.equal(c.tailscale.state, 'bad');
+  assert.match(c.help, /Internet works/); assert.match(c.help, /Tailscale app/);
+  assert.doesNotMatch(c.help + JSON.stringify(c) + (await h.api.diagnose()).message, /device.{0,10}offline|no internet|Tailscale is disconnected/i);
+});
+test('public no-cors probe uses follow: browsers reject error/manual before the network, even for a 204', async () => {
+  // Fetch Standard main-fetch: cross-origin no-cors requires redirect=follow.
+  // Node/VM fetch doubles otherwise accept combinations that Chromium rejects.
+  for (const detailed of [false, true]) {
+    const h = setup({ online: false, fetch: async (url, options) => {
+      if (url.startsWith('/')) throw Error('Private route down');
+      if (options.mode === 'no-cors' && options.redirect !== 'follow') throw TypeError('Fetch rejects no-cors redirect mode');
+      return { ok: false, status: 0, type: 'opaque' };
+    } });
+    const c = detailed ? await h.api.checks() : await h.api.diagnose();
+    assert.match(detailed ? c.help : c.message, /Internet works/);
+    if (detailed) assert.equal(c.internet.state, 'ok');
+    const [, options] = h.calls.find(([url]) => url.startsWith('https:'));
+    assert.equal(options.mode, 'no-cors'); assert.equal(options.credentials, 'omit');
+    assert.equal(options.redirect, 'follow');
+  }
 });
 test('checks: no internet, then Tailscale, then Wizard; each names its state and only the first failure is red', async () => {
   const run = async (opts) => { const h = setup(opts); return { c: await h.api.checks(), urls: h.calls.map(c => c[0]), h }; };
   // The device itself is offline: nothing crosses the network for the internet row.
   let r = await run({ online: false, fetch: async () => { throw Error('network'); } });
-  assert.equal(r.c.internet.state, 'bad'); assert.equal(r.c.tailscale.state, 'wait'); assert.equal(r.c.wizard.state, 'wait');
-  assert.deepEqual(r.urls, ['/troubleshoot/api/ping']);
+  assert.equal(r.c.internet.state, 'skip'); assert.equal(r.c.tailscale.state, 'bad'); assert.equal(r.c.wizard.state, 'wait');
+  assert.deepEqual(r.urls, ['https://derp1.tailscale.com/generate_204', '/troubleshoot/api/ping']);
   // Internet works, Wizard's address doesn't answer: Tailscale (or the Wizard computer).
   r = await run({ fetch: async url => { if (url.startsWith('https://derp1.tailscale.com/')) return { ok: false, status: 0, type: 'opaque' }; throw Error('network'); } });
   assert.equal(r.c.internet.state, 'ok'); assert.equal(r.c.tailscale.state, 'bad'); assert.equal(r.c.wizard.state, 'wait'); assert.equal(r.c.tailnet, true);
@@ -141,17 +176,52 @@ test('checks: a slow link is timed and called slow, without a speed test', async
   const h = setup({ fetch: async () => response() });
   h.ctx.navigator.connection = { effectiveType: '2g' };
   const c = await h.api.checks();
-  assert.equal(c.tailscale.state, 'slow'); assert.match(c.tailscale.detail, /^Slow · /);
+  assert.equal(c.tailscale.state, 'slow'); assert.match(c.tailscale.detail, /address answered/);
   assert.ok(h.calls.length <= 4, 'a handful of tiny requests (internet, ping, the existing diagnosis), no download');
+});
+test('late detailed checks are marked stale after newer successful evidence', async () => {
+  let release, calls = 0;
+  const h = setup({ fetch: async url => {
+    if (url.endsWith('/ping') && ++calls === 1) return new Promise((_, reject) => { release = () => reject(Error('old failure')); });
+    return response();
+  } });
+  const old = h.api.checks();
+  assert.equal((await h.api.diagnose(0)).layer, 'send');
+  release(); assert.equal((await old).stale, true);
+  assert.equal((await h.api.diagnose()).layer, 'send');
+});
+test('late failed diagnosis cannot replace newer successful connection evidence', async () => {
+  let release, calls = 0;
+  const h = setup({ fetch: async url => {
+    if (url.endsWith('/ping') && ++calls === 1) return new Promise((_, reject) => { release = () => reject(Error('old failure')); });
+    return response();
+  } });
+  const old = h.api.diagnose();
+  assert.equal((await h.api.diagnose(0)).layer, 'send');
+  release(); await old;
+  assert.equal((await h.api.diagnose()).layer, 'send');
+});
+test('a blocked public check is unknown even if the host answers with 502; it never masks service health', async () => {
+  const h = setup({ online: false, fetch: async url => { if (url.startsWith('https:')) throw Error('CSP blocked'); return response({}, 502); } });
+  const c = await h.api.checks();
+  assert.equal(c.internet.state, 'skip'); assert.match(c.internet.detail, /Unknown/);
+  assert.equal(c.hostReachable, true); assert.equal(c.tailscale.state, 'ok'); assert.equal(c.wizard.layer, 'gateway');
+  assert.doesNotMatch(c.help, /device.*offline|Tailscale app/);
+});
+test('primary nginx policy and generator retain the narrow public probe allowlist', () => {
+  const csp = readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1];
+  assert.deepEqual(csp.match(/connect-src ([^;]+)/)[1].split(' '), ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204']);
+  assert.match(readFileSync(new URL('../packaging/entrypoint.sh', import.meta.url), 'utf8'), /cp \/etc\/wizard-shell\/static.conf \/tmp\/wizard-static.conf/);
 });
 test('Troubleshoot decides on a current diagnosis, not one from before the disconnect', async () => {
   let up = true;
   const h = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { if (!up) throw new TypeError('Load failed'); return response(); } });
   await h.api.diagnose();                 // a healthy diagnosis is cached
   up = false; h.advance(5000);            // the Wizard drops; the cache is still within its 10 s
-  assert.equal(await h.api.open(), false);
-  assert.deepEqual(h.opened, [], 'never opens the page that can’t load');
-  const fresh = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
-  assert.equal(await fresh.api.open(), false, 'no diagnosis yet: diagnoses first');
-  assert.deepEqual(fresh.opened, []);
+  h.ctx.WizOpenApp = id => { h.opened.push(id); return true; };
+  assert.equal(h.api.open(), true); assert.deepEqual(h.opened, ['troubleshooter']);
+  assert.equal(h.calls.length, 2, 'opening never diagnoses, even with a stale cache');
+  const fresh = setup({ fetch: () => new Promise(() => {}) });
+  fresh.ctx.WizOpenApp = () => true;
+  assert.equal(fresh.api.open(), true); assert.equal(fresh.calls.length, 0);
 });
