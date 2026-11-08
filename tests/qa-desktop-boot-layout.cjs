@@ -12,7 +12,7 @@ let currentPage;
 (async () => {
  const browser = await chromium.launch();
  try {
-  for (const mode of ['default', 'reload', 'classic', 'stale-ai-apps', 'stale-classic']) {
+  for (const mode of ['restored-chat', 'default', 'reload', 'classic', 'stale-ai-apps', 'stale-classic']) {
    const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, serviceWorkers: 'block' });
    await context.routeWebSocket('**/*', ws => ws.close());
    await context.addInitScript(({ mode }) => {
@@ -20,7 +20,14 @@ let currentPage;
      sessionStorage.setItem('qa.seeded', '1');
      localStorage.setItem('wos.shell', 'desktop');
      for (const [k, v] of Object.entries({ 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula' })) localStorage.setItem(k, v);
-     if (mode === 'classic' || mode === 'stale-classic') localStorage.setItem('wos.desktop-view.v1', 'classic');
+     if (mode === 'restored-chat') {
+     localStorage.setItem('wos.desktop-view.v1', 'ai-apps');
+     localStorage.setItem('wux.desk.wins', JSON.stringify({ restored: { id: 'restored', app: 'chats', thread: 'qa-thread' } }));
+     localStorage.setItem('wux.desk.ws', JSON.stringify([{ id: 'drestored', wins: ['restored'], focus: 'restored', mono: false }]));
+     localStorage.setItem('wux.desk.cur', '0');
+     localStorage.setItem('wux.desk.homeOpen', 'false');
+    }
+    if (mode === 'classic' || mode === 'stale-classic') localStorage.setItem('wos.desktop-view.v1', 'classic');
      if (mode === 'stale-classic') localStorage.setItem('wos.layout', 'ai-apps');
      if (mode === 'stale-ai-apps') { localStorage.setItem('wos.desktop-view.v1', 'ai-apps'); localStorage.setItem('wos.layout', 'orb'); }
     }
@@ -60,7 +67,7 @@ let currentPage;
     }
     return r.fulfill({ json: { apps: [], agents: [], sessions: [], connected: false } });
    });
-   const p = currentPage = await context.newPage(); p.on('pageerror', e => errors.push(e.message));
+   const p = currentPage = await context.newPage(); p.on('pageerror', e => { errors.push(e.message); console.error('PAGEERROR', e.stack); }); p.on('console', m => { if (['warning', 'error'].includes(m.type())) console.error('BROWSER', m.type(), m.text()); });
    await p.goto(origin + prefix + 'desktop.html');
    if (mode === 'reload') {   // the shell saved the view it wore; a refresh must decide it again before paint
     await p.waitForFunction(() => localStorage.getItem('wos.desktop-view.v1') === 'ai-apps' && document.documentElement.dataset.aiApps === 'desktop');
