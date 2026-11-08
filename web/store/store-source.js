@@ -1,6 +1,8 @@
 import {sameInstalled} from './store-status.js';
 // Installed provenance wins over catalog availability. Only one source chip per app.
 export function sourceLabel(app = {}, installed) {
+  // The App Manager records a Beta install as a link selection; the Beta row for that same repository stays Beta.
+  if (installed?.source === 'link' && app.source === 'beta' && installed.repo === app.repo) installed = {...installed, source:'beta', private:true};
   const a = installed && (installed.source || installed.repo || installed.local) ? {...installed, publisher:installed.publisher || app.publisher, from:installed.from || app.from, ...(installed.source ? {} : {private:app.private,channel:app.channel})} : app;
   if (a.source === 'link' || a.install_link === true) return {kind:'link', label:'Link', detail:a.from ? `Shared with you by ${a.from}` : ''};
   if (a.source === 'local' || /^local\//.test(a.repo || '') || typeof a.local === 'string' || typeof a.source?.local === 'string') return {kind:'local', label:'Local', detail:''};

@@ -13,6 +13,7 @@ import { withPrivateCatalog } from './store-private-catalog.mjs';
 import { createRouterOwnerRoutes } from './store-router-owner.mjs';
 import { linkPreview } from './store-link-preview.mjs';
 import { createAppLogos, LOGO_VERSION } from './store-app-logos.mjs';
+import { createBetaSource } from './store-beta-source.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
@@ -64,7 +65,7 @@ export function shellMetadata(doc) {
     status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
   }));
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes(), appLogos } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy(), undefined, { betaRead: createBetaSource() }), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes(), appLogos } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();

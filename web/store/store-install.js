@@ -1,7 +1,16 @@
 /* Store's exact release install transaction, shared with the app setup checklist.
  * IDs select a server-authorized release; never accept arbitrary install URLs or refs. */
+// The owner-gated App Manager request every Store write uses: same origin, never cached, JSON with the Store marker.
+export function ownerRequest(path, { method = 'GET', body, base = new URL('../', import.meta.url), fetchImpl = fetch, signal } = {}) {
+  const write = method !== 'GET';
+  return fetchImpl(new URL(path, base).href, { method, credentials: 'same-origin', cache: 'no-store', signal,
+    ...(write ? { headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(body ?? {}) } : {}) });
+}
+// A Beta row (a private GitHub repository shared with the signed-in account) installs through the existing link
+// selection: the App Manager checks the exact repository and commit with this Wizard's GitHub sign-in.
+export const selectionSource = source => source === 'beta' ? 'link' : source;
 export async function installRelease(a, { base = new URL('../', import.meta.url) } = {}) {
-  const selection = { source: a.source, repo: a.repo, commit: a.commit, operation: a.operation || 'install' };
+  const selection = { source: selectionSource(a.source), repo: a.repo, commit: a.commit, operation: a.operation || 'install' };
   const endpoint = new URL('store-install/' + encodeURIComponent(a.id), base).href;
   const r = await fetch(endpoint, { method: 'POST', credentials: 'same-origin', cache: 'no-store',
     headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });

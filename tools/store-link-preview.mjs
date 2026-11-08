@@ -26,22 +26,27 @@ export function manifestProjection(markdown) {
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(fields.id || '') || !['view','service','agent','external'].includes(fields.type) || !scalar(fields.name,80)) throw Error('manifest');
   return {id:fields.id, name:fields.name, summary:scalar(fields.summary,300), type:fields.type, version:scalar(fields.version,40), publisher:scalar(fields.publisher,80)};
 }
-function token() {
+export function token() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
   try { return readFileSync(join(homedir(),'.wizard-os/github-token'),'utf8').trim(); } catch { return ''; }
+}
+// The one GitHub reader: fixed api.github.com endpoints, the server-side credential, refused redirects, timeouts and
+// capped bodies. Link previews and the Beta source both use it, so neither can widen the fetch rules on its own.
+export function githubReader({fetchImpl=fetch, auth='', limit=256*1024, rawLimit=64*1024} = {}) {
+  const headers={Accept:'application/vnd.github+json', ...(auth ? {Authorization:'Bearer '+auth} : {})};
+  return async (path, {raw=false, base='/repos/'} = {}) => {
+    const r=await fetchImpl('https://api.github.com'+base+path, {headers:{...headers,...(raw ? {Accept:'application/vnd.github.raw+json'} : {})}, redirect:'error',signal:AbortSignal.timeout(8000)});
+    if (!r.ok) throw Error('unavailable');
+    const text=(await readCapped(r,raw ? rawLimit : limit)).toString('utf8');
+    return raw ? text : JSON.parse(text);
+  };
 }
 export async function linkPreview(q, {fetchImpl=fetch, index, readToken=token} = {}) {
   const parsed=parseInstallLink(q);
   if (!parsed.ok || q.has('from') || q.has('view')) return {status:400, body:{error:parsed.error || 'The preview accepts only a repository and commit.'}};
   const {repo}=parsed;
-  const auth=readToken();
-  const headers={Accept:'application/vnd.github+json', ...(auth ? {Authorization:'Bearer '+auth} : {})};
-  const request=async (path, raw=false) => {
-    const r=await fetchImpl('https://api.github.com/repos/'+repo+path, {headers:{...headers,...(raw ? {Accept:'application/vnd.github.raw+json'} : {})}, redirect:'error',signal:AbortSignal.timeout(8000)});
-    if (!r.ok) throw Error('unavailable');
-    const text=(await readCapped(r,raw ? 64*1024 : 256*1024)).toString('utf8');
-    return raw ? text : JSON.parse(text);
-  };
+  const read=githubReader({fetchImpl, auth:readToken()});
+  const request=(path, raw=false) => read(repo+path, {raw});
   try {
     const commit=parsed.commit || (await request('/commits/HEAD')).sha;
     if (!/^[a-fA-F0-9]{40}$/.test(commit || '')) throw Error('commit');
