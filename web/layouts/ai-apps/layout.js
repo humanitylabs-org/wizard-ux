@@ -351,7 +351,9 @@ export default function setup(api) {
         const h = el('button', 'aa-lab aa-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aa-sec-' + k });
         h.append(el('span', '', { text: word0 }), icon('down', 'aa-ico aa-sec-c'));
         // folded (round 7): a minimal tally: Working its count with a tiny spinner, Ready its count
-        if (!on && k !== 'archive' && rows.length) { h.append(el('span', 'aa-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' })); h.setAttribute('aria-label', `${word0}, ${rows.length}, folded`); }
+        // Ready counts unread only (James, 8 Nov 2026); Working and Snoozed keep their place counts.
+        const tallyN = k === 'ready' ? globalThis.WizChatsListModel.unreadCount(rows) : rows.length;
+        if (!on && k !== 'archive' && tallyN) { h.append(el('span', 'aa-tally', { 'data-n': String(tallyN), 'aria-hidden': 'true' })); h.setAttribute('aria-label', `${word0}, ${tallyN}${k === 'ready' ? ' unread' : ''}, folded`); }
         api.listen(h, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintDrawer(true); });
         const body = el('div', 'aa-sec-b', { id: 'aa-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on) {

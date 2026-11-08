@@ -193,8 +193,10 @@ function priorityGroups(list, notes, rank) {
 }
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */
+/** The one unread tally for raw threads (+ notification rows): every Ready-side number is this, never the list length. */
+const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => isNew(s)).map(s => s.id)).size + (notes || []).filter(n => !n.read).length;
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, unreadCount, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

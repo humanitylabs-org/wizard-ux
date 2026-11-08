@@ -180,9 +180,9 @@ export default function phone(api) {
   /* ---------- the Chats pill: the stock Chats list, with the Ready count ---------- */
   function paintChats() {
     const n = badgeMap.wizard || 0;
-    chatsN.textContent = n ? `${n > 99 ? '99+' : n} ready` : '';
+    chatsN.textContent = n ? `${n > 99 ? '99+' : n} unread` : '';
     chatsN.hidden = !n; chats.classList.toggle('has-ready', !!n);
-    chats.setAttribute('aria-label', n ? `Chats, ${n} ready` : 'Chats');
+    chats.setAttribute('aria-label', n ? `Chats, ${n} unread` : 'Chats');
   }
   api.listen(chats, 'click', () => api.sessions.openList('ready'));
 

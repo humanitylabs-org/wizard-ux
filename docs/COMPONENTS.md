@@ -58,7 +58,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chat state | `WizLive` (`web/live.js`): rename/read fences; `WizCore.chats`: dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `miguel/group-by-day` opt-in; Pins/compact independent |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, notification placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New chat open after send (`WosSkinHost.routeShows`); single-app host; pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount` |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, notification placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New chat open after send (`WosSkinHost.routeShows`); single-app host; pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; list/focus/drawer numbers: `WizChatsListModel.unreadThreads` (every Ready-side number is unread only, never the list length) |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Mic, retry, model, place | `WosChatPower` (`chat-power.js`); `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels`; `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
