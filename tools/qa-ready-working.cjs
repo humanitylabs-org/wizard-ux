@@ -44,9 +44,9 @@ const check = (label, ok) => { if (!ok) throw Error(label); console.log('PASS ' 
         const L = window.WizLive, s = L.session('tt-main'), g = L.workGroups(L.unified());
         return { working: g.working.some(x => x.id === s.id), ready: g.ready.some(x => x.id === s.id),
           unread: L.visibleUnread(L.unified()).map(x => x.id), orb: window.WizCore.workspaceNav.chatsCount(L),
-          needs: (window.__wux || window.__wos).chats.FILTERS.needs.test(s), ask: s.attention.ask };
+          ask: s.attention.ask };
       });
-      check(tag + ': not in Ready, Needs-you or orb count', before.working && !before.ready && !before.needs && !before.unread.includes('tt-main') && before.orb === before.unread.length);
+      check(tag + ': not in Ready or orb count', before.working && !before.ready && !before.unread.includes('tt-main') && before.orb === before.unread.length);
       check(tag + ': plain idle ask still Ready', await page.evaluate(() => window.WizLive.workGroups(window.WizLive.unified()).ready.some(x => x.id === 'tt-other')));
       const alternate = skin === 'nebula' ? 'grove' : 'nebula';
       await page.evaluate(id => window.WosSkin.set(id), alternate);
@@ -59,9 +59,31 @@ const check = (label, ok) => { if (!ok) throw Error(label); console.log('PASS ' 
       const geometry = await mainRow.evaluate(el => { const r = el.getBoundingClientRect(); const ask = el.querySelector('.att.needs, .aad-working-ask'); return { visible: r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight, color: ask && getComputedStyle(ask).color, skin: document.documentElement.dataset.skin }; });
       check(tag + ': screenshot has visible row and themed ask', geometry.visible && geometry.color && geometry.skin === skin);
       await page.screenshot({ path: path.join(OUT, `working-helper-${shell}-${skin}.png`) });
+      // Exercise Chats' exposed production navigation/filter API and its rendered rows,
+      // rather than reaching into the private STATUS/FILTERS closure.
+      if (shell === 'desktop') {
+        await page.evaluate(() => window.WosExperience.chooseDesktopView('classic'));
+        await page.waitForFunction(() => !document.documentElement.dataset.layout);
+      }
+      const filterWin = await page.evaluate(() => {
+        const api = window.__wux || window.__wos;
+        api.openChatsList?.();
+        const w = Object.values(api.wins).find(w => w.app === 'chats' && !w.thread);
+        if (!w) throw Error('Chats list window missing');
+        // Desktop's shared list pane is a production Chats window (id::list),
+        // separate from the right-hand thread pane's state.
+        const id = window.__wux ? w.id + '::list' : w.id;
+        api.chats.setFilter(window.__wux ? { id } : w, 'needs');
+        if (api.chats.ch(id).filter !== 'needs') throw Error('Needs-you filter was not selected');
+        return id;
+      });
+      const filtered = page.locator(`[data-chats="${filterWin}"] .ch-scroll`).first();
+      await filtered.locator('[data-chopen="tt-other"]').waitFor({ state: 'visible' });
+      check(tag + ': Needs-you list excludes helper but retains idle ask', await filtered.locator('[data-chopen="tt-main"]').count() === 0 && await filtered.locator('[data-chopen="tt-other"]').isVisible());
       helper = false; await page.evaluate(() => window.WizLive.refresh());
       await page.waitForFunction(() => !window.WizLive.session('tt-main').background);
-      check(tag + ': helper completion moves the same thread to Ready', await page.evaluate(() => { const L = window.WizLive, g = L.workGroups(L.unified()); return !g.working.some(x => x.id === 'tt-main') && g.ready.some(x => x.id === 'tt-main') && (window.__wux || window.__wos).chats.FILTERS.needs.test(L.session('tt-main')); }));
+      await filtered.locator('[data-chopen="tt-main"]').waitFor({ state: 'visible' });
+      check(tag + ': helper completion moves the same thread to Ready and Needs-you', await page.evaluate(() => { const L = window.WizLive, g = L.workGroups(L.unified()); return !g.working.some(x => x.id === 'tt-main') && g.ready.some(x => x.id === 'tt-main'); }) && await filtered.locator('[data-chopen="tt-main"]').isVisible());
       check(tag + ': no page errors or real-service requests', ctx.errors.length === 0 && svc.reqs.every(r => !/https?:/.test(r)));
       await ctx.close();
     }
