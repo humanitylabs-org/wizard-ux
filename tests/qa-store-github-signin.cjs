@@ -56,6 +56,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   if(!f)f=await page.waitForEvent('framenavigated',{predicate:f=>f.url().includes('/store/index.html')});
   await f.waitForFunction(()=>window.__store?.state().loaded&&document.documentElement.dataset.skin);
   assert.equal(await f.evaluate(()=>document.documentElement.dataset.skin),'nebula');
+  await page.waitForTimeout(1200);   // the shell's window-open motion settles before the first real tap
   const shot=async name=>page.screenshot({path:path.join(OUT,`${tag}-${name}.png`),animations:'disabled'});
   const sheet=()=>f.evaluate(()=>document.getElementById('sheet').innerText);
   const state=()=>f.evaluate(()=>window.__store.state());
@@ -64,7 +65,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   // First-paint probe: time from the real tap's click dispatch to the sheet's first DOM change.
   const probe=()=>f.evaluate(()=>{window.__p={t0:0,t1:0,text:''};addEventListener('click',()=>{window.__p.t0=performance.now();},{capture:true,once:true});
    new MutationObserver((m,o)=>{if(!window.__p.t1){window.__p.t1=performance.now();window.__p.text=document.getElementById('sheet').innerText;o.disconnect();}}).observe(document.getElementById('sheet'),{childList:true,subtree:true});});
-  const painted=async()=>{await f.waitForFunction(()=>window.__p.t1>0);return f.evaluate(()=>({ms:window.__p.t1-window.__p.t0,text:window.__p.text}));};
+  const painted=async()=>{await f.waitForFunction(()=>window.__p.t1>0).catch(async e=>{await shot('FAILED-no-paint');throw Error('no paint after tap: '+JSON.stringify(await f.evaluate(()=>({p:window.__p,layers:window.__store.state().layers,hidden:document.getElementById('sheet').hidden}))));});return f.evaluate(()=>({ms:window.__p.t1-window.__p.t0,text:window.__p.text}));};
 
   // ---- Sources entry: one control next to Refresh, a real touch target
   const box=await f.locator('#sources').boundingBox();assert.ok(box.height>=44,'Sources is a 44px target');
