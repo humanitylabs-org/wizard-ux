@@ -34,6 +34,7 @@ test('live.js keeps only known wizard_last_run_error codes, clipped', () => {
   const live = read('web/live.js');
   assert.match(live, /runError: runErrorOf\(item\.wizard_last_run_error\),/);
   assert.match(live, /reconnect:null, runError:null,/);
+  assert.match(live, /\.\.\.item, runError: runErrorOf\(item\.runError\), status:/);
 });
 
 test('switched off (default): no reason, the old panel exactly', () => {
@@ -89,4 +90,36 @@ test('Errors row and thread use the reason in place of "Error: <message>" and th
   assert.equal(JSON.parse(read(tw + 'manifest.json')).id, TWEAK);
   assert.ok(JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes(TWEAK));
   assert.match(read(tw + 'tweak.css'), /html\[data-tweaks~="wizard\/failure-reason"\]/);
+});
+
+// Agent chat parity (AGENTS.md): the same failed run on the main agent and on a routed host-profile, container and
+// restricted agent normalizes through the real live.js normalize() (detail rows and compact list rows) and renders
+// the same reason and actions.
+function normalizer() {
+  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const context = modelContext({}); vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
+  return context.normalize;
+}
+const ERR = { code: 'provider_billing', provider: 'openai-codex', message: 'Your ChatGPT plan has ended.' };
+const detailRow = agent => ({ id: `s-${agent || 'main'}`, title: 'How is your day', status: 'failed', wizard_last_run_status: 'failed', model: 'gpt-6-sol', provider: 'openai-codex',
+  last_user_message: { role: 'user', content: 'How is your day' }, wizard_last_run_error: ERR, ...(agent ? { agent } : {}) });
+const compactRow = agent => ({ listVersion: 1, id: `s-${agent || 'main'}`, title: 'How is your day', status: 'failed', runId: '', lastRunStatus: 'failed', model: 'gpt-6-sol', provider: 'openai-codex',
+  preview: 'How is your day', agent: agent || '', runError: ERR });
+
+test('main and routed threads (host-profile, container, restricted) carry and render the same reason', () => {
+  const normalize = normalizer(), M = models();
+  const render = s => { const r = M.runError(s); return { line: r?.line, buttons: buttons(M.failureHtml({ s, busy: '', canRetry: true })) }; };
+  const main = render(normalize(detailRow('')));
+  assert.deepEqual(main, { line: 'ChatGPT isn’t available: subscription ended', buttons: ['Choose another model', 'Retry', 'Dismiss'] });
+  for (const kind of ['host-profile', 'container', 'restricted']) {
+    const d = normalize(detailRow(kind)), c = normalize(compactRow(kind));
+    assert.equal(d.agent, kind); assert.equal(c.agent, kind);
+    assert.deepEqual({ ...d.runError }, { ...ERR }, `${kind} detail`);
+    assert.deepEqual({ ...c.runError }, { ...ERR }, `${kind} compact`);
+    assert.deepEqual(render(d), main, `${kind} detail render`);
+    assert.deepEqual(render(c), main, `${kind} compact render`);
+  }
+  // A compact row is data too: an unknown code is dropped, never rendered.
+  assert.equal(normalize({ ...compactRow('container'), runError: { code: 'evil', message: '<b>x</b>' } }).runError, null);
+  assert.equal(normalize({ ...detailRow('restricted'), wizard_last_run_error: { code: 'evil' } }).runError, null);
 });

@@ -75,7 +75,7 @@
     return { code: v.code, provider: one(v.provider, 60), message: one(v.message, 200) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runError: runErrorOf(item.runError), status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
