@@ -1,7 +1,0 @@
-{
-  "version": 1,
-  "extends": "grove",
-  "frame": {
-    "foundation": "borderless"
-  }
-}
