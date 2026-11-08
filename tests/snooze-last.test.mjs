@@ -34,7 +34,7 @@ test('stock (no tweak, or no skin host) Snooze still leaves Ready; approvals sta
   }
 });
 test('subject grouping renders the entire snoozed tail after all awake subjects', () => {
-  const c = modelContext({ snoozeLast: () => true, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt }, stiKind: () => 'none', subjOrder: () => [], esc: s => s });
+  const c = modelContext({ snoozeLast: () => true, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt, isNew: () => true }, stiKind: () => 'none', subjOrder: () => [], esc: s => s });
   vm.runInContext(block(chats, '  function readyBody(', '  /* Android Back on the list'), c);
   const html = c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`);
   assert.ok(html.indexOf('<row>s</row>') > html.indexOf('<row>b</row>'));
@@ -44,7 +44,7 @@ test('stock subject grouping is unchanged: same HTML as readyBody without the sn
   const src = block(chats, '  function readyBody(', '  /* Android Back on the list');
   const stockSrc = src.split('\n').filter(l => !l.includes('snoozeLast()')).join('\n');
   assert.notEqual(stockSrc, src);
-  const run = code => { const c = modelContext({ snoozeLast: () => false, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt }, stiKind: () => 'none', subjOrder: () => [], esc: s => s }); vm.runInContext(code, c);
+  const run = code => { const c = modelContext({ snoozeLast: () => false, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt, isNew: () => true }, stiKind: () => 'none', subjOrder: () => [], esc: s => s }); vm.runInContext(code, c);
     return c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`); };
   assert.equal(run(src), run(stockSrc));
 });
