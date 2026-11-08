@@ -147,6 +147,22 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
     await dp.screenshot({ path: path.join(OUT, `desktop-${skin}-menu.png`) });
     await closeMenu(dp);
   }
+  // The visual row includes a sibling pin control and a few gutter pixels outside
+  // the data-chopen button. Both must still suppress Chromium's native iframe menu.
+  await setSkin(dp, 'grove');
+  await dp.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(dp);
+  await dp.locator(`${droot} .ch-row[data-chopen="qa_pin_a"]`).locator('xpath=..').locator('.ch-pin-toggle').click({ button: 'right' }); await sleep(300);
+  ok(await dp.locator('.ch-sheet').count() === 1, 'desktop: right-clicking the row pin opens the shared row menu');
+  await closeMenu(dp);
+  const gutter = await dp.evaluate(({ root, sid }) => {
+    const wrap = document.querySelector(`${root} .ch-row[data-chopen="${sid}"]`).closest('.ch-row-wrap');
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+    const uncanceled = wrap.dispatchEvent(event);
+    return { prevented: !uncanceled, sheet: !!document.querySelector('.ch-sheet') };
+  }, { root: droot, sid: 'qa_pin_a' });
+  ok(gutter.prevented && gutter.sheet, 'desktop: right-clicking the row gutter suppresses the native menu and opens the sheet', gutter);
+  await closeMenu(dp);
+  await dp.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(dp);
   // Miguel's own tweak keeps his chats pin-free: no Pin in the menu, no row pins, even with Show pin buttons on.
   await dp.evaluate(() => WosExperience.toggle('miguel/hidden-pin')); await settle(dp);
   await dp.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(dp);

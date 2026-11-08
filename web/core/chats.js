@@ -2622,7 +2622,16 @@ window.WizCore.chats = function createChats(H) {
     };
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpCancel);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
-    root.addEventListener('contextmenu', e => { const row = e.target.closest(ROW_MENU); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen, row.dataset.chnotif); } });
+    root.addEventListener('contextmenu', e => {
+      // A thread's pin/sign-in controls and the narrow row gutter are siblings of the
+      // data-chopen button. Treat the whole visual row as one context-menu target so
+      // Chromium never falls through to its native iframe menu at the row's edge.
+      const wrap = e.target.closest('.ch-list .ch-row-wrap');
+      const row = e.target.closest(ROW_MENU) || wrap?.querySelector('[data-chopen]');
+      if (!row) return;
+      e.preventDefault();
+      if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen, row.dataset.chnotif); }
+    });
     // Paste, drag/drop and the Enter policy come from the shared WizComposerInput (web/core/composer-input.js), the
     // same implementation apps get as WizardApp.composer: files go to addFiles (the paperclip upload path), text
     // pastes insert from the event snapshot (dictation-app safe), an empty paste explains how to get the take back.
