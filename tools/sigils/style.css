@@ -55,20 +55,8 @@
 :is(.wbar .ic, .wic, .app-chip i, .pal-it .ic, .ag-sig.xs, .ch-agent.thread .ag-sig).sgt > :is(.sg-hat, .sg-hat-private) { -webkit-mask-size: 66.57910% 80%; mask-size: 66.57910% 80%; }
 .sg-hat { --sg: url("/wizard-os-home/brand/wizard-mark-white.png"); }
 .sg-hat-private { --sg: url("/wizard-os-home/brand/wizard-mark-private.png"); }
-/* Hermes uses its official black portrait on a light circular badge. Do not reverse it into the app hue. */
-.sgi.sg-hermes {
-  position: relative; overflow: hidden; border-radius: 50%;
-  transform: scale(.68);
-  background: color(srgb 0.96862745 0.96078431 1);
-  -webkit-mask: none; mask: none;
-  box-shadow: inset 0 0 0 1px color(srgb 0.03137255 0.02745098 0.03921569 / .10);
-}
-.sgi.sg-hermes::after {
-  content: ""; position: absolute; inset: 0;
-  background: color(srgb 0.03137255 0.02745098 0.03921569);
-  -webkit-mask: url("/wizard-os-home/brand/apps/hermes.svg") center / contain no-repeat;
-  mask: url("/wizard-os-home/brand/apps/hermes.svg") center / contain no-repeat;
-}
+/* Cached app-icon classes also fall back to the Wizard artwork, never the retired portrait. */
+.sg-hermes { --sg: url("/wizard-os-home/brand/wizard-mark-white.png"); }
 /* Agents (the app): two hats layered (tools/sigils/agent_hats.py). The private agent's green hat stands
  * behind, the main agent's purple hat in front at the main hat's exact ink height; never a keyhole.
  * Both masks share one canvas, so one mask size keeps them registered; each layer is lit like any glyph. */
@@ -149,7 +137,7 @@
 .sgi.sgb-claude { --sgb: url("/wizard-os-home/brand/apps/claude.svg"); }
 .sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
 .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
-.sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+.sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/wizard-mark-white.png"); }
 .sgi.sgb-google { --sgb: url("/wizard-os-home/brand/apps/google.svg"); }
 .sgi.sgb-youtube-music { --sgb: url("/wizard-os-home/brand/apps/youtube-music.svg"); }
 .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat; }

@@ -16,7 +16,7 @@
  */
 (() => {
   'use strict';
-  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents', 'hermes']);
+  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
   const colour = value => `#${value}`;
   const HOUSE = Object.fromEntries(Object.entries(/*HOUSE*/).map(([id, [glyph, color]]) => [id, [glyph, colour(color)]]));
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
@@ -44,6 +44,8 @@
     return logo ? { ...s, glyph: '', logo } : s;
   }
   function sigilOf(a) {
+    // Retire the portrait only at the artwork boundary, including stale launcher metadata.
+    if (a.icon === 'hermes' || a.icon === '/wizard-os-home/brand/apps/hermes.svg') a = { ...a, icon: 'hat' };
     const own = typeof a.icon === 'string' && NAMES.has(a.icon) ? a.icon : '';
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
@@ -86,6 +88,7 @@
   //   img    → the app's own same-origin icon file, used as the silhouette
   const LETTER = ch => "url('data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><mask id="m"><rect width="512" height="512" fill="#fff"/><text x="256" y="256" dy=".35em" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-weight="800" font-size="196" fill="#000">${esc(ch)}</text></mask><circle cx="256" cy="256" r="164" mask="url(#m)"/></svg>`).replace(/'/g, '%27') + "')";
   function named(glyph, color) {
+    if (glyph === 'hermes') glyph = 'hat'; // cached icon callers keep the Wizard mark
     if (NAMES.has(glyph)) return `<i class="sgi sg-${glyph}" aria-hidden="true"></i>`;
     const ch = String(glyph || '?');
     return `<i class="sgi sgl" aria-hidden="true" style="--sg:${esc(LETTER(ch))}">${esc(ch)}</i>`;

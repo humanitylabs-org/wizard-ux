@@ -32,32 +32,25 @@ test('every known Wizard App Store app has a designed sigil (no letter fallback)
   assert.deepEqual(missing, [], `add a HOUSE entry in tools/sigils/build.py for: ${missing.join(', ')}`);
 });
 
-test('Home wears the approved 12%-wider hat while the main Hermes agent wears the Hermes logo', () => {
+test('Home keeps its previous house artwork and app icons never select Hermes', () => {
   const S = sigil();
-  assert.ok(S.has('hermes'), 'Hermes is available as a first-class mask sigil');
-  const css = read('web/core/sigils.css');
-  const hermesBadge = css.match(/\.sgi\.sg-hermes\s*\{([^}]*)\}/s);
-  assert.ok(hermesBadge, 'Hermes badge rule exists');
-  assert.match(hermesBadge[1], /background:\s*(?:#F7F5FF|color\(srgb 0\.96862745 0\.96078431 1\));/, 'Hermes uses the exact approved light circle');
-  assert.match(hermesBadge[1], /border-radius:\s*50%;/, 'Hermes badge is circular');
-  assert.match(hermesBadge[1], /mask:\s*none;/, 'Hermes is not reversed into the app hue');
-  assert.match(hermesBadge[1], /transform:\s*scale\(\.68\);/, 'the circular badge matches the hat\'s 68% optical height');
-  const hermesPortrait = css.match(/\.sgi\.sg-hermes::after\s*\{([^}]*)\}/s);
-  assert.ok(hermesPortrait, 'Hermes portrait layer exists');
-  assert.match(hermesPortrait[1], /inset:\s*0;/, 'the portrait fills the circle without changing the badge size');
-  assert.match(hermesPortrait[1], /background:\s*(?:#08070A|color\(srgb 0\.03137255 0\.02745098 0\.03921569\));/, 'the portrait stays the exact approved black');
-  assert.match(hermesPortrait[1], /mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/, 'the portrait uses the Hermes source mark');
-  assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
-  assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
-  assert.equal(S.of({ id: 'wizard', name: 'Chats' }).glyph, 'hermes', 'main Chats uses the Hermes badge in dock and active-orb navigation');
-  assert.match(S.html({ id: 'wizard', name: 'Chats' }), /class="sgi sg-hermes"/, 'main Chats renders the full-colour circled Hermes mark');
   for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {
-    const src = read(p);
-    assert.match(src, /class="sgi sg-hat"/, `${p}: Home uses the hat`);
-    assert.doesNotMatch(src, /class="sgi sg-home"/, `${p}: old house mark is gone`);
+    assert.match(read(p), /class="sgi sg-home"/, `${p}: original Home glyph`);
   }
-  const style = read('tools/sigils/style.css');
-  assert.match(style, /\.sgi\.sg-hat[^{}]*\{[^}]*mask-size:\s*56\.59224% 68%/s, 'Home inherits the selected exactly 12%-wider hat geometry');
+  assert.equal(S.has('hermes'), false);
+  for (const id of ['wizard', 'hermes-agent', 'hermes-frontend-3']) {
+    assert.equal(S.of({ id, name: 'Hermes' }).glyph, 'hat');
+    assert.doesNotMatch(S.html({ id, name: 'Hermes' }), /sg-hermes|sgb-hermes|sglogo/);
+  }
+  for (const icon of ['hermes', '/wizard-os-home/brand/apps/hermes.svg']) {
+    assert.equal(S.of({ id: 'custom', icon }).glyph, 'hat');
+    assert.doesNotMatch(S.html({ id: 'custom', icon }), /sg-hermes|sgb-hermes|sgimg/);
+  }
+  assert.match(S.named('hermes'), /sg-hat/);
+  assert.doesNotMatch(read('web/core/sigils.css'), /url\(["']?\/wizard-os-home\/brand\/apps\/hermes\.svg/);
+  assert.match(read('web/core/agents.js'), /return A\.isPrivate\(a\) \? 'hat-private' : 'hat'/);
+  assert.equal(S.brand['wizard-google'], 'google');
+  assert.equal(S.brand['wizard-youtube-music'], 'youtube-music');
 });
 
 test('phone navigation keeps active and inactive app marks smaller and inside the orb', () => {

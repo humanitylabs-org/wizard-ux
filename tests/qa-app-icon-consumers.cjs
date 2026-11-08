@@ -8,7 +8,7 @@ const pin = fs.readFileSync(path.join(ROOT, 'web/core/home-screen-apps.js'), 'ut
 assert.ok(process.env.PIN_BASE_SOURCE, 'PIN_BASE_SOURCE required');
 const baseline = fs.readFileSync(process.env.PIN_BASE_SOURCE, 'utf8');
 const extract = s => s.slice(s.indexOf('  async function iconPNG('), s.indexOf('  async function show('));
-const assets = ['core/sigils.js', 'core/sigils.css', 'brand/apps/hermes.svg', 'skins/obsidian/skin.css'];
+const assets = ['core/sigils.js', 'core/sigils.css', 'brand/wizard-mark-white.png', 'brand/apps/hermes.svg', 'skins/obsidian/skin.css'];
 const served = [], rejected = [], pageErrors = [], cases = [];
 let raster, browser, server;
 const main = async () => {
@@ -19,7 +19,7 @@ const main = async () => {
     const relative = req.url.startsWith('/wizard-os-home/') ? req.url.slice('/wizard-os-home/'.length) : '';
     if (!assets.includes(relative)) { rejected.push(req.url); res.writeHead(404); res.end(); return; }
     const bytes = fs.readFileSync(path.join(ROOT, 'web', relative)); served.push({ url: req.url, sha256: hash(bytes) });
-    res.writeHead(200, { 'Content-Type': relative.endsWith('.css') ? 'text/css' : relative.endsWith('.js') ? 'text/javascript' : 'image/svg+xml' }); res.end(bytes);
+    res.writeHead(200, { 'Content-Type': relative.endsWith('.css') ? 'text/css' : relative.endsWith('.js') ? 'text/javascript' : relative.endsWith('.png') ? 'image/png' : 'image/svg+xml' }); res.end(bytes);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;

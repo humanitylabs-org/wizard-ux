@@ -43,15 +43,15 @@ function assertTint(f, a) {
   assert.deepEqual(f.canvases[0].ctx.draws[0], [f.canvases[1], 0, 0]);
   assert.deepEqual(f.canvases[0].ctx.letters, []);
 }
-test('brand-only Hermes aliases with cached logos pin existing brand, not logo or letter', async () => {
+test('retired Hermes aliases with cached logos pin the Wizard glyph instead', async () => {
   for (const id of ['hermes-agent', 'hermes-frontend-3']) {
     const a = { id, name: 'Hermes' }, f = fixture(a);
     assert.equal(f.window.WizSigil.of(a).logo, undefined);
-    assert.ok(f.html.includes('sgi sgb sgb-hermes ' + (id === 'hermes-agent' ? 'sg-spark' : 'sg-apps')));
+    assert.match(f.html, /sgi sg-hat/);
+    assert.doesNotMatch(f.html, /hermes|sglogo/);
     await f.run();
-    assert.deepEqual(f.properties, ['--sgb']);
-    assert.deepEqual(f.requests, [brandURL]);
-    assert.deepEqual(f.canvases[1].ctx.draws[0].slice(1), [32, 32, 128, 128]);
+    assert.deepEqual(f.properties, ['--sg']);
+    assert.deepEqual(f.requests, ['data:image/svg+xml,%3Csvg%3E%3C/svg%3E']);
     assertTint(f, a);
   }
 });
@@ -107,7 +107,7 @@ test('missing glyph, empty mask, failed file and failed brand decode fall back w
     assert.match(await f.run(), /^data:image\/png/); assert.deepEqual(f.canvases[0].ctx.letters, [['M', 96, 100]]); assert.equal(f.canvases.length, 1);
   }
   const f = fixture({ id: 'hermes-agent', name: 'Hermes' }, { fail: true });
-  await f.run(); assert.deepEqual(f.requests, [brandURL]); assert.deepEqual(f.canvases[0].ctx.letters, [['H', 96, 100]]);
+  await f.run(); assert.deepEqual(f.requests, ['data:image/svg+xml,%3Csvg%3E%3C/svg%3E']); assert.deepEqual(f.canvases[0].ctx.letters, [['H', 96, 100]]);
 });
 test('external, scheme, protocol-relative, query and fragment masks cause zero image loads', async () => {
   for (const url of ['https://untrusted.invalid/icon.svg', 'http://untrusted.invalid/icon.svg', '//untrusted.invalid/icon.svg', 'javascript:alert(1)', '/fixture/icon.svg?query=1', '/fixture/icon.png#fragment']) {
@@ -133,7 +133,7 @@ test('Store constructor is a valid unbranded catalog ID and retains its catalog 
     const html = store(framed)({ id: 'constructor', name: 'Constructor', logo: true });
     assert.match(html, /<img src="\/store-data\/logo\/constructor"/); assert.doesNotMatch(html, /\bsgt\b/);
     const canonical = store(framed)({ id: 'hermes-agent', name: 'Hermes', logo: true });
-    assert.match(canonical, /sgi sgb sgb-hermes/); assert.doesNotMatch(canonical, /<img/);
+    assert.match(canonical, /sgi sg-hat/); assert.doesNotMatch(canonical, /<img|sgb-hermes/);
     const house = store(framed)({ id: 'messenger', name: 'Messenger', logo: true });
     assert.match(house, /sg-chats/); assert.doesNotMatch(house, /<img/);
   }
