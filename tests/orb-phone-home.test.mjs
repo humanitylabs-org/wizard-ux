@@ -94,7 +94,7 @@ test('phone, Orbs, on Home: the orb fixed in the middle, still satellites to tap
   sats.find(b => b.attrs['data-app'] === 'notes').dispatchEvent({ type: 'click' }); assert.deepEqual(P.state.opened, ['notes'], 'tap = open that app');
   // the Chats pill: Ready count, opens the stock Chats list
   const pill = P.find('obp-chats')[0]; assert.ok(pill, 'one Chats pill');
-  assert.equal(pill.attrs['aria-label'], 'Chats, 4 ready'); assert.equal(P.find('obp-chats-n')[0].textContent, '4 ready');
+  assert.equal(pill.attrs['aria-label'], 'Chats, 4 unread'); assert.equal(P.find('obp-chats-n')[0].textContent, '4 unread');
   pill.dispatchEvent({ type: 'click' }); assert.deepEqual(P.state.lists, ['ready']);
   // a press on the centre orb is the dock orb's own gesture (same pointer, same place)
   const btn = P.find('obp-orbbtn')[0];

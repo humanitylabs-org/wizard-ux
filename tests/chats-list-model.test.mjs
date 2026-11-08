@@ -78,7 +78,7 @@ test('core/classic desktop and stock phone use shared ordering/grouping while ke
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ window: {}, READY_ORDERS: [], readyOrder: 'newest', snoozeLast: () => false, deferredOf: s => s.deferred,
     attOf: s => s.attention, stiKind: () => 'none', waitsOn: s => s.attention?.state === 'needs_you', subjOrder: () => [], esc: String,
-    LIVE: { cardAt: s => s.at }, sesRank: s => M.sessionRank(s) });
+    LIVE: { cardAt: s => s.at, isNew: () => true }, sesRank: s => M.sessionRank(s) });
   vm.runInContext(block('  function readyBody(', '  /* Android Back') + '\nthis.render = readyBody;', c);
   const sessions = rows.filter(r => !r.note).map(r => ({ ...r, status: r.state === 'approval' ? 'waiting_for_approval' : 'completed', deferred: r.state === 'deferred', attention: { state: ({ needs: 'needs_you', failed: 'needs_you' }[r.state] || r.state), subject: r.title.split(' · ')[0] } }));
   const row = s => `<row id="${s.id}"></row>`;

@@ -4,7 +4,7 @@ import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../../web/core/chats.js', import.meta.url), 'utf8');
-export function listFixture({ status = false, query = '', busy = false, footer = true, inputRows = null, pinned = [] } = {}) {
+export function listFixture({ status = false, query = '', busy = false, footer = true, inputRows = null, pinned = [], unread = () => false } = {}) {
   const state = { q: query }, writes = [], groups = Object.fromEntries(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive'].map(k => [k, [{ id: k, title: 'match', section: k }]]));
   const rows = inputRows || Object.values(groups).flat(), el = { querySelector: () => null, innerHTML: '', firstElementChild: null };
   const w = { id: 'synthetic', thread: null };
@@ -13,7 +13,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
   const ctx = {
     window: { WizCore: { chatSearch: { query: () => footer ? bs : null, cancel: no, scanning: r => r.busy, footer: r => `<div class="ch-bodysearch${r.busy ? ' busy' : ''}" data-chbs="${r.busy ? 'busy' : 'done'}">Synthetic search status</div>` } } },
     H: {}, W: { synthetic: w }, ch: () => state, norm: x => String(x || '').trim().toLowerCase(),
-    LIVE: { cardAt: s => s.activityAt || s.updatedAt, ok: true, statusFor: () => ({ ok: true }), searchRows: () => rows, sessionsFor: () => rows, workGroups: input => Object.fromEntries(Object.keys(groups).map(k => [k, input.filter(r => r.section === k)])), isNew: () => false, archiveAfterDays: 7 },
+    LIVE: { cardAt: s => s.activityAt || s.updatedAt, ok: true, statusFor: () => ({ ok: true }), searchRows: () => rows, sessionsFor: () => rows, workGroups: input => Object.fromEntries(Object.keys(groups).map(k => [k, input.filter(r => r.section === k)])), isNew: unread, archiveAfterDays: 7 },
     syncListTitle: no, closeStream: no, winAgent: empty, STATUS: {}, focusOf: () => null, notes: () => ({ awake: [], later: [] }), focusMatches: () => true,
     PIN: { partition: rows => ({ pinned: rows.filter(s => pinned.includes(s.id)), rest: rows.filter(s => !pinned.includes(s.id)) }) }, snoozeLast: () => false, owner: () => w.id, newDrafts: () => [], esc: String,
     matchFilters: () => [], OUTBOX: null, sendPill: empty, PW: null, byStatus: () => status, readyOrdered: identity, workingOrdered: identity, workingOrderBar: () => '<div class="ch-rdy-bar" aria-label="Order Working"></div>',
