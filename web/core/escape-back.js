@@ -56,6 +56,7 @@
     add('viewer-menu', () => h.chats().KIT?.viewer?.state?.menu, () => h.chats().KIT.viewer.close());
     add('link-menu', () => W.WizLinks?.isMenuOpen?.(), () => W.WizLinks.backMenu());
     add('links', () => h.links()?.isOpen(), () => h.links().back());
+    add('downloads', () => W.WosDownloads?.isOpen?.(), () => W.WosDownloads.back());
     h.chats().registerBack?.(stack, h.afterChat);
     add('status', () => W.WizCore?.status?.state?.fatal || W.WizCore?.status?.state?.offline === 'open', () => W.WizCore.status.back());
     add('device', () => W.WosDevice?.sheet, () => W.WosDevice.back());

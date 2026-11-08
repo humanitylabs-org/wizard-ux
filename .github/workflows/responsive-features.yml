@@ -94,11 +94,14 @@ jobs:
       - run: npx playwright install --only-shell chromium
       - run: node tests/qa-desktop-escape-back.cjs
       - run: QA_OUT=escape-back-evidence node tests/qa-desktop-boot-layout.cjs
+      - run: QA_OUT=archive-flash-evidence node tests/qa-desktop-archive-flash.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: desktop-escape-back-evidence
-          path: escape-back-evidence/
+          path: |
+            escape-back-evidence/
+            archive-flash-evidence/
   opaque-overlays:
     runs-on: ubuntu-latest
     timeout-minutes: 10

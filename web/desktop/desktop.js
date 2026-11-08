@@ -424,6 +424,12 @@
     if (W[origin]) focusWin(origin);
     return true;
   }
+  // A link's preview window whose app says it is done (WizardApp.nav.back, e.g. Reader after handing a page it
+  // cannot read to the owner's browser) closes, as Esc closes it; installed apps' own windows never close this way.
+  function closePreview(w) {
+    if (!w?.preview || W[w.id] !== w) return false;
+    closeWin(w.id); return true;
+  }
   window.WizOpenApp = (id, path = '') => {
     const x = hostedOpenable(id); if (!x) return false;
     if (!path) return openApp(x);
@@ -763,7 +769,7 @@
     if (!f) return;
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id) && pal.hidden && !CHATS.isHosted(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w), openThread: (sid, opts) => { const r = window.WosSkinHost?.routeOpen?.('thread', { sid, from: a.id }, () => threadFromApp(sid, opts)); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts); }, openContextDraft: (key, text) => { const go = main => { let cw = main ? findWin(mainChats) : (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }; const r = window.WosSkinHost?.routeOpen?.('draft', { from: a.id }, () => go(true)); if (r) { if (!r.value) throw new Error('Main Chats unavailable'); return r.value; } return go(false); }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) || (pal.hidden && !CHATS.isHosted(w.id) && !!window.WosSkinHost?.routeShows?.(wsOf(w.id))) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id) && pal.hidden && !CHATS.isHosted(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w) || closePreview(w), openThread: (sid, opts) => { const r = window.WosSkinHost?.routeOpen?.('thread', { sid, from: a.id }, () => threadFromApp(sid, opts)); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts); }, openContextDraft: (key, text) => { const go = main => { let cw = main ? findWin(mainChats) : (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }; const r = window.WosSkinHost?.routeOpen?.('draft', { from: a.id }, () => go(true)); if (r) { if (!r.value) throw new Error('Main Chats unavailable'); return r.value; } return go(false); }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) || (pal.hidden && !CHATS.isHosted(w.id) && !!window.WosSkinHost?.routeShows?.(wsOf(w.id))) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;

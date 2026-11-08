@@ -27,7 +27,11 @@
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
     // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
     // phone = the same orb scene on Home only (layouts/orb/phone.js).
+<<<<<<< HEAD
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: '', js: 'phone.js' }) }) }),
+=======
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: 'phone-boot.css', js: 'phone.js' }) }) }),
+>>>>>>> origin/main
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
@@ -869,6 +873,9 @@
     return {
       // The orb's recorder plus a local command take (the held orb / ⌥C); call command() again to finish it.
       voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined,
+        // Layout-only: a layout-docked composer owns its mic even while a companion app has keyboard focus.
+        reply: (wid, sid) => live() && typeof wid === 'string' && typeof sid === 'string' && sid && sid !== '__new__'
+          ? shell.recordReply?.(wid, sid) : false,
         /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
          * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
          * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */

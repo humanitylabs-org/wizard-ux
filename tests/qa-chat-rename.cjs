@@ -10,7 +10,9 @@ const origin='https://rename.test',prefix='/wizard-os-home/',id='synthetic-renam
  try {for(const phone of [false,true]) {
   const name=phone?'phone':'desktop',errors=[],writes=[],blocked=[];
   let title='Old title',patches=0,stale=0,detailRelease,detailHeld=false;
-  const row=t=>({id,title:t,source:'wizard-mobile',status:'completed',archived:false,hidden:false,message_count:2,started_at:1793922000,last_active:1793923000,wizard_last_user_at:1793922500,wizard_last_assistant_at:1793923000,last_user_message:{role:'user',content:'Synthetic question',timestamp:1793922500},latest_message:{role:'assistant',content:'Synthetic answer',timestamp:1793923000}});
+  // Timestamps relative to the run: a fixed date ages out of the list a day later and the row never shows.
+  const T=Math.floor(Date.now()/1000)-600;
+  const row=t=>({id,title:t,source:'wizard-mobile',status:'completed',archived:false,hidden:false,message_count:2,started_at:T-1000,last_active:T,wizard_last_user_at:T-500,wizard_last_assistant_at:T,last_user_message:{role:'user',content:'Synthetic question',timestamp:T-500},latest_message:{role:'assistant',content:'Synthetic answer',timestamp:T}});
   const context=await browser.newContext({viewport:phone?{width:412,height:892}:{width:1440,height:960},isMobile:phone,hasTouch:phone,serviceWorkers:'block'});
   await context.routeWebSocket('**/*',ws=>ws.close());
   await context.addInitScript(({phone})=>{

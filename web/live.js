@@ -41,7 +41,11 @@
     .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
+<<<<<<< HEAD
     .replace(/\[WIZARD_TWEAK_V1\][\s\S]*?\[\/WIZARD_TWEAK_V1\]/g, ' ') // a tweak card (core/chat-kit.js tweakIds)
+=======
+    .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
+>>>>>>> origin/main
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
@@ -342,8 +346,13 @@
     archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
     compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
+<<<<<<< HEAD
     workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
     chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
+=======
+    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
+    workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
+>>>>>>> origin/main
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.

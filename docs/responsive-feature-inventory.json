@@ -340,6 +340,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/downloads.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "In-app Downloads banner and sheet; shows only where the Android bridge exists"
+    },
     "core/edge-peek.js": {
       "loadedBy": [
         "phone",
@@ -934,6 +941,8 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/downloads.css",
+    "core/downloads.js",
     "core/edge-peek.js",
     "core/escape-back.js",
     "core/experience.js",

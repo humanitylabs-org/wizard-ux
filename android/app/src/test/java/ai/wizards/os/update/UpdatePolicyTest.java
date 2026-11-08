@@ -34,8 +34,18 @@ public class UpdatePolicyTest {
                 UpdatePolicy.hold(false, true, false, false, false), true, false));
         assertEquals(UpdatePolicy.Hold.MIC, UpdatePolicy.hold(false, true, false, false, true));
     }
-    @Test public void liveOwnerProtectsPausedTakeWithoutAppOps() {
-        assertEquals(UpdatePolicy.Hold.TAKE, UpdatePolicy.hold(false, true, true, false, false));
+    @Test public void idleLivingServiceAndStaleHolderCannotBlockATap() {
+        UpdatePolicy.Hold h = UpdatePolicy.hold(false, true, true, false, false);
+        assertEquals(UpdatePolicy.Hold.NONE, h);
+        assertEquals(UpdatePolicy.Step.INSTALL, UpdatePolicy.next(true, true, true, true, h, true, true));
+    }
+    @Test public void actualPausedTakeStillProtectsWithoutAppOpsOrHolder() {
+        for (boolean holder : new boolean[]{false, true}) for (boolean alive : new boolean[]{false, true}) {
+            UpdatePolicy.Hold h = UpdatePolicy.hold(true, holder, alive, false, false);
+            assertEquals(UpdatePolicy.Hold.TAKE, h);
+            assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, true, h, true, true));
+            assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, false, h, true, false));
+        }
     }
     @Test public void genuineTakeWinsOverMusicAndMic() {
         assertEquals(UpdatePolicy.Hold.TAKE, UpdatePolicy.hold(true, false, false, true, true));
@@ -43,6 +53,27 @@ public class UpdatePolicyTest {
         assertEquals("take", UpdatePolicy.Hold.TAKE.reason);
         assertEquals("music", UpdatePolicy.Hold.MUSIC.reason);
         assertEquals("mic", UpdatePolicy.Hold.MIC.reason);
+    }
+
+    @Test public void sentTakeHoldsTheFenceUntilTheOutboxHasIt() {
+        assertTrue(UpdatePolicy.captureHeld(true, 0));
+        assertTrue("stopped but not yet saved to the outbox", UpdatePolicy.captureHeld(false, 1));
+        assertFalse(UpdatePolicy.captureHeld(false, 0));
+        assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, true,
+                UpdatePolicy.hold(UpdatePolicy.captureHeld(false, 1), false, false, false, false), true, true));
+    }
+    @Test public void everywhereFinishMarksSavingBeforeItStopsListening() throws Exception {
+        String svc = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(System.getProperty("user.dir"),
+                "src/main/java/ai/wizards/os/everywhere/EverywhereService.java")), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(svc.contains("UpdatePolicy.captureHeld(s != null && s.listening, saving.get())"));
+        int fin = svc.indexOf("private void finish() {");
+        int inc = svc.indexOf("saving.incrementAndGet();", fin);
+        int body = svc.indexOf("private void finishIntoOutbox() {", fin);
+        int stop = svc.indexOf("listening = false;", fin);
+        int enqueue = svc.indexOf("outbox.enqueueRecording(", body);
+        assertTrue(fin > 0 && inc > fin && inc < body && inc < stop);
+        int release = svc.indexOf("try { finishIntoOutbox(); } finally { saving.decrementAndGet(); }", fin);
+        assertTrue("saving is released only after the whole outbox hand-off returns", release > inc && release < body && enqueue > body);
     }
 
     static final String FEED = "https://box.example.ts.net/reports/wizard-os/latest.json";

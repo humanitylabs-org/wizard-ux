@@ -37,3 +37,12 @@ test('Back cannot close an ordinary window or a stale workflow', () => {
  assert.equal(t.ctx.closeWorkflow({ id: 'gone', workflow: true }), false);
  assert.ok(t.W.chat);
 });
+test('an app in a link preview window that says it is done (nav.back) closes the preview, as Esc does (Reader hand-off, 7 Nov 2026)', () => {
+ // Gate 7 Nov: Reader handed a bot-walled page to a new tab, then called WizardApp.nav.back(); desktop answered only for
+ // sign-in workflows, so the Reader preview stayed open beside the chat showing "This site does not let Reader in".
+ const t = setup(); t.W.reader = { id: 'reader', app: 'frame', appId: 'browser', preview: true };
+ assert.equal(t.ctx.closePreview(t.W.reader), true); assert.equal(t.W.reader, undefined); assert.ok(t.W.chat);
+ assert.equal(t.ctx.closePreview(t.W.chat), false, 'an ordinary window is never closed by an app'); assert.ok(t.W.chat);
+ assert.equal(t.ctx.closePreview({ id: 'gone', preview: true }), false, 'a stale preview is ignored');
+ assert.match(source, /back: \(\) => closeWorkflow\(w\) \|\| closePreview\(w\)/);
+});

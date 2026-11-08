@@ -294,8 +294,14 @@
   function knownTakeLive() {
     try {
       const w = W$(), c = window.WizAppCapture?.getState?.();
+<<<<<<< HEAD
       // A processing/sent take and a deferred reason from an old APK are not live recording evidence.
       return !!J(DEV()?.recActive?.())?.id || ['listen', 'paused'].includes(w?.voice) || !!c?.recording || DEV()?.updateRecording?.() === true;
+=======
+      // A processing/sent take, a deferred reason and an old APK's updateRecording() (which can report a stale or generic
+      // mic claim) are not live recording evidence: native still fences genuine takes, and its refusal gets a recovery path.
+      return !!J(DEV()?.recActive?.())?.id || ['listen', 'paused'].includes(w?.voice) || !!c?.recording;
+>>>>>>> origin/main
     } catch (_) { return true; } // never bypass an unreadable recorder
   }
   const readyMessage = u => `${readyText(u)}${knownTakeLive() ? ' · Finish your recording first' : updateAction ? ' · ' + updateAction : ''}`;

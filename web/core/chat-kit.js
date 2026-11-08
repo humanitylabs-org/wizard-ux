@@ -110,7 +110,11 @@
     .replace(/\[WIZARD_FILE_CHIPS_V1\][\s\S]*?\[\/WIZARD_FILE_CHIPS_V1\]/g, '')
     .replace(/\[WIZARD_CLOSE_AND_FILE_V1\][\s\S]*?\[\/WIZARD_CLOSE_AND_FILE_V1\]/g, '')
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, '')
+<<<<<<< HEAD
     .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\][\s\S]*?\[\/WIZARD_TWEAK_V1\][ \t]*\n*/g, '\n\n')
+=======
+    .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // unterminated: to the end
+>>>>>>> origin/main
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')

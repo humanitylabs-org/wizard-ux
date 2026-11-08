@@ -81,6 +81,16 @@
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', launcherSettled() && !!window.WizLauncher?.get('autoOpen').some(id => APP[id])); } }
   window.WosFeatures.pruneWindows(W);
   desks = window.WizCore.migrateChatsFocus(W, desks);
+  /* Upgrade: starter windows the previous shell opened carry no `seed` mark. Until this device first joins the shared
+   * workspaces nothing it holds has reached the box, so its auto-open apps are still starter apps: mark them, and the
+   * first join drops them instead of pushing them to every device. A joined device's windows already synced as before. */
+  function markLegacyStarters(wins, autoOpen, joined) {
+    if (joined) return 0;
+    const auto = new Set(autoOpen || []); let n = 0;
+    for (const w of Object.values(wins || {})) if (w && w.app === 'frame' && auto.has(w.appId) && !w.seed) { w.seed = true; n++; }
+    return n;
+  }
+  markLegacyStarters(W, window.WizLauncher?.get('autoOpen'), joinedWorkspaces());
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
@@ -3957,7 +3967,11 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       // Joining the owner's shared workspaces: his open apps replace this device's starter apps (seed), so a phone
+<<<<<<< HEAD
       // whose storage was reset never shows Topics or Mizel he did not open (James, 6 Nov 2026).
+=======
+      // whose storage was reset never shows starter apps he did not open (James, 6 Nov 2026).
+>>>>>>> origin/main
       if (o.join && state.desks.length) desks = desks.filter(d => {
         if (d.home || !d.wins.some(id => W[id]?.seed)) return true;
         d.wins = d.wins.filter(id => { if (!W[id]?.seed) return true; winEl(id)?.remove(); delete W[id]; return false; });

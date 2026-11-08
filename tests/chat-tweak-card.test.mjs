@@ -139,11 +139,68 @@ test('wiring: Chats draws the card inside the reply and routes its tap; WosSetti
   assert.match(settings, /window\.WosSettings = \{[^\n]*\btweakCard, tweakCardTap,/);
   assert.equal((settings.match(/class="st-row tw-row"/g) || []).length, 1, 'one switch-row markup, shared');
   const css = read('web/core/chats.css'), rule = css.slice(css.indexOf('.msg.a .ch-tweak {'), css.indexOf('}', css.indexOf('.msg.a .ch-tweak {')));
+<<<<<<< HEAD
   assert.match(rule, /background: linear-gradient\(var\(--wz-surface\), var\(--wz-surface\)\), var\(--wz-panel, var\(--wz-base, var\(--bg, #05030c\)\)\)/, 'text-bearing card is opaque');
   assert.doesNotMatch(rule.replace(/var\(--bg, #05030c\)/, ''), /#[0-9a-f]{3,8}\b|rgba?\(/i, '--wz-* tokens only');
+=======
+  assert.match(rule, /background: linear-gradient\(var\(--wz-surface\), var\(--wz-surface\)\), var\(--wz-panel, var\(--wz-base, var\(--bg\)\)\)/, 'text-bearing card is opaque (base.css always defines --bg)');
+  assert.doesNotMatch(rule, /#[0-9a-f]{3,8}\b|rgba?\(/i, '--wz-* tokens only');
+>>>>>>> origin/main
 });
 
 test('experience state names the shells a non-view tweak declares (so the card can say Phone only)', () => {
   const src = read('web/core/experience.js');
   assert.match(src, /: Array\.isArray\(manifests\.get\(t\.id\)\?\.shells\) \? \{ \.\.\.t, shells: shellsOf\(t\.id\) \} : t\) \}\);/);
 });
+<<<<<<< HEAD
+=======
+
+test('marker: a reply cut off inside an unterminated marker never shows the protocol text (saved text, copy, preview)', () => {
+  const cut = 'Shipped the phone list. It starts off.\n\n[WIZARD_TWEAK_V1]{"id":"wizard/desk';
+  const [tn] = KIT.parseRows(rows(cut));
+  for (const t of [tn.a.text, tn.a.plainText]) { assert.doesNotMatch(t, /WIZARD_TWEAK|wizard\/desk/); assert.match(t, /starts off\./); }
+  assert.equal([...(tn.a.tweaks || [])].length, 0, 'no card from a half marker');
+  const ctx = { chipLabel: () => ' ' };
+  vm.runInNewContext(between(read('web/live.js'), '  const clean = s =>', '\n\n') + '\nglobalThis.clean = clean;', ctx);
+  assert.equal(ctx.clean(cut), 'Shipped the phone list. It starts off.');
+});
+
+
+// Agent chat parity (AGENTS.md; wizard-agent-service qa/agent-parity/features.json "chat-tweak-card"): the same reply in a
+// main thread and in host-profile, container and restricted routed threads gives the same card, the same tap and the
+// same clean Chats preview. Routed ids and agent pins as the Service sends them (tests/chat-pins.test.mjs KINDS).
+const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
+  container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
+function listNormalizer() {
+  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  assert.ok(a > 0 && b > a, 'live.js normalizer block found');
+  const context = modelContext({});
+  vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
+  return context.normalize;
+}
+test('parity: main and routed threads (host-profile, container, restricted) get the same card, tap and preview', async () => {
+  const normalize = listNormalizer(), seen = new Map();
+  for (const [kind, [sid, agent]] of Object.entries(ROUTES)) {
+    const history = rows(reply).map(r => ({ ...r, session_id: sid, ...(agent ? { agent } : {}) }));
+    const [tn] = KIT.parseRows(history);
+    assert.deepEqual([...tn.a.tweaks], ['wizard/desktop-chats'], `${kind}: tweak parsed from history`);
+    assert.doesNotMatch(tn.a.text + tn.a.plainText, /WIZARD_TWEAK|desktop-chats/, `${kind}: marker hidden in thread and copy`);
+    const k = cardKit({ tweaks: [{ ...desktopChats, on: false }] });
+    const html = k.tweakCard(tn.a.tweaks);
+    assert.match(html, /role="switch" aria-checked="false"/, kind);
+    const card = fakeCard('wizard/desktop-chats'); k.cards.push(card);
+    assert.equal(k.tweakCardTap(fakeButton('wizard/desktop-chats', false)), true, `${kind}: tap accepted`);
+    assert.match(card.innerHTML, /aria-checked="true"/, `${kind}: painted on the tap's frame`);
+    await Promise.resolve(); await Promise.resolve();
+    assert.deepEqual(k.calls, ['wizard/desktop-chats'], `${kind}: one toggle`);
+    const full = normalize({ id: sid, title: 'Synthetic', status: 'completed', ...(agent ? { agent } : {}), latest_message: { role: 'assistant', content: reply, timestamp: 2 } });
+    assert.equal(full.agent, agent, `${kind}: row keeps its agent`);
+    assert.equal(full.preview, 'Shipped the phone list. It starts off. Say if it reads right.', `${kind}: full-list preview`);
+    // The slim list arrives already cleaned by the Service (wizard-agent-service tests/session-list-view.node.mjs).
+    const slim = normalize({ listVersion: 1, id: sid, status: 'completed', agent, preview: full.preview });
+    assert.equal(slim.preview, full.preview, `${kind}: slim-list preview`);
+    seen.set(kind, html);
+  }
+  assert.equal(new Set(seen.values()).size, 1, 'byte-identical card for every runtime kind');
+});
+>>>>>>> origin/main
