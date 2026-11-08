@@ -58,7 +58,6 @@ final class UnreadNotification implements BadgeSync.Mechanism {
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
                 .setContentIntent(pi);
-        if (Build.VERSION.SDK_INT >= 30) b.setSilent(true);
         nm.notify(ID, b.build());
         Log.i(UnreadBadges.TAG, "notification count=" + count);
         return true;
