@@ -35,6 +35,8 @@ const check = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 
         const before = await page.evaluate(() => {
           const nb = [...document.querySelectorAll('.ch-msgs')].find(n => n.getClientRects().length);
           const doc = !!nb.closest('.wos-doc-thread'), sc = doc ? document.scrollingElement : nb;
+          // A reader's own gesture (wheel/touch) ends the opening settle; a programmatic scroll alone is not a reader.
+          nb.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 4000 }));
           sc.scrollTop = sc.scrollHeight; return sc.scrollTop;
         });
         await page.waitForTimeout(600);
