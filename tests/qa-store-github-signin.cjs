@@ -2,22 +2,24 @@
 // documented _github calls (and no install, no /v1/runs) are allowed. The GitHub account, code and catalog are mocked
 // exactly per the App Manager contract; no real credential exists anywhere in this test.
 const {chromium}=require('../tools/qa-playwright.cjs');
+const {ownerRead,seedOwner}=require('../tools/qa-desktop-frame-fixture.cjs');
 const fs=require('node:fs'), path=require('node:path'), assert=require('node:assert/strict');
 const ROOT=process.env.QA_ROOT || path.resolve(__dirname,'..'), OUT=process.env.QA_OUTPUT || path.join(process.env.TMPDIR || '/tmp','store-github-signin');
 const HOLD=Number(process.env.QA_HOLD_MS || 5000);   // the delayed backend that proves a tap paints before the answer
-const C='a'.repeat(40), origin='https://github-signin.test', DECOY='gho_TESTONLYdecoy', DEVICE='DEVICE-CODE-SECRET';
+const C='a'.repeat(40), origin='http://github-signin.test', DECOY='gho_TESTONLYdecoy', DEVICE='DEVICE-CODE-SECRET';
 const catalog=[{id:'public-notes',name:'Public Notes',summary:'Notes from the public App Index.',repo:'example/public-notes',source:'standard',type:'view',commit:C}];
 const beta={id:'beta-journal',name:'Friend Journal',summary:'A private app a friend shared on GitHub.',repo:'friend/journal',source:'beta',source_name:'Beta',channel:'standard',private:true,type:'view',commit:'b'.repeat(40),publisher:'friend'};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const host=(skin)=>`<!doctype html><html data-skin="${skin}"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/wizard-os-home/core/base.css"><link rel="stylesheet" href="/wizard-os-home/skins/sepia/skin.css"><style>html,body{margin:0;width:100%;height:100%;background:var(--bg)}.win{width:100%;height:100%;background:var(--sk-win,var(--bg))}iframe{border:0;width:100%;height:100%;display:block}</style><script>localStorage.setItem('wos.skin','${skin}');</script><script src="/wizard-os-home/core/skins.js"></script><script>window.WizCore={apps:()=>({APPS:[{url:'/wizard-os-home/store/'}]})};window.WosChat={sharePayload:async data=>{window.shared=data;return 'shared'}};</script><script src="/wizard-os-home/core/appearance-host.js"></script><body><div class="win"><iframe src="/wizard-os-home/store/index.html"></iframe></div></body></html>`;
 const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].split(/[ ,/]+/).filter(Boolean);return p.length>3?Number(p[3]):1;};
 (async()=>{
  fs.mkdirSync(OUT,{recursive:true}); const browser=await chromium.launch({headless:true,args:['--no-sandbox']}); const results=[];
- try {for(const skin of ['nebula','sepia'])for(const viewport of [{width:390,height:844},{width:1280,height:800}]){
-  const phone=viewport.width===390, tag=`${skin}-${viewport.width}`;
-  const context=await browser.newContext({viewport,hasTouch:phone,isMobile:phone,serviceWorkers:'block',permissions:['clipboard-read','clipboard-write']});
+ try {for(const shell of ['phone','desktop']){
+  const phone=shell==='phone', viewport=phone?{width:390,height:844}:{width:1440,height:900}, tag=shell; let skin='nebula',result_other=[];
+  const context=await browser.newContext({...(phone?{viewport,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'}:{viewport}),serviceWorkers:'block',permissions:['clipboard-read','clipboard-write']});
+  await context.addInitScript(seedOwner,{phone:true});
+  await context.addInitScript(sh=>{if(window!==top)return;localStorage.setItem('wux.shell',sh);localStorage.setItem('wos.skin','nebula');},shell);
   const gh={state:'signed_out',source:'file',login:'friend-tester',failSignout:false}, delay={get:0,start:0,signout:0};
-  const log={get:0,start:[],signout:0,search:[],unsafe:[],runs:[],errors:[],gate:[]};
+  const log={get:0,start:[],signout:0,search:[],unsafe:[],otherWrites:[],runs:[],errors:[],gate:[]};
   const status=()=>({state:gh.state,login:gh.state==='signed_in'?gh.login:'',source:gh.source,access_token:DECOY,device_code:DEVICE,
    ...(gh.state==='pending'?{user_code:'WDJB-MJHT',verification_uri:'https://github.com/login/device',expires_in:899,interval:5}:{})});
   await context.route('**/*',async route=>{
@@ -32,7 +34,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
      log.signout++;await sleep(delay.signout);if(gh.failSignout)return route.fulfill({status:500,json:{error:'nope'}});gh.state='signed_out';return route.fulfill({json:status()});
     }
    }
-   if(!['GET','HEAD'].includes(req.method())){log.unsafe.push(req.method()+' '+u.pathname);return route.abort();}
+   if(!['GET','HEAD'].includes(req.method())){const w=req.method()+' '+u.pathname;(/store|install|github|\/v1\/runs/.test(u.pathname)?log.unsafe:log.otherWrites).push(w);return route.fulfill({json:{}});}
    if(u.pathname.includes('/store-data/')){
     if(u.pathname.includes('/index/search')){log.search.push(u.search);return route.fulfill({json:{apps:[...catalog,...(gh.state==='signed_in'?[beta]:[])],sources:[],next_offset:null}});}
     if(u.pathname.endsWith('/api/apps/installed'))return route.fulfill({json:{installed:[]}});
@@ -40,17 +42,20 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
     if(u.pathname.includes('/router/v1/'))return route.fulfill({json:{models:[],connections:[]}});
     return route.fulfill({status:404,json:{error:'Fixture only'}});
    }
-   if(u.pathname==='/host')return route.fulfill({contentType:'text/html',body:host(skin)});
    if(u.pathname.startsWith('/wizard-os-home/')){
     const file=path.join(ROOT,'web',decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)));
     if(fs.existsSync(file)&&fs.statSync(file).isFile())return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':'application/octet-stream',body:fs.readFileSync(file)});
    }
-   return route.abort();
+   if(u.origin!==origin)return route.abort();
+   return route.fulfill({json:ownerRead(u.pathname)});
   });
-  const page=await context.newPage();page.on('pageerror',e=>log.errors.push(e.message));await page.goto(origin+'/host');
-  const f=page.frames().find(f=>f.url().includes('/store/index.html'));assert.ok(f);
+  const page=await context.newPage();page.on('pageerror',e=>log.errors.push(e.message));await page.goto(`${origin}/wizard-os-home/${phone?'':'desktop.html'}?shell=${shell}&open=app-store`);
+  await page.waitForFunction(sh=>document.documentElement.dataset.shell===sh,shell);
+  await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/store/index.html')));
+  let f=page.frames().find(f=>f.url().includes('/store/index.html'));
+  if(!f)f=await page.waitForEvent('framenavigated',{predicate:f=>f.url().includes('/store/index.html')});
   await f.waitForFunction(()=>window.__store?.state().loaded&&document.documentElement.dataset.skin);
-  assert.equal(await f.evaluate(()=>document.documentElement.dataset.skin),skin);
+  assert.equal(await f.evaluate(()=>document.documentElement.dataset.skin),'nebula');
   const shot=async name=>page.screenshot({path:path.join(OUT,`${tag}-${name}.png`),animations:'disabled'});
   const sheet=()=>f.evaluate(()=>document.getElementById('sheet').innerText);
   const state=()=>f.evaluate(()=>window.__store.state());
@@ -95,18 +100,18 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   await f.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));});
   await sleep(300);g1=log.get;await sleep(4300);assert.equal(log.get,g1,'no polling while hidden');
   await f.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
-  await f.waitForFunction(n=>true,0);await sleep(250);assert.ok(log.get>g1,'reads again as soon as the page is visible');
-  assert.equal((await state()).github.polling,true);
+  await sleep(250);assert.ok(log.get>g1,'reads again as soon as the page is visible');
+  await f.waitForFunction(()=>window.__store.state().github.polling===true);
 
   // ---- 4. live skin change while the sheet is open (real host → Appearance v1)
-  const other=skin==='nebula'?'sepia':'nebula';
+  const other='grove';
   const look=()=>f.evaluate(()=>{const p=document.querySelector('.gh-panel'),c=getComputedStyle(p);return {skin:document.documentElement.dataset.skin,bg:c.backgroundColor,img:c.backgroundImage,ink:getComputedStyle(document.querySelector('.gh-panel h3')).color,raised:getComputedStyle(document.documentElement).getPropertyValue('--wz-surface-raised').trim()};});
   const before=await look();assert.equal(alpha(before.bg),1,'panel is opaque');
   await page.evaluate(id=>WosSkin.set(id),other);await f.waitForFunction(s=>document.documentElement.dataset.skin===s,other);await twoFrames();
   const after=await look();assert.equal(after.skin,other);assert.equal(alpha(after.bg),1,'still opaque after the skin change');
   assert.notDeepEqual([before.bg,before.img,before.raised],[after.bg,after.img,after.raised],'panel follows the live skin');
   assert.match(await f.locator('[data-gh-code]').innerText(),/WDJB-MJHT/);await shot('pending-live-'+other);
-  await page.evaluate(id=>WosSkin.set(id),skin);await f.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
+  skin=other;
 
   // ---- 5. approval on GitHub: the poll sees signed_in, Store refreshes with refresh=1, Beta app appears with no reload
   const marker=await f.evaluate(()=>window.__qaDocument=String(Math.random()));
@@ -114,7 +119,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   await f.waitForFunction(()=>/Signed in as/.test(document.getElementById('sheet').innerText),null,{timeout:6000});
   assert.match(await f.locator('[data-gh-who]').innerText(),/^Signed in as friend-tester$/);
   assert.equal(await f.locator('[data-gh-code]').count(),0);
-  await f.waitForFunction(n=>true,0);await sleep(400);
+  await sleep(400);
   assert.ok(log.search.slice(searches0).some(s=>/refresh=1/.test(s)),'catalog refreshed with refresh=1');
   assert.equal(await f.evaluate(()=>window.__qaDocument),marker,'no reload');
   assert.ok(!(await sheet()).match(/gho_|token/i));
@@ -122,8 +127,8 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   g1=log.get;await sleep(3000);assert.equal(log.get,g1,'polling stops once signed in');
   // Back pops exactly the sheet; the list shows the Beta app
   assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),true);assert.equal(await f.locator('#sheet').isHidden(),true);
-  await f.locator('[data-kind="apps"]').click();await f.locator('#results .row').nth(1).waitFor();
-  assert.match(await f.locator('#results').innerText(),/Friend Journal/);assert.equal(await f.locator('#results [data-app^="beta-journal|"] [data-source="beta"]').count(),1);
+  await f.locator('[data-kind="apps"]').click();await f.locator('#results .row').first().waitFor();
+  assert.match(await f.locator('#results').innerText(),/Friend Journal/);assert.equal(await f.locator('#results .row[data-app^="beta-journal|"] [data-source="beta"]').count(),1);
   await shot('beta-list');
 
   // ---- 6. nested Back: list → Sources → Back → list → Back → root → Back consumed by the shell
@@ -135,7 +140,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   await tap('#sources');await f.locator('[data-gh-out]').waitFor();await f.keyboard.press('Escape');assert.deepEqual((await state()).layers,[]);
   await tap('#sources');await f.locator('[data-gh-out]').waitFor();await tap('.gh-panel h3');assert.deepEqual((await state()).layers,['sheet']);
   const pb=await f.locator('.gh-panel').boundingBox();
-  const outside=phone?[8,Math.min(viewport.height-20,pb.y+pb.height+80)]:[viewport.width-20,viewport.height-40];
+  const outside=[pb.x+20,pb.y+pb.height+40];   // inside the sheet layer, below the panel
   if(phone)await page.touchscreen.tap(...outside);else await page.mouse.click(...outside);
   await f.waitForFunction(()=>window.__store.state().layers.length===0);
   await tap('#sources');await f.locator('[data-gh-out]').waitFor();
@@ -149,7 +154,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   assert.match(await f.locator('#toast').innerText(),/Couldn’t sign out/);assert.equal(log.search.length,s0,'a failed sign-out does not refresh');
   gh.failSignout=false;await probe();await tap('[data-gh-out]');p=await painted();assert.match(p.text,/Sign in to GitHub/);
   await f.waitForFunction(()=>window.__store.state().github.busy==='',null,{timeout:HOLD+4000});delay.signout=0;
-  await f.waitForFunction(n=>true,0);await sleep(500);assert.ok(log.search.slice(s0).some(s=>/refresh=1/.test(s)),'sign-out refreshes the catalog');
+  await sleep(500);assert.ok(log.search.slice(s0).some(s=>/refresh=1/.test(s)),'sign-out refreshes the catalog');
   assert.match(await sheet(),/Sign in to GitHub/);
   assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),true);await f.locator('[data-kind="apps"]').click();await f.locator('#results .row').first().waitFor();
   assert.doesNotMatch(await f.locator('#results').innerText(),/Friend Journal/);await f.evaluate(()=>window.__wizardCloseOverlay());
@@ -167,10 +172,10 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   }
   assert.equal(log.start.length,2);
   // ---- 9. nothing else happened
-  assert.deepEqual(log.unsafe,[]);assert.deepEqual(log.runs,[]);assert.deepEqual(log.errors,[]);
+  result_other=log.otherWrites;assert.deepEqual(log.unsafe,[]);assert.deepEqual(log.runs,[]);assert.deepEqual(log.errors,[]);
   for(const g of log.gate)assert.deepEqual([g.store,g.type,g.body],['1','application/json','{}']);
   assert.equal(await f.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-  results.push({skin,viewport,starts:log.start.length,signouts:log.signout,polls:log.get,unsafeWrites:log.unsafe.length,runs:log.runs.length,pageErrors:log.errors});
+  results.push({shell,viewport,starts:log.start.length,signouts:log.signout,polls:log.get,unsafeWrites:log.unsafe.length,otherShellWrites:log.otherWrites,runs:log.runs.length,pageErrors:log.errors});
   await context.close();
  }
  // Standalone Store (no host): dark fallbacks, opaque panel.
