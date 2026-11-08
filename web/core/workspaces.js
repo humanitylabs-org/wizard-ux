@@ -46,7 +46,7 @@
   }
   function merge() {
     const own = { id: 'this', name: text(registry.this?.wizard) || 'This Wizard', url: location.origin, kind: 'remote', status: 'ready', source: 'registry' };
-    const managed = (Array.isArray(registry.managed) ? registry.managed : []).slice(0, MAX - 1).map(v => ({ ...v, kind: v.kind === 'company' ? 'company' : 'managed', source: 'registry' }));
+    const managed = (Array.isArray(registry.managed) ? registry.managed : []).slice(0, MAX - 1).map(v => ({ ...v, kind: v.kind === 'company' ? 'company' : v.kind === 'remote' ? 'remote' : 'managed', source: 'registry' }));
     const entries = normalize([own, ...managed]);
     const urls = new Set(entries.filter(v => v.url).map(v => v.url));
     for (const v of saved()) if (!entries.some(i => i.id === v.id) && !urls.has(v.url) && entries.length < MAX) { entries.push(v); urls.add(v.url); }

@@ -72,7 +72,7 @@ export function cleanRegistry(raw) {
     const where = clip(m.where, 120), peer = clip(m.peer, 64).toLowerCase();
     // A saved address is navigation only, never permission to manage the target.
     let url = ''; try { const u = new URL(clip(m.url, 2048)); if (['http:', 'https:'].includes(u.protocol) && !u.username && !u.password) url = u.href; } catch (_) {}
-    const workspace = { ...(url ? {url} : {}), ...(['company', 'managed'].includes(m.kind) ? {kind: m.kind} : {}), ...(['owner', 'technical-admin', 'member'].includes(m.role) ? {role: m.role} : {}) };
+    const workspace = { ...(url ? {url} : {}), ...(['company', 'managed', 'remote'].includes(m.kind) ? {kind: m.kind} : {}), ...(['owner', 'technical-admin', 'member'].includes(m.role) ? {role: m.role} : {}) };
     managed.push({id, name, ...workspace, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m), ...withAccess(m.access)});
     if (managed.length >= 12) break;
   }

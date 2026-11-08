@@ -139,6 +139,16 @@ test('registry read path preserves validated workspace address, kind and role', 
   assert.equal(result[0].url, 'http://private-box:8923/'); assert.equal(result[0].kind, 'company'); assert.equal(result[0].role, 'technical-admin');
   assert.equal(result[1].url, undefined);
 });
+test('another Wizard of the same owner (kind remote) lists under My Wizards, switchable', async () => {
+  const { cleanRegistry } = await import('../tools/system-devices.mjs');
+  const reg = cleanRegistry({ managed: [{ id: 'wizard-james', name: 'WizardOS 2', kind: 'remote', url: 'https://wizard-james.example.ts.net:8796/wizard-os-home/', role: 'owner' }] });
+  assert.equal(reg.managed[0].kind, 'remote');
+  const b = boot({ devices: reg });
+  const state = await b.w.list();
+  const it = state.items.find(v => v.id === 'wizard-james');
+  assert.equal(it.kind, 'remote'); assert.equal(it.name, 'WizardOS 2'); assert.equal(b.w.groups(state.items)[0].label, '');
+  await b.w.switch('wizard-james'); assert.equal(b.nav.length, 1); assert.match(b.nav[0], /^https:\/\/wizard-james\.example\.ts\.net:8796\/wizard-os-home\/$/);
+});
 test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', () => {
   for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/workspaces.js/);
   assert.match(read('web/core/bridge.js'), /window.wizardUX = \{ \.\.\.window.wizardUX,/);
