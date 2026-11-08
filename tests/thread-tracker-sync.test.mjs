@@ -17,9 +17,14 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
     WizChatsListModel: { isListWorking: s => s?.status === 'running' } };
   const fetchImpl = async (path, init = {}) => box(path, init);
   const ctx = vm.createContext({ window: win, document: doc, fetch: fetchImpl, setInterval() {}, setTimeout, CustomEvent: class { constructor(t, init) { this.type = t; this.detail = init?.detail; } }, MutationObserver: class { constructor(f) { mutation = f; } observe() {} }, Date, JSON, Math, Set, Map, Object, String, Promise, console });
+<<<<<<< HEAD
   win.WizLive = { session: () => ({ status: 'running' }) };
   vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx);
   win.WizChatsListModel = ctx.WizChatsListModel;
+=======
+  // The real Chats list model decides Working vs stopped, as in the shell.
+  vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx); win.WizChatsListModel = ctx.WizChatsListModel;
+>>>>>>> 75299dfa (Thread tracker: header 'N open' counts every listed row, including answered asks still being worked on (matches tally) on current live 6d7e155f)
   vm.runInContext(readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8'), ctx);
   if (windows) {
     // Exercise the actual shared Chats subscriber, not a test copy of the activation behavior.
@@ -165,5 +170,67 @@ test('send before ledger ingestion reconciles old green only, not work finished 
   return reply({items:[item('old','done',{message_id:'m',at:10}),item('new','done',{message_id:'n',at:10,updated_at:30})]});
  });
  T.beforeSend('t','',20); await tick();
+<<<<<<< HEAD
  assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old']}]); assert.match(T.dots('t'),/1 finished, not seen/);
+=======
+ assert.deepEqual(writes,[]); assert.match(T.dots('t'),/2 finished, not seen/);
+});
+test('late ledger reload preserves pinned versions but never expands the snapshot to newly ingested work', async () => {
+ let items=[item('old','done',{message_id:'m',at:10})]; const writes=[];
+ const {T}=boot((path,init)=>{
+  if(init.method==='POST'){writes.push(JSON.parse(init.body));return new Promise(()=>{});}
+  return reply(path.includes('/counts')?{threads:{}}:{items});
+ });
+ await T.load('t'); const lease=T.beforeSend('t','',20,{defer:true});
+ items=[...items,item('new','done',{message_id:'new',at:10,updated_at:30})];
+ // An ordinary late ledger poll while custody is pending must not add ids.
+ await T.loadCounts(true); await tick(); lease.commit(); await tick();
+ assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old'],items:[{id:'old',updated_at:10}]}]); assert.match(T.dots('t'),/1 finished, not seen/);
+});
+
+// Owner reply = answered: amber/red groups on older replies stop counting and spin while the run works (no clock, no backend ack).
+test('a send answers older amber and red groups: no red, count drops, spinner while working, re-tag brings it back', async () => {
+  let items = [item('shots', 'blocked', { message_id: 'm', title: 'Marker screenshots' }), item('redact', 'needs_you', { message_id: 'm', ask: 'Reply redact to retry', title: 'Redact marker' }),
+    item('other', 'needs_you', { message_id: 'n', ask: 'Approve the logo', title: 'Logo' })];
+  const writes = []; let status = 'completed';
+  const { T, win } = boot((path, init) => { if (init.method === 'POST') writes.push(JSON.parse(init.body)); return reply(path.endsWith('/counts') ? { threads: {} } : { items }); });
+  win.WizLive = { session: () => ({ status }) };
+  await T.load('t');
+  assert.match(T.stripHtml('t'), /2 open/); assert.match(T.stripHtml('t'), /tt-dot bad/);
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true });
+  status = 'running'; lease.commit(); await tick();
+  const html = T.stripHtml('t');
+  assert.doesNotMatch(html, /tt-dot bad|tt-dot you/, 'no red or amber while the run works');
+  assert.match(html, /2 open/); assert.match(html, /Answered · working on it/); assert.match(html, /tt-dot run/); assert.doesNotMatch(T.dots('t'), /need you|stuck/); assert.match(T.dots('t'), /running/);
+  assert.equal(writes.filter(w => w.items).length, 0, 'never acknowledged in the backend');
+  // The run ends without mentioning the item: it stays answered and uncounted.
+  status = 'completed'; assert.equal(T.stripHtml('t'), ''); assert.equal(T.dots('t'), '');
+  // The next reply re-tags it (a new server version): it returns as amber/red on the new reply.
+  items = [item('shots', 'blocked', { message_id: 'p', updated_at: 30, title: 'Marker screenshots' }), items[1], items[2]];
+  await new Promise(r => setTimeout(r, 2600)); await T.load('t'); await tick();
+  const back = T.stripHtml('t'); assert.match(back, /tt-dot bad/); assert.match(back, /1 open/);
+});
+test('a cancelled send does not answer anything; answered survives reload only for the same versions', async () => {
+  const items = [item('a', 'blocked', { message_id: 'm' })];
+  const { T, win } = boot((path) => reply(path.endsWith('/counts') ? { threads: {} } : { items }));
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  await T.load('t');
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true }); lease.cancel();
+  assert.match(T.stripHtml('t'), /tt-dot bad/);
+>>>>>>> 75299dfa (Thread tracker: header 'N open' counts every listed row, including answered asks still being worked on (matches tally) on current live 6d7e155f)
+});
+// James, 7 Nov 2026: header said "2 open" while the strip listed 7 running rows (5 answered + 2 working) and the tally said 7.
+test('header open count equals the rows listed and the tally, including answered asks still being worked on', async () => {
+  const items = [1, 2, 3, 4, 5].map(n => item('ask' + n, n % 2 ? 'needs_you' : 'blocked', { message_id: 'm' + n, ask: 'Reply ' + n }))
+    .concat([item('w1', 'running', { message_id: 'w1' }), item('w2', 'running', { message_id: 'w2' })]);
+  const { T, win } = boot((path) => reply(path.endsWith('/counts') ? { threads: {} } : { items }));
+  let status = 'completed'; win.WizLive = { session: () => ({ status }) };
+  await T.load('t');
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true }); status = 'running'; lease.commit(); await tick();
+  const html = T.stripHtml('t');
+  assert.equal((html.match(/data-tt-row=/g) || []).length, 7, 'seven rows listed');
+  assert.equal((html.match(/Answered · working on it/g) || []).length, 5);
+  assert.match(html, /<span class="tt-tot">7 open<\/span>/);
+  assert.match(html, /aria-label="7 running"/);
+  assert.match(T.dots('t'), /7 running/);
 });

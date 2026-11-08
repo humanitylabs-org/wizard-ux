@@ -156,6 +156,11 @@
     if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
+<<<<<<< HEAD
+=======
+    // Header = rows listed = sum of the visible tally: answered asks still working on it count as open.
+    const openN = live.length;
+>>>>>>> 75299dfa (Thread tracker: header 'N open' counts every listed row, including answered asks still being worked on (matches tally) on current live 6d7e155f)
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
     const run = live.filter(i => i.state === 'running');
     const fin = live.filter(i => i.state === 'done');
