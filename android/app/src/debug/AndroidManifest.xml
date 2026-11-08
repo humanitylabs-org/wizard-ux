@@ -1,7 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <!-- Debug-only, isolated companion process; never packaged in the signed release. -->
-        <activity android:name="ai.wizards.os.everywhere.DictationEditorFixture"
-            android:exported="true" android:process=":dictationEditor" />
-    </application>
-</manifest>

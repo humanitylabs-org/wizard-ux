@@ -1,2 +1,0 @@
-app_identifier(ENV["APP_IDENTIFIER"] || "ai.wizards.os")
-team_id(ENV["DEVELOPMENT_TEAM"]) if ENV["DEVELOPMENT_TEAM"]
