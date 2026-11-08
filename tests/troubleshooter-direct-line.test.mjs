@@ -81,3 +81,25 @@ test('the recovery window carries the direct-line button, hidden until needed', 
   assert.match(html, /<p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link/);
   assert.match(readFileSync(new URL('../web/core/polish.css', import.meta.url), 'utf8'), /\[data-recovery-direct\]\[hidden\] \{ display: none !important; \}/);
 });
+
+test('phone: a fresh tap that reuses the open Troubleshooter window reruns the fallback at once', async () => {
+  let head = 0;
+  const h = mount({ stored: 'https://wizard.tail.ts.net:9691/troubleshoot/', fetch: async (u, o) => o.method === 'HEAD' ? (head++, { ok: false, status: 504 }) : never() });
+  h.mount(); fire(h, 0); await flush(); // window mounted earlier (no fresh tap): offered, not followed
+  assert.equal(h.direct.hidden, false);
+  assert.deepEqual(h.assigned, []);
+  h.context.WizOpenApp = () => true; // the shell reuses and focuses the mounted window; mountRecovery is not rerun
+  h.context.WizReach.open(); await flush();
+  assert.deepEqual(h.assigned, ['https://wizard.tail.ts.net:9691/troubleshoot/'], 'no wait for the next 15 s poll');
+  assert.equal(head, 2, 'the repair page is tried again on the fresh tap');
+});
+
+test('a later failed health probe never hides a repair page that already loaded', async () => {
+  const h = mount({ fetch: async (u, o) => o.method === 'HEAD' ? { ok: true, status: 200 } : never() });
+  h.mount(); fire(h, 0); await flush();
+  h.handlers.load();
+  assert.equal(h.frame.hidden, false);
+  fire(h, 4000); await flush(); // the ping and internet probes time out: Wizard's address looks unreachable
+  assert.equal(h.frame.hidden, false, 'the loaded document stays usable');
+  assert.equal(h.direct.hidden, true);
+});

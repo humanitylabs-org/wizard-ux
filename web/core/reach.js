@@ -153,7 +153,7 @@
   function recoveryHtml() {
     return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
   }
-  const recoveries = new Set();
+  const recoveries = new Set(), retaps = new Set();
   function mountRecovery(root, url) {
     if (!root || root._recovery) return;
     // Provider reconnect links carry their sign-in workflow in this query. Keep it through local-first checks.
@@ -212,13 +212,22 @@
       root.querySelector('[data-recovery-rows]').innerHTML = [['internet', 'Internet'], ['tailscale', c.tailnet ? 'Tailscale / private connection' : 'Your Wizard’s connection'], ['wizard', 'Wizard']].map(([key, title]) => `<li class="wz-row" data-recovery-row="${key}"><span class="wz-main"><b>${esc(title)}</b><small>${esc(c[key].detail)}</small></span></li>`).join('');
       // A host HTTP error is not proof the repair page loaded. Keep help visible until its actual document loads.
       if (c.hostReachable) loadRepair();
-      if (!c.hostReachable) failed('Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.');
+      // A repair page that already loaded stays: a later failed probe never hides working repair controls.
+      if (!c.hostReachable && !remoteReady) failed('Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.');
       if (c.wizard.state === 'ok') window.WizLive?.refresh?.();
       // Only the open failing recovery window polls; healthy checks stop. Outbox retains sole retry ownership.
       if (c.wizard.state !== 'ok' || !remoteReady) timer = setTimeout(run, 15000);
     }
     button.addEventListener('click', run);
     recoveries.add(run);
+    // A fresh Open Troubleshooter tap that reuses this already-open window reruns the fallback at once: an offered
+    // direct line is followed (phone, confirmed address) and a failed repair page is tried again.
+    retaps.add(function retap() {
+      if (!connected()) { retaps.delete(retap); return; }
+      if (remoteReady) return;
+      if (!direct.hidden) offerDirect();
+      loadRepair();
+    });
     // Mount and paint the ordinary window before any diagnostic work starts.
     requestAnimationFrame(() => setTimeout(() => { loadRepair(); run(); }, 0));
   }
@@ -244,7 +253,9 @@
     // for the bare page is only the last resort, when the shell can't open windows at all.
     open() {
       openedAt = Date.now();
-      try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
+      // Windows mounted before this tap; a window this tap mounts runs its own first load after paint.
+      const reused = [...retaps];
+      try { if (window.WizOpenApp?.('troubleshooter')) { for (const retap of reused) try { retap(); } catch (_) {} return true; } } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
       return true;
