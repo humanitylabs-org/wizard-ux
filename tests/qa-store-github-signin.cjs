@@ -6,7 +6,7 @@ const {ownerRead,seedOwner}=require('../tools/qa-desktop-frame-fixture.cjs');
 const fs=require('node:fs'), path=require('node:path'), assert=require('node:assert/strict');
 const ROOT=process.env.QA_ROOT || path.resolve(__dirname,'..'), OUT=process.env.QA_OUTPUT || path.join(process.env.TMPDIR || '/tmp','store-github-signin');
 const HOLD=Number(process.env.QA_HOLD_MS || 5000);   // the delayed backend that proves a tap paints before the answer
-const C='a'.repeat(40), origin='http://github-signin.test', DECOY='gho_TESTONLYdecoy', DEVICE='DEVICE-CODE-SECRET';
+const C='a'.repeat(40), origin='https://github-signin.test', DECOY='gho_TESTONLYdecoy', DEVICE='DEVICE-CODE-SECRET';
 const catalog=[{id:'public-notes',name:'Public Notes',summary:'Notes from the public App Index.',repo:'example/public-notes',source:'standard',type:'view',commit:C}];
 const beta={id:'beta-journal',name:'Friend Journal',summary:'A private app a friend shared on GitHub.',repo:'friend/journal',source:'beta',source_name:'Beta',channel:'standard',private:true,type:'view',commit:'b'.repeat(40),publisher:'friend'};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -14,7 +14,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
 (async()=>{
  fs.mkdirSync(OUT,{recursive:true}); const browser=await chromium.launch({headless:true,args:['--no-sandbox']}); const results=[];
  try {for(const shell of ['phone','desktop']){
-  const phone=shell==='phone', viewport=phone?{width:390,height:844}:{width:1440,height:900}, tag=shell; let skin='nebula',result_other=[];
+  const phone=shell==='phone', viewport=phone?{width:390,height:844}:{width:1280,height:800}, tag=shell; let skin='nebula',result_other=[];
   const context=await browser.newContext({...(phone?{viewport,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'}:{viewport}),serviceWorkers:'block',permissions:['clipboard-read','clipboard-write']});
   await context.addInitScript(seedOwner,{phone:true});
   await context.addInitScript(sh=>{if(window!==top)return;localStorage.setItem('wux.shell',sh);localStorage.setItem('wos.skin','nebula');},shell);
@@ -43,7 +43,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
     return route.fulfill({status:404,json:{error:'Fixture only'}});
    }
    if(u.pathname.startsWith('/wizard-os-home/')){
-    const file=path.join(ROOT,'web',decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)));
+    const file=path.join(ROOT,'web',(decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length))||'index.html'));
     if(fs.existsSync(file)&&fs.statSync(file).isFile())return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':'application/octet-stream',body:fs.readFileSync(file)});
    }
    if(u.origin!==origin)return route.abort();
@@ -82,8 +82,8 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   // ---- 2. Sign in with a 5 s backend: pending view on the same frame, then the code
   delay.start=HOLD;const gets0=log.get;await probe();await tap('[data-gh-start]');p=await painted();
   assert.ok(p.ms<100,'pending painted '+p.ms+'ms after the tap');assert.match(p.text,/Getting your code…/);
-  assert.equal(await f.locator('[data-gh-start]').isDisabled(),true);assert.equal(await f.locator('.gh-go[aria-busy="true"]').count(),1);
-  await f.locator('[data-gh-start]').click({force:true,trial:true}).catch(()=>{});await twoFrames();
+  assert.equal(await f.locator('.gh-go[aria-busy="true"]').isDisabled(),true);assert.equal(await f.locator('[data-gh-start]').count(),0);
+  await f.locator('.gh-go[aria-busy="true"]').dispatchEvent('click');await twoFrames();
   assert.equal(log.start.length,1,'a second tap while pending does not post again');
   await f.locator('[data-gh-code]').waitFor({timeout:HOLD+4000});delay.start=0;
   assert.equal((await f.locator('[data-gh-code]').innerText()).trim(),'WDJB-MJHT');
@@ -92,7 +92,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   const html=await f.evaluate(()=>document.documentElement.outerHTML);assert.ok(!html.includes(DECOY)&&!html.includes(DEVICE),'no token or device code reaches the page');
   await shot('pending');
   // Copy: label changes on the tap, clipboard holds the code
-  await tap('[data-gh-copy]');assert.match(await f.locator('[data-gh-copy]').innerText(),/Copied/);
+  await f.evaluate(()=>window.focus());await tap('[data-gh-copy]');await sleep(300);assert.match(await f.locator('[data-gh-copy]').innerText(),/Copied/);
   assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'WDJB-MJHT');
 
   // ---- 3. polling: ~2 s cadence, silent while hidden, immediate on return, stops with the sheet
@@ -104,7 +104,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   await f.waitForFunction(()=>window.__store.state().github.polling===true);
 
   // ---- 4. live skin change while the sheet is open (real host → Appearance v1)
-  const other='grove';
+  const other='sepia';
   const look=()=>f.evaluate(()=>{const p=document.querySelector('.gh-panel'),c=getComputedStyle(p);return {skin:document.documentElement.dataset.skin,bg:c.backgroundColor,img:c.backgroundImage,ink:getComputedStyle(document.querySelector('.gh-panel h3')).color,raised:getComputedStyle(document.documentElement).getPropertyValue('--wz-surface-raised').trim()};});
   const before=await look();assert.equal(alpha(before.bg),1,'panel is opaque');
   await page.evaluate(id=>WosSkin.set(id),other);await f.waitForFunction(s=>document.documentElement.dataset.skin===s,other);await twoFrames();
@@ -137,7 +137,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),true);assert.deepEqual((await state()).layers,[]);
   assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),false);assert.equal(await f.locator('#discover').isVisible(),true);
   // Escape closes it; a tap inside the panel keeps it; a tap outside (blank sheet area / header) closes it like Back.
-  await tap('#sources');await f.locator('[data-gh-out]').waitFor();await f.keyboard.press('Escape');assert.deepEqual((await state()).layers,[]);
+  await tap('#sources');await f.locator('[data-gh-out]').waitFor();await f.evaluate(()=>document.body.focus()); await page.keyboard.press('Escape');assert.deepEqual((await state()).layers,[]);
   await tap('#sources');await f.locator('[data-gh-out]').waitFor();await tap('.gh-panel h3');assert.deepEqual((await state()).layers,['sheet']);
   const pb=await f.locator('.gh-panel').boundingBox();
   const outside=[pb.x+20,pb.y+pb.height+40];   // inside the sheet layer, below the panel
@@ -183,7 +183,7 @@ const alpha=c=>{const m=/rgba?\(([^)]+)\)/.exec(c);if(!m)return 1;const p=m[1].s
   await context.route('**/*',async route=>{const u=new URL(route.request().url());
    if(u.pathname.startsWith('/wizard-os-home/store-install/_github'))return route.fulfill({json:{state:'signed_in',login:'friend-tester',source:'file'}});
    if(u.pathname.includes('/store-data/')){if(u.pathname.includes('/index/search'))return route.fulfill({json:{apps:catalog,sources:[],next_offset:null}});if(u.pathname.endsWith('/api/apps/installed'))return route.fulfill({json:{installed:[]}});if(u.pathname.endsWith('/wizard/v1/installed-apps'))return route.fulfill({json:{complete:true,wam:[],shell:[]}});return route.fulfill({status:404,json:{}});}
-   if(u.pathname.startsWith('/wizard-os-home/')){const file=path.join(ROOT,'web',decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)));if(fs.existsSync(file)&&fs.statSync(file).isFile())return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html',body:fs.readFileSync(file)});}
+   if(u.pathname.startsWith('/wizard-os-home/')){const file=path.join(ROOT,'web',(decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length))||'index.html'));if(fs.existsSync(file)&&fs.statSync(file).isFile())return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html',body:fs.readFileSync(file)});}
    return route.abort();});
   const page=await context.newPage();await page.goto(origin+'/wizard-os-home/store/index.html');await page.waitForFunction(()=>window.__store?.state().loaded);
   await page.locator('#sources').tap();await page.locator('[data-gh-out]').waitFor();
