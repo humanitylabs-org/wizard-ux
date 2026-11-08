@@ -57,14 +57,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const errs = []; page.on('pageerror', e => errs.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`); await page.waitForFunction(() => window.WosLookup && window.WosSelMenu);
     const select = async (id, phrase) => page.evaluate(([id, phrase]) => {
-      const n = document.getElementById(id).querySelector('p').firstChild, at = n.nodeValue.indexOf(phrase), r = document.createRange();
+      document.getElementById(id).scrollIntoView({ block: 'start' }); const n = document.getElementById(id).querySelector('p').firstChild, at = n.nodeValue.indexOf(phrase), r = document.createRange();
       r.setStart(n, at); r.setEnd(n, at + phrase.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return s.toString();
     }, [id, phrase]);
     const menu = async () => { await page.locator('.selmenu:not([hidden]).on [data-sm]').first().waitFor({ timeout: 4000 }); return page.evaluate(() => WosSelMenu.state.items); };
     const pop = () => page.evaluate(() => { const e = document.querySelector('.wos-lookup'); return e && !e.hidden ? { text: e.querySelector('.lk-body')?.textContent.trim(), term: e.querySelector('.lk-term')?.textContent, label: e.querySelector('small')?.textContent, state: e.dataset.state } : null; });
     const waitState = (s, ms = 8000) => page.waitForFunction(s => document.querySelector('.wos-lookup')?.dataset.state === s, s, { timeout: ms });
-    const look = () => page.evaluate(() => { const b = document.querySelector('.selmenu [data-sm="lookup"]'); b.click(); const e = document.querySelector('.wos-lookup'); return { visible: !!e && !e.hidden, text: e?.querySelector('.lk-body')?.textContent.trim(), label: e?.querySelector('small')?.textContent, sel: getSelection().toString(), menuHidden: document.querySelector('.selmenu').hidden, rect: e && e.getBoundingClientRect().toJSON() }; });
-    const cleanup = async () => { await page.evaluate(() => { WosLookup.close(); getSelection().removeAllRanges(); }); await sleep(250); };
+    const look = () => page.evaluate(() => { if (!window.__fw) { const f = window.fetch; window.__fw = []; window.fetch = (...a) => { const e = document.querySelector('.wos-lookup'); window.__fw.push(!!e && !e.hidden && /Explaining/.test(e.textContent)); return f(...a); }; } const b = document.querySelector('.selmenu [data-sm="lookup"]'); b.click(); const e = document.querySelector('.wos-lookup'); return { visible: !!e && !e.hidden, text: e?.querySelector('.lk-body')?.textContent.trim(), label: e?.querySelector('small')?.textContent, sel: getSelection().toString(), menuHidden: document.querySelector('.selmenu').hidden, rect: e && e.getBoundingClientRect().toJSON() }; });
+    const cleanup = async () => { await page.evaluate(() => { WosLookup.close(); WosLookup.clearCache(); getSelection().removeAllRanges(); }); await sleep(250); };
     const tap = async (x, y) => { if (W < 700) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y); };
 
     // 1. The menu: Copy · Share · Quote · Look up · Select all
@@ -76,7 +76,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const t0 = Date.now(); const first = await look();
     assert.ok(first.visible && first.text === 'Explaining…' && first.label === 'AI explanation', 'popover painted in the tap task: ' + JSON.stringify(first));
     assert.equal(first.sel, "Plato's Timaeus", 'selection stays alive'); assert.ok(first.menuHidden, 'menu steps aside');
-    assert.equal(calls.length, 0, 'painted before any request reached the server (sync check)');
+    assert.deepEqual(await page.evaluate(() => window.__fw), [true], 'loading state was already on screen when the request was issued');
     if (SHOTS) { await sleep(300); await page.screenshot({ path: path.join(SHOTS, `lookup-loading-${W}.png`) }); }
     await waitState('done', 9000);
     const dt = Date.now() - t0; assert.ok(dt >= 4500, 'the delayed backend really delayed: ' + dt);
@@ -91,13 +91,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     assert.deepEqual(Object.keys(body).sort(), ['after', 'before', 'frame', 'session', 'text']);
     // 4. Text inside is selectable; opaque panel; skin tokens
     const style = await page.evaluate(() => { const e = document.querySelector('.wos-lookup'), c = getComputedStyle(e); return { us: getComputedStyle(e.querySelector('.lk-body')).userSelect, bg: c.backgroundColor, z: c.zIndex, pos: c.position }; });
-    assert.equal(style.us, 'text'); assert.match(style.bg, /^rgb\(/, 'fully opaque panel (no alpha): ' + style.bg); assert.equal(style.pos, 'fixed');
+    assert.equal(style.us, 'text'); assert.ok(/^(rgb|color)\(/.test(style.bg) && !/\/|rgba|, 0\)/.test(style.bg), 'fully opaque panel (no alpha): ' + style.bg); assert.equal(style.pos, 'fixed');
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `lookup-done-${W}.png`) });
     // 5. Copy out of the popover: select its words, the menu offers Copy, the popover stays
     await page.evaluate(() => { const n = document.querySelector('.wos-lookup .lk-body').firstChild, r = document.createRange(); r.setStart(n, 0); r.setEnd(n, 22); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
     const inner = await menu(); assert.ok(inner.includes('copy') && !inner.includes('lookup') && !inner.includes('quote'), 'popover selection menu: ' + inner);
     await page.evaluate(() => document.querySelector('.selmenu [data-sm="copy"]').click()); await sleep(200);
     assert.deepEqual(await page.evaluate(() => window.__copied), [ANSWER.slice(0, 22)], 'copied the popover words'); assert.ok(await pop(), 'popover stays open after copying');
+    // a repeat of the same words in the same message is answered from memory (no second request, instant)
+    await page.evaluate(() => { WosLookup.close(); getSelection().removeAllRanges(); });
+    await select('m1', "Plato's Timaeus"); await menu(); const rep = await look(); assert.equal(rep.text, ANSWER); assert.equal(calls.length, 1, 'repeat served from the in-page cache');
     await cleanup();
 
     // 6. Streaming: provisional deltas trail "…", then the validated final replaces them
@@ -141,7 +144,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     // 11. Long selections are explained locally, no request; James's own messages work too
     mode = 'good'; calls = [];
     await select('m1', 'The demiurge appears in Plato\'s Timaeus as a craftsman'); await menu(); await look();
-    assert.equal((await pop()).text, 'Select a word or short phrase to explain.'); assert.equal(calls.length, 0); await cleanup();
+    assert.equal((await pop()).text, 'Select a word or short phrase to explain.'); assert.equal(await page.locator('[data-lk-retry]').count(), 0, 'no retry for a local notice'); assert.equal(calls.length, 0); await cleanup();
     await select('m2', 'Gnostic emanations'); await menu(); await look(); await waitState('done'); assert.equal(calls[0].text, 'Gnostic emanations'); assert.ok(calls[0].before.includes('SECOND-MESSAGE-MUST-NOT-LEAK')); await cleanup();
 
     // 12. Private thread: no Look up at all

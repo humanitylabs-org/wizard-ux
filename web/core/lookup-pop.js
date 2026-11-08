@@ -62,7 +62,7 @@
   function paint(body, kind) {
     const p = mount(); status = kind; shown = body;
     p.dataset.state = kind;
-    p.innerHTML = `<div class="lk-term" lang="">${esc(term)}</div><p class="lk-body">${esc(body)}${kind === 'error' ? ` <button type="button" class="lk-retry" data-lk-retry>Retry</button>` : ''}</p><small>AI explanation${model && model !== MODEL ? ' · ' + esc(model) : ''}</small>`;
+    p.innerHTML = `<div class="lk-term" lang="">${esc(term)}</div><p class="lk-body">${esc(body)}${kind === 'error' && req ? ` <button type="button" class="lk-retry" data-lk-retry>Retry</button>` : ''}</p><small>AI explanation${model && model !== MODEL ? ' · ' + esc(model) : ''}</small>`;
     p.hidden = false; place();
   }
   function rectOf() {
@@ -168,7 +168,7 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 
-  window.WosLookup = { open, close, back, retry, contextOf, normalise, MODEL, holds: n => inside(n),
+  window.WosLookup = { open, close, back, retry, contextOf, normalise, MODEL, clearCache: () => cache.clear(), holds: n => inside(n),
     get isOpen() { return status !== 'closed' && !!el && !el.hidden; },
     get state() { return { open: status !== 'closed' && !!el && !el.hidden, status, term, text: shown, model, request: req ? { ...req } : null, selectable: !!el && getComputedStyle(el).userSelect !== 'none' }; } };
 })();
