@@ -97,7 +97,8 @@ public final class AppsBridge implements AppsInstaller.Listener {
     }
 
     @Override
-    public void onStatus(JSONObject s) {
+    public void onStatus(String owner, JSONObject s) {
+        if (!AppState.origin(activity).equals(owner)) return; // another Wizard's install (#371): never shown here
         try { push(new JSONObject().put("type", "status").put("status", s).toString()); } catch (JSONException ignored) { }
     }
 
@@ -233,7 +234,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
                 return new JSONObject().put("bridge", VERSION).put("app", activity.getPackageName())
                         .put("version", BuildConfig.VERSION_NAME).put("versionCode", BuildConfig.VERSION_CODE)
                         .put("sdk", Build.VERSION.SDK_INT).put("canInstall", activity.getPackageManager().canRequestPackageInstalls())
-                        .put("installs", AppsInstaller.status());
+                        .put("installs", AppsInstaller.status(activity));
             case "list":
                 AppsUpdateJob.schedule(activity); // the add-on is in use: keep its apps updated from now on
                 return new JSONObject().put("apps", AppsCatalog.list(activity)).put("self", activity.getPackageName()).put("sdk", Build.VERSION.SDK_INT);

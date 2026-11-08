@@ -32,7 +32,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,15 +53,16 @@ import ai.wizards.os.device.Http;
 public final class AppsInstaller {
     public static final String TAG = "WizardApps";
     static final String ACTION_STATUS = "ai.wizards.os.apps.STATUS";
-    static final String EXTRA_PKG = "pkg";
+    static final String EXTRA_PKG = "pkg", EXTRA_OWNER = "owner";
     static final int N_FAIL = 7631, N_CONFIRM = 7632;
     private static final ExecutorService io = Executors.newSingleThreadExecutor();
     private static final Handler main = new Handler(Looper.getMainLooper());
-    private static final JSONObject states = new JSONObject();
+    /** Per Wizard origin, so a Connect / Change Wizard never shows the previous Wizard's pending install (#371). */
+    private static final InstallStates states = new InstallStates();
     /** Push hook (the bridge): status changes go to the open view. */
     static volatile Listener listener;
 
-    public interface Listener { void onStatus(JSONObject s); }
+    public interface Listener { void onStatus(String owner, JSONObject s); }
 
     private AppsInstaller() {}
 
@@ -70,6 +70,8 @@ public final class AppsInstaller {
         public final String sha256, pkg, signer;
         public final long versionCode;
         public final boolean background;
+        /** The Wizard origin this install was started for; its status is only ever shown to that Wizard. */
+        String owner = "";
         public Request(String sha256, String pkg, String signer, long versionCode, boolean background) {
             this.sha256 = sha256; this.pkg = pkg; this.signer = signer == null ? "" : signer; this.versionCode = versionCode; this.background = background;
         }
@@ -87,34 +89,19 @@ public final class AppsInstaller {
 
     /* ------------------------------------------------------------------ status */
 
-    public static synchronized JSONObject status() {
-        try { return new JSONObject(states.toString()); } catch (JSONException e) { return new JSONObject(); }
-    }
+    /** The install status of the Wizard this phone is connected to now (never another Wizard's). */
+    public static JSONObject status(Context c) { return states.snapshot(AppState.origin(c.getApplicationContext())); }
 
-    static synchronized void set(String pkg, String state, Object... kv) {
+    static void set(String owner, String pkg, String state, Object... kv) {
         try {
-            JSONObject o = new JSONObject().put("package", pkg).put("state", state).put("at", System.currentTimeMillis());
-            for (int i = 0; i + 1 < kv.length; i += 2) o.put(String.valueOf(kv[i]), kv[i + 1]);
-            states.put(pkg, o);
-            // Old finished entries go after a while so the map stays small.
-            long cut = System.currentTimeMillis() - 30 * 60_000L;
-            for (Iterator<String> it = states.keys(); it.hasNext(); ) {
-                JSONObject x = states.optJSONObject(it.next());
-                if (x != null && x.optLong("at") < cut && !"downloading".equals(x.optString("state")) && !"installing".equals(x.optString("state"))) it.remove();
-            }
+            JSONObject o = states.put(owner, pkg, state, System.currentTimeMillis(), kv);
             Log.i(TAG, pkg + " → " + state + (kv.length > 1 ? " " + o : ""));
             Listener l = listener;
-            if (l != null) { JSONObject copy = new JSONObject(o.toString()); main.post(() -> l.onStatus(copy)); }
+            if (l != null) main.post(() -> l.onStatus(owner, o));
         } catch (JSONException ignored) { }
     }
 
-    static boolean busy(String pkg) {
-        JSONObject o;
-        synchronized (AppsInstaller.class) { o = states.optJSONObject(pkg); }
-        if (o == null) return false;
-        String s = o.optString("state");
-        return ("downloading".equals(s) || "installing".equals(s) || "confirm".equals(s)) && System.currentTimeMillis() - o.optLong("at") < 10 * 60_000L;
-    }
+    static boolean busy(String owner, String pkg) { return states.busy(owner, pkg, System.currentTimeMillis()); }
 
     /* ------------------------------------------------------------------ install */
 
@@ -123,8 +110,9 @@ public final class AppsInstaller {
         Context app = c.getApplicationContext();
         String bad = AppsPolicy.checkRequest(r.sha256, r.pkg, r.signer, app.getPackageName());
         if (bad != null) return bad;
-        if (busy(r.pkg)) return null; // already on its way: the view keeps showing progress
-        set(r.pkg, "downloading", "progress", 0, "sha256", r.sha256);
+        r.owner = AppState.origin(app);
+        if (busy(r.owner, r.pkg)) return null; // already on its way: the view keeps showing progress
+        set(r.owner, r.pkg, "downloading", "progress", 0, "sha256", r.sha256);
         io.execute(() -> run(app, r));
         return null;
     }
@@ -145,7 +133,7 @@ public final class AppsInstaller {
             fail(app, r, "Something went wrong (" + e.getClass().getSimpleName() + ")");
         } finally {
             // A refused or failed file never lingers; a committed one is deleted when the session reports.
-            if (f != null) { JSONObject s = status().optJSONObject(r.pkg); if (s == null || "error".equals(s.optString("state"))) //noinspection ResultOfMethodCallIgnored
+            if (f != null) { JSONObject s = states.get(r.owner, r.pkg); if (s == null || "error".equals(s.optString("state"))) //noinspection ResultOfMethodCallIgnored
                 f.delete(); }
         }
     }
@@ -180,7 +168,7 @@ public final class AppsInstaller {
                     if (n > AppsPolicy.MAX_BYTES) throw new IOException("too large");
                     o.write(b, 0, k);
                     int p = total > 0 ? (int) Math.min(99, n * 100 / total) : 0;
-                    if (p != last && p % 10 == 0) { last = p; set(r.pkg, "downloading", "progress", p, "sha256", r.sha256); }
+                    if (p != last && p % 10 == 0) { last = p; set(r.owner, r.pkg, "downloading", "progress", p, "sha256", r.sha256); }
                 }
             }
         } finally { h.disconnect(); }
@@ -210,7 +198,7 @@ public final class AppsInstaller {
     }
 
     private static void commit(Context app, Request r, File f) {
-        set(r.pkg, "installing", "sha256", r.sha256);
+        set(r.owner, r.pkg, "installing", "sha256", r.sha256);
         PackageInstaller pi = app.getPackageManager().getPackageInstaller();
         boolean installed = AppsCatalog.installedVc(app, r.pkg) >= 0;
         String[] src = AppsCatalog.source(app, r.pkg);
@@ -244,7 +232,7 @@ public final class AppsInstaller {
                 }
                 // Unique per session (data + request code): PendingIntent equality ignores extras, so a shared one would mix up results.
                 Intent i = new Intent(app, AppsInstallReceiver.class).setAction(ACTION_STATUS).setData(Uri.parse("wizard-apps-session:" + id)).putExtra(EXTRA_PKG, r.pkg)
-                        .putExtra("bg", r.background).putExtra("sha", r.sha256);
+                        .putExtra("bg", r.background).putExtra("sha", r.sha256).putExtra(EXTRA_OWNER, r.owner);
                 int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
                 PendingIntent cb = PendingIntent.getBroadcast(app, id, i, flags);
                 Log.i(TAG, "session " + id + " " + r.pkg + " installed=" + installed + " owned=" + owned + " requireUserAction=" + ua + " requestOwnership=" + own);
@@ -259,18 +247,18 @@ public final class AppsInstaller {
 
     private static void fail(Context app, Request r, String why) {
         Log.w(TAG, r.pkg + ": " + why);
-        set(r.pkg, "error", "message", why);
+        set(r.owner, r.pkg, "error", "message", why);
         if (r.background || !AppState.front()) notice(app, N_FAIL, "Couldn’t update " + label(app, r.pkg), why, null);
     }
 
     /** STATUS_* from the session. */
-    static void onStatus(Context c, String pkg, int status, String message, Intent confirm, boolean bg, String sha) {
+    static void onStatus(Context c, String owner, String pkg, int status, String message, Intent confirm, boolean bg, String sha) {
         Context app = c.getApplicationContext();
         Log.i(TAG, "status " + pkg + " " + status + (message != null ? " " + message : ""));
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            if (confirm == null) { set(pkg, "error", "message", "Android’s installer didn’t open"); return; }
+            if (confirm == null) { set(owner, pkg, "error", "message", "Android’s installer didn’t open"); return; }
             confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            set(pkg, "confirm");
+            set(owner, pkg, "confirm");
             if (AppState.front() && !bg) {
                 try { app.startActivity(confirm); return; } catch (RuntimeException e) { Log.w(TAG, "confirm: " + e); }
             }
@@ -285,13 +273,13 @@ public final class AppsInstaller {
         if (status == PackageInstaller.STATUS_SUCCESS) {
             remember(app, pkg);
             JSONObject row = AppsCatalog.row(app, pkg);
-            set(pkg, "installed", "versionName", row == null ? "" : row.optString("versionName"), "installer", row == null ? "" : row.optString("installer"),
+            set(owner, pkg, "installed", "versionName", row == null ? "" : row.optString("versionName"), "installer", row == null ? "" : row.optString("installer"),
                     "owner", row == null ? "" : row.optString("owner"));
             postInventorySoon(app);
             return;
         }
         String why = AppsPolicy.failure(status, message);
-        set(pkg, "error", "message", why == null ? "Install failed" : why, "status", status);
+        set(owner, pkg, "error", "message", why == null ? "Install failed" : why, "status", status);
         if (bg || !AppState.front()) notice(app, N_FAIL, "Couldn’t update " + label(app, pkg), why, null);
     }
 
@@ -353,8 +341,9 @@ public final class AppsInstaller {
                     if (!AppsPolicy.autoUpdate(vc >= 0, AppsPolicy.owned(src[0], src[1], app.getPackageName()), vc, u.optLong("versionCode"))) continue;
                     Request r = new Request(u.optString("sha256"), pkg, u.optString("signer"), u.optLong("versionCode"), true);
                     String bad = AppsPolicy.checkRequest(r.sha256, r.pkg, r.signer, app.getPackageName());
-                    if (bad != null || busy(pkg)) continue;
-                    set(pkg, "downloading", "progress", 0, "sha256", r.sha256);
+                    r.owner = o;
+                    if (bad != null || busy(o, pkg)) continue;
+                    set(o, pkg, "downloading", "progress", 0, "sha256", r.sha256);
                     run(app, r);
                     n++;
                 }

@@ -18,7 +18,8 @@ public class AppsInstallReceiver extends BroadcastReceiver {
         String pkg = i.getStringExtra(AppsInstaller.EXTRA_PKG);
         if (pkg == null) return;
         Intent confirm = status == PackageInstaller.STATUS_PENDING_USER_ACTION ? extraIntent(i) : null;
-        AppsInstaller.onStatus(c, pkg, status, msg, confirm, i.getBooleanExtra("bg", false), i.getStringExtra("sha"));
+        String owner = i.getStringExtra(AppsInstaller.EXTRA_OWNER);
+        AppsInstaller.onStatus(c, owner == null ? "" : owner, pkg, status, msg, confirm, i.getBooleanExtra("bg", false), i.getStringExtra("sha"));
     }
 
     @SuppressWarnings("deprecation")
