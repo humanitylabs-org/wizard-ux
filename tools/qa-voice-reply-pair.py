@@ -10,7 +10,11 @@ root = Path(__file__).resolve().parents[1]
 baseline = root.parent / 'red'
 out = root.parent / 'evidence'
 out.mkdir(exist_ok=True)
+<<<<<<< HEAD
 env = dict(os.environ, QA_PLAYWRIGHT='/srv/work/tt-late-git/node_modules/playwright', QA_VOICE_REPLY_ONLY='1')
+=======
+env = dict(os.environ, QA_VOICE_REPLY_ONLY='1')  # QA_PLAYWRIGHT, when set, passes through to the shared resolver
+>>>>>>> origin/main
 results = {}
 for name, source, smoke in [('red-live', baseline, True), ('green-candidate', root, False)]:
     target = out / name

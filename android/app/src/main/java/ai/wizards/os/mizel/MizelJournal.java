@@ -41,6 +41,10 @@ public final class MizelJournal {
     /** A capture session is open (recording or paused). True on disk after a process death → recovery. */
     public boolean recording;
     public boolean paused;
+    /** Durable update pause; never set by an ordinary user pause or stop. */
+    public boolean resumeAfterUpdate;
+    public int captureVersion;
+    public String uploadOrigin;
     public long pausedAt;
     /** Wall time of the last chunk written; "Recording ended unexpectedly at HH:MM" uses it. */
     public long lastBeatAt;
@@ -79,6 +83,7 @@ public final class MizelJournal {
         for (int s : dropped) d.put(s);
         return new JSONObject().put("v", 1).put("meetingId", meetingId).put("createdAt", createdAt).put("nextSeq", nextSeq)
                 .put("mediaSamples", mediaSamples).put("mediaMs", mediaMs()).put("recording", recording).put("paused", paused)
+                .put("resumeAfterUpdate", resumeAfterUpdate).put("captureVersion", captureVersion).put("uploadOrigin", uploadOrigin)
                 .put("pausedAt", pausedAt).put("lastBeatAt", lastBeatAt).put("pending", p).put("acked", acked)
                 .put("lastAckedSeq", lastAckedSeq).put("dropped", d).put("stopReason", stopReason == null ? JSONObject.NULL : stopReason)
                 .put("finalSeq", finalSeq).put("stopSent", stopSent).put("stopSentAt", stopSentAt).put("stopNextAt", stopNextAt)
@@ -93,6 +98,9 @@ public final class MizelJournal {
         j.mediaSamples = o.optLong("mediaSamples");
         j.recording = o.optBoolean("recording");
         j.paused = o.optBoolean("paused");
+        j.resumeAfterUpdate = o.optBoolean("resumeAfterUpdate");
+        j.captureVersion = o.optInt("captureVersion");
+        j.uploadOrigin = o.optString("uploadOrigin", "");
         j.pausedAt = o.optLong("pausedAt");
         j.lastBeatAt = o.optLong("lastBeatAt");
         JSONArray p = o.optJSONArray("pending");

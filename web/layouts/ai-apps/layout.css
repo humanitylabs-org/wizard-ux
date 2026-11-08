@@ -544,8 +544,3 @@ html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > .ch
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="app"][data-chact] { color: var(--wz-base, var(--bg)) !important; background: var(--aa-ink) !important; border: 1px solid var(--aa-ink) !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="app"] ~ [data-chact="resolve"][data-chact] { color: var(--aa-ink) !important; background: none !important; border: 1px solid color-mix(in srgb, var(--aa-ink) 18%, transparent) !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="resolve"] svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
-
-/* Desktop refresh, first frames (core/skin-host.js decides the view before paint): Classic's chat list never shows
- * under this layout, and nothing else of Classic shows before desktop.css applies. */
-html[data-shell="desktop"][data-layout="ai-apps"][data-chats-owner] :is(.pane-list, .pane-split, .pane-empty) { display: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-layout-booting] body { opacity: 0 !important; pointer-events: none; }

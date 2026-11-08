@@ -16,7 +16,11 @@ export function listFixture({ status = false, query = '', busy = false, footer =
     LIVE: { cardAt: s => s.activityAt || s.updatedAt, ok: true, statusFor: () => ({ ok: true }), searchRows: () => rows, sessionsFor: () => rows, workGroups: input => Object.fromEntries(Object.keys(groups).map(k => [k, input.filter(r => r.section === k)])), isNew: () => false, archiveAfterDays: 7 },
     syncListTitle: no, closeStream: no, winAgent: empty, STATUS: {}, focusOf: () => null, notes: () => ({ awake: [], later: [] }), focusMatches: () => true,
     PIN: { partition: rows => ({ pinned: rows.filter(s => pinned.includes(s.id)), rest: rows.filter(s => !pinned.includes(s.id)) }) }, snoozeLast: () => false, owner: () => w.id, newDrafts: () => [], esc: String,
+<<<<<<< HEAD
     matchFilters: () => [], OUTBOX: null, sendPill: empty, PW: null, byStatus: () => status, readyOrdered: identity, workingOrdered: identity, workingSortControl: () => '<select data-working-order></select>',
+=======
+    matchFilters: () => [], OUTBOX: null, sendPill: empty, PW: null, byStatus: () => status, readyOrdered: identity, workingOrdered: identity, workingOrderBar: () => '<div class="ch-rdy-bar" aria-label="Order Working"></div>',
+>>>>>>> origin/main
     SEC_PAGE: 40, STALE_LIST: 120000, waitsOn: () => false, deferredOf: () => false, isWorking: () => false, attOf: () => null,
     archSel: empty, readyBody: (list, row) => list.map(row).join(''), chatRow: (s, snip, tag) => `<div class="ch-row" data-chopen="${s.id}">${tag ? `<span class="ch-search-status">${tag}</span>` : ''}</div>`,
     listPlace: () => null, storedListPlace: () => null, compactOn: () => false, focusedAgent: empty, focusStrip: empty,

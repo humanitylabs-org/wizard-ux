@@ -518,7 +518,7 @@ window.WosChatPower = function chatPower(A) {
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
     // later parts of an interrupted take, so nothing goes twice.
     const sealed = seal === true ? A.takeComposer(wid, sid) : seal || { text: '', files: [], done() {}, putBack() {} };
-    const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i); // no count cap (James, 6 Nov 2026)
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
     follow(wid);
@@ -651,7 +651,6 @@ window.WosChatPower = function chatPower(A) {
     const c = ch(sh.wid); c.files = c.files || [];
     const had = c.files.findIndex(x => x.id === f.id);
     if (had >= 0) { c.files.splice(had, 1); toast('✕', 'Removed from this message', 1200); }
-    else if (c.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
     else { c.files.push({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes, key: Math.random().toString(36).slice(2), preview: f.kind === 'image' ? F.media(f).url : '' }); toast('📎', `Attached · ${f.kind === 'voice' ? 'Voice note' : clip(f.name, 32)}`, 1400); }
     A.saveDraft(sh.wid); A.refreshCompose(sh.wid);
     paint(sh.pane, A.elOf(sh.pane));

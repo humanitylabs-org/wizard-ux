@@ -82,6 +82,11 @@
     homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_routes: Array.isArray(a.voice_routes) ? a.voice_routes : [],
+<<<<<<< HEAD
+=======
+    // Only a read of the box's own list confirms them; the device cache is a fallback when that read fails (commands.js).
+    voice_routes_confirmed: trusted === true,
+>>>>>>> origin/main
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
@@ -146,12 +151,12 @@
     try {
       if (window.WizConfig?.ready) await window.WizConfig.ready;
       const url = window.WizConfig?.endpoint('apps');
-      if (!url) return;
+      if (!url) return false;
       if (window.WizLauncher?.ready) await window.WizLauncher.ready;
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
-      if (!r.ok) return;
+      if (!r.ok) return false;
       const snapshot = await r.json();
-      if (!snapshot || !Array.isArray(snapshot.apps)) return;
+      if (!snapshot || !Array.isArray(snapshot.apps)) return false;
       window.WizChatsHost?.configure(snapshot);
       // Owner's In development list (launcher.json in_development, James 23 Oct 2026): any app id, built-ins included.
       DEV = new Set(Array.isArray(snapshot.in_development) ? snapshot.in_development.map(String) : []);
@@ -166,7 +171,8 @@
       window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
-    } catch (e) {}
+      return true;   // a fresh list from the box (refreshApps resolves true; false = the read failed, cache kept)
+    } catch (e) { return false; }
   }
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;

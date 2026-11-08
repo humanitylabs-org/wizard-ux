@@ -70,6 +70,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
+    /** In-app Downloads (ai.wizards.os.downloads): events waiting for the shell to take them via window.__wosDownloads. */
+    private final java.util.ArrayDeque<String> pendingDownloads = new java.util.ArrayDeque<>();
+    private int downloadsTries;
+    private final ai.wizards.os.downloads.Downloads.Listener downloadsListener = json -> main.post(() -> queueDownloadPush(json));
     private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
@@ -410,6 +414,29 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
     };
 
+    /** Hands one Downloads event (start | done | failed | sync) to the shell; retries while the shell is still loading. */
+    private void queueDownloadPush(String json) {
+        if (json == null) return;
+        if (pendingDownloads.size() >= 8) pendingDownloads.pollFirst();
+        pendingDownloads.addLast(json);
+        downloadsTries = 0;
+        main.removeCallbacks(deliverDownloads);
+        main.post(deliverDownloads);
+    }
+
+    private final Runnable deliverDownloads = new Runnable() {
+        @Override
+        public void run() {
+            final String json = pendingDownloads.peekFirst();
+            if (json == null || web == null) return;
+            web.evaluateJavascript("(window.__wosDownloads ? window.__wosDownloads(" + json + ") : false)", r -> {
+                if ("true".equals(r)) { pendingDownloads.remove(json); if (!pendingDownloads.isEmpty()) main.post(this); return; }
+                if (++downloadsTries < 60) main.postDelayed(this, 300); // shell still loading: retry for ~18 s
+                else pendingDownloads.clear();                           // the sync on next resume catches up
+            });
+        }
+    };
+
     private void downloadOutside(String url, String userAgent, String disposition, String mime) {
         Uri u = Uri.parse(url);
         if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
@@ -423,7 +450,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
             String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
             if (cookie != null) r.addRequestHeader("Cookie", cookie);
-            ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+            long downloadId = ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+            try { ai.wizards.os.downloads.Downloads.track(this, downloadId, name, mime); } catch (RuntimeException ignored) { } // the list is extra; the download itself already runs
             Toast.makeText(this, "Downloading " + name + " · it'll be in Downloads", Toast.LENGTH_SHORT).show();
         } catch (RuntimeException e) {
             openOutside(u); // no download manager / storage refused: let the browser fetch it
@@ -729,9 +757,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
+        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
         resumed = true;
+        ai.wizards.os.downloads.Downloads.addListener(downloadsListener);
+        queueDownloadPush(ai.wizards.os.downloads.DownloadsPolicy.eventJson("sync", null)); // a download may have finished while away
         if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
         if (mizel != null) mizel.setPcmForeground(true);
         if (everywhereSetup) {
@@ -804,6 +835,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
         resumed = false;
+        ai.wizards.os.downloads.Downloads.removeListener(downloadsListener);
         main.removeCallbacks(reachRetry);
         super.onPause();
     }
@@ -961,6 +993,36 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
         }
+        /* ---- In-app Downloads (web/core/downloads.js). JSON/strings only; ids are DownloadManager ids as digits. ----
+         * Only the Wizard shell page may use these: the current top page must be the shell origin (not a hosted page, not an
+         * outside site). A hosted-app iframe inside the shell shares this bridge like every other Bridge method. */
+        private boolean shellCaller() {
+            final boolean[] ok = {false};
+            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(() -> { try {
+                String u = web == null ? null : web.getUrl();
+                ok[0] = u != null && Origin.isShell(MainActivity.this, Uri.parse(u));
+            } finally { l.countDown(); } });
+            try { l.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return ok[0];
+        }
+        /** {"v":1,"items":[{id,name,mime,size,got,status,started,finished}]} newest first; in-flight rows are refreshed. */
+        @JavascriptInterface public String downloadsList() {
+            if (!shellCaller()) return "{\"v\":1,\"items\":[]}";
+            try { return ai.wizards.os.downloads.Downloads.listJson(MainActivity.this); }
+            catch (RuntimeException e) { return "{\"v\":1,\"items\":[]}"; }
+        }
+        /** Open the finished file in the app that handles it: "ok" | "missing" | "none" (no app can open it). */
+        @JavascriptInterface public String downloadsOpen(String id) {
+            if (!shellCaller()) return "missing";
+            final String[] out = {"missing"};
+            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(() -> { try { out[0] = ai.wizards.os.downloads.Downloads.open(MainActivity.this, String.valueOf(id)); } finally { l.countDown(); } });
+            try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return out[0];
+        }
+        @JavascriptInterface public String downloadsCancel(String id) { return shellCaller() ? ai.wizards.os.downloads.Downloads.cancel(MainActivity.this, String.valueOf(id)) : "missing"; }
+        @JavascriptInterface public String downloadsRemove(String id) { return shellCaller() ? ai.wizards.os.downloads.Downloads.remove(MainActivity.this, String.valueOf(id)) : "missing"; }
         @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }

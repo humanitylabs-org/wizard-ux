@@ -42,11 +42,14 @@ import ai.wizards.os.MicOwner;
  * Pause releases the microphone (AudioRecord stopped and released) and starts a 30-minute countdown; at zero the
  * meeting stops with reason pause_timeout. Stop queues {"final_seq":{"me":N},"reason":…}, which the uploader sends
  * only after every chunk up to N is acknowledged. After a process death the service never restarts the microphone
- * (Android 14 forbids a background mic start): it closes the meeting with reason process_death and says so.
+ * (Android 14 forbids a background mic start). Ordinary crashes close the meeting; package updates preserve
+ * it for a visible Activity restart or a direct notification tap.
  */
 public class MeetingRecorderService extends Service {
     static final String TAG = MizelHub.TAG;
     public static final String ACTION_START = "ai.wizards.os.mizel.START";
+    private static final String ACTION_RESTORE = "ai.wizards.os.mizel.RESTORE_UPDATE";
+    private static final int N_UPDATE_PAUSED = 7319;
     public static final String ACTION_PAUSE = "ai.wizards.os.mizel.PAUSE";
     public static final String ACTION_RESUME = "ai.wizards.os.mizel.RESUME";
     public static final String ACTION_STOP = "ai.wizards.os.mizel.STOP";
@@ -208,8 +211,119 @@ public class MeetingRecorderService extends Service {
 
     /* ------------------------------------------------------------------ entry points */
 
-    /** Null if a meeting may start now, else the protocol error (and a toast says why). */
-    static String canStart(Context c) {
+    /** Whether a durably paused meeting is waiting for an update/open. */
+    public static boolean updatePending(Context c) {
+        for (MizelJournal j : MizelHub.store(c).all()) if (MizelUpdatePolicy.pending(j)) return true;
+        return false;
+    }
+
+    /** Updater IO thread waits until the last WAV and the resume intent are durably stored. */
+    public static boolean prepareForUpdate() {
+        return "ok".equals(onMain(() -> {
+            MeetingRecorderService s = instance; Live l = live;
+            if (s == null || l == null || l.stopping) return "no";
+            if (MizelUpdatePolicy.pending(s.store.snapshot(l.meetingId))) return "ok";
+            // A user's pause or a mic loan must never become an automatic restart.
+            if (l.paused || (borrow != null && borrow.open())) return "no";
+            if (!s.stopCapture()) return "no";
+            long now = System.currentTimeMillis();
+            if (!s.store.pauseForUpdate(l.meetingId, ai.wizards.os.BuildConfig.VERSION_CODE, MizelConfig.origin(s), now)) {
+                s.startCapture(l); // failed custody => refuse installation, keep the current take
+                return "no";
+            }
+            l.paused = true; l.pausedAtWall = now;
+            s.main.removeCallbacks(s.pauseTimeout);
+            MicOwner.release(MicOwner.MEETING); s.releaseWake();
+            s.refreshNotification(true);
+            notifyUpdatePaused(s, l.meetingId);
+            MizelHub.pushState(s);
+            s.uploader.kick();
+            return "ok";
+        }));
+    }
+
+    /** Both existing replacement receivers call this; deliberately no background mic/FGS start. */
+    public static void afterPackageReplaced(Context c) {
+        if (live != null) return; // the other receiver may already have reopened the visible Activity
+        MizelStore store = MizelHub.store(c);
+        synchronized (store) {
+            for (MizelJournal j : store.all()) {
+                // Legacy journals have no version/origin; an actual replacement broadcast can migrate an open take.
+                if (j.recording && !j.paused && j.stopReason == null && !j.stopSent)
+                    store.pauseForUpdate(j.meetingId, j.captureVersion, j.uploadOrigin == null || j.uploadOrigin.isEmpty()
+                            ? MizelConfig.origin(c) : j.uploadOrigin, System.currentTimeMillis());
+            }
+        }
+        recover(c);
+    }
+
+    /** Called only by a resumed visible Activity, including a direct notification Activity PendingIntent. */
+    public static void resumeUpdateFromActivity(android.app.Activity a) { resumeUpdate(a); }
+
+    /** Installation never took custody: resume only while visible, otherwise keep the tap-to-resume notice. */
+    public static void resumeAfterFailedUpdate(Context c) {
+        onMain(() -> {
+            if (ai.wizards.os.device.AppState.front()) resumeUpdate(c);
+            else for (MizelJournal j : MizelHub.store(c).all())
+                if (MizelUpdatePolicy.pending(j)) notifyUpdatePaused(c, j.meetingId);
+            return "ok";
+        });
+    }
+
+    private static void resumeUpdate(Context a) {
+        recover(a);
+        for (MizelJournal j : MizelHub.store(a).all()) {
+            if (!MizelUpdatePolicy.canResume(j, MizelConfig.origin(a))) continue;
+            if (live != null && (!live.meetingId.equals(j.meetingId) || !live.paused)) return;
+            if (canStart(a) != null) { notifyUpdatePaused(a, j.meetingId); return; }
+            send(a, ACTION_RESTORE, j.meetingId, null, 0, true);
+            return;
+        }
+    }
+
+    private void restoreUpdate(String id, int req) {
+        if (live != null && !live.meetingId.equals(id)) { refuseStart(req, MizelProtocol.E_BUSY_OTHER); return; }
+        if (live != null && !live.paused) { foreground(); return; } // duplicate Activity delivery
+        MizelJournal j = store.updateResumeSnapshot(id, MizelConfig.origin(this), System.currentTimeMillis());
+        if (j == null || canStart(this) != null) { refuseStart(req, MizelProtocol.E_START_FAILED); return; }
+        boolean created = live == null;
+        if (created) { live = new Live(id, j.mediaSamples); live.paused = true; live.pausedAtWall = j.pausedAt; }
+        if (!foreground()) {
+            if (created) live = null;
+            notifyUpdatePaused(this, id); stopSelf(); return;
+        }
+        resume(req);
+        if (created && live != null && live.paused) {
+            live = null; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf();
+            notifyUpdatePaused(this, id);
+        } else if (created) main.post(ticker);
+    }
+
+    public static void stopUpdatePaused(Context c, String id) {
+        MizelStore s = MizelHub.store(c);
+        synchronized (s) {
+            if (!MizelUpdatePolicy.pending(s.snapshot(id))) return;
+            s.requestStop(id, MizelPolicy.REASON_USER, System.currentTimeMillis());
+        }
+        c.getSystemService(NotificationManager.class).cancel(N_UPDATE_PAUSED);
+        MizelUploadJob.schedule(c);
+        MizelHub.pushState(c);
+    }
+
+    private static void notifyUpdatePaused(Context c, String id) {
+        channels(c);
+        Notification n = new Notification.Builder(c, CH_ALERT)
+                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setContentTitle("Recording paused for the app update")
+                .setContentText("Tap to resume the same meeting")
+                .setStyle(new Notification.BigTextStyle().bigText("Recording paused for the app update — tap to resume the same meeting."))
+                .setCategory(Notification.CATEGORY_REMINDER).setOnlyAlertOnce(true)
+                .setContentIntent(openMeeting(c, id, 6)).setAutoCancel(true).build();
+        try { c.getSystemService(NotificationManager.class).notify(N_UPDATE_PAUSED, n); }
+        catch (RuntimeException e) { Log.w(TAG, "could not post update pause notice", e); }
+    }
+
+    public static String canStart(Context c) {
         if (c.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             return MizelProtocol.E_MIC_PERMISSION;
         // DeviceBridge's foreground voice/task recorder does not use the side-button MicOwner lease.
@@ -246,14 +360,22 @@ public class MeetingRecorderService extends Service {
         if (live != null) return;
         MizelStore s = MizelHub.store(c);
         boolean any = false;
+        synchronized (s) {
         for (MizelJournal j : s.all()) {
             if (!j.recording) continue;
+            if (MizelUpdatePolicy.interruptedByUpdate(j, ai.wizards.os.BuildConfig.VERSION_CODE))
+                s.pauseForUpdate(j.meetingId, j.captureVersion, j.uploadOrigin, System.currentTimeMillis());
+            if (MizelUpdatePolicy.pending(s.snapshot(j.meetingId))) {
+                notifyUpdatePaused(c, j.meetingId);
+                continue; // background jobs and either receiver must not queue /stop
+            }
             long endedAt = s.recover(j.meetingId, System.currentTimeMillis());
             MicOwner.release(MicOwner.MEETING);
             Log.w(TAG, "recovered " + j.meetingId + " after process death: final_seq=" + s.get(j.meetingId).finalSeq
                     + " pending=" + s.pendingCount(j.meetingId) + " ended=" + endedAt);
             notifyEnded(c, j.meetingId, endedAt);
             any = true;
+        }
         }
         MizelUploader up = MizelUploader.get(c);
         up.kick();
@@ -289,6 +411,7 @@ public class MeetingRecorderService extends Service {
         }
         switch (a) {
             case ACTION_START: start(id, req); break;
+            case ACTION_RESTORE: restoreUpdate(id, req); break;
             case ACTION_PAUSE: pause(req); break;
             case ACTION_RESUME: resume(req); break;
             case ACTION_STOP: {
@@ -343,6 +466,12 @@ public class MeetingRecorderService extends Service {
         }
         recover(this); // any older session left open by a dead process is closed first
         MizelJournal j = store.beginSession(id, System.currentTimeMillis());
+        if (!store.noteCapture(id, ai.wizards.os.BuildConfig.VERSION_CODE, MizelConfig.origin(this))) {
+            store.abandonSession(id);
+            MicOwner.release(MicOwner.MEETING);
+            refuseStart(req, MizelProtocol.E_START_FAILED);
+            return;
+        }
         Live l = new Live(id, j.mediaSamples);
         live = l;
         drainDeadline = 0;
@@ -430,6 +559,15 @@ public class MeetingRecorderService extends Service {
         l.paused = false;
         l.pausedAtWall = 0;
         store.setPaused(l.meetingId, false, System.currentTimeMillis());
+        if (MizelUpdatePolicy.pending(store.snapshot(l.meetingId))) {
+            if (!store.finishUpdateResume(l.meetingId, ai.wizards.os.BuildConfig.VERSION_CODE)) {
+                stopCapture(); l.paused = true;
+                MicOwner.release(MicOwner.MEETING);
+                notifyUpdatePaused(this, l.meetingId);
+                MizelHub.done(req, MizelProtocol.E_START_FAILED); return;
+            }
+            getSystemService(NotificationManager.class).cancel(N_UPDATE_PAUSED);
+        }
         acquireWake();
         Log.i(TAG, "resumed " + l.meetingId + " media_ms=" + l.mediaMs());
         refreshNotification(true);
@@ -445,6 +583,7 @@ public class MeetingRecorderService extends Service {
         if (!stopCapture()) { l.stopping = false; MizelHub.done(req, MizelProtocol.E_MIC_BUSY); return; }
         if (borrow != null && borrow.open()) { borrow.close(borrow.eventId); saveBorrow(borrow, "meeting_stopped"); }
         MizelJournal j = store.requestStop(l.meetingId, reason, System.currentTimeMillis());
+        getSystemService(NotificationManager.class).cancel(N_UPDATE_PAUSED);
         live = null;
         MicOwner.release(MicOwner.MEETING);
         releaseWake();
@@ -462,7 +601,7 @@ public class MeetingRecorderService extends Service {
 
     private final Runnable pauseTimeout = () -> {
         Live l = live;
-        if (l == null || !l.paused) return;
+        if (l == null || !l.paused || updatePending(MeetingRecorderService.this)) return;
         Log.i(TAG, "paused too long: stopping " + l.meetingId + " (pause_timeout)");
         stop(MizelPolicy.REASON_PAUSE_TIMEOUT, 0);
     };
@@ -742,6 +881,12 @@ public class MeetingRecorderService extends Service {
         if (l == null) return b.setContentTitle("Mizel").setContentText("Starting…").build();
         b.setContentIntent(openMeeting(this, l.meetingId, 1));
         boolean ticking = !MizelConfig.qaStaticNotification(this);
+        if (MizelUpdatePolicy.pending(store.snapshot(l.meetingId))) {
+            return b.setContentTitle("Recording paused for the app update")
+                    .setContentText("Tap to resume the same meeting")
+                    .setContentIntent(openMeeting(this, l.meetingId, 6))
+                    .addAction(new Notification.Action.Builder(null, "Stop", action(ACTION_STOP, 4)).build()).build();
+        }
         if (l.paused) {
             long ends = l.pausedAtWall + MizelConfig.pauseTimeoutMs(this);
             b.setContentTitle("Meeting paused · " + MizelPolicy.duration(l.mediaMs()) + " recorded")

@@ -24,7 +24,20 @@
         }
       } catch (e) { /* a malformed marker is hidden, not shown */ }
     }
-    return out.slice(0, 8);
+    return out;
+  }
+  // [WIZARD_TWEAK_V1]{"id":"wizard/desktop-chats"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
+  // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
+  const TWEAK_ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
+  function tweakIds(s) {
+    const out = [];
+    for (const m of String(s || '').matchAll(TWEAK_RE)) {
+      try {
+        const p = JSON.parse(m[1]);
+        for (const v of [p?.id, ...(Array.isArray(p?.ids) ? p.ids : [])]) { const id = typeof v === 'string' ? v.trim() : ''; if (TWEAK_ID.test(id) && !out.includes(id) && out.length < 8) out.push(id); }
+      } catch (e) { /* hidden, not shown */ }
+    }
+    return out;
   }
   // <helm_attachments>{"items":[…]}</helm_attachments>: port of normalizers.ts helmPresentation.
   const HELM = /<\s*(\/?)\s*helm_attachments\s*>/gi;
@@ -52,7 +65,6 @@
           const mime = typeof it.mime === 'string' ? it.mime.trim().toLowerCase().slice(0, 160) : '';
           if (!HELM_ID.test(id) || !name || !mime) continue;
           const prior = attachments.find(a => a.id === id);
-          if (!prior && attachments.length >= 16) continue;
           // The same envelope is understood by old clients as a bottom attachment.
           // Only validated image IDs become positioned Markdown, never raw paths/HTML.
           if (p.inline === true && (prior ? prior.kind === 'image' : mime.startsWith('image/')) && !placed.has(id)) {
@@ -64,7 +76,6 @@
           if (attachments.some(a => a.id === id)) continue;
           attachments.push({ id, name, mime, kind: kindOf(mime, typeof it.kind === 'string' ? it.kind : ''), bytes: Number(it.bytes) || 0, url: `/wizard/attachments/${id}`,
             transcript: mime.startsWith('audio/') && typeof it.transcript === 'string' ? it.transcript.replace(/\s+/g, ' ').trim().slice(0, 4000) : '' });
-          if (attachments.length === 16) break;
         }
       } catch (e) { /* malformed metadata stays hidden */ }
     }
@@ -92,13 +103,14 @@
       else if (p.type === 'image') { if (p.source?.type === 'base64' && p.source.data) add(`data:${p.source.media_type || 'image/png'};base64,${p.source.data}`); else add(p.url ?? p.image_url ?? p.image); }
     }
     for (const k of ['image_urls', 'imageUrls', 'images']) if (Array.isArray(m?.[k])) m[k].forEach(add);
-    return urls.slice(0, 8);
+    return urls;
   }
   const cleanText = s => reply.strip(String(s || ''))
     .replace(/\[WIZARD_FILES_V1\][\s\S]*?\[\/WIZARD_FILES_V1\]/g, '')
     .replace(/\[WIZARD_FILE_CHIPS_V1\][\s\S]*?\[\/WIZARD_FILE_CHIPS_V1\]/g, '')
     .replace(/\[WIZARD_CLOSE_AND_FILE_V1\][\s\S]*?\[\/WIZARD_CLOSE_AND_FILE_V1\]/g, '')
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, '')
+    .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // unterminated: to the end
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
@@ -176,17 +188,19 @@
         newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
-        const t = h.text;
+        const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw);
         if (!cur) newTurn(null);
         else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
-        if (!t) { if (!h.attachments.length) cur.steps++; continue; }
+        if (!t && !tweaks.length) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
-        if (cur.a) cur.notes.push(cur.a.text);
-        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+        // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
+        const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8);
+        if (cur.a?.text) cur.notes.push(cur.a.text);
+        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
@@ -455,13 +469,13 @@
     all() { try { const v = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } },
     get(k) {
       const d = this.all()[k];
-      return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files.filter(f => f && SAFE_ID.test(String(f.id || ''))).slice(0, 8) : [], reply: reply.clean(d?.reply) };
+      return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files.filter(f => f && SAFE_ID.test(String(f.id || ''))) : [], reply: reply.clean(d?.reply) };
     },
     // Typing never touches a draft's reply (the notification it answers): only setReply or clear does.
     set(k, text, files) {
       if (!k) return;
       const all = this.all();
-      const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })).slice(0, 8);
+      const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
       text = String(text || '');
       const rp = reply.clean(all[k]?.reply);
       if (!text.trim() && !fs.length && !rp) delete all[k];
@@ -1055,5 +1069,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

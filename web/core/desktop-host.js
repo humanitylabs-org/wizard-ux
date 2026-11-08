@@ -65,6 +65,14 @@
       },
       close: id => has(id) ? adapter.close(id) === true : false,
       chats: id => find(id)?.kind === 'chats' ? adapter.chats?.(id) || null : null,
+<<<<<<< HEAD
+=======
+      // Placement containers the shell gives a layout to position, keyed by the
+      // host's desk index. A layout never queries the shell's own markup for them.
+      placements: () => Object.freeze((adapter.placements?.() || []).filter(p => p?.node).map(p => Object.freeze({
+        desk: Number.isInteger(p.desk) ? p.desk : null, node: p.node, shown: !!p.shown,
+      }))),
+>>>>>>> origin/main
       settings: Object.freeze({
         isOpen: () => adapter.settings?.().isOpen === true,
         closePart: () => adapter.settings?.().closePart || null,

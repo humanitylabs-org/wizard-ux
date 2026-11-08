@@ -70,7 +70,11 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
+<<<<<<< HEAD
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
+=======
+import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
+>>>>>>> origin/main
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
@@ -103,6 +107,13 @@ export default function desktop(api) {
   const mainChatWindow = () => chatWindows().find(w => w.desk === mainChats()?.desk) || chatWindows()[0] || null;
   const chatParts = part => chatWindows().map(w => host.chats(w.id)?.[part]).filter(n => n && n.getClientRects().length && n.getBoundingClientRect().width > 0);
   const chatAction = act => chatWindows().map(w => host.chats(w.id)?.action(act)).find(onScreen) || null;
+<<<<<<< HEAD
+=======
+  // the desks' placement containers come from the host (WizDesktop.host.placements), keyed by desk; never Classic markup
+  const placements = () => host?.placements?.() || [];
+  const placementOf = (desk, not = null) => placements().find(p => p.desk === desk && p.node !== not)?.node || null;
+  const deskOfNode = n => placements().find(p => p.node === n)?.desk ?? null;
+>>>>>>> origin/main
   const panes = globalThis.WizCore.panes;
   const MODE_KEYS = { KeyU: 'centre', KeyJ: 'pair', KeyF: 'full', KeyT: 'tiled' };
   const MODE_LABELS = { centre: 'Centred', pair: 'Side by side', full: 'Full screen', tiled: 'Back to tiled' };
@@ -163,7 +174,11 @@ export default function desktop(api) {
       glideUntil = Date.now() + FLIP_MS + 10;
     });
   }
+<<<<<<< HEAD
   const shownDesks = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden])')];
+=======
+  const shownDesks = () => placements().filter(p => p.shown).map(p => p.node);
+>>>>>>> origin/main
   const homeComposer = () => chatParts('composer')[0] || null;
   root.dataset.aiApps = 'desktop';
   api.sessions.ownList?.(); // core does not mount/paint the legacy list beneath this sidebar
@@ -507,7 +522,7 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { draftWant = false; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
@@ -766,7 +781,11 @@ export default function desktop(api) {
     if (root.dataset.aadSide === 'rail') return;
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
+<<<<<<< HEAD
     const sig = JSON.stringify([q,
+=======
+    const sig = JSON.stringify([q, archiveTop(root),
+>>>>>>> origin/main
       secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
@@ -777,8 +796,13 @@ export default function desktop(api) {
       if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else {
       // The sidebar and its search are Chats only; app search belongs to the global launcher.
+<<<<<<< HEAD
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
+=======
+      // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
+      for (const [k, word0] of sectionsFor(root)) {
+>>>>>>> origin/main
         const rows = k === 'working' ? globalThis.WizChatsListModel.workingSort(s[k], workingOrder()) : s[k] || [], on = !!secOpen[k];
         // round 18 item 4 (Miguel: the open sidebar built on the folded rail): Snoozed only when it holds chats, as on the rail
         if (k === 'snoozed' && !rows.length) continue;
@@ -1108,10 +1132,14 @@ export default function desktop(api) {
    * Built on the desks as they are (round 7's thirds): the Chats desk and the app's desk are both shown (desktop.css,
    * data-aad-role on their desks), the chat between the sidebar and the panel, the app docked left of the open-apps
    * column; hiding the panel leaves its app running on its desk. */
-  const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
+  const wsps = () => placements().map(p => p.node);
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
   /** The remaining renderer adapter maps the host's Chats desk to its placement container. */
+<<<<<<< HEAD
   const chatsEl = () => { const w = mainChatWindow(); return w ? wsps().find(n => Number(n.dataset.ws) === w.desk) || null : null; };
+=======
+  const chatsEl = () => { const w = mainChatWindow(); return w ? placementOf(w.desk) : null; };
+>>>>>>> origin/main
   /** Retained thread identity comes from the host, not mirrored renderer attributes. */
   const behindThread = () => { const t = mainChatWindow()?.thread || ''; return t && t !== '__new__' ? t : null; };
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
@@ -1322,7 +1350,7 @@ export default function desktop(api) {
     if (h.app && !dropped && (want === h.app || !pane || pane.id !== h.app || Number(pane.desk) !== h.r.desk)) {
       // the app now in front becomes the panel (its desk is the one not hidden)
       const app = (host?.windows() || []).find(w => w.visible && w.desk === h.r.desk && w.kind !== 'chats');
-      const el0 = app && wsps().find(w => Number(w.dataset.ws) === app.desk);
+      const el0 = app && placementOf(app.desk);
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
       want = null;
     }
@@ -1341,7 +1369,7 @@ export default function desktop(api) {
       api.sessions.newChat(); api.after(80, () => { want = id0; api.nav.goDesk(d0); api.after(600, () => { fixingBehind = false; }); });
     }
     const second = model.slots.includes('app2') && model.app2 && desks().find(d => d.id === model.app2 && d.id !== pane?.id && d.id !== CHATS);
-    secondEl = second ? wsps().find(w => Number(w.dataset.ws) === second.desk && w !== chat) || null : null;
+    secondEl = second ? placementOf(second.desk, chat) : null;
     for (const w of wsps()) {
       const r = w === pane?.el ? 'app' : w === chat ? 'chat' : w === secondEl ? 'app2' : '';
       if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; }
@@ -1518,7 +1546,16 @@ export default function desktop(api) {
   api.listen(doc, 'focusin', rememberSurface, true);
   api.back.surface?.(() => {
     // Shared registry has already offered recording and transient overlays.
+<<<<<<< HEAD
     if (panes.get().mode === 'full') { windowMode('tiled'); return true; }
+=======
+    if (panes.get().mode === 'full') {
+      // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
+      const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
+      if (frame && globalThis.WizAppServices?.back?.(frame) === 'handled') return true;
+      windowMode('tiled'); return true;
+    }
+>>>>>>> origin/main
     const a = doc.activeElement;
     // A mixed Chats/app desk can have a focused iframe without an AI-apps pane.
     // Do not consume its Back: the shell's focused-window fallback owns that app.
@@ -1559,6 +1596,20 @@ export default function desktop(api) {
   /** the rails come back as they are now (a side opened by hand, a chat or an app opened): the stash stays for ⌥. */
   function focusLeave() { if (!focusOn()) return; delete root.dataset.aadFocus; }
   let stepAt = null;
+  api.sessions.archiveOrder?.(sid => {
+    if (root.dataset.aadSide === 'rail') {
+      const key = railNow()?.key;
+      return key ? railRows(sessions || readSessions(), key, readyOrder(), groupBy()).map(r => r.id) : [];
+    }
+    const rows = [...scroll.querySelectorAll('.aad-rw[data-sid]')], row = rows.find(r => r.dataset.sid === sid);
+    if (!row) return [];
+    const group = r => {
+      for (let n = r.previousElementSibling; n; n = n.previousElementSibling) if (n.classList.contains('aad-grp')) return n;
+      return r.parentElement;
+    };
+    const section = group(row);
+    return rows.filter(r => r.parentElement === row.parentElement && group(r) === section).map(r => r.dataset.sid);
+  });
   const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
@@ -1801,6 +1852,9 @@ export default function desktop(api) {
     frontApp = h.app;
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
+    // A notification in the chat column that becomes a chat (Resolve this / Have Wizard handle it, or a reply sent from
+    // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
+    if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
     // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
     // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
@@ -1843,7 +1897,7 @@ export default function desktop(api) {
       return false;
     },
     // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
-    shows: desk => (!!secondEl && Number(secondEl.dataset.ws) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
+    shows: desk => (!!secondEl && deskOfNode(secondEl) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && deskOfNode(dockEl) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });

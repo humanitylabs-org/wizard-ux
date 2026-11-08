@@ -63,11 +63,17 @@
   // A fresh layout must not persist auto-open desks from compatibility defaults or a stale cache: the shell
   // may paint before synced preferences arrive (waitForShell), so seed only once the first load has settled.
   const launcherSettled = () => window.WizLauncher?.settled !== false;
+  // Starter apps are a brand-new device's first look, never the owner's open apps (James, 6 Nov 2026: "things keep
+  // popping open, particularly the Topics app"). They are marked `seed` (device-only: workspace sync never sends them),
+  // seed only into the layout this boot created, and never on a device that has already joined the shared workspaces.
+  let freshBoot = false;
+  const joinedWorkspaces = () => !!store.get('wsync.v2.phone', null)?.base;
   function seedApps() {
-    for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId }; desks.push(blank({ wins: [id], focus: id })); }
+    if (!freshBoot || joinedWorkspaces()) return;
+    for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId, seed: true }; desks.push(blank({ wins: [id], focus: id })); }
   }
   function freshLayout() {
-    W = {}; desks = [blank({ id: 'home', home: true })];
+    W = {}; desks = [blank({ id: 'home', home: true })]; freshBoot = true;
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks.push(blank({ wins: [c.id], focus: c.id }));
     if (launcherSettled()) seedApps();
   }
@@ -75,6 +81,16 @@
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', launcherSettled() && !!window.WizLauncher?.get('autoOpen').some(id => APP[id])); } }
   window.WosFeatures.pruneWindows(W);
   desks = window.WizCore.migrateChatsFocus(W, desks);
+  /* Upgrade: starter windows the previous shell opened carry no `seed` mark. Until this device first joins the shared
+   * workspaces nothing it holds has reached the box, so its auto-open apps are still starter apps: mark them, and the
+   * first join drops them instead of pushing them to every device. A joined device's windows already synced as before. */
+  function markLegacyStarters(wins, autoOpen, joined) {
+    if (joined) return 0;
+    const auto = new Set(autoOpen || []); let n = 0;
+    for (const w of Object.values(wins || {})) if (w && w.app === 'frame' && auto.has(w.appId) && !w.seed) { w.seed = true; n++; }
+    return n;
+  }
+  markLegacyStarters(W, window.WizLauncher?.get('autoOpen'), joinedWorkspaces());
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
@@ -1150,10 +1166,18 @@
     // One frame so the pressed, spinning icon paints before any work starts.
     requestAnimationFrame(() => { if (OPENING.id !== a.id) return; openApp(a); if (!window.WosAppSetup?.gate || a.kind !== 'wizard' || !a.url) openingEnd(a.id); });
   }
+  // An app's open window taken to one of its own pages (replace: a page change never adds a Back step of its own).
+  function framePage(w, rel) {
+    w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
+    let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    return true;
+  }
   function placeApp(mine, obj, opts = {}, refresh) {
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
     openingReady();
     if (!here) { const w = openWin(obj, opts); openingEnd(); return w; }
+    delete W[here].seed; // the owner opened it himself: a starter app becomes one of his open apps (and syncs)
     if (W[here].app !== 'chats') bringBeside(here);
     const t = deskOf(here);
     if (refresh) refresh(W[here], t);
@@ -1239,7 +1263,8 @@
       placeApp(w => w.app === 'frame' && w.appId === a.id && w.from, { app: 'frame', appId: a.id, from: opts.from }, {}, w => { w.from = opts.from; });
       return true;
     }
-    if (a.kind === 'wizard' && a.url) { placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id }, opts); return true; }
+    // extra.path: one of the app's own pages (a spoken declared route), opened exactly like a tap, then at that page.
+    if (a.kind === 'wizard' && a.url) { const path = extra.path || ''; placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id, ...(path ? { url: path } : {}) }, opts, path ? w => framePage(w, path) : null); return true; }
     const q = extra.query || '';
     placeApp(w => w.app === 'app' && w.appId === a.id, { app: 'app', appId: a.id, query: q }, opts, q ? (w, t) => { w.query = q; renderDesk(t); } : null);
     return true;
@@ -2366,9 +2391,7 @@
     // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
     // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
     // arrived). Adding one row per finished upload left later files out of a send that happened in between.
-    const room = Math.max(0, 8 - files.length);
-    if (list.length > room) toast('!', 'Up to 8 files per message', 2400);
-    const rows = list.slice(0, room).map(file => {
+    const rows = list.map(file => {
       const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
       window.WizUploads?.pending?.track(f, file);
       files.push(f); return [file, f];
@@ -2384,7 +2407,6 @@
   $('#arcScreen').addEventListener('click', async () => {
     if (!sameTake(V.files) || $('#arcScreen').disabled) return;
     const files = V.files;
-    if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
     // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
     const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
     files.push(f); renderVoiceFiles();
@@ -2414,6 +2436,9 @@
   // placeholder (WizUploads.pending) that the outbox swaps for its receipt before delivery.
   const PEND = window.WizUploads?.pending;
   const takeFiles = () => V.files.map(f => PEND ? PEND.ref(f) : (f.id && !f.uploading ? { id: f.id, name: f.name, mime: f.mime, bytes: f.bytes } : null)).filter(f => f && f.id);
+  // The take's own files plus the thread composer's (seal), each file once. Never a count cap (James, 6 Nov 2026):
+  // only real size limits (upload, inline image budget) apply.
+  const withSealFiles = (files, seal) => [...(files || []), ...(seal ? seal.files || [] : [])].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i);
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
     window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
@@ -3097,7 +3122,7 @@
         if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
         if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
-        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
+        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: withSealFiles(fl, sl), typed: sl?.text || '', snap })
           .then(item => sl?.done(item));
       });
       await Promise.all(queued.map(q => Promise.resolve(q).catch(e => OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)))));
@@ -3288,7 +3313,7 @@
      * it), never to the main agent and never through the cloud router. A held orb is still a phone command, but
      * only on-device commands run; anything else offers the choices and sends nothing. */
     if (v?.agent && target == null) {
-      if (kind === 'command' && !typed) { const lc = localParse(text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
+      if (kind === 'command' && !typed) { const lc = await LOCAL_COMMANDS.confirm(localParse(text, snap, kind), text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
       const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
       setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
       return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
@@ -3302,17 +3327,27 @@
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : '', seal?.reply ? 'the notification' : ''].filter(Boolean).join(' + ');
       if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
       if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
-      const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+      const all = withSealFiles(files, seal);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all, reply: seal?.reply || null }).then(item => { seal?.done(item); return item; });
     }
     // Registered app delivery and composer custody above are not commands. All other tap takes
     // use the normal message destination, without local parsing, cloud routing or no-match cards.
     if (window.WosCommands.isMessageTake(kind, typed)) {
+      // A tapped take whose first word is a declared app route ("music") opens that app, outside threads, before
+      // anything goes to the agent (James, 7 Nov: a tapped "Music" became a new chat instead of song ID).
+      if (target == null && !(v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) {
+        // Paint now; act only once the box's fresh app list confirms the route (else it is a message as usual).
+        if (LOCAL_COMMANDS.declaredRoute?.(text)) {
+          showRouted('command', `Command · on-device${sttNote}`);
+          const dr = await LOCAL_COMMANDS.confirmRoute(text);
+          if (dr) return finishCmd(dr, text, opts);
+        }
+      }
       if (target == null && (v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) return toView(v, text, `To ${v.name}${sttNote}`, snap);
       return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
     }
     const t0 = performance.now();
-    const loc = localParse(text, snap, kind, typed);
+    const loc = await LOCAL_COMMANDS.confirm(localParse(text, snap, kind, typed), text, snap, kind, typed);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -3404,7 +3439,11 @@
     return window.WosCommands.execute(c, text, {
       search: openSearch, settings: openSettings,
       focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, chatList: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
+<<<<<<< HEAD
       findApp, openApp: app => openApp(app, {}, opts), openAppRoute: (id, url) => window.WizOpenApp(id, url), musicDone: opts.musicDone, layout: c => {
+=======
+      findApp, openApp: app => openApp(app, {}, opts), openAppRoute: (id, url) => { const a = hostedOpenable(id); return !!a && appAt(url)?.id === id && openApp(a, { path: url }, opts) !== false; }, musicDone: opts.musicDone, layout: c => {
+>>>>>>> origin/main
         const a = c.action, f = opts.snap?.id || desks[idx].focus;
     if (a === 'desk') {
       const to = c.to; closeSheets();
@@ -3931,6 +3970,14 @@
     apply(state, o = {}) {
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
+      // Joining the owner's shared workspaces: his open apps replace this device's starter apps (seed), so a phone
+      // whose storage was reset never shows starter apps he did not open (James, 6 Nov 2026).
+      if (o.join && state.desks.length) desks = desks.filter(d => {
+        if (d.home || !d.wins.some(id => W[id]?.seed)) return true;
+        d.wins = d.wins.filter(id => { if (!W[id]?.seed) return true; winEl(id)?.remove(); delete W[id]; return false; });
+        if (!d.wins.includes(d.focus)) d.focus = d.wins[d.wins.length - 1] || null;
+        return d.wins.length > 0;
+      });
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
       r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
@@ -4228,14 +4275,13 @@
       const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); return !!openWin({ app: 'frame', appId: 'app-store', url: u.pathname + u.search }); },
     homeHost: () => secOf(HOME),
     orbHost: () => orbWrap,
+    chatsSurfaces: () => Object.keys(W).filter(id => W[id]?.app === 'chats').map(id => CHATS.surface(id)).filter(Boolean),
     // The Apps view's Home grid: one entry per desk (each desk is one app), in desk order, with the app it shows.
     // A layout placing the shell's opens (apps.routeOpens): the app's own window at one of its own pages
     showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
       if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
       const mine = x => x?.app === 'frame' && x.appId === id && !x.from, w = mine(W[desks[idx].focus]) ? W[desks[idx].focus] : Object.values(W).find(x => mine(x) && deskOf(x.id) >= 0); if (!w) return false;
-      w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
-      let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
-      if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } } return true; },   // (replace: no Back step of its own)
+      return framePage(w, rel); },
     phoneDesks: () => desks.map((d, i) => { if (d.home || !d.wins.length) return null; const w = W[d.focus] || W[d.wins[0]]; if (!w) return null; const a = winApp(w); return { desk: i, id: w.appId || a.id || '', name: a.name || w.title || '' }; }).filter(Boolean),
     // An app's mark exactly as the dock draws it (its logo or sigil, its colour): the Apps view's icons.
     phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },
