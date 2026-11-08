@@ -165,7 +165,7 @@ const WosWork = (() => { const w = {}; vm.runInNewContext(workScript, { window: 
 const returned = { phase: 'stalled', pending: 0, returned: 2, since: now / 1000 - 258, resumeEligible: true };
 for (const layout of ['day', 'status']) {
   test(`${layout}: returned helpers plus a running background job stay Working, not Ready`, () => {
-    const s = row({ status: 'running', waitingOn: 'helper', background: 'heavy', attention: { state: 'fyi', ask: 'Background work is still running or waiting to report back.' },
+    const s = row({ status: 'running', waitingOn: 'helper', attention: { state: 'fyi', ask: 'Background work is still running or waiting to report back.' },
       helperStatus: { ...returned, phase: 'background', resumeEligible: false }, runId: 'old', lastRunStatus: 'completed' }), c = harness([s], { layout });
     assert.equal(c.group([s], now).working.length, 1);
     assert.equal(c.group([s], now).ready.length, 0);
