@@ -170,7 +170,7 @@ public class WizardKeyboardService extends AccessibilityService {
      */
     public boolean insertText(String text) {
         text = text.stripLeading();
-        boolean icAvailable = false, commitIssued = false;
+        boolean icAvailable = false, commitIssued = false, webEditor = true, verifiable = false, textChanged = false;
 
         // Strategy 1: InputConnection (API 33+) — works in ALL apps including Obsidian. No accessibility tree walk and
         // no sleep before the commit: the surrounding text comes from the InputConnection itself.
@@ -180,6 +180,9 @@ public class WizardKeyboardService extends AccessibilityService {
                 InputMethod.AccessibilityInputConnection ic = inputMethod == null ? null : inputMethod.getCurrentInputConnection();
                 if (ic != null) {
                     icAvailable = true;
+                    // Cheap state only before the commit: the cached node and its cached text (no tree walk, no IPC).
+                    final AccessibilityNodeInfo node = lastFocusedNode;
+                    final CharSequence beforeText = node == null ? null : node.getText();
                     SurroundingText surrounding = ic.getSurroundingText(50, 50, 0);
                     if (surrounding != null) {
                         CharSequence before = surrounding.getText().subSequence(0, surrounding.getSelectionStart());
@@ -208,14 +211,27 @@ public class WizardKeyboardService extends AccessibilityService {
                     }
                     ic.commitText(text, 1, null);
                     commitIssued = true;
-                    logCommitLater(text);
+                    // After the words are in: web editors (Notes) and unknown nodes are trusted at once, no wait.
+                    webEditor = node == null || InsertPolicy.isWebEditor(node);
+                    if (!webEditor && beforeText != null) {
+                        // Reliable native editor: poll in short steps, leave the moment the text moves.
+                        verifiable = true;
+                        for (int waited = 0; waited < InsertPolicy.VERIFY_CAP_MS && !textChanged && verifiable; waited += InsertPolicy.VERIFY_STEP_MS) {
+                            try { Thread.sleep(InsertPolicy.VERIFY_STEP_MS); }
+                            catch (InterruptedException ie) { Thread.currentThread().interrupt(); verifiable = false; break; }
+                            node.refresh();
+                            CharSequence now = node.getText();
+                            if (now == null) verifiable = false;
+                            else textChanged = !beforeText.toString().contentEquals(now);
+                        }
+                    }
                 }
             } catch (Exception e) {
                 Log.w(TAG, "InputConnection strategy failed: " + e.getMessage());
             }
         }
-        if (InsertPolicy.afterCommit(icAvailable, commitIssued) == InsertPolicy.Outcome.TYPED) return true;
-        if (!InsertPolicy.clipboardAllowed(icAvailable, commitIssued)) return false;
+        if (InsertPolicy.afterCommit(icAvailable, commitIssued, webEditor, verifiable, textChanged) == InsertPolicy.Outcome.TYPED) return true;
+        if (!InsertPolicy.clipboardAllowed(icAvailable, commitIssued, webEditor, verifiable, textChanged)) return false;
 
         // Strategy 2: Clipboard paste (fallback for older Android or when IME unavailable). Only here may the words
         // touch the clipboard, and only when they were not typed.
@@ -242,34 +258,6 @@ public class WizardKeyboardService extends AccessibilityService {
             main.postDelayed(pendingRestore, 500);
         }
         return pasted;
-    }
-
-    /**
-     * Logging only (never changes the result, never touches the clipboard): after a commit, poll the last focused
-     * node in short steps and log whether its text moved. Skipped for web editors, whose accessibility text lags.
-     */
-    private void logCommitLater(String typed) {
-        final AccessibilityNodeInfo node = lastFocusedNode;
-        if (node == null) return;
-        final CharSequence beforeText = node.getText(); // cached copy, no IPC
-        final long start = SystemClock.uptimeMillis();
-        main.postDelayed(new Runnable() {
-            boolean first = true;
-            @Override public void run() {
-                try {
-                    if (first) { // off the typing path: the parent walk only happens after the words are in
-                        first = false;
-                        if (!InsertPolicy.shouldVerify(InsertPolicy.isWebEditor(node))) return;
-                    }
-                    long waited = SystemClock.uptimeMillis() - start;
-                    node.refresh();
-                    boolean changed = !java.util.Objects.equals(beforeText, node.getText());
-                    if (changed || waited >= InsertPolicy.VERIFY_CAP_MS) {
-                        Log.i(TAG, "commitText " + (changed ? "visible" : "not visible to accessibility") + " after " + waited + "ms chars=" + typed.length());
-                    } else main.postDelayed(this, InsertPolicy.VERIFY_STEP_MS);
-                } catch (Exception ignored) { }
-            }
-        }, InsertPolicy.VERIFY_STEP_MS);
     }
 
     private volatile Runnable pendingRestore;
