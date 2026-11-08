@@ -123,14 +123,14 @@ window.WosChatPower = function chatPower(A) {
   }
   /* Live repaints and growth never pull the reader down (James, 8 Nov 2026: no scroll-yanking while a reply streams).
    * A place at the bottom stays at the bottom only while the content is unchanged (keyboard, composer, rotation) or
-   * just after his own send; content that grew below leaves the words he is reading where they are and shows
-   * ↓ Latest. Opening a thread still lands as before (position + settle use restore directly). */
+   * just after his own send; content that grew (bottom place, or the opening last-reply place clamped at the end)
+   * leaves the words he is reading where they are, re-pinned only to his own on-screen eye line, and shows ↓ Latest. Opening a thread still lands as before (position + settle use restore directly). */
   function hold(nb, place) {
     const el = nb.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
     if (!c || !onScreen(nb)) return restore(nb, place);
     const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
     let done = true;
-    if (!place?.atBottom || !grew || Date.now() < (c.pinUntil || 0)) done = restore(nb, place);
+    if (!grew || Date.now() < (c.pinUntil || 0)) done = restore(nb, place);
     else {
       // The eye-line record is only trusted when it was captured on this screen (just before the repaint).
       if (place === c.eyeRec && place.anchor) restore(nb, { ...place, atBottom: false });

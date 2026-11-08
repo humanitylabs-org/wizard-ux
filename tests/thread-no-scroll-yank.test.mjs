@@ -44,6 +44,11 @@ for (const doc of [false, true]) {
     h.tick(2000); h.grow(500); h.api.reflow(h.nb); assert.equal(h.top(), 1640, 'the streaming reply does not yank');
     assert.equal(h.latest.hidden, false);
   });
+  test(`the opening last-reply place does not drag the view when that reply grows (${mode})`, () => {
+    const h = harness(doc); h.api.RP.save({ sessionId: 'thread', messageId: 'reply', anchor: { key: 'row', nth: 0, off: 8 }, atBottom: false, scrollTop: 0, savedAt: 1 });
+    h.api.reflow(h.nb); const at = h.top();
+    h.grow(300); h.api.reflow(h.nb); assert.equal(h.top(), at);
+  });
   test(`↓ Latest jumps once without starting a follow (${mode})`, () => {
     const h = harness(doc); h.sc.scrollTop = 600; h.api.capture(h.nb); h.api.reflow(h.nb);
     h.api.follow('win', false); assert.equal(h.top(), 1500);
