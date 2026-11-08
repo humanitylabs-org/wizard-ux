@@ -64,6 +64,7 @@
       const s = open.get(wid); if (!s || !el) return false;
       const esc = kit.esc, md = text => kit.md(text).replace(/<img\b[^>]*>/gi, '');
       const bubble = m => `<div class="msg ${m.role === 'user' ? 'u' : 'a'}"><div class="bub">${md(m.text)}</div></div>`;
+      const was = el.querySelector('[data-incog-thread] .ch-msgs'), keep = was && !s.toBottom ? was.scrollTop : null; s.toBottom = false;
       const old = el.querySelector('[data-incog-field]'), focused = !!old && old === document.activeElement;
       const selection = old ? [old.selectionStart, old.selectionEnd] : null;
       const work = s.working && !s.starting ? window.WosWork?.html({ work: [] }, { live: true, open: true, md, esc, clip: (x, n) => x.slice(0, n), key: 'incognito', streamSteps: s.steps }) || '<p role="status">Replying…</p>' : '';
@@ -74,14 +75,15 @@
         <form class="ch-compose" data-incog-form><div class="ch-row2"><div class="ch-field"><textarea data-incog-field rows="1" placeholder="Message ${esc(s.agent.label || 'Private agent')}" aria-label="Incognito message" autocomplete="off" autocorrect="off" spellcheck="false" ${s.starting || (s.error && !s.retry) ? 'disabled' : ''}>${esc(s.draft)}</textarea></div>${s.working && !s.starting ? '<button type="button" class="ch-send" data-incog-stop aria-label="Stop Incognito reply">■</button>' : `<button type="submit" class="ch-send" aria-label="Send Incognito message" ${s.working || (s.error && !s.retry) ? 'disabled' : ''}>↑</button>`}</div></form></div>`;
       const field = el.querySelector('[data-incog-field]'); grow(field);
       if (focused && !field.disabled) { field.focus({ preventScroll: true }); field.setSelectionRange(...selection); }
-      const box = el.querySelector('.ch-msgs'); box.scrollTop = box.scrollHeight;
+      // A streaming reply never pulls the reader down (James, 8 Nov 2026); opening and his own send land at the bottom.
+      const box = el.querySelector('.ch-msgs'); box.scrollTop = keep == null ? box.scrollHeight : keep;
       return true;
     }
     async function send(wid, text, retry = false) {
       const s = open.get(wid); text = String(text || '').trim();
       if (!s || s.working || (s.error && !s.retry) || !text) return false;
       s.stream?.close(); s.draft = ''; s.sent = true; s.working = true; s.error = ''; s.retry = false; s.output = ''; s.steps = []; s.lastInput = text;
-      if (!retry) s.messages.push({ role: 'user', text }); paint(wid);
+      if (!retry) s.messages.push({ role: 'user', text }); s.toBottom = true; paint(wid);
       try {
         const admitted = await request(s, '/v1/runs', 'POST', { input: text });
         if (!alive(wid, s)) return false;
