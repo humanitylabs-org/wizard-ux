@@ -779,6 +779,10 @@ body {
 .device.orb-corner .desk-dots, .device.orb-corner #scrub { display: none; }
 .device.orb-corner .orb-wrap { margin: 0; }
 .device.orb-corner .win.full .ch-compose { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
+/* Android's document-scroll thread pins the composer (position: fixed) above the bottom bar's strip, so the corner orb is
+ * under it, never in it: no empty orb column in the row (James, 8 Nov 2026: the Stop button sat 60px short of the edge, the
+ * model chip wrapped). The column is reserved only where the orb really overlays the composer. */
+html.wos-doc-scroll .device.orb-corner .wos-doc-thread .ch-compose { padding-right: 10px; }
 .device.orb-corner .win.full .ch-scroll { padding-bottom: 72px; }
 /* voice controls fan up and left from the corner, Cancel nearest the thumb */
 .device.orb-corner .arc { left: auto; right: calc(var(--corner-r) + var(--corner-orb) / 2); bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) / 2); margin: 0 -25px -25px 0; }

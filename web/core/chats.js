@@ -201,6 +201,11 @@ window.WizCore.chats = function createChats(H) {
   }
   {
     const queueDocumentThread = () => { if (!docFrame) docFrame = requestAnimationFrame(() => { docFrame = 0; syncDocumentThread(); }); };
+    // The composer sits above the bottom bar's measured strip. That strip changes without any size change when the bar
+    // finishes its corner animation (it measured as 0 mid-fade) and while the app is away, so measure again when the
+    // animation ends and on resume (James, 8 Nov 2026: the composer kept a stale gap after the Android app resumed).
+    for (const ev of ['visibilitychange', 'pageshow', 'focus']) (ev === 'visibilitychange' ? document : window).addEventListener(ev, queueDocumentThread);
+    document.addEventListener('animationend', e => { if (e.target?.id === 'dock') queueDocumentThread(); }, true);
     // Desk changes / Back / closing a hosted thread must relinquish document scrolling too.
     new MutationObserver(queueDocumentThread).observe(document.body, { childList: true, subtree: true });
     const device = document.getElementById('device');
