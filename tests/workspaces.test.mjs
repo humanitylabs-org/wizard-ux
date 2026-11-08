@@ -20,8 +20,8 @@ class El extends EventTarget {
   querySelectorAll(s) { const all = this.children.flatMap(n => [n, ...n.querySelectorAll('*')]); return all.filter(n => s === '*' || s === n.tagName.toLowerCase() || (s.startsWith('.') && n.className.split(' ').includes(s.slice(1))) || (s.startsWith('[data-workspace-id=') && n.dataset.workspaceId === s.match(/="([^"]+)"/)[1])); }
   querySelector(s) { return this.querySelectorAll(s)[0] || null; }
 }
-function boot({ native = false, items = [], devices = { this: { wizard: 'Local Wizard' }, devices: [], managed: [] }, local = [], shell = 'desktop', call } = {}) {
-  const win = new EventTarget(), body = new El('body'), html = new El('html'), slot = new El('div'), data = new Map([['wos.workspaces.v1', JSON.stringify(local)]]), stack = [], toasts = [], calls = [], nav = [], hooks = {};
+function boot({ native = false, items = [], devices = { this: { wizard: 'Local Wizard' }, devices: [], managed: [] }, local = [], shell = 'desktop', call, hash = '' } = {}) {
+  const win = new EventTarget(), body = new El('body'), html = new El('html'), slot = new El('div'), data = new Map([['wos.workspaces.v1', JSON.stringify(local)]]), stack = [], toasts = [], calls = [], nav = [], replaced = [], hooks = {};
   const document = { body, documentElement: html, createElement: tag => new El(tag), createElementNS: (_ns, tag) => new El(tag), querySelector: () => slot, querySelectorAll: () => [], getElementById: () => body };
   const host = { env: { shell }, route: () => ({ view: 'desk', desk: 0 }), on: (k, fn) => { hooks[k] = fn; }, listen: (el, k, fn) => el.addEventListener(k, fn), mount: n => body.append(n), toast: x => toasts.push(x), back: { push(fn) { stack.push(fn); return () => { const at = stack.indexOf(fn); if (at >= 0) stack.splice(at, 1); }; } } };
   let setup;
@@ -33,8 +33,8 @@ function boot({ native = false, items = [], devices = { this: { wizard: 'Local W
   win.innerWidth = 1280;
   const storage = { getItem: k => data.get(k), setItem: (k, v) => data.set(k, v) };
   const custom = class extends Event { constructor(k, opts) { super(k); this.detail = opts.detail; } };
-  vm.runInNewContext(source, { window: win, document, localStorage: storage, location: { origin: 'https://here.test', pathname: '/wizard-os-home/', assign: x => nav.push(x) }, URL, CustomEvent: custom, AbortController, AbortSignal, CSS: { escape: v => v }, crypto: { randomUUID }, fetch: () => { throw new Error('fixture must not fetch'); }, setTimeout: () => { throw new Error('no idle timers'); }, setInterval: () => { throw new Error('no polling'); } });
-  return { w: win.WizWorkspaces, start: () => setup(host), win, body, slot, stack, toasts, calls, nav, data, hooks };
+  vm.runInNewContext(source, { window: win, document, localStorage: storage, location: { origin: 'https://here.test', hostname: 'here.test', pathname: '/wizard-os-home/', search: '', hash, assign: x => nav.push(x) }, history: { state: null, replaceState: (_s, _t, u) => { replaced.push(u); } }, URL, CustomEvent: custom, AbortController, AbortSignal, CSS: { escape: v => v }, crypto: { randomUUID }, fetch: () => { throw new Error('fixture must not fetch'); }, setTimeout: () => { throw new Error('no idle timers'); }, setInterval: () => { throw new Error('no polling'); } });
+  return { w: win.WizWorkspaces, start: () => setup(host), win, body, slot, stack, toasts, calls, nav, data, hooks, replaced };
 }
 const remote = (id = 'other', extra = {}) => ({ id, name: 'Other Wizard', url: 'https://other.test', kind: 'remote', status: 'ready', ...extra });
 const managed = (extra = {}) => remote('managed', { kind: 'managed', role: 'technical-admin', org: 'Example group', ...extra });
@@ -90,7 +90,7 @@ test('failed native switch rolls back and toasts, no navigation', async () => {
 });
 test('navigation fallback keeps shell path only for an origin, drops current query/thread state', async () => {
   const b = boot({ local: [remote()] }); await b.w.list(); await b.w.switch('other');
-  assert.deepEqual(b.nav, ['https://other.test/wizard-os-home/']);
+  assert.equal(b.nav.length, 1); assert.match(b.nav[0], /^https:\/\/other\.test\/wizard-os-home\/#wzfrom=/);
   assert.equal(b.w.destination('http://private-box:8923'), 'http://private-box:8923/wizard-os-home/');
   assert.equal(b.w.destination('https://other.test/a/'), 'https://other.test/a/');
 });
@@ -147,7 +147,22 @@ test('another Wizard of the same owner (kind remote) lists under My Wizards, swi
   const state = await b.w.list();
   const it = state.items.find(v => v.id === 'wizard-james');
   assert.equal(it.kind, 'remote'); assert.equal(it.name, 'WizardOS 2'); assert.equal(b.w.groups(state.items)[0].label, '');
-  await b.w.switch('wizard-james'); assert.equal(b.nav.length, 1); assert.match(b.nav[0], /^https:\/\/wizard-james\.example\.ts\.net:8796\/wizard-os-home\/$/);
+  await b.w.switch('wizard-james'); assert.equal(b.nav.length, 1); assert.match(b.nav[0], /^https:\/\/wizard-james\.example\.ts\.net:8796\/wizard-os-home\/#wzfrom=/);
+});
+test('switching carries a safe way back; the target saves it once and strips the hash', async () => {
+  const a = boot({ local: [remote()], devices: { this: { wizard: 'WizardOS 1' } } }); await a.w.list(); await a.w.switch('other');
+  const hash = new URL(a.nav[0]).hash;
+  const carried = JSON.parse(decodeURIComponent(hash.slice('#wzfrom='.length)));
+  assert.deepEqual(plain(carried), { name: 'WizardOS 1', url: 'https://here.test/wizard-os-home/' });
+  const b = boot({ hash }); // the target Wizard (its own origin is simulated by a different saved list)
+  assert.deepEqual(b.replaced, ['/wizard-os-home/']);
+  assert.deepEqual(JSON.parse(b.data.get('wos.workspaces.v1')).map(v => v.url), []);  // same origin as itself: never saved
+  const c = boot({ hash: '#wzfrom=' + encodeURIComponent(JSON.stringify({ name: 'WizardOS 1', url: 'https://first.test/wizard-os-home/' })) });
+  const saved = JSON.parse(c.data.get('wos.workspaces.v1')); assert.equal(saved.length, 1); assert.equal(saved[0].name, 'WizardOS 1'); assert.equal(saved[0].url, 'https://first.test/wizard-os-home/');
+  assert.deepEqual(plain((await c.w.list()).items.map(v => v.name)), ['Local Wizard', 'WizardOS 1']);
+  const bad = boot({ hash: '#wzfrom=' + encodeURIComponent(JSON.stringify({ name: 'X', url: 'javascript:alert(1)' })) });
+  assert.equal(bad.data.get('wos.workspaces.v1'), '[]');
+  const junk = boot({ hash: '#wzfrom=%E0%A4%A' }); assert.equal(junk.data.get('wos.workspaces.v1'), '[]');
 });
 test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', () => {
   for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/workspaces.js/);

@@ -49,7 +49,8 @@
     const managed = (Array.isArray(registry.managed) ? registry.managed : []).slice(0, MAX - 1).map(v => ({ ...v, kind: v.kind === 'company' ? 'company' : v.kind === 'remote' ? 'remote' : 'managed', source: 'registry' }));
     const entries = normalize([own, ...managed]);
     const urls = new Set(entries.filter(v => v.url).map(v => v.url));
-    for (const v of saved()) if (!entries.some(i => i.id === v.id) && !urls.has(v.url) && entries.length < MAX) { entries.push(v); urls.add(v.url); }
+    const origins = new Set(entries.filter(v => v.url).map(v => new URL(v.url).origin));
+    for (const v of saved()) if (!entries.some(i => i.id === v.id) && !urls.has(v.url) && !origins.has(new URL(v.url).origin) && entries.length < MAX) { entries.push(v); urls.add(v.url); origins.add(new URL(v.url).origin); }
     accept({ active: 'this', items: entries });
   }
   function ingest(devices) { if (!native() && devices && typeof devices === 'object') { registry = devices; if (!pending) { merge(); publish(); } } }
@@ -94,6 +95,29 @@
     if (u.pathname === '/' && !u.search && !u.hash) u.pathname = location.pathname;
     return u.href;
   }
+  // A saved Wizard lives in one origin's localStorage, so the Wizard we navigate to cannot see it. Carry a
+  // safe way back in the URL hash (name + address only, no access); the target saves it once and strips it.
+  const FROM = 'wzfrom=';
+  function withReturn(url) {
+    if (native()) return url;
+    const u = new URL(url); if (u.hash) return url;
+    const here = text(registry.this?.wizard) || location.hostname.split('.')[0] || 'Wizard';
+    u.hash = FROM + encodeURIComponent(JSON.stringify({ name: text(here, 60), url: location.origin + location.pathname }));
+    return u.href;
+  }
+  function adoptReturn() {
+    try {
+      if (native() || !location.hash.startsWith('#' + FROM)) return;
+      const r = JSON.parse(decodeURIComponent(location.hash.slice(1 + FROM.length)));
+      history.replaceState(history.state, '', location.pathname + location.search);
+      const url = address(r?.url), name = text(r?.name, 60) || 'Wizard';
+      if (!url || new URL(url).origin === location.origin) return;
+      const items = saved(); if (items.some(v => new URL(v.url).origin === new URL(url).origin)) return;
+      const id = 'from-' + new URL(url).host.replace(/[^a-z0-9.-]/gi, '-').slice(0, 60);
+      persist([...items, { id, name, url, kind: 'remote' }].slice(-MAX));
+    } catch (_) { /* a malformed hash is ignored */ }
+  }
+  adoptReturn();
   const toast = message => api?.toast(message);
   function close() {
     if (!overlay) return false;
@@ -116,7 +140,7 @@
       if (native()) {
         const result = await window.WizCore.bridge.call('workspaces.switch', { id });
         if (result?.ok !== true) throw new Error('Couldn’t open that Wizard.');
-      } else location.assign(destination(item.url));
+      } else location.assign(withReturn(destination(item.url)));
       return { ok: true };
     } catch (error) { state.active = previous; toast('Couldn’t open that Wizard. Please try again.'); throw error; }
     finally { pending = ''; notify(); }

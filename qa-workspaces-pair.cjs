@@ -12,8 +12,9 @@ const type = f => ({ '.html': 'text/html', '.css': 'text/css', '.js': 'applicati
 const at = Math.floor(Date.now() / 1000);
 const thread = { id: 'qa-thread', title: 'Synthetic switcher thread', source: 'wizard-mobile', status: 'done', archived: false, hidden: false, message_count: 1, started_at: at - 200, last_active: at - 100, preview: 'Synthetic text only', preview_role: 'assistant' };
 const registries = {
-  [A]: { this: {}, devices: [], managed: [{ id: 'wizard-james', name: 'WizardOS 2', kind: 'remote', role: 'owner', url: B + '/wizard-os-home/' }] },
-  [B]: { this: {}, devices: [], managed: [{ id: 'telos', name: 'WizardOS 1', kind: 'remote', role: 'owner', url: A + '/wizard-os-home/' }] }
+  [A]: { this: { wizard: 'WizardOS 1' }, devices: [], managed: [{ id: 'wizard-james', name: 'WizardOS 2', kind: 'remote', role: 'owner', url: B + '/wizard-os-home/' }] },
+  // B has no reciprocal entry (like a Wizard that only just got the switcher): the way back is carried through the switch.
+  [B]: { this: {}, devices: [] }
 };
 async function boot(browser, { phone, skin = 'nebula', registry = null, local = [] }) {
   const writes = [], runs = [], errors = [];
@@ -117,12 +118,13 @@ async function run(browser, { phone, skins }) {
   if (phone) await p.evaluate(() => window.__wos.goDesk(0, true)); else await p.locator('#logo').click();
   await p.waitForTimeout(1200);
   ok(await shown(b), `${dev}: the other Wizard's shell shows the switcher`);
+  ok(!p.url().includes('wzfrom'), `${dev}: carried hash stripped from the address bar`, p.url());
   await openMenu(b);
   const rowsB = await p.locator('.wz-workspaces-item').evaluateAll(a => a.map(e => ({ id: e.dataset.workspaceId, text: e.textContent.trim().replace(/\s+/g, ' '), checked: e.getAttribute('aria-checked') })));
-  ok(rowsB.length === 2 && rowsB[1].id === 'telos' && rowsB[0].checked === 'true', `${dev}: second Wizard lists the first to switch back`, JSON.stringify(rowsB));
+  ok(rowsB.length === 2 && rowsB[1].id.startsWith('from-') && rowsB[1].text.includes('WizardOS 1') && rowsB[0].checked === 'true', `${dev}: second Wizard lists the first to switch back`, JSON.stringify(rowsB));
   await p.screenshot({ path: path.join(OUT, `${dev}-3-on-wizardos2-menu.png`) });
   const back = p.waitForURL(u => u.origin === A, { timeout: 8000 });
-  const row2 = p.locator('[data-workspace-id="telos"]'); phone ? await row2.tap() : await row2.click(); await back;
+  const row2 = p.locator('[data-workspace-id^="from-"]'); phone ? await row2.tap() : await row2.click(); await back;
   ok(p.url().startsWith(A + '/wizard-os-home/'), `${dev}: selecting the first Wizard returns to it`, p.url());
   ok(b.runs.length === 0, `${dev}: zero /v1/runs`, JSON.stringify(b.runs)); ok(b.errors.length === 0, `${dev}: zero page errors`, b.errors.join(' | '));
   await b.ctx.close();
