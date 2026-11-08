@@ -10,10 +10,10 @@ function harness(doc = false) {
   const state = { lid: 'reply', posFor: 'thread', show: 120 }, w = { id: 'win', thread: 'thread' }, latest = { hidden: true };
   let top = 1500, height = 2000, now = 10_000;
   const sc = { get scrollHeight() { return height; }, clientHeight: 500, get scrollTop() { return top; }, set scrollTop(n) { top = n; } };
-  const host = { dataset: { chats: 'win' }, querySelector: s => s === '[data-chlatest]' ? latest : null };
-  const row = { dataset: { morphKey: 'row' }, getBoundingClientRect: () => ({ top: 1700 - top, height: 150 }) };
+  const host = { dataset: { chats: 'win' }, querySelector: s => s === '[data-chlatest]' ? latest : null, addEventListener() {}, removeEventListener() {} };
+  const row = { complete: true, dataset: { morphKey: 'row' }, getBoundingClientRect: () => ({ top: 1700 - top, height: 150 }) };
   const first = { getBoundingClientRect: () => ({ top: 100 - top }) }, last = { getBoundingClientRect: () => ({ bottom: 100 - top + height }) };
-  const nb = { isConnected: true, firstElementChild: first, lastElementChild: last, querySelectorAll: () => [row],
+  const nb = { isConnected: true, addEventListener() {}, removeEventListener() {}, children: [], querySelector: () => null, firstElementChild: first, lastElementChild: last, querySelectorAll: () => [row],
     closest: s => s === '[data-incog-thread]' ? null : s === '[data-chats]' ? host : { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 100 }) }) },
     getBoundingClientRect: () => ({ top: 100 }) };
   if (!doc) Object.defineProperties(nb, { scrollTop: { get: () => sc.scrollTop, set: n => { sc.scrollTop = n; } }, scrollHeight: { get: () => sc.scrollHeight }, clientHeight: { get: () => sc.clientHeight } });
@@ -48,6 +48,11 @@ for (const doc of [false, true]) {
     const h = harness(doc); h.api.RP.save({ sessionId: 'thread', messageId: 'reply', anchor: { key: 'row', nth: 0, off: 8 }, atBottom: false, scrollTop: 0, savedAt: 1 });
     h.api.reflow(h.nb); const at = h.top();
     h.grow(300); h.api.reflow(h.nb); assert.equal(h.top(), at);
+  });
+  test(`a working thread just opened does not follow its streaming reply during the opening settle (${mode})`, () => {
+    const h = harness(doc); h.api.RP.save({ sessionId: 'thread', messageId: 'reply', atBottom: true, working: false, scrollTop: 0, savedAt: 1 });
+    h.state.posFor = null; h.api.position({ id: 'win', thread: 'thread' }, h.nb.closest('[data-chats]'), h.nb, { turns: [{ u: { text: 'hi' }, a: { text: 'x', at: 1 } }], working: true });
+    const at = h.top(); h.grow(400); h.api.reflow(h.nb); assert.equal(h.top(), at);
   });
   test(`↓ Latest jumps once without starting a follow (${mode})`, () => {
     const h = harness(doc); h.sc.scrollTop = 600; h.api.capture(h.nb); h.api.reflow(h.nb);

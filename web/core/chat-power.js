@@ -183,7 +183,7 @@ window.WosChatPower = function chatPower(A) {
       c.eyeRec = null; c.pinUntil = 0;
       restore(nb, place);
       c.seenH = contentH(nb);
-      settle(c, nb, () => { restore(nb, RP.read(sid)); c.seenH = contentH(nb); });
+      settle(c, nb, () => settleTo(c, nb, sid));
       if (!c.posCached) c.unreadOpen = '';
     } else {
       if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
@@ -191,7 +191,7 @@ window.WosChatPower = function chatPower(A) {
         if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
         if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
       }
-      if (settling(c)) { const s = c.settle; settle(c, nb, () => { restore(nb, RP.read(sid)); c.seenH = contentH(nb); }, s.until); restore(nb, RP.read(sid)); c.seenH = contentH(nb); }
+      if (settling(c)) { const s = c.settle; settle(c, nb, () => settleTo(c, nb, sid), s.until); settleTo(c, nb, sid); }
       else hold(nb, RP.read(sid));
     }
     // Content or chrome can grow without a repaint. Both modes use the same restore rule.
@@ -206,6 +206,14 @@ window.WosChatPower = function chatPower(A) {
     paintLatest(el, nb);
     return true;
   }
+  // Opening settles onto its place while images/history arrive, but a reply streaming in during those first seconds
+  // is still growth below: it keeps the view where it is and shows ↓ Latest (PR #1172 review).
+  function settleTo(c, nb, sid) {
+    const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
+    if (!grew || !A.isWorking?.(LIVE.session?.(sid))) restore(nb, RP.read(sid));
+    c.seenH = contentH(nb);
+    const el = nb.closest('[data-chats]'); if (el) paintLatest(el, nb);
+  }
   function resume(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
     if (c?.placeOptions) position(w, el, nb, c.placeOptions);
@@ -216,7 +224,7 @@ window.WosChatPower = function chatPower(A) {
     clearTimeout(c.reflowT);
     const wait = 600 - (Date.now() - (c.placeUserAt || 0));
     if (wait > 0) { c.reflowT = setTimeout(() => reflow(nb), wait + 1); return; }
-    if (settling(c)) { restore(nb, RP.read(w.thread)); c.seenH = contentH(nb); } else hold(nb, RP.read(w.thread));
+    if (settling(c)) settleTo(c, nb, w.thread); else hold(nb, RP.read(w.thread));
   }
   const SETTLE_MS = 3000;
   function settle(c, nb, apply, until) {
