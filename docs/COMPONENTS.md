@@ -97,7 +97,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Android shell capabilities | `WosDevicePort` (`device-port.js`), `WosDeviceRecording` (`device-recording.js`), `WosDeviceOrb` (`device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) |
 | Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; host owns cutout, child inset 0 |
 | Home-screen declaration | `WizHomeScreenCapabilities` (`home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
-| Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) |
+| Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`). The pinned thread composer sits above the bottom strip, so it reserves no orb column and re-measures on resume / dock animation end (`qa-orb-doc-scroll-composer.cjs`) |
 
 | Owner Look sync | `WosLookSync` (`look-sync.js`): skin/tweaks/defaults, desktop backdrop + views; legacy seeds; ordered equality-group causal base + pending ACK overlay for all fields; foreground refresh; feature switches |
 
