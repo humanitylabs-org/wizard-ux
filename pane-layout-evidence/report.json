@@ -1,0 +1,1469 @@
+{
+  "baseline": "ed0401b78cae26a53783e06670daeac8e9f24a9b",
+  "cases": [
+    {
+      "skin": "nebula",
+      "tree": "baseline",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      },
+      "writes": [
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "errors": []
+    },
+    {
+      "skin": "nebula",
+      "tree": "candidate",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      }
+    },
+    {
+      "skin": "nebula",
+      "patch": {
+        "ratio": "1/3"
+      },
+      "actual": {
+        "side": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 288,
+          "y": 44,
+          "width": 317,
+          "height": 916
+        },
+        "app": {
+          "x": 605,
+          "y": 44,
+          "width": 635,
+          "height": 916
+        },
+        "header": {
+          "x": 605,
+          "y": 0,
+          "width": 635,
+          "height": 44
+        },
+        "ctop": {
+          "x": 288,
+          "y": 0,
+          "width": 317,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 288,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 288,
+            "y": 0,
+            "width": 317,
+            "height": 960
+          },
+          "app": {
+            "x": 605,
+            "y": 0,
+            "width": 635,
+            "height": 960
+          },
+          "app2": {
+            "x": 288,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "nebula",
+      "patch": {
+        "ratio": "2/3"
+      },
+      "actual": {
+        "side": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 288,
+          "y": 44,
+          "width": 635,
+          "height": 916
+        },
+        "app": {
+          "x": 923,
+          "y": 44,
+          "width": 317,
+          "height": 916
+        },
+        "header": {
+          "x": 923,
+          "y": 0,
+          "width": 317,
+          "height": 44
+        },
+        "ctop": {
+          "x": 288,
+          "y": 0,
+          "width": 635,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 288,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 288,
+            "y": 0,
+            "width": 635,
+            "height": 960
+          },
+          "app": {
+            "x": 923,
+            "y": 0,
+            "width": 317,
+            "height": 960
+          },
+          "app2": {
+            "x": 288,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "nebula",
+      "patch": {
+        "ratio": "1/2",
+        "side": "end"
+      },
+      "actual": {
+        "side": {
+          "x": 952,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 476,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "app": {
+          "x": 0,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        },
+        "ctop": {
+          "x": 476,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 952,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 0,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 476,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app": {
+            "x": 0,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app2": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "nebula",
+      "patch": {
+        "side": "start",
+        "dock": {
+          "edge": "start"
+        }
+      },
+      "actual": {
+        "side": {
+          "x": 200,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 488,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "app": {
+          "x": 964,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "header": {
+          "x": 964,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        },
+        "ctop": {
+          "x": 488,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 200,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 488,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 488,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app": {
+            "x": 964,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app2": {
+            "x": 488,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "nebula",
+      "secondApp": {
+        "x": 1002,
+        "y": 44,
+        "width": 238,
+        "height": 916
+      },
+      "actual": {
+        "side": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 288,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "app": {
+          "x": 764,
+          "y": 44,
+          "width": 238,
+          "height": 916
+        },
+        "header": {
+          "x": 764,
+          "y": 0,
+          "width": 238,
+          "height": 44
+        },
+        "ctop": {
+          "x": 288,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        }
+      }
+    },
+    {
+      "skin": "nebula",
+      "omittedChats": true,
+      "app": {
+        "x": 288,
+        "y": 44,
+        "width": 635,
+        "height": 916
+      },
+      "second": {
+        "x": 923,
+        "y": 44,
+        "width": 317,
+        "height": 916
+      }
+    },
+    {
+      "skin": "nebula",
+      "tree": "candidate",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      },
+      "writes": [
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "errors": []
+    },
+    {
+      "skin": "sepia",
+      "tree": "baseline",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      },
+      "writes": [
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "errors": []
+    },
+    {
+      "skin": "sepia",
+      "tree": "candidate",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      }
+    },
+    {
+      "skin": "sepia",
+      "patch": {
+        "ratio": "1/3"
+      },
+      "actual": {
+        "side": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 288,
+          "y": 44,
+          "width": 317,
+          "height": 916
+        },
+        "app": {
+          "x": 605,
+          "y": 44,
+          "width": 635,
+          "height": 916
+        },
+        "header": {
+          "x": 605,
+          "y": 0,
+          "width": 635,
+          "height": 44
+        },
+        "ctop": {
+          "x": 288,
+          "y": 0,
+          "width": 317,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 288,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 288,
+            "y": 0,
+            "width": 317,
+            "height": 960
+          },
+          "app": {
+            "x": 605,
+            "y": 0,
+            "width": 635,
+            "height": 960
+          },
+          "app2": {
+            "x": 288,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "sepia",
+      "patch": {
+        "ratio": "2/3"
+      },
+      "actual": {
+        "side": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 288,
+          "y": 44,
+          "width": 635,
+          "height": 916
+        },
+        "app": {
+          "x": 923,
+          "y": 44,
+          "width": 317,
+          "height": 916
+        },
+        "header": {
+          "x": 923,
+          "y": 0,
+          "width": 317,
+          "height": 44
+        },
+        "ctop": {
+          "x": 288,
+          "y": 0,
+          "width": 635,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 288,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 288,
+            "y": 0,
+            "width": 635,
+            "height": 960
+          },
+          "app": {
+            "x": 923,
+            "y": 0,
+            "width": 317,
+            "height": 960
+          },
+          "app2": {
+            "x": 288,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "sepia",
+      "patch": {
+        "ratio": "1/2",
+        "side": "end"
+      },
+      "actual": {
+        "side": {
+          "x": 952,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 476,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "app": {
+          "x": 0,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "header": {
+          "x": 0,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        },
+        "ctop": {
+          "x": 476,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 952,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 0,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 476,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app": {
+            "x": 0,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app2": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "sepia",
+      "patch": {
+        "side": "start",
+        "dock": {
+          "edge": "start"
+        }
+      },
+      "actual": {
+        "side": {
+          "x": 200,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 488,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "app": {
+          "x": 964,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "header": {
+          "x": 964,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        },
+        "ctop": {
+          "x": 488,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        }
+      },
+      "expected": {
+        "sidebar": {
+          "x": 200,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "content": {
+          "x": 488,
+          "y": 0,
+          "width": 952,
+          "height": 960
+        },
+        "panes": {
+          "chats": {
+            "x": 488,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app": {
+            "x": 964,
+            "y": 0,
+            "width": 476,
+            "height": 960
+          },
+          "app2": {
+            "x": 488,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          }
+        },
+        "tiled": true
+      }
+    },
+    {
+      "skin": "sepia",
+      "secondApp": {
+        "x": 1002,
+        "y": 44,
+        "width": 238,
+        "height": 916
+      },
+      "actual": {
+        "side": {
+          "x": 0,
+          "y": 0,
+          "width": 288,
+          "height": 960
+        },
+        "dock": {
+          "x": 1240,
+          "y": 0,
+          "width": 200,
+          "height": 960
+        },
+        "chat": {
+          "x": 288,
+          "y": 44,
+          "width": 476,
+          "height": 916
+        },
+        "app": {
+          "x": 764,
+          "y": 44,
+          "width": 238,
+          "height": 916
+        },
+        "header": {
+          "x": 764,
+          "y": 0,
+          "width": 238,
+          "height": 44
+        },
+        "ctop": {
+          "x": 288,
+          "y": 0,
+          "width": 476,
+          "height": 44
+        }
+      }
+    },
+    {
+      "skin": "sepia",
+      "omittedChats": true,
+      "app": {
+        "x": 288,
+        "y": 44,
+        "width": 635,
+        "height": 916
+      },
+      "second": {
+        "x": 923,
+        "y": 44,
+        "width": 317,
+        "height": 916
+      }
+    },
+    {
+      "skin": "sepia",
+      "tree": "candidate",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      },
+      "writes": [
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "errors": []
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "baseline": "ed0401b78cae26a53783e06670daeac8e9f24a9b",
+  "cases": [
+    {
+      "skin": "nebula",
+      "tree": "baseline",
+      "snapshots": {
+        "home": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": null,
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 26,
+            "height": 44
+          }
+        },
+        "chat": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 479.984375,
+            "height": 916
+          },
+          "app": null,
+          "header": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 479.984375,
+            "height": 44
+          }
+        },
+        "both": {
+          "side": {
+            "x": 0,
+            "y": 0,
+            "width": 288,
+            "height": 960
+          },
+          "dock": {
+            "x": 1240,
+            "y": 0,
+            "width": 200,
+            "height": 960
+          },
+          "chat": {
+            "x": 288,
+            "y": 44,
+            "width": 432,
+            "height": 916
+          },
+          "app": {
+            "x": 720,
+            "y": 44,
+            "width": 520,
+            "height": 916
+          },
+          "header": {
+            "x": 720,
+            "y": 0,
+            "width": 520,
+            "height": 44
+          },
+          "ctop": {
+            "x": 288,
+            "y": 0,
+            "width": 432,
+            "height": 44
+          }
+        }
+      },
+      "writes": [
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "errors": []
+    }
+  ]
+}
