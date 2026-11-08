@@ -18,3 +18,15 @@ description = "Verified SHA-256 of shared style tokens.css, not a credential"
 condition = "AND"
 paths = ['''^docs/provenance/appearance-review\.json$''']
 regexes = ['''^fdb2b9a39a2b2b4893a5f3f3d13db4e685097dcdd55037ebb9d102ffccdedca1$''']
+
+[[allowlists]]
+description = "Verified Playwright source-manifest SHA-256 values, not Sentry access tokens"
+condition = "AND"
+paths = ['''^tools/flight/r32/source-manifest\.json$''']
+regexes = ['''^(0fc4ad550d17a23e9f1cbc78f646e57461f4feb22253dd5220034ef44091005c|45681332f4178770c204b33e5b8dcbba940baf3bc6fc86506bab24027cb513f3|7b4f3a6e64023f52319739dd1026636d0e769edecf1eccd4b7f03bf8a4b54865|b7ae55d578fb3a2a6bd4d9acc0abf93146ae1d9062330bbc0e3f82acbff751b8)$''']
+
+[[allowlists]]
+description = "Historical notification routing localStorage key, not an API credential"
+condition = "AND"
+paths = ['''^web/core/notif-bell\.js$''']
+regexes = ['''^wos\.notify\.route\.v1$''']

@@ -25,6 +25,10 @@
 .ddot.sig.filled, .ddot.sig.review.filled { background: none; }
 .ddot.sig:active { background: rgba(205, 190, 255, .10); transform: scale(.9); }
 .ddot.sig:active .dsg { opacity: 1; }
+/* Navigation marks step down together without shrinking their tap targets. The active mark is capped before
+ * that shared optical scale, so even a skin with a larger custom dock can never push its sigil to the orb edge. */
+#device:not(.orb-corner) .dock :is(.ddot.sig[data-goto], #orbApp) .dsg { scale: .9; }
+#device:not(.orb-corner) .dock #orbApp .dsg { max-width: 54%; max-height: 54%; }
 /* a review desk (link opened from a thread) keeps its amber cue: a short underline */
 .ddot.sig.review::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 12px; height: 2px; margin-left: -6px; border-radius: 2px; background: rgba(255, 184, 77, .85); }
 
