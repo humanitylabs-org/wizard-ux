@@ -5,7 +5,7 @@ import android.service.voice.VoiceInteractionService;
 import android.util.Log;
 
 /**
- * The always-bound assistant service. Android binds it while Wizard OS is the digital
+ * The always-bound assistant service. Android binds it while WizardOS is the digital
  * assistant; it lets the lock-screen surface hand a live recording over to the corner orb.
  */
 public class WizardVoiceService extends VoiceInteractionService {

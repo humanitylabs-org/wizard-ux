@@ -538,7 +538,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         frames = frames or [] if not SHELL else frames or pg.ev("[...document.querySelectorAll('iframe')].map(f => { try { return [f.src, typeof f.contentWindow.wizardMizelPort] } catch (e) { return [f.src, 'x'] } })")
         shot('01-shell-mizel-window')
         mf = [f for f in (frames or []) if '/mizel-live/' in f[0]]
-        if SHELL: check('bridge', 'real Mizel iframe (/mizel-live/) inside the Wizard OS shell gets wizardMizelPort', mf and all(f[1] == 'object' for f in mf), frames)
+        if SHELL: check('bridge', 'real Mizel iframe (/mizel-live/) inside the WizardOS shell gets wizardMizelPort', mf and all(f[1] == 'object' for f in mf), frames)
         pg.ev("history.length")
         ok = open_host(pg)
         R0 = pg.ev("JSON.stringify({hasPort: R.hasPort, frames: R.frames})")
@@ -612,12 +612,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.pump(6, lambda: pg.ev("location.pathname.startsWith('/mizel-live/') && !!window.QA_LIVE"), 0.5)
         href = pg.ev("location.href"); live = pg.ev("JSON.stringify(window.QA_LIVE || null)")
         shot('04-notification-opened-live')
-        check('link', 'tapping the notification opens Wizard OS on /mizel-live/#/m/<id> in the app WebView', href == f'{ORIGIN}/mizel-live/#/m/{A}' and PKG in top(), {'href': href, 'top': top()[:120], 'live': live})
+        check('link', 'tapping the notification opens WizardOS on /mizel-live/#/m/<id> in the app WebView', href == f'{ORIGIN}/mizel-live/#/m/{A}' and PKG in top(), {'href': href, 'top': top()[:120], 'live': live})
         check('bridge', '/mizel-live/ page (private origin) has the port too', bool(live and live != 'null' and json.loads(live).get('port') == 'object'), live)
         # Back from /mizel-live/ stays in the app (g)
         sx('input keyevent KEYCODE_BACK'); time.sleep(2.5); pg.pump(3)
         href_b = pg.ev("location.href")
-        check('back', 'Back from the Mizel Live view stays inside Wizard OS', PKG in top(), {'top': top()[:120], 'href': href_b})
+        check('back', 'Back from the Mizel Live view stays inside WizardOS', PKG in top(), {'top': top()[:120], 'href': href_b})
         # back to the QA host to watch pushes
         open_host(pg)
         st = mz(pg, 'status')
@@ -802,10 +802,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         # ------------------------------------------------ (g) Back: nested view → Back → still open
         time.sleep(4); pg = Page('' if not SHELL else 'wizard-os-home'); pg.pump(3)
         if not SHELL:
-            for n in ('launcher sheet open → Back closes the sheet', 'Mizel desk open → Back returns to Home', 'repeated Back at the root never leaves Wizard OS', 'Back from a nested private page returns to the shell'):
+            for n in ('launcher sheet open → Back closes the sheet', 'Mizel desk open → Back returns to Home', 'repeated Back at the root never leaves WizardOS', 'Back from a nested private page returns to the shell'):
                 skip('back', n, 'needs the real shell (tailnet origin unreachable from the emulator); Back is covered by qa_native_parity')
             sx('input keyevent KEYCODE_BACK'); time.sleep(2)
-            check('back', 'Back on a nested private page keeps Wizard OS open (no shell)', PKG in top(), top()[:100])
+            check('back', 'Back on a nested private page keeps WizardOS open (no shell)', PKG in top(), top()[:100])
         else:
             pg.ev("new Promise(r => { const t0=Date.now(); const t = () => (window.__wos || Date.now()-t0>20000) ? r() : setTimeout(t, 200); t(); })")
             stq = "JSON.stringify({idx: window.__wos.idx, home: window.__wos.HOME, sheet: window.__wos.sheet, log: (window.__wos.back.log || []).slice(-3)})"
@@ -823,7 +823,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             check('back', 'Mizel desk open → Back returns to Home; app still open', PKG in top() and before['idx'] != before['home'] and after['idx'] == after['home'], {'before': before, 'after': after, 'top': top()[:100]})
             for i in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1.2)
             pg.pump(2)
-            check('back', 'repeated Back at the root never leaves Wizard OS', PKG in top() and pg.ev("location.pathname").startswith('/wizard-os-home'), top()[:100])
+            check('back', 'repeated Back at the root never leaves WizardOS', PKG in top() and pg.ev("location.pathname").startswith('/wizard-os-home'), top()[:100])
             open_host(pg); sx('input keyevent KEYCODE_BACK'); time.sleep(2.5); pg.pump(3)
             check('back', 'Back from a nested private page returns to the shell, app still open', PKG in top() and pg.ev("location.pathname").startswith('/wizard-os-home'), pg.ev('location.href'))
 

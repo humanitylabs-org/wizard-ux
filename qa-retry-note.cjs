@@ -1,6 +1,6 @@
 // QA: a failed thread's Retry and "Choose another model" stay usable when the failed turn has no typed request
 // (a coordinator's follow-through note started it), including after the model is changed from the composer chip.
-// Bug James hit 18 Oct 2026 on "Wizard OS · Daily agent runtime": he switched to Astra, Retry stayed grey, he typed "Retry".
+// Bug James hit 18 Oct 2026 on "WizardOS · Daily agent runtime": he switched to Astra, Retry stayed grey, he typed "Retry".
 // Every write is intercepted (same fence as qa-chat-power.cjs); nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &  then  QA_WEB_DIR=<worktree> node qa-retry-note.cjs [url]
 // Negative control: run it against a checkout without the fix; the note cases must FAIL.

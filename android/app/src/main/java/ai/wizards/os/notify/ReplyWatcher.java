@@ -31,8 +31,8 @@ import ai.wizards.os.device.AppState;
 import ai.wizards.os.device.Http;
 
 /**
- * Reply-ready notifications for any chat James started or answered from Wizard OS (gap #21).
- * The page reports each accepted send (session + run). This polls the run until it settles and, if Wizard OS is
+ * Reply-ready notifications for any chat James started or answered from WizardOS (gap #21).
+ * The page reports each accepted send (session + run). This polls the run until it settles and, if WizardOS is
  * not on screen, posts the configured wizard name with the start of the answer; a tap opens that thread in the app.
  * Polls in-process every few seconds while the app lives, with a JobScheduler job as the backstop after a kill.
  */
@@ -120,7 +120,7 @@ public final class ReplyWatcher {
         return n;
     }
 
-    /** Wizard OS came to the front: the thread is right there, so drop notifications for it. */
+    /** WizardOS came to the front: the thread is right there, so drop notifications for it. */
     public static void appFront(Context c) {
         kick(c.getApplicationContext());
     }

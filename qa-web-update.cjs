@@ -34,8 +34,8 @@ async function ctxFor(b, kind) {
   return { ctx, p, errs };
 }
 const one = base => ({ v: 1, head: V(base + 1), updates: [
-  { before: V(base), after: V(base + 1), at: Date.now() / 1000, changes: [{ sha: 'aaa1111', what: 'Drop the edge tabs', thread: 'qa_bound_views', title: 'Wizard OS · Bound views' }] },
-  { before: V(base - 1), after: V(base), at: Date.now() / 1000 - 3600, changes: [{ sha: 'old0000', what: 'Older change', thread: 'qa_old', title: 'Wizard OS · Old thing' }] },
+  { before: V(base), after: V(base + 1), at: Date.now() / 1000, changes: [{ sha: 'aaa1111', what: 'Drop the edge tabs', thread: 'qa_bound_views', title: 'WizardOS · Bound views' }] },
+  { before: V(base - 1), after: V(base), at: Date.now() / 1000 - 3600, changes: [{ sha: 'old0000', what: 'Older change', thread: 'qa_old', title: 'WizardOS · Old thing' }] },
 ] });
 const msgOf = p => p.locator('#dvWeb .dv-um').evaluate(e => [...e.children].map(x => x.textContent).join(' / ')).catch(() => '');
 
@@ -65,7 +65,7 @@ const msgOf = p => p.locator('#dvWeb .dv-um').evaluate(e => [...e.children].map(
     ok(await p.locator('#dvWeb').isVisible(), 'desktop: banner stays up after opening the thread');
     // Second deploy joins; several threads → Threads ▾ list.
     S.changes.updates.unshift({ before: V(S.ver), after: V(S.ver + 1), at: Date.now() / 1000, changes: [
-      { sha: 'bbb2222', what: 'Selection menu drags out of the way', thread: 'qa_selmenu', title: 'Wizard OS · Selection menu drag' },
+      { sha: 'bbb2222', what: 'Selection menu drags out of the way', thread: 'qa_selmenu', title: 'WizardOS · Selection menu drag' },
       { sha: 'ccc3333', what: 'Tidy whitespace', thread: null, title: null }] });
     S.ver++;
     await p.evaluate(() => window.WizWebUpdate.check(true)); await sleep(800);

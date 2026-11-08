@@ -1,4 +1,4 @@
-// QA for Share + the text selection menu (feature/share-select, Wizard OS 0.9.7), phone shell with a fake Android bridge.
+// QA for Share + the text selection menu (feature/share-select, WizardOS 0.9.7), phone shell with a fake Android bridge.
 //  1 Share under a response calls Android's share sheet (WizardOSNative.shareText) with "From Archimedes:" + the text
 //  2 Selecting words in a chat shows Wizard's own menu (Copy · Share · Quote · Search · Select all) and tells the
 //    native view the selection is ours (selection(3)); Android's toolbar stays quiet for it

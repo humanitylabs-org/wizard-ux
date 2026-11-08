@@ -1,4 +1,4 @@
-/* Wizard OS · cancelled recordings (James, 11 Oct 2026)
+/* WizardOS · cancelled recordings (James, 11 Oct 2026)
  *
  * An X tapped by accident must not throw away a long message. Any take cancelled after 20 s or more is kept on
  * this phone for a week (newest 10): Settings → Cancelled recordings lists them with "Transcribe & copy", which

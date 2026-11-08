@@ -28,8 +28,8 @@
   };
 
   function blockerCard(b) {
-    if (b === 'native') return `<div class="us-note">Food runs on the Wizard OS Android app. Open it there to order.</div>`;
-    if (b === 'accessibility') return `<button class="us-note us-fix" data-us="a11y"><b>One switch first</b><span>Food taps through Grab with Wizard OS accessibility (the same switch as voice typing). Tap to turn it on.</span></button>`;
+    if (b === 'native') return `<div class="us-note">Food runs on the WizardOS Android app. Open it there to order.</div>`;
+    if (b === 'accessibility') return `<button class="us-note us-fix" data-us="a11y"><b>One switch first</b><span>Food taps through Grab with WizardOS accessibility (the same switch as voice typing). Tap to turn it on.</span></button>`;
     if (b === 'grab') return `<div class="us-note"><b>Grab isn't on this phone</b><span>Install Grab and sign in, then come back.</span></div>`;
     return '';
   }
@@ -78,7 +78,7 @@
 
   function toast(i, t) { WizardApp.shell.toast(i, t); }
   function why(b) {
-    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That order is gone' : b;
+    return b === 'accessibility' ? 'Turn on WizardOS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That order is gone' : b;
   }
 
   function onClick(e) {

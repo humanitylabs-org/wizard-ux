@@ -566,7 +566,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
   /* ===== Back never exits ===== */
   {
     await back(); await back(); await back();
-    ok(p.url().includes('/wizard-os-home/') && !p.isClosed(), 'repeated Back keeps Wizard OS open');
+    ok(p.url().includes('/wizard-os-home/') && !p.isClosed(), 'repeated Back keeps WizardOS open');
   }
 
   /* ===== Desktop shell: the same Chats features come from the shared web/core/chats.js ===== */
@@ -611,7 +611,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     await d.keyboard.press('Escape'); await sleep(400);
     ok(!(await d.evaluate(() => __wux.chats.KIT.viewer.state.open)) && (await dThread()) === REAL_THREAD, 'desktop: Esc closes the viewer and stays in the thread');
     await d.evaluate(() => history.back()); await sleep(500);
-    ok(d.url().includes('/wizard-os-home/') && !d.isClosed(), 'desktop: browser Back keeps Wizard OS open');
+    ok(d.url().includes('/wizard-os-home/') && !d.isClosed(), 'desktop: browser Back keeps WizardOS open');
     // Fixture thread: Markdown, Copy and the one-tap Defer, all through the shared client.
     await dOpen('qa_media_thread');
     const mdOk = await d.evaluate(() => { const m = document.querySelector('.pane-main .ch-msgs'); return !!(m.querySelector('table') && m.querySelector('blockquote') && m.querySelector('pre code') && m.querySelector('em')); });

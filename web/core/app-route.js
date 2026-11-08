@@ -1,4 +1,4 @@
-/* Wizard OS — an app's settings sheet: "Which agents can use <App>?" (#58) and "Sends its work to: [agent]"
+/* WizardOS — an app's settings sheet: "Which agents can use <App>?" (#58) and "Sends its work to: [agent]"
  * (App → agent binding, wizard-os spec/AGENTS.md sections 5 and 7). Shared by both shells; the Agents app has the
  * same pickers on its agent pages.
  *

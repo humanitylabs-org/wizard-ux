@@ -3,7 +3,7 @@ import WebKit
 import AVFoundation
 import Capacitor
 
-/// The Wizard this app talks to. An iPhone can't run Wizard OS, so the app is a client of a Wizard running elsewhere
+/// The Wizard this app talks to. An iPhone can't run WizardOS, so the app is a client of a Wizard running elsewhere
 /// (like the Android app): it opens that Wizard's `/wizard-os-home/` and Wizard UX picks its phone shell from the
 /// iPhone user agent.
 enum WizardAddress {

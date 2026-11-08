@@ -3,7 +3,7 @@
 //   not window.__wos.voice) holds the install; the update hint is re-seeded per skin so each skin starts from 'ready'.
 //   Synthetic only: every request is routed to the fake Wizard; asserts zero runs/uploads/transcribes.
 // Usage: QA_WEB_DIR=<worktree> QA_OUT=<dir> node qa-native-update-banner.cjs  (post-ship harness from the 0.10.27 run)
-// QA: Wizard OS device features (feature/native-parity) in the web shell, with a faked native bridge.
+// QA: WizardOS device features (feature/native-parity) in the web shell, with a faked native bridge.
 //   #14 orb records through the native foreground-service recorder (WizardOSDevice.recStart/recStop), a take that
 //       outlives the page is picked back up, a notification Send / an interrupted take reaches the durable outbox once.
 //   #20 a shared item opens the Share sheet, uploads to Wizard Files and starts a new chat with the attachment;
@@ -144,7 +144,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
         if(shell==='phone'){
           await seed();
           const banner=p.locator('#dvUpdate');const text=await banner.innerText();
-          assert.match(text,/Wizard OS 0.10.27 is ready/);assert.match(text,/Install now/);assert.doesNotMatch(text,/installs|recording|restart|Tap again/i);
+          assert.match(text,/WizardOS 0.10.27 is ready/);assert.match(text,/Install now/);assert.doesNotMatch(text,/installs|recording|restart|Tap again/i);
           const geometry=await banner.evaluate(e=>{const r=e.getBoundingClientRect();return {width:r.width,x:r.x,y:r.y,height:r.height,overflow:e.scrollWidth>e.clientWidth+1,bg:getComputedStyle(e).backgroundColor};});
           assert(!geometry.overflow);assert(geometry.x>=0&&geometry.y>=0);assert(!/rgba\(.+,\s*0\)/.test(geometry.bg));
           await p.screenshot({path:SHOTS+'/'+shell+'-'+skin+'-ready.png'});

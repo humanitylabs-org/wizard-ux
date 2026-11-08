@@ -1,4 +1,4 @@
-/* Wizard OS sigils: one silhouette, one bite, one colour.
+/* WizardOS sigils: one silhouette, one bite, one colour.
  * An icon box gets class `sgt` and `--c:<app colour>`; inside it, `<i class="sgi sg-<glyph>">` draws the
  * glyph as a mask over a lit gradient of that colour. The tile itself stays dark glass, tinted by the
  * app's hue, so the glyph carries the colour and a full grid reads calm, not loud. */

@@ -1,4 +1,4 @@
-/* Wizard OS orb — a WebGL glass sphere with a living galaxy inside.
+/* WizardOS orb — a WebGL glass sphere with a living galaxy inside.
    Exposes window.Orb with setMode(mode) and setLevel(0..1). Falls back to the PNG orb.
    Orb.create(canvas, fallback, { R }) draws another of the same orb (Two orbs' agent orb) with its own state.
    Shared by every Wizard surface: the in-app dock, the side button (android/app/src/main/assets/assist/) and the

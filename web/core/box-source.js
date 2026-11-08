@@ -1,4 +1,4 @@
-/* Wizard OS · Settings › About: where this box stands against main (wizard-ux#887 rule 5). One row, plain words:
+/* WizardOS · Settings › About: where this box stands against main (wizard-ux#887 rule 5). One row, plain words:
  *   Built on main f3cb2e21 · "2 behind main · 120 own changes"
  * Sources, nothing polled, no token in the browser:
  *   my-release.json  an owner's own release (written by my-release): the main commit it sits on and his own changes;

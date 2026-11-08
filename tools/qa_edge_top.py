@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Status bar + camera edge (runs on Thales). usage: qa_edge_top.py APK PKG WEBDIR
 
-James (10 Oct 2026): (1) the Wizard OS background stopped below the status bar; Telegram keeps its background
+James (10 Oct 2026): (1) the WizardOS background stopped below the status bar; Telegram keeps its background
 all the way up. (2) Full screen went under the camera and the thread title sat behind it. Now the page draws
 under the status bar (content below it) and full screen keeps the background under the camera, content below.
 A fake Wizard on the emulator host serves this branch's web/ and stubs every API.
@@ -75,7 +75,7 @@ class Page:
         if not page:
             print('DIAG top:', top()); print('DIAG pages:', l if 'l' in dir() else None)
             print('DIAG log:', sx("logcat -d | grep -E 'AndroidRuntime|FATAL|WizardOS|chromium' | tail -40"))
-            raise RuntimeError('no Wizard OS page')
+            raise RuntimeError('no WizardOS page')
         self.writes = []; self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=20)

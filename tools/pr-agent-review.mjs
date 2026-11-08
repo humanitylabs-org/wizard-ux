@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Wizard OS PR agent review. One reviewer for every humanitylabs-org repo (called through
+// WizardOS PR agent review. One reviewer for every humanitylabs-org repo (called through
 // .github/workflows/pr-agent-review.yml). It reads the PR's files and patches through the GitHub API,
 // never checks out or runs PR code, and posts one COMMENT review per head commit.
 //

@@ -1,6 +1,6 @@
 # Wizard for iPhone (Capacitor)
 
-The iPhone app for Wizard UX. An iPhone can't run Wizard OS, so the app is a client of a Wizard running elsewhere,
+The iPhone app for Wizard UX. An iPhone can't run WizardOS, so the app is a client of a Wizard running elsewhere,
 like the Android app in `../android`: a Capacitor web view on that Wizard's `/wizard-os-home/`. Wizard UX picks its
 phone shell from the iPhone user agent; the app adds `WizardOS-iOS/<version>` to it.
 

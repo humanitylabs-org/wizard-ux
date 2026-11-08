@@ -371,7 +371,7 @@ final class ScreenMode {
         Log.i(TAG, "screen copied chars=" + text.length());
     }
 
-    /** Ask Wizard: the selection (quoted) and the frozen screen, opened in Wizard OS's share sheet to add a question. */
+    /** Ask Wizard: the selection (quoted) and the frozen screen, opened in WizardOS's share sheet to add a question. */
     private void ask(String text) {
         byte[] img = shot;
         String quoted = "";
@@ -386,7 +386,7 @@ final class ScreenMode {
             close();
         } catch (Exception e) {
             Log.w(TAG, "screen ask failed", e);
-            Toast.makeText(ctx, "Couldn’t open Wizard OS", Toast.LENGTH_SHORT).show();
+            Toast.makeText(ctx, "Couldn’t open WizardOS", Toast.LENGTH_SHORT).show();
         }
     }
 

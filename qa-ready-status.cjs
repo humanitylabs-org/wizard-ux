@@ -30,9 +30,9 @@ const now = Date.now() / 1000;
 const FIX = {
   qa_rs_working: { title: 'QA rs Working reply', t: now - 10, status: 'running', att: null },
   qa_rs_fyi: { title: 'QA rs FYI answer', t: now - 20, att: { state: 'fyi', ask: 'Good Arts Law is a 1990s copyright doctrine', subject: 'Research' } },
-  qa_rs_done: { title: 'QA rs Done fix', t: now - 30, att: { state: 'done', ask: 'Sending pill is live', subject: 'Wizard OS' } },
-  qa_rs_check: { title: 'QA rs Check build', t: now - 40, att: { state: 'check', ask: 'Try the new orb timing from the side button', subject: 'Wizard OS' } },
-  qa_rs_needs: { title: 'QA rs Needs decision', t: now - 50, att: { state: 'needs_you', ask: 'Say "ship desks" if the preview feels right', subject: 'Wizard OS' } },
+  qa_rs_done: { title: 'QA rs Done fix', t: now - 30, att: { state: 'done', ask: 'Sending pill is live', subject: 'WizardOS' } },
+  qa_rs_check: { title: 'QA rs Check build', t: now - 40, att: { state: 'check', ask: 'Try the new orb timing from the side button', subject: 'WizardOS' } },
+  qa_rs_needs: { title: 'QA rs Needs decision', t: now - 50, att: { state: 'needs_you', ask: 'Say "ship desks" if the preview feels right', subject: 'WizardOS' } },
   qa_rs_old: { title: 'QA rs Old needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the UPS and Cat6 purchase', subject: 'Home' } },
   // Newer than qa_rs_old on the same day: Priority must still put the needs-you row first in Past week.
   qa_rs_old_fyi: { title: 'QA rs Old FYI', t: now - 3 * 86400 + 600, att: { state: 'fyi', ask: 'Summarised the router notes', subject: 'Research' } },
@@ -240,9 +240,9 @@ function routeFor() {
     await expandReady(); await sleep(150);
     const subjW = await p.$$eval(await R('.ch-subj'), els => els.map(e => ({ name: e.querySelector('span')?.textContent, waiting: /waiting/.test(e.textContent) })));
     const subj = subjW.map(x => x.name), firstQuiet = subjW.findIndex(x => !x.waiting);
-    ok(subj.includes('Wizard OS') && !subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other'
-      && (firstQuiet < 0 || subjW.slice(firstQuiet).every(x => !x.waiting)) && subj.indexOf('Wizard OS') < firstQuiet,
-      '3 By subject: groups with something waiting first (Wizard OS among them), Other last', subjW);
+    ok(subj.includes('WizardOS') && !subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other'
+      && (firstQuiet < 0 || subjW.slice(firstQuiet).every(x => !x.waiting)) && subj.indexOf('WizardOS') < firstQuiet,
+      '3 By subject: groups with something waiting first (WizardOS among them), Other last', subjW);
     const order = await readyIds();
     ok(order.indexOf('qa_rs_needs') < order.indexOf('qa_rs_done') && order.indexOf('qa_rs_done') < order.indexOf('qa_rs_fyi') && order.indexOf('qa_rs_fyi') < order.indexOf('qa_rs_plain') && !order.includes('qa_rs_old'), '3 rows sit under their subject (older days stay out of Ready)', order);
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);

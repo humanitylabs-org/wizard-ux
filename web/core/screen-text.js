@@ -1,5 +1,5 @@
 /* What is on screen, as text, for the agent.
- * When James speaks or types, the shell's [Wizard OS context] note names the window in front. This adds the
+ * When James speaks or types, the shell's [WizardOS context] note names the window in front. This adds the
  * words actually visible in that window (headings, labels, list rows, field values), read once at send time,
  * so "this", "here" and "that step" can be resolved without a screenshot.
  *

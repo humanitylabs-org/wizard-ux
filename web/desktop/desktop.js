@@ -241,7 +241,7 @@
     const w = homeOpen && !id ? null : W[id || ws[cur].focus], others = homeOpen ? [] : ws[cur].wins.filter(x => x !== w?.id).map(x => priv(W[x]) ? privName(W[x]) : winTitle(W[x]));
     const a = appOf(w);
     return [
-      `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (${homeOpen ? 'Home' : 'workspace ' + C.workspaceNav.slot(cur)}).`,
+      `[WizardOS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (${homeOpen ? 'Home' : 'workspace ' + C.workspaceNav.slot(cur)}).`,
       w ? `Window in front: ${priv(w) ? privName(w) : winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : homeOpen ? 'Home screen in front.' : 'No window was open.',
       (s => s ? `Visible on screen: ${s}` : '')(w && w.app !== 'chats' ? (window.WizScreen?.read(winEl(w.id)) || '') : ''),
       others.length ? `Also open on this workspace: ${others.join(', ')}.` : '',
@@ -1542,7 +1542,7 @@
    * Opening remembers what had focus; Esc, Back or a click outside puts it back. Nothing is written. */
   const pal = $('#palette'), palCard = $('.pal-card', pal), palIn = $('#palInput'), palList = $('#palList');
   let palItems = [], palSel = 0, palMode = 'all', palDesk = null, palPrev = null;
-  // The agent's name comes from Wizard OS settings; keep static labels in step with it.
+  // The agent's name comes from WizardOS settings; keep static labels in step with it.
   function palPaint() {
     const apps = palMode === 'apps';
     pal.dataset.mode = palMode;

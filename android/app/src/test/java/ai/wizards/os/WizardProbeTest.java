@@ -18,7 +18,7 @@ public class WizardProbeTest {
                         BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
                         String line;
                         for (int n = 0; n < 50 && (line = in.readLine()) != null && !line.isEmpty(); n++) { }
-                        byte[] body = (mode == 0 ? "<title>Wizard OS</title><script src='core/shell.js'></script>" : "<title>Sign in</title>").getBytes(StandardCharsets.UTF_8);
+                        byte[] body = (mode == 0 ? "<title>WizardOS</title><script src='core/shell.js'></script>" : "<title>Sign in</title>").getBytes(StandardCharsets.UTF_8);
                         OutputStream out = s.getOutputStream();
                         out.write(((mode == 2 ? "HTTP/1.1 302 Found\r\nLocation: /login\r\n" : "HTTP/1.1 200 OK\r\n") + "Content-Type: text/html\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
                         out.write(body); out.flush();

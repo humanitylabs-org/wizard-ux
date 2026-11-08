@@ -11,17 +11,17 @@ const agents = [{ id:'hermes', label:'Archimedes', is_default:true }, { id:'phil
 const now = Date.now()/1000;
 const rows = [
  ['main_phil','Main philosophy','Philosophy','', 'check'],
- ['main_wos','Main Wizard','Wizard OS','', 'needs_you'],
+ ['main_wos','Main Wizard','WizardOS','', 'needs_you'],
  ['main_plain','No subject','','', 'fyi'],
  ['phil_one','Philosopher question','Philosophy','philosopher','needs_you'],
  ['phil_two','Philosopher answer','Philosophy','philosopher','check'],
- ['private_one','Sealed thread','Wizard OS','private','check']
+ ['private_one','Sealed thread','WizardOS','private','check']
 ].map(([id,title,subject,agent,state],i) => ({id,title,source:'wizard-mobile',status:'completed',message_count:2,hidden:false,last_active:now-i,started_at:now-500,wizard_last_user_at:now-100,wizard_last_assistant_at:now-i,wizard_activity_at:now-i,wizard_attention:{state,subject,ask:'Fixture ask'},...(agent?{agent}:{}), latest_message:{role:'assistant',content:'Fixture reply',timestamp:now-i}}));
 const writes = [], errors = [], failedAgents = new Set(), spaceDetails = new Map();
 let writeSeq = 0;
 let sharedSpaces = [];
 let soloAgent = false, visualAgents = false;
-const sampleSpaces = () => [{id:'wizard-launch',name:'Wizard OS launch',threads:['main_wos','deleted_thread'],createdAt:'2026-10-24T00:00:00.000Z'},{id:'reading',name:'Reading',threads:['main_phil'],createdAt:'2026-10-24T00:00:00.000Z'}];
+const sampleSpaces = () => [{id:'wizard-launch',name:'WizardOS launch',threads:['main_wos','deleted_thread'],createdAt:'2026-10-24T00:00:00.000Z'},{id:'reading',name:'Reading',threads:['main_phil'],createdAt:'2026-10-24T00:00:00.000Z'}];
 async function route(r) {
  const q=r.request(), u=new URL(q.url()), m=q.method();
  const json=(body,status=200)=>r.fulfill({status,json:body});
@@ -478,12 +478,12 @@ async function soloAcceptance(b) {
   await capture(p,mode+'-focus-status');
   await p.locator('[data-chchipx="status"]:visible').click();
   await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
-  ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' Space focus survives reload');
+  ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('WizardOS launch'),mode+' Space focus survives reload');
   await p.locator('[data-chopen="main_wos"]:visible').click();await p.waitForTimeout(250);
   ok(await p.locator('.ch-thread .ch-focus-strip').count()===0&&(desktop||await p.locator('.ch-focus-strip:visible').count()===0),mode+' thread view has no strip');
   if(desktop) ok(await p.locator('.pane-list .ch-focus-strip:visible').count()===1,mode+' desktop strip stays in list pane only');
   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos){a.onBack();a.onBack();}else{a.escStep();a.escStep();}});
-  ok(await p.locator('.ch-focus-strip:visible').count()===1&&(await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' Back twice keeps app and Focus');
+  ok(await p.locator('.ch-focus-strip:visible').count()===1&&(await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('WizardOS launch'),mode+' Back twice keeps app and Focus');
   await p.evaluate(()=>WizOpenAgentChats('philosopher'));await p.waitForTimeout(150);
   ok(JSON.stringify(await snap(p))===JSON.stringify(before)&&(await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Philosopher'),mode+' openAgentChats reuses main window');
   await p.evaluate(()=>WizOpenAgentChats('private',{thread:'__new__'}));
@@ -494,16 +494,16 @@ async function soloAcceptance(b) {
   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos)a.onBack();else a.escStep();});
   const hermesTab=()=>p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]').innerText();
   // With All in front, the agent tab still names the Space it remembers (James, 25 Oct 2026).
-  await choose(p,'all:');for(const sk of ['obsidian','nebula']){await p.evaluate(sk=>{document.documentElement.dataset.skin=sk;},sk);await capture(p,mode+'-all-remembered-'+sk);}await p.evaluate(()=>{document.documentElement.dataset.skin='obsidian';});ok((await hermesTab()).includes('Wizard OS launch'),mode+' agent tab keeps its remembered Space name under All');
-  await choose(p,'agent:hermes');ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' agent tab returns to its remembered Space');
+  await choose(p,'all:');for(const sk of ['obsidian','nebula']){await p.evaluate(sk=>{document.documentElement.dataset.skin=sk;},sk);await capture(p,mode+'-all-remembered-'+sk);}await p.evaluate(()=>{document.documentElement.dataset.skin='obsidian';});ok((await hermesTab()).includes('WizardOS launch'),mode+' agent tab keeps its remembered Space name under All');
+  await choose(p,'agent:hermes');ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('WizardOS launch'),mode+' agent tab returns to its remembered Space');
   await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');await activate(p,'[data-spall]');
-  await choose(p,'all:');ok(!(await hermesTab()).includes('Wizard OS launch'),mode+' All Archimedes in the picker clears the remembered Space name');
+  await choose(p,'all:');ok(!(await hermesTab()).includes('WizardOS launch'),mode+' All Archimedes in the picker clears the remembered Space name');
   await choose(p,'agent:hermes');
   ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
   // Both typed and held commands go through the same existing grammar and executor.
   for(const typed of [false,true]){
-   await p.evaluate(async({typed})=>{const a=window.__wos||window.__wux;if(window.__wos)await a.handleText('focus Wizard OS launch',typed?'auto':'command',typed,300,null);else a.localCommand('focus Wizard OS launch');},{typed});
-   ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+(typed?' typed':' held')+' focus Wizard OS launch');
+   await p.evaluate(async({typed})=>{const a=window.__wos||window.__wux;if(window.__wos)await a.handleText('focus WizardOS launch',typed?'auto':'command',typed,300,null);else a.localCommand('focus WizardOS launch');},{typed});
+   ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('WizardOS launch'),mode+(typed?' typed':' held')+' focus WizardOS launch');
    if(typed) await capture(p,mode+'-space');
    await p.evaluate(async({typed})=>{const a=window.__wos||window.__wux;if(window.__wos)await a.handleText('clear focus',typed?'auto':'command',typed,300,null);else a.localCommand('clear focus');},{typed});
    ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('All'),mode+(typed?' typed':' held')+' clear focus');

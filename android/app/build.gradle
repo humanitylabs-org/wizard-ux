@@ -49,7 +49,7 @@ android {
         buildConfigField 'String', 'HOME_URL', javaString(defaultOrigin ? defaultOrigin + '/wizard-os-home/' : '')
         buildConfigField 'String', 'ORIGIN', javaString(defaultOrigin)
         manifestPlaceholders = [wizardDeepLinkHost: deepLinkHost]
-        // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
+        // The one certificate (SHA-256) an in-app update must be signed with: the WizardOS release key.
         buildConfigField 'String', 'UPDATE_SIGNER', '"3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd"'
     }
 
@@ -96,7 +96,7 @@ android {
             matchingFallbacks = ['debug']
         }
         // Second update fixture (built with :app:assembleQalater): newer again than qanext (versionCode 9100+N),
-        // so the silent-update QA can publish a second update after Wizard OS installed the first one itself.
+        // so the silent-update QA can publish a second update after WizardOS installed the first one itself.
         qalater {
             initWith debug
             applicationIdSuffix '.qa'
@@ -115,7 +115,7 @@ android {
         abortOnError true
         checkReleaseBuilds false
         textReport true
-        // A WebView shell over James's private Wizard OS web app with one small native bridge.
+        // A WebView shell over James's private WizardOS web app with one small native bridge.
         disable 'SetJavaScriptEnabled', 'JavascriptInterface', 'OldTargetApi', 'GradleDependency', 'AndroidGradlePluginVersion', 'MonochromeLauncherIcon'
     }
 }

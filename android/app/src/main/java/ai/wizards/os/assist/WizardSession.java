@@ -152,7 +152,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             return;
         }
         capture.attach(this);
-        ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached Wizard OS
+        ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached WizardOS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());
         awake = false;
         syncAwake();
@@ -324,7 +324,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     private String delivered;
 
-    /** Tap the bubble after it sent: open that thread in Wizard OS (the unsent list if it is still on its way). */
+    /** Tap the bubble after it sent: open that thread in WizardOS (the unsent list if it is still on its way). */
     private void openWizard(String text) {
         Log.i(TAG, "open wizard thread=" + delivered);
         startAssistantActivity(AssistLockActivity.threadIntent(getContext(), delivered));

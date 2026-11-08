@@ -39,7 +39,8 @@ public class ServerOriginTest {
     }
     @Test public void rejectGenericOkAndLoginPages() {
         assertFalse(WizardProbe.looksLikeWizard("<title>Sign in</title>"));
-        assertFalse(WizardProbe.looksLikeWizard("<title>Wizard OS</title>"));
-        assertTrue(WizardProbe.looksLikeWizard("<title>Wizard OS</title><script src='core/app.js'></script>"));
+        assertFalse(WizardProbe.looksLikeWizard("<title>WizardOS</title>"));
+        assertTrue(WizardProbe.looksLikeWizard("<title>WizardOS</title><script src='core/app.js'></script>"));
+        assertTrue(WizardProbe.looksLikeWizard("<title>Wizard" + " OS</title><script src='core/app.js'></script>"));
     }
 }

@@ -27,8 +27,8 @@ const VW = 412, VH = 892;
 const now = Date.now() / 1000;
 const FIX = {
   qa_rd_plain: { title: 'QA rd Plain thread', t: now - 20, att: { state: 'fyi', ask: 'Plain answer for the defer test', subject: 'Research' } },
-  qa_rd_needs: { title: 'QA rd Needs you', t: now - 40, att: { state: 'needs_you', ask: 'Pick the desk layout', subject: 'Wizard OS' } },
-  qa_rd_check: { title: 'QA rd Test this', t: now - 60, att: { state: 'check', ask: 'Try the timer', subject: 'Wizard OS' } },
+  qa_rd_needs: { title: 'QA rd Needs you', t: now - 40, att: { state: 'needs_you', ask: 'Pick the desk layout', subject: 'WizardOS' } },
+  qa_rd_check: { title: 'QA rd Test this', t: now - 60, att: { state: 'check', ask: 'Try the timer', subject: 'WizardOS' } },
   qa_rd_plain_ref: { title: 'QA rd Plain reference', t: now - 30, att: null },
   qa_rd_def: { title: 'QA rd Deferred today', t: now - 10, att: { state: 'fyi', ask: 'Read this later', subject: 'Research' }, def: true },
   qa_rd_def_old: { title: 'QA rd Deferred needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the purchase', subject: 'QA rd Home' }, def: true },

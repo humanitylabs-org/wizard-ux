@@ -24,7 +24,7 @@ a = artifacts[0]
 if str(a['aapt2'].get('version_code')) != '1001' or a['aapt2'].get('version_name') != '0.9.12-homescreen.1-preview' or a['aapt2'].get('application_label') != 'Wizard Preview':
     raise SystemExit('Wrong coordinated Home-screen Preview version/label')
 if a['signer_sha256'] != '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd':
-    raise SystemExit('Wrong Wizard OS signer')
+    raise SystemExit('Wrong WizardOS signer')
 apk = P(build['job']) / 'source' / a['path']
 if not apk.resolve().is_relative_to(P(build['job']) / 'source'):
     raise SystemExit('Artifact escaped source')

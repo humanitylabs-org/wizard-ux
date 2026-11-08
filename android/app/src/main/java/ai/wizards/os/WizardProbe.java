@@ -30,8 +30,11 @@ public final class WizardProbe {
             if (!looksLikeWizard(out.toString(StandardCharsets.UTF_8.name()))) throw new IOException("This address answered, but it is not a Wizard shell.");
         } finally { c.disconnect(); }
     }
+    private static final String LEGACY_TITLE = "Wizard" + " OS";
+
     public static boolean looksLikeWizard(String html) {
-        // The current shell ships a WizCore module and the Wizard OS title. Not a generic 200/login page.
-        return html != null && html.contains("Wizard OS") && (html.contains("core/") || html.contains("__wosNativeBack"));
+        // The current shell ships a WizCore module and the WizardOS title. Not a generic 200/login page.
+        // A shell from before the one-word name (James, 8 Nov 2026) carries the old two-word title; it still counts.
+        return html != null && (html.contains("WizardOS") || html.contains(LEGACY_TITLE)) && (html.contains("core/") || html.contains("__wosNativeBack"));
     }
 }

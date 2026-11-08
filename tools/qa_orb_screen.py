@@ -10,7 +10,7 @@ overlay scene, the crash check and cleanup (a proportional lane for that scene).
 Receipt: <job>/receipt.json (every check by name, the parent of shots/). Search replies are synthetic HTTP fixtures
 served by this script, never live inference.
 
-WEB_DIR (the worktree's web/) is served as the Wizard OS shell by the fake Wizard, since the emulator can't reach
+WEB_DIR (the worktree's web/) is served as the WizardOS shell by the fake Wizard, since the emulator can't reach
 the private network.
 
 A fake Wizard Search on the host (the emulator reaches it as 10.0.2.2) answers /wizard-search/api/translate,
@@ -25,11 +25,11 @@ Checks
   Back steps out one layer at a time (search → selection → Screen) and never leaves the app underneath
   Translate screen (Google Lens style) → the foreign text alone is translated and painted over in place, the pill
   names the detected language, the language list re-translates
-  Ask Wizard → Wizard OS opens on its share sheet with the text
+  Ask Wizard → WizardOS opens on its share sheet with the text
   a screen with no text layer (a picture) → Read picture text runs by itself
   Translate screen over a picture, with a geometry fixture → the English is painted in place over the Thai (no picture
   panel opens), Thai → English pill, Original, a hit-tested outside tap, Back, Copy translation
-  Hide orb → the orb is gone, a "Floating orb hidden" notification brings it back; opening Wizard OS does too
+  Hide orb → the orb is gone, a "Floating orb hidden" notification brings it back; opening WizardOS does too
   without Accessibility, Select text opens the one-step setup instead of failing
   no crashes
 """
@@ -601,7 +601,7 @@ with _lockfile as lock:
             # Ask Wizard from the whole translated screen
             sx(f"input tap {p['btn']['tAsk'][0]} {p['btn']['tAsk'][1]}"); time.sleep(4)
             ask = wait_log('screen ask staged', 5); shot('11-ask-wizard')
-            check('Ask Wizard opens Wizard OS with the text (and the screen picture)', ask and 'shot=' in ask and PKG in top(), (ask, top()))
+            check('Ask Wizard opens WizardOS with the text (and the screen picture)', ask and 'shot=' in ask and PKG in top(), (ask, top()))
             sp.close()
             try:
                 pg = Page('wizard-os-home')
@@ -610,11 +610,11 @@ with _lockfile as lock:
                     sheet = pg.ev("(() => { const t = document.querySelector('.dv-quote'); const img = document.querySelectorAll('.dv-items .ch-att').length; return t ? {text: t.textContent, items: img} : null; })()")
                     if sheet: break
                     time.sleep(0.6)
-                check('the Wizard OS share sheet holds the original text, its English and the screen picture', sheet and 'ผัด' in sheet['text'] and 'English:' in sheet['text'] and 'EN(' in sheet['text'] and sheet['items'] == 1, sheet)
+                check('the WizardOS share sheet holds the original text, its English and the screen picture', sheet and 'ผัด' in sheet['text'] and 'English:' in sheet['text'] and 'EN(' in sheet['text'] and sheet['items'] == 1, sheet)
                 sx('input keyevent KEYCODE_BACK'); time.sleep(1)
                 pg.close()
             except Exception as e:
-                check('the Wizard OS share sheet holds the selected text', False, e)
+                check('the WizardOS share sheet holds the selected text', False, e)
 
             # ---------------- a picture with no text layer
             chrome(PIC_HTML)
@@ -650,19 +650,19 @@ with _lockfile as lock:
             check('hidden again', not wait_window('WizardEverywhere', False, 4), bubble())
             sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(4)
             sx('input keyevent KEYCODE_HOME'); time.sleep(2)
-            check('opening Wizard OS brings the orb back too', wait_window('WizardEverywhere', True, 6), bubble())
+            check('opening WizardOS brings the orb back too', wait_window('WizardEverywhere', True, 6), bubble())
 
             # ---------------- without Accessibility: Select text opens the setup
             sx('settings put secure enabled_accessibility_services ""'); time.sleep(3)
             b, m = open_menu(); tap_text(r'^Select text$'); time.sleep(3); shot('12-no-a11y')
             x = ui()
-            check('without Accessibility, Select text opens Wizard OS on the one-step setup', PKG in top() and re.search('voice typing|Accessibility', x, re.I), (top(), re.findall(r'text="([^"]+)"', x)[:8]))
+            check('without Accessibility, Select text opens WizardOS on the one-step setup', PKG in top() and re.search('voice typing|Accessibility', x, re.I), (top(), re.findall(r'text="([^"]+)"', x)[:8]))
 
         crashed = sx('logcat -d -b crash')
-        # Only Wizard OS counts: a uiautomator dump racing the emulator ("FATAL EXCEPTION: UiAutomation") is the harness.
+        # Only WizardOS counts: a uiautomator dump racing the emulator ("FATAL EXCEPTION: UiAutomation") is the harness.
         mine = [b for b in crashed.split('FATAL EXCEPTION')[1:] if 'UiAutomation' not in b.split('\n', 1)[0]]
         pids = sx(f'pidof {PKG}', check=False).split()
-        check('no Wizard OS crashes', not mine and f'Process: {PKG}' not in crashed, (crashed[:400], pids))
+        check('no WizardOS crashes', not mine and f'Process: {PKG}' not in crashed, (crashed[:400], pids))
         COMPLETED = True  # the whole selected flow ran; only now can the receipt be ok
     except Exception as e:
         import traceback; traceback.print_exc()

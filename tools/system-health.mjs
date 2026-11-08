@@ -1,4 +1,4 @@
-// Wizard OS system health: the owner's health checks (disk, memory, services, backups…) shown in Home → Resources.
+// WizardOS system health: the owner's health checks (disk, memory, services, backups…) shown in Home → Resources.
 //
 // The checks themselves are produced by whatever watchdog the install runs; this adapter only reads its latest
 // result file and passes an allowlisted, clipped shape to the shell. Nothing here runs a check or names a machine.

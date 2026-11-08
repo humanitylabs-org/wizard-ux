@@ -41,13 +41,13 @@ import ai.wizards.os.device.AppState;
 import ai.wizards.os.device.Http;
 
 /**
- * Installs third-party apps the Android Apps server pinned. Same shape as Wizard OS's own updater (update/Updater):
+ * Installs third-party apps the Android Apps server pinned. Same shape as WizardOS's own updater (update/Updater):
  * HTTP download → SHA-256 + package + version + signer checks → PackageInstaller session (hashing again while
  * streaming) → result in {@link AppsInstallReceiver}.
  *
  *  - The page never supplies a URL: bytes come only from {origin}/android-apps/apk/{sha256}.apk.
- *  - First install: Android's one confirm; Wizard OS asks to become the update owner (API 34+).
- *  - Update of an app Wizard OS owns: USER_ACTION_NOT_REQUIRED, so Android installs it without asking.
+ *  - First install: Android's one confirm; WizardOS asks to become the update owner (API 34+).
+ *  - Update of an app WizardOS owns: USER_ACTION_NOT_REQUIRED, so Android installs it without asking.
  *  - An update must carry the installed app's signing key; anything else is refused before Android sees it.
  */
 public final class AppsInstaller {
@@ -79,7 +79,7 @@ public final class AppsInstaller {
 
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences("android_apps", Context.MODE_PRIVATE); }
 
-    /** Packages Wizard OS has installed (so the list can show them even without a launcher entry). */
+    /** Packages WizardOS has installed (so the list can show them even without a launcher entry). */
     static Set<String> known(Context c) { return new HashSet<>(prefs(c).getStringSet("known", new HashSet<>())); }
 
     private static void remember(Context c, String pkg) {
@@ -325,7 +325,7 @@ public final class AppsInstaller {
         }
     }
 
-    /** Background: install every pending update for an app Wizard OS owns. Runs on the worker; done() on the main thread. */
+    /** Background: install every pending update for an app WizardOS owns. Runs on the worker; done() on the main thread. */
     public static void checkUpdates(Context c, Runnable done) {
         Context app = c.getApplicationContext();
         io.execute(() -> {

@@ -1,4 +1,4 @@
-"""Wizard OS app sigils: one silhouette, one bite.
+"""WizardOS app sigils: one silhouette, one bite.
 Every glyph is built from primitives with boolean path ops (skia-pathops), normalised onto a
 512 grid and emitted as a single compound path, so the browser renders it with one <path>."""
 import json, math, sys

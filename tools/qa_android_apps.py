@@ -171,7 +171,7 @@ def frame_open(): return bool(pg.ev("!!(%s)" % FRAME))
 def back_stays(label):
     em.sx('input keyevent KEYCODE_BACK'); time.sleep(1.2)
     ok = em.front()
-    check('Back (%s): Wizard OS stays open' % label, ok, em.top())
+    check('Back (%s): WizardOS stays open' % label, ok, em.top())
     return ok
 
 
@@ -204,7 +204,7 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # ============ 1: open Android Apps from its single launcher tile ============
         front_wizard(); connect(); time.sleep(3)
-        check('Wizard OS loads the shell from the fake Wizard', pg.ev('location.href').startswith(ORIGIN), pg.ev('location.href'))
+        check('WizardOS loads the shell from the fake Wizard', pg.ev('location.href').startswith(ORIGIN), pg.ev('location.href'))
         check('the shell has the Android Apps port (window.wizardAppsPort)', pg.ev("typeof window.wizardAppsPort === 'object' && !!window.wizardAppsPort"))
         # First-run coach card covers the launcher: a returning user has dismissed it (like qa-launcher-apps).
         pg.ev("(() => { const g = document.querySelector('#coachGo'); if (g && !document.querySelector('#coach').hidden) g.click(); return 1; })()"); time.sleep(0.6)
@@ -256,15 +256,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         ok = wait(lambda: em.vcode(FIX) == 81, 60)
         check('… one tap installs it (Aegis 3.4.2, versionCode 81)', ok and tapped, (tapped, em.vcode(FIX)))
         src = em.source(FIX)
-        check('installer of record = Wizard OS', src['installer'] == PKG, src)
-        check('update owner = Wizard OS (setRequestUpdateOwnership)', src['updateOwner'] == PKG, src)
+        check('installer of record = WizardOS', src['installer'] == PKG, src)
+        check('update owner = WizardOS (setRequestUpdateOwnership)', src['updateOwner'] == PKG, src)
         if not em.front(): front_wizard()
         connect(); time.sleep(2)
         wait(lambda: FIX in rows(), 15)
         badge = fev("(d.querySelector('[data-pkg=\"%s\"] .badge') || {}).textContent" % FIX)
         check('the new app shows in Installed with a Wizard badge', FIX in rows() and badge == 'Wizard', (rows(), badge))
         check('the installed app left “Ready to install”', wait(lambda: not ST['queue'] and not fev("d.querySelector('#ready [data-install]')"), 20), ST['queue'])
-        check('inventory after install includes it, owned by Wizard OS', wait(lambda: any(a.get('package') == FIX and a.get('installer') == PKG for i in ST['inventory'][-3:] for a in i.get('apps', [])), 15))
+        check('inventory after install includes it, owned by WizardOS', wait(lambda: any(a.get('package') == FIX and a.get('installer') == PKG for i in ST['inventory'][-3:] for a in i.get('apps', [])), 15))
         shot('06-installed-wizard-badge')
 
         # ============ 3: launch from the list ============
@@ -316,7 +316,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('silent update: the job installs Aegis 3.4.3 by itself', ok, (em.vcode(FIX), lg[-400:]))
         check('… with no Android dialog (USER_ACTION_NOT_REQUIRED, Wizard owns it)', not seen and 'requireUserAction=2' in lg, lg[-300:])
         src = em.source(FIX)
-        check('… and Wizard OS is still installer of record / update owner', src['installer'] == PKG and src['updateOwner'] == PKG, src)
+        check('… and WizardOS is still installer of record / update owner', src['installer'] == PKG and src['updateOwner'] == PKG, src)
         nt = em.sx('dumpsys notification --noredact | grep -E "android.title=|android.text=" | head -8')
         check('no failure notification after a good update', 'Couldn' not in nt, nt.strip()[:200])
         shot('10-after-silent-update')
@@ -336,7 +336,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         info = wait(lambda: 'settings' in em.top().lower(), 8)
         check('App info opens Android’s app details', info, em.top())
         em.sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-        check('Back from App info returns to Wizard OS', em.front(), em.top())
+        check('Back from App info returns to WizardOS', em.front(), em.top())
         connect(); time.sleep(1)
         ftap('[data-menu="%s"]' % FIX); time.sleep(0.6); ftap('#menu [data-act="uninstall"]')
         dlg = wait(lambda: em.installer_ui() or 'uninstall' in em.ui().lower(), 10)

@@ -1,4 +1,4 @@
-/* Wizard OS — agents (Agents MVP, Lane B). Shared by both shells and the Agents app.
+/* WizardOS — agents (Agents MVP, Lane B). Shared by both shells and the Agents app.
  *
  * One Wizard can run several agents. Each agent has its own harness (Hermes first), model provider, permissions
  * and its own chats. The Agent Service owns the truth:

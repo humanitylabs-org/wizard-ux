@@ -191,7 +191,7 @@ function row(s) {
 }
 function seedMain() {
   const t = now();
-  addSession('hermes', 'wizard_fixture_main_1', 'Wizard OS · Agents MVP plan', [{ role: 'user', content: 'Plan the agents MVP', timestamp: t - 7200 }, { role: 'assistant', content: 'Here is the plan: Agents app, per-agent chats, Private agent on Tinfoil.', timestamp: t - 7100 }]);
+  addSession('hermes', 'wizard_fixture_main_1', 'WizardOS · Agents MVP plan', [{ role: 'user', content: 'Plan the agents MVP', timestamp: t - 7200 }, { role: 'assistant', content: 'Here is the plan: Agents app, per-agent chats, Private agent on Tinfoil.', timestamp: t - 7100 }]);
   addSession('hermes', 'wizard_fixture_main_2', 'Groceries for the week', [{ role: 'user', content: 'What should I buy?', timestamp: t - 3600 }, { role: 'assistant', content: 'Eggs, rice, greens and coffee.', timestamp: t - 3500 }]);
   const archived = addSession('hermes', 'wizard_fixture_archived_main', 'Archived main fixture', [{ role: 'user', content: 'Finished main work', timestamp: t - 3400 }, { role: 'assistant', content: 'Done.', timestamp: t - 3300 }]);
   archived.status = 'running'; archived.archived = true;

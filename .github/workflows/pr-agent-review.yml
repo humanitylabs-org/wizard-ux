@@ -1,5 +1,5 @@
 # Agent review on every PR (team rule, 23 Oct 2026): an agent other than the author reviews each PR
-# before an admin approves and merges it. This file is the one reviewer for every Wizard OS repo:
+# before an admin approves and merges it. This file is the one reviewer for every WizardOS repo:
 # wizard-ux runs it on its own PRs, and other repos call it with a three-line workflow:
 #
 #   on: { pull_request_target: { types: [opened, synchronize, reopened, ready_for_review] } }

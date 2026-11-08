@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * Keeps the share uploader alive while it works, as a foreground service of type dataSync with a progress
- * notification ("N files → Agent"). Started only from something on screen (the share sheet, or Wizard OS opening
+ * notification ("N files → Agent"). Started only from something on screen (the share sheet, or WizardOS opening
  * with shares still queued), which Android allows on every version.
  *
  * Why dataSync and not a user-initiated data transfer job: this is a sideloaded app with minSdk 28, the job API is
@@ -54,7 +54,7 @@ public class ShareService extends Service implements ShareUploader.Host {
         start(c, i);
     }
 
-    /** Wizard OS came to the front with shares still queued (e.g. after a force-stop): carry on now. */
+    /** WizardOS came to the front with shares still queued (e.g. after a force-stop): carry on now. */
     public static void resumeIfPending(Context c) {
         try {
             ShareQueue q = ShareQueue.get(c);

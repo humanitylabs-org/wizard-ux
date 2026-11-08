@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe (runs on Thales): which settings pages and state Wizard OS can reach for side-button setup.
+"""Probe (runs on Thales): which settings pages and state WizardOS can reach for side-button setup.
 Boots a throwaway API35 emulator, installs the given APK, inspects intents/settings, always stops."""
 import fcntl, os, pathlib, subprocess, sys, time, uuid
 from qa_paths import work_root

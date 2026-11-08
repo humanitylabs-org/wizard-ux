@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe (runs on Thales): which page-side ways of saving a file does the Wizard OS WebView hand to its
+"""Probe (runs on Thales): which page-side ways of saving a file does the WizardOS WebView hand to its
 DownloadListener (→ Android DownloadManager → Downloads), and which ones navigate the shell away?
 
 usage: probe_webview_download.py QA_APK [OUT_DIR]

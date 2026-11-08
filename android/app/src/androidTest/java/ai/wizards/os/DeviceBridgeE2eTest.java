@@ -60,7 +60,7 @@ public class DeviceBridgeE2eTest {
                 BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
                 String request = in.readLine(); if (request == null) return;
                 String header; while ((header = in.readLine()) != null && !header.isEmpty()) { }
-                String html = "<!doctype html><title>Wizard OS</title><!-- core/ synthetic fixture -->"
+                String html = "<!doctype html><title>WizardOS</title><!-- core/ synthetic fixture -->"
                     + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='padding-top:120px'><p id='status'>Checking device bridge</p><button onclick=\"location.href='/not-shell'\">Check wrong path</button>"
                     + "<script>const pending=new Map();let seq=0;"
                     + "function rpc(port,method,v=1,params={}){return new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,resolve);setTimeout(()=>reject(Error('timeout '+method)),10000);port.postMessage(JSON.stringify({v,id,method,params}));});}"

@@ -23,7 +23,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const now = Date.now() / 1000;
 const FIX = {
   qa_tt_pivot: { title: 'DeFleur · Captions', t: now - 20, was: 'Review 0xMovez post on X', renames: [{ from: 'Review 0xMovez post on X', to: 'DeFleur · Captions', at: now - 300, by: 'agent' }], att: { state: 'done', ask: 'Captions stay on the whole clip', subject: 'DeFleur Video' } },
-  qa_tt_plain: { title: 'Wizard OS · Ready list', t: now - 40, att: { state: 'check', ask: 'Try the new Ready order', subject: 'Wizard OS' } },
+  qa_tt_plain: { title: 'WizardOS · Ready list', t: now - 40, att: { state: 'check', ask: 'Try the new Ready order', subject: 'WizardOS' } },
   qa_tt_other: { title: 'Grab · Usuals', t: now - 60, att: { state: 'fyi', ask: 'Usuals browse Grab first', subject: 'Grab' } },
 };
 const writes = [];
@@ -147,7 +147,7 @@ function routeFor() {
     const toastTxt = await p.evaluate(() => [...document.querySelectorAll('.toast, [class*="toast"]')].map(e => e.textContent).join(' | '));
     const r6 = await p.evaluate(sel => document.querySelector(sel)?.querySelector('.tp b')?.textContent, row('qa_tt_plain'));
     ok(/already has that name/.test(toastTxt), '6 a taken name says "Another thread already has that name"', toastTxt);
-    ok(r6 === 'Wizard OS · Ready list', '6 the old name stays after a failed rename', r6);
+    ok(r6 === 'WizardOS · Ready list', '6 the old name stays after a failed rename', r6);
 
     // 7. Cancel leaves everything as it was.
     await p.evaluate(({ wid }) => __wos.openRowSheet(wid, 'qa_tt_other'), { wid }); await sleep(300);

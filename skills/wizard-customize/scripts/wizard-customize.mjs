@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Owner's-agent customization client for Wizard OS: look (the worn own skin's skin.css / skin.js) and
+// Owner's-agent customization client for WizardOS: look (the worn own skin's skin.css / skin.js) and
 // Chats layout (box-wide ui-preferences). Every change is journalled with its exact "before" state, verified by
 // reading it back, and undone in one step. It never edits shell source, skin packages, settings.json or
 // ui-preferences.json, and it never approves a script (only the owner's tap in Settings › Look can).

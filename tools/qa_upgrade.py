@@ -64,7 +64,7 @@ with _lockfile as lock:
               'DEBUGGABLE' not in new_package and 'BackgroundAudioService' in new_package)
         sx('logcat -c')
         sx(f'am start -W -n {PKG}/.MainActivity'); time.sleep(8)
-        check('new release launches into Wizard OS', PKG in top(), top())
+        check('new release launches into WizardOS', PKG in top(), top())
         (job / 'after.png').write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
         for step in range(3):
             sx('input keyevent KEYCODE_BACK'); time.sleep(1)

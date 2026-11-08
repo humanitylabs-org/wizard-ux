@@ -1,4 +1,4 @@
-/* Wizard OS · device features (feature/native-parity)
+/* WizardOS · device features (feature/native-parity)
  *
  * The web half of the Android-native features. Everything here is a no-op in a browser/PWA or an older shell
  * (no window.WizardOSDevice), except the web hot-reload, which works everywhere.
@@ -9,9 +9,9 @@
  *  #20 Share to Wizard: other apps' share sheet → native copy → this sheet → upload to Wizard Files → send
  *      to a new chat or an existing thread (through the outbox like every send).
  *  #21 Reply notifications: every send the outbox delivers is handed to the native reply watcher, which posts
- *      "Archimedes replied" while Wizard OS is in the background; a tap opens that thread.
+ *      "Archimedes replied" while WizardOS is in the background; a tap opens that thread.
  *  #22 Updates: newer signed APKs download + install by themselves (one "Update ready · tap to restart" banner while
- *      Wizard OS is in front, nothing mid-recording), and a
+ *      WizardOS is in front, nothing mid-recording), and a
  *      web hot-reload that keeps chat drafts.
  */
 (() => {
@@ -22,8 +22,8 @@
   const OUTBOX = window.WosOutbox || null;
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
-  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
+  // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
+  const OS = () => 'WizardOS';
   const toast = (i, t, ms) => W$()?.toast?.(i, t, ms);
   const J = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   const log = (...a) => { window.__devLog = (window.__devLog || []).concat(a.join(' ')).slice(-60); };
@@ -190,7 +190,7 @@
     const route = snap?.route || window.WosModels.voiceRoute(t.id);
     const sid = target?.thread || pin?.sid || '';
     const it = await OUTBOX.enqueue({ nativeId: t.id, ...(how === 'recovered' ? { space: false } : {}), ...(route || {}), meetingEventId:snap?.meetingEventId||'', agent:target?.agent||'', kind: sid && sid!=='__new__' ? 'reply' : 'new', sessionId: sid==='__new__'?'':sid, steerRunId: snap?.meetingEventId ? '' : pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
-      instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
+      instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the WizardOS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
     releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
     if(snap?.meetingEventId && it.durable)await window.WosOrbHandoff.end(window.WosOrbHandoff.forTake(t.id),{status:'captured',voiceTakeId:t.id,deliveryKey:it.id});
@@ -261,7 +261,7 @@
     log('share:result', id, result);
   }
 
-  /* ================= #21 reply notifications for chats sent from Wizard OS ================= */
+  /* ================= #21 reply notifications for chats sent from WizardOS ================= */
   OUTBOX?.onSent((it, res) => {
     const d = DEV(); if (!d || typeof d.watchRun !== 'function' || !res?.runId) return;
     const s = W$()?.live?.session?.(it.sessionId);

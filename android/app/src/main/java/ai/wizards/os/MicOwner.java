@@ -1,7 +1,7 @@
 package ai.wizards.os;
 
 /**
- * One microphone owner at a time, inside the Wizard OS process.
+ * One microphone owner at a time, inside the WizardOS process.
  *
  * The meeting recorder (Mizel), the floating Everywhere orb and the side button each take the mic through here.
  * A second taker is refused (the caller shows a toast with {@link #reason}) instead of silently stealing or

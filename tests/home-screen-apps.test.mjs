@@ -215,7 +215,7 @@ test('Desks overview hold-and-release offers Add to home screen; drag keeps reor
   assert.match(read('core/home-screen-apps.js'), /Object\.freeze\(\{ attach, offer,/);
 });
 
-// A home-screen app window is not "Wizard OS in front": the floating orb stays over it (James, 24 Oct).
+// A home-screen app window is not "WizardOS in front": the floating orb stays over it (James, 24 Oct).
 test('Pinned home-screen apps keep the floating orb', async () => {
   const { readFileSync } = await import('node:fs');
   const j = f => readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8');

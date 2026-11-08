@@ -8,7 +8,7 @@ import android.content.pm.PackageInstaller;
 import android.os.Build;
 
 /**
- * Result of Wizard OS's own PackageInstaller session (not exported: only the installer, through the session's
+ * Result of WizardOS's own PackageInstaller session (not exported: only the installer, through the session's
  * PendingIntent, can reach it). STATUS_PENDING_USER_ACTION carries Android's confirm screen in EXTRA_INTENT.
  */
 public class InstallReceiver extends BroadcastReceiver {

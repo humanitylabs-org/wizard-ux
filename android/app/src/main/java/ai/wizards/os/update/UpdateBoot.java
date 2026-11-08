@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-/** After a reboot: keep the background update check (and any unfinished share) scheduled. After an update: reopen Wizard OS if James was in it. */
+/** After a reboot: keep the background update check (and any unfinished share) scheduled. After an update: reopen WizardOS if James was in it. */
 public class UpdateBoot extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {

@@ -1,4 +1,4 @@
-/* Wizard OS skins (core/skins.js). A skin re-dresses the real shell: same DOM, same sizes, same gestures.
+/* WizardOS skins (core/skins.js). A skin re-dresses the real shell: same DOM, same sizes, same gestures.
  * It changes only design tokens (inline on <html>, blended while browsing), the clock typeface, the living
  * background (#skinA/#skinB canvases) and the orb's colour (a CSS filter, so orb.js stays byte-identical
  * with the Android copy). Nebula = the original look: no overrides at all. Five skins (Paper retired 12 Oct).

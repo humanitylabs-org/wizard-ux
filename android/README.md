@@ -1,4 +1,4 @@
-# Wizard OS for Android
+# WizardOS for Android
 
 This is a native WebView shell, not a Capacitor Android project. Run Gradle/builds on your Android build
 machine, not a small control-plane VPS. `npm test` runs the lightweight source/configuration guards.

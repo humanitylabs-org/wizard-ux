@@ -1,4 +1,4 @@
-// Wizard OS service worker: scoped to /wizard-os-home/ only, so every app on this origin installs separately.
+// WizardOS service worker: scoped to /wizard-os-home/ only, so every app on this origin installs separately.
 // Network first, always: online, every request goes to Wizard exactly as before (Chrome also needs a fetch handler to
 // treat the page as installable). The shell's own files (pages, scripts, styles, icons under this scope) are copied
 // into one cache as they arrive, so Wizard still opens with no connection or on spotty wifi (a plane, a tunnel); the

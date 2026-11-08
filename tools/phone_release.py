@@ -203,7 +203,7 @@ def draft(output, phone):
     # Fail rather than overwrite an existing release (draft or published).
     existing = subprocess.run(['gh', 'release', 'view', tag, '--repo', REPO], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     require(existing.returncode != 0, 'Release already exists; do not overwrite it')
-    run(['gh', 'release', 'create', tag, '--repo', REPO, '--draft', '--target', phone['source_commit'], '--title', 'Wizard OS Android ' + phone['versionName'], '--notes', phone['notes'], apk, output / 'phone.json'])
+    run(['gh', 'release', 'create', tag, '--repo', REPO, '--draft', '--target', phone['source_commit'], '--title', 'WizardOS Android ' + phone['versionName'], '--notes', phone['notes'], apk, output / 'phone.json'])
     state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'url,isDraft,targetCommitish,assets']))
     require(state['isDraft'] and state['targetCommitish'] == phone['source_commit'], 'Release draft/target readback failed')
     require({a['name'] for a in state['assets']} == {apk.name, 'phone.json'}, 'Release assets readback failed')

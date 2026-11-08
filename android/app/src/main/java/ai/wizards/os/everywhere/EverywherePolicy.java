@@ -39,12 +39,12 @@ public final class EverywherePolicy {
         return text == null || text.isEmpty() ? "transcribe" : "sending";
     }
 
-    /** The floating button shows only when it is switched on, Android allows it, and Wizard OS is not in front. */
+    /** The floating button shows only when it is switched on, Android allows it, and WizardOS is not in front. */
     public static boolean bubbleVisible(boolean enabled, boolean overlayAllowed, boolean appInFront) {
         return enabled && overlayAllowed && !appInFront;
     }
 
-    /** 0.9.3: the long-press menu's "Hide orb" hides it (switched on, just out of the way) until Wizard OS is opened. */
+    /** 0.9.3: the long-press menu's "Hide orb" hides it (switched on, just out of the way) until WizardOS is opened. */
     public static boolean orbVisible(boolean enabled, boolean overlayAllowed, boolean appInFront, boolean hiddenByUser) {
         return bubbleVisible(enabled, overlayAllowed, appInFront) && !hiddenByUser;
     }

@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Which microphone Wizard OS records from, per phone (James, 18 Oct 2026).
+ * Which microphone WizardOS records from, per phone (James, 18 Oct 2026).
  *
  * Default is the phone's own mic, so a Bluetooth speaker never hijacks a voice note. The person can choose otherwise
  * in Settings → Microphone without a native update: the page reads and writes this policy through

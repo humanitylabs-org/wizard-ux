@@ -1,5 +1,5 @@
 /* Photos relay: the shell's narrow door between the optional Photos app (a hosted frame at /photos/) and the
- * Wizard OS Android backup worker. Photos is its own app; the shell draws no Photos UI and Settings has no Photos row.
+ * WizardOS Android backup worker. Photos is its own app; the shell draws no Photos UI and Settings has no Photos row.
  *
  * Native gives the SHELL (main frame, private origin) one message port, window.wizardPhotosPort, protocol v1:
  *   shell → {v:1, id, method, params}; native → {v:1, id, ok, result|error}; native push → {v:1, type:'status', status}.

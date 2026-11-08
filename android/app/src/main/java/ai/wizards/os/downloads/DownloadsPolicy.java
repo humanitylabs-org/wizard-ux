@@ -10,7 +10,7 @@ import java.util.Locale;
 
 /**
  * Pure rules for the in-app Downloads list (no Android classes, so they are unit-testable off-device).
- * The list is a small recent history of files Wizard OS handed to Android's DownloadManager; the web shell
+ * The list is a small recent history of files WizardOS handed to Android's DownloadManager; the web shell
  * (web/core/downloads.js) shows it as a banner when one finishes and as the Downloads sheet.
  */
 public final class DownloadsPolicy {

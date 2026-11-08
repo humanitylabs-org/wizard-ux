@@ -1,4 +1,4 @@
-// QA + measurement: the orb's battery cost (James, 10 Oct: Wizard OS 38.5% of a day's battery).
+// QA + measurement: the orb's battery cost (James, 10 Oct: WizardOS 38.5% of a day's battery).
 // Boots the real shell (self-contained, every request fulfilled from QA_WEB_DIR/web), counts actual WebGL
 // orb draws (gl.drawArrays on the #orb canvas) and reports draws/minute idle, listening, hidden, slept.
 // Usage: QA_WEB_DIR=<repo> node qa-orb-battery.cjs   (prints JSON metrics + PASS/FAIL lines)

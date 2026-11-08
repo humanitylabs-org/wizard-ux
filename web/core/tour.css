@@ -1,4 +1,4 @@
-/* Wizard OS first-run tour + Help sheet (core/tour.js). Dark, quiet, one line of copy above the orb. */
+/* WizardOS first-run tour + Help sheet (core/tour.js). Dark, quiet, one line of copy above the orb. */
 .tour { position: absolute; inset: 0; z-index: 90; pointer-events: none; opacity: 0; transition: opacity 280ms var(--ease); }
 .tour.on { opacity: 1; }
 .tour[hidden] { display: none; }

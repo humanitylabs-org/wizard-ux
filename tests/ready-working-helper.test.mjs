@@ -111,7 +111,7 @@ test('real chat row keeps the amber ask (tracker off) with no helper badge, for 
   }
 });
 
-// James, 7 Nov 2026 ('Wizard OS · Chats #2'): a false Interrupted run filed the thread under
+// James, 7 Nov 2026 ('WizardOS · Chats #2'): a false Interrupted run filed the thread under
 // Errors / inbox Needs you while two helpers it had started were still running. Any running worker
 // keeps it in Working, with the error status kept for the thread's card; Errors only once all stop.
 const running = { phase: 'running', pending: 2, returned: 0 };
@@ -150,7 +150,7 @@ test('fyi + running helper is Working; approvals and recovery keep their gate', 
 test('slim and full list rows carry the running helper of an interrupted thread into Working', () => {
   const c = modelContext({});
   vm.runInContext(block(live, '  const READY_OR_ATTENTION', '  /* ---- thread-seen') + '\nthis.normalize = normalize;', c);
-  const full = c.normalize({ id: 'err', title: 'Wizard OS · Chats', status: 'interrupted', wizard_helper_status: running, last_active: now / 1000 });
+  const full = c.normalize({ id: 'err', title: 'WizardOS · Chats', status: 'interrupted', wizard_helper_status: running, last_active: now / 1000 });
   const slim = c.normalize({ ...row({ status: 'interrupted', helperStatus: running }), listVersion: 1 });
   for (const s of [full, slim]) {
     assert.equal(s.status, 'interrupted');

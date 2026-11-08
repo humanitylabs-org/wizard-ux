@@ -1,6 +1,6 @@
-# Mizel meeting recorder (Android, Wizard OS 0.7.0)
+# Mizel meeting recorder (Android, WizardOS 0.7.0)
 
-Native meeting recording for the Mizel.ai view inside Wizard OS (`ai.wizards.os`). The page drives it over
+Native meeting recording for the Mizel.ai view inside WizardOS (`ai.wizards.os`). The page drives it over
 `window.wizardMizelPort`; native owns the microphone, the chunk files, the upload outbox and the base URL.
 
 Source: `android/app/src/main/java/ai/wizards/os/mizel/` · `MicOwner.java` · QA: `tools/qa_mizel.py`.
@@ -11,7 +11,7 @@ All example hosts below are synthetic. In the app the origin is the persisted ow
 
 Installed with AndroidX `WebViewCompat.addWebMessageListener(web, "wizardMizelPort", {"https://box.example.ts.net"}, …)`.
 
-- Present in **every frame whose origin is exactly `https://box.example.ts.net`** — the Wizard OS shell, its
+- Present in **every frame whose origin is exactly `https://box.example.ts.net`** — the WizardOS shell, its
   `/meetings/` iframe, `/mizel-live/` (main frame or iframe). Absent everywhere else (other origins, http, other
   ports). If the WebView lacks `WEB_MESSAGE_LISTENER`, no port is installed at all (feature-detect
   `window.wizardMizelPort`).
@@ -148,7 +148,7 @@ Base: `https://box.example.ts.net` (release; debug `.qa` builds may be pointed a
 - **One mic owner:** `MicOwner` (in-process lock). A meeting start while the Everywhere orb or the side button
   is listening → `mic_busy` + toast; an orb/side-button start while a meeting records (not paused) → refused
   with a toast ("A meeting is recording. Pause or stop it first."). Paused meetings do not hold the mic.
-- **Notification:** tap → Wizard OS opens `https://box.example.ts.net/mizel-live/#/m/<meetingId>` inside its
+- **Notification:** tap → WizardOS opens `https://box.example.ts.net/mizel-live/#/m/<meetingId>` inside its
   WebView (`/mizel-live/` is now an in-app private path, also as a VIEW link). Actions Pause/Resume/Stop.
 - **Local files:** kept after acknowledgement until the meeting reports `status: "ready"` (or 404) plus one day,
   then deleted (checked by the uploader while alive and at every service/app start).

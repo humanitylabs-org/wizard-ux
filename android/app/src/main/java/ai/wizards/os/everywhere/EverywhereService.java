@@ -55,20 +55,20 @@ import java.util.List;
 import ai.wizards.os.MainActivity;
 
 /**
- * Wizard Everywhere: the floating Wizard orb (formerly Archimedes Anywhere) inside Wizard OS.
+ * Wizard Everywhere: the floating Wizard orb (formerly Archimedes Anywhere) inside WizardOS.
  *
  *  - The same orb as the app (web/orb.js, drawn in assets/assist/everywhere.html), not a portrait.
- *  - Switched on in Wizard OS → Settings. Floats over other apps and the home screen, bottom right by default;
+ *  - Switched on in WizardOS → Settings. Floats over other apps and the home screen, bottom right by default;
  *    drag to move, it snaps to the nearer edge and remembers where you left it — one place with the keyboard
  *    closed and another with it open.
- *  - Hidden whenever Wizard OS itself is in front (the app has its own orb); back as soon as you leave.
+ *  - Hidden whenever WizardOS itself is in front (the app has its own orb); back as soon as you leave.
  *  - Tap to talk. While it listens, Cancel · Pause · Screen fan out around it, like the app's orb. Tap the orb
  *    again to send. Going quiet never sends: only the side button sends by itself (James, 0.6.1). The recording goes into {@link EverywhereOutbox} before any network
  *    call, so a dropped connection never loses it.
  *  - With a keyboard open it becomes voice typing: tap, talk, and the words are typed where the cursor is
- *    (needs Accessibility → Wizard OS, see {@link WizardKeyboardService}). Nothing goes to Wizard.
+ *    (needs Accessibility → WizardOS, see {@link WizardKeyboardService}). Nothing goes to Wizard.
  *  - "Not sent" raises a notification with Retry; replies raise a notification that opens the thread.
- *  - Carry: while the app's own orb is recording and you leave Wizard OS, this orb shows that recording (timer,
+ *  - Carry: while the app's own orb is recording and you leave WizardOS, this orb shows that recording (timer,
  *    Pause, Cancel; tap to send) so it is obvious the mic is still on. The app keeps the recording; the orb is
  *    its remote control. Works even when Wizard Everywhere is switched off (overlay permission permitting).
  */
@@ -84,7 +84,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final String ACTION_APP_VOICE = "ai.wizards.os.everywhere.APP_VOICE";
     /** "Show orb" on the notification while the orb is hidden (0.9.3). */
     static final String ACTION_SHOW = "ai.wizards.os.everywhere.SHOW";
-    /** Hidden from the long-press menu (an app refuses to work with something drawn over it). Opening Wizard OS clears it. */
+    /** Hidden from the long-press menu (an app refuses to work with something drawn over it). Opening WizardOS clears it. */
     static final String KEY_HIDDEN = "hidden";
     static final String EXTRA_FRONT = "front", EXTRA_KB = "kb", EXTRA_IME_TOP = "imeTop", EXTRA_SURFACE = "surface";
     static final String CH_RUNNING = "everywhere";
@@ -159,7 +159,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     public static boolean overlayAllowed(Context c) { return Settings.canDrawOverlays(c); }
 
-    /** The orb was hidden from its long-press menu; it stays switched on and comes back from Wizard OS or the notification. */
+    /** The orb was hidden from its long-press menu; it stays switched on and comes back from WizardOS or the notification. */
     public static boolean hidden(Context c) { return prefs(c).getBoolean(KEY_HIDDEN, false); }
 
     static void setHidden(Context c, boolean on) { prefs(c).edit().putBoolean(KEY_HIDDEN, on).apply(); }
@@ -189,14 +189,14 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         catch (Exception ignored) { }
     }
 
-    /** Wizard OS tells the orb when it comes to the front / leaves, so the orb hides while the app is open. */
+    /** WizardOS tells the orb when it comes to the front / leaves, so the orb hides while the app is open. */
     public static void setAppInFront(Context c, boolean front) {
         appInFront = front;
         if (front && hidden(c)) {
-            // James hid the orb for an app that refused to work under it; coming back to Wizard OS brings it back.
+            // James hid the orb for an app that refused to work under it; coming back to WizardOS brings it back.
             setHidden(c, false);
-            Log.i(TAG, "orb unhidden: Wizard OS opened");
-            if (enabled(c)) Toast.makeText(c, "Floating orb is back · it shows when you leave Wizard OS", Toast.LENGTH_SHORT).show();
+            Log.i(TAG, "orb unhidden: WizardOS opened");
+            if (enabled(c)) Toast.makeText(c, "Floating orb is back · it shows when you leave WizardOS", Toast.LENGTH_SHORT).show();
         }
         if (!(enabled(c) || appRecording()) || !overlayAllowed(c)) return;
         try { c.startService(new Intent(c, EverywhereService.class).setAction(ACTION_FRONT).putExtra(EXTRA_FRONT, front)); }
@@ -217,7 +217,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /**
      * The app's orb changed state (listen / paused / think / idle). While it records, this service runs as a
      * microphone foreground service (started now, while the app is in front, which Android requires) and the
-     * floating orb mirrors the take whenever Wizard OS is not in front.
+     * floating orb mirrors the take whenever WizardOS is not in front.
      */
     public static void appVoiceState(Context c, String state, long elapsedMs) {
         boolean rec = "listen".equals(state) || "paused".equals(state);
@@ -315,7 +315,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         c.getSystemService(NotificationManager.class).cancel(N_UNSENT);
     }
 
-    /** The answer is ready: a notification that opens the thread (not while Wizard OS is in front). */
+    /** The answer is ready: a notification that opens the thread (not while WizardOS is in front). */
     static void notifyReply(Context c, EverywhereOutbox.Item it, String text) {
         channels(c);
         if (!canNotify(c) || appInFront || it.dictation()) return;
@@ -354,7 +354,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     /**
      * Battery (0.8.5): the orb's WebGL page draws only while its window is on screen and the display is on.
-     * Off screen it gets Orb.sleep(true) and the WebView is paused, so it costs nothing behind Wizard OS,
+     * Off screen it gets Orb.sleep(true) and the WebView is paused, so it costs nothing behind WizardOS,
      * under the side-button surface or with the screen off. Android used to bill ~38% of a day's battery to it.
      */
     static boolean orbShouldSleep(boolean attached, boolean screenOff) { return !attached || screenOff; }
@@ -399,16 +399,16 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         Notification n = hid ? new Notification.Builder(this, CH_RUNNING)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle("Floating orb hidden")
-                .setContentText("Tap to bring it back · opening Wizard OS does too")
+                .setContentText("Tap to bring it back · opening WizardOS does too")
                 .setContentIntent(PendingIntent.getService(this, 8, new Intent(this, EverywhereService.class).setAction(ACTION_SHOW),
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
                 .setOngoing(true)
                 .build()
                 : new Notification.Builder(this, CH_RUNNING)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle(appRecording() && !listening ? (nativeTake() ? "Floating orb shows your recording" : "paused".equals(appVoice) ? "Wizard OS recording paused" : "Wizard OS is recording")
+                .setContentTitle(appRecording() && !listening ? (nativeTake() ? "Floating orb shows your recording" : "paused".equals(appVoice) ? "WizardOS recording paused" : "WizardOS is recording")
                         : listening ? (dictating ? "Typing what you say…" : "Listening…") : "Wizard Everywhere is on")
-                .setContentText(appRecording() && !listening ? "Tap the orb to send, or open Wizard OS"
+                .setContentText(appRecording() && !listening ? "Tap the orb to send, or open WizardOS"
                         : listening ? "Tap the orb to finish"
                         : WizardKeyboardService.get() == null ? "Voice typing is off · tap to turn it on" : "Tap the orb to talk · hold it to select text, translate or hide")
                 .setContentIntent(appRecording() && !listening ? openApp(this, null, 5) : openApp(this, MainActivity.ACTION_SETTINGS, 2))
@@ -461,7 +461,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     /* ------------------------------------------------------------------ the orb window */
 
-    /** The app's recording is being shown on this orb (Wizard OS is in the background). */
+    /** The app's recording is being shown on this orb (WizardOS is in the background). */
     private boolean carrying() { return appRecording() && !listening && !appInFront && !surfaceInFront; }
 
     /**
@@ -744,7 +744,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     /**
      * The orb's window keeps the screen on while it has a live take, its own (talking or paused) or the app's take it
-     * carries outside Wizard OS, so a screen timeout can't cut the take short or lock the phone (0.5.1; carry 0.8.6).
+     * carries outside WizardOS, so a screen timeout can't cut the take short or lock the phone (0.5.1; carry 0.8.6).
      */
     private void syncAwake() {
         if (lp == null || web == null) return;
@@ -930,7 +930,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             menu.setElevation(10 * density);
             menu.addView(menuRow("⌖", "Select text", "Copy · search · translate anything on screen", M_SELECT));
             menu.addView(menuRow("文", "Translate screen", "English over the text, in place", M_TRANSLATE));
-            menu.addView(menuRow("⊘", "Hide orb", "Until you open Wizard OS", M_HIDE));
+            menu.addView(menuRow("⊘", "Hide orb", "Until you open WizardOS", M_HIDE));
             menu.setOnTouchListener((v, e) -> {
                 if (e.getActionMasked() == MotionEvent.ACTION_OUTSIDE) { hideMenu(); return true; }
                 return false;
@@ -980,7 +980,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             setHidden(this, true);
             syncBubble();
             startForegroundSafe(micInUse());
-            Toast.makeText(this, "Orb hidden · open Wizard OS (or tap its notification) to bring it back", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Orb hidden · open WizardOS (or tap its notification) to bring it back", Toast.LENGTH_LONG).show();
             return;
         }
         openScreen(M_TRANSLATE.equals(id) ? "translate" : "select");
@@ -1034,9 +1034,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (processing()) { toast("Still processing your recording…"); return; }
         if (nativeTake()) {
             // One take, one microphone: an in-app recording is still going (the app's window is gone, so the orb
-            // can't drive it). Open Wizard OS, which picks that take back up, instead of starting a second one.
+            // can't drive it). Open WizardOS, which picks that take back up, instead of starting a second one.
             Log.i(TAG, "native take running; opening the app instead of a second recording");
-            toast("Your recording is still going in Wizard OS");
+            toast("Your recording is still going in WizardOS");
             try { openApp(this, null, 5).send(); } catch (PendingIntent.CanceledException ignored) { }
             return;
         }
@@ -1059,7 +1059,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private void start(boolean dictate) {
         if (listening || processing()) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Open Wizard OS once and allow the microphone", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Open WizardOS once and allow the microphone", Toast.LENGTH_LONG).show();
             try { openApp(this, MainActivity.ACTION_SETTINGS, 4).send(); } catch (PendingIntent.CanceledException ignored) { }
             return;
         }
@@ -1080,7 +1080,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!startForegroundSafe(true)) {
             listening = false;
             endLoan("start_failed", "Android blocked the microphone");
-            Toast.makeText(this, "Android blocked the microphone. Open Wizard OS and try again.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Android blocked the microphone. Open WizardOS and try again.", Toast.LENGTH_LONG).show();
             return;
         }
         try {
@@ -1180,7 +1180,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         recorder = null;
         discard();
         buzz(14);
-        toast(kept ? "Cancelled · kept in Wizard OS Settings for a week" : "Discarded");
+        toast(kept ? "Cancelled · kept in WizardOS Settings for a week" : "Discarded");
     }
 
     /** Screen: hide the orb, capture what is behind it, attach it to this message (up to four). */
@@ -1193,7 +1193,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         WizardKeyboardService k = WizardKeyboardService.get();
         if (Build.VERSION.SDK_INT < 30) { toast("Screenshots need Android 11 or newer"); return; }
         if (k == null) {
-            // Not set up yet: bring Wizard OS forward on the one-step setup dialog. The take keeps recording.
+            // Not set up yet: bring WizardOS forward on the one-step setup dialog. The take keeps recording.
             Log.i(TAG, "screen tapped without accessibility: opening setup");
             try { openApp(this, MainActivity.ACTION_ACCESSIBILITY, 6).send(); } catch (PendingIntent.CanceledException ignored) { }
             return;
@@ -1366,7 +1366,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (typed) { lastInserted = text; lastInsertAt = now; }
         else {
             WizardKeyboardService.copyAsLatest(this, text.trim());
-            toast(k == null ? "Copied · turn on Accessibility → Wizard OS to type it for you" : "Copied · paste it where you want it");
+            toast(k == null ? "Copied · turn on Accessibility → WizardOS to type it for you" : "Copied · paste it where you want it");
         }
         Log.i(TAG, "dictation " + (typed ? "typed" : "copied") + " chars=" + text.length());
         if (it.meetingEvent != null && !it.meetingEvent.isEmpty())

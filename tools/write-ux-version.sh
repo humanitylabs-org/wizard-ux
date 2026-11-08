@@ -1,6 +1,6 @@
 #!/bin/sh
 # Writes web/ux-version.txt = git tree id of web/ at HEAD. The shell polls it (web/core/web-update.js, both shells) and shows
-# "Wizard OS update ready · Reload" when it changes. Run by .git/hooks post-commit/post-merge/post-checkout/
+# "WizardOS update ready · Reload" when it changes. Run by .git/hooks post-commit/post-merge/post-checkout/
 # post-rewrite (tools/install-hooks.sh, which passes the hook name as $1); safe to run by hand. Gitignored, so
 # writing it never dirties the tree.
 # Also: a commit made by an agent thread records that thread (HERMES_SESSION_ID) as a git note, and

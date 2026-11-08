@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * DownloadManager.ACTION_DOWNLOAD_COMPLETE arrives at a manifest receiver. The receiver stays exported because the
- * sender is not Wizard OS and not the system UID (see docs/android-downloads-port.md, "Receiver"), so any app can send
+ * sender is not WizardOS and not the system UID (see docs/android-downloads-port.md, "Receiver"), so any app can send
  * the same action. Review finding on PR #1140 (source-level, no device exploit shown): a raw thread was started for every
- * non-negative id BEFORE the id was checked against what Wizard OS tracks. These tests pin: tracked id first, a single
+ * non-negative id BEFORE the id was checked against what WizardOS tracks. These tests pin: tracked id first, a single
  * bounded worker, genuine completions kept.
  */
 public class DownloadsReceiverPolicyTest {

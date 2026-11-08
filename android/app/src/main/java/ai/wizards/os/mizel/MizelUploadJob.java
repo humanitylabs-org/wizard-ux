@@ -12,7 +12,7 @@ import android.util.Log;
 
 /**
  * Finishes meeting uploads after the recorder has gone (Stop while offline, or a process death): Android runs this
- * when there is a network, even with Wizard OS closed. The work itself is MizelUploader's; this only keeps the
+ * when there is a network, even with WizardOS closed. The work itself is MizelUploader's; this only keeps the
  * process alive until nothing is outstanding, and asks to be rescheduled if the server is still unreachable.
  */
 public class MizelUploadJob extends JobService {

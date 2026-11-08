@@ -40,7 +40,7 @@ test('desktop and phone show first-observed interface revision and installed ser
     assert.match(root.innerHTML, /Interface revision at first check<\/b><small title="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">aaaaaaaa<\/small>/);
     assert.match(root.innerHTML, /data-settings-observed-full[^>]*>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
     assert.doesNotMatch(root.innerHTML, /<details data-settings-technical open|code this document loaded|the Android app update separately/);
-    assert.match(root.innerHTML, /Wizard OS \(server\) 0\.3\.15/);
+    assert.match(root.innerHTML, /WizardOS \(server\) 0\.3\.15/);
     assert.doesNotMatch(root.innerHTML, /data-settings-observed-full[^>]*>bbbb/);
     assert.match(root.innerHTML, /data-osu-auto/); assert.match(root.innerHTML, /data-osu="auto"[^>]*>Automatic<\/button><button type="button" data-osu="ask"[^>]*>Ask me</, 'Automatic / Ask me in both shells (wizard-app-manager#483)'); assert.match(root.innerHTML, /data-osu="ch-latest"[^>]*>For testers</);
   }
@@ -53,8 +53,8 @@ test('native data is rendered by the same registered About owner, never a shell-
   for (const {root,view} of mounts) {
     view.focus('about');
     assert.match(root.innerHTML, /Phone app \(Android\) 0\.10\.23/);
-    assert.match(root.innerHTML, /Wizard OS \(server\) 0\.3\.15/);
-    assert.doesNotMatch(root.innerHTML, /Wizard OS 0\.10\.23/);
+    assert.match(root.innerHTML, /WizardOS \(server\) 0\.3\.15/);
+    assert.doesNotMatch(root.innerHTML, /WizardOS 0\.10\.23/);
     assert.match(root.innerHTML, /data-dvupd/); // existing guarded native update action preserved
     assert.match(root.innerHTML, /Reply notifications/);
     assert.match(root.innerHTML, /The Android phone app updates separately too/);
@@ -118,9 +118,9 @@ test('lost connection during an install retains explicitly last-checked identity
     assert.equal(s.WosUpdates.state.installing,true,'known state is retained, not discarded');
     for(const {root,view} of mounts){
       view.focus('about');
-      assert.match(root.innerHTML,/Wizard OS \(server\) 0\.3\.15/);
+      assert.match(root.innerHTML,/WizardOS \(server\) 0\.3\.15/);
       assert.match(root.innerHTML,/Last checked · previously verified/);
-      assert.match(root.innerHTML,/Last checked: Updating Wizard OS… Connection lost; latest progress unverified/);
+      assert.match(root.innerHTML,/Last checked: Updating WizardOS… Connection lost; latest progress unverified/);
       assert.doesNotMatch(root.innerHTML,/Nothing has been changed|Up to date|data-osu="(?:auto|ask|apply|ch-stable|ch-latest)"/);
       assert.match(root.innerHTML,/<button type="button"[^>]*data-osu="retry"/);
     }

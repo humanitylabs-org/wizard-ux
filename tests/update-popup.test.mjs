@@ -37,8 +37,8 @@ test('pop-up shows Update with the same words and button as the Settings card, j
   const b = await boot({ status: ST() });
   b.U.popup();
   const p = b.pop(); assert.ok(p, 'pop-up on Home');
-  assert.match(p.innerHTML, /<b>Wizard OS update<\/b><span>Takes 10–20 minutes<\/span><\/div><button type="button" class="osu-pop-go" data-osu="apply" >Install<\/button>/);
-  assert.match(b.U.cardHtml(), /<b data-osu-title>Wizard OS update<\/b><span>Takes 10–20 minutes<\/span>[^]*>Install<\/button>/, 'same words in Settings');
+  assert.match(p.innerHTML, /<b>WizardOS update<\/b><span>Takes 10–20 minutes<\/span><\/div><button type="button" class="osu-pop-go" data-osu="apply" >Install<\/button>/);
+  assert.match(b.U.cardHtml(), /<b data-osu-title>WizardOS update<\/b><span>Takes 10–20 minutes<\/span>[^]*>Install<\/button>/, 'same words in Settings');
   assert.match(p.innerHTML, /data-osu-dismiss aria-label="Dismiss">×/);
   assert.equal(p.style.bottom, (874 - 790 + 12) + 'px', 'sits 12px above the dock top');
   tapGo(p); await tick();
@@ -46,7 +46,7 @@ test('pop-up shows Update with the same words and button as the Settings card, j
 });
 test('interrupted says Try again; up to date, updating and unpinned show no pop-up', async () => {
   const f = await boot({ status: ST({ interrupted: true }) }); f.U.popup();
-  assert.match(f.pop().innerHTML, /Wizard OS update didn’t finish.*Try again/s);
+  assert.match(f.pop().innerHTML, /WizardOS update didn’t finish.*Try again/s);
   for (const s of [ST({ update_available: false, latest: '0.3.32' }), ST({ installing: true }), ST({ unpinned: true })]) {
     const n = await boot({ status: s }); n.U.popup();
     assert.equal(n.pop(), undefined, JSON.stringify(s));
@@ -97,20 +97,20 @@ test('Home hears about a new release without a reload: the status is re-read eve
   const tick = timers.find(t => t.ms === 60e3); assert.ok(tick, 'a one-minute tick');
   now.t += 5 * 60e3; tick.f(); await tick0(); b.U.popup(); assert.equal(b.pop(), undefined, 'not before 10 minutes');
   now.t += 5 * 60e3; tick.f(); await tick0(); await tick0(); b.U.popup();
-  assert.match(b.pop().innerHTML, /Wizard OS update/);
+  assert.match(b.pop().innerHTML, /WizardOS update/);
 });
 const tick0 = () => new Promise(r => setTimeout(r, 0));
 test('the stock module reads no personal release file and has no release-layer states', () => {
   assert.doesNotMatch(src, /my-release|\bmine\b|Propose|behind > 0|data-mine/);
 });
 
-// Two kinds of update, two names (Miguel, 27 Oct 2026): "Wizard OS" means only the box's own install; the screens are
+// Two kinds of update, two names (Miguel, 27 Oct 2026): "WizardOS" means only the box's own install; the screens are
 // the "Interface", already here and a Reload away. Automatic says when it will install; Ask me says how long it takes.
-test('words: the interface never says Wizard OS; Wizard OS says overnight (Automatic) or how long (Ask me)', async () => {
+test('words: the interface never says WizardOS; WizardOS says overnight (Automatic) or how long (Ask me)', async () => {
   const fs = await import('node:fs');
   const web = fs.readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8');
-  const shown = (web.match(/'[^'\n]*'|`[^`\n]*`/g) || []).filter(x => /Wizard OS/.test(x));
-  assert.deepEqual(shown, [], 'no interface notice string names Wizard OS');
+  const shown = (web.match(/'[^'\n]*'|`[^`\n]*`/g) || []).filter(x => /WizardOS/.test(x));
+  assert.deepEqual(shown, [], 'no interface notice string names WizardOS');
   assert.match(web, /class="wb-text">Reloading<em>/);
   const osu = fs.readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
   assert.match(osu, /title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload'/);

@@ -265,7 +265,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
             Log.i(TAG, "handoff to corner; listening=" + capture.listening());
             finish();
         } else {
-            Log.i(TAG, "corner unavailable (Wizard OS is not the assistant); staying full");
+            Log.i(TAG, "corner unavailable (WizardOS is not the assistant); staying full");
         }
     }
 
@@ -329,7 +329,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         closeSurface();
     }
 
-    /** Wizard OS on the thread a side-button message went to; the unsent list if it hasn't landed yet. */
+    /** WizardOS on the thread a side-button message went to; the unsent list if it hasn't landed yet. */
     static Intent threadIntent(Context c, String sessionId) {
         Intent i = new Intent(sessionId != null ? ai.wizards.os.MainActivity.ACTION_THREAD : ai.wizards.os.MainActivity.ACTION_UNSENT)
                 .setClassName(c.getPackageName(), "ai.wizards.os.MainActivity")
@@ -339,7 +339,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
     }
 
     /**
-     * Opens Wizard OS with the words as a draft (ai.wizards.os.action.SAY). Wizard OS shows the
+     * Opens WizardOS with the words as a draft (ai.wizards.os.action.SAY). WizardOS shows the
      * draft and James sends it with one tap; nothing is ever sent from here.
      */
     static Intent sayIntent(Context c, String text) {

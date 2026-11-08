@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Wizard OS image-save device QA (runs on Thales). The real Wizard OS shell + real Wizard Search, inside the real
+"""WizardOS image-save device QA (runs on Thales). The real WizardOS shell + real Wizard Search, inside the real
 Android app's WebView on a fresh API 35 emulator. It checks that saving a search image puts a real file in Downloads.
 
 usage: qa_image_save_device.py QA_APK WEB_DIR SEARCH_PORT [OUT_DIR]
-  QA_APK       a Wizard OS debug (".qa") build; its WebView download path matches the release
+  QA_APK       a WizardOS debug (".qa") build; its WebView download path matches the release
   WEB_DIR      the worktree's web/ (the shell under test), copied to this Mac
   SEARCH_PORT  a local port that reaches Wizard Search (an ssh -R tunnel to the VPS service under test)
 
@@ -12,9 +12,9 @@ and answers the few Wizard reads the shell needs. Every Wizard write is refused 
 dead, so nothing can reach the real Wizard.
 
 Checks: image spell → viewer; Save → Android DownloadManager → /sdcard/Download/<title>.jpg with the exact bytes the
-search service serves, Wizard OS stays in front, viewer stays open; long-press the photo → Save / Share menu →
+search service serves, WizardOS stays in front, viewer stays open; long-press the photo → Save / Share menu →
 Save image → a second file; long-press a search result → opens with the menu; real Back key steps menu → viewer →
-sheet and Wizard OS stays open.
+sheet and WizardOS stays open.
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, urllib.error, urllib.request
 from qa_paths import origin_host, work_root
@@ -159,7 +159,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.id = 0
         u = page['webSocketDebuggerUrl']; m = re.match(r'ws://([^/]+)(/.*)', u); assert m
         host, path = m.groups(); h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=60)
@@ -290,7 +290,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         ready = wait(lambda: pg.ev("!!(window.__wos && window.__wos.live && window.__wos.live.ok && window.WosChat && window.WizCore && window.WizCore.apps)"), 45)
         pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo')?.click(); try { localStorage.setItem('wos.coached', 'true'); } catch (e) {} return 1; })()")
         ua = pg.ev('navigator.userAgent')
-        check('Wizard OS shell is up inside the app (fake Wizard)', ready and 'WizardOS-Android/' in (ua or ''), ua)
+        check('WizardOS shell is up inside the app (fake Wizard)', ready and 'WizardOS-Android/' in (ua or ''), ua)
         time.sleep(1.5)
 
         # 1. Image spell → search sheet → real results
@@ -335,7 +335,7 @@ with (BASE / 'worker.lock').open('a') as lock:
                   same and (b[:3] == b'\xff\xd8\xff' or b[:8] == b'\x89PNG\r\n\x1a\n' or b[:4] == b'RIFF' or b[:3] == b'GIF'), (len(b), len(body), b[:8]))
             check('Save: it is named after the result (%s)' % d['path'].rsplit('/', 1)[-1],
                   d['path'].startswith('/storage/emulated/0/Download/') and stem.lower() in d['path'].lower() and re.search(r'\.(jpe?g|png|webp|gif)$', d['path'], re.I), (d['path'], item['name'], cd))
-        check('Save: Wizard OS stays in front, viewer still open', front() and viewer(pg).get('open'), (top()[-90:], viewer(pg)))
+        check('Save: WizardOS stays in front, viewer still open', front() and viewer(pg).get('open'), (top()[-90:], viewer(pg)))
 
         # 3. Long-press the photo → Save / Share menu → Save image
         img = pg.centre("document.querySelector('.mviewer .mv-stage img')")
@@ -361,10 +361,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         v = viewer(pg)
         check('long-press a search result opens it with Save / Share', v.get('open') and v.get('menu') and v.get('i') == 2, v)
 
-        # 5. Back ×3 never leaves Wizard OS
+        # 5. Back ×3 never leaves WizardOS
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(0.8)
         v = viewer(pg); sheet = json.loads(pg.ev("JSON.stringify(window.__wos.links ? window.__wos.links.state() : {})") or '{}')
-        check('Back ×3 (menu → viewer → sheet) and Wizard OS is still open', front() and not v.get('open') and not sheet.get('open'), (top()[-80:], v, sheet))
+        check('Back ×3 (menu → viewer → sheet) and WizardOS is still open', front() and not v.get('open') and not sheet.get('open'), (top()[-80:], v, sheet))
         shot('05-after-back')
 
         # 6. A photo in a chat thread: same viewer, same Save → Downloads
@@ -384,7 +384,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             # file is named by its attachment id (right extension, exact bytes). Search images carry real names (?dl=).
             check('chat photo: viewer → Save puts the photo in Downloads, byte for byte (%s)' % (got3[0]['path'].rsplit('/', 1)[-1] if got3 else '-'),
                   v.get('open') and got3 and b3 == PNG and got3[0]['path'].endswith('.png'), (v, got3, len(b3)))
-            check('chat photo: Wizard OS stays in front', front(), top()[-80:])
+            check('chat photo: WizardOS stays in front', front(), top()[-80:])
             pg.touch(*pg.centre("document.querySelector('.mviewer .mv-stage img')"), hold=0.9); time.sleep(0.8)
             check('chat photo: long-press opens Save / Share too', viewer(pg).get('menu'), viewer(pg))
             shot('06-chat-photo-menu')

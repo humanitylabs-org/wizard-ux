@@ -356,10 +356,10 @@ with (BASE / 'worker.lock').open('a') as lock:
             u1 = upload_of(big)
             check('after force-stop + airplane mode: no bytes move', u1 and u1['offset'] - at < 64 * 1048576, (at, u1 and u1['offset']))
             em.sx('cmd connectivity airplane-mode disable'); time.sleep(8)
-            # Android blocks every background restart after a force-stop (by design); the queue resumes when Wizard OS opens.
+            # Android blocks every background restart after a force-stop (by design); the queue resumes when WizardOS opens.
             em.sx('am start -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(3)
             u2 = wait_offset(big, (u1['offset'] + 1) / u1['bytes'] if u1 else 0.5, 120)
-            check('reopening Wizard OS resumes the upload', u2 and u1 and u2['offset'] > u1['offset'], (u1 and u1['offset'], u2 and u2['offset']))
+            check('reopening WizardOS resumes the upload', u2 and u1 and u2['offset'] > u1['offset'], (u1 and u1['offset'], u2 and u2['offset']))
             em.sx('input keyevent KEYCODE_HOME')
             sh, u, s = wait_delivered(big, 900)
             check('the 2 GB share completes and is delivered', sh and sh['status'] == 'delivered', sh)

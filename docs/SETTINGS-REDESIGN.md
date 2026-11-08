@@ -66,4 +66,4 @@ Wizard skin tokens only (`--wz-*`); transparent when hosted; check two skins (Ne
 
 ## What belongs in Settings
 
-Settings configures Wizard itself: look, chats, voice, phone integration, recovery, usage, updates. Anything that is an app or optional (Photos backup, Android Apps, Music, Calendar…) lives in its own app and launcher tile, never as a Settings row or page (James, 24 Oct 2026). A Wizard OS native capability such as photo backup reaches its app through a narrow shell relay (`photos-relay.js`, `android-relay.js`), not through Settings.
+Settings configures Wizard itself: look, chats, voice, phone integration, recovery, usage, updates. Anything that is an app or optional (Photos backup, Android Apps, Music, Calendar…) lives in its own app and launcher tile, never as a Settings row or page (James, 24 Oct 2026). A WizardOS native capability such as photo backup reaches its app through a narrow shell relay (`photos-relay.js`, `android-relay.js`), not through Settings.

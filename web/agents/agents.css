@@ -1,4 +1,4 @@
-/* Agents — a Wizard OS system app. Dark by default; skins arrive as --wz-* tokens through the shared appearance
+/* Agents — a WizardOS system app. Dark by default; skins arrive as --wz-* tokens through the shared appearance
  * client (core/app-client.js). Same vocabulary as Chats: glass rows, sigils, quiet section heads. */
 :root {
   --c-canvas: var(--wz-canvas, #06040e);

@@ -11,7 +11,7 @@ let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LINK = 'https://hermes-agent.nousresearch.com/docs/reference/automation-blueprints-catalog';
-const SAID = 'Which of these blueprints should we bake into Wizard OS';
+const SAID = 'Which of these blueprints should we bake into WizardOS';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 async function boot(b, desktop = false) {

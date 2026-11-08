@@ -29,7 +29,7 @@ def validate(config, revision):
     if config.get('expected_signer') != SIGNER:
         raise ValueError('established phone signer required')
     if Path(config.get('signing_env', '')).resolve() != Path.home() / '.hermes/secure/wizard-os/signing.env':
-        raise ValueError('Wizard OS WOS_* signing configuration required')
+        raise ValueError('WizardOS WOS_* signing configuration required')
     if config['tasks'] != [':app:assembleRelease']:
         raise ValueError('expected one release build; Android unit tests belong to CI')
 

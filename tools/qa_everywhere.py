@@ -17,11 +17,11 @@ words into the focused field (nothing goes to Wizard); it keeps a separate spot 
 button sends by itself (no "send this?" draft).
 
 Checks: Settings shows the Everywhere switch; turning it on asks for the overlay permission; the floating
-button is hidden while Wizard OS is in front and shows bottom-right on the launcher and over another app;
+button is hidden while WizardOS is in front and shows bottom-right on the launcher and over another app;
 a drag moves it and it snaps to an edge and stays there; a tap records (canned audio), the recording survives
 the dropped connection, lands as exactly one run with the voice note attached; the Unsent list + "Not sent"
 notification appear when Wizard is down, Retry from the notification delivers it once; no crashes; Back never
-leaves Wizard OS.
+leaves WizardOS.
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import shlex, urllib.parse, urllib.request
@@ -142,7 +142,7 @@ class Page:
         if not page:
             print('DIAG top:', top()); print('DIAG pages:', l if 'l' in dir() else None)
             print('DIAG log:', sx("logcat -d | grep -E 'AndroidRuntime|FATAL|WizardOS|chromium' | tail -40"))
-            raise RuntimeError('no Wizard OS page')
+            raise RuntimeError('no WizardOS page')
         self.writes = []; self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=20)
@@ -285,7 +285,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             # The current Settings UI no longer has the [data-st=everywhere] row these steps were written for.
             # Enable the same way the app's own bridge does and record the setup-UI checks as skipped, not passed.
             for n in ('Settings shows the Wizard Everywhere switch, off', 'turning it on opens Android’s “Display over other apps” page',
-                      'Accessibility setup dialog flow', 'back in Wizard OS, Settings shows Voice typing & screenshots on'):
+                      'Accessibility setup dialog flow', 'back in WizardOS, Settings shows Voice typing & screenshots on'):
                 print('SKIP ' + n + ' — Settings UI changed; setup UI not exercised by this harness', flush=True); SKIPPED.append(n)
             sx(f'appops set {PKG} SYSTEM_ALERT_WINDOW allow'); sx(f'appops set {PKG} ACCESS_RESTRICTED_SETTINGS allow')
             pg.ev("window.WizardOSNative.setEverywhere(true)"); time.sleep(2)
@@ -312,7 +312,7 @@ with (BASE / 'worker.lock').open('a') as lock:
                 if PKG in top(): break
                 sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
             time.sleep(2.5)
-            check('Back from the overlay page returns to Wizard OS', PKG in top(), top())
+            check('Back from the overlay page returns to WizardOS', PKG in top(), top())
             st = json.loads(pg.ev("window.WizardOSNative.everywhere()"))
             check('switch reads on with overlay allowed', st.get('enabled') and st.get('overlay'), st)
             # 0.6.1: switching it on asks for Accessibility right away, one dialog, one button.
@@ -324,7 +324,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             t = top(); shot('03b-a11y-page')
             check('the button lands on Android’s Accessibility page', 'ccessibility' in t or 'SubSettings' in t or 'SpaActivity' in t, t)
             for _ in range(3):   # the row may sit under "Downloaded apps"
-                if tap_text(r'^Wizard OS voice typing$'): break
+                if tap_text(r'^WizardOS voice typing$'): break
                 sx('input swipe 540 1800 540 700 300'); time.sleep(1)
             time.sleep(2); rs = ui(); shot('03c-restricted')
             locked = re.search(r'Restricted setting|restricted', rs, re.I)
@@ -333,9 +333,9 @@ with (BASE / 'worker.lock').open('a') as lock:
             for _ in range(4):
                 if PKG in top(): break
                 sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-            d2 = dialog('Unlock it for Wizard OS|Turn on voice typing', 8); shot('03d-unlock-dialog')
+            d2 = dialog('Unlock it for WizardOS|Turn on voice typing', 8); shot('03d-unlock-dialog')
             print('  app gate log:', sx("logcat -d -s WizardOS:* | grep -E 'accessibility (gate|setup)|restricted' | tail -4").strip())
-            check('back in Wizard OS the dialog moves on to “Allow restricted settings”', 'Unlock it for Wizard OS' in d2 or not locked, (bool(locked), re.findall(r'text="([^"]+)"', d2)[:6]))
+            check('back in WizardOS the dialog moves on to “Allow restricted settings”', 'Unlock it for WizardOS' in d2 or not locked, (bool(locked), re.findall(r'text="([^"]+)"', d2)[:6]))
             if 'Open App info' in d2:
                 tap_text(r'^Open App info$', d2); time.sleep(3); shot('03e-app-info')
                 if not tap_text(r'^More options$'): sx('input tap 1010 160')
@@ -358,7 +358,7 @@ with (BASE / 'worker.lock').open('a') as lock:
                 pg.ev("window.WizardOSNative.voiceTypingSettings()"); time.sleep(1.5); d2 = dialog('Turn on voice typing', 5)
             tap_text(r'^Open Accessibility$', d2); time.sleep(3)
             for _ in range(3):
-                if tap_text(r'^Wizard OS voice typing$'): break
+                if tap_text(r'^WizardOS voice typing$'): break
                 sx('input swipe 540 1800 540 700 300'); time.sleep(1)
             time.sleep(2)
             x = ui()
@@ -366,7 +366,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             if sw_node:
                 x1, y1, x2, y2 = map(int, sw_node.groups()); sx(f'input tap {(x1 + x2) // 2} {(y1 + y2) // 2}')
             else:
-                tap_text(r'^Use Wizard OS voice typing$', x)
+                tap_text(r'^Use WizardOS voice typing$', x)
             al = dialog(r'text="Allow"', 6); shot('03e-a11y-allow')
             tap_text(r'^Allow$', al or None); time.sleep(2); shot('03f-a11y-on')
             on_by_ui = 'WizardKeyboardService' in sx('settings get secure enabled_accessibility_services')
@@ -380,12 +380,12 @@ with (BASE / 'worker.lock').open('a') as lock:
             time.sleep(2.5)
             vt0 = pg.ev("(() => { const r = document.querySelector('[data-st=typing]'); return r ? r.innerText.replace(/\\s+/g,' ') + (r.querySelector('.sw.on') ? ' [switch on]' : '') : null; })()")
             shot('03g-settings-typing-on')
-            check('back in Wizard OS, Settings shows Voice typing & screenshots on', vt0 and 'On' in vt0 and '[switch on]' in vt0, vt0)
+            check('back in WizardOS, Settings shows Voice typing & screenshots on', vt0 and 'On' in vt0 and '[switch on]' in vt0, vt0)
             check('no setup dialog left over once it is on', not re.search('Turn on voice typing|Unlock it for', ui()), '')
             # Off again for the next part: the Screen button must open the setup, not just complain.
             sx('settings put secure enabled_accessibility_services ""'); time.sleep(2)
             shot('03-settings-on')
-        check('floating button is hidden while Wizard OS is in front', wait_bubble(False, 4) is None, bubble())
+        check('floating button is hidden while WizardOS is in front', wait_bubble(False, 4) is None, bubble())
         # Leave the app: home screen
         sx('input keyevent KEYCODE_HOME'); time.sleep(2.5)
         b = wait_bubble(True)
@@ -428,10 +428,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('Pause pauses the recording', 'paused' in logs(': paused'), logs('paused|resumed'))
         time.sleep(3)  # the QA recording would have finished by now if Pause didn't hold it
         check('while paused it does not send', STATE['transcribe'] == 0 and 'listening' in logs('listening'), STATE['transcribe'])
-        # Screen with voice typing & screenshots off → Wizard OS comes forward on the setup dialog.
+        # Screen with voice typing & screenshots off → WizardOS comes forward on the setup dialog.
         sx(f'input tap {SHOT[0]} {SHOT[1]}'); time.sleep(3)
         ds = dialog('Turn on voice typing', 6); shot('07b-screen-opens-setup')
-        check('Screen while it is off opens Wizard OS on the setup dialog', PKG in top() and 'Open Accessibility' in ds, (top(), re.findall(r'text="([^"]+)"', ds)[:5]))
+        check('Screen while it is off opens WizardOS on the setup dialog', PKG in top() and 'Open Accessibility' in ds, (top(), re.findall(r'text="([^"]+)"', ds)[:5]))
         tap_text(r'^Not now$', ds); time.sleep(0.8)
         sx('input keyevent KEYCODE_HOME'); time.sleep(2.5)
         check('the recording carried on through the setup detour (still paused, nothing sent)', STATE['transcribe'] == 0 and 'cancelled' not in logs('cancelled') and bubble() is not None, (STATE['transcribe'], bubble()))
@@ -468,7 +468,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('floating Cancel ends the app’s recording', pg.ev("window.__wos.voice") == 'idle', (pg.ev("window.__wos.voice"), logs('remote')))
         b6 = wait_bubble(True, 4)
         check('the orb goes back to its small idle self', b6 and (b6[2] - b6[0]) < dp(120), b6)
-        # 2. Voice typing + screenshots need Accessibility → Wizard OS.
+        # 2. Voice typing + screenshots need Accessibility → WizardOS.
         sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService')
         sx('settings put secure accessibility_enabled 1'); time.sleep(3)
         check('voice typing service connects', 'keyboard service connected' in logs('keyboard service connected'), logs('keyboard'))
@@ -600,7 +600,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('side button sends by itself (no draft, no Send tap)', len(STATE['runs']) == runs_before + 1 and 'side button' in sb.get('instructions', ''), (len(STATE['runs']) - runs_before, sb.get('instructions', '')[:90]))
         dlv = wait_log('delivered session', 10, alogs)
         check('the side-button surface says it was sent', 'delivered' in dlv, dlv or alogs('sending|queued'))
-        check('no draft was opened in Wizard OS', 'MainActivity' not in top(), top())
+        check('no draft was opened in WizardOS', 'MainActivity' not in top(), top())
         sx('input keyevent KEYCODE_BACK'); time.sleep(1); sx('input keyevent KEYCODE_HOME'); time.sleep(2)
         cx, cy = (bh[0] + bh[2]) // 2, (bh[1] + bh[3]) // 2
         # Wizard down: the message stays, becomes "Not sent" with a notification and Retry.
@@ -621,7 +621,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('notification opens Settings on the Unsent list with the message', rows and any('Everywhere button' in r and 'Not sent' in r for r in rows), rows)
         vt = pg.ev("(() => { const r = document.querySelector('[data-st=typing]'); return r ? r.innerText.replace(/\\s+/g,' ') : null; })()")
         check('Settings shows Voice typing & screenshots as on', vt and 'On' in vt, vt)
-        check('floating button hidden again while Wizard OS is open', wait_bubble(False, 4) is None)
+        check('floating button hidden again while WizardOS is open', wait_bubble(False, 4) is None)
         # Retry from the list once Wizard is back
         STATE['down'] = False
         n_before = len(STATE['runs'])
@@ -634,7 +634,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         shot('14-all-sent')
         # Back never exits
         for _ in range(4): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
-        check('Back stays in Wizard OS', PKG in top(), top())
+        check('Back stays in WizardOS', PKG in top(), top())
         # Switch off → button gone everywhere
         pg.ev("window.WizardOSNative.setEverywhere(false)"); time.sleep(1)
         sx('input keyevent KEYCODE_HOME'); time.sleep(2.5)

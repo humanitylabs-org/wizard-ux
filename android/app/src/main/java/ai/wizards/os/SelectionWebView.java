@@ -10,7 +10,7 @@ import android.view.View;
 import android.webkit.WebView;
 
 /**
- * Wizard OS draws its own menu for text selected in chats (Copy · Share · Quote · Search · Select all, chosen in
+ * WizardOS draws its own menu for text selected in chats (Copy · Share · Quote · Search · Select all, chosen in
  * Settings). The page tells this view, through WizardOSNative.selection(state), when a selection is its own; then
  * Android's floating Copy/Share/Select all toolbar is started with an empty menu, so it never shows, while the
  * selection, its handles and dragging stay native. Anywhere else (the composer, a hosted app) the stock toolbar runs

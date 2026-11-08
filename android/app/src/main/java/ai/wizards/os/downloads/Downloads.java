@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
- * The in-app Downloads list: files Wizard OS handed to Android's DownloadManager, remembered (last 30) so the
+ * The in-app Downloads list: files WizardOS handed to Android's DownloadManager, remembered (last 30) so the
  * web shell can say "Downloaded · Open" inside Wizard instead of leaving it to the system tray.
  *
  * Never a file:// URI: opening goes through DownloadManager's own content URI with a one-off read grant.
@@ -65,10 +65,10 @@ public final class Downloads {
         emit("start", it);
     }
 
-    /** Whether Wizard OS started this download (a cheap list lookup; no DownloadManager query, no side effect). */
+    /** Whether WizardOS started this download (a cheap list lookup; no DownloadManager query, no side effect). */
     public static synchronized boolean isTracked(Context c, long id) { return find(load(c), id) != null; }
 
-    /** DownloadManager.ACTION_DOWNLOAD_COMPLETE (also for a failed download). Ignores ids Wizard OS did not start. */
+    /** DownloadManager.ACTION_DOWNLOAD_COMPLETE (also for a failed download). Ignores ids WizardOS did not start. */
     public static void onComplete(Context c, long id) {
         DownloadsPolicy.Item done = null;
         synchronized (Downloads.class) {

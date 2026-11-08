@@ -1,4 +1,4 @@
-/* Wizard OS — Chats kit: message parsing, Markdown, Bangkok time, per-thread drafts,
+/* WizardOS — Chats kit: message parsing, Markdown, Bangkok time, per-thread drafts,
  * copy/share, and the in-app media viewer. Loaded before app.js, which wires it into the
  * Chats window. Behaviour follows wizard-mobile ff86db8c (normalizers.ts, MarkdownMessage.tsx,
  * MediaViewers.tsx, CopyableTextBlock.tsx, sharing.ts, threadTimestamp.ts). */

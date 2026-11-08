@@ -1,4 +1,4 @@
-// Live-integration QA for Wizard OS Home, run against the real private origin.
+// Live-integration QA for WizardOS Home, run against the real private origin.
 // Safe by construction: blocks every Hermes write (no messages are sent), and the
 // read-state test only touches one thread that the test itself makes look unread.
 const { chromium } = require('./tools/qa-playwright.cjs');

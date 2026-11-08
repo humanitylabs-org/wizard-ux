@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wizard OS Home prototype server.
+"""WizardOS Home prototype server.
 
 Serves the static prototype and two small endpoints:
   POST /api/transcribe  -> Wizard Voice Core (wizard-stt, Tinfoil-attested Voxtral)
@@ -44,7 +44,7 @@ def _tinfoil_key() -> str:
     return ""
 
 
-ROUTER_SYSTEM = """You are the command router inside Wizard OS, a voice-first phone shell.
+ROUTER_SYSTEM = """You are the command router inside WizardOS, a voice-first phone shell.
 Classify ONE spoken utterance and reply with ONLY one compact JSON object, no prose.
 
 If it is a direct phone/UI command, reply {"route":"command","action":ACTION,...args}. Actions:

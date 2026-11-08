@@ -58,13 +58,13 @@ public final class WizardIdentity {
     }
 
     public static String voicePrompt(String name) {
-        return "Voice request spoken to " + normalize(name) + " through Wizard OS on an Android phone.";
+        return "Voice request spoken to " + normalize(name) + " through WizardOS on an Android phone.";
     }
 
     public static String replyTitle(String name) { return normalize(name) + " replied"; }
     public static String approvalText(String name) { return normalize(name) + " needs your approval to continue"; }
     public static String channelDescription(String name) {
-        return "When " + normalize(name) + " answers a chat you sent from Wizard OS";
+        return "When " + normalize(name) + " answers a chat you sent from WizardOS";
     }
     public static String everywhereTitle(String name, String excerpt) { return normalize(name) + " · " + excerpt; }
 }

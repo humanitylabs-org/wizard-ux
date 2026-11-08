@@ -1,13 +1,13 @@
-/* Android Apps relay: the shell's narrow door between the Android Apps view (a hosted frame) and Wizard OS native.
+/* Android Apps relay: the shell's narrow door between the Android Apps view (a hosted frame) and WizardOS native.
  *
- * Hosted frames never see native interfaces. Wizard OS (0.8.9+) gives the SHELL a message port,
+ * Hosted frames never see native interfaces. WizardOS (0.8.9+) gives the SHELL a message port,
  * window.wizardAppsPort (AndroidX addWebMessageListener, private origin, main frame only). This relay accepts
  *   {type:'wizard-os:android', id, method, params}
  * only from a frame that is (1) one of the shell's own app iframes, (2) same origin, (3) at /android-apps/, and only
  * for the allowlisted methods. Answers go back to that frame as {type:'wizard-os:android', id, ok, result|error};
  * native pushes (install status, resume) go to every Android Apps frame as {type:'wizard-os:android-push', ...}.
- * Without the port (older Wizard OS, a browser), every call answers {ok:false, error:'no-bridge'} so the view can say
- * "Update Wizard OS to use Android Apps".
+ * Without the port (older WizardOS, a browser), every call answers {ok:false, error:'no-bridge'} so the view can say
+ * "Update WizardOS to use Android Apps".
  */
 (() => {
   'use strict';

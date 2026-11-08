@@ -99,7 +99,7 @@ function renderRow(s, trackerOn, agent = '') {
 }
 const ask = { state: 'needs_you', ask: 'Approve the Google setup' };
 for (const s of [{ id: 'cal', title: 'Calendar · Google setup', status: 'running', attention: ask, background: 'helper', preview: 'Still setting it up' },
-  { id: 'upd', title: 'Wizard OS · Updates #2', status: 'completed', attention: ask, background: 'helper', preview: 'Still setting it up' }]) {
+  { id: 'upd', title: 'WizardOS · Updates #2', status: 'completed', attention: ask, background: 'helper', preview: 'Still setting it up' }]) {
   test(`Working row (${s.status}${s.background ? ', helper' : ''}): no helper pill; tracker on drops 'Needs you:', off keeps it`, () => {
     const on = renderRow(s, true), off = renderRow(s, false);
     for (const html of [on, off]) assert.doesNotMatch(html, /Helper still working|ch-background/);

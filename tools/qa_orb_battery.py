@@ -4,12 +4,12 @@
 usage: qa_orb_battery.py NEW_APK PKG [BASE_APK] [SECS]
 
 For each APK (baseline first when given, then the new one) it installs the exact bytes, turns Wizard
-Everywhere on, leaves Wizard OS for another app (the dialer) so the floating orb shows, and measures over
+Everywhere on, leaves WizardOS for another app (the dialer) so the floating orb shows, and measures over
 SECS seconds:
   - frames the orb's overlay WebView rendered  (dumpsys gfxinfo PKG: Total frames rendered, reset first)
   - CPU time of every process of the package, incl. the WebView renderer (/proc/<pid>/stat utime+stime)
 Phases: idle orb over the dialer; screen off (orb attached, display off).
-James, 10 Oct 2026: Device care showed Wizard OS at 38.5% of a day's battery with the orb in the corner.
+James, 10 Oct 2026: Device care showed WizardOS at 38.5% of a day's battery with the orb in the corner.
 """
 import fcntl, json, os, pathlib, re, subprocess, sys, time, uuid
 from qa_paths import work_root

@@ -8,7 +8,7 @@ import ai.wizards.os.MainActivity;
 
 /**
  * Android's assistant settings gear (and anything else that asks for the assistant's settings) lands here.
- * The side-button switch lives inside Wizard OS itself, so this just opens Wizard OS on that switch.
+ * The side-button switch lives inside WizardOS itself, so this just opens WizardOS on that switch.
  */
 public class AssistSetupActivity extends Activity {
     @Override

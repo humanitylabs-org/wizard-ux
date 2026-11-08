@@ -58,7 +58,7 @@ test('native hold pause and resume reconcile the same foreground take and timer'
   await h.nativePause(false); assert.equal(w.voice, 'listen'); assert.equal(w.V.native, id);
 });
 
-test('no port, or the full Wizard OS app: inert, the orb keeps today\'s recorder', async () => {
+test('no port, or the full WizardOS app: inert, the orb keeps today\'s recorder', async () => {
   for (const opts of [{ port: false }, { full: true }]) {
     const h = harness(opts); await settle();
     assert.equal(h.window.WosDeviceRecording.device(), null);

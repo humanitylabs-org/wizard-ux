@@ -328,7 +328,7 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     /* --- reply notifications --- */
 
-    /** A message James sent from Wizard OS was accepted: tell him when the reply is ready if he has left the app. */
+    /** A message James sent from WizardOS was accepted: tell him when the reply is ready if he has left the app. */
     @JavascriptInterface
     public void watchRun(String sessionId, String runId, String title) {
         askNotifications();

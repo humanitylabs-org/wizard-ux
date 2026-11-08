@@ -104,13 +104,13 @@ const phoneDismissed=()=>{
       const text=await p.locator('.st-page:visible').innerText();
       const hasInterface=await p.locator('[data-settings-version="interface"]').count()===1;
       if(process.env.QA_EXPECT_RED){ok(!hasInterface,'RED_EXPECTED desktop interface version absent');await shot('baseline-about');throw Object.assign(Error('RED_EXPECTED desktop interface version absent'),{expectedRed:!hasInterface});}
-      ok(hasInterface&&text.includes('Wizard OS (server) 0.3.101'),kind+' '+skin+': server version visible and interface revision in Technical details');
+      ok(hasInterface&&text.includes('WizardOS (server) 0.3.101'),kind+' '+skin+': server version visible and interface revision in Technical details');
       await tap('[data-settings-technical] summary');
       await p.waitForFunction(()=>document.querySelector('[data-settings-technical]')?.open);
       ok((await p.locator('[data-settings-observed-full]:visible').innerText())===process.env.QA_INTERFACE_BUILD,kind+' '+skin+': exact first-observed interface fingerprint in Technical details');
       await shot(skin+'-technical');
       await tap('[data-settings-technical] summary');
-      if(phone){ok(text.includes('Phone app (Android) 0.10.23')&&!text.includes('Wizard OS 0.10.23'),skin+': native app identity distinct from server');await tap('[data-dvupd]');ok(await p.evaluate(()=>__qaNativeChecks)>0,skin+': existing native check action preserved');}
+      if(phone){ok(text.includes('Phone app (Android) 0.10.23')&&!text.includes('WizardOS 0.10.23'),skin+': native app identity distinct from server');await tap('[data-dvupd]');ok(await p.evaluate(()=>__qaNativeChecks)>0,skin+': existing native check action preserved');}
       ok(await p.locator('[data-osu="ask"],[data-osu="auto"]').count()===0&&(await p.locator('[data-osu-auto]:visible').innerText()).includes('Install by themselves overnight'),kind+' '+skin+': no Ask me, always automatic readback');
       ok((await p.locator('[data-osu="ch-latest"]').innerText()).trim()==='For testers'&&(await p.locator('[data-osu="ch-stable"]').innerText()).trim()==='For everyone',kind+' '+skin+': For testers / For everyone names');
       await tap('[data-osu="ch-latest"]');ok(channel==='latest',kind+' '+skin+': channel action/readback');
@@ -128,7 +128,7 @@ const phoneDismissed=()=>{
       ok((await p.locator('[data-osu-auto]:visible').innerText()).includes('Install by themselves overnight'),kind+' '+skin+': read-only retry recovers verified mode');
       await p.evaluate(()=>WosUpdates.load(true));
       pending=true;await p.evaluate(()=>WosUpdates.load(true));
-      ok((await p.locator('.st-page:visible').innerText()).includes('Wizard OS (server) 0.3.101'),kind+' '+skin+': installed version retained beside pending update');
+      ok((await p.locator('.st-page:visible').innerText()).includes('WizardOS (server) 0.3.101'),kind+' '+skin+': installed version retained beside pending update');
       await tap('#settingsBody [data-osu="apply"]');ok(journal.writes.some(w=>w.path.endsWith('/store-install/_updates')&&w.body==='{"action":"apply"}'),kind+' '+skin+': original Install action intercepted');
       await p.evaluate(()=>WosUpdates.load(true));
       pending=false;await p.evaluate(()=>WosUpdates.load(true));

@@ -23,7 +23,7 @@ import java.util.List;
 import ai.wizards.os.everywhere.WizardKeyboardService;
 
 /**
- * Teaches and replays a usual inside the Grab app, through Wizard OS's accessibility service.
+ * Teaches and replays a usual inside the Grab app, through WizardOS's accessibility service.
  *
  * Teach: Grab opens fresh; James builds his basket as usual; every tap and typed search is written down; Done.
  * Run:   Grab opens fresh under a cover; the same taps are found again by their text (not screen position), one by
@@ -137,7 +137,7 @@ public final class UsualsRunner {
         return "";
     }
 
-    /** Done on the teach card: keep what was recorded and go back to Wizard OS (to name it, if it's new). */
+    /** Done on the teach card: keep what was recorded and go back to WizardOS (to name it, if it's new). */
     public void finishTeach() { finishTeach(false); }
 
     /**
@@ -192,7 +192,7 @@ public final class UsualsRunner {
         if (u != null) { u.lastResult = ""; u.lastRunAt = 0; UsualsStore.put(app, u); }
     }
 
-    /** Rename on the "Saved" card: Wizard OS opens on Food with the name field. */
+    /** Rename on the "Saved" card: WizardOS opens on Food with the name field. */
     void renameSaved() {
         if (cover != null) cover.hide();
         backToWizard("food");
@@ -416,7 +416,7 @@ public final class UsualsRunner {
     private void step() {
         if (mode != Mode.RUNNING || usual == null) return;
         WizardKeyboardService s = svc();
-        if (s == null) { fail("Wizard OS accessibility was switched off"); return; }
+        if (s == null) { fail("WizardOS accessibility was switched off"); return; }
         if (stepIdx >= usual.steps.size()) { reachCheckout(); return; }
         UsualsPolicy.Step st = usual.steps.get(stepIdx);
         long waited = SystemClock.uptimeMillis() - stepStarted;
@@ -805,7 +805,7 @@ public final class UsualsRunner {
         i.setAction(ai.wizards.os.MainActivity.ACTION_FOOD);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         Context from = svc() != null ? svc() : app;
-        try { from.startActivity(i); } catch (Exception e) { Log.w(TAG, "back to Wizard OS failed", e); }
+        try { from.startActivity(i); } catch (Exception e) { Log.w(TAG, "back to WizardOS failed", e); }
     }
 
     private UsualsCover cover() {

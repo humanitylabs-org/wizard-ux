@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
-"""Wizard OS hands-free update QA (runs on Thales). Fresh API 35 emulator, exact APK bytes, real PackageInstaller.
+"""WizardOS hands-free update QA (runs on Thales). Fresh API 35 emulator, exact APK bytes, real PackageInstaller.
 
 usage: qa_silent_update.py QA_APK NEXT_APK LATER_APK WEB_DIR [OUT_DIR]
 
 QA_APK    debug build (ai.wizards.os.qa, versionCode N; 0.7.0 = 11), installed over adb (installer of record: none)
 NEXT_APK  qanext build of the same job (versionCode 9000+N, same debug key): the first update
-LATER_APK qalater build of the same job (versionCode 9100+N, same debug key): the second update, after Wizard OS
+LATER_APK qalater build of the same job (versionCode 9100+N, same debug key): the second update, after WizardOS
           has installed itself once
 
 Nothing reaches the real Wizard: debug-only files/qa_home.txt + qa_origin.txt point the app at a fake Wizard on
 this Mac (http://localhost:PORT through `adb reverse`); the emulator's DNS is dead.
 
 Checks
-  A  background: feed names NEXT with the right sha256/signer; with Wizard OS in the background the periodic job
+  A  background: feed names NEXT with the right sha256/signer; with WizardOS in the background the periodic job
      (forced with `cmd jobscheduler run -f`) downloads + verifies it by itself; without "Install unknown apps" it
      waits and leaves one "ready" notification; nothing installs yet.
   B  in front: one "Update ready · tap to restart" banner; tap → Android's "Install unknown apps" (once) → back →
      PackageInstaller session. API 35 would install even this first self-update silently, so the QA-only
      files/qa_update_confirm.txt forces USER_ACTION_REQUIRED: STATUS_PENDING_USER_ACTION → EXTRA_INTENT opens Android's
-     confirm; Cancel → STATUS_FAILURE_ABORTED is shown; Retry → confirm → NEXT lands; Wizard OS is now the installer
+     confirm; Cancel → STATUS_FAILURE_ABORTED is shown; Retry → confirm → NEXT lands; WizardOS is now the installer
      of record. Taps counted.
   N1 wrong sha256 in the feed: downloaded, refused, file deleted, nothing installs (app in background, so a missing
      check would install silently).
   N2 right sha256 but signed by another key: refused, nothing installs.
   R  recording running (native recorder, app in background): LATER downloads but is deferred; nothing installs
-     while the take runs; after the take ends and Wizard OS is in the background, LATER installs with ZERO taps and
+     while the take runs; after the take ends and WizardOS is in the background, LATER installs with ZERO taps and
      no installer screen.
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
@@ -107,7 +107,7 @@ BAD = job / 'qalater-othersigner.apk'
 ks = job / 'other.jks'
 if ks.exists(): ks.unlink()
 sh('keytool', '-genkeypair', '-keystore', ks, '-storepass', 'qaqaqa', '-keypass', 'qaqaqa', '-alias', 'other', '-keyalg', 'RSA',
-   '-keysize', '2048', '-validity', '3650', '-dname', 'CN=Not Wizard OS')
+   '-keysize', '2048', '-validity', '3650', '-dname', 'CN=Not WizardOS')
 sh(BT / 'apksigner', 'sign', '--ks', ks, '--ks-pass', 'pass:qaqaqa', '--key-pass', 'pass:qaqaqa', '--out', BAD, LATER)
 SHA = {k: hashlib.sha256(p.read_bytes()).hexdigest() for k, p in (('next', NEXT), ('later', LATER), ('bad', BAD))}
 
@@ -200,7 +200,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=30)
@@ -313,7 +313,7 @@ with _lockfile as lock:
               SIGNERS['next'] == SIGNERS['later'] == SIGNER and SIGNERS['bad'] and SIGNERS['bad'] != SIGNER, SIGNERS)
         sh(ADB, '-s', S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         aiff = job / 'q.aiff'; aac = job / 'qa_mic.aac'
-        sh('say', '-o', aiff, 'Wizard OS update test. This take must not be interrupted by an update.')
+        sh('say', '-o', aiff, 'WizardOS update test. This take must not be interrupted by an update.')
         sh('afconvert', '-f', 'adts', '-d', 'aac', aiff, aac)
         sh(ADB, '-s', S, 'push', aac, '/data/local/tmp/qa_mic.aac')
         def stage():
@@ -325,7 +325,7 @@ with _lockfile as lock:
         # ============ A: background check + automatic download, waits for permission ============
         sx('logcat -c')
         bring_front(); connect(); time.sleep(4)
-        check('the app loads Wizard OS from the fake Wizard', pg.ev('location.href').startswith(ORIGIN), pg.ev('location.href'))
+        check('the app loads WizardOS from the fake Wizard', pg.ev('location.href').startswith(ORIGIN), pg.ev('location.href'))
         js = sx('cmd jobscheduler get-job-state %s %d' % (PKG, JOB_ID)).strip()
         dj = sx('dumpsys jobscheduler | grep -A12 "%s/ai.wizards.os.update.UpdateJob" | head -14' % PKG)
         check('periodic background update job is scheduled', 'UpdateJob' in dj and 'unknown' not in js.lower(), (js, dj.strip()[:400]))
@@ -336,11 +336,11 @@ with _lockfile as lock:
         verified = wait(lambda: 'verified' in logs('verified|rejected'), 60, 1)
         time.sleep(3)
         lg = logs('job|step|verified|state .*ready|available', 12)
-        check('A: with Wizard OS in the background the job downloads the newer build by itself', ST['gets'].get('wizard-os-qanext.apk', 0) > g0, (r, ST['gets']))
+        check('A: with WizardOS in the background the job downloads the newer build by itself', ST['gets'].get('wizard-os-qanext.apk', 0) > g0, (r, ST['gets']))
         check('A: the download passes size + sha256 + package + versionCode + signer checks', verified and SHA['next'] + '.apk' in cached(), (lg[-600:], cached()))
         check('A: nothing installs without "Install unknown apps" (waits for James)', vcode() == VC and 'WAIT_PERMISSION' in lg, (vcode(), lg[-300:]))
         nt = wait(lambda: (lambda n: n if 'is ready' in n else '')(notifs()), 10) or notifs()
-        check('A: one "Wizard OS … is ready · Tap to install" notification', 'is ready' in nt and 'Tap to install' in nt, nt.strip()[:300])
+        check('A: one "WizardOS … is ready · Tap to install" notification', 'is ready' in nt and 'Tap to install' in nt, nt.strip()[:300])
         sx('cmd statusbar expand-notifications'); time.sleep(1.5); shot('A1-ready-notification'); sx('cmd statusbar collapse')
 
         # ============ B: front → one banner → tap → allow → (confirm) → installed ============
@@ -363,7 +363,7 @@ with _lockfile as lock:
         if hit: taps += 1
         time.sleep(1.5)
         check('B: first time only, Android\'s "Install unknown apps" opens and is allowed with one tap', hit and 'allow' in sx('appops get %s REQUEST_INSTALL_PACKAGES' % PKG).lower(), (t[:140], hit))
-        sx('input keyevent KEYCODE_BACK'); time.sleep(2)   # back to Wizard OS (the system Back, not a tap)
+        sx('input keyevent KEYCODE_BACK'); time.sleep(2)   # back to WizardOS (the system Back, not a tap)
         # API 35 lets even this first self-update through without a confirm (UPDATE_PACKAGES_WITHOUT_USER_ACTION +
         # updating itself). files/qa_update_confirm.txt (QA builds only) makes the session ask anyway, so the
         # STATUS_PENDING_USER_ACTION → EXTRA_INTENT path and a cancelled confirm (STATUS_FAILURE_ABORTED) run for real.
@@ -396,18 +396,18 @@ with _lockfile as lock:
         check('B: the first update lands after one Android confirm (versionCode %d) · taps=%d (banner, allow, cancel, retry, confirm)' % (NEXT_VC, taps), newv and confirm, (vcode(), lg[-300:]))
         runas('rm -f files/qa_update_confirm.txt')
         inst = installer()
-        check('B: Wizard OS is now its own installer of record (later updates are silent)', inst == PKG, inst)
+        check('B: WizardOS is now its own installer of record (later updates are silent)', inst == PKG, inst)
         stage()  # app data survives an update; harmless re-stage
         time.sleep(4)
         relaunched = front(); nt = notifs()
         receipt['bal'] = sx('logcat -d | grep -iE "Background activity launch|BAL_|Abort background activity" | tail -4')
         receipt['relaunched_after_tap_update'] = relaunched
         shot('B5-after-first-update')
-        check('B: after a tapped update James lands back in Wizard OS (or gets a "tap to open" notification)', relaunched or 'Wizard OS updated to' in nt,
+        check('B: after a tapped update James lands back in WizardOS (or gets a "tap to open" notification)', relaunched or 'WizardOS updated to' in nt,
               (relaunched, top()[-80:], logs('replaced', 2)))
         if not relaunched: bring_front()
         connect()
-        check('B: the updated app (%d) runs and loads Wizard OS' % NEXT_VC, pg.ev("window.WizardOSNative.platform()").endswith('-qanext'), pg.ev("window.WizardOSNative.platform()"))
+        check('B: the updated app (%d) runs and loads WizardOS' % NEXT_VC, pg.ev("window.WizardOSNative.platform()").endswith('-qanext'), pg.ev("window.WizardOSNative.platform()"))
 
         # ============ N1: wrong sha256 ============
         sx('logcat -c'); home()
@@ -427,7 +427,7 @@ with _lockfile as lock:
         g0 = ST['gets'].get('wizard-os-qalater-other.apk', 0)
         run_job()
         rej = wait(lambda: logs('rejected'), 60, 1); time.sleep(8)
-        check('N2: an APK signed by another key is refused (sha256 matched)', 'signed by Wizard OS' in (rej or '') and ST['gets'].get('wizard-os-qalater-other.apk', 0) > g0, (rej, ST['gets']))
+        check('N2: an APK signed by another key is refused (sha256 matched)', 'signed by WizardOS' in (rej or '') and ST['gets'].get('wizard-os-qalater-other.apk', 0) > g0, (rej, ST['gets']))
         check('N2: nothing installs and the file is deleted', vcode() == NEXT_VC and not any(f.endswith('.apk') for f in cached()), (vcode(), cached()))
         bring_front(); connect(); time.sleep(1)
         eb = banner(); shot('N2-signer-refused')
@@ -484,10 +484,10 @@ with _lockfile as lock:
         stage(); bring_front()
         try:
             connect()
-            check('R: the silently-updated app (%d) starts and loads Wizard OS' % LATER_VC, pg.ev("window.WizardOSNative.platform()").endswith('-qalater'), pg.ev("window.WizardOSNative.platform()"))
+            check('R: the silently-updated app (%d) starts and loads WizardOS' % LATER_VC, pg.ev("window.WizardOSNative.platform()").endswith('-qalater'), pg.ev("window.WizardOSNative.platform()"))
             shot('R4-qalater-running')
         except Exception as e:
-            check('R: the silently-updated app (%d) starts and loads Wizard OS' % LATER_VC, False, e)
+            check('R: the silently-updated app (%d) starts and loads WizardOS' % LATER_VC, False, e)
 
         # Each simulated non-take hold gets a fresh QA install, not a fabricated policy-only result.
         # The release APK has no hold-fixture hook. Permanent-signer upgrade is covered by qa_upgrade.py.

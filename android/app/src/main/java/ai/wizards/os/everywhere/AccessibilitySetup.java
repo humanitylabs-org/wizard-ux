@@ -12,7 +12,7 @@ import android.provider.Settings;
 import android.util.Log;
 
 /**
- * Getting "Accessibility → Wizard OS" switched on: it powers voice typing into any app and the orb's Screen button.
+ * Getting "Accessibility → WizardOS" switched on: it powers voice typing into any app and the orb's Screen button.
  *
  * Android 13+ greys that switch out for apps installed outside an app store ("Restricted setting"). The only way
  * through is App info → ⋮ → Allow restricted settings, and Android shows that menu item only after the user has
@@ -24,7 +24,7 @@ public final class AccessibilitySetup {
     /** What the dialog asks for next. */
     public enum Step {
         DONE,
-        /** Accessibility → Wizard OS → On. */
+        /** Accessibility → WizardOS → On. */
         TURN_ON,
         /** Restricted and never tried: Android only offers "Allow restricted settings" after one tap on the greyed row. */
         TAP_ONCE,
@@ -115,7 +115,7 @@ public final class AccessibilitySetup {
         return i;
     }
 
-    /** Wizard OS's App info page, where ⋮ → Allow restricted settings lives. */
+    /** WizardOS's App info page, where ⋮ → Allow restricted settings lives. */
     public static Intent appInfoPage(Context c) {
         return new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + c.getPackageName()))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

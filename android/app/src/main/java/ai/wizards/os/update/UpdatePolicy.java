@@ -86,7 +86,7 @@ public final class UpdatePolicy {
     }
 
     /**
-     * The update's signer set must be exactly {pinned} (the Wizard OS release key, or the debug key for QA builds),
+     * The update's signer set must be exactly {pinned} (the WizardOS release key, or the debug key for QA builds),
      * equal to the installed app's set, and agree with the feed's "signer" when the feed names one.
      */
     public static boolean signerOk(Set<String> installed, Set<String> update, String pinned, String feedSigner) {
@@ -111,13 +111,13 @@ public final class UpdatePolicy {
         OFFER,
         /** Fetch it now (unmetered, or James tapped). */
         DOWNLOAD,
-        /** Downloaded + verified while Wizard OS is in front: one "Update ready · tap to restart" banner. */
+        /** Downloaded + verified while WizardOS is in front: one "Update ready · tap to restart" banner. */
         BANNER,
-        /** Install now (Wizard OS in the background, or James tapped). */
+        /** Install now (WizardOS in the background, or James tapped). */
         INSTALL,
         /** A recording is running: never interrupt it, try again when it ends. */
         DEFER,
-        /** Android has not allowed Wizard OS to install apps yet and James isn't here to allow it: wait for him. */
+        /** Android has not allowed WizardOS to install apps yet and James isn't here to allow it: wait for him. */
         WAIT_PERMISSION,
     }
 
@@ -125,8 +125,8 @@ public final class UpdatePolicy {
      * @param newer      the feed names a higher versionCode than this app
      * @param verified   that APK is on the phone and passed every check
      * @param unmetered  the active network is unmetered (Wi-Fi)
-     * @param front      Wizard OS is on screen
-     * @param recording  any Wizard OS recording is running (native recorder, orb, floating orb, side button)
+     * @param front      WizardOS is on screen
+     * @param recording  any WizardOS recording is running (native recorder, orb, floating orb, side button)
      * @param silentOk   Android should install without asking (API 31+ and "Install unknown apps" allowed)
      * @param tapped     James tapped Update / the ready banner
      */
@@ -148,14 +148,14 @@ public final class UpdatePolicy {
     }
 
     /**
-     * Is any Wizard OS take live? Then an update must wait (installing restarts the app and would throw the take away).
+     * Is any WizardOS take live? Then an update must wait (installing restarts the app and would throw the take away).
      * A paused take counts: its MediaRecorder is paused, so Android no longer reports RECORD_AUDIO as active, but
      * the side button / floating orb still hold the one mic owner until the take is sent or cancelled (0.8.6).
      *
      * @param nativeRecorder the in-app native recorder has a take
      * @param appVoice       the in-app web orb reported a take (listening / paused / thinking)
      * @param micHolder      MicOwner.holder(): side button, floating orb or meeting, null when free
-     * @param micOpActive    Android says the RECORD_AUDIO op is active for Wizard OS
+     * @param micOpActive    Android says the RECORD_AUDIO op is active for WizardOS
      */
     public static boolean takeLive(boolean nativeRecorder, boolean appVoice, String micHolder, boolean micOpActive) {
         return nativeRecorder || appVoice || micHolder != null || micOpActive;
@@ -164,7 +164,7 @@ public final class UpdatePolicy {
     /** SessionParams.setRequireUserAction value: USER_ACTION_NOT_REQUIRED (2) on API 31+, else none (0 = unspecified). */
     public static int requireUserAction(int sdk) { return sdk >= 31 ? 2 : 0; }
 
-    /** Seconds Wizard OS waits after leaving the screen before restarting itself into a ready update. */
+    /** Seconds WizardOS waits after leaving the screen before restarting itself into a ready update. */
     public static final long BACKGROUND_GRACE_MS = 15_000L;
 
     /**

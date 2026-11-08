@@ -31,7 +31,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   await p.evaluate(() => { const a = window.WizCore.apps('mobile').APPS.find(a => a.id === 'legacy-wizard'); __wos.openApp(a); });
   await p.waitForTimeout(6000);
   const fr = () => p.frames().find(f => /\/wizard\/(\?|#|$)/.test(f.url()));
-  ok(!!fr(), 'Legacy Wizard opens in a Wizard OS window');
+  ok(!!fr(), 'Legacy Wizard opens in a WizardOS window');
   const panel = () => fr().evaluate(() => document.querySelector('.chat-panel')?.classList.contains('open'));
   const shell = () => p.evaluate(() => { const fid = Object.values(__wos.wins).find(w => w.app === 'frame' && w.appId === 'legacy-wizard')?.id; return { idx: __wos.idx, full: __wos.desks[__wos.idx].full, focus: __wos.desks[__wos.idx].focus === fid, open: !!fid, toast: document.querySelector('#toast.show')?.innerText || '' }; });
   const back = async () => { const r = await p.evaluate(() => window.__wosNativeBack()); await p.waitForTimeout(700); return r; };

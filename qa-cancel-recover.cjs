@@ -138,7 +138,7 @@ const group = p => p.evaluate(() => { const g = document.querySelector('#setting
 
     // Back closes Settings; the app is still open.
     await p.evaluate(() => history.back()); await sleep(700);
-    ok(await p.evaluate(() => !!window.__wos && __wos.sheet !== 'settings'), 'Back closes Settings and Wizard OS stays open', await p.evaluate(() => String(__wos.sheet)));
+    ok(await p.evaluate(() => !!window.__wos && __wos.sheet !== 'settings'), 'Back closes Settings and WizardOS stays open', await p.evaluate(() => String(__wos.sheet)));
 
     // Delete.
     await p.evaluate(() => __wos.openSettings()); await sleep(400);

@@ -196,15 +196,15 @@ class FocusedModeAndPorts(unittest.TestCase):
         original = {
             "'QA build installs'", "'the orb floats over Chrome'", "'Hide orb removes the orb from the screen'",
             "'a screen that is only a picture gets read automatically (Read picture text)'",
-            "'picking Japanese translates the screen into Japanese'", "'no Wizard OS crashes'", "'script ran to the end'",
-            "'without Accessibility, Select text opens Wizard OS on the one-step setup'"}
+            "'picking Japanese translates the screen into Japanese'", "'no WizardOS crashes'", "'script ran to the end'",
+            "'without Accessibility, Select text opens WizardOS on the one-step setup'"}
         names = check_names(TREE)
         self.assertEqual(len(names), 64, 'all 48 original + 16 picture/lease check sites')
         self.assertTrue(original <= set(names))
         # the 48 originals = 4 shared set-up/end checks (run in both modes) + 44 case-flow checks that only the full
         # mode runs; --picture-only skips them, nothing is removed
         shared = {"'QA build installs'", "'Everywhere on (overlay + accessibility), status says hold is available'",
-                  "'no Wizard OS crashes'", "'script ran to the end'"}
+                  "'no WizardOS crashes'", "'script ran to the end'"}
         orelse = check_names(ast.Module(body=picture_only_if().orelse, type_ignores=[]))
         self.assertEqual(len(orelse), 44)
         self.assertTrue(shared <= set(names) and not shared & set(orelse))
@@ -273,7 +273,7 @@ class Interruption(unittest.TestCase):
         for completed, res, want in ((False, [True] * 5, False), (True, [True] * 5, True), (True, [True, False], False), (True, [], False)):
             self.assertIs(bool(eval(ok_expr, {'COMPLETED': completed, 'res': res})), want, (completed, res))
         done = SRC.index('COMPLETED = True')
-        self.assertLess(SRC.index("check('no Wizard OS crashes'"), done)
+        self.assertLess(SRC.index("check('no WizardOS crashes'"), done)
         self.assertLess(done, SRC.index("check('script ran to the end', False"), 'never set on the error path')
         self.assertEqual(SRC.count('COMPLETED = True'), 1)
         self.assertLess(SRC.index('signal.signal(_sig, _interrupted)'), SRC.index('with _lockfile as lock:'), 'installed before anything is owned')

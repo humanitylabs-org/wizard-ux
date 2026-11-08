@@ -33,7 +33,7 @@ test('reads the App Manager through the Store listener and registers one Setting
   assert.equal(registered[0].id, 'updates');
   assert.equal(registered[0].available(), true);
   const h = U.html();
-  assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>Wizard OS update<\/b><span>Installs tonight when it’s quiet<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Install now<\/button>/);
+  assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>WizardOS update<\/b><span>Installs tonight when it’s quiet<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Install now<\/button>/);
   assert.equal(U.cardHtml(), U.card() && h.slice(h.indexOf('<div class="osu-card"'), h.indexOf('</button></div>') + 15), 'the page leads with the same card Settings puts on top');
   assert.doesNotMatch(h, /data-osu="(?:auto|ask)"|Ask me|role="radiogroup" aria-label="Updates"/, 'no Automatic / Ask me choice on an always_auto App Manager');
   assert.match(h, /<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates<\/span><p class="st-hint">Install by themselves overnight, never during a chat\.<\/p><\/div>/);
@@ -43,7 +43,7 @@ test('up to date shows installed version and no Update button; a saved Ask me is
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false }]);
   const h = U.html();
   assert.equal(U.card(), null); assert.equal(U.cardHtml(), '', 'nothing to do: no card');
-  assert.match(h, /<b data-osu-title>Wizard OS \(server\) 0\.3\.15<\/b><\/span><span class="st-val">Up to date<\/span>/, 'a quiet value, not an Up to date pill');
+  assert.match(h, /<b data-osu-title>WizardOS \(server\) 0\.3\.15<\/b><\/span><span class="st-val">Up to date<\/span>/, 'a quiet value, not an Up to date pill');
   assert.doesNotMatch(h, /data-osu="apply"|osu-card|data-osu="(?:auto|ask)"|Ask me/);
   assert.match(h, /Install by themselves overnight/);
 });
@@ -58,7 +58,7 @@ test('Automatic / Ask me is back (wizard-app-manager#483): Ask me never installs
   const h = U.html();
   assert.match(h, /<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates<\/span><div class="st-seg" role="radiogroup" aria-label="Updates"><button type="button" data-osu="auto" role="radio" aria-checked="false" >Automatic<\/button><button type="button" data-osu="ask" role="radio" aria-checked="true" >Ask me<\/button><\/div><p class="st-hint">Nothing installs until you tap Install\.<\/p><\/div>/);
   assert.doesNotMatch(h, /Turn on automatic updates/);
-  assert.match(U.cardHtml(), /<b data-osu-title>Wizard OS update<\/b><span>Takes 10–20 minutes<\/span>[^]*>Install<\/button>/, 'Ask me shows the new version and an Install button, never "tonight"');
+  assert.match(U.cardHtml(), /<b data-osu-title>WizardOS update<\/b><span>Takes 10–20 minutes<\/span>[^]*>Install<\/button>/, 'Ask me shows the new version and an Install button, never "tonight"');
   assert.doesNotMatch(U.cardHtml(), /tonight/);
   const c = ctx();
   assert.equal(U.act(btn('auto'), c), true); await tick(); await tick();
@@ -119,7 +119,7 @@ test('Install now POSTs the exact body with the Store headers; never force, neve
   assert.equal(apply.headers['X-Wizard-Store'], '1');
   assert.equal(apply.headers['Content-Type'], 'application/json');
   assert.equal(U.state.installing, true);
-  assert.match(U.html(), /data-osu-card="building"[^]*<b data-osu-title>Updating Wizard OS…<\/b>/);
+  assert.match(U.html(), /data-osu-card="building"[^]*<b data-osu-title>Updating WizardOS…<\/b>/);
   assert.match(U.html(), /data-osu="apply" disabled>Install now</, 'same card, button disabled while it runs');
   assert.ok(!calls.some(x => x.body && 'force' in x.body));
 });
@@ -136,12 +136,12 @@ test('a refused write keeps the old state and tells the owner', async () => {
 test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
   const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
   const h = U.html();
-  assert.match(h, /data-osu-card="failed"[^]*<b data-osu-title>Wizard OS update didn’t finish<\/b><span>Tries again tonight<\/span>/);
+  assert.match(h, /data-osu-card="failed"[^]*<b data-osu-title>WizardOS update didn’t finish<\/b><span>Tries again tonight<\/span>/);
   assert.match(h, /data-osu="apply" >Try again</);
   const ask = await load(() => [200, { ...STATUS, always_auto: undefined, mode: 'ask', chosen: true, interrupted: true }]);
-  assert.match(ask.U.html(), /<b data-osu-title>Wizard OS update didn’t finish<\/b>[^]*>Try again</);
+  assert.match(ask.U.html(), /<b data-osu-title>WizardOS update didn’t finish<\/b>[^]*>Try again</);
   const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
-  assert.match(old.U.html(), /<b data-osu-title>Wizard OS update<\/b>/);
+  assert.match(old.U.html(), /<b data-osu-title>WizardOS update<\/b>/);
 });
 
 test('channel picker: hidden on an App Manager without channels; For testers / For everyone, ids unchanged', async () => {
@@ -183,11 +183,11 @@ test('choosing For testers POSTs only {channel: "latest"} and says For testers',
 
 test('a release that only swaps the interface image says it takes about 2 minutes (App Manager quick: true)', async () => {
   const { U } = await load((m, b) => m === 'POST' ? [200, { ...STATUS, started: true, quick: true }] : [200, { ...STATUS, always_auto: undefined, mode: 'ask', chosen: true, quick: true }]);
-  assert.match(U.cardHtml(), /<b data-osu-title>Wizard OS update<\/b><span>Takes about 2 minutes<\/span>[^]*>Install<\/button>/);
+  assert.match(U.cardHtml(), /<b data-osu-title>WizardOS update<\/b><span>Takes about 2 minutes<\/span>[^]*>Install<\/button>/);
   const c = ctx();
   U.act(btn('apply'), c);
   await tick(); await tick();
-  assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating Wizard OS · takes about 2 minutes']);
+  assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating WizardOS · takes about 2 minutes']);
   assert.equal(U.card().state, 'building');
   assert.equal(U.card().line, 'Takes about 2 minutes', 'no reconnect promise: only the interface restarts, then it offers Reload');
 });
@@ -199,7 +199,7 @@ test('without quick (older App Managers, or the full installer) the 10–20 minu
     const c = ctx();
     U.act(btn('apply'), c);
     await tick(); await tick();
-    assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating Wizard OS · takes 10–20 minutes']);
+    assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating WizardOS · takes 10–20 minutes']);
     assert.equal(U.card().line, 'Takes 10–20 minutes · Wizard reconnects by itself');
   }
 });
@@ -209,5 +209,5 @@ test('the App Manager decides at Install time: a quick:false reply keeps the lon
   const c = ctx();
   U.act(btn('apply'), c);
   await tick(); await tick();
-  assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating Wizard OS · takes 10–20 minutes']);
+  assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating WizardOS · takes 10–20 minutes']);
 });

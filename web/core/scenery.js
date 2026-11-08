@@ -1,4 +1,4 @@
-/* Wizard OS scenery gate (WOS_SCENERY_V1). Owns ALL decorative background motion of the phone shell:
+/* WizardOS scenery gate (WOS_SCENERY_V1). Owns ALL decorative background motion of the phone shell:
  * the skin canvases (core/skins.js registers a layer), Nebula's star twinkle (the starfield lives here) and the
  * Nebula drift (CSS @keyframes drift, running only under .device.scenery-live).
  *

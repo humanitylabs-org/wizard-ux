@@ -237,7 +237,7 @@ def run(pg, sx, sh, top, check, save, shot, PKG, ST, LOCK, FAKE, mz, open_host, 
     ev = wait_for(lambda: event(F, lambda e: e['status'] == 'sent'), 40)
     check(G, 'side: marker saved with the thread link', ev and ev.get('threadId') and ev.get('source') == 'side', ev)
     sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-    check(G, 'side: Back leaves Wizard OS open or returns to it (never a crash)', 'ai.wizards.os' not in sx('logcat -b crash -d'), top()[:120])
+    check(G, 'side: Back leaves WizardOS open or returns to it (never a crash)', 'ai.wizards.os' not in sx('logcat -b crash -d'), top()[:120])
     stop_meeting(F)
 
     # ------------------------------------------------ reverse: a meeting cannot start while the orb holds the mic

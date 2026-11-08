@@ -1,7 +1,7 @@
 /* Wizard UX core: who and when, from the Wizard Agent Service.
  *
  * Nothing about any particular owner, agent or place is built into the UX. At start it reads
- * GET /wizard/v1/bootstrap (Wizard OS settings.json + what this box can do) and keeps the last
+ * GET /wizard/v1/bootstrap (WizardOS settings.json + what this box can do) and keeps the last
  * answer on the device, so a reload paints instantly and offline still works.
  *
  *   WizConfig.agent()          the agent's display name ("Wizard" until the owner names it)

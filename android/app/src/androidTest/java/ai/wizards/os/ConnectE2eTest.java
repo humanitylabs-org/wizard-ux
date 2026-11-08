@@ -118,7 +118,7 @@ public class ConnectE2eTest {
                 while ((header = in.readLine()) != null && !header.isEmpty()) if (header.toLowerCase().startsWith("content-length:")) length = Integer.parseInt(header.substring(15).trim());
                 for (int i = 0; i < length; i++) if (in.read() < 0) break;
                 boolean shell = request.startsWith("GET /wizard-os-home/");
-                String html = "<!doctype html><title>Wizard OS</title><!-- core/ QA fixture -->"
+                String html = "<!doctype html><title>WizardOS</title><!-- core/ QA fixture -->"
                     + "<meta name='viewport' content='width=device-width, initial-scale=1'><body style='background:#05030c;color:#f3efff;font:22px sans-serif;padding-top:120px'>"
                     + "<!-- The app draws edge to edge and the real shell pads itself from the reported top inset; the fixture keeps its text clear of the status bar so accessibility reports it visible. -->"
                     + "<p id='place'>Fixture home</p><button onclick=\"document.getElementById('place').textContent='Fixture nested'\">Open nested</button>"

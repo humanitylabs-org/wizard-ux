@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Food device QA (runs on a Linux/KVM worker): Wizard OS (QA build) + a stand-in Grab app (tools/fake-grab, package
+"""Food device QA (runs on a Linux/KVM worker): WizardOS (QA build) + a stand-in Grab app (tools/fake-grab, package
 com.grabtaxi.passenger) on a fresh API35 emulator.
 
 usage: qa_usuals.py WOS_QA_APK FAKE_GRAB_APK WEB_DIR [OUT_DIR]
@@ -57,7 +57,7 @@ def sx(c):
         sh(ADB, 'connect', S); time.sleep(.5); result = sh(ADB, '-s', S, 'shell', c)
     return result
 def shot(name): (OUT / (name + '.png')).write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
-# No uiautomator: a dump re-binds UiAutomation and knocks Wizard OS's accessibility service (and its cover) off.
+# No uiautomator: a dump re-binds UiAutomation and knocks WizardOS's accessibility service (and its cover) off.
 # The stand-in Grab and the cover (debug builds) log their labels and centres instead.
 def _views(tag, prefix):
     lines = [l for l in sx(f'logcat -d -s {tag}:*').splitlines() if (': ' + prefix) in l and ': views |Not now@' not in l]  # the pop-up logs its own line
@@ -166,7 +166,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=30)
@@ -267,7 +267,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         (OUT / 'webview-provider.txt').write_text(sx('dumpsys webviewupdate'))
         out1 = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         out2 = sh(ADB, '-s', S, 'install', '-r', GRAB).strip().splitlines()[-1]
-        check('install Wizard OS QA + stand-in Grab', out1 == 'Success' and out2 == 'Success', out1 + ' / ' + out2)
+        check('install WizardOS QA + stand-in Grab', out1 == 'Success' and out2 == 'Success', out1 + ' / ' + out2)
         sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo {ORIGIN} > files/qa_home.txt; echo {ORIGIN} > files/qa_origin.txt'")
         sx(f'pm grant {PKG} android.permission.RECORD_AUDIO'); sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(8)
@@ -473,7 +473,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             check('F: …and sends nothing to Wizard', len(WRITES) == n0, WRITES[n0:])
             ready = wait_for(lambda: find(r'^Place order'), 90, 1)
             tap_text(r'^Cancel$'); time.sleep(2)
-            check('F: Cancel on the cover: nothing ordered, back in Wizard OS', grablog().count('ORDER PLACED') == 2 and PKG in top(), top())
+            check('F: Cancel on the cover: nothing ordered, back in WizardOS', grablog().count('ORDER PLACED') == 2 and PKG in top(), top())
             nm = pg.ev("window.WosUsuals.match('what is a good kra pao place')")
             check('F: ordinary talk about kra pao does not start an order', nm == '', nm)
             nm2 = pg.ev("window.WosUsuals.match('I want something else')")
@@ -487,7 +487,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             tap_text(r'^✕$'); time.sleep(2.5)
             pg.close(); pg = page()
             c1 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
-            check('F: ✕ (don\'t save) → back in Wizard OS, no new usual, no order', PKG in top() and c1 == c0 and grablog().count('ORDER PLACED') == 2, (top(), c0, c1))
+            check('F: ✕ (don\'t save) → back in WizardOS, no new usual, no order', PKG in top() and c1 == c0 and grablog().count('ORDER PLACED') == 2, (top(), c0, c1))
             # Food spells (James, 12 Oct): "order grab" / "order food" / "I want to order lunch" open Grab for a new order
             for said in ('Order grab', 'Order food.', 'I want to order lunch'):
                 pg.close(); pg = page(); n0 = len(WRITES)
@@ -518,7 +518,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sheet = pg.ev("!!document.querySelector('.us-sheet')")
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.2)
         after = pg.ev("!!document.querySelector('.us-sheet')")
-        check('G: Back closes the edit sheet and Wizard OS stays open', sheet and not after and PKG in top(), (sheet, after, top()))
+        check('G: Back closes the edit sheet and WizardOS stays open', sheet and not after and PKG in top(), (sheet, after, top()))
         crashed = sx('logcat -d -b crash')
         check('no Java crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
         errors = [e for e in EVENTS if e.get('method') == 'Runtime.exceptionThrown' or e.get('method') == 'Runtime.consoleAPICalled' and e.get('params', {}).get('type') == 'error' or e.get('method') == 'Log.entryAdded' and e.get('params', {}).get('entry', {}).get('level') == 'error']

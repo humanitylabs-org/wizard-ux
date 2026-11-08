@@ -1,4 +1,4 @@
-/* Wizard OS · AI Look up popover (ported from the reading app's Look up → "AI explanation").
+/* WizardOS · AI Look up popover (ported from the reading app's Look up → "AI explanation").
  *
  * Select words in a chat message, tap Look up in the selection menu (core/sel-menu.js): a compact opaque popover opens
  * under the words (above them when there is no room) and a fast model streams a 1-2 sentence plain explanation of the

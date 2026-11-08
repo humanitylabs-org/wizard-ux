@@ -14,7 +14,7 @@ import org.json.JSONObject;
 
 /**
  * Sends one recording to Wizard Voice Core (Tinfoil-attested Voxtral) through the private,
- * tailnet-only Wizard OS endpoint. The phone must be on Tailscale. Nothing else leaves the phone.
+ * tailnet-only WizardOS endpoint. The phone must be on Tailscale. Nothing else leaves the phone.
  */
 public final class Transcriber {
 
