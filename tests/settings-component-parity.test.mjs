@@ -42,7 +42,7 @@ test('desktop and phone show first-observed interface revision and installed ser
     assert.doesNotMatch(root.innerHTML, /<details data-settings-technical open|code this document loaded|the Android app update separately/);
     assert.match(root.innerHTML, /Wizard OS \(server\) 0\.3\.15/);
     assert.doesNotMatch(root.innerHTML, /data-settings-observed-full[^>]*>bbbb/);
-    assert.match(root.innerHTML, /data-osu-auto/); assert.doesNotMatch(root.innerHTML, /data-osu="(?:auto|ask)"/); assert.match(root.innerHTML, /data-osu="ch-latest"[^>]*>For testers</);
+    assert.match(root.innerHTML, /data-osu-auto/); assert.match(root.innerHTML, /data-osu="auto"[^>]*>Automatic<\/button><button type="button" data-osu="ask"[^>]*>Ask me</, 'Automatic / Ask me in both shells (wizard-app-manager#483)'); assert.match(root.innerHTML, /data-osu="ch-latest"[^>]*>For testers</);
   }
 });
 test('native data is rendered by the same registered About owner, never a shell-specific markup callback', async () => {

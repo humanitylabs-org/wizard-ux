@@ -1,4 +1,4 @@
-// Settings → Updates (always automatic, For testers / For everyone, installed vs latest, Update now) over the App Manager's owner-only
+// Settings → Updates (Automatic / Ask me, For testers / For everyone, installed vs latest, Update now) over the App Manager's owner-only
 // store-install listener, the same path and headers as the Store's Get.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,7 +35,7 @@ test('reads the App Manager through the Store listener and registers one Setting
   const h = U.html();
   assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>Wizard OS update<\/b><span>Installs tonight when it’s quiet<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Install now<\/button>/);
   assert.equal(U.cardHtml(), U.card() && h.slice(h.indexOf('<div class="osu-card"'), h.indexOf('</button></div>') + 15), 'the page leads with the same card Settings puts on top');
-  assert.doesNotMatch(h, /data-osu="(?:auto|ask)"|Ask me|role="radiogroup" aria-label="Updates"/, 'no Automatic / Ask me choice');
+  assert.doesNotMatch(h, /data-osu="(?:auto|ask)"|Ask me|role="radiogroup" aria-label="Updates"/, 'no Automatic / Ask me choice on an always_auto App Manager');
   assert.match(h, /<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates<\/span><p class="st-hint">Install by themselves overnight, never during a chat\.<\/p><\/div>/);
 });
 
@@ -48,23 +48,41 @@ test('up to date shows installed version and no Update button; a saved Ask me is
   assert.match(h, /Install by themselves overnight/);
 });
 
-test('an older App Manager with a saved Ask me offers only "Turn on automatic updates", never Ask me', async () => {
-  let state = { ...STATUS, always_auto: undefined, mode: 'ask', chosen: true };
+test('Automatic / Ask me is back (wizard-app-manager#483): Ask me never installs by itself, Install still works', async () => {
+  let state = { ...STATUS, always_auto: undefined, mode: 'ask', chosen: false };
   const { U, calls } = await load((method, body) => {
     if (method === 'GET') return [200, state];
-    state = { ...state, mode: body.mode }; return [200, state];
+    if (body.action) return [200, { ...state, started: true }];
+    state = { ...state, mode: body.mode, chosen: true }; return [200, state];
   });
-  assert.match(U.html(), /<button type="button" class="st-wide wz-button secondary" data-osu="auto" >Turn on automatic updates<\/button><p class="st-hint">Nothing installs until you tap Install\.<\/p>/);
-  assert.doesNotMatch(U.html(), /data-osu="ask"|Ask me/);
-  assert.match(U.cardHtml(), /<span>Takes 10–20 minutes<\/span>[^]*>Install<\/button>/, 'its card still says Install');
+  const h = U.html();
+  assert.match(h, /<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates<\/span><div class="st-seg" role="radiogroup" aria-label="Updates"><button type="button" data-osu="auto" role="radio" aria-checked="false" >Automatic<\/button><button type="button" data-osu="ask" role="radio" aria-checked="true" >Ask me<\/button><\/div><p class="st-hint">Nothing installs until you tap Install\.<\/p><\/div>/);
+  assert.doesNotMatch(h, /Turn on automatic updates/);
+  assert.match(U.cardHtml(), /<b data-osu-title>Wizard OS update<\/b><span>Takes 10–20 minutes<\/span>[^]*>Install<\/button>/, 'Ask me shows the new version and an Install button, never "tonight"');
+  assert.doesNotMatch(U.cardHtml(), /tonight/);
   const c = ctx();
-  assert.equal(U.act(btn('ask'), c), true); await tick();
-  assert.equal(calls.filter(x => x.method === 'POST').length, 0, 'an Ask me tap (old markup) sends nothing');
   assert.equal(U.act(btn('auto'), c), true); await tick(); await tick();
-  assert.deepEqual(calls.find(x => x.method === 'POST').body, { mode: 'auto' });
-  assert.deepEqual(c.t.at(-1), ['✓', 'Updates: automatic', 1800]);
-  assert.doesNotMatch(U.html(), /data-osu="auto"/);
+  assert.deepEqual(calls.filter(x => x.method === 'POST').at(-1).body, { mode: 'auto' });
+  assert.deepEqual(c.t.at(-1), ['✓', 'Updates: Automatic', 1800]);
+  assert.match(U.html(), /data-osu="auto" role="radio" aria-checked="true" >Automatic<[^]*Install by themselves overnight, never during a chat\./);
   assert.match(U.cardHtml(), /Installs tonight when it’s quiet[^]*>Install now<\/button>/);
+  assert.equal(U.act(btn('ask'), c), true); await tick(); await tick();
+  assert.deepEqual(calls.filter(x => x.method === 'POST').at(-1).body, { mode: 'ask' }, 'Ask me is sent again');
+  assert.deepEqual(c.t.at(-1), ['✓', 'Updates: Ask me', 1800]);
+  const posts = calls.filter(x => x.method === 'POST').length;
+  assert.equal(U.act(btn('ask'), c), true); await tick();
+  assert.equal(calls.filter(x => x.method === 'POST').length, posts, 'tapping the chosen option again sends nothing');
+  assert.equal(U.act(btn('apply'), c), true); await tick(); await tick();
+  assert.deepEqual(calls.filter(x => x.method === 'POST').at(-1).body, { action: 'apply' }, 'Install still installs on Ask me');
+});
+
+test('an App Manager that reports always_auto (0.3.107) shows no Ask me, because it would not keep it', async () => {
+  const { U, calls } = await load(() => [200, { ...STATUS, mode: 'auto', chosen: true }]);
+  assert.doesNotMatch(U.html(), /data-osu="(?:auto|ask)"|Ask me/);
+  const c = ctx();
+  for (const what of ['ask', 'auto']) assert.equal(U.act(btn(what), c), true);
+  await tick();
+  assert.equal(calls.filter(x => x.method === 'POST').length, 0);
 });
 
 test('an unpinned box says it is updated by hand and offers no Update', async () => {
@@ -136,11 +154,10 @@ test('channel picker: hidden on an App Manager without channels; For testers / F
   assert.doesNotMatch(h, />(?:Stable|Latest)</, 'the old channel names are gone from the screen');
 });
 
-test('an older App Manager (before #458) on For testers says its automatic updates only take For everyone releases', async () => {
+test('For testers on an App Manager with Automatic / Ask me (no always_auto) carries no "only For everyone" caveat', async () => {
   const { U } = await load(() => [200, { ...STATUS, always_auto: undefined, channel: 'latest', stable: '0.3.16' }]);
-  assert.match(U.html(), /Every new release as soon as it’s out\. Try new features in Appearance\. Updates install by themselves only for For everyone releases until your Wizard is updated\./);
-  const now = await load(() => [200, { ...STATUS, channel: 'latest', stable: '0.3.16' }]);
-  assert.doesNotMatch(now.U.html(), /only for For everyone/);
+  assert.match(U.html(), /Every new release as soon as it’s out\. Try new features in Appearance\.<\/p>/);
+  assert.doesNotMatch(U.html(), /only for For everyone/);
 });
 
 test('choosing For testers POSTs only {channel: "latest"} and says For testers', async () => {

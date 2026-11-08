@@ -1,12 +1,14 @@
-/* Wizard OS · Settings → About & updates: one update card, always-automatic updates, release channel; the Home pop-up.
+/* Wizard OS · Settings → About & updates: one update card, Automatic / Ask me, release channel; the Home pop-up.
  *
  * Two kinds of update, two names (Miguel, 27 Oct 2026). "Wizard OS" is only the box (App Manager, Agent Service,
  * apps): a 10–20 minute install that waits for a quiet moment, like a macOS update. The screens you use are the
  * "Interface": a new one is already on the box and only needs a Reload, so its notice never says "Wizard OS".
  *
  * The box updates the one documented way: the App Manager reruns the installer (`os.sh | bash -s start`) onto the
- * release the box's channel names. Updates are always automatic (Miguel + James, Nov 2026): overnight, skipping
- * while a chat run is active; Install now is the "now" escape. There is no Automatic / Ask me choice any more.
+ * release the box's channel names. Automatic does that overnight, skipping while a chat run is active (Install now
+ * is the "now" escape); Ask me never installs by itself and waits for a tap on Install. The always-automatic
+ * experiment (wizard-app-manager#465) was reverted (wizard-app-manager#483, James: "Automatic, Ask Me"): only an
+ * App Manager that still reports `always_auto: true` gets no choice, because it would not keep Ask me.
  * Channels keep their ids (stable / latest) but are shown as "For everyone" and "For testers": every merge to main
  * reaches For testers; a For testers release moves to For everyone after about 3 days with no release blocker.
  * New work ships behind off-by-default feature switches, which testers turn on in Settings › Appearance ("Try new
@@ -14,13 +16,12 @@
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
- *   GET                       {mode, chosen, always_auto (App Managers where updates are always automatic),
+ *   GET                       {mode, chosen, always_auto (only the 0.3.107 App Manager: updates always automatic),
  *                              installed, latest, update_available, unpinned, checked, installing,
  *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried),
  *                              quick (the release only swaps the interface image in place: about 2 minutes, not
  *                              the 10–20 minute installer; App Managers without it never send it)}
- *   POST {"mode":"auto"}       only on an older App Manager that still has a saved Ask me: "Turn on automatic
- *                              updates". The shell never offers Ask me.
+ *   POST {"mode":"auto"|"ask"} the owner's choice (kept across installer reruns)
  *   POST {"channel":"stable"|"latest"} release channel (DECISIONS #75): stable = "For everyone" (default),
  *                              latest = "For testers". GET then also returns {channel, stable};
  *                              `latest` is this box's channel release, and what Automatic installs (#458).
@@ -29,8 +30,8 @@
  * An unavailable route is reported in About; no install/policy controls are enabled without a valid response.
  *
  * One card, same look in every state; only the words change. Nothing to do = no card:
- *   behind    "Wizard OS update" · "Installs tonight when it’s quiet" · Install now
- *             (an older App Manager with a saved Ask me: "Takes 10–20 minutes" · Install)
+ *   behind    "Wizard OS update" · Automatic: "Installs tonight when it’s quiet" · Install now
+ *                                Ask me:    "Takes 10–20 minutes" · Install
  *   building  "Updating Wizard OS…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Install (disabled)
  *             (quick: "Takes about 2 minutes" in both; the new interface then offers its own Reload)
  *   failed    "Wizard OS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
@@ -57,7 +58,7 @@
   let st = null, at = 0, inflight = null, busy = '', off = false, issue = '';
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
-  // Updates install by themselves: always on App Managers that say so, and on older ones unless Ask me is saved.
+  // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
@@ -129,10 +130,10 @@
     if (Date.now() - at > FRESH) load();
     const auto = isAuto();
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
-    // An App Manager from before the channel fix (wizard-app-manager issue 458) installs only For everyone releases by itself, even on For testers: say so.
-    const oldAuto = auto && st.always_auto !== true && ch === 'latest' ? ' Updates install by themselves only for For everyone releases until your Wizard is updated.' : '';
-    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.${oldAuto}`}</p></div>` : '';
-    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${auto ? '<p class="st-hint">Install by themselves overnight, never during a chat.</p>' : `<button type="button" class="st-wide wz-button secondary" data-osu="auto" ${busy ? 'disabled' : ''}>Turn on automatic updates</button><p class="st-hint">Nothing installs until you tap Install.</p>`}</div>`;
+    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.`}</p></div>` : '';
+    // Automatic / Ask me (wizard-app-manager#483). The 0.3.107 App Manager (always_auto) would not keep Ask me: no choice there.
+    const choice = st.always_auto === true ? '' : seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]]);
+    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
   function pick(chan, ctx) {
@@ -161,7 +162,8 @@
     if (what === 'retry') { if (!inflight) { off = false; void load(true); ctx?.render?.(); } return true; }
     if (busy || !st || issue) return true;
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
-    if (what === 'ask' || (what === 'auto' && isAuto())) return true;   // Ask me is retired; auto only turns it on
+    if (what === 'ask' && st.always_auto === true) return true;   // that App Manager would answer Automatic anyway
+    if ((what === 'auto' || what === 'ask') && what === (isAuto() ? 'auto' : 'ask') && (st.chosen || st.always_auto === true)) return true;
     if (what === 'apply' && card()?.disabled) return true;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };
@@ -171,7 +173,7 @@
         else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
       } else {
         st = valid(d) ? d : { ...st, mode: what, chosen: true };
-        ctx?.toast?.('✓', 'Updates: automatic', 1800);
+        ctx?.toast?.('✓', st.mode === 'ask' ? 'Updates: Ask me' : 'Updates: Automatic', 1800);
       }
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
