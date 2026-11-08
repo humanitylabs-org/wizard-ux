@@ -15,7 +15,7 @@ function harness(rows, { layout = 'status', snooze = false } = {}) {
     window: { WizConfig: { dayStart: n => n - n % 864e5 }, WosSkinHost: { snoozeOrder: snooze ? 'last' : '' } },
     snoozeLast: () => snooze, seenKeyOf: s => s.id, assistantAt: s => s.previewAt, hasNew: () => true, WEEK: 7 * 864e5 });
   vm.runInContext(block(live, '  const DAY = 864e5;', '  // Agent Service owns box-wide preferences.') + block(live, '  const sectionTime =', '  async function fetchDispositions()') + '\nthis.group = groupWork;', c);
-  vm.runInContext(`this.L = { deferred: {}, ok: true, sessionsFor: () => input, unified: () => input, seenOf: () => ({}), ${block(live, "    groups(agent = '') {", '    async refresh() {')} ${line(live, '    visibleUnread(rows)')} };`, vm.createContext(Object.assign(c, { input: rows })));
+  vm.runInContext(`this.L = { deferred: {}, ok: true, sessionsFor: () => input, unified: () => input, seenOf: () => ({}), ${block(live, "    groups(agent = '') {", '    async refresh() {')} ${line(live, '    visibleUnread(rows)')} ${line(live, '    workGroups(sessions, now)')} };`, vm.createContext(Object.assign(c, { input: rows })));
   vm.runInContext(block(chats, '  const WORKING_ST =', '\n  // Same sections') + '\n' + ['const deferredOf =', 'const attOf =', 'const waitsOn ='].map(t => line(chats, t)).join('\n') + '\nthis.needs = ({' + line(chats, '    needs: {') + '}).needs.test; this.waits = waitsOn; this.runWorking = isWorking;', c);
   vm.runInContext(block(nav, '  function chatsCount(live) {', '  function refreshChats(') + '\nthis.orbCount = chatsCount;', c);
   return c;

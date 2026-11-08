@@ -26,11 +26,20 @@
   }
   // One projection for every Chats/Ready pill; list membership remains a separate workflow concern.
   // Reuse the loaded unified list and canonical visibility/read rules: no reads, receipts or migration here.
+  // Unread rows that are still Working stay out of the Chats count; Working is counted on its own.
   function chatsCount(live) {
-    const threads = live?.ok ? live.visibleUnread(live.unified()).length : 0;
+    const threads = chatUnreadCount(live);
     // Preserve app notification routing, but never badge read/snoozed inbox items as Ready did.
     const inbox = window.WosBell?.unreadCount?.() || 0;
     return threads + inbox;
+  }
+  function chatUnreadCount(live) {
+    if (!live?.ok || typeof live.unified !== 'function' || typeof live.visibleUnread !== 'function' || typeof live.workGroups !== 'function') return 0;
+    try {
+      const rows = live.unified(), unread = live.visibleUnread(rows);
+      const working = new Set(live.workGroups(rows).working || []);
+      return Math.max(0, Array.isArray(unread) ? unread.filter(row => !working.has(row)).length : 0);
+    } catch (_) { return 0; }
   }
   function refreshChats(live, id = 'wizard') {
     setCount(id, chatsCount(live), !!window.WosBell?.unreadCount?.() && !!window.WosBell?.readyMore?.());
@@ -70,5 +79,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatsCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatUnreadCount, chatsCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
 })();

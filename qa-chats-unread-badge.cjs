@@ -25,11 +25,13 @@ async function settle(p) {
 async function snap(name, phone) {
   await settle(page); const file = path.join(OUT, name + '.png');
   const state = await page.evaluate(() => ({ shell: document.documentElement.dataset.shell, skin: document.documentElement.dataset.skin,
-    count: WizCore.workspaceNav.counts.wizard || 0, ready: WizLive.workGroups().ready.length,
+    count: WizCore.workspaceNav.counts.wizard || 0, groups: Object.fromEntries(Object.entries(WizLive.groups()).map(([key, rows]) => [key, rows.length])),
     unread: WizLive.visibleUnread(WizLive.unified()).map(s => s.id), title: document.title,
+    statusCounts: document.querySelector('#moons') ? { ...document.querySelector('#moons').dataset } : null,
     badges: [...document.querySelectorAll('#orbBadge, .dbg, .dw-badge, [data-badge="wizard"]')].map(n => ({ text: n.textContent, hidden: n.hidden, box: n.getBoundingClientRect().toJSON() })),
     width: innerWidth, height: innerHeight, touch: navigator.maxTouchPoints, ua: navigator.userAgent }));
   assert.equal(state.shell, phone ? 'phone' : 'desktop'); if (phone) assert(state.touch > 0 && /Android/.test(state.ua));
+  if (phone) assert.deepEqual(state.statusCounts, { needs: String(state.groups.needs), working: String(state.groups.working), ready: String(state.groups.ready) }, 'orb publishes uncapped authoritative status counts');
   if (state.count > 0) assert(state.badges.some(b => !b.hidden && b.box.width > 0 && b.box.height > 0 && b.text.trim() === String(state.count)), 'positive app count must reach a rendered shell badge');
   await page.screenshot({ path: file });
   const b = fs.readFileSync(file); assert.equal(b.readUInt32BE(16), state.width); assert.equal(b.readUInt32BE(20), state.height);
@@ -155,6 +157,13 @@ async function tapThread(id, phone) {
         await refresh(); await expectCount(page, 2);
         assert.deepEqual(await page.evaluate(() => WizLive.visibleUnread(WizLive.unified()).map(s => [s.id, s.attention?.state]).sort()), [['badge-done', 'done'], ['badge-fyi', 'fyi']], 'both real done/FYI states must survive normalization');
         await snap(mode + '-unread-two-nebula', phone);
+      });
+      await check(mode + ': unread Working activity stays out of the Chats badge', async () => {
+        s.rows.push(raw('badge-working', at, 'none', { status: 'running' }));
+        await refresh();
+        assert.equal(await page.evaluate(() => WizLive.workGroups().working.some(row => row.id === 'badge-working')), true);
+        assert.equal(await page.evaluate(() => WizLive.visibleUnread(WizLive.unified()).some(row => row.id === 'badge-working')), true);
+        await expectCount(page, 2);
       });
       await check(mode + ': trusted reading clears badge despite Ready inventory persisting', async () => {
         await tapThread('badge-done', phone); await expectCount(page, 1);
