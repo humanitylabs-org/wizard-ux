@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 const model = readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8');
-for (const agent of ['', 'profile', 'container', 'restricted']) test(`stopped tracker dots, strip and live subscriber: ${agent || 'main'}`, async () => {
+for (const agent of ['']) test(`stopped tracker dots, strip and live subscriber: ${agent || 'main'}`, async () => {
   const row = { status: 'completed' }; let subscriber, paints = 0;
   const doc = { documentElement: { dataset: { tweaks: 'wizard/thread-tracker' } }, addEventListener() {}, querySelectorAll() { paints++; return []; } };
   const win = { addEventListener() {}, dispatchEvent() {}, WizLive: { session: () => row, sessionFor: () => row, onChange(fn) { subscriber = fn; } } };

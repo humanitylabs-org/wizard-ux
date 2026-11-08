@@ -12,7 +12,8 @@
  * GET …/counts → { threads: { '<agent>/<thread>': counts } }. Seen is stored on the box, so phone and desktop agree.
  * Everything paints from local state first (a tap never waits on the box); the box then confirms.
  *
- *   WosThreadTracker.on() · load(sid, agent) · stripHtml(sid, agent) · dots(sid, agent) · dotsNode(sid, agent) · loadCounts()
+ * Main builder agent only: another agent's thread gets no strip, dots, Reply or Resume (onFor(agent) is false).
+ *   WosThreadTracker.on() · onFor(agent) · load(sid, agent) · stripHtml(sid, agent) · dots(sid, agent) · dotsNode(sid, agent) · loadCounts()
  *   · click(e, { sid, agent, jump, resume }) · itemFor(message) · isOpen() · close() · repaint()
  * Stopped rows (marked running, nothing behind them) carry Resume: resume(text) is the host's ordinary owner send,
  * the row spins on the tap's frame and goes back to stopped only if that send was refused.
@@ -23,6 +24,10 @@
   const BASE = '/wizard/v1/thread-items';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const on = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(ID); } catch (_) { return false; } };
+  // The main builder agent's threads only (James, 9 Nov 2026: "This is for our builder agent, which wouldn't apply to
+  // all agents"). Philosopher and every other agent's threads and rows render exactly as with the tweak off.
+  const mainAgent = agent => !agent || agent === 'hermes';
+  const onFor = agent => on() && mainAgent(agent);
   const listWorking = (sid, agent = '') => {
     const session = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
     return !!window.WizChatsListModel?.isListWorking(session);
@@ -81,7 +86,7 @@
   }
   // The transcript Chats just read, for every agent (routed threads keep no stored copy): chats.js hands its turns.
   const shownUserAt = new Map();
-  function shown(sid, agent, turns) { const t = userAtOfTurns(turns); if (Number.isFinite(t)) shownUserAt.set(key(sid, agent || ''), t); }
+  function shown(sid, agent, turns) { if (!mainAgent(agent)) return; const t = userAtOfTurns(turns); if (Number.isFinite(t)) shownUserAt.set(key(sid, agent || ''), t); }
   function latestUserAt(rows) {
     if (!Array.isArray(rows) || !rows.length || !window.WosChat?.parseRows) return NaN;
     if (!userAtOf.has(rows)) {
@@ -182,7 +187,7 @@
     return list;
   }
   async function load(sid, agent = '') {
-    if (!on() || !sid || sid === '__new__') return;
+    if (!onFor(agent) || !sid || sid === '__new__') return;
     const k = key(sid, agent), cur = threads.get(k);
     if (cur?.loading || (cur && Date.now() - cur.at < 2500)) return;
     threads.set(k, { items: cur?.items || [], at: Date.now(), loading: true });
@@ -204,7 +209,8 @@
     try {
       const r = await req(`${BASE}/counts`);
       if (r.ok) {
-        const next = (await r.json())?.threads || {};
+        const all = (await r.json())?.threads || {}, next = {};
+        for (const [k, c] of Object.entries(all)) if (mainAgent(splitKey(k)[1])) next[k] = c; // an older box still counts every agent
         // A thread open in this shell knows its own latest; keep that over a poll that raced a tap.
         // Only a tap the box has not confirmed yet is kept over the poll; otherwise the poll is the newer truth, and a
         // loaded thread whose tally moved is reloaded so its strip follows.
@@ -283,14 +289,14 @@
     return headRow + body;
   }
   function stripHtml(sid, agent = '') {
-    if (!on() || !sid || sid === '__new__') return '';
+    if (!onFor(agent) || !sid || sid === '__new__') return '';
     const inner = innerHtml(sid, agent);
     if (!inner) return '';
     const k = key(sid, agent);
     return `<div class="tt-strip${openKeys.has(k) ? ' open' : ''}" data-part="thread-tracker" data-tt-strip="${esc(sid)}" data-tt-agent="${esc(agent || '')}">${inner}</div>`;
   }
   function dots(sid, agent = '') {
-    if (!on()) return '';
+    if (!onFor(agent)) return '';
     const k = key(sid, agent), loaded = threads.get(k);
     const c = loaded?.items.length ? tally(project(k, loaded.items)) : counts[k];
     if (!c) return '';
@@ -336,7 +342,7 @@
     return strip?.getClientRects().length ? Math.max(base, strip.getBoundingClientRect().bottom + 8) : base;
   }
   function watch(nb, { sid, agent = '', active } = {}) {
-    if (!nb || typeof IntersectionObserver !== 'function') return;
+    if (!nb || typeof IntersectionObserver !== 'function' || !mainAgent(agent)) return;
     let v = views.get(nb);
     if (!v || v.sid !== sid || v.agent !== agent) {
       v?.io.disconnect();
@@ -400,7 +406,7 @@
   // (James, 8 Nov 2026: threads were vanishing into Archive after he dismissed their last open item).
   function markSeen(sid, agent, ids, defer = false, versions = null) {
     const k = key(sid, agent), t = threads.get(k);
-    if (!t) return;
+    if (!t || !mainAgent(agent)) return;
     const expected = new Map(t.items.filter(i => ids.includes(i.id)).map(i => [i.id, { id: i.id, updated_at: i.updated_at }]));
     const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
     const mine = seenLocally.get(k) || new Set(); seenLocally.set(k, mine);
@@ -449,7 +455,7 @@
   // Pin server versions, never compare the phone clock with server timestamps.
   // A late reload can only acknowledge versions known all-done at the send tap.
   function applySendSeen(sid, agent, defer = false) {
-    const k = key(sid, agent), send = sendSnapshots.get(k); if (!on() || !send || (!send.committed && !defer)) return;
+    const k = key(sid, agent), send = sendSnapshots.get(k); if (!onFor(agent) || !send || (!send.committed && !defer)) return;
     const ids = [];
     for (const g of groupsOf(threads.get(k)?.items || [])) {
       if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && send.versions.has(`${i.id}@${i.updated_at}`))) continue;
@@ -460,7 +466,7 @@
     if (ids.length) return markSeen(sid, agent, ids, defer, send.versions);
   }
   function beforeSend(sid, agent = '', at = Date.now(), { defer = false } = {}) {
-    if (!on() || !sid || sid === '__new__' || !Number.isFinite(at)) return;
+    if (!onFor(agent) || !sid || sid === '__new__' || !Number.isFinite(at)) return;
     const k = key(sid, agent), prior = sendSnapshots.get(k);
     const versions = new Set(groupsOf(threads.get(k)?.items || [])
       .filter(g => g.kind === 'done' && g.members.every(i => i.state === 'done' && Number.isFinite(i.updated_at)))
@@ -545,7 +551,7 @@
     node.classList.remove('tt-flash'); void node.offsetWidth; node.classList.add('tt-flash');
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
-  window.WosThreadTracker = Object.freeze({ ID, on, load, shown, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
+  window.WosThreadTracker = Object.freeze({ ID, on, onFor, load, shown, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
   // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
   // Reuse the session list's lifecycle notifications; never add a liveness poll.
   window.WizLive?.onChange?.(repaint);

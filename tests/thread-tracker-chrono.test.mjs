@@ -24,7 +24,7 @@ const listOrder = html => order(html.split('tt-ackg')[0]);
 // The box lists newest change first; updated_at moves on every state edit, so it must never order the list.
 const it = (id, state, at, extra = {}) => ({ id, title: id, state, message_id: String(at), at, created_at: at, updated_at: 9000 - at, seen_at: 0, seen: false, ...extra });
 
-for (const agent of ['', 'profile']) {
+for (const agent of ['']) { // main builder agent only (James, 9 Nov 2026)
   test(`mixed statuses render oldest reply first, not by status: ${agent || 'main'}`, async () => {
     const items = [it('red', 'blocked', 400), it('amber', 'needs_you', 300), it('stopped', 'running', 200), it('green', 'done', 100)];
     const { T } = await fixture(items, { agent });
