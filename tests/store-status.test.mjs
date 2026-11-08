@@ -71,11 +71,12 @@ test('Alpha first, deterministic name/id/repo remainder, shell capability is exc
 // Beta discovery uses link install provenance (UX#1188); this shared status primitive
 // must compare the next catalog head with the exact WAM resource, not its display label.
 const beta = {id:'friend-journal',repo:'friend/journal',commit:pin('c'),version:'1.1.0',source:'beta',channel:'standard'};
-const linked = {id:'journal-preview',app_id:beta.id,repo:beta.repo,commit:pin('b'),version:'1.0.0',source:'link'};
-test('next Beta head and identical link control both offer Update for the WAM-installed resource',()=>{
+// Scalar subset of registry.build (wam/registry.py:120-148): no app_id or channel.
+const linked = {id:beta.id,name:'Journal',type:'view',repo:beta.repo,commit:pin('b'),version:'1.0.0',source:'link',status:'running',urn:'friend-journal:wizard'};
+test('registry-shaped same-ID Beta/link metadata offers Update (status only)',()=>{
  const snapshot={wam:wamMetadata({apps:[linked]}),shell:[],complete:true};
  const i=resolveInstalled(beta,snapshot,[]);
- assert.equal(i.id,'journal-preview'); assert.equal(i.repo,beta.repo); assert.equal(i.source,'link');
+ assert.equal(i.id,beta.id); assert.equal(i.repo,beta.repo); assert.equal(i.source,'link');
  for(const explicit of [false,true]) {
   assert.equal(releaseState({...beta,source:'link',channel:undefined},i,explicit,true),'update');
   assert.equal(releaseState(beta,i,explicit,true),'update');
@@ -84,6 +85,7 @@ test('next Beta head and identical link control both offer Update for the WAM-in
 });
 test('Beta/link compatibility is symmetric and accepts normalized explicit repository identity',()=>{
  assert.equal(releaseState({...beta,source:'link'},{...linked,source:'beta'},true,true),'update');
+ // Direct releaseState normalization control only: URL-shaped repos are rejected by wamMetadata.
  assert.equal(releaseState(beta,{...linked,repo:'https://github.com/Friend/Journal'},true,true),'update');
 });
 test('Beta/link compatibility never infers repository identity from an app ID or absent repository',()=>{

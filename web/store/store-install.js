@@ -1,7 +1,9 @@
 /* Store's exact release install transaction, shared with the app setup checklist.
  * IDs select a server-authorized release; never accept arbitrary install URLs or refs. */
+// Beta is discovery, not an Alpha subscription. Keep this shared helper identical to UX#1188.
+export const selectionSource = source => source === 'beta' ? 'link' : source;
 export async function installRelease(a, { base = new URL('../', import.meta.url) } = {}) {
-  const selection = { source: a.source, repo: a.repo, commit: a.commit, operation: a.operation || 'install' };
+  const selection = { source: selectionSource(a.source), repo: a.repo, commit: a.commit, operation: a.operation || 'install' };
   const endpoint = new URL('store-install/' + encodeURIComponent(a.id), base).href;
   const r = await fetch(endpoint, { method: 'POST', credentials: 'same-origin', cache: 'no-store',
     headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
