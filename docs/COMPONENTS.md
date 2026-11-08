@@ -26,7 +26,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Photo/video viewer | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` |
 | Same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) |
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin |
-| Skin/tokens/mode | `WizardApp.theme.get / onChange`, `--wz-*` roles |
+| Skin/tokens/mode | `WizardApp.theme.get / onChange`, `--wz-*` roles (owner bubble: `--wz-owner-message`, `--wz-owner-message-edge`, `--wz-on-owner-message`) |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback |
 | Connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (local help/checks) |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
@@ -61,7 +61,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, notification placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New chat open after send (`WosSkinHost.routeShows`); single-app host; pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
-| Composer mic, retry, model | `WosChatPower` (`chat-power.js`); layouts `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels`; `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
+| Composer mic, retry, model | `WosChatPower` (`chat-power.js`; thread reading place: growth never pulls the reader down, `follow(wid, pin)` for his send / ↓ Latest); layouts `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels`; `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `md`, `copyRich`, `viewer`; contained initial fit / zoom-pan / keys+native seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
