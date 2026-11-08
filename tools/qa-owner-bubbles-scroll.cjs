@@ -19,7 +19,7 @@ const check = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 
       try {
         await page.evaluate(sid => (window.__wux ? window.__wux.openThread(sid) : window.__wos.openWizardThread(sid)), 'tt-main');
         await page.waitForSelector('.ch-thread .msg.u .bub', { timeout: 20000 });
-        await page.waitForTimeout(1800);
+        await page.waitForTimeout(3600); // past the opening settle (opening still lands at the bottom, by design)
         const col = await page.evaluate(() => {
           const vis = s => [...document.querySelectorAll(s)].filter(n => n.getClientRects().length).pop();
           const u = vis('.ch-thread .msg.u .bub'), a = vis('.ch-thread .msg.a .bub'), cs = n => getComputedStyle(n);
