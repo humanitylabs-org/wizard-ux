@@ -1,0 +1,30 @@
+PASS nebula: no pin button on chat rows by default
+PASS nebula: row menu has Pin {"labels":["Rename","Pin","Add to a Space…","Snooze","Done"],"pinVisible":true}
+PASS nebula: row menu has no Open {"labels":["Rename","Pin","Add to a Space…","Snooze","Done"],"pinVisible":true}
+PASS nebula: Show pin buttons tweak is listed and off {"id":"wizard/pin-buttons","name":"Show pin buttons","description":"A pin button on every chat. Pin is always in a chat's menu","author":"wizard","builtin":false,"on":false}
+PASS obsidian: no pin button on chat rows by default
+PASS obsidian: row menu has Pin {"labels":["Rename","Pin","Add to a Space…","Snooze","Done"],"pinVisible":true}
+PASS obsidian: row menu has no Open {"labels":["Rename","Pin","Add to a Space…","Snooze","Done"],"pinVisible":true}
+PASS obsidian: Show pin buttons tweak is listed and off {"id":"wizard/pin-buttons","name":"Show pin buttons","description":"A pin button on every chat. Pin is always in a chat's menu","author":"wizard","builtin":false,"on":false}
+PASS phone hold: shared menu has Pin and no Open ["Rename","Pin","Add to a Space…","Snooze","Done"]
+PASS phone swipe: shared menu has Pin and no Open ["Rename","Pin","Add to a Space…","Snooze","Done"]
+PASS menu Pin pins the chat and closes the menu
+PASS pin write intercepted and read back (never reached a real Wizard)
+PASS Show pin buttons on: every row gets its pin button [4,4]
+PASS Show pin buttons off again: buttons gone
+PASS novairecito keeps pin buttons as its look [4,4]
+PASS novairecito menu: Pin, no Open {"labels":["Rename","Pin","Add to a Space…","💬\nChoose emoji","Snooze","Done"],"pinVisible":true}
+PASS sepia keeps pin buttons as its look [4,4]
+PASS sepia menu: Pin, no Open {"labels":["Rename","Pin","Add to a Space…","💬\nChoose emoji","Snooze","Done"],"pinVisible":true}
+PASS leaving Novairecito family restores the unchanged device tweak choice
+PASS routed agent: its chats open
+PASS routed agent: no pin button on its rows by default
+PASS routed agent: row menu has Pin and no Open {"labels":["Rename","Pin","Add to a Space…","Snooze","Done"],"pinVisible":true}
+PASS routed agent: menu Pin pins its thread
+PASS routed agent: pin write intercepted and read back ["qa_pin_b","qa_pin_r1"]
+PASS desktop grove: no pin button on rows
+PASS desktop grove: right-click menu has Pin and no Open ["Rename","Pin","Add to a Space…","Snooze","Done"]
+PASS desktop landscapes: no pin button on rows
+PASS desktop landscapes: right-click menu has Pin and no Open ["Rename","Pin","Add to a Space…","Snooze","Done"]
+PASS no page errors []
+29/29 passed
