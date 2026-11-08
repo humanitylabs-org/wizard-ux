@@ -16,14 +16,14 @@
  */
 (() => {
   'use strict';
-  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
-  // Colours are stored without '#' so this generated table holds no literal colour (style gate); added back here.
-  const HOUSE = Object.fromEntries(Object.entries(/*HOUSE*/).map(([id, [glyph, hex]]) => [id, [glyph, '#' + hex]]));
+  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents', 'hermes']);
+  const colour = value => `#${value}`;
+  const HOUSE = Object.fromEntries(Object.entries(/*HOUSE*/).map(([id, [glyph, color]]) => [id, [glyph, colour(color)]]));
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries(/*HOUSE_ALIASES*/)) HOUSE[id] = HOUSE[old];
 
   const BRAND = /*BRAND*/;
-  const FALLBACK = /*FALLBACK*/;
+  const FALLBACK = /*FALLBACK*/.map(colour);
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
   // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).
   const ICON = /^\/(?!\/)[A-Za-z0-9._~\/-]+\.(?:svg|png|webp)$/;

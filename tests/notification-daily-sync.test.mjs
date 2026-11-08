@@ -84,7 +84,7 @@ test('offline: the choice holds on this device and is sent once Notifications an
 
 test('the fourth choice is called Morning report and wears its coffee cup', () => {
   const h = boot().WosBell.picker('notifications');
-  assert.match(h, /data-notify-to="daily"[^>]*><svg class="wos-route-ic wos-route-mr" viewBox="0 0 512 512" aria-hidden="true"><path d="M96 235H349[^]*?<span>Morning report<\/span>/);
+  assert.match(h, /data-notify-to="daily"[^>]*><svg class="wos-route-ic wos-route-mr" viewBox="0 0 512 512" aria-hidden="true"><path d="M95 233H349[^]*?<span>Morning report<\/span>/);
 });
 
 test('the coffee cup is the Morning Report sigil from sigils.css', () => {

@@ -4,4 +4,4 @@ html[data-tweaks~="wizard/two-orbs"][data-layout="two-orb"] #device:not(.orb-cor
   background: #fff;
   box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 4px 16px rgba(0,0,0,.25);
 }
-html[data-tweaks~="wizard/two-orbs"][data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi, svg) { filter: brightness(0); }
+html[data-tweaks~="wizard/two-orbs"][data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi:not(.sg-hermes), svg) { filter: brightness(0); }
