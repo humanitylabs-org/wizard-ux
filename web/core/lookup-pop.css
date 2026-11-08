@@ -1,0 +1,25 @@
+/* Wizard OS · AI Look up popover (core/lookup-pop.js). Wisdom's "AI explanation" popover in Appearance v1 tokens:
+ * fully opaque panel (--wz-panel over --wz-base), follows the live skin; dark standalone fallback in the var() defaults.
+ * Selectable/copyable text is opted in with the chat selection rule in core/chats.css. */
+.wos-lookup {
+  position: fixed; left: 0; top: 0; z-index: 250; box-sizing: border-box; max-height: calc(100vh - 24px); overflow: auto; overscroll-behavior: contain;
+  padding: 12px 14px 10px; border-radius: var(--wz-radius, 14px); text-align: left;
+  background: var(--wz-panel, #1f1a30); border: 1px solid var(--wz-border, rgba(205, 190, 255, .24));
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .55), 0 0 0 1px rgba(0, 0, 0, .25);
+  color: var(--wz-text, #f3efff); font: 15px/1.42 var(--wz-font-ui, system-ui, sans-serif);
+  animation: wos-lk-in 140ms var(--wz-ease, ease-out);
+}
+.wos-lookup[hidden] { display: none; }
+@keyframes wos-lk-in { from { transform: translateY(4px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .wos-lookup { animation: none; } }
+.wos-lookup .lk-term { font: 650 15px/1.3 var(--wz-font-ui, system-ui, sans-serif); color: var(--wz-text, #f3efff); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wos-lookup .lk-body { margin: 6px 0 0; font: 400 16px/1.45 var(--wz-font-reading, var(--wz-font-ui, system-ui, sans-serif)); color: var(--wz-text, #f3efff); overflow-wrap: anywhere; }
+.wos-lookup[data-state="loading"] .lk-body, .wos-lookup[data-state="streaming"] .lk-body { color: var(--wz-text-secondary, #b9b0d8); }
+.wos-lookup[data-state="error"] .lk-body { color: var(--wz-text-secondary, #b9b0d8); }
+.wos-lookup small { display: block; margin-top: 9px; color: var(--wz-text-muted, #8f86b4); font: 700 10.5px/1 var(--wz-font-ui, system-ui, sans-serif); letter-spacing: .12em; text-transform: uppercase; }
+.wos-lookup .lk-retry {
+  display: inline-flex; align-items: center; min-height: 32px; margin-left: 4px; padding: 0 12px; border-radius: var(--wz-radius-pill, 20px);
+  border: 1px solid var(--wz-border, rgba(205, 190, 255, .24)); background: var(--wz-accent-soft, rgba(185, 155, 255, .16)); color: var(--wz-accent, #b99bff);
+  font: 650 13px/1 var(--wz-font-ui, system-ui, sans-serif); -webkit-tap-highlight-color: transparent;
+}
+.wos-lookup .lk-retry:active { background: var(--wz-border, rgba(205, 190, 255, .24)); }

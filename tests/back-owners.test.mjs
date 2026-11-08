@@ -11,7 +11,7 @@ function fixture() {
  const module=(global,name,property='isOpen',method='back')=>{const o=w[global]||={};Object.defineProperty(o,property,{configurable:true,get:()=>state.open===name});o[method]=()=>{hits.push(name);state.open='';return true;};return o;};
  module('WosWelcome','welcome','active');module('WosOrbSwitcher','orb-picker');module('WizShareWizard','share-wizard');
  module('WizHomeScreenApps','pin-sheet','state');Object.defineProperty(w.WizHomeScreenApps,'state',{get:()=>({open:state.open==='pin-sheet'})});
- module('WosTour','tour','helpOpen');module('WosSelMenu','selection','state');Object.defineProperty(w.WosSelMenu,'state',{get:()=>({open:state.open==='selection'})});
+ module('WosTour','tour','helpOpen');module('WosLookup','lookup');module('WosSelMenu','selection','state');Object.defineProperty(w.WosSelMenu,'state',{get:()=>({open:state.open==='selection'})});
  module('WosContextMenu','context');
  for(const [m,n] of [['WosShareSheet','share'],['WosDownloads','downloads'],['WosAppRoute','route'],['WosAppSetup','setup'],['WosBoomerang','reminder']]) {module(m,n);Object.defineProperty(w[m],'isOpen',{value:()=>state.open===n});}
  const viewer=module('viewer','viewer');Object.defineProperty(viewer,'isOpen',{value:()=>state.open==='viewer'||state.open==='viewer-menu'});Object.defineProperty(viewer,'state',{get:()=>({menu:state.open==='viewer-menu'})});viewer.close=()=>{hits.push(state.open);state.open='';};
@@ -39,7 +39,7 @@ test('phone history/native Back and desktop Escape install the identical shared 
  assert.match(desktop,/escapeOverlay: close => escapeBack\.push\(close\)/);
 });
 test('enumerate EVERY registered shared Back handler: actual desktop Escape reaches each exactly once',()=>{
- const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources'];
+ const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources'];
  assert.deepEqual(Array.from(f.stack.names()).sort(),expected.sort());
  for(const name of expected) {f.state.open=name;const n=f.hits.length;f.press();assert.deepEqual(f.hits.slice(n),[name],name);}
 });

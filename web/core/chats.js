@@ -1751,6 +1751,16 @@ window.WizCore.chats = function createChats(H) {
     const it = sendChat(id, text, how, null, { sid, away: true, instructions: viewContext(id, how), ...(scoped ? { agent: scoped } : {}) });
     PW?.follow(id); return it;
   }
+  // AI Look up (core/lookup-pop.js): which agent/thread the words sit in. Private agents, private threads and Incognito
+  // never use a cloud model, so the selection menu hides Look up there (the Agent Service refuses them too).
+  function lookupScope(id) {
+    const w = W[id]; if (!w) return null;
+    const sid = w.thread && w.thread !== '__new__' ? String(w.thread) : '';
+    const agent = winAgent(w) || (sid && LIVE.agentOf ? LIVE.agentOf(sid) : '') || '';
+    const priv = !!INC?.active(id) || !!(sid && LIVE.isPrivate?.(sid)) || !!(agent && AGS()?.isPrivate(agentRec(agent)));
+    let title = ''; try { title = winTitle(w) || ''; } catch (e) {}
+    return { session: sid, agent, private: priv, frame: `${agentName(agent)}${title ? ' · ' + title : ''}`.slice(0, 80) };
+  }
   function agentRec(id) {
     const A = AGS();
     if (!id) { const d = A?.get(A.defaultId()); return d || { id: 'hermes', label: window.WizConfig.agent(), privacy: 'standard', appearance: { glyph: 'wizard' }, model: {}, is_default: true }; }
@@ -3520,7 +3530,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
