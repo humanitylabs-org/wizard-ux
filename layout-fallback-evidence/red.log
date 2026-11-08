@@ -1,0 +1,26 @@
+node:internal/process/promises:391
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok(body.includes('QA synthetic layout callback fault'))
+
+    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:171:15
+    at RouteHandler._handleInternal (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:61687:11)
+    at RouteHandler._handleImpl (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:61654:29)
+    at /srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:61648:59
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at _Zone.run (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:11049:40)
+    at RouteHandler.handle (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:61648:38)
+    at _BrowserContext._onRoute (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:63919:46)
+    at Proxy.<anonymous> (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:63779:63)
+    at Proxy._callHandler (/srv/work/morning-diff-deps-r4/node_modules/playwright-core/lib/coreBundle.js:11647:33) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '=='
+}
+
+Node.js v20.19.2

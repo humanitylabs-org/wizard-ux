@@ -1,0 +1,3 @@
+/* Thread tracker: the strip, the dots and Reply are drawn by core/thread-tracker.js + chats.js while this tweak is on
+ * (html[data-tweaks~="wizard/thread-tracker"]); nothing is drawn, requested from the box, or asked of the agent otherwise. */
+html[data-tweaks~="wizard/thread-tracker"] { --wos-thread-tracker: on; }

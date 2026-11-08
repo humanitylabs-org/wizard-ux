@@ -1,0 +1,3116 @@
+{
+  "synthetic": true,
+  "source": "4b1a5f1deab9bb3971c0fead465463ae6fd94883",
+  "modes": [
+    "restored-apps-chat"
+  ],
+  "cases": [
+    {
+      "mode": "restored-apps-chat",
+      "phase": "fresh",
+      "checks": [
+        "AI apps sidebar + populated chats list; no Classic menubar; SDK tools in five retained frames; restored thread; companion; pins"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.153Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.155Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.257Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.258Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.424Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.425Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.426Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:36.427Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.557Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.559Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "result": {
+        "samples": 202,
+        "hits": [],
+        "rows": 0,
+        "phases": [
+          "loading",
+          "loading+ai-apps",
+          "interactive+ai-apps",
+          "complete+ai-apps"
+        ],
+        "ownership": [
+          {
+            "t": 52,
+            "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+          },
+          {
+            "t": 160,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+          },
+          {
+            "t": 451,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          },
+          {
+            "t": 496,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          }
+        ],
+        "layout": "ai-apps",
+        "owner": "layout",
+        "bodyOpacity": "1"
+      },
+      "workspace": {
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats",
+            "thread": "qa-thread"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion",
+            "companionOwner": "qa-editor-win"
+          }
+        ],
+        "desks": [
+          {
+            "id": "drestored",
+            "wins": [
+              "restored"
+            ]
+          },
+          {
+            "id": "dqaeditor",
+            "wins": [
+              "qa-editor-win",
+              "peer"
+            ]
+          },
+          {
+            "id": "dqanotes",
+            "wins": [
+              "qa-notes-win"
+            ]
+          },
+          {
+            "id": "dqacalendar",
+            "wins": [
+              "qa-calendar-win"
+            ]
+          },
+          {
+            "id": "dqamusic",
+            "wins": [
+              "qa-music-win"
+            ]
+          }
+        ],
+        "pins": [
+          "qa-editor",
+          "qa-notes",
+          "qa-music"
+        ],
+        "state": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        }
+      },
+      "fault": {
+        "before": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        },
+        "after": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "sameScene": false,
+        "choice": "ai-apps",
+        "diagnostic": {
+          "version": 1,
+          "layout": "ai-apps",
+          "reason": "error",
+          "where": "on(render)",
+          "at": "2026-11-06T13:21:34.156Z",
+          "release": "",
+          "message": "QA synthetic layout callback fault",
+          "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "lastFault": {
+            "layout": "ai-apps",
+            "reason": "error",
+            "where": "on(render)",
+            "at": "2026-11-06T13:21:34.156Z",
+            "release": "",
+            "message": "QA synthetic layout callback fault",
+            "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          }
+        },
+        "backdrop": {
+          "id": "custom",
+          "wide": "qa-custom-wide",
+          "tall": "qa-custom-tall"
+        },
+        "sidebarVisible": false,
+        "classicMenuVisible": true
+      },
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at process.processImmediate (node:internal/timers:454:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)",
+      "failureState": {
+        "legacy": {
+          "samples": 207,
+          "hits": [],
+          "rows": 0,
+          "phases": [
+            "loading",
+            "loading+ai-apps",
+            "interactive+ai-apps",
+            "complete+ai-apps"
+          ],
+          "ownership": [
+            {
+              "t": 52,
+              "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+            },
+            {
+              "t": 160,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+            },
+            {
+              "t": 451,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 496,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 1219,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":true,\"mounts\":0}}"
+            }
+          ]
+        },
+        "diagnostic": "{\"version\":1,\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:34.156Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\",\"lastFault\":{\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:34.156Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\"}}",
+        "html": {
+          "shell": "desktop",
+          "wizardBackgrounds": "",
+          "imageBackground": "",
+          "skin": "nebula",
+          "skinFrame": "borderless",
+          "layout": "ai-apps",
+          "chatsOwner": "layout",
+          "tweaks": "wizard/unified-inbox"
+        },
+        "layout": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "restored-apps-chat",
+      "phase": "reload",
+      "checks": [
+        "AI apps sidebar + populated chats list; no Classic menubar; SDK tools in five retained frames; restored thread; companion; pins"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.153Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.155Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.257Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.258Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.424Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.425Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.426Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:36.427Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.557Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.559Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "result": {
+        "samples": 194,
+        "hits": [],
+        "rows": 0,
+        "phases": [
+          "loading",
+          "loading+ai-apps",
+          "interactive+ai-apps",
+          "complete+ai-apps"
+        ],
+        "ownership": [
+          {
+            "t": 29,
+            "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+          },
+          {
+            "t": 72,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+          },
+          {
+            "t": 342,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          },
+          {
+            "t": 361,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          }
+        ],
+        "layout": "ai-apps",
+        "owner": "layout",
+        "bodyOpacity": "1"
+      },
+      "workspace": {
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats",
+            "thread": "qa-thread"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion",
+            "companionOwner": "qa-editor-win"
+          }
+        ],
+        "desks": [
+          {
+            "id": "drestored",
+            "wins": [
+              "restored"
+            ]
+          },
+          {
+            "id": "dqaeditor",
+            "wins": [
+              "qa-editor-win",
+              "peer"
+            ]
+          },
+          {
+            "id": "dqanotes",
+            "wins": [
+              "qa-notes-win"
+            ]
+          },
+          {
+            "id": "dqacalendar",
+            "wins": [
+              "qa-calendar-win"
+            ]
+          },
+          {
+            "id": "dqamusic",
+            "wins": [
+              "qa-music-win"
+            ]
+          }
+        ],
+        "pins": [
+          "qa-editor",
+          "qa-notes",
+          "qa-music"
+        ],
+        "state": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        }
+      },
+      "fault": {
+        "before": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        },
+        "after": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "sameScene": false,
+        "choice": "ai-apps",
+        "diagnostic": {
+          "version": 1,
+          "layout": "ai-apps",
+          "reason": "error",
+          "where": "on(render)",
+          "at": "2026-11-06T13:21:35.259Z",
+          "release": "",
+          "message": "QA synthetic layout callback fault",
+          "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "lastFault": {
+            "layout": "ai-apps",
+            "reason": "error",
+            "where": "on(render)",
+            "at": "2026-11-06T13:21:35.259Z",
+            "release": "",
+            "message": "QA synthetic layout callback fault",
+            "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          }
+        },
+        "backdrop": {
+          "id": "custom",
+          "wide": "qa-custom-wide",
+          "tall": "qa-custom-tall"
+        },
+        "sidebarVisible": false,
+        "classicMenuVisible": true
+      },
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at process.processImmediate (node:internal/timers:454:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)",
+      "failureState": {
+        "legacy": {
+          "samples": 211,
+          "hits": [],
+          "rows": 0,
+          "phases": [
+            "loading",
+            "loading+ai-apps",
+            "interactive+ai-apps",
+            "complete+ai-apps"
+          ],
+          "ownership": [
+            {
+              "t": 29,
+              "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+            },
+            {
+              "t": 72,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+            },
+            {
+              "t": 342,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 361,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 1023,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":true,\"mounts\":0}}"
+            }
+          ]
+        },
+        "diagnostic": "{\"version\":1,\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:35.259Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\",\"lastFault\":{\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:35.259Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\"}}",
+        "html": {
+          "shell": "desktop",
+          "skin": "sepia",
+          "skinFrame": "borderless",
+          "tweaks": "wizard/unified-inbox",
+          "layout": "ai-apps",
+          "chatsOwner": "layout"
+        },
+        "layout": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "restored-apps-chat",
+      "phase": "reload2",
+      "checks": [
+        "AI apps sidebar + populated chats list; no Classic menubar; SDK tools in five retained frames; restored thread; companion; pins"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.153Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.155Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.257Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.258Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.424Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.425Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.426Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:36.427Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.557Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.559Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "result": {
+        "samples": 194,
+        "hits": [],
+        "rows": 0,
+        "phases": [
+          "loading",
+          "loading+ai-apps",
+          "interactive+ai-apps",
+          "complete+ai-apps"
+        ],
+        "ownership": [
+          {
+            "t": 31,
+            "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+          },
+          {
+            "t": 68,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+          },
+          {
+            "t": 248,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          },
+          {
+            "t": 273,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          }
+        ],
+        "layout": "ai-apps",
+        "owner": "layout",
+        "bodyOpacity": "1"
+      },
+      "workspace": {
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats",
+            "thread": "qa-thread"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion",
+            "companionOwner": "qa-editor-win"
+          }
+        ],
+        "desks": [
+          {
+            "id": "drestored",
+            "wins": [
+              "restored"
+            ]
+          },
+          {
+            "id": "dqaeditor",
+            "wins": [
+              "qa-editor-win",
+              "peer"
+            ]
+          },
+          {
+            "id": "dqanotes",
+            "wins": [
+              "qa-notes-win"
+            ]
+          },
+          {
+            "id": "dqacalendar",
+            "wins": [
+              "qa-calendar-win"
+            ]
+          },
+          {
+            "id": "dqamusic",
+            "wins": [
+              "qa-music-win"
+            ]
+          }
+        ],
+        "pins": [
+          "qa-editor",
+          "qa-notes",
+          "qa-music"
+        ],
+        "state": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        }
+      },
+      "fault": {
+        "before": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        },
+        "after": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "sameScene": false,
+        "choice": "ai-apps",
+        "diagnostic": {
+          "version": 1,
+          "layout": "ai-apps",
+          "reason": "error",
+          "where": "on(render)",
+          "at": "2026-11-06T13:21:36.427Z",
+          "release": "",
+          "message": "QA synthetic layout callback fault",
+          "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "lastFault": {
+            "layout": "ai-apps",
+            "reason": "error",
+            "where": "on(render)",
+            "at": "2026-11-06T13:21:36.427Z",
+            "release": "",
+            "message": "QA synthetic layout callback fault",
+            "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          }
+        },
+        "backdrop": {
+          "id": "custom",
+          "wide": "qa-custom-wide",
+          "tall": "qa-custom-tall"
+        },
+        "sidebarVisible": false,
+        "classicMenuVisible": true
+      },
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15",
+      "failureState": {
+        "legacy": {
+          "samples": 205,
+          "hits": [],
+          "rows": 0,
+          "phases": [
+            "loading",
+            "loading+ai-apps",
+            "interactive+ai-apps",
+            "complete+ai-apps"
+          ],
+          "ownership": [
+            {
+              "t": 31,
+              "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+            },
+            {
+              "t": 68,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+            },
+            {
+              "t": 248,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 273,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 969,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":true,\"mounts\":0}}"
+            }
+          ]
+        },
+        "diagnostic": "{\"version\":1,\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:36.427Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\",\"lastFault\":{\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:36.427Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\"}}",
+        "html": {
+          "shell": "desktop",
+          "skin": "nebula",
+          "skinFrame": "borderless",
+          "tweaks": "wizard/unified-inbox",
+          "layout": "ai-apps",
+          "chatsOwner": "layout",
+          "wizardBackgrounds": "",
+          "imageBackground": ""
+        },
+        "layout": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "restored-apps-chat",
+      "phase": "reload3",
+      "checks": [
+        "AI apps sidebar + populated chats list; no Classic menubar; SDK tools in five retained frames; restored thread; companion; pins"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x18402a61200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.153Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.155Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:34.156Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.257Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.258Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:35.259Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.424Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.425Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:36.426Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:36.427Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.557Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.559Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] callback-error: {layout: ai-apps, reason: callback-error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] callback-error:",
+            "[object Object]"
+          ]
+        },
+        {
+          "type": "warning",
+          "text": "[skin layout:ai-apps] on(render): Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 138,
+            "column": 18,
+            "lineNumber": 138,
+            "columnNumber": 18
+          },
+          "args": [
+            "[skin layout:ai-apps] on(render):",
+            {
+              "name": "Error",
+              "message": "QA synthetic layout callback fault",
+              "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "text": "[layout] error: {layout: ai-apps, reason: error, where: on(render), at: 2026-11-06T13:21:37.560Z, release: }",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/core/skin-host.js",
+            "line": 133,
+            "column": 18,
+            "lineNumber": 133,
+            "columnNumber": 18
+          },
+          "args": [
+            "[layout] error:",
+            "[object Object]"
+          ]
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "result": {
+        "samples": 193,
+        "hits": [],
+        "rows": 0,
+        "phases": [
+          "loading",
+          "loading+ai-apps",
+          "interactive+ai-apps",
+          "complete+ai-apps"
+        ],
+        "ownership": [
+          {
+            "t": 28,
+            "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+          },
+          {
+            "t": 67,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+          },
+          {
+            "t": 310,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          },
+          {
+            "t": 334,
+            "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+          }
+        ],
+        "layout": "ai-apps",
+        "owner": "layout",
+        "bodyOpacity": "1"
+      },
+      "workspace": {
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats",
+            "thread": "qa-thread"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion",
+            "companionOwner": "qa-editor-win"
+          }
+        ],
+        "desks": [
+          {
+            "id": "drestored",
+            "wins": [
+              "restored"
+            ]
+          },
+          {
+            "id": "dqaeditor",
+            "wins": [
+              "qa-editor-win",
+              "peer"
+            ]
+          },
+          {
+            "id": "dqanotes",
+            "wins": [
+              "qa-notes-win"
+            ]
+          },
+          {
+            "id": "dqacalendar",
+            "wins": [
+              "qa-calendar-win"
+            ]
+          },
+          {
+            "id": "dqamusic",
+            "wins": [
+              "qa-music-win"
+            ]
+          }
+        ],
+        "pins": [
+          "qa-editor",
+          "qa-notes",
+          "qa-music"
+        ],
+        "state": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        }
+      },
+      "fault": {
+        "before": {
+          "id": "ai-apps",
+          "active": true,
+          "disabled": false,
+          "mounts": 3
+        },
+        "after": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "sameScene": false,
+        "choice": "ai-apps",
+        "diagnostic": {
+          "version": 1,
+          "layout": "ai-apps",
+          "reason": "error",
+          "where": "on(render)",
+          "at": "2026-11-06T13:21:37.560Z",
+          "release": "",
+          "message": "QA synthetic layout callback fault",
+          "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)",
+          "lastFault": {
+            "layout": "ai-apps",
+            "reason": "error",
+            "where": "on(render)",
+            "at": "2026-11-06T13:21:37.560Z",
+            "release": "",
+            "message": "QA synthetic layout callback fault",
+            "stack": "Error: QA synthetic layout callback fault\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          }
+        },
+        "backdrop": {
+          "id": "custom",
+          "wide": "qa-custom-wide",
+          "tall": "qa-custom-tall"
+        },
+        "sidebarVisible": false,
+        "classicMenuVisible": true
+      },
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at process.processImmediate (node:internal/timers:454:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)",
+      "failureState": {
+        "legacy": {
+          "samples": 210,
+          "hits": [],
+          "rows": 0,
+          "phases": [
+            "loading",
+            "loading+ai-apps",
+            "interactive+ai-apps",
+            "complete+ai-apps"
+          ],
+          "ownership": [
+            {
+              "t": 28,
+              "state": "{\"layout\":null,\"owner\":null,\"booting\":false}"
+            },
+            {
+              "t": 67,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":false,\"mounts\":0}}"
+            },
+            {
+              "t": 310,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":true,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 334,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":true,\"disabled\":false,\"mounts\":3}}"
+            },
+            {
+              "t": 996,
+              "state": "{\"layout\":\"ai-apps\",\"owner\":\"layout\",\"booting\":false,\"state\":{\"id\":\"ai-apps\",\"active\":false,\"disabled\":true,\"mounts\":0}}"
+            }
+          ]
+        },
+        "diagnostic": "{\"version\":1,\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:37.560Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\",\"lastFault\":{\"layout\":\"ai-apps\",\"reason\":\"error\",\"where\":\"on(render)\",\"at\":\"2026-11-06T13:21:37.560Z\",\"release\":\"\",\"message\":\"QA synthetic layout callback fault\",\"stack\":\"Error: QA synthetic layout callback fault\\n    at https://boot.test/wizard-os-home/layouts/ai-apps/desktop.js:100:66\\n    at https://boot.test/wizard-os-home/core/skin-host.js:148:85\\n    at emit (https://boot.test/wizard-os-home/core/skin-host.js:333:73)\\n    at Object.rendered (https://boot.test/wizard-os-home/core/skin-host.js:1745:56)\\n    at eval (eval at evaluate (:370:30), <anonymous>:4:50)\\n    at UtilityScript.evaluate (<anonymous>:372:16)\\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\"}}",
+        "html": {
+          "shell": "desktop",
+          "skin": "sepia",
+          "skinFrame": "borderless",
+          "tweaks": "wizard/unified-inbox",
+          "layout": "ai-apps",
+          "chatsOwner": "layout"
+        },
+        "layout": {
+          "id": "ai-apps",
+          "active": false,
+          "disabled": true,
+          "mounts": 0
+        },
+        "wins": [
+          {
+            "id": "restored",
+            "app": "chats"
+          },
+          {
+            "id": "qa-editor-win",
+            "app": "frame",
+            "appId": "qa-editor"
+          },
+          {
+            "id": "qa-notes-win",
+            "app": "frame",
+            "appId": "qa-notes"
+          },
+          {
+            "id": "qa-calendar-win",
+            "app": "frame",
+            "appId": "qa-calendar"
+          },
+          {
+            "id": "qa-music-win",
+            "app": "frame",
+            "appId": "qa-music"
+          },
+          {
+            "id": "peer",
+            "app": "frame",
+            "appId": "qa-editor-companion"
+          }
+        ]
+      }
+    }
+  ],
+  "failures": [
+    {
+      "mode": "restored-apps-chat",
+      "pass": "fresh",
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at process.processImmediate (node:internal/timers:454:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)"
+    },
+    {
+      "mode": "restored-apps-chat",
+      "pass": "reload",
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at process.processImmediate (node:internal/timers:454:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)"
+    },
+    {
+      "mode": "restored-apps-chat",
+      "pass": "reload2",
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15"
+    },
+    {
+      "mode": "restored-apps-chat",
+      "pass": "reload3",
+      "error": "AssertionError [ERR_ASSERTION]: callback threshold never unloads the owner layout\n\nfalse !== true\n\n    at /srv/work/layout-never-classic-20261106/tests/qa-desktop-boot-layout.cjs:262:15\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at process.processImmediate (node:internal/timers:454:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)"
+    }
+  ],
+  "pass": false
+}

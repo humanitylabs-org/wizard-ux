@@ -1,0 +1,9 @@
+{
+  "id": "wizard/two-orbs",
+  "name": "Experimental two orbs",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": ["layout"],
+  "description": "Agent orb bottom right; a white orb types and runs commands"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "wizard/unified-inbox",
+  "name": "Notifications in Chats",
+  "version": "3.2.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav",
+    "inbox"
+  ],
+  "description": "Chats is the inbox: Notifications' alerts and every app with an inbox feed are yellow threads in Chats, labelled with their app; several from one app fold into one row. They open in the chat window with Open, Done, Snooze and Resolve this (the rest from that app listed under, with Done all); done ones under Archive."
+}

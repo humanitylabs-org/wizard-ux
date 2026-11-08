@@ -1,0 +1,38 @@
+{
+  "teamAuthors": [
+    "miguel",
+    "wizard"
+  ],
+  "profiles": [
+    "wizard",
+    "miguel"
+  ],
+  "tweaks": [
+    "miguel/send-and-go",
+    "wizard/pin-buttons",
+    "miguel/snooze-someday",
+    "wizard/two-orbs",
+    "miguel/machines-home",
+    "wizard/app-borders",
+    "wizard/unified-inbox",
+    "wizard/new-send-list",
+    "miguel/no-desk-close",
+    "miguel/archive-top",
+    "miguel/group-by-day",
+    "miguel/reply-summary",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps",
+    "wizard/thread-tracker"
+  ],
+  "defaults": [
+    "wizard/unified-inbox"
+  ],
+  "aliases": {
+    "miguel/unified-inbox": "wizard/unified-inbox",
+    "wizard/machines-home": "miguel/machines-home",
+    "miguel/switch-row-actions": "miguel/model-pills"
+  }
+}

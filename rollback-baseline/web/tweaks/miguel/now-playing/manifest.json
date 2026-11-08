@@ -1,0 +1,12 @@
+{
+  "id": "miguel/now-playing",
+  "name": "Now playing",
+  "version": "1.2.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "media"
+  ],
+  "description": "While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays"
+}

@@ -1,0 +1,471 @@
+{
+  "synthetic": true,
+  "source": "9500aaeea09e5d6c528887a7e746edf03526dab6",
+  "modes": [
+    "restored-apps-chat"
+  ],
+  "cases": [
+    {
+      "mode": "restored-apps-chat",
+      "phase": "fresh",
+      "checks": [
+        "Nebula + saved custom desktopBackdrop: painted RGB recorded after load/reload"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "backdrop": {
+        "pixels": [
+          {
+            "id": "skinA",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          },
+          {
+            "id": "skinB",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          }
+        ],
+        "selected": null,
+        "wallpaper": "living",
+        "local": "custom",
+        "skin": "nebula",
+        "html": {
+          "shell": "desktop",
+          "wizardBackgrounds": "",
+          "skin": "nebula",
+          "skinFrame": "borderless",
+          "layout": "ai-apps",
+          "chatsOwner": "layout",
+          "aiApps": "desktop",
+          "viewChrome": "desktop",
+          "settingsOver": "",
+          "aadSide": "open",
+          "aadPaneSide": "start",
+          "aadDockEdge": "end",
+          "aadPaneTiled": "false",
+          "aadTabs": "open",
+          "aadChat": "on",
+          "aiFront": "chat",
+          "aadNew": "false",
+          "aadHome": "",
+          "tweaks": "wizard/unified-inbox",
+          "vcOrb": "composer"
+        }
+      },
+      "pass": true
+    },
+    {
+      "mode": "restored-apps-chat",
+      "phase": "reload",
+      "checks": [
+        "Nebula + saved custom desktopBackdrop: painted RGB recorded after load/reload"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "backdrop": {
+        "pixels": [
+          {
+            "id": "skinA",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          },
+          {
+            "id": "skinB",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          }
+        ],
+        "selected": null,
+        "wallpaper": "living",
+        "local": "custom",
+        "skin": "nebula",
+        "html": {
+          "shell": "desktop",
+          "wizardBackgrounds": "",
+          "skin": "nebula",
+          "skinFrame": "borderless",
+          "tweaks": "wizard/unified-inbox",
+          "layout": "ai-apps",
+          "chatsOwner": "layout",
+          "aiApps": "desktop",
+          "viewChrome": "desktop",
+          "settingsOver": "",
+          "aadSide": "open",
+          "aadPaneSide": "start",
+          "aadDockEdge": "end",
+          "aadPaneTiled": "false",
+          "aadTabs": "open",
+          "aadChat": "on",
+          "aiFront": "chat",
+          "aadNew": "false",
+          "aadHome": "",
+          "vcOrb": "composer"
+        }
+      },
+      "pass": true
+    },
+    {
+      "mode": "restored-apps-chat",
+      "phase": "reload2",
+      "checks": [
+        "Nebula + saved custom desktopBackdrop: painted RGB recorded after load/reload"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "backdrop": {
+        "pixels": [
+          {
+            "id": "skinA",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          },
+          {
+            "id": "skinB",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          }
+        ],
+        "selected": null,
+        "wallpaper": "living",
+        "local": "custom",
+        "skin": "nebula",
+        "html": {
+          "shell": "desktop",
+          "wizardBackgrounds": "",
+          "skin": "nebula",
+          "skinFrame": "borderless",
+          "tweaks": "wizard/unified-inbox",
+          "layout": "ai-apps",
+          "chatsOwner": "layout",
+          "aiApps": "desktop",
+          "viewChrome": "desktop",
+          "settingsOver": "",
+          "aadSide": "open",
+          "aadPaneSide": "start",
+          "aadDockEdge": "end",
+          "aadPaneTiled": "false",
+          "aadTabs": "open",
+          "aadChat": "on",
+          "aiFront": "chat",
+          "aadNew": "false",
+          "aadHome": "",
+          "vcOrb": "composer"
+        }
+      },
+      "pass": true
+    },
+    {
+      "mode": "restored-apps-chat",
+      "phase": "reload3",
+      "checks": [
+        "Nebula + saved custom desktopBackdrop: painted RGB recorded after load/reload"
+      ],
+      "errors": [],
+      "logs": [
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        },
+        {
+          "type": "warning",
+          "text": "[.WebGL-0x34ac02408e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+          "location": {
+            "url": "https://boot.test/wizard-os-home/desktop.html",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          },
+          "args": []
+        }
+      ],
+      "writes": [],
+      "seenWrites": [
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen",
+        "PUT /wizard/thread-seen"
+      ],
+      "runs": [],
+      "backdrop": {
+        "pixels": [
+          {
+            "id": "skinA",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          },
+          {
+            "id": "skinB",
+            "width": 1440,
+            "height": 960,
+            "opacity": "0",
+            "display": "block",
+            "maxRGB": 0,
+            "bright": 0
+          }
+        ],
+        "selected": null,
+        "wallpaper": "living",
+        "local": "custom",
+        "skin": "nebula",
+        "html": {
+          "shell": "desktop",
+          "wizardBackgrounds": "",
+          "skin": "nebula",
+          "skinFrame": "borderless",
+          "tweaks": "wizard/unified-inbox",
+          "layout": "ai-apps",
+          "chatsOwner": "layout",
+          "aiApps": "desktop",
+          "viewChrome": "desktop",
+          "settingsOver": "",
+          "aadSide": "open",
+          "aadPaneSide": "start",
+          "aadDockEdge": "end",
+          "aadPaneTiled": "false",
+          "aadTabs": "open",
+          "aadChat": "on",
+          "aiFront": "chat",
+          "aadNew": "false",
+          "aadHome": "",
+          "vcOrb": "composer"
+        }
+      },
+      "pass": true
+    }
+  ],
+  "failures": [],
+  "pass": true
+}

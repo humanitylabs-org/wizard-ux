@@ -1,0 +1,67 @@
+/* Now playing (miguel/now-playing), minimal (Miguel, 4 Nov 2026): small bars on the playing app's own icon in the
+ * AI apps view's apps column (the phone: its Home dock and grid, below) (the view draws .aad-np only while this tweak watches, so nothing here paints at rest).
+ * Hover: the bars become a pause glyph (paused: play). Paused: the bars stop, then fade out after a short grace.
+ * Colours are the column's own (--aad-* tokens, else the shell's ink), never an accent; motion slow and small. */
+html[data-tweaks~="miguel/now-playing"] .aad-np {
+  --np-ink: var(--aad-ink, var(--wz-text, var(--ink)));
+  position: absolute; right: -5px; bottom: -5px; z-index: 1; width: 15px; height: 15px; margin: 0; padding: 0; border: 0; box-sizing: border-box;
+  display: grid; place-items: center; border-radius: 5px; cursor: pointer; color: var(--np-ink); font: inherit;
+  background: var(--aad-panel, var(--wz-base, var(--bg)));
+  box-shadow: 0 0 0 1px var(--aad-line, color-mix(in srgb, var(--np-ink) 14%, transparent));
+  animation: np-in 250ms ease;
+}
+/* a slightly larger hit area than the drawn badge, so the bars are easy to catch */
+html[data-tweaks~="miguel/now-playing"] .aad-np::before { content: ""; position: absolute; inset: -3px; border-radius: 7px; }
+html[data-tweaks~="miguel/now-playing"] .aad-np:focus-visible { outline: 2px solid var(--wz-accent, var(--np-ink)); outline-offset: 1px; }
+html[data-tweaks~="miguel/now-playing"] .aad-np > span { grid-area: 1 / 1; display: flex; align-items: flex-end; justify-content: center; gap: 1.5px; width: 9px; height: 8px; }
+html[data-tweaks~="miguel/now-playing"] .aad-np-b i { display: block; width: 2px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: 50% 100%; transform: scaleY(.4); animation: np-bar 1.2s ease-in-out infinite alternate; }
+html[data-tweaks~="miguel/now-playing"] .aad-np-b i:nth-child(2) { animation-duration: .9s; animation-delay: -.45s; }
+html[data-tweaks~="miguel/now-playing"] .aad-np-b i:nth-child(3) { animation-duration: 1.4s; animation-delay: -.8s; }
+/* the glyph under the bars: pause (two bars), or play (a triangle) while paused */
+html[data-tweaks~="miguel/now-playing"] .aad-np > .aad-np-g { visibility: hidden; gap: 2px; }
+html[data-tweaks~="miguel/now-playing"] .aad-np-g::before, html[data-tweaks~="miguel/now-playing"] .aad-np-g::after { content: ""; width: 2.5px; height: 100%; border-radius: 1px; background: currentColor; }
+html[data-tweaks~="miguel/now-playing"] .aad-vtab[data-media="paused"] .aad-np-g::after { display: none; }
+html[data-tweaks~="miguel/now-playing"] .aad-vtab[data-media="paused"] .aad-np-g::before { width: 7px; border-radius: 0; clip-path: polygon(10% 0, 100% 50%, 10% 100%); }
+html[data-tweaks~="miguel/now-playing"] .aad-np:is(:hover, :focus-visible) .aad-np-b { visibility: hidden; }
+html[data-tweaks~="miguel/now-playing"] .aad-np:is(:hover, :focus-visible) .aad-np-g { visibility: visible; }
+/* paused: the bars stop low and the badge fades out after a short grace (then it takes no clicks) */
+html[data-tweaks~="miguel/now-playing"] .aad-vtab[data-media="paused"] .aad-np-b i { animation: none; transform: scaleY(.4); }
+html[data-tweaks~="miguel/now-playing"] .aad-vtab[data-media="paused"] .aad-np { animation: np-gone 250ms ease 4s both; }
+/* while left ⌥ is held the keycap sits on the bars: they hold still */
+html[data-tweaks~="miguel/now-playing"].key-hints-on .aad-np-b i { animation-play-state: paused; }
+/* The phone (AI apps view Home: the dock and the grid): the same bars on the playing app's icon, a little larger for a
+ * 64 px icon. No hover on a phone: a tap on the bars pauses (the icon itself still opens the app); paused, the bars
+ * become a small play mark that fades out after the same grace. The hit area is 44 px, an invisible padding around
+ * the drawn badge (never a bigger visual); pressing the bars never shrinks the icon as a press on the icon does. The
+ * bars / play mark swap by opacity, never visibility: a visible child would keep taking taps after the badge fades. */
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np {
+  --np-ink: var(--aa-ink, var(--wz-text, var(--ink)));
+  position: absolute; right: -4px; bottom: -4px; z-index: 2; width: 20px; height: 20px; box-sizing: border-box;
+  display: grid; place-items: center; border-radius: 7px; cursor: pointer; color: var(--np-ink);
+  background: var(--aa-surface, var(--wz-panel, var(--wz-base, var(--bg))));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--np-ink) 16%, transparent), 0 1px 3px color-mix(in srgb, black 22%, transparent);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; animation: np-in 250ms ease;
+}
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np::before { content: ""; position: absolute; inset: -12px -9px -12px -15px; border-radius: 50%; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np > span { grid-area: 1 / 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 11px; height: 10px; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np-b i { display: block; width: 2.5px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: 50% 100%; transform: scaleY(.4); animation: np-bar 1.2s ease-in-out infinite alternate; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np-b i:nth-child(2) { animation-duration: .9s; animation-delay: -.45s; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np-b i:nth-child(3) { animation-duration: 1.4s; animation-delay: -.8s; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np > .ah-np-g { opacity: 0; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np-g::before { content: ""; width: 8px; height: 100%; margin-left: 2px; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-app[data-media="paused"] .ah-np-b { opacity: 0; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-app[data-media="paused"] .ah-np > .ah-np-g { opacity: 1; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-app[data-media="paused"] .ah-np { animation: np-gone 250ms ease 4s both; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-app:has(.ah-np:active) .ah-tile { transform: none; filter: none; }
+html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-ghost .ah-np { display: none; }
+@keyframes np-bar { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+@keyframes np-in { from { opacity: 0; } }
+@keyframes np-gone { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-tweaks~="miguel/now-playing"] .aad-np-b i { animation: none; transform: scaleY(.7); }
+  html[data-tweaks~="miguel/now-playing"] .aad-np { animation: none; }
+  html[data-tweaks~="miguel/now-playing"] .aad-vtab[data-media="paused"] .aad-np { animation: np-gone 1ms linear 4s both; }
+  html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np-b i { animation: none; transform: scaleY(.7); }
+  html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-np { animation: none; }
+  html[data-tweaks~="miguel/now-playing"][data-shell="phone"] .ah-app[data-media="paused"] .ah-np { animation: np-gone 1ms linear 4s both; }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "miguel/archive-top",
+  "name": "Archive on top",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it"
+}

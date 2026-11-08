@@ -1,0 +1,9 @@
+{
+  "id": "wizard/new-send-list",
+  "name": "New sends return to Chats",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": ["layout"],
+  "description": "After a new desktop text or composer-mic send, keep the Chats list instead of opening a fresh New chat. Existing replies keep the shared shortcut."
+}

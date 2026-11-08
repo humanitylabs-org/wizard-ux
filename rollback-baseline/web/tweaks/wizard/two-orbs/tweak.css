@@ -1,0 +1,7 @@
+/* Reuse the built-in geometry; a neutral white command orb is distinct from the agent's coloured orb.
+ * No second renderer or placement rules. This deliberately neutral control does not use the skin accent. */
+html[data-tweaks~="wizard/two-orbs"][data-layout="two-orb"] #device:not(.orb-corner) #orbWrap::before {
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 4px 16px rgba(0,0,0,.25);
+}
+html[data-tweaks~="wizard/two-orbs"][data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi, svg) { filter: brightness(0); }

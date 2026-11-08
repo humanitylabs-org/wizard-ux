@@ -1,0 +1,1 @@
+{"id": "wizard/pin-buttons", "name": "Show pin buttons", "version": "1.0.0", "author": "wizard", "apiVersion": 1, "capabilities": ["layout"], "description": "A pin button on every chat. Pin is always in a chat's menu"}

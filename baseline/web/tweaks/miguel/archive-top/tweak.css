@@ -1,0 +1,6 @@
+/* Archive first in every Chats layout, desktop and phone: core already does this for By status (#790), so this adds
+   By day (Archive above Errors, Working, Ready, Yesterday, Past week, Snoozed; that order is kept below it).
+   Skins that arrange the phone list themselves keep their own (higher-specificity) order; theirs already puts Archive first. */
+html[data-tweaks~="miguel/archive-top"] .ch-list .ch-scroll { display: flex; flex-direction: column; }
+html[data-tweaks~="miguel/archive-top"] .ch-list .ch-sec[data-sec="archive"] { order: -2; }
+html[data-tweaks~="miguel/archive-top"] .ch-list .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }

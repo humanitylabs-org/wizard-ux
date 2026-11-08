@@ -1,0 +1,1 @@
+{"id": "wizard/thread-tracker", "name": "Thread tracker", "version": "1.0.0", "author": "wizard", "apiVersion": 1, "capabilities": ["layout"], "description": "See every ask in a thread at a glance: a strip under the title with what needs you, what is running and what finished, dots in your chats list, and Reply on any message. Chats stay an ordinary chat."}

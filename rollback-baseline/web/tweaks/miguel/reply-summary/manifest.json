@@ -1,0 +1,12 @@
+{
+  "id": "miguel/reply-summary",
+  "name": "Short answer first",
+  "version": "1.2.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "settings"
+  ],
+  "description": "A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is"
+}

@@ -1,0 +1,8 @@
+{
+  "key": "layout-never-classic-proof-1be851995-r3",
+  "host": "forum",
+  "lane": "light",
+  "cwd": "/srv/work/layout-never-classic-20261106",
+  "argv": ["python3", "run-proof.py"],
+  "timeout_seconds": 800
+}
