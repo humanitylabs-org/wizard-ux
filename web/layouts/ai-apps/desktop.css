@@ -933,7 +933,13 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-tiled="true"] .aad-grip[data-grip="app"] { display: none; }
 
 /* Window arrangements share the pane model; text-bearing floating windows are
+<<<<<<< HEAD
  * solid Appearance panels, never the skin's glass material. */
+=======
+ * solid Appearance panels, never the skin's glass material. They keep the tiled
+ * panes' own skin colour (the window tint over the skin base, made opaque), never
+ * the grey --wz-panel mix (James, 6 Nov 2026). */
+>>>>>>> origin/main
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-modes { display: inline-flex; align-items: center; gap: 1px; flex: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-modes > .aad-ib { width: 28px; height: 30px; border-radius: 6px; color: var(--wz-text-secondary, var(--aad-ink-2)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode[aria-pressed="true"] { color: var(--wz-text, var(--aad-ink)); background: var(--wz-panel-raised, var(--wz-panel)); box-shadow: inset 0 0 0 1px var(--wz-border, var(--aad-line)); }
@@ -942,7 +948,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-centre { wi
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-pair { background: linear-gradient(90deg, transparent 44%, currentColor 44%, currentColor 55%, transparent 55%); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-tiled { background: linear-gradient(90deg, transparent 25%, currentColor 25%, currentColor 33%, transparent 33%, transparent 66%, currentColor 66%, currentColor 74%, transparent 74%); }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-mode-hidden] { display: none !important; }
+<<<<<<< HEAD
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-stop { position: absolute; inset: -44px 0 auto; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; box-sizing: border-box; color: var(--wz-text, var(--aad-ink)); background: var(--wz-panel); }
+=======
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-stop { position: absolute; inset: -44px 0 auto; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; box-sizing: border-box; color: var(--wz-text, var(--aad-ink)); background: linear-gradient(var(--aad-main), var(--aad-main)), var(--aad-canvas); }
+>>>>>>> origin/main
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-stop[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app2"] > .win > .wbar { position: absolute; visibility: hidden; width: 1px; height: 1px; pointer-events: none; }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role="chat"] {
@@ -953,10 +963,17 @@ html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="c
   position: absolute; inset: -44px 0 auto; width: 100%; height: 44px; visibility: visible;
 }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] {
+<<<<<<< HEAD
   background: var(--wz-panel); transition: none;
 }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] > :is(.win, .aad-ctop, .aad-ptop) {
   background: var(--wz-panel) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; transition: none; animation: none;
+=======
+  background: var(--aad-canvas); transition: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] > :is(.win, .aad-ctop, .aad-ptop) {
+  background: linear-gradient(var(--aad-main), var(--aad-main)), var(--aad-canvas) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; transition: none; animation: none;
+>>>>>>> origin/main
 }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] > .win > :is(.wbody, .wbar) { transition: none; }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) :is(.aad-grip, .aad-pload) { display: none !important; }

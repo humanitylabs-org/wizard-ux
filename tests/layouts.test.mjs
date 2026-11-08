@@ -89,15 +89,15 @@ test('unknown layout ids fall back to Classic', async () => {
   assert.equal(P.host.setLayout('../../evil'), 'classic');
 });
 
-test('a broken layout turns itself off and the shell carries on', async () => {
+test('broken layout callbacks stay contained without removing navigation, and can recover', async () => {
   const P = page();
-  let tap;
-  P.setMod({ default: api => { tap = api.orb.onTap(() => { throw new Error('boom'); }); } });
+  let tap, attempts = 0;
+  P.setMod({ default: api => { tap = api.orb.onTap(() => { if (++attempts <= 3) throw new Error('boom'); return true; }); } });
   P.host.attach(P.adapter); P.host.setLayout('two-orb'); await settle();
   for (let i = 0; i < 3; i++) assert.notEqual(P.host.orbTap(), true);
-  assert.equal(P.host.layoutState.disabled, true); assert.equal(P.host.layoutState.active, false);
-  assert.equal(P.host.orbTap(), false, 'the classic tap is back');
-  assert.ok(P.toasts.some(t => /turned off/.test(t)));
+  assert.equal(P.host.layoutState.disabled, false); assert.equal(P.host.layoutState.active, true);
+  assert.equal(P.host.orbTap(), true, 'the existing hook can recover on its next call');
+  assert.ok(!P.toasts.some(t => /turned off/.test(t)));
   assert.equal(typeof tap, 'function');
 });
 

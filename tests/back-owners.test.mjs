@@ -13,7 +13,7 @@ function fixture() {
  module('WizHomeScreenApps','pin-sheet','state');Object.defineProperty(w.WizHomeScreenApps,'state',{get:()=>({open:state.open==='pin-sheet'})});
  module('WosTour','tour','helpOpen');module('WosSelMenu','selection','state');Object.defineProperty(w.WosSelMenu,'state',{get:()=>({open:state.open==='selection'})});
  module('WosContextMenu','context');
- for(const [m,n] of [['WosShareSheet','share'],['WosAppRoute','route'],['WosAppSetup','setup'],['WosBoomerang','reminder']]) {module(m,n);Object.defineProperty(w[m],'isOpen',{value:()=>state.open===n});}
+ for(const [m,n] of [['WosShareSheet','share'],['WosDownloads','downloads'],['WosAppRoute','route'],['WosAppSetup','setup'],['WosBoomerang','reminder']]) {module(m,n);Object.defineProperty(w[m],'isOpen',{value:()=>state.open===n});}
  const viewer=module('viewer','viewer');Object.defineProperty(viewer,'isOpen',{value:()=>state.open==='viewer'||state.open==='viewer-menu'});Object.defineProperty(viewer,'state',{get:()=>({menu:state.open==='viewer-menu'})});viewer.close=()=>{hits.push(state.open);state.open='';};
  w.WizLinks={isMenuOpen:()=>state.open==='link-menu',backMenu(){hits.push('link-menu');state.open='';}};
  const links={isOpen:()=>state.open==='links',back(){hits.push('links');state.open='';}};
@@ -39,7 +39,7 @@ test('phone history/native Back and desktop Escape install the identical shared 
  assert.match(desktop,/escapeOverlay: close => escapeBack\.push\(close\)/);
 });
 test('enumerate EVERY registered shared Back handler: actual desktop Escape reaches each exactly once',()=>{
- const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources'];
+ const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources'];
  assert.deepEqual(Array.from(f.stack.names()).sort(),expected.sort());
  for(const name of expected) {f.state.open=name;const n=f.hits.length;f.press();assert.deepEqual(f.hits.slice(n),[name],name);}
 });
@@ -57,6 +57,7 @@ function appFocusFixture({paneOn=false,appFocused=true,docked=false}={}) {
  f.c.docked=docked;f.c.closeChat=()=>f.hits.push('close-chat');
  f.c.api={back:{surface:fn=>{f.w.WosSkinHost={escapeSurface:fn};}},apps:{back:id=>f.hits.push('layout-app:'+id)}};
  f.c.escStep=()=>{f.hits.push('focused-app-fallback');return 'hosted';};
+ f.c.panes={get:()=>({mode:'tiled',focus:appFocused?'app':'chats'}),set(){}};f.c.windowMode=()=>f.hits.push('window-mode');
  const layout=read('layouts/ai-apps/desktop.js'),start=layout.indexOf('  api.back.surface?.(() => {');
  vm.runInContext(layout.slice(start,layout.indexOf('  /* round 18 item 3b',start)),f.c);return f;
 }
@@ -70,6 +71,13 @@ test('an iframe outside the remembered app pane also yields to its actual focuse
 test('recording and shared overlays keep priority over the focused app fallback',()=>{
  const f=appFocusFixture();f.state.voice=true;f.state.open='viewer';f.press();f.press();f.press();
  assert.deepEqual(f.hits,['voice-cancel','viewer','focused-app-fallback']);
+});
+test('full screen: an open layer inside the focused app closes first, then Esc returns to tiled',()=>{
+ const f=appFocusFixture({paneOn:true});let mode='full',layer=true;
+ f.c.panes={get:()=>({mode,focus:'app'}),set(){}};f.c.windowMode=m=>{mode=m;f.hits.push('mode:'+m);};
+ f.c.pane.el.querySelector=()=>'frame';f.c.WizAppServices={back:fr=>{if(fr==='frame'&&layer){layer=false;f.hits.push('app-layer');return 'handled';}return 'atRoot';}};
+ f.press();f.press();f.press();
+ assert.deepEqual(f.hits,['app-layer','mode:tiled','layout-app:browser']);
 });
 test('a modeled app pane receives one Back per press, including root; chat focus does not navigate it',()=>{
  const f=appFocusFixture({paneOn:true});f.press();f.press();

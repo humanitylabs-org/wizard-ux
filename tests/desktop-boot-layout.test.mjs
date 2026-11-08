@@ -12,9 +12,11 @@ test('default desktop boot wears AI apps and claims the chat list before attach,
   assert.equal(f.boot.dataset, 'ai-apps', 'html[data-layout] painted synchronously');
   assert.equal(f.doc.documentElement.dataset.chatsOwner, 'layout', 'Classic list pane hidden from the first frame');
   assert.equal(f.host.chatsClaimed(), true, 'chats.js and desktop.js never mount the legacy list');
-  assert.ok(f.boot.css.some(h => h?.includes('/layouts/ai-apps/layout.css')), 'blocking layout stylesheet requested at boot');
+  assert.ok(f.boot.css.some(h => h?.includes('/layouts/ai-apps/desktop-boot.css')), 'blocking layout stylesheet requested at boot');
+  assert.ok(!f.boot.css.some(h => h?.includes('/layouts/ai-apps/layout.css')), "the phone's layout sheet is never requested on the desktop");
   assert.equal(f.doc.documentElement.dataset.layoutBooting, '', 'first frames stay clear until the layout applies');
-  assert.ok(f.imports.some(h => h.includes('/layouts/ai-apps/layout.js')), 'the layout code loads from attach; the decision never waited for it');
+  assert.ok(f.imports.some(h => h.includes('/layouts/ai-apps/desktop.js')), 'the layout code loads from attach; the decision never waited for it');
+  assert.ok(!f.imports.some(h => h.includes('/layouts/ai-apps/layout.js')), "the desktop imports its own entry, never the phone's layout.js");
 });
 
 test('a saved AI apps view is honoured at boot the same way', () => {
@@ -68,7 +70,8 @@ test('a layout that cannot load gives Classic its list back and clears the boot 
 });
 
 test('layout CSS keeps Classic hidden through boot and the layout clears the veil when its sheet applies', () => {
-  const css = read('web/layouts/ai-apps/layout.css');
+  const css = read('web/layouts/ai-apps/desktop-boot.css');
+  assert.doesNotMatch(read('web/layouts/ai-apps/layout.css'), /data-shell="desktop"/, "the phone's sheet carries no desktop rules");
   assert.match(css, /\[data-chats-owner\] :is\(\.pane-list, \.pane-split, \.pane-empty\) \{ display: none !important/);
   assert.match(css, /\[data-layout-booting\] body \{ opacity: 0 !important/);
   const js = read('web/layouts/ai-apps/desktop.js');

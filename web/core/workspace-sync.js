@@ -27,7 +27,10 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   // Bound views and review peeks belong to the chat that opened them; device-only apps stay on their device.
-  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview;
+  // An app the shell opened by itself (`seed`: a new device's starter apps) is not the owner's choice, so it never
+  // reaches the box: a fresh phone or test browser joining must not pop Topics open on every device (James, 6 Nov 2026).
+  // It travels once the owner opens it himself (the shell clears `seed`).
+  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview && !w.seed;
   function pick(w) {
     const o = { id: w.id, app: w.app };
     for (const k of FIELDS) { const v = w[k]; if (v != null && v !== '' && !(k === 'thread' && v === '__new__')) o[k] = v; }

@@ -92,6 +92,8 @@ public final class MizelHub {
         MizelJournal last = null;
         for (MizelJournal j : store(c).all()) if (last == null || j.createdAt >= last.createdAt) last = j;
         if (last == null) return MizelProtocol.state(false, false, null, 0, 0, 0, "idle", timeout);
+        if (MizelUpdatePolicy.pending(last))
+            return MizelProtocol.state(true, true, last.meetingId, last.mediaMs(), last.pending.size(), 0, "paused_for_update", timeout);
         boolean finishing = !last.pending.isEmpty() || last.stopPending();
         return MizelProtocol.state(false, false, last.meetingId, last.mediaMs(), last.pending.size(), 0,
                 finishing ? "finishing" : "done", timeout);
@@ -108,6 +110,9 @@ public final class MizelHub {
                     reply.accept(MizelProtocol.reply(c.id, true, null, state(app)));
                     return;
                 case MizelProtocol.START: {
+                    if (MeetingRecorderService.updatePending(app)) {
+                        reply.accept(MizelProtocol.reply(c.id, false, MizelProtocol.E_BUSY_OTHER, state(app))); return;
+                    }
                     if (live != null) {
                         if (live.meetingId.equals(c.meetingId)) reply.accept(MizelProtocol.reply(c.id, true, null, state(app)));
                         else reply.accept(MizelProtocol.reply(c.id, false, MizelProtocol.E_BUSY_OTHER, state(app)));
@@ -120,7 +125,16 @@ public final class MizelHub {
                     return;
                 }
                 default: {
-                    if (live == null) { reply.accept(MizelProtocol.reply(c.id, false, MizelProtocol.E_NOT_RECORDING, state(app))); return; }
+                    if (live == null) {
+                        MizelJournal pending = null;
+                        for (MizelJournal j : store(app).all()) if (MizelUpdatePolicy.pending(j)) { pending = j; break; }
+                        if (MizelProtocol.STOP.equals(c.cmd) && pending != null
+                                && (c.meetingId == null || c.meetingId.equals(pending.meetingId))) {
+                            MeetingRecorderService.stopUpdatePaused(app, pending.meetingId);
+                            reply.accept(MizelProtocol.reply(c.id, true, null, state(app))); return;
+                        }
+                        reply.accept(MizelProtocol.reply(c.id, false, MizelProtocol.E_NOT_RECORDING, state(app))); return;
+                    }
                     if (c.meetingId != null && !c.meetingId.equals(live.meetingId)) {
                         reply.accept(MizelProtocol.reply(c.id, false, MizelProtocol.E_WRONG_MEETING, state(app)));
                         return;

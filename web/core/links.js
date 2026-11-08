@@ -125,7 +125,12 @@
   }
 
   function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null, readerApp = () => null, readerOpen = null } = {}) {
+<<<<<<< HEAD
     readerHome = () => { const app = readerApp(), t = app?.url ? abs(app.url) : null; return t && inApp(t) ? t.pathname.replace(/[^/]*$/, '') : ''; };
+=======
+    // Only a mount that names its Reader (the shell's) owns the identity; auxiliary mounts (App Setup) must not replace it.
+    if (arguments[0]?.readerApp) readerHome = () => { const app = readerApp(), t = app?.url ? abs(app.url) : null; return t && inApp(t) ? t.pathname.replace(/[^/]*$/, '') : ''; };
+>>>>>>> origin/main
     const el = document.createElement('section');
     el.className = `linksheet ${mode}`; el.setAttribute('aria-label', 'Link'); el.hidden = true;
     el.innerHTML = `<div class="ls-scrim" data-ls="close"></div><div class="ls-panel"><header class="ls-bar">

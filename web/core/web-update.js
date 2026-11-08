@@ -236,6 +236,7 @@
   const QUIET_IDLE_MS = 10 * 60e3, QUIET_RETRY_MS = 15 * 60e3, QUIET_KEY = 'wos.web.quiet';
   let lastInput = Date.now();
   const touched = () => { lastInput = Date.now(); };
+<<<<<<< HEAD
   function typing() {
     const a = document.activeElement;
     if (!a || !(a.isContentEditable || /^(INPUT|TEXTAREA)$/.test(a.tagName || ''))) return false;
@@ -244,6 +245,27 @@
   function quietReady() {
     if (!pending || !H?.autoApply || going || checking || rescuing || armed || !printNow) return false;
     if (!document.hidden && (Date.now() - lastInput < QUIET_IDLE_MS || typing())) return false;
+=======
+  // An installed app's frame keeps its input to itself: a same-origin frame's focused field is looked into; a visible
+  // window whose focus is inside any app frame is never quiet (its clicks and keys never reach this document).
+  function focused() {
+    let a = document.activeElement;
+    for (let depth = 0; a && a.tagName === 'IFRAME' && depth < 4; depth++) {
+      let inner = null; try { inner = a.contentDocument?.activeElement || null; } catch (_) {}
+      if (!inner) break; a = inner;
+    }
+    return a;
+  }
+  function typing() {
+    const a = focused();
+    if (!a || !(a.isContentEditable || /^(INPUT|TEXTAREA)$/.test(a.tagName || ''))) return false;
+    return !!String((a.isContentEditable ? a.textContent : a.value) || '').trim();
+  }
+  const inAppFrame = () => document.activeElement?.tagName === 'IFRAME';
+  function quietReady() {
+    if (!pending || !H?.autoApply || going || checking || rescuing || armed || !printNow) return false;
+    if (!document.hidden && (Date.now() - lastInput < QUIET_IDLE_MS || typing() || inAppFrame())) return false;
+>>>>>>> origin/main
     const p = plan(); if (p.host || !p.ok || p.keeps) return false;
     try { if (H.quietHold?.()) return false; } catch (_) { return false; }
     try { const last = JSON.parse(sessionStorage.getItem(QUIET_KEY) || 'null'); if (last?.v === printNow && Date.now() - last.at < QUIET_RETRY_MS) return false; } catch (_) {}
@@ -251,7 +273,10 @@
   }
   function maybeQuiet() {
     if (!quietReady()) return false;
+<<<<<<< HEAD
     try { sessionStorage.setItem(QUIET_KEY, JSON.stringify({ v: printNow, at: Date.now() })); } catch (_) {}
+=======
+>>>>>>> origin/main
     log('web:quiet', document.hidden ? 'hidden' : 'idle'); void go('quiet', plan()); return true;
   }
   async function go(why, p) {
@@ -264,7 +289,13 @@
         try { H?.beforeReload?.(); } catch (_) {}
         window.WizAppReadingPosition?.flush();
         const committed = plan();
+<<<<<<< HEAD
         if (!ok(committed) || typing()) { going = false; render(); return false; }
+=======
+        if (!ok(committed) || typing() || (!document.hidden && inAppFrame())) { going = false; render(); return false; }
+        // The once-per-build cooldown starts only when the reload is committed: a stand-down above retries later.
+        try { sessionStorage.setItem(QUIET_KEY, JSON.stringify({ v: printNow, at: Date.now() })); } catch (_) {}
+>>>>>>> origin/main
         window.WizAppServices?.update.commitReload?.(committed);
         log('web:reload', why); window.__wosReloading = why; location.reload();
         setTimeout(() => { going = false; render(); }, 4500);

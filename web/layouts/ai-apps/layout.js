@@ -37,17 +37,16 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
+import { ICON, ACTS, SVG, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, gaugeInto, fuelOf,
   pinsFrom, togglePin, appLayers, orderOpen, homeDrop, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
   READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
-import desktop from './desktop.js';
 
 const LONG_PRESS = 450;     // ms, a still press on a chat row opens its menu
 const EDGE = 24;            // px from the left edge where a swipe opens the drawer
 
 export default function setup(api) {
-  if (api.env.shell === 'desktop') return desktop(api);
+  // the desktop's entry is desktop.js (core/skin-host.js files.desktop): this file is the phone's only
   if (api.env.shell !== 'phone') return () => {};
   const doc = document, root = doc.documentElement;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
@@ -334,7 +333,11 @@ export default function setup(api) {
     const here = api.route().thread, out = [], s = sessions || readSessions();
     const apps = api.apps.list(), dk = desks();
     // repaint only when what it lists changed (renders come often while a chat is working; a row under a finger stays)
+<<<<<<< HEAD
     const sig = JSON.stringify([q, here, secOpen, api.sessions.workingOrder?.(), readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
+=======
+    const sig = JSON.stringify([q, archiveTop(root), here, secOpen, api.sessions.workingOrder?.(), readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
+>>>>>>> origin/main
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     if (q) {
@@ -345,8 +348,8 @@ export default function setup(api) {
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aa-empty', { text: 'No chat or app by that name.' }));
     } else {
       // the drawer is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
-      // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
-      for (const [k, word0] of SECTIONS) {
+      // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
+      for (const [k, word0] of sectionsFor(root)) {
         // round 18 item 3a: Ready in the stock Chats Filter's order (Priority / Newest / Oldest), notifications among it
         const rows = k === 'working' ? globalThis.WizChatsListModel.workingSort(s[k], api.sessions.workingOrder?.()) : k === 'ready' ? readySort(s[k] || [], readyOrder()) : s[k] || [], on = !!secOpen[k];
         const h = el('button', 'aa-lab aa-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aa-sec-' + k });
@@ -558,11 +561,15 @@ export default function setup(api) {
    * dock orb moves into it at that size (chrome.orbIn), so tap talks / dictates and hold gives a command, as everywhere.
    * Off a chat, during a take (the stock voice controls around the orb's own spot) or with no composer on screen: back
    * to its own spot. */
+  // The Chats windows' shared surfaces come from the shell (api.phone.chats: WizChatsHost surfaces), never its markup.
+  const chatSurfaces = () => api.phone.chats?.() || [];
+  const onScreenComposer = W => chatSurfaces().map(s => s.composer).find(n => { if (!n) return false; const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; }) || null;
+  const shownNote = () => chatSurfaces().map(s => s.notification).find(n => n && (typeof n.getClientRects !== 'function' || n.getClientRects().length)) || null;
   function orbSlot() {
     if (root.dataset.aiFront !== 'chat') return null;
     if ((api.voice?.state?.()?.state || 'idle') !== 'idle') return null;
     const W = globalThis.innerWidth || 0;
-    const c = [...doc.querySelectorAll('.win.app-chats .ch-compose')].find(n => { const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; });
+    const c = onScreenComposer(W);
     const row = c?.querySelector('.ch-row2'); if (!row) return null;
     return gridSlot(row, 3);
   }
@@ -570,7 +577,7 @@ export default function setup(api) {
   // Home's apps end where the composer starts (it grows with words)
   function homeRoom() {
     const W = globalThis.innerWidth || 0, H = globalThis.innerHeight || 0;
-    const c = [...doc.querySelectorAll('.win.app-chats .ch-compose')].find(n => { const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; });
+    const c = onScreenComposer(W);
     const top = c ? c.getBoundingClientRect().top : 0;
     if (H && top > 0) root.style.setProperty('--ah-bottom', Math.round(H - top) + 'px');
   }
@@ -597,12 +604,12 @@ export default function setup(api) {
   }
   function paintTop(r = api.route()) {
     if (r.home || r.view !== 'thread' || r.thread !== '__new__' || (r.app && r.app !== 'chats')) draftWant = false;
-    noteRouteIntoActions(doc, '.win.app-chats');
+    globalThis.WizChatsHost.placeNotificationRoute(shownNote());
     const app = r.app && r.app !== 'chats' ? r.app : '';
     root.dataset.aiFront = r.home ? 'chat' : app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     // Home = a New chat: nothing but the skin's background, the composer and the orb
     // a notification opened from the list is a New chat holding the note: a chat, never Home (round 7)
-    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !noteThread(doc, '.win.app-chats') && !draftWant;
+    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !shownNote() && !draftWant;
     if (home) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
     homeShow(home);
     if (!home && app) closeSheet();

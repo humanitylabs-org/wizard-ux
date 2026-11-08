@@ -141,6 +141,9 @@
     front: () => homeOpen ? (globalThis.WosSkinHost?.panelMode && panelWin()?.id) || null : ws[cur].focus,
     // Desktop readers stay on their thread through sends and state/actions; Back remains explicit.
     keepThreadOpen: true,
+    // A new chat sent from the Chats window a layout docks beside an app (AI apps: Resolve this on a notification) stays
+    // in that column, never the list / Home laid out full width under the app panel (James, 6 Nov 2026).
+    keepNewOpen: id => !homeOpen && !!globalThis.WosSkinHost?.routeShows?.(wsOf(id)),
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
@@ -170,7 +173,11 @@
   function commandSnapshot() { const w=focused(); return {id:w?.id,thread:w?.thread,view:{appId:w?.appId,kind:w?.app==='chats' ? w.thread ? 'chat thread' : 'thread list' : 'app'}}; }
   const LOCAL_COMMANDS = window.WosCommands.create({CHATS,APP,findApp,appByName,quickSearch,sendSnap:commandSnapshot});
   function executeCommand(c,text,snap,musicDone) {
+<<<<<<< HEAD
     return window.WosCommands.execute(c,text,{search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,chatList:openChatsList,launcher:openPalette,findApp,openApp,openAppRoute:(id,url)=>window.WizOpenApp(id,url),musicDone,
+=======
+    return window.WosCommands.execute(c,text,{search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,chatList:openChatsList,launcher:openPalette,findApp,openApp,openAppRoute:(id,url)=>{const a=hostedOpenable(id);return !!a&&appAt(url)?.id===id&&openApp(a,{path:url})!==false;},musicDone,
+>>>>>>> origin/main
       layout(c) { const f=snap?.id?W[snap.id]:focused();
         if(c.action==='desk') { if(c.to==='home') goHome(); else c.to==='next'?stepDesk(1):c.to==='prev'?stepDesk(-1):goWs(+c.to-1); return true; }
         if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
@@ -186,8 +193,11 @@
     else toast(ok?'⚡':'!',ok?'Command handled on-device':'No command matched · nothing sent',2600);
   }
   // The words of a finished command take, as if just transcribed (QA seam: headless has no microphone).
-  function commandText(text, snap=commandSnapshot()) { const cmd=LOCAL_COMMANDS.parse(text,snap,'command'), music=/^(music|play_music)$/.test(cmd?.action||''); const ok=!!cmd && !!executeCommand(cmd,text,snap); commandSaid(ok,cmd,text,music); return ok?'local':'none'; }
-  function localCommand(text, snap=commandSnapshot()) { const c=LOCAL_COMMANDS.parse(text,snap,'command');return c ? executeCommand(c,text,snap) : false; }
+  async function commandText(text, snap=commandSnapshot()) { const cmd=await LOCAL_COMMANDS.confirm(LOCAL_COMMANDS.parse(text,snap,'command'),text,snap,'command'), music=/^(music|play_music)$/.test(cmd?.action||''); const ok=!!cmd && !!executeCommand(cmd,text,snap); commandSaid(ok,cmd,text,music); return ok?'local':'none'; }
+  function localCommand(text, snap=commandSnapshot()) { const c=LOCAL_COMMANDS.parse(text,snap,'command');
+    // A declared route opens only once the box's fresh app list confirms it (commands.js confirm).
+    if (c?.action==='open_app_route') return LOCAL_COMMANDS.confirm(c,text,snap,'command').then(x=>x ? executeCommand(x,text,snap) : false);
+    return c ? executeCommand(c,text,snap) : false; }
   let boundManager;
   function threadShown(wid,el) {
     if (wid.endsWith('::list')) return;
@@ -492,7 +502,7 @@
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
     // a layout placing the shell's opens (apps.routeOpens) puts an app where it shows apps (a desk given is stock's)
-    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;
+    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: opts.path || '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;
     if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
@@ -502,10 +512,11 @@
       if (ex) { focusWin(ex.id); return true; }
       newWin({ app: 'chats', thread: null, chatsProvider }, opts); return true;
     }
+    // opts.path: one of the app's own pages (a spoken declared route), opened exactly like a tap, then at that page.
     if (a.url) {
       const ex = !opts.fresh && findWin(w => w.app === 'frame' && w.appId === a.id);
-      if (ex) { focusWin(ex.id); return true; }
-      newWin({ app: 'frame', appId: a.id }, opts); return true;
+      if (ex) { focusWin(ex.id); if (opts.path) framePage(ex, opts.path); return true; }
+      newWin({ app: 'frame', appId: a.id, ...(opts.path ? { url: opts.path } : {}) }, opts); return true;
     }
     if (a.href) { window.open(a.href, '_blank', 'noopener'); return true; }
     return false;
@@ -588,6 +599,11 @@
     },
     close: id => { closeWin(id); return !W[id]; },
     chats: id => CHATS.surface(id),
+<<<<<<< HEAD
+=======
+    // The desks' placement containers (Classic's own markup stays here).
+    placements: () => [...stage.children].filter(n => n.classList?.contains('wsp')).map(n => ({ desk: Number(n.dataset.ws), node: n, shown: !n.hidden })),
+>>>>>>> origin/main
     settings: () => ({ isOpen: !setEl.hidden && setEl.parentNode === document.body, closePart: setEl.querySelector('.st-close') }),
     closeSettings: () => { const open = !setEl.hidden; if (open) closeSettings(); return open && setEl.hidden; },
     settingsOverlay: () => {
@@ -2080,7 +2096,7 @@
         if(!it?.text){if(owned)said({result:'kept',text:''});return 'retained';}
         // A command take is never a message: executed or unmatched, its custody finishes here.
         // Music settles on the player's done receipt; a failure keeps the recording.
-        const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const music=/^(music|play_music)$/.test(cmd?.action||'');
+        const cmd=await LOCAL_COMMANDS.confirm(LOCAL_COMMANDS.parse(it.text,snap,'command'),it.text,snap,'command'); const music=/^(music|play_music)$/.test(cmd?.action||'');
         const ok=cmd && executeCommand(cmd,it.text,snap,music?(done=>{if(done)OUTBOX.completeLocal(it.id);}):undefined);
         if(!music || !ok) await OUTBOX.completeLocal(it.id);
         commandSaid(ok,cmd,it.text,music);return ok?'local':'none';
@@ -3120,7 +3136,9 @@
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
     openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
-    contextDraft: (key, item, words, draft) => { let w = homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; focusWin(w.id); CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
+    // Resolve this on the notification this window already shows sends in place: re-opening it hopped the window through
+    // its list, and the AI apps layout then laid the chat out full width under the app panel (James, 6 Nov 2026).
+    contextDraft: (key, item, words, draft) => { let w = homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; focusWin(w.id); const inPlace = !!words && !draft && String(key).startsWith('notifications:') && CHATS.notifOpen?.(w.id) === String(key).slice(14); if (!inPlace) { CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); } if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => ws.length,

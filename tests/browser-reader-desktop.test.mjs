@@ -21,9 +21,13 @@ function desktopReader({existing = false, checkedLink = false} = {}) {
     goWs: i => {context.cur=i;},
     winEl: id => ({querySelector:()=>({contentWindow:{location:{pathname:'/browser/',search:'',hash:'',replace:url=>navigations.push([id,url])}}})}),
     WosAppSetup:{gate:(_app,resume)=>{gates.push(resume);return true;}},
+<<<<<<< HEAD
     // The layout's goApp now asks the shared panes owner to focus the app pane.
     panes:(()=>{let state={focus:'chats'};return {get:()=>state,set:next=>{state={...state,...next};}};})(),
     unpeek(){}, closeAll(){}, loading(){}, want:'', focusWant:'', wantAppFocus: id => { context.focusWant = id; }, CHATS_ID:'wizard', chatsFresh:true, chatThread:null, mainChats:()=>null,
+=======
+    unpeek(){}, closeAll(){}, loading(){}, want:'', focusWant:'', wantAppFocus: id => { context.focusWant = id; }, panes:{get:()=>({mode:'tiled',focus:'chats',slots:['chats']}),set(){}}, CHATS_ID:'wizard', chatsFresh:true, chatThread:null, mainChats:()=>null,
+>>>>>>> origin/main
   };
   context.window = context;
   context.WosSkinHost = {routeOpen(kind, detail, go) { if (routing) return null; routing=true; try { return holder.open(kind,detail,go) ? {value:true} : null; } finally {routing=false;} }};

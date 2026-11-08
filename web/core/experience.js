@@ -249,7 +249,7 @@
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
         shell: shellHere(),
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : t) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t) });
     },
     installed, defaults, authors,
     // Initial shell routes must see the selected view, including overlapping refreshes.

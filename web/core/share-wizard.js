@@ -12,7 +12,7 @@
   const inLane = fn => { const p = lane.then(fn, fn); lane = p.catch(() => {}); return p; };
   function valid(data) {
     const files = data?.files ?? [];
-    if (!Array.isArray(files) || files.length > 10 || files.some(f => !blob(f)) || files.reduce((n,f) => n + f.size, 0) > 100 * 1048576) throw new Error('Use up to 10 files / 100 MB');
+    if (!Array.isArray(files) || files.some(f => !blob(f))) throw new Error('Share files must be files');
     if (data?.text != null && (typeof data.text !== 'string' || data.text.length > 100000)) throw new Error('Use up to 100000 characters');
     if (data?.title != null && (typeof data.title !== 'string' || data.title.length > 200)) throw new Error('Invalid share title');
     if (!files.length && !data?.text?.trim()) throw new Error('Nothing to share');

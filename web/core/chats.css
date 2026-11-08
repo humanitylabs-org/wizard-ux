@@ -184,6 +184,14 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .steps.live summary { color: var(--cyan); }
 /* Reply summary (--wos-reply-summary: on): the short answer is one tappable block; tapping it shows the full reply in
  * its place, and Show less folds it back. */
+/* A tweak a reply carries (WIZARD_TWEAK_V1, core/settings.js tweakCard): Settings › Look's own switch row on an opaque card. */
+.msg.a .ch-tweak { max-width: 520px; margin: 10px 0 4px; padding: 0 12px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px);
+  background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text); }
+.msg.a .ch-tweak > .st-row:last-child { border-bottom: 0; }
+.msg.a .ch-tweak .st-row { min-height: 56px; padding: 10px 0; }
+.msg.a .ch-tweak .st-row:not(:disabled):not(.static) { cursor: pointer; }
+.msg.a .ch-tweak .st-row:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; border-radius: 8px; }
+.msg.a .ch-tweak .tw-gone small { color: var(--wz-text-muted); }
 .msg.a .rsum { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px;
   background: var(--glass, transparent); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .msg.a .rsum:hover { border-color: var(--line-2); }
@@ -288,8 +296,6 @@ a.fchip { color: inherit; text-decoration: none; }
 /* On a narrow list column the buttons stack; they then stretch to one shared width instead of ragged right edges.
    The 14px row gap keeps each button's 44px hit area its own. */
 .ch-pill.wait:has([data-chtroubleshoot]) .pbtn { flex: 1 0 auto; height: 30px; padding: 0 13px; line-height: 28px; white-space: nowrap; }
-.ch-sync.off { flex-wrap: wrap; }
-.ch-sync [data-chtroubleshoot] { min-height: 44px; padding: 4px 10px; border-radius: 99px; font: inherit; }
 [data-chtroubleshoot] { color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); }
 
 .ch-pill.sent { gap: 6px; padding: 0 14px 0 12px; color: #8fe3b5; pointer-events: none; animation: ch-pill-out 1.5s ease-in forwards; }
@@ -706,10 +712,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.compact .ch-row .pv { display: none; }
 /* Archive reads as a different place: a light tinted panel. */
 .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-/* Archive on top, then Working, then Ready uninterrupted at the bottom, on desktop and phone alike (By status layout;
-   James, 31 Oct 2026). Skins that arrange the phone list themselves (obsidian, landscapes) outrank these rules. */
+/* Working first, then Ready uninterrupted, Archive last, on desktop and phone alike (By status layout). Archive went
+   back to the bottom (James, 6 Nov 2026); Miguel's "Archive on top" tweak (miguel/archive-top) is the only way to put
+   it first, and its higher-specificity rule outranks this one. */
 .ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
-.ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
+.ch-list.by-status .ch-sec[data-sec="archive"] { order: 1; }
 .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
 .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
@@ -769,6 +776,18 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* Opened on the stored list snapshot: a quiet "Updating…" line with a spinner until the fresh read lands. */
 .ch-sync { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 16px 6px; font-size: 12px; color: var(--ink-3); animation: ch-fade .2s ease; }
 .ch-sync.off { color: var(--ink-2); }
+/* Every state is one line (James, 7 Nov 2026): long text ends in an ellipsis, the full line is the text's title. */
+.ch-sync > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Not up to date: one quiet row no taller than a section header, dot + line on the left, a text action on the right.
+   The action is not a pill: no fill or border, the quiet violet text of "Show all" (.ch-more); its 44px touch target
+   comes from padding, pulled back by a negative block margin so the row itself stays 32px; it paints above the list
+   below (position + z-index) so a tap on its lower edge still reaches it. */
+.ch-sync:has(.ch-sync-act) { justify-content: flex-start; gap: 7px; min-height: 32px; padding: 0 6px 0 16px; }
+.ch-sync-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--wz-warning, var(--amber)); }
+.ch-sync.stale .ch-sync-dot { background: var(--wz-text-muted, var(--ink-3)); }
+.ch-sync .ch-sync-act { position: relative; z-index: 1; flex: none; margin: -6px 0 -6px auto; height: 44px; padding: 0 10px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  font: inherit; font-weight: 650; white-space: nowrap; color: var(--violet-2, var(--wz-accent, var(--ink))); cursor: pointer; }
+.ch-sync .ch-sync-act:hover, .ch-sync .ch-sync-act:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
 @media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; } }
 
