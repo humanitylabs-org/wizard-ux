@@ -121,7 +121,12 @@ export function releaseState(a,i,explicit,complete) {
   if(i?.conflict || (a.conflict && !exactInstall(a,i))) return 'conflict';
   if(!i) return complete ? 'get' : 'unknown';
   if(a.commit && i.commit === a.commit && sameRepo(a.repo,i.repo)) return 'installed';
-  const newer = sameRepo(a.repo,i.repo) && a.commit && i.commit && i.source && i.channel && a.source === i.source && a.channel === i.channel && newerVersion(a.version,i.version);
+  // Beta is a discovery label; its install selection is recorded as link (UX#1188).
+  // WAM's registry and link previews omit channel: only these two sources default to Standard.
+  const linkSource = source => source === 'beta' || source === 'link';
+  const channel = row => row.channel || (linkSource(row.source) ? 'standard' : '');
+  const sameSource = a.source === i.source || (linkSource(a.source) && linkSource(i.source));
+  const newer = sameRepo(a.repo,i.repo) && a.commit && i.commit && i.source && channel(i) && sameSource && channel(a) === channel(i) && newerVersion(a.version,i.version);
   if(newer) return complete ? 'update' : 'unknown';
   if(explicit) return complete ? 'switch' : 'unknown';
   // An unknown/different/older pin isn't an upgrade; default action opens the existing copy.
