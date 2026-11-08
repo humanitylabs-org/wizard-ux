@@ -13,7 +13,8 @@ html[data-skin="obsidian-light"] { --ob-fill: #000000; --ob-on: #ffffff; --ob-ti
 html[data-skin^="obsidian"] :is(.ch-new, .ch-compose button, .ch-fab, .ch-compose button.ch-mic.on, .tr-type button, .tr-cmd, .side-card .side-go) {
   background: var(--ob-fill); color: var(--ob-on); box-shadow: none; border-color: transparent; }
 html[data-skin^="obsidian"] :is(.ch-new, .ch-compose button, .ch-fab) svg { stroke: var(--ob-on); }
-html[data-skin^="obsidian"] .msg.u .bub { background: var(--ob-tint); border-color: var(--ob-edge); }
+html[data-skin="obsidian"] { --wz-owner-message: color-mix(in srgb, var(--violet) 26%, var(--bg)); --wz-owner-message-edge: color-mix(in srgb, var(--violet) 44%, var(--bg)); }
+html[data-skin^="obsidian"] .msg.u .bub { background: var(--wz-owner-message); border-color: var(--wz-owner-message-edge); }
 html[data-skin^="obsidian"] :is(.ws.cur, .dchats .pane-newchat, .dchats .ch-row.cur, .ch-rdy-bar button.on, .ch-fopt.on, .mrow.on, .fi-row.on, .ch-chip, .bub a.wsl, .ch-earlier, .msg.u.pending .pbtn, .ch-pill .pbtn, .logo[aria-current="page"]) {
   background: var(--ob-tint); border-color: var(--ob-edge); color: var(--ink); }
 html[data-skin^="obsidian"] .ws.cur::after { background: var(--ink); }

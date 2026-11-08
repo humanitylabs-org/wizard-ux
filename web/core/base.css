@@ -35,4 +35,13 @@ body { font: 15px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Robot
 :root {
   /* Opaque backing shared by every text-bearing floating panel. Never use canvas here. */
   --wz-panel: var(--wz-base, var(--bg, #05030c));
+  /* The owner's own message bubbles (James, 8 Nov 2026: skim a thread by speaker). Agent replies sit on the window;
+   * his words get an opaque accent-tinted surface on every skin, readable ink (WCAG AA, tests/owner-message-surface). */
+  --wz-owner-message: color-mix(in srgb, var(--violet) 40%, var(--bg));
+  --wz-owner-message-edge: color-mix(in srgb, var(--violet) 64%, var(--bg));
+  --wz-on-owner-message: var(--ink);
+}
+html:is([data-skin="obsidian-light"], [data-skin="sepia"], [data-color-scheme="light"]) {
+  --wz-owner-message: color-mix(in srgb, var(--violet) 22%, var(--bg));
+  --wz-owner-message-edge: color-mix(in srgb, var(--violet) 40%, var(--bg));
 }

@@ -9,7 +9,7 @@
  *                     delivered by the durable outbox with the recording attached                        (sendVoiceTo)
  *  #17 work receipt   one collapsible row per turn: Worked for 3m · 2 of 4 done · named steps         (chat-work.js)
  *  #18 reading place  opens at the start of the latest reply, remembers where you were for an hour,
- *                     “↓ Latest” jump; a Working thread follows the bottom until you scroll up
+ *                     “↓ Latest” jump; live replies never pull the reader down (only his own send does)
  *  #23 Files          browse Wizard Files, preview in the media viewer, attach to a chat              (files.js)
  *
  *   const PW = window.WosChatPower(api)   (api: the Chats instance's internals, see chats.js)
@@ -69,6 +69,9 @@ window.WosChatPower = function chatPower(A) {
     return el.getBoundingClientRect().top - (A.threadViewportTop ? A.threadViewportTop(nb, base) : base);
   };
   const bottomGap = nb => { const s = scrollBox(nb); return s.scrollHeight - s.scrollTop - s.clientHeight; };
+  // The thread's own content extent, the same in box and document scrolling (the composer and chrome are outside it).
+  const contentH = nb => { const a = nb.firstElementChild, b = nb.lastElementChild; return a && b ? b.getBoundingClientRect().bottom - a.getBoundingClientRect().top : 0; };
+  const PIN_MS = 1500; // his own send shows his message once, then the reply streams in below without moving him
   function anchorOf(nb) {
     if (!onScreen(nb)) return null;
     const seen = {};
@@ -105,15 +108,37 @@ window.WosChatPower = function chatPower(A) {
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
     if (c?.placeOptions?.notification) { c.placeOptions.notificationScroll = scrollBox(nb).scrollTop; return; }
     if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;
-    RP.save({ sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
+    RP.save(c.eyeRec = { sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
       scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: bottomGap(nb) < 80,
       working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
+    c.seenH = contentH(nb); // what the reader has seen; growth past this never pulls him down
   }
-  function follow(wid) {
+  // Jump to the bottom once: his own send (pin: keeps his new message in view while it paints) or ↓ Latest (no pin).
+  function follow(wid, pin = true) {
     const w = H.win(wid); if (!w?.thread || w.thread === '__new__') return;
-    RP.save({ ...RP.read(w.thread), sessionId: w.thread, messageId: ch(wid).lid || '',
+    const c = ch(wid); c.pinUntil = pin ? Date.now() + PIN_MS : 0; c.eyeRec = null;
+    RP.save({ ...RP.read(w.thread), sessionId: w.thread, messageId: c.lid || '', anchor: null,
       scrollTop: 0, atBottom: true, savedAt: Date.now(), working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
-    const nb = A.elOf?.(wid)?.querySelector('.ch-msgs'); if (nb) { endSettle(ch(wid)); restore(nb, RP.read(w.thread)); }
+    const nb = A.elOf?.(wid)?.querySelector('.ch-msgs'); if (nb) { endSettle(c); restore(nb, RP.read(w.thread)); c.seenH = contentH(nb); }
+  }
+  /* Live repaints and growth never pull the reader down (James, 8 Nov 2026: no scroll-yanking while a reply streams).
+   * A place at the bottom stays at the bottom only while the content is unchanged (keyboard, composer, rotation) or
+   * just after his own send; content that grew (bottom place, or the opening last-reply place clamped at the end)
+   * leaves the words he is reading where they are, re-pinned only to his own on-screen eye line, and shows ↓ Latest. Opening a thread still lands as before (position + settle use restore directly). */
+  function hold(nb, place) {
+    const el = nb.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
+    if (!c || !onScreen(nb)) return restore(nb, place);
+    const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
+    let done = true;
+    if (!grew || Date.now() < (c.pinUntil || 0)) done = restore(nb, place);
+    else {
+      // The eye-line record is only trusted when it was captured on this screen (just before the repaint).
+      if (place === c.eyeRec && place.anchor) restore(nb, { ...place, atBottom: false });
+      capture(nb);
+    }
+    c.seenH = contentH(nb);
+    paintLatest(el, nb);
+    return done;
   }
   function paintLatest(el, nb) {
     const b = el.querySelector('[data-chlatest]'), hidden = bottomGap(nb) < 160;
@@ -155,8 +180,10 @@ window.WosChatPower = function chatPower(A) {
         if (saved == null && !place.atBottom) c.atStart = sid;
         RP.save(place);
       }
+      c.eyeRec = null; c.pinUntil = 0;
       restore(nb, place);
-      settle(c, nb, () => restore(nb, RP.read(sid)));
+      c.seenH = contentH(nb);
+      settle(c, nb, () => settleTo(c, nb, sid));
       if (!c.posCached) c.unreadOpen = '';
     } else {
       if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
@@ -164,8 +191,8 @@ window.WosChatPower = function chatPower(A) {
         if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
         if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
       }
-      if (settling(c)) { const s = c.settle; settle(c, nb, () => restore(nb, RP.read(sid)), s.until); }
-      restore(nb, RP.read(sid));
+      if (settling(c)) { const s = c.settle; settle(c, nb, () => settleTo(c, nb, sid), s.until); settleTo(c, nb, sid); }
+      else hold(nb, RP.read(sid));
     }
     // Content or chrome can grow without a repaint. Both modes use the same restore rule.
     const nodes = [nb, ...nb.children, nb.closest('.ch-thread')?.querySelector('.ch-compose')].filter(Boolean);
@@ -179,6 +206,14 @@ window.WosChatPower = function chatPower(A) {
     paintLatest(el, nb);
     return true;
   }
+  // Opening settles onto its place while images/history arrive, but a reply streaming in during those first seconds
+  // is still growth below: it keeps the view where it is and shows ↓ Latest (review of this fix).
+  function settleTo(c, nb, sid) {
+    const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
+    if (!grew || !A.isWorking?.(LIVE.session?.(sid))) restore(nb, RP.read(sid));
+    c.seenH = contentH(nb);
+    const el = nb.closest('[data-chats]'); if (el) paintLatest(el, nb);
+  }
   function resume(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
     if (c?.placeOptions) position(w, el, nb, c.placeOptions);
@@ -189,7 +224,7 @@ window.WosChatPower = function chatPower(A) {
     clearTimeout(c.reflowT);
     const wait = 600 - (Date.now() - (c.placeUserAt || 0));
     if (wait > 0) { c.reflowT = setTimeout(() => reflow(nb), wait + 1); return; }
-    restore(nb, RP.read(w.thread));
+    if (settling(c)) settleTo(c, nb, w.thread); else hold(nb, RP.read(w.thread));
   }
   const SETTLE_MS = 3000;
   function settle(c, nb, apply, until) {
@@ -210,7 +245,7 @@ window.WosChatPower = function chatPower(A) {
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats); if (!w?.thread) return;
     const c = ch(w.id), sc = scrollBox(nb), own = placed.has(sc) && Math.abs(sc.scrollTop - placed.get(sc)) < 1;
     placed.delete(sc);
-    if (!own && !settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); }
+    if (!own && !settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); c.pinUntil = 0; }
     capture(nb); paintLatest(el, nb);
   }
   // Pick from what's already in Wizard Files (#23), next to the paperclip.
@@ -711,7 +746,7 @@ window.WosChatPower = function chatPower(A) {
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
     if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
-    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id); } return true; }
+    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id, false); } return true; }
     if (t.closest('[data-chmic]')) {
       if (!w?.thread || !H.recordReply) return true;
       const r = H.recordReply(id, w.thread);
