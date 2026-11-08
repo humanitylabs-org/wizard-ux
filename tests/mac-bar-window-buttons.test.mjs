@@ -36,7 +36,15 @@ test('the Mac app marks the page before first paint; browsers and phones do not'
 
 test('inside the Mac app the desktop bar reserves the native window-button area', () => {
   const css = read('web/desktop/desktop.css');
-  // 96px matches the area WizardDragView leaves to the window buttons (p.x < 96).
-  assert.match(css, /html\[data-native-chrome="mac"\] \.bar \{[^}]*padding-left:\s*96px/);
+  // The Mac app measures the buttons into --wz-titlebar-left; without it, 96px matches the area
+  // WizardDragView leaves to the window buttons (p.x < 96). 8px is the bar's normal edge padding.
+  assert.match(css, /html\[data-native-chrome="mac"\] \.bar \{[^}]*padding-left:\s*max\(8px,\s*var\(--wz-titlebar-left,\s*96px\)\)/);
   assert.match(css, /html\[data-native-chrome="mac"\] \.ws-list \{[^}]*overflow-x:\s*auto/);
+});
+
+test('the measured inset only ever applies inside the Mac app', () => {
+  const css = read('web/desktop/desktop.css');
+  const uses = css.split('\n').filter(l => l.includes('--wz-titlebar-left') && !l.trim().startsWith('*') && !l.trim().startsWith('/*'));
+  assert.ok(uses.length >= 1);
+  for (const l of uses) assert.match(l, /^html\[data-native-chrome="mac"\] /);
 });
