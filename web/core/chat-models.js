@@ -62,6 +62,32 @@
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
    * switch. James's skins keep the stock compact menu, so none of this shows there (team rule: taste lives in your skin). */
   const ours = () => typeof document !== 'undefined' && (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/model-pills');
+  /* Failure reason (wizard-ux#166, off by default behind the wizard/failure-reason tweak): when the Agent Service names
+   * why the last run failed (wizard_last_run_error), the Errors row and the thread say it plainly instead of
+   * "Error: <your message>", and the ways out are ordered by what can work. A sign-out with a connection app keeps
+   * its own Sign in panel (s.reconnect wins). */
+  const REASON_TWEAK = 'wizard/failure-reason';
+  const reasonOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(REASON_TWEAK); } catch (_) { return false; } };
+  const PROVIDER_NAMES = [[/codex|chatgpt|openai/i, 'ChatGPT'], [/claude|anthropic/i, 'Claude'], [/tinfoil/i, 'Tinfoil'], [/gemini|google/i, 'Gemini'], [/openrouter/i, 'OpenRouter']];
+  const providerName = p => (PROVIDER_NAMES.find(([re]) => re.test(String(p || ''))) || [])[1] || '';
+  const REASONS = {
+    provider_auth: P => ({ line: `${P || 'The AI provider'} isn’t available: signed out or sign-in expired`,
+      body: `Wizard couldn’t use your ${P || 'AI'} account. Sign in again, then tap Retry, or choose another model now.` }),
+    provider_billing: P => ({ line: `${P || 'The AI provider'} isn’t available: subscription ended`, modelFirst: true,
+      body: `Your ${P || 'AI'} plan has ended or needs payment, so Retry on ${P || 'the same provider'} will fail again until it’s renewed. Choose another model, or renew the plan and tap Retry.` }),
+    provider_quota: P => ({ line: `${P || 'The AI provider'} usage limit reached`, modelFirst: true,
+      body: `You’ve used up your ${P || 'AI'} limit for now, so Retry on ${P || 'the same provider'} will fail until it resets. Choose another model, or tap Retry later.` }),
+    network: P => ({ line: `Couldn’t reach ${P || 'the AI provider'}: network problem`,
+      body: `The connection to ${P || 'the AI provider'} failed. Your account is fine. Retry usually works.` }),
+    unknown: P => ({ line: `${P || 'The AI provider'} couldn’t answer`,
+      body: 'Tap Retry, or choose another model.' }),
+  };
+  function runError(s) {
+    if (!reasonOn() || !s || s.reconnect || !['failed', 'interrupted'].includes(s.status)) return null;
+    const e = s.runError, make = e && REASONS[e.code];
+    if (!make) return null;
+    return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
+  }
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
   /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the
@@ -233,6 +259,7 @@
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider) { return visibleChoices(shown(M.options), model, provider); },
+    runError,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
     short(model, provider) {
       if (!model) return '';
@@ -430,6 +457,14 @@
         return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>
         <p>This message is saved. Sign in to ${esc(rc.name)} and it will send to ${esc(target)} on its own.</p>
         <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}">Sign in to ${esc(rc.name)}</button></div></section>`;
+      }
+      const re = s.queueReason !== 'provider_access' && busy !== 'retry' ? runError(s) : null;
+      if (re) {
+        const retryB = `<button type="button" data-chretry ${busy || !canRetry ? 'disabled' : ''}>Retry</button>`;
+        const modelB = `<button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button>`;
+        return `<section class="ch-fail reason${re.modelFirst ? ' model-first' : ''}" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}" data-chreason="${esc(re.code)}"><span class="lb">${esc(re.line)}</span>
+        <p>${esc(re.body)} Your message is saved.${model ? ` It was sent to ${esc(model)}.` : ''}</p>${re.message ? `<p class="ch-fail-why">${esc(re.message)}</p>` : ''}
+        <div class="ch-fail-b">${re.modelFirst ? modelB + retryB : retryB + modelB}<button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
       }
       const waiting = s.status === 'queued' && s.queueReason === 'provider_access';
       const what = waiting ? s.safeError || 'The selected AI provider could not start this request.' : s.status === 'interrupted' ? 'The last request was interrupted before it finished.' : 'The last request didn’t finish.';

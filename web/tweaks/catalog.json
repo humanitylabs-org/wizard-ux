@@ -28,7 +28,8 @@
     "wizard/thread-tracker",
     "wizard/desktop-chats",
     "wizard/background-continue",
-    "wizard/wizardos-name"
+    "wizard/wizardos-name",
+    "wizard/failure-reason"
   ],
   "defaults": [
     "wizard/unified-inbox"

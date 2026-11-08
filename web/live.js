@@ -66,8 +66,16 @@
     const nextRun = optIso(v.nextRun);
     return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
   }
+  // Why the last run failed (Agent Service wizard_last_run_error, wizard-ux#166): a known code plus the provider.
+  // Only the off-by-default wizard/failure-reason tweak shows it (core/chat-models.js runError).
+  const RUN_ERROR_CODES = new Set(['provider_auth', 'provider_billing', 'provider_quota', 'network', 'unknown']);
+  function runErrorOf(v) {
+    if (!v || typeof v !== 'object' || !RUN_ERROR_CODES.has(v.code)) return null;
+    const one = (x, n) => (typeof x === 'string' ? x : '').replace(/\s+/g, ' ').trim().slice(0, n);
+    return { code: v.code, provider: one(v.provider, 60), message: one(v.message, 200) };
+  }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
@@ -90,6 +98,7 @@
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
       reconnect: reconnectOf(item.wizard_reconnect),
+      runError: runErrorOf(item.wizard_last_run_error),
       archived: !!item.archived, hidden: !!item.hidden,
       messageCount: Number.isSafeInteger(item.message_count) ? item.message_count : undefined,
       lastUserAt, lastAssistantAt,
