@@ -119,6 +119,16 @@ public final class HomeScreenShortcuts {
                     }
                     if (!manager.isRequestPinShortcutSupported()) { send.accept("unsupported"); return; }
                     if ("status".equals(op)) { send.accept(pinned(activity,app) ? "pinned" : "ready"); return; }
+                    if ("pin-widget".equals(op)) {
+                        // Fallback widget (off the default path): same activation rules as a pin, Messenger only.
+                        if (!ai.wizards.os.badge.UnreadBadges.APP_ID.equals(app)) { send.accept("error"); return; }
+                        final long wg = touch.claim(SystemClock.elapsedRealtime());
+                        if (wg < 0 || !activity.hasWindowFocus() || !touch.current(wg)) { send.accept("error"); return; }
+                        String widgetIcon = data.optString("icon");
+                        if (decodeIcon(widgetIcon) == null) widgetIcon = ""; // same PNG bounds as a pin; else the app icon is used
+                        send.accept(ai.wizards.os.badge.UnreadWidget.requestPin(activity,widgetIcon));
+                        return;
+                    }
                     if (!"pin".equals(op)) return;
                     final long gesture = touch.claim(SystemClock.elapsedRealtime());
                     final String page = view.getUrl();
@@ -142,6 +152,7 @@ public final class HomeScreenShortcuts {
             });
     }
     /** Both paths enforce the same PNG format and decoded size bounds. */
+    public static Bitmap decodeIcon(String png) { try { return icon(png); } catch (RuntimeException e) { return null; } }
     private static Bitmap icon(String png) {
         if (!png.startsWith("data:image/png;base64,") || png.length() > 90000) return null;
         byte[] bytes = Base64.decode(png.substring(22),Base64.DEFAULT);
@@ -163,15 +174,16 @@ public final class HomeScreenShortcuts {
         android.content.SharedPreferences prefs = c.getSharedPreferences("home-screen-pins",Context.MODE_PRIVATE);
         if (!HomeScreenPolicy.needsUpdate(ownPinned,prefs.getString(id + ":name",null),
                 prefs.getString(id + ":icon",null),name,png)) return "unchanged";
+        // A page refresh redraws the plain icon; keep the unread bubble on it.
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,id).setShortLabel(name).setLongLabel(name)
-            .setIcon(Icon.createWithBitmap(bitmap)).build();
+            .setIcon(Icon.createWithBitmap(ai.wizards.os.badge.BadgeCompositor.compose(bitmap,ai.wizards.os.badge.UnreadBadges.storedCount(c,app)))).build();
         // Recheck ownership immediately before the update; updateShortcuts itself cannot create a pin.
         if (!pinned(c,app) || !c.getSystemService(ShortcutManager.class).updateShortcuts(Collections.singletonList(shortcut))) return "error";
         prefs.edit().putString(id + ":name",name).putString(id + ":icon",png).apply();
         if (BuildConfig.DEBUG) android.util.Log.i("WizardHomeShortcuts","updated " + id);
         return "updated";
     }
-    private static String pin(Context c, JSONObject data) {
+    static String pin(Context c, JSONObject data) {
         String app = data.optString("appId"), name = data.optString("name"), png = data.optString("icon");
         name = HomeScreenPolicy.displayName(app,name);
         if (!HomeScreenPolicy.validId(app) || name.trim().isEmpty() || name.length() > 80) return "error";
@@ -187,7 +199,7 @@ public final class HomeScreenShortcuts {
         Intent launch = new Intent(c,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(taskUri(c,app))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_NEW_TASK);
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,shortcutId).setShortLabel(name).setLongLabel(name)
-            .setIcon(Icon.createWithBitmap(bitmap)).setIntent(launch).build();
+            .setIcon(Icon.createWithBitmap(ai.wizards.os.badge.BadgeCompositor.compose(bitmap,ai.wizards.os.badge.UnreadBadges.storedCount(c,app)))).setIntent(launch).build();
         Intent callback = new Intent(c,PinConfirmed.class).setData(taskUri(c,app)).putExtra("token",token);
         PendingIntent pending = PendingIntent.getBroadcast(c,0,callback,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return c.getSystemService(ShortcutManager.class).requestPinShortcut(shortcut,pending.getIntentSender()) ? "pending" : "unsupported";

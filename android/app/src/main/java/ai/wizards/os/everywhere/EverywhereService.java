@@ -337,6 +337,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     public void onCreate() {
         super.onCreate();
         liveService = this;
+        ai.wizards.os.badge.UnreadBadges.hold(this, this, true); // foreground service: unread icon badge may poll while backgrounded
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers still unsent from an earlier run
         wm = getSystemService(WindowManager.class);
         density = getResources().getDisplayMetrics().density;
@@ -439,6 +440,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     @Override
     public void onDestroy() {
+        ai.wizards.os.badge.UnreadBadges.hold(this, this, false);
         outbox.removeListener(this);
         try { unregisterReceiver(screenWatch); } catch (Exception ignored) { }
         discard();

@@ -271,6 +271,20 @@
             android:name=".notify.ReplyJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Messenger icon unread count: periodic backstop poll, and the opt-in 1x1 widget fallback. -->
+        <service
+            android:name=".badge.UnreadJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver
+            android:name=".badge.UnreadWidget"
+            android:label="Messenger"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/messenger_widget_info" />
+        </receiver>
         <!-- In-app update: PackageInstaller session results (Android's confirm screen, success, failures). -->
         <receiver
             android:name=".update.InstallReceiver"
