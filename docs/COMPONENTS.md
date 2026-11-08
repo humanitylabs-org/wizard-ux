@@ -12,33 +12,33 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 ## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
-| Need | Use |
+|Need|Use|
 |---|---|
-| Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` |
-| Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` |
-| App identity/root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK |
-| Composer input | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) |
-| File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) |
-| Photo/video viewer | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` |
-| Same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) |
-| Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin |
-| Skin/tokens/mode | `WizardApp.theme.get/onChange`, `--wz-*` (`--wz-owner-message`) |
-| Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback |
-| Connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct) |
-| Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
-| Share out (people → apps → Other) | `WizardApp.share.text / file` |
-| Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) |
-| Mic, camera, screen capture | `WizardApp.capture.start / settle / pending / ack`, `WizardApp.voiceInput.register` |
-| Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) |
-| Tools | `WizardApp.titlebar.set`; `WizAppServices.titlebar.render` |
-| Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy |
-| Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) |
-| Draft holds/keep (1.5s) | `WizardApp.update.hold` |
-| Offline shell | `web/sw.js` |
-| App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic |
-| Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) |
-| Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM |
-| App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin |
+|Owner signatures|`WizardApp.identity.*` → `wizardDevicePort`|
+|Agent chat|`WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft`|
+|App identity/root|`WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK|
+|Composer input|`WizardApp.composer.bind` (Chats' `web/core/composer-input.js`)|
+|File chip before send|`WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`)|
+|Photo/video viewer|`WizardApp.media.view(items, i)` = Chats' `WosChat.viewer`|
+|Same-app companion|`WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md)|
+|Back in app; leave on dismiss|`WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin|
+|Skin/tokens/mode|`WizardApp.theme.get/onChange`, `--wz-*` (`--wz-owner-message`)|
+|Native Android skin|`WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback|
+|Connect|`ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct)|
+|Transcribe audio|`WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks)|
+|Share out (people → apps → Other)|`WizardApp.share.text / file`|
+|Receive shares|`WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`)|
+|Mic, camera, screen capture|`WizardApp.capture.start / settle / pending / ack`, `WizardApp.voiceInput.register`|
+|Duck Music; orb app button|`WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb)|
+|Tools|`WizardApp.titlebar.set`; `WizAppServices.titlebar.render`|
+|Fingerprint app secret|`WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy|
+|Offline replica, durable edits|`WizOffline.create` (`core/offline-kit.js`)|
+|Draft holds/keep (1.5s)|`WizardApp.update.hold`|
+|Offline shell|`web/sw.js`|
+|App reading place|`WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic|
+|Motion/haptics|`WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`)|
+|Canonical style admission|`check_style.py` (`wizard-os/style/`), mirrored in WAM|
+|App kit: rows/sections/empty/add|`WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin|
 
 ## Shell (`web/core/`): both shells/all agents.
 
