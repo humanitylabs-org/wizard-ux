@@ -396,7 +396,9 @@
 
   /* ---------- taps ---------- */
   const anchorOf = i => ({ message_id: i.message_id || null, at: i.at || 0 });
-  function markSeen(sid, agent, ids, defer = false, versions = null, dismiss = false) {
+  // Seen/Dismiss only acknowledge tracker items; they never archive the thread. Only the Archive button archives
+  // (James, 8 Nov 2026: threads were vanishing into Archive after he dismissed their last open item).
+  function markSeen(sid, agent, ids, defer = false, versions = null) {
     const k = key(sid, agent), t = threads.get(k);
     if (!t) return;
     const expected = new Map(t.items.filter(i => ids.includes(i.id)).map(i => [i.id, { id: i.id, updated_at: i.updated_at }]));
@@ -404,22 +406,12 @@
     const mine = seenLocally.get(k) || new Set(); seenLocally.set(k, mine);
     t.items = t.items.map(i => { if (ids.includes(i.id) && !i.seen) { mine.add(`${i.id}@${i.updated_at}`); return { ...i, seen: true }; } return i; });
     counts[k] = tally(project(k, t.items));
-    let readyConfirmed;
-    const c = counts[k], L = window.WizLive;
-    if (dismiss && !c.needs_you && !c.blocked && !c.running && !c.done_unseen && L?.archive
-      && (L.agentOf?.(sid) || 'hermes') === (agent || 'hermes')) {
-      // Reuse Ready's Done operation, including its rollback. Never archive a
-      // thread which still has other unread work, or persist before Seen confirms.
-      const confirmed = new Promise(resolve => { readyConfirmed = resolve; });
-      L.archive(sid, { confirmed });
-    }
     changedEvent(); // painted before the box hears about it
     pendingSeen.set(k, (pendingSeen.get(k) || 0) + 1);
     let phase = 'staged';
     const settle = () => { if (phase === 'settled') return; phase = 'settled'; pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1)); };
     // A write the box did not take is rolled back at once and the thread re-read, so this device never hides what the others still show.
     const undo = () => {
-      readyConfirmed?.(false);
       settle(); const set = seenLocally.get(k); for (const tok of restore.keys()) set?.delete(tok);
       const cur = threads.get(k);
       if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(project(k, cur.items)); changedEvent(); }
@@ -446,7 +438,6 @@
         for (const result of j.results || []) if (result.status === 'stale') {
           const i = expected.get(result.id); if (i) mine.delete(`${i.id}@${i.updated_at}`);
         }
-        readyConfirmed?.(!j.results?.some(r => r.status === 'stale') && j.items.every(i => i.seen === true));
         settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(project(k, threads.get(k).items)); changedEvent();
       })
       .catch(undo);
@@ -535,7 +526,7 @@
     const item = groupsOf(project(k, threads.get(k)?.items || [])).find(i => i.id === row.dataset.ttRow);
     if (!item) return true;
     if (t.closest('[data-tt-resume]')) { resumeRows(s, a, stoppedOf(s, a).filter(i => i.id === item.id), resume); return true; }
-    if (t.closest('[data-tt-dismiss]') && item.kind === 'you') { markSeen(s, a, item.ids, false, null, true); return true; }
+    if (t.closest('[data-tt-dismiss]') && item.kind === 'you') { markSeen(s, a, item.ids); return true; }
     if (t.closest('[data-tt-seen]')) { markSeen(s, a, item.ids); return true; }
     // Opening is not seeing: close the list and jump; the visible dwell acknowledges green replies.
     openKeys.delete(k); opened = null; repaint();
