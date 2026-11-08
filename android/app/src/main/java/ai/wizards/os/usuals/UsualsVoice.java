@@ -31,7 +31,7 @@ public final class UsualsVoice {
         UsualsRunner r = UsualsRunner.get(c);
         String b = UsualsRunner.NEW.equals(id) ? r.teach("") : r.run(id);
         if (b.isEmpty()) return;
-        String why = "accessibility".equals(b) ? "Food needs Wizard OS accessibility switched on"
+        String why = "accessibility".equals(b) ? "Food needs WizardOS accessibility switched on"
                 : "grab".equals(b) ? "Grab isn't installed" : "busy".equals(b) ? "Finish teaching first" : "That order is gone";
         Log.i(UsualsRunner.TAG, "voice run refused: " + b);
         Toast.makeText(c, why, Toast.LENGTH_LONG).show();

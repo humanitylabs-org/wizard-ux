@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wizard OS native-parity QA (runs on Thales). Fresh API 35 emulator, the exact QA APK, real Android plumbing.
+"""WizardOS native-parity QA (runs on Thales). Fresh API 35 emulator, the exact QA APK, real Android plumbing.
 
 usage: qa_native_parity.py QA_APK NEXT_APK WEB_DIR [OUT_DIR]
 
@@ -19,7 +19,7 @@ Checks
       mid-take leaves a take that the app offers on relaunch and sends once.
   #20 Android share sheet lists Wizard; sharing an image → Share sheet in the app → new chat with the image
       uploaded and attached to the run; Back closes the sheet and stays in the app.
-  #21 reply to a chat sent from Wizard OS while the app is in the background → notification → tap opens that thread.
+  #21 reply to a chat sent from WizardOS while the app is in the background → notification → tap opens that thread.
   #22 update feed with a bad checksum is refused; the real newer APK shows the banner → Update → "Install unknown
       apps" → download → verify sha256 + signer → Android's package installer opens; installing it lands 9000+N.
       Web hot-reload keeps a typed chat draft.
@@ -88,7 +88,7 @@ def wait(fn, secs, step=0.7):
     return fn()
 
 
-# ------------------------------------------------------------------ fake Wizard (+ static Wizard OS + update feed)
+# ------------------------------------------------------------------ fake Wizard (+ static WizardOS + update feed)
 NEXT_SHA = hashlib.sha256(NEXT.read_bytes()).hexdigest()
 ST = {'transcribe': [], 'uploads': [], 'sessions': {}, 'runs': [], 'keys': {}, 'done': set(), 'log': [],
       'feed': None, 'apk_gets': 0, 'route': 0}
@@ -217,7 +217,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=30)
@@ -361,7 +361,7 @@ with _lockfile as lock:
         sh(ADB, '-s', S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         # QA hooks (debug build only): fake origin for the page + native HTTP, canned microphone.
         aiff = job / 'q.aiff'; aac = job / 'qa_mic.aac'
-        sh('say', '-o', aiff, 'This is the Wizard OS native recorder test. It keeps recording with the screen off.')
+        sh('say', '-o', aiff, 'This is the WizardOS native recorder test. It keeps recording with the screen off.')
         sh('afconvert', '-f', 'adts', '-d', 'aac', aiff, aac)
         sh(ADB, '-s', S, 'push', aac, '/data/local/tmp/qa_mic.aac')
         runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt && cp /data/local/tmp/qa_mic.aac files/qa_mic.aac' % (ORIGIN, ORIGIN))
@@ -372,7 +372,7 @@ with _lockfile as lock:
         sx('am start -W -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(6)
         connect()
         href = pg.ev('location.href')
-        check('the app loads Wizard OS from the fake Wizard', href.startswith(ORIGIN + '/wizard-os-home/'), href)
+        check('the app loads WizardOS from the fake Wizard', href.startswith(ORIGIN + '/wizard-os-home/'), href)
         check('native device bridge present', pg.ev("typeof window.WizardOSDevice?.recStart === 'function'"))
         shot('00-home')
 
@@ -380,7 +380,7 @@ with _lockfile as lock:
         # Since silent-update (0.7.0) the on-resume check downloads by itself, so the tampered feed is caught at once:
         # the banner names the refusal and nothing is installed.
         banner = wait(lambda: pg.ev("(() => { const e = document.querySelector('#dvUpdate'); return e && !e.hidden ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 25)
-        check('#22 a newer Wizard OS in the feed is found and checked (tampered checksum refused, Retry offered)', banner and 'checksum' in banner and 'Retry' in banner and ('available %s' % NEXT_VN) in logs('WizardUpdate', 'available'), banner)
+        check('#22 a newer WizardOS in the feed is found and checked (tampered checksum refused, Retry offered)', banner and 'checksum' in banner and 'Retry' in banner and ('available %s' % NEXT_VN) in logs('WizardUpdate', 'available'), banner)
         shot('22a-update-banner')
 
         # ============ #14a orb take: background + screen off, then send once ============
@@ -396,7 +396,7 @@ with _lockfile as lock:
         s1 = rec_size(rid)
         sx('input keyevent KEYCODE_HOME'); time.sleep(6)
         s2 = rec_size(rid)
-        check('#14 keeps recording with Wizard OS in the background', s2 > s1 + 20000 and not front(), (s1, s2, top()[:80]))
+        check('#14 keeps recording with WizardOS in the background', s2 > s1 + 20000 and not front(), (s1, s2, top()[:80]))
         sx('input keyevent KEYCODE_SLEEP'); time.sleep(2)
         pw = sx('dumpsys power | grep -E "mWakefulness=|Display Power: state="')
         time.sleep(12)
@@ -555,19 +555,19 @@ with _lockfile as lock:
             hit = tap_text(r'^Wizard$', xml)
             time.sleep(1.5)
             if not wait(front, 6): tap_text(r'^Just once$|^Always$'); time.sleep(2)
-        check('#20 sharing from outside lands in Wizard OS', wait(front, 8), (hit, top()[:100]))
+        check('#20 sharing from outside lands in WizardOS', wait(front, 8), (hit, top()[:100]))
         if not wait(front, 6):
             sx("am start -n %s/ai.wizards.os.share.ShareActivity -a android.intent.action.SEND -t image/png --eu android.intent.extra.STREAM %s --es android.intent.extra.TEXT 'Shared from the QA gallery' --grant-read-uri-permission" % (PKG, media))
             time.sleep(3)
         nat = native_sheet_send()
-        check('#20 the native Send to Wizard sheet shows the image and hands off to Wizard OS', 'qa-share' in nat and 'Send' in nat and wait(front, 8), (nat, top()[:100]))
+        check('#20 the native Send to Wizard sheet shows the image and hands off to WizardOS', 'qa-share' in nat and 'Send' in nat and wait(front, 8), (nat, top()[:100]))
         connect()
         sheet = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
-        check('#20 Wizard OS opens the Share sheet with the image and text', sheet and 'Share to Wizard' in sheet and 'qa-share' in sheet and pg.ev("document.querySelector('[data-dv=share] textarea')?.value || ''").startswith('Shared from'), sheet)
+        check('#20 WizardOS opens the Share sheet with the image and text', sheet and 'Share to Wizard' in sheet and 'qa-share' in sheet and pg.ev("document.querySelector('[data-dv=share] textarea')?.value || ''").startswith('Shared from'), sheet)
         time.sleep(1); shot('20b-share-in-app')
         # Back closes the sheet and stays in the app (Back never exits), then share again.
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-        check('#20 Back closes the Share sheet and Wizard OS stays open', front() and not pg.ev("!!document.querySelector('[data-dv=share]')"), top()[:100])
+        check('#20 Back closes the Share sheet and WizardOS stays open', front() and not pg.ev("!!document.querySelector('[data-dv=share]')"), top()[:100])
         sx('input keyevent KEYCODE_HOME'); time.sleep(1.5)
         sx("am start -a android.intent.action.SEND -t image/png --eu android.intent.extra.STREAM %s --es android.intent.extra.TEXT 'Shared from the QA gallery' --grant-read-uri-permission -f 0x10000000" % media)
         time.sleep(4)
@@ -599,20 +599,20 @@ with _lockfile as lock:
         if share_sid: ST['done'].add(ST['runs'][n0]['id'])
         t_note = wait(lambda: 'QA reply from the fake Wizard' in notifs(), 45, 1.5)
         nt = notifs()
-        check('#21 "Archimedes replied" notification while Wizard OS is in the background', t_note and 'chat-replies' in nt, nt[:400])
+        check('#21 "Archimedes replied" notification while WizardOS is in the background', t_note and 'chat-replies' in nt, nt[:400])
         sx('cmd statusbar expand-notifications'); time.sleep(2); shot('21a-reply-notification')
         hit = tap_text(r'QA reply from the fake Wizard')
         time.sleep(4)
         connect()
         th = pg.ev("(() => { const w = window.__wos; const d = w.desks[w.idx]; const f = w.wins[d.focus]; return f ? (f.app + ':' + (f.thread || '')) : ''; })()") or ''
-        check('#21 tapping it opens that thread in Wizard OS', hit and front() and th == 'chats:' + share_sid, (hit, th, top()[:80]))
+        check('#21 tapping it opens that thread in WizardOS', hit and front() and th == 'chats:' + share_sid, (hit, th, top()[:80]))
         time.sleep(2); shot('21b-thread-opened')
         # The earlier voice chat (#14) replies while the app is in front: no notification (James is looking at it).
         if run14:
             ST['done'].add(run14['id']); time.sleep(12)
-            check('#21 no notification while Wizard OS is in front', 'for ' + run14['id'] not in notifs(), '')
+            check('#21 no notification while WizardOS is in front', 'for ' + run14['id'] not in notifs(), '')
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
-        check('Back never leaves Wizard OS (thread → list → home)', front(), top()[:100])
+        check('Back never leaves WizardOS (thread → list → home)', front(), top()[:100])
 
         sweep()
         # ============ #22b web hot-reload keeps a typed draft ============
@@ -627,8 +627,8 @@ with _lockfile as lock:
             UXV0[0] = UXV.read_text(); UXV.write_text(hashlib.sha1(b'qa-native-parity-deploy').hexdigest() + '\n')
         time.sleep(1.2); pg.ev("window.WosDevice.checkWeb(true)"); time.sleep(2)
         bn = pg.ev("(() => { const e = document.querySelector('#dvWeb'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()")
-        # No change list → "Wizard OS was updated"; with ux-changes.json → "Update ready · <thread>". Both end in Reload.
-        check('#22 web update detected → "Wizard OS was updated / Update ready · Reload"', ('was updated' in (bn or '') or 'Update ready' in (bn or '')) and 'Reload' in (bn or ''), bn)
+        # No change list → "WizardOS was updated"; with ux-changes.json → "Update ready · <thread>". Both end in Reload.
+        check('#22 web update detected → "WizardOS was updated / Update ready · Reload"', ('was updated' in (bn or '') or 'Update ready' in (bn or '')) and 'Reload' in (bn or ''), bn)
         shot('22b-web-updated')
         sweep(); pg.ev("window.__qaMark = 1"); pg.tap('#dvWeb [data-web=go]'); time.sleep(4)
         connect()
@@ -639,7 +639,7 @@ with _lockfile as lock:
         pg.ev("window.__wos.goDesk(window.__wos.HOME, true)")
 
         # ============ #22c APK update: bad checksum refused → fixed feed → "Install unknown apps" → installed ============
-        # Since silent-update (0.7.0) Wizard OS downloads and verifies FIRST, and only a verified APK asks for
+        # Since silent-update (0.7.0) WizardOS downloads and verifies FIRST, and only a verified APK asks for
         # "Install unknown apps" (a tampered one never reaches Android). On API 35 the self-update may then install
         # through a PackageInstaller session with or without Android's confirm screen; either way it must land.
         sweep()
@@ -662,7 +662,7 @@ with _lockfile as lock:
             tap_text(r'Allow from this source'); time.sleep(1.5)
             if 'allow' not in sx('appops get %s REQUEST_INSTALL_PACKAGES' % PKG).lower():
                 sx('appops set %s REQUEST_INSTALL_PACKAGES allow' % PKG)
-            sx('input keyevent KEYCODE_BACK'); time.sleep(2)   # system Back returns to Wizard OS
+            sx('input keyevent KEYCODE_BACK'); time.sleep(2)   # system Back returns to WizardOS
         confirm = False; t0 = time.time()
         while time.time() - t0 < 90:
             if ('versionCode=%d' % NEXT_VC) in sx('dumpsys package %s | grep versionCode' % PKG): break
@@ -684,9 +684,9 @@ with _lockfile as lock:
         sx('am start -W -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(4)
         try:
             connect(); sweep()
-            check('the updated app (%d) starts' % NEXT_VC + ' and loads Wizard OS', pg.ev("window.WizardOSNative.platform()").endswith('-qanext'), pg.ev("window.WizardOSNative.platform()"))
+            check('the updated app (%d) starts' % NEXT_VC + ' and loads WizardOS', pg.ev("window.WizardOSNative.platform()").endswith('-qanext'), pg.ev("window.WizardOSNative.platform()"))
         except Exception as e:
-            check('the updated app (%d) starts' % NEXT_VC + ' and loads Wizard OS', False, e)
+            check('the updated app (%d) starts' % NEXT_VC + ' and loads WizardOS', False, e)
         check('zero requests to the real Wizard from the WebView (fake origin only)', not FOREIGN, FOREIGN[:5])
         writes = [l for l in ST['log'] if not l.startswith('GET')]
         receipt['fake_writes'] = writes

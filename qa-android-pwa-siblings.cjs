@@ -1,5 +1,5 @@
 // Sibling-app install check on real Android Chrome: each private app gets its OWN install prompt + banner,
-// even after another app on wizard.example.ts.net (Wizard OS) has been installed.
+// even after another app on wizard.example.ts.net (WizardOS) has been installed.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const { execSync } = require('child_process');
 const adb = c => execSync(`ssh -o ConnectTimeout=8 ${require('./tools/qa-paths.cjs').buildHost()} 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });

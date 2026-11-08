@@ -807,7 +807,7 @@ export default function desktop(api) {
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
           // the chosen order (item 3: group first, then the order inside each)
-          // (round 24c: or one per project, Wizard OS, Messenger, … under their own headers)
+          // (round 24c: or one per project, WizardOS, Messenger, … under their own headers)
           const groups = groupBy() === 'project' ? projectGroups(rows, readyOrder()) : readyGroups(rows, readyOrder());
           for (const g of groups) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)

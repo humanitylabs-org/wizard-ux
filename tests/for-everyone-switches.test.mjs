@@ -1,5 +1,5 @@
 // For everyone keeps feature switches off; For testers turns them on in Settings › Look ("Try new features") or in the
-// Wizard OS Tracker app, one shared state in look.json `tweaks` (Miguel, 7 Nov 2026).
+// WizardOS Tracker app, one shared state in look.json `tweaks` (Miguel, 7 Nov 2026).
 // The channel comes from the App Manager (core/os-updates.js → wos:channel), kept per device in wos.channel.v1.
 import test from 'node:test';
 import assert from 'node:assert/strict';

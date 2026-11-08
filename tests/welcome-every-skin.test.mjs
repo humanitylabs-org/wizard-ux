@@ -98,6 +98,6 @@ test('Pick a skin: a card sets only that skin (plain setter), never a family or 
     assert.match(d.html(), new RegExp(`data-id="${id}" aria-pressed="true"`))
   }
   assert.ok(skin.calls.every(([fn]) => fn === 'set'))
-  // The one allowed read is the product-name helper OS() (wizard-os#436): it only reads the wizardos-name tweak.
+  // The product-name helper OS() is a constant: WizardOS, one word (James, 8 Nov 2026).
   assert.doesNotMatch(welcome.replace(/\n  const OS = .*\n/, '\n'), /setFamily|\.tweaks|recommends|WosTweaks/)
 })

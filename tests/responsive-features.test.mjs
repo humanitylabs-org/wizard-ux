@@ -145,7 +145,7 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
   assert.equal(sandbox.WosSettings.moveDraft(opts), false); assert.deepEqual(removed, ['fixture']); assert.equal(notices.length, 1);
 });
 
-// Switches live in Settings (For testers only) and in the Wizard OS Tracker app, one state (Miguel, 7 Nov 2026).
+// Switches live in Settings (For testers only) and in the WizardOS Tracker app, one state (Miguel, 7 Nov 2026).
 test('Settings › Look shows "Try new features" on For testers and hides it on For everyone, in both mounts', () => {
   const { sandbox, roots } = harness();
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
@@ -158,7 +158,7 @@ test('Settings › Look shows "Try new features" on For testers and hides it on 
       v.focus('look'); assert.equal(v.page, 'appearance');
       const html = root.innerHTML;
       assert.match(html, /data-tweak-toggle="miguel\/orb-shell"/, channel + ': views stay');
-      assert.doesNotMatch(html, /Wizard OS Tracker/, 'Settings is self-contained: no pointer to the Tracker');
+      assert.doesNotMatch(html, /WizardOS Tracker/, 'Settings is self-contained: no pointer to the Tracker');
       if (channel === 'latest') {
         assert.match(html, /data-try-features><h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p>[^]*data-tweak-toggle="miguel\/snooze-someday"[^]*class="tw-by">by miguel</);
       } else {

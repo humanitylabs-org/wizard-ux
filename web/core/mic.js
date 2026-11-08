@@ -1,4 +1,4 @@
-/* Wizard OS · Settings → Microphone (James, 18 Oct 2026)
+/* WizardOS · Settings → Microphone (James, 18 Oct 2026)
  *
  * By default every recording uses the phone's own mic, so a Bluetooth speaker never hijacks a voice note. Someone
  * who wants a Bluetooth headset or other mic chooses it here, per phone, without a native update or an agent edit:

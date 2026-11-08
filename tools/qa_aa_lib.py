@@ -102,7 +102,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=40)

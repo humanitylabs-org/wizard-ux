@@ -121,11 +121,11 @@ const foodWin = p => p.evaluate(() => { const frame = [...document.querySelector
   ok(/order food/i.test(fw.text) && /order grab/i.test(fw.text) && /order kra pao/i.test(fw.text), 'the app lists the spells (order food / order grab / order <saved dish>)', fw.text.slice(0, 300));
   ok(!/usual/i.test(fw.text), 'no "usual" wording left in the app', fw.text.slice(0, 400));
 
-  // 6. Back from Food stays in Wizard OS.
+  // 6. Back from Food stays in WizardOS.
   const before = p.url();
   for (let i = 0; i < 3; i++) { await p.evaluate(() => window.__wos.onBack()); await sleep(600); }
   const bl = await p.evaluate(() => ({ log: (window.__backLog || []).slice(-3), home: window.__wos.idx }));
-  ok(p.url() === before && bl.log[0] && bl.log[0] !== 'exit-warn', 'Back steps out of Food inside Wizard OS (no exit)', JSON.stringify(bl));
+  ok(p.url() === before && bl.log[0] && bl.log[0] !== 'exit-warn', 'Back steps out of Food inside WizardOS (no exit)', JSON.stringify(bl));
 
   ok(p.errs.length === 0, 'no page errors', p.errs.join(' | '));
   console.log(`${pass}/${pass + fail} passed`);

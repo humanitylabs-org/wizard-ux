@@ -1,4 +1,4 @@
-// QA (screen context): when James speaks or types, the [Wizard OS context] note carries the words visible in the
+// QA (screen context): when James speaks or types, the [WizardOS context] note carries the words visible in the
 // window in front (read at send time), so the agent can resolve "this", "here", "that step" without a screenshot.
 // Covers a native-web window (Usuals), a same-origin framed app (visible text in, off-screen / hidden / password out),
 // the review-page note, the size bound, and that a chat thread's own text is not repeated.

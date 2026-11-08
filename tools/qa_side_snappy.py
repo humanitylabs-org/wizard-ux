@@ -6,7 +6,7 @@ usage: qa_side_snappy.py APK PKG [QANEXT_APK]
 James (10 Oct 2026):
  1. after a side-button message is sent the orb lingered 1-2 s ("Sending to Wizard" / "Sent · tap to open" bubble);
  2. talking for a while the screen dimmed toward lock (side-button orb had no keep-screen-on);
- 3. he paused a take, an update popped up (Wizard OS installed itself: a paused take was not "recording"), and the
+ 3. he paused a take, an update popped up (WizardOS installed itself: a paused take was not "recording"), and the
     take was gone.
 Checks: A snappy close, B/C/D screen awake (side orb, in-app orb, floating orb carrying the app take), E paused take
 holds a ready update (needs QANEXT_APK), F a take cut off by an app update is recovered and sent.
@@ -115,7 +115,7 @@ class Page:
         if not page:
             print('DIAG top:', top()); print('DIAG pages:', l if 'l' in dir() else None)
             print('DIAG log:', sx("logcat -d | grep -E 'AndroidRuntime|FATAL|WizardOS|chromium' | tail -40"))
-            raise RuntimeError('no Wizard OS page')
+            raise RuntimeError('no WizardOS page')
         self.writes = []; self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=20)
@@ -276,7 +276,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('input keyevent KEYCODE_HOME'); time.sleep(1.5)
         sx(f'cmd role add-role-holder --user 0 {SIDE} {PKG}'); time.sleep(2)
         sx('settings put global power_button_long_press 5')
-        check('Wizard OS is the assistant (side button)', PKG in sx(f'cmd role get-role-holders --user 0 {SIDE}'))
+        check('WizardOS is the assistant (side button)', PKG in sx(f'cmd role get-role-holders --user 0 {SIDE}'))
 
         # A. Snappy: after the take is sent the orb is gone within ~1 s, no lingering bubble, no "Sent" toast.
         arm(1500); n0 = len(side_runs())
@@ -305,7 +305,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         w = awake(); shot('b1-paused-25s')
         check('B: paused 25 s with a 15 s screen timeout: screen still on (no dim, no lock)', w == 'Awake', w)
 
-        # E (with QANEXT): a newer Wizard OS is ready while the take is paused: it must wait, not install.
+        # E (with QANEXT): a newer WizardOS is ready while the take is paused: it must wait, not install.
         if NEXT:
             sha = __import__('hashlib').sha256(NEXT.read_bytes()).hexdigest()
             BT = sorted((SDK / 'build-tools').iterdir())[-1]

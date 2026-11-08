@@ -1,4 +1,4 @@
-// Renders the Wizard OS PWA icons from the supplied designer hat (web/brand/wizard-mark-white.png).
+// Renders the WizardOS PWA icons from the supplied designer hat (web/brand/wizard-mark-white.png).
 // Usage (repo root): node tools/brand/render-pwa-icons.cjs  -> web/icon-512.png, icon-192.png, apple-touch-icon.png, favicon.ico
 const { chromium } = require('playwright'); const fs=require('fs'); const path=require('path');
 const ROOT=path.join(__dirname,'..','..'), WEB=path.join(ROOT,'web');

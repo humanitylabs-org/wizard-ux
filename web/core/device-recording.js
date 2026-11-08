@@ -1,6 +1,6 @@
 /* Background recording in the Wizard Shell Android app (android/shell), over window.wizardDevicePort v1.
  *
- * Optional: in a browser, the PWA or the full Wizard OS app (window.WizardOSDevice) this file does nothing and the
+ * Optional: in a browser, the PWA or the full WizardOS app (window.WizardOSDevice) this file does nothing and the
  * orb records exactly as before. In the shell it discovers `device.recording` and offers app.js the same small
  * recorder surface the full app's bridge has (recStart/recActive/recLevel/recPause/recCancel/recDone/recPending),
  * plus two async calls app.js awaits when it needs bytes (stopTake, readTake). The take is recorded by a native

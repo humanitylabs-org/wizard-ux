@@ -11,12 +11,12 @@ import android.os.Build;
 import android.provider.Settings;
 
 /**
- * The side-button switch inside Wizard OS.
+ * The side-button switch inside WizardOS.
  *
  * Android lets an app ask for most roles with one system dialog, but not the assistant role: the user has to tick
- * Wizard OS on the assistant page, and the hold-the-side-button gesture is a separate system setting. So the
+ * WizardOS on the assistant page, and the hold-the-side-button gesture is a separate system setting. So the
  * switch does the most Android allows: one tap asks for the microphone, then lands exactly on the system page
- * where the remaining tick lives, and Wizard OS reads the result back and updates the switch when the user
+ * where the remaining tick lives, and WizardOS reads the result back and updates the switch when the user
  * returns. The step logic is pure Java so it is unit-testable off-device.
  */
 public final class SideButton {
@@ -61,7 +61,7 @@ public final class SideButton {
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_USED, false);
     }
 
-    /** Called by the assistant surfaces: the side button really reached Wizard OS at least once. */
+    /** Called by the assistant surfaces: the side button really reached WizardOS at least once. */
     public static void markUsed(Context c) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_USED, true).apply();
     }
@@ -77,7 +77,7 @@ public final class SideButton {
     /* ---------------- the one system page the user still has to tick ---------------- */
 
     /**
-     * Opens the page where Wizard OS is picked as the assistant. Samsung's One UI keeps the side-key choice on
+     * Opens the page where WizardOS is picked as the assistant. Samsung's One UI keeps the side-key choice on
      * its own Side button page (Settings > Advanced features > Side button), so on Samsung that page comes
      * first; elsewhere it is the digital-assistant picker, then the default-apps list as a fallback.
      */

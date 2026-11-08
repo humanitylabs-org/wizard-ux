@@ -31,11 +31,11 @@
     <!-- Native parity (0.7.0): background orb recorder, in-app update. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- Hands-free updates: once Wizard OS installed itself, Android installs its later versions without asking
+    <!-- Hands-free updates: once WizardOS installed itself, Android installs its later versions without asking
          (API 31+); the background check only downloads on unmetered networks. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Android Apps (optional Wizard app): Wizard OS installs open-source apps James asks for and becomes their
+    <!-- Android Apps (optional Wizard app): WizardOS installs open-source apps James asks for and becomes their
          update owner (API 34+), so later versions install silently; uninstall goes through Android's own dialog. -->
     <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -83,14 +83,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Assistant handoff: the side-key assistant opens Wizard OS listening, or with words as a draft. -->
+            <!-- Assistant handoff: the side-key assistant opens WizardOS listening, or with words as a draft. -->
             <intent-filter>
                 <action android:name="ai.wizards.os.action.LISTEN" />
                 <action android:name="ai.wizards.os.action.SAY" />
                 <action android:name="ai.wizards.os.action.SIDE_BUTTON" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            <!-- Opening a Wizard OS link lands in the app rather than a browser tab. -->
+            <!-- Opening a WizardOS link lands in the app rather than a browser tab. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -134,7 +134,7 @@
         <!-- ===== Side-button assistant (feature/side-button-assistant) =====
              Hold the side button: locked phone = full Wizard over the real keyguard (showWhenLocked);
              unlocked phone = a small orb in the corner, in Android's own assistant window, so the
-             app underneath keeps every touch outside the orb. Requires Wizard OS as the
+             app underneath keeps every touch outside the orb. Requires WizardOS as the
              digital assistant app (Settings > Apps > Default apps > Digital assistant app). -->
         <activity
             android:name=".assist.AssistLockActivity"
@@ -198,7 +198,7 @@
         <service
             android:name=".everywhere.WizardKeyboardService"
             android:exported="true"
-            android:label="Wizard OS voice typing"
+            android:label="WizardOS voice typing"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -275,7 +275,7 @@
         <receiver
             android:name=".update.InstallReceiver"
             android:exported="false" />
-        <!-- Reboot: keep the update check scheduled. Updated: reopen Wizard OS if James was in it. -->
+        <!-- Reboot: keep the update check scheduled. Updated: reopen WizardOS if James was in it. -->
         <receiver
             android:name=".update.UpdateBoot"
             android:exported="false">
@@ -301,7 +301,7 @@
             android:authorities="${applicationId}.outshare"
             android:exported="false"
             android:grantUriPermissions="true" />
-        <!-- In-app Downloads: DownloadManager says a download Wizard OS started has finished (system broadcast from another app's UID, so exported; only the holder of DownloadProvider's signature permission may send it, and only ids Wizard OS tracked are acted on). -->
+        <!-- In-app Downloads: DownloadManager says a download WizardOS started has finished (system broadcast from another app's UID, so exported; only the holder of DownloadProvider's signature permission may send it, and only ids WizardOS tracked are acted on). -->
         <receiver
             android:name=".downloads.DownloadsReceiver"
             android:exported="true"
@@ -310,7 +310,7 @@
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
         </receiver>
-        <!-- Android Apps: install session results, and the background update job for apps Wizard OS installed. -->
+        <!-- Android Apps: install session results, and the background update job for apps WizardOS installed. -->
         <receiver
             android:name=".apps.AppsInstallReceiver"
             android:exported="false" />

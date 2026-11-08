@@ -28,7 +28,7 @@ const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 
   // Chrome fires the prompt after its engagement check; a tap counts as engagement.
   const bb = await p.locator('#dock').boundingBox();
   for (let i = 0; i < 20 && !(await p.evaluate(() => window.__bip)); i++) await p.waitForTimeout(1000);
-  ok(await p.evaluate(() => window.__bip) > 0 || await p.isVisible('#wizard-pwa-install'), 'Chrome offers a real install prompt for Wizard OS', 'bip=' + await p.evaluate(() => window.__bip));
+  ok(await p.evaluate(() => window.__bip) > 0 || await p.isVisible('#wizard-pwa-install'), 'Chrome offers a real install prompt for WizardOS', 'bip=' + await p.evaluate(() => window.__bip));
   console.log(`${pass}/${pass + fail} passed`);
   await b.close().catch(() => {}); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

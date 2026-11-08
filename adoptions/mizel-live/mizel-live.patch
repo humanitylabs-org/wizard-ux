@@ -214,7 +214,7 @@ index d3b9360..1dbce4e 100644
 -// Levels may arrive as a number (mixed) or {me, them}. See window.mizel below for the reverse direction.
 -class NativeRecorder {
 -  // Two native shells speak this contract:
--  //  · Wizard OS (Android): window.wizardMizelPort, wrapped below as wizardNative.meetings with onState().
+-  //  · WizardOS (Android): window.wizardMizelPort, wrapped below as wizardNative.meetings with onState().
 -  //    The phone owns the mic, writes 5 s chunks to its own storage first, uploads them and sends Stop
 -  //    (with final_seq) itself, so it keeps recording with the screen off and survives network loss.
 -  //  · Wizard for Mac: start/stop/pause/resume + onLevel; the page keeps time.
@@ -323,7 +323,7 @@ index d3b9360..1dbce4e 100644
 -  detach() { if (this.livePcm) { this.livePcm = false; void this.b.pcm?.(this.meetingId, false).catch(() => {}); } for (const f of this.offs) { try { if (typeof f === 'function') f(); } catch { /* ignore */ } } this.offs = []; }
 -}
 -
--// Wizard OS (Android) exposes window.wizardMizelPort on the retired custom domain only (AndroidX
+-// WizardOS (Android) exposes window.wizardMizelPort on the retired custom domain only (AndroidX
 -// WebMessageListener). Wrap it as wizardNative.meetings so the recorder above can drive the phone.
 -const NATIVE_ERRORS = {
 -  mic_busy: 'The microphone is busy (Wizard voice or the side button is listening). Finish that first.',

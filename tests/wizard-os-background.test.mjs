@@ -1,4 +1,4 @@
-// Wizard OS backgrounds (Miguel, 4 Nov 2026): Landscapes can show the official hat instead of the photos.
+// WizardOS backgrounds (Miguel, 4 Nov 2026): Landscapes can show the official hat instead of the photos.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -14,7 +14,7 @@ test('every scene ships baked for night and day, desktop and phone', () => {
   assert.ok(existsSync(new URL('../tools/brand/wallpapers.html', import.meta.url)), 'generator kept for provenance');
 });
 
-test('Landscapes stays the default and every Wizard OS option is listed', () => {
+test('Landscapes stays the default and every WizardOS option is listed', () => {
   for (const id of ['landscapes', 'lake', 'valley', 'moonrise', 'sea', 'clouds', 'glass']) assert.match(skins, new RegExp(`id: '${id}'`));
   assert.match(skins, /: 'landscapes'; \} catch \(_\) \{ return 'landscapes'; \}/);
   assert.match(skins, /if \(selected !== 'landscapes'\) \{ const w = WIZ\.get\(selected, this\.LIGHT, W, H\)/);

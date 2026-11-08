@@ -100,7 +100,7 @@ async function openSearch(p, q) {
 (async () => {
   const b = await chromium.launch();
 
-  /* ===== A. Wizard OS Android app: Save goes to Android's downloads ===== */
+  /* ===== A. WizardOS Android app: Save goes to Android's downloads ===== */
   {
     const { ctx, p, writes } = await boot(b, ANDROID_UA);
     const f = await openSearch(p, 'goku super saiyan');

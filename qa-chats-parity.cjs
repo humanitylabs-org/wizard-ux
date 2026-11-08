@@ -168,7 +168,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
 
   /* 6. Back still steps out (thread → list), never exits. */
   await p.goBack().catch(() => {}); await p.waitForTimeout(800);
-  ok(await p.evaluate(() => location.pathname.includes('/wizard-os-home/')), 'Back keeps Wizard OS open');
+  ok(await p.evaluate(() => location.pathname.includes('/wizard-os-home/')), 'Back keeps WizardOS open');
 
   ok(leaked.length === writes.length, 'every Wizard write was intercepted (none reached Wizard)', leaked.length + ' seen vs ' + writes.length + ' intercepted');
   ok(errs.length === 0, 'no page errors', errs.join(' | '));

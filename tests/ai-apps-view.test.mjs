@@ -2547,46 +2547,46 @@ test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music
   assert.ok(bar);
 });
 
-test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one sub-header per title project (Wizard OS, Messenger, …), waiting ones first, Other last; ⌥↓ walks it; the folded rail shows each project', async () => {
+test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one sub-header per title project (WizardOS, Messenger, …), waiting ones first, Other last; ⌥↓ walks it; the folded rail shows each project', async () => {
   const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
   const at = m => new Date(Date.now() - m * 60e3).toISOString();
   const rows = [
-    { id: 'a', title: 'Messenger · Voice notes', state: 'fyi', at: at(5) }, { id: 'b', title: 'Wizard OS · Hotkeys', state: 'done', at: at(1) },
-    { id: 'c', title: 'Wizard OS · Rail', state: 'fyi', at: at(9) }, { id: 'd', title: 'New chat', state: 'fyi', at: at(2) },
+    { id: 'a', title: 'Messenger · Voice notes', state: 'fyi', at: at(5) }, { id: 'b', title: 'WizardOS · Hotkeys', state: 'done', at: at(1) },
+    { id: 'c', title: 'WizardOS · Rail', state: 'fyi', at: at(9) }, { id: 'd', title: 'New chat', state: 'fyi', at: at(2) },
     { id: 'e', title: 'AI Wizards · Azad', state: 'needs', at: at(30) }, { id: 'n', title: 'Mail · invoice', note: true, unread: true, at: at(3) }];
   const g = P.projectGroups(rows, 'newest');
-  assert.deepEqual(g.map(x => x.word + ':' + x.rows.map(r => r.id).join('')), ['AI Wizards:e', 'Wizard OS:bc', 'Messenger:a', 'Notifications:n', 'Other:d']);
-  assert.deepEqual(P.projectGroups(rows, 'oldest').find(x => x.word === 'Wizard OS').rows.map(r => r.id), ['c', 'b'], 'the chosen order inside each');
+  assert.deepEqual(g.map(x => x.word + ':' + x.rows.map(r => r.id).join('')), ['AI Wizards:e', 'WizardOS:bc', 'Messenger:a', 'Notifications:n', 'Other:d']);
+  assert.deepEqual(P.projectGroups(rows, 'oldest').find(x => x.word === 'WizardOS').rows.map(r => r.id), ['c', 'b'], 'the chosen order inside each');
   assert.deepEqual(P.readyFlat(rows, 'newest', 'project').map(r => r.id), ['e', 'b', 'c', 'a', 'n', 'd'], 'the walk follows what is drawn');
   assert.deepEqual(P.GROUP_MODES.map(m => m[1]), ['By status', 'By project', 'One list']);
-  assert.deepEqual(P.railRows({ ready: rows }, 'proj:Wizard OS', 'newest').map(r => r.id), ['b', 'c']);
-  assert.deepEqual(P.railActive({ ready: rows }, 'c', null, 'newest', 'projects'), { key: 'proj:Wizard OS', i: 1, n: 2 });
+  assert.deepEqual(P.railRows({ ready: rows }, 'proj:WizardOS', 'newest').map(r => r.id), ['b', 'c']);
+  assert.deepEqual(P.railActive({ ready: rows }, 'c', null, 'newest', 'projects'), { key: 'proj:WizardOS', i: 1, n: 2 });
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.doesNotMatch(read(f), /attention\?\.subject \|\| ''\)\.trim\(\)/, f + ': one name only, the title\'s project');
 
   const { w, store } = deskWorld();
-  w.st.sessions.ready[0].title = 'Messenger · A'; w.st.sessions.ready[1].title = 'Wizard OS · B';
+  w.st.sessions.ready[0].title = 'Messenger · A'; w.st.sessions.ready[1].title = 'WizardOS · B';
   (await layout()).default(w.api);
   w.q('.aad-groupb').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aad-sortmenu [data-group="project"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupBy, 'project'); assert.equal(store.groupReady, false);
-  assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['project:Messenger', 'project:Wizard OS']);
+  assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['project:Messenger', 'project:WizardOS']);
   assert.deepEqual(w.qa('#aad-sec-ready .aad-row-t').map(n => n.textContent).sort(), ['A', 'B'], 'round 26: rows drop the project the header already says');
   assert.equal(w.q('#aad-sec-ready .aad-row-t').title.includes(' · '), true, 'the full title stays as its tip');
-  assert.equal(P.titleInProject({ title: 'Wizard OS · Hotkeys' }), 'Hotkeys'); assert.equal(P.titleInProject({ title: 'No project here' }), 'No project here');
+  assert.equal(P.titleInProject({ title: 'WizardOS · Hotkeys' }), 'Hotkeys'); assert.equal(P.titleInProject({ title: 'No project here' }), 'No project here');
   assert.equal(P.titleInProject({ title: 'Mail · x', note: true }), 'Mail · x', 'notifications keep their title');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-rk').map(n => n.dataset.k).filter(k => k.startsWith('proj:')).sort(), ['proj:Messenger', 'proj:Wizard OS'], 'folded: one rail row per project');
+  assert.deepEqual(w.qa('.aad-rk').map(n => n.dataset.k).filter(k => k.startsWith('proj:')).sort(), ['proj:Messenger', 'proj:WizardOS'], 'folded: one rail row per project');
   assert.ok(!w.qa('.aad-rk').some(n => n.dataset.k === 'ready'), 'no Ready total over them');
   store.groupBy = 'subject'; assert.equal(P.groupMode('subject'), 'none');
 });
 
 test('a remembered rail key cannot hide the current chat marker after switching grouping', async () => {
  const P=await import(new URL('web/layouts/ai-apps/parts.js',root).href);
- const sessions={ready:[{id:'qa-project-current',title:'Wizard OS · Rail',state:'needs'}]};
- assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','projects').key,'proj:Wizard OS');
- assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','list').key,'ready');
+ const sessions={ready:[{id:'qa-project-current',title:'WizardOS · Rail',state:'needs'}]};
+ assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','projects').key,'proj:WizardOS');
+ assert.equal(P.railActive(sessions,'qa-project-current','proj:WizardOS','newest','list').key,'ready');
  assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','groups').key,'needs');
- assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','groups').key,'needs');
+ assert.equal(P.railActive(sessions,'qa-project-current','proj:WizardOS','newest','groups').key,'needs');
 });
 
 

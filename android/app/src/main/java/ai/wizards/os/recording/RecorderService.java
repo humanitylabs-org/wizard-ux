@@ -395,7 +395,7 @@ public class RecorderService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        // James swiped Wizard OS away mid-take: the recording keeps going (it is his, and the notification has
+        // James swiped WizardOS away mid-take: the recording keeps going (it is his, and the notification has
         // Stop and Send). Nothing to do here; the service is foreground and outlives the task.
         super.onTaskRemoved(rootIntent);
     }
@@ -453,7 +453,7 @@ public class RecorderService extends Service {
         getSystemService(NotificationManager.class).notify(N_RECORDING, build());
     }
 
-    /** The app is not open: say the take is safe, and let a tap finish the job in Wizard OS. */
+    /** The app is not open: say the take is safe, and let a tap finish the job in WizardOS. */
     private void savedNotice(String id, boolean send) {
         if (id == null) return;
         Intent i = new Intent(this, MainActivity.class).setAction(DeviceBridge.ACTION_RECOVER)
@@ -462,7 +462,7 @@ public class RecorderService extends Service {
         Notification n = new Notification.Builder(this, CH_RECORDING)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle(send ? "Recording saved · tap to send" : "Recording saved")
-                .setContentText(send ? "Open Wizard OS and it sends" : "Open Wizard OS to send or delete it")
+                .setContentText(send ? "Open WizardOS and it sends" : "Open WizardOS to send or delete it")
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .build();

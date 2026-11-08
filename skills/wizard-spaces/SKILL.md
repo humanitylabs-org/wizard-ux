@@ -54,7 +54,7 @@ Run the shipped helper from this skill's directory (Node 22+):
 
 ```sh
 node scripts/wizard-spaces.mjs list
-node scripts/wizard-spaces.mjs create --agent hermes 'Wizard OS launch' wizard_real_thread_1 wizard_real_thread_2
+node scripts/wizard-spaces.mjs create --agent hermes 'WizardOS launch' wizard_real_thread_1 wizard_real_thread_2
 node scripts/wizard-spaces.mjs rename SPACE_ID 'Launch'
 node scripts/wizard-spaces.mjs search SPACE_ID 'launch release'
 node scripts/wizard-spaces.mjs add SPACE_ID --agent hermes wizard_real_thread_3

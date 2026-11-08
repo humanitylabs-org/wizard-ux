@@ -1,4 +1,4 @@
-/* Wizard OS first run: a two-beat tour on the live shell with the real microphone, plus the Help sheet.
+/* WizardOS first run: a two-beat tour on the live shell with the real microphone, plus the Help sheet.
  * James, 11 Oct 2026: practise the real thing. The tour never fakes what the user said; it tells them what
  * to do, the real shell does it, and the tour watches the shell's events (app.js tourEv) to move on.
  *
@@ -26,8 +26,8 @@
   let misses = 0, typed = false, inbox = false, busy = false;
   const $ = (s, r = document) => r.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
-  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
+  // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
+  const OS = () => 'WizardOS';
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
   const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
   const done = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'false'); } catch (e) { return false; } };

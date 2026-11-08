@@ -61,8 +61,8 @@ if WizardOrigin.isConnectLink(URL(string: "wizard://install?repo=github.com%2Fa%
 if WizardOrigin.isConnectLink(URL(string: "https://connect/")!) { failures += 1; print("FAIL: https consumed") }
 // Shell check (WizardProbeTest)
 if WizardOrigin.looksLikeWizard("<title>Sign in</title>") { failures += 1; print("FAIL: sign-in page passed") }
-if WizardOrigin.looksLikeWizard("<title>Wizard OS</title>") { failures += 1; print("FAIL: title alone passed") }
-if !WizardOrigin.looksLikeWizard("<title>Wizard OS</title><script src='core/app.js'></script>") { failures += 1; print("FAIL: shell refused") }
+if WizardOrigin.looksLikeWizard("<title>WizardOS</title>") { failures += 1; print("FAIL: title alone passed") }
+if !WizardOrigin.looksLikeWizard("<title>WizardOS</title><script src='core/app.js'></script>") { failures += 1; print("FAIL: shell refused") }
 if !WizardOrigin.needsTailscale("https://box.example.ts.net") || WizardOrigin.needsTailscale("https://box.example") {
     failures += 1; print("FAIL: needsTailscale")
 }

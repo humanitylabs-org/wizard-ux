@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thales API35 smoke for the PRODUCTION signed Wizard OS APK: pin one app from the real Apps menu,
+"""Thales API35 smoke for the PRODUCTION signed WizardOS APK: pin one app from the real Apps menu,
 open it from the Android launcher shortcut, prove Back never exits, and prove the pinned app is its own task.
 Read-only on the live Wizard: opens Wisdom's home view only (no chapter, no page turns, no writes).
 Usage on Thales: QA_OUT=$WIZARD_WORK_ROOT/... python3 tools/qa_home_screen_live_smoke.py <AndroidBuilds/jobs/JOB/receipt.json>
@@ -24,10 +24,10 @@ if build.get('status') != 'ok' or build.get('host') != os.environ.get('WIZARD_BU
     raise SystemExit('Build receipt is not successful Thales output')
 arts = [a for a in build['artifacts'] if a.get('aapt2', {}).get('package') == PKG]
 if len(arts) != 1:
-    raise SystemExit('Exactly one production Wizard OS artifact required')
+    raise SystemExit('Exactly one production WizardOS artifact required')
 a = arts[0]
 if a['signer_sha256'] != SIGNER:
-    raise SystemExit('Wrong Wizard OS signer')
+    raise SystemExit('Wrong WizardOS signer')
 apk = P(build['job']) / 'source' / a['path']
 if hashlib.sha256(apk.read_bytes()).hexdigest() != a['sha256']:
     raise SystemExit('Exact artifact SHA mismatch')

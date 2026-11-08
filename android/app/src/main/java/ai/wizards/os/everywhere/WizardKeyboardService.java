@@ -36,7 +36,7 @@ import java.util.List;
  *  - Types the words into the focused field (cursor-aware, with spacing and capitals), falling back to paste.
  *  - Takes the screenshots the orb's Screen button attaches to a message (Android 11+).
  *
- * James turns it on once in Android Settings → Accessibility → Wizard OS. Nothing else uses it.
+ * James turns it on once in Android Settings → Accessibility → WizardOS. Nothing else uses it.
  */
 public class WizardKeyboardService extends AccessibilityService {
     static final String TAG = EverywhereOutbox.TAG;

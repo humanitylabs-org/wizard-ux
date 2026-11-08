@@ -43,10 +43,10 @@ dump_ui() {
 }
 dump_ui
 # Fresh CI emulators sometimes show another app's "isn't responding" dialog (Pixel Launcher during boot) on top
-# of ours. Dismiss it with Wait and look again; an ANR dialog for Wizard OS itself still fails below.
+# of ours. Dismiss it with Wait and look again; an ANR dialog for WizardOS itself still fails below.
 for _ in 1 2 3; do
   grep -q "isn't responding" "$OUT/ui.xml" 2>/dev/null || break
-  grep -q "Wizard OS isn't responding" "$OUT/ui.xml" && fail "Wizard OS isn't responding (ANR dialog)"
+  grep -q "WizardOS isn't responding" "$OUT/ui.xml" && fail "WizardOS isn't responding (ANR dialog)"
   echo "dismissing a system ANR dialog: $(grep -o "text=\"[^\"]*isn't responding\"" "$OUT/ui.xml" | head -1)"
   cp "$OUT/ui.xml" "$OUT/ui-anr-dialog.xml"
   b="$(grep -o 'text="Wait"[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' "$OUT/ui.xml" | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]' | head -1)"

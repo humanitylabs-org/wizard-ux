@@ -1,5 +1,5 @@
 // Share files fixture: the exact v1 resumable uploads + shares contract (briefs/share-files.md, "API contract"),
-// on disk so a restart resumes, plus just enough of the Agent Service for the Wizard OS shell to boot and send
+// on disk so a restart resumes, plus just enough of the Agent Service for the WizardOS shell to boot and send
 // a chat. The client lane (web composer, Android share sheet) builds and QA's against this until the server
 // lane's wizard-agent-service is staged.
 //

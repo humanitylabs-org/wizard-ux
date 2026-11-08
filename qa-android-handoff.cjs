@@ -1,4 +1,4 @@
-// Assistant handoff QA on the Thales emulator: the side-key app's intents reach the running Wizard OS app.
+// Assistant handoff QA on the Thales emulator: the side-key app's intents reach the running WizardOS app.
 //  - SAY sends the words by itself, exactly like talking to the orb (no draft, no Send tap) — James, 0.6.0.
 //  - Back afterwards never leaves the app.
 //  - LISTEN opens the orb listening with a live mic.
@@ -21,7 +21,7 @@ async function attach() {
     try { const l = await (await fetch('http://127.0.0.1:9334/json/list')).json(); page = l.find(x => x.type === 'page' && /wizard-os-home/.test(x.url)); } catch (e) {}
     if (!page) await sleep(600);
   }
-  if (!page) throw new Error('no Wizard OS page in the app WebView');
+  if (!page) throw new Error('no WizardOS page in the app WebView');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   let id = 0; const wait = new Map();
@@ -49,11 +49,11 @@ const fire = (action, text) => execSync(`ssh ${require('./tools/qa-paths.cjs').b
 (async () => {
   let { ws, ev } = await attach();
   await ev(`(() => { const w = window.__wos; w.closeSheets(); w.goDesk(w.HOME + 1); return w.idx; })()`);
-  sh('shell input keyevent 3'); await sleep(1200); // Home key: Wizard OS goes to the background, as when a side-key app is in front
+  sh('shell input keyevent 3'); await sleep(1200); // Home key: WizardOS goes to the background, as when a side-key app is in front
   const out = fire('SAY', SAID);
-  check('SAY intent resolves to Wizard OS', !/Error|unable/i.test(out), out.split('\n').slice(-1)[0]);
+  check('SAY intent resolves to WizardOS', !/Error|unable/i.test(out), out.split('\n').slice(-1)[0]);
   await sleep(2500);
-  check('Wizard OS comes to the front', top().includes(PKG));
+  check('WizardOS comes to the front', top().includes(PKG));
   ws.close(); ({ ws, ev } = await attach());
   await sleep(3000);
   const runs = writes.filter(w => /\/v1\/runs|\/sessions/.test(w));

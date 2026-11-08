@@ -1,4 +1,4 @@
-// QA for the Wizard OS native app (ai.wizards.os.qa debug build, same code as release) on the Thales emulator.
+// QA for the WizardOS native app (ai.wizards.os.qa debug build, same code as release) on the Thales emulator.
 // Drives the real WebView over its devtools socket (forwarded to 127.0.0.1:9334; raw CDP over Node's built-in
 // WebSocket, since WebViews don't support Playwright's browser contexts) and the real hardware Back key via adb.
 // Every non-GET request to Hermes/Wizard is failed by CDP Fetch interception: QA never sends or changes read state.
@@ -19,7 +19,7 @@ async function attach() {
     try { const l = await (await fetch('http://127.0.0.1:9334/json/list')).json(); page = l.find(x => x.type === 'page' && /wizard-os-home/.test(x.url)); } catch (e) {}
     if (!page) await sleep(700);
   }
-  if (!page) throw new Error('no Wizard OS page in the app WebView');
+  if (!page) throw new Error('no WizardOS page in the app WebView');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   let id = 0; const wait = new Map();
@@ -45,7 +45,7 @@ async function attach() {
 (async () => {
   if (!top().includes(PKG)) { sh(`shell am start -W -n ${PKG}/ai.wizards.os.MainActivity`); await sleep(9000); }
   const { ws, ev, url } = await attach();
-  check('native app loads the Wizard OS shell', /\/wizard-os-home\//.test(url), url);
+  check('native app loads the WizardOS shell', /\/wizard-os-home\//.test(url), url);
   await ev(`new Promise(r => { const t = () => window.__wos ? r() : setTimeout(t, 200); t(); })`);
   const info = await ev(`({ ua: navigator.userAgent, nat: document.documentElement.classList.contains('native-app'), hook: typeof window.__wosNativeBack, bridge: window.WizardOSNative ? window.WizardOSNative.platform() : null })`);
   check('runs as the native app (UA tag + native bridge)', /WizardOS-Android\//.test(info.ua) && info.nat && /^android:/.test(info.bridge || ''), info.bridge);

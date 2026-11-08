@@ -83,7 +83,7 @@ public final class MeetingLoans {
     /** A person's name for the app being typed into ("Messages"), or "" when Android won't say. */
     public static String appLabel(Context c, String pkg) {
         if (pkg == null || pkg.isEmpty()) return "";
-        if (pkg.equals(c.getPackageName())) return "Wizard OS";
+        if (pkg.equals(c.getPackageName())) return "WizardOS";
         try {
             PackageManager pm = c.getPackageManager();
             ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);

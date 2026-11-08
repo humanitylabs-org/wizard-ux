@@ -1,4 +1,4 @@
-/* Wizard OS appearance host: Appearance v1 (wizard-os spec/APPEARANCE.md, decisions #50–#53). APPEARANCE_HOST_V1
+/* WizardOS appearance host: Appearance v1 (wizard-os spec/APPEARANCE.md, decisions #50–#53). APPEARANCE_HOST_V1
  * Shared by both shells. The shell owns the backdrop: an app that adopted the appearance client paints a transparent
  * canvas and sits on the same window material as Chats. Theme content only: this grants no data, API, mic or agent rights.
  *

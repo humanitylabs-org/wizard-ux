@@ -24,7 +24,7 @@ function fixture(state = 'deferred', reason = 'take') {
 for(const state of ['ready','deferred']) for(const reason of ['take','music','mic',undefined]) {
   test(`${state}/${reason}: plain ready text and first idle tap calls native`,()=>{
     const f=fixture(state,reason);
-    assert.match(f.html(),/Wizard OS 0.10.27 is ready/);assert.match(f.html(),/Install now/);
+    assert.match(f.html(),/WizardOS 0.10.27 is ready/);assert.match(f.html(),/Install now/);
     assert.doesNotMatch(f.html(),/installs|by itself|restart|Tap again|recording/i);
     f.tap();assert.deepEqual(f.calls,['install']);assert.match(f.paintAtInstall,/Opening installer/);
   });
@@ -36,7 +36,7 @@ for(const kind of ['voice','paused','capture','active']) test(`${kind}: protects
 });
 test('processing is not recording and a legacy APK refusal gives an honest recovery path',()=>{
   const f=fixture();f.voice='think';f.tap();assert.deepEqual(f.calls,['install']);
-  f.timers.find(t=>t.ms===2500).fn();assert.match(f.html(),/If no recording is active, force stop Wizard OS/);
+  f.timers.find(t=>t.ms===2500).fn();assert.match(f.html(),/If no recording is active, force stop WizardOS/);
   assert.doesNotMatch(f.html(),/installs after|installs by itself|Tap again/);
 });
 test('banner body is not consent; only Install now initiates installation',()=>{
@@ -51,5 +51,5 @@ test('an old APK stale mic claim (updateRecording true, no live take) still reac
   const f=fixture();f.native=true;f.show();
   assert.doesNotMatch(f.html(),/Finish your recording first/);
   f.tap();assert.deepEqual(f.calls,['install']);
-  f.timers.find(t=>t.ms===2500).fn();assert.match(f.html(),/If no recording is active, force stop Wizard OS/);
+  f.timers.find(t=>t.ms===2500).fn();assert.match(f.html(),/If no recording is active, force stop WizardOS/);
 });

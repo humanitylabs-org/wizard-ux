@@ -50,7 +50,7 @@ test('first message reuses one main Chats window and opens its thread', () => {
 test('Welcome: branded, offers Claude (recommended), ChatGPT and Tinfoil, and opens the app straight into sign-in', () => {
   const js = read('web/core/welcome.js');
   assert.match(js, /class="wl-brand"><img src="brand\/wizard-mark-white.png"[^`]*\$\{OS\(\)\}/);
-  assert.match(js, /\? 'WizardOS' : 'Wizard OS'/, 'the brand reads WizardOS with the wizard/wizardos-name tweak (wizard-os#436)');
+  assert.match(js, /const OS = \(\) => 'WizardOS';/, 'the brand is always WizardOS, one word (James, 8 Nov 2026)');
   assert.match(js, /app: 'wizard-claude', name: 'Claude', note: 'Recommended'[^]*app: 'wizard-chatgpt'[^]*app: 'wizard-tinfoil', name: 'Tinfoil'/);
   assert.match(js, /searchParams.set\('connect', '1'\)/);
   assert.match(js, /store\/store-install.js/, 'a missing provider app installs through the Store install path');

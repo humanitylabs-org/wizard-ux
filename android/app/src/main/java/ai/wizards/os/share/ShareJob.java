@@ -11,7 +11,7 @@ import android.os.Looper;
 import android.util.Log;
 
 /**
- * The backstop that finishes shares with Wizard OS closed: after a reboot (persisted job), a process death, a
+ * The backstop that finishes shares with WizardOS closed: after a reboot (persisted job), a process death, a
  * long network outage or Android 15's dataSync limit. Android runs it when there is a network. The work is
  * {@link ShareUploader}'s; this keeps the process alive while it runs, posts the same progress notification, and
  * asks to be rescheduled if the share is still on its way after a few minutes. Plain JobScheduler, like

@@ -47,7 +47,7 @@
   const SYSTEM = [
     { kind: 'app-updates', name: 'App updates', title: /^(\d+ apps? updated|App updates need a look)$/i },
     { kind: 'connections', name: 'App connections', title: /^(App connection added|Connection needs your OK)$/i },
-    { kind: 'wizard-updates', name: 'Wizard updates', title: /^(App Manager updated|Wizard OS updated|Your release needs you to finish an update)$/i },
+    { kind: 'wizard-updates', name: 'Wizard updates', title: /^(App Manager updated|WizardOS updated|Your release needs you to finish an update)$/i },
   ];
   const SYSID = /^system:([a-z-]{1,40})$/;
   const sysOf = id => { const m = SYSID.exec(String(id || '')); return m ? SYSTEM.find(k => k.kind === m[1]) || null : null; };
@@ -293,7 +293,7 @@
     ...(i.app ? { app: str(i.app, 64), appName: str(i.appName, 80), key: str(i.key, 200), open: str(i.open, 500) } : {}),
     ...(() => { const f = fromOf(i); return f ? { from: f, fromName: str(appName(f), 80) } : {}; })() });
 
-  /* App inbox feeds (Wizard OS inbox feed v1): an installed app that serves GET /<app>/api/inbox → { inbox: 1, items }
+  /* App inbox feeds (WizardOS inbox feed v1): an installed app that serves GET /<app>/api/inbox → { inbox: 1, items }
    * lists what needs the owner now (what its badge counts), one item per thing. Read only for apps set to Chats (and
    * once per app to learn which apps have one, for the Settings list). A thing handled in the app leaves its feed, so
    * its row clears by itself. Archive / Snooze are inbox marks (Notifications /api/marks, else this device) covering

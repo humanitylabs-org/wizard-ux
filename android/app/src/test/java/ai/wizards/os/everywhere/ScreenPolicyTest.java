@@ -182,7 +182,7 @@ public class ScreenPolicyTest {
     @Test public void hiddenOrbStaysHiddenUntilWizardOsOpens() {
         assertTrue(EverywherePolicy.orbVisible(true, true, false, false));
         assertFalse(EverywherePolicy.orbVisible(true, true, false, true));   // hidden from the long-press menu
-        assertFalse(EverywherePolicy.orbVisible(true, true, true, false));   // Wizard OS in front: never two orbs
+        assertFalse(EverywherePolicy.orbVisible(true, true, true, false));   // WizardOS in front: never two orbs
         assertFalse(EverywherePolicy.orbVisible(false, true, false, false));
         assertFalse(EverywherePolicy.orbVisible(true, false, false, false));
     }

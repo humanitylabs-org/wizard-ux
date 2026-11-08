@@ -13,7 +13,7 @@ let pass=0,fail=0; const check=(v,n)=>{ console.log(v?'PASS':'FAIL',n);v?pass++:
   const ctx=await browser.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1400,height:900},hasTouch:shell==='phone',isMobile:shell==='phone',serviceWorkers:'block'});
   const sid='wizard_qa_provider_preflight', ts=Date.now()/1000-190;
   let sentWrites=0;const errs=[];
-  const session={id:sid,source:'wizard-mobile',title:'Wizard OS · Opus delivery',status:'failed',archived:false,hidden:false,message_count:0,started_at:ts,last_active:ts,model:'claude-opus-5-5',provider:'anthropic',wizard_last_run_status:'failed',wizard_run_id:'wizardq_qa_preflight',wizard_last_run_key:'qa_preflight',wizard_last_user_at:ts,wizard_activity_at:ts,wizard_last_request_at:ts,preview:'Saved request',preview_role:'user',wizard_last_run_preview:'Saved request'};
+  const session={id:sid,source:'wizard-mobile',title:'WizardOS · Opus delivery',status:'failed',archived:false,hidden:false,message_count:0,started_at:ts,last_active:ts,model:'claude-opus-5-5',provider:'anthropic',wizard_last_run_status:'failed',wizard_run_id:'wizardq_qa_preflight',wizard_last_run_key:'qa_preflight',wizard_last_user_at:ts,wizard_activity_at:ts,wizard_last_request_at:ts,preview:'Saved request',preview_role:'user',wizard_last_run_preview:'Saved request'};
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),json=(body)=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
    if(!['GET','HEAD'].includes(q.method())){if(u.pathname.endsWith('/v1/runs'))sentWrites++;return json({});}

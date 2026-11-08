@@ -156,7 +156,7 @@ async function phone(b) {
   // Browser Back (plain tab): first Back at root warns and stays.
   const urlBefore = p.url();
   await p.evaluate(() => history.back()); await wait(900);
-  ok(p.url().startsWith(ORIGIN) && await p.locator('.home').count() >= 1, 'Back test phone (browser history): still in Wizard OS after Back at root', p.url() + ' was ' + urlBefore);
+  ok(p.url().startsWith(ORIGIN) && await p.locator('.home').count() >= 1, 'Back test phone (browser history): still in WizardOS after Back at root', p.url() + ' was ' + urlBefore);
   await shot(p, 'phone-12-home-after-back');
   // ---- Deep link + main Chats unaffected ----
   await p.evaluate(() => __wos.openApp(__wos.chats && window.WizCore.apps('mobile').APPS.find(a => a.id === 'wizard'))); await wait(1200);

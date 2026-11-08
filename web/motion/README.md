@@ -43,5 +43,5 @@ Theme via custom properties on any ancestor: `--wm-violet-2`, `--wm-green`, `--w
 - The drifting-words canvas reapplies its transform every frame (Android drops/restores 2D canvases under memory pressure).
 
 ## Used by
-- Wizard OS Home, Live Mode preview: `/wizard-os-home-preview/` (`web/live-mode.js`).
+- WizardOS Home, Live Mode preview: `/wizard-os-home-preview/` (`web/live-mode.js`).
 - Next: the lock-screen orb ("Redesign GrapheneOS lock screen AI interaction" thread), Chats/Wizard surfaces.

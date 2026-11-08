@@ -5,7 +5,7 @@ import android.os.RemoteException;
 import android.speech.RecognitionService;
 import android.speech.SpeechRecognizer;
 
-/** Present because Android requires it for an assistant; Wizard OS offers no system dictation. */
+/** Present because Android requires it for an assistant; WizardOS offers no system dictation. */
 public class WizardRecognitionService extends RecognitionService {
     @Override
     protected void onStartListening(Intent intent, Callback listener) {

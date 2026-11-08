@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Staged shares for the web picker (Wizards without the resumable shares API, text shares, the orb's Screen):
- * files/share/<id>/{meta.json, 0.bin, 1.bin, …}. Deleted once Wizard OS has them (or after a day). No size cap: the
+ * files/share/<id>/{meta.json, 0.bin, 1.bin, …}. Deleted once WizardOS has them (or after a day). No size cap: the
  * only limit is the phone's free space. Resumable shares live in {@link ShareQueue} instead.
  */
 public final class ShareStore {

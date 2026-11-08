@@ -1,4 +1,4 @@
-/* Wizard OS — live Wizard data: sessions, shared read state, real sends.
+/* WizardOS — live Wizard data: sessions, shared read state, real sends.
  * Read-state semantics mirror wizard-mobile src/threadSeen.ts exactly, and the
  * state is the same record Wizard itself uses (localStorage + /wizard/thread-seen),
  * so opening a chat anywhere clears it everywhere. */
@@ -360,7 +360,7 @@
 
   /* ---- Work sections: exact port of wizard-mobile src/workSections.ts ---- */
   const DAY = 864e5;
-  // The owner's day: their time zone and day_starts_at from Wizard OS settings (WizConfig).
+  // The owner's day: their time zone and day_starts_at from WizardOS settings (WizConfig).
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');

@@ -15,9 +15,9 @@ public final class AppState {
 
     private AppState() {}
 
-    /** Wizard OS is on screen (MainActivity started). Reply notifications only fire while it is not. */
+    /** WizardOS is on screen (MainActivity started). Reply notifications only fire while it is not. */
     public static synchronized boolean front() { return !visible.isEmpty(); }
-    /** The Wizard OS shell itself is on screen. A home-screen app (AppSessionActivity) is a standalone app window with no
+    /** The WizardOS shell itself is on screen. A home-screen app (AppSessionActivity) is a standalone app window with no
      *  orb of its own, so the floating Archimedes orb stays over it (James, 24 Oct). */
     public static synchronized boolean shellFront() {
         for (Object o : visible) if (!(o instanceof ai.wizards.os.AppSessionActivity)) return true;
@@ -41,7 +41,7 @@ public final class AppState {
         return qa != null ? qa : ai.wizards.os.ServerSettings.origin(c);
     }
 
-    /** The Wizard OS shell URL: the private origin, or the QA fake (debug builds with files/qa_home.txt only). */
+    /** The WizardOS shell URL: the private origin, or the QA fake (debug builds with files/qa_home.txt only). */
     public static String homeUrl(Context c) {
         return origin(c) + "/wizard-os-home/" + (BuildConfig.APPLICATION_ID.endsWith(".musicpreview") ? "?open=wizard-music" : "");
     }

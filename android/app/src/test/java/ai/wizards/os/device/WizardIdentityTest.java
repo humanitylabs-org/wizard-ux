@@ -30,9 +30,9 @@ public class WizardIdentityTest {
             String name = WizardIdentity.normalize(input);
             assertEquals(name + " replied", WizardIdentity.replyTitle(input));
             assertEquals(name + " needs your approval to continue", WizardIdentity.approvalText(input));
-            assertEquals("When " + name + " answers a chat you sent from Wizard OS", WizardIdentity.channelDescription(input));
+            assertEquals("When " + name + " answers a chat you sent from WizardOS", WizardIdentity.channelDescription(input));
             assertEquals(name + " · Hello", WizardIdentity.everywhereTitle(input, "Hello"));
-            assertEquals("Voice request spoken to " + name + " through Wizard OS on an Android phone.", WizardIdentity.voicePrompt(input));
+            assertEquals("Voice request spoken to " + name + " through WizardOS on an Android phone.", WizardIdentity.voicePrompt(input));
         }
     }
 

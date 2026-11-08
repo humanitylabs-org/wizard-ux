@@ -52,9 +52,9 @@ public final class EverywhereOutbox {
         int shots = it.shots == null ? 0 : it.shots.length();
         String where = SRC_SIDE.equals(it.source)
                 ? (it.locked
-                    ? "Spoken into the Wizard OS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
-                    : "The user spoke this by holding their Android phone's side button (Wizard OS assistant, phone unlocked). ")
-                : "The user spoke this to the Wizard Everywhere floating orb on their Android phone, outside the Wizard OS app (they may be in another app). ";
+                    ? "Spoken into the WizardOS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
+                    : "The user spoke this by holding their Android phone's side button (WizardOS assistant, phone unlocked). ")
+                : "The user spoke this to the Wizard Everywhere floating orb on their Android phone, outside the WizardOS app (they may be in another app). ";
         return where + "The original recording is attached as a voice note."
                 + (shots > 0 ? " They attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on their screen while talking." : "");
     }

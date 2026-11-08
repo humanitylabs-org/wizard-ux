@@ -183,7 +183,7 @@ final class VoiceCapture {
         discard();
         qaAudio = qa;
         if (qa == null && app.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            emitError("mic", "Open Wizard OS once and allow the microphone.");
+            emitError("mic", "Open WizardOS once and allow the microphone.");
             return;
         }
         // One mic owner. A recording meeting lends it (pauses, flushed) and gets it back once this take is kept.

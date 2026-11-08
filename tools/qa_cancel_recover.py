@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wizard OS cancelled-recording recovery QA (runs on Thales). Fresh API 35 emulator, the exact QA APK.
+"""WizardOS cancelled-recording recovery QA (runs on Thales). Fresh API 35 emulator, the exact QA APK.
 
 usage: qa_cancel_recover.py QA_APK WEB_DIR [OUT_DIR]
 
@@ -11,7 +11,7 @@ Checks (fake Wizard on this Mac; nothing reaches the real one):
   floating orb (Wizard Everywhere, over the launcher): a long take, the real X tapped -> kept, toast says where
   Settings lists both, newest first; Transcribe & copy sends that exact audio to Wizard Voice once, shows the words,
   and the Android clipboard holds them (pasted into a field with KEYCODE_PASTE); Delete removes the file;
-  Back closes Settings and Wizard OS stays open; nothing was sent as a message; no crashes.
+  Back closes Settings and WizardOS stays open; nothing was sent as a message; no crashes.
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
@@ -74,7 +74,7 @@ def wait(fn, secs, step=0.7):
     return fn()
 
 
-# ------------------------------------------------------------------ fake Wizard (+ static Wizard OS + update feed)
+# ------------------------------------------------------------------ fake Wizard (+ static WizardOS + update feed)
 NEXT_SHA = hashlib.sha256(NEXT.read_bytes()).hexdigest()
 ST = {'transcribe': [], 'uploads': [], 'sessions': {}, 'runs': [], 'keys': {}, 'done': set(), 'log': [],
       'feed': None, 'apk_gets': 0, 'route': 0}
@@ -197,7 +197,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=30)
@@ -344,7 +344,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         connect()
         # A fresh install opens the first-run practice tour, which (by design) swallows orb taps: finish it first.
         pg.ev("(() => { try { localStorage.setItem('wos.tour.v1', 'true'); } catch (e) {} try { window.WosTour?.finish('qa'); } catch (e) {}; return true; })()"); time.sleep(1)
-        check('the app loads Wizard OS from the fake Wizard', pg.ev('location.href').startswith(ORIGIN + '/wizard-os-home/'))
+        check('the app loads WizardOS from the fake Wizard', pg.ev('location.href').startswith(ORIGIN + '/wizard-os-home/'))
         check('the cancelled-recordings bridge is there', pg.ev("typeof window.WizardOSDevice?.cancelledList === 'function' && !!window.WosCancelled"))
 
         # ---------- in-app orb: short cancel is gone ----------
@@ -419,7 +419,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.ev("document.querySelector('#settingsBody [data-cxid] [data-cx=delete]').click()"); time.sleep(1)
         check('Delete removes the file from the phone', len(kept_files()) == 1 and len(cancelled_rows()) == 1, (kept_files(), cancelled_rows()))
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.2)
-        check('Back closes Settings and Wizard OS stays open', pg.ev("window.__wos.sheet") != 'settings' and PKG in top(), (pg.ev("window.__wos.sheet"), top()[:90]))
+        check('Back closes Settings and WizardOS stays open', pg.ev("window.__wos.sheet") != 'settings' and PKG in top(), (pg.ev("window.__wos.sheet"), top()[:90]))
         check('no message was ever sent', not ST['runs'], len(ST['runs']))
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])

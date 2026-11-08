@@ -9,8 +9,8 @@ import android.content.Context;
 import android.util.Log;
 
 /**
- * Background update check: every few hours on an unmetered network, even with Wizard OS closed. Reads the feed,
- * downloads + verifies a newer build, and installs it (silently once Wizard OS installed the running version).
+ * Background update check: every few hours on an unmetered network, even with WizardOS closed. Reads the feed,
+ * downloads + verifies a newer build, and installs it (silently once WizardOS installed the running version).
  * Plain JobScheduler: no WorkManager dependency for one periodic job.
  */
 public class UpdateJob extends JobService {

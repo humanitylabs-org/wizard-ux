@@ -1,4 +1,4 @@
-// QA: Wizard OS device features (feature/native-parity) in the web shell, with a faked native bridge.
+// QA: WizardOS device features (feature/native-parity) in the web shell, with a faked native bridge.
 //   #14 orb records through the native foreground-service recorder (WizardOSDevice.recStart/recStop), a take that
 //       outlives the page is picked back up, a notification Send / an interrupted take reaches the durable outbox once.
 //   #20 a shared item opens the Share sheet, uploads to Wizard Files and starts a new chat with the attachment;
@@ -147,7 +147,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     for (const reason of ['music', 'mic', 'take', null]) {
       await state(reason);
       const t = await text(), label = reason || 'legacy';
-      ok(/Wizard OS 0\.9\.99 is ready/.test(t) && /Install now/.test(t) && !/installs|by itself|restart|Tap again/i.test(t), `deferred ${label}: plain ready text with Install now`, t);
+      ok(/WizardOS 0\.9\.99 is ready/.test(t) && /Install now/.test(t) && !/installs|by itself|restart|Tap again/i.test(t), `deferred ${label}: plain ready text with Install now`, t);
       n = await count(); await click();
       ok(await count() === n + 1, `deferred ${label}: first idle Install now calls native updateInstall`);
     }
@@ -157,7 +157,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     await p.evaluate(() => window.__wos.closeSheets());
     // Old APK still deferred 2.5 s after Install now (a stale in-process mic claim): an honest recovery path, no APK escape.
     await state(null); await click(); await sleep(2800);
-    ok(/If no recording is active, force stop Wizard OS/.test(await text()), 'legacy refusal explains the force-stop recovery');
+    ok(/If no recording is active, force stop WizardOS/.test(await text()), 'legacy refusal explains the force-stop recovery');
     await shot(p, '22-legacy-deferred');
     await sleep(2700); // Longer than the removed three-second fallback, and the five-second acceptance window.
     ok(apkRequests.length === 0 && apkNavigations.length === 0, 'legacy deferred: zero APK requests or navigations after 5.5 seconds', JSON.stringify({apkRequests, apkNavigations}));
@@ -251,7 +251,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(W.uploads.slice(up0).some(f => /wizard-voice-.*\.aac$/.test(f.filename) && f.mime === 'audio/aac'), 'the recording rides along as an .aac voice note', JSON.stringify(W.uploads.slice(up0)));
     ok(!d.takes['rec-sent-1'], 'sent take deleted on the phone');
     ok(await p.evaluate(() => window.WosDevice.sheet === 'recording'), 'interrupted take is offered (Recording saved)');
-    ok(/Wizard OS closed while you were recording/.test(await p.locator('.dv-sheet').innerText()), 'card explains it was interrupted');
+    ok(/WizardOS closed while you were recording/.test(await p.locator('.dv-sheet').innerText()), 'card explains it was interrupted');
     await shot(p, '14-recovered');
     await p.locator('[data-take="rec-kill-1"] [data-takeact="send"]').click(); await sleep(2500);
     d = await dev(p);
@@ -330,19 +330,19 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok((await dev(p)).calls.includes('updateCheck') || await p.waitForFunction(() => window.__dev.calls.includes('updateCheck'), null, { timeout: 5000 }).then(() => true, () => false), 'checks for a newer APK on start');
     await p.evaluate(() => window.WosDevice.event('update', { state: 'available', version: '0.9.0', versionCode: 99, installed: '0.5.1' }));
     await sleep(300);
-    ok(/Wizard OS 0\.9\.0 is available/.test(await p.locator('#dvUpdate').innerText()), 'banner: newer version available');
+    ok(/WizardOS 0\.9\.0 is available/.test(await p.locator('#dvUpdate').innerText()), 'banner: newer version available');
     await shot(p, '22-update-banner');
     await p.locator('#dvUpdate [data-upd="go"]').click();
     ok((await dev(p)).calls.includes('updateInstall'), 'Update → native download/verify/install');
     await p.evaluate(() => window.WosDevice.event('update', { state: 'downloading', version: '0.9.0', versionCode: 99, progress: 42 }));
     ok(/42%/.test(await p.locator('#dvUpdate').innerText()), 'download progress shown');
-    await p.evaluate(() => window.WosDevice.event('update', { state: 'error', version: '0.9.0', versionCode: 99, message: 'The download isn’t signed by Wizard OS' }));
+    await p.evaluate(() => window.WosDevice.event('update', { state: 'error', version: '0.9.0', versionCode: 99, message: 'The download isn’t signed by WizardOS' }));
     ok(/isn’t signed/.test(await p.locator('#dvUpdate').innerText()) && await p.locator('#dvUpdate [data-upd="go"]').innerText() === 'Retry', 'a rejected download says why and offers Retry');
     await p.evaluate(() => window.WosDevice.event('update', { state: 'available', version: '0.9.0', versionCode: 99 }));
     await p.locator('#dvUpdate [data-upd="later"]').click();
     ok(await p.locator('#dvUpdate').isHidden(), '× hides the banner for this version');
     await p.evaluate(() => window.__wos.openSettings()); await sleep(400);
-    ok(/Wizard OS 0\.5\.1/.test(await p.locator('#settingsBody').innerText()) && /0\.9\.0 is available/.test(await p.locator('#settingsBody').innerText()), 'Settings shows the version row with the update');
+    ok(/WizardOS 0\.5\.1/.test(await p.locator('#settingsBody').innerText()) && /0\.9\.0 is available/.test(await p.locator('#settingsBody').innerText()), 'Settings shows the version row with the update');
     ok(/Reply notifications/.test(await p.locator('#settingsBody').innerText()), 'Settings shows the reply-notification state');
     await shot(p, '22-settings');
     ok(errs.length === 0, 'no page errors (update)', errs.join(' | '));
@@ -389,7 +389,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     await sleep(200);
     W.assetVer++;
     await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(800);
-    ok(await p.locator('#dvWeb').isVisible(), 'new web code detected → "Wizard OS was updated · Reload"');
+    ok(await p.locator('#dvWeb').isVisible(), 'new web code detected → "WizardOS was updated · Reload"');
     await shot(p, '22-web-reload');
     await p.locator('#dvWeb [data-web="go"]').click();
     await p.waitForFunction(() => window.WosDevice && window.WosDevice.ready, null, { timeout: 20000 }); await sleep(1200);
@@ -436,7 +436,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(!(await p.locator('#dvWeb').isVisible().catch(() => false)), 'no prompt while nothing changed');
     W.assetVer++; // a deploy that only touched core/chat-kit.js (missing from the old list)
     await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(600);
-    ok(await p.locator('#dvWeb').isVisible(), 'a deploy that changes any web file raises "Wizard OS was updated · Reload"');
+    ok(await p.locator('#dvWeb').isVisible(), 'a deploy that changes any web file raises "WizardOS was updated · Reload"');
     await p.locator('#dvWeb [data-web="go"]').click();
     await p.waitForFunction(() => window.WosDevice && window.WosDevice.ready, null, { timeout: 20000 }); await sleep(2200);
     ok(await p.evaluate(() => window.__wosReloading === undefined && !document.querySelector('#dvWeb')), 'one tap reloads into the new version, prompt gone');
@@ -458,8 +458,8 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     await open(p); await sleep(2200);
     const base = W.assetVer;
     W.changes = { v: 1, head: V(base + 1), updates: [
-      { before: V(base), after: V(base + 1), at: Date.now() / 1000, changes: [{ sha: 'aaa1111', what: 'Drop the edge tabs', thread: 'qa_bound_views', title: 'Wizard OS · Bound views' }] },
-      { before: V(base - 1), after: V(base), at: Date.now() / 1000 - 3600, changes: [{ sha: 'old0000', what: 'Older change', thread: 'qa_old', title: 'Wizard OS · Old thing' }] },
+      { before: V(base), after: V(base + 1), at: Date.now() / 1000, changes: [{ sha: 'aaa1111', what: 'Drop the edge tabs', thread: 'qa_bound_views', title: 'WizardOS · Bound views' }] },
+      { before: V(base - 1), after: V(base), at: Date.now() / 1000 - 3600, changes: [{ sha: 'old0000', what: 'Older change', thread: 'qa_old', title: 'WizardOS · Old thing' }] },
     ] };
     W.assetVer++;
     await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(700);
@@ -475,7 +475,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     await p.screenshot({ path: path.join(SHOTS, 'update-thread-one.png') });
     // A second deploy while the banner is up adds its thread; an older one this page already had is left out.
     W.changes.updates.unshift({ before: V(base + 1), after: V(base + 2), at: Date.now() / 1000, changes: [
-      { sha: 'bbb2222', what: 'Selection menu drags out of the way', thread: 'qa_selmenu', title: 'Wizard OS · Selection menu drag' },
+      { sha: 'bbb2222', what: 'Selection menu drags out of the way', thread: 'qa_selmenu', title: 'WizardOS · Selection menu drag' },
       { sha: 'ccc3333', what: 'Tidy whitespace', thread: null, title: null }] });
     W.assetVer++;
     await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(700);

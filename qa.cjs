@@ -1,4 +1,4 @@
-// Wizard OS Home — phone-viewport QA. Usage: node qa.cjs [baseUrl]
+// WizardOS Home — phone-viewport QA. Usage: node qa.cjs [baseUrl]
 const { chromium } = require('./tools/qa-playwright.cjs');
 const BASE = process.argv[2] || 'http://127.0.0.1:9271/';
 const OUT = process.env.QA_OUT || require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa');
@@ -146,7 +146,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
 
   // agent route
   await page.evaluate(() => window.__wos.goDesk(0, true)); await page.waitForTimeout(500);
-  await page.evaluate(() => window.__wos.runUtterance('what should I prioritize for the Wizard OS launch next week?', 'auto', true));
+  await page.evaluate(() => window.__wos.runUtterance('what should I prioritize for the WizardOS launch next week?', 'auto', true));
   await page.waitForFunction(() => /Archimedes/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
   await page.waitForTimeout(500);
   await page.waitForTimeout(1200);
@@ -156,7 +156,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   check('run admitted with idempotency key and same session', !!run && run.body?.session_id === ses?.body?.id && run.idem.length >= 32 && /prioritize/.test(run.body?.input || ''), JSON.stringify(run?.body));
   // Background new threads (0.6.x): the new thread starts in the background — no window opens on this desk.
   check('the new thread starts in the background (no window opened)', !ad.some(w => w.app === 'chats' && w.thread === ses?.body?.id), JSON.stringify(ad));
-  check('send carries view context for Archimedes', typeof run?.body?.instructions === 'string' && /Wizard OS/.test(run.body.instructions), (run?.body?.instructions || '').slice(0, 160));
+  check('send carries view context for Archimedes', typeof run?.body?.instructions === 'string' && /WizardOS/.test(run.body.instructions), (run?.body?.instructions || '').slice(0, 160));
   await shot('14-agent');
 
   // hold for command (fake mic)

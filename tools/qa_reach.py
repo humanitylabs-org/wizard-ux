@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wizard OS "can't reach your Wizard" QA (runs on Thales): the native connection screen that replaced the pure
+"""WizardOS "can't reach your Wizard" QA (runs on Thales): the native connection screen that replaced the pure
 black screen James saw with Tailscale off (12 Oct). Fresh API 35 emulator, exact debug APK, dead DNS (like a phone
 off the tailnet). A fake Wizard on this Mac answers ok / hangs forever / 502 on demand. Nothing reaches the real Wizard.
 
@@ -177,7 +177,7 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # 3 Back keeps the app and the screen
         sx('input keyevent KEYCODE_BACK'); time.sleep(2)
-        check('#3 Back on the screen keeps Wizard OS open', PKG in top(), top()[:90])
+        check('#3 Back on the screen keeps WizardOS open', PKG in top(), top()[:90])
         check('#3 …and the screen stays up', seen('Tailscale is off', 4))
 
         # 4 Wizard back + Try again
@@ -239,7 +239,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         log = sx('logcat -d -s WizardOSReach')
         (job / 'reach.log').write_text(log)
         crashed = '\n'.join(l for l in sx('logcat -d -b crash').splitlines() if PKG in l or 'ai.wizards.os' in l)
-        check('no Wizard OS crashes (UiAutomation harness crashes ignored)', 'FATAL' not in crashed and 'ai.wizards.os' not in crashed, crashed[:300])
+        check('no WizardOS crashes (UiAutomation harness crashes ignored)', 'FATAL' not in crashed and 'ai.wizards.os' not in crashed, crashed[:300])
     except Exception as e:
         check('harness', False, repr(e))
     finally:

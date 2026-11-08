@@ -39,7 +39,7 @@ public class ApkProvider extends ContentProvider {
         try {
             File f = file(uri);
             MatrixCursor c = new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
-            c.addRow(new Object[]{"Wizard-OS.apk", f.length()});
+            c.addRow(new Object[]{"WizardOS.apk", f.length()});
             return c;
         } catch (FileNotFoundException e) { return null; }
     }

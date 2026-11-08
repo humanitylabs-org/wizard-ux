@@ -53,12 +53,12 @@ import ai.wizards.os.device.Http;
  * Hands-free in-app update (#22). Reads the release feed (reports/wizard-os/latest.json on the private origin).
  * When it names a newer versionCode: download (by itself on unmetered networks: the on-resume check and a periodic
  * UpdateJob) → check size + SHA-256 from the feed → check the APK is this app, newer, and signed by exactly the
- * pinned Wizard OS key (BuildConfig.UPDATE_SIGNER; QA builds: the installed debug key) → install through a
- * PackageInstaller session with USER_ACTION_NOT_REQUIRED (API 31+). Once Wizard OS has installed itself once, Android
+ * pinned WizardOS key (BuildConfig.UPDATE_SIGNER; QA builds: the installed debug key) → install through a
+ * PackageInstaller session with USER_ACTION_NOT_REQUIRED (API 31+). Once WizardOS has installed itself once, Android
  * lets later updates through without asking; the first one (or API < 31, or "Install unknown apps" not yet allowed)
  * comes back as STATUS_PENDING_USER_ACTION and Android's own confirm screen is shown.
  *
- * Never mid-recording; never under James's fingers: with Wizard OS on screen the page shows one
+ * Never mid-recording; never under James's fingers: with WizardOS on screen the page shows one
  * "Update ready · tap to restart" banner, and it installs when he taps it or when the app has been in the background
  * for a moment. State changes reach the page as WosDevice.event('update', state).
  */
@@ -128,7 +128,7 @@ public final class Updater {
         else if (verified != null && !"error".equals(state.optString("state"))) advance(a, false, null);
     }
 
-    /** Wizard OS left the screen: a downloaded update installs after a short grace (unless James comes back). */
+    /** WizardOS left the screen: a downloaded update installs after a short grace (unless James comes back). */
     public static void onStop(Activity a) {
         if (verified == null) return;
         main.removeCallbacks(backgroundInstall);
@@ -230,7 +230,7 @@ public final class Updater {
                     set("ready");
                     if (!AppState.front() && UpdatePolicy.mayPromptAgain(prefs(app).getInt("noticed", 0), r.versionCode, false)) {
                         prefs(app).edit().putInt("noticed", r.versionCode).apply();
-                        notice(app, "Wizard OS " + r.versionName + " is ready", "Tap to install");
+                        notice(app, "WizardOS " + r.versionName + " is ready", "Tap to install");
                     }
                     return;
                 case INSTALL:
@@ -271,7 +271,7 @@ public final class Updater {
         set("permission");
         main.post(() -> {
             try { a.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.getPackageName()))); }
-            catch (RuntimeException e) { set("error", "message", "This phone won’t let Wizard OS install updates"); }
+            catch (RuntimeException e) { set("error", "message", "This phone won’t let WizardOS install updates"); }
         });
     }
 
@@ -332,7 +332,7 @@ public final class Updater {
 
     /**
      * Android should let this commit through without asking: API 31+ and "Install unknown apps" allowed. Then a
-     * USER_ACTION_NOT_REQUIRED session is silent when Wizard OS is the installer of record / update owner, or updates
+     * USER_ACTION_NOT_REQUIRED session is silent when WizardOS is the installer of record / update owner, or updates
      * itself while declaring UPDATE_PACKAGES_WITHOUT_USER_ACTION (both true here). If Android still wants a confirm
      * (older rules, OEM policy) the session says so (STATUS_PENDING_USER_ACTION) and we show Android's screen.
      */
@@ -352,7 +352,7 @@ public final class Updater {
     }
 
     /**
-     * The one signing certificate an update must carry. Release: the Wizard OS key, built in (build.gradle). QA builds
+     * The one signing certificate an update must carry. Release: the WizardOS key, built in (build.gradle). QA builds
      * (UPDATE_SIGNER empty): the debug key this build was signed with; each Thales build job has its own, and the
      * QA fixtures (debug, qanext, qalater) come from the same job.
      */
@@ -417,10 +417,10 @@ public final class Updater {
         PackageInfo apk = pm.getPackageArchiveInfo(f.getPath(), PackageManager.GET_SIGNING_CERTIFICATES);
         if (apk == null) return "The download isn’t an Android app";
         if (!c.getPackageName().equals(apk.packageName)) return "The download is a different app";
-        if (apk.getLongVersionCode() != r.versionCode || apk.getLongVersionCode() <= BuildConfig.VERSION_CODE) return "The download isn’t a newer Wizard OS";
+        if (apk.getLongVersionCode() != r.versionCode || apk.getLongVersionCode() <= BuildConfig.VERSION_CODE) return "The download isn’t a newer WizardOS";
         Set<String> me = installedSigners(c);
         if (me.isEmpty()) return "Couldn’t read this app’s signature";
-        if (!UpdatePolicy.signerOk(me, signers(apk.signingInfo), pinnedSigner(c), r.signer)) return "The download isn’t signed by Wizard OS";
+        if (!UpdatePolicy.signerOk(me, signers(apk.signingInfo), pinnedSigner(c), r.signer)) return "The download isn’t signed by WizardOS";
         return null;
     }
 
@@ -456,7 +456,7 @@ public final class Updater {
 
     /**
      * Stream the verified file into a session (hashing it again on the way, so a file swapped after the check is
-     * refused) and commit. The result arrives in {@link InstallReceiver}. {@code relaunch}: open Wizard OS again once
+     * refused) and commit. The result arrives in {@link InstallReceiver}. {@code relaunch}: open WizardOS again once
      * the new version is in (James was in it).
      */
     @android.annotation.SuppressLint("ApplySharedPref") // must hit disk before Android kills us for the install
@@ -542,7 +542,7 @@ public final class Updater {
             // Not on screen: Android's confirm waits behind a notification tap.
             set("confirm");
             PendingIntent pi = PendingIntent.getActivity(app, 72, confirm, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            notice(app, "Wizard OS update ready", "Tap to install", pi);
+            notice(app, "WizardOS update ready", "Tap to install", pi);
             return;
         }
         if (status == PackageInstaller.STATUS_SUCCESS) {
@@ -555,10 +555,10 @@ public final class Updater {
         Log.w(TAG, "install failed: " + why);
         set("error", "message", why == null ? "Update failed" : why, "status", status);
         ai.wizards.os.mizel.MeetingRecorderService.resumeAfterFailedUpdate(app);
-        if (!AppState.front()) notice(app, "Wizard OS couldn’t update", why);
+        if (!AppState.front()) notice(app, "WizardOS couldn’t update", why);
     }
 
-    /** MY_PACKAGE_REPLACED: the new version is in. Reopen Wizard OS if James was in it when it restarted. */
+    /** MY_PACKAGE_REPLACED: the new version is in. Reopen WizardOS if James was in it when it restarted. */
     @android.annotation.SuppressLint("ApplySharedPref")
     static void onReplaced(Context c) {
         SharedPreferences p = prefs(c);
@@ -567,11 +567,11 @@ public final class Updater {
         UpdateJob.schedule(c);
         Log.i(TAG, "replaced; now " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ") installer=" + installerOfRecord(c) + " relaunch=" + want);
         if (want <= 0) return;
-        // James was in Wizard OS when it restarted: bring it back. Android may refuse a start from the background
+        // James was in WizardOS when it restarted: bring it back. Android may refuse a start from the background
         // (it allows it when Wizard Everywhere's overlay is on), so a tap-to-open notification is left as well;
         // opening the app clears it.
         Intent i = new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        notice(c, N_UPDATED, "Wizard OS updated to " + BuildConfig.VERSION_NAME, "Tap to open",
+        notice(c, N_UPDATED, "WizardOS updated to " + BuildConfig.VERSION_NAME, "Tap to open",
                 PendingIntent.getActivity(c, 73, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         try { c.startActivity(i); } catch (RuntimeException e) { Log.i(TAG, "relaunch: " + e.getMessage()); }
     }

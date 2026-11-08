@@ -1,7 +1,7 @@
-/* Wizard OS · "Interface update" banner, shared by both shells (James, 14 Oct: "if I ask for a change on mobile,
+/* WizardOS · "Interface update" banner, shared by both shells (James, 14 Oct: "if I ask for a change on mobile,
  * the same change should reflect on desktop in a way that fits that form factor").
  *
- * Words (Miguel, 27 Oct 2026): this is the Interface, never "Wizard OS" (that name means the box's own 10–20 minute
+ * Words (Miguel, 27 Oct 2026): this is the Interface, never "WizardOS" (that name means the box's own 10–20 minute
  * update, core/os-updates.js). An interface update is already here; Reload is all it takes.
  * Owns everything about a web/ update: noticing it (ux-version.txt, the git tree id of web/), naming the
  * thread(s) that made it (ux-changes.json), the banner with Thread / Threads ▾ beside Reload, Back/Esc folding
@@ -90,7 +90,7 @@
       changes = out.slice(0, 8);
     } catch (e) { changes = []; }
   }
-  // "Wizard OS · Bound views" → "Bound views": the banner already says what updated.
+  // "WizardOS · Bound views" → "Bound views": the banner already says what updated.
   const shortTitle = t => { const s = String(t || '').trim(); const i = s.indexOf(' · '); return (i > 0 && i < 24 ? s.slice(i + 3) : s) || ''; };
   const rowName = c => shortTitle(c.title) || c.what || 'A change';
   function goThread(id) {

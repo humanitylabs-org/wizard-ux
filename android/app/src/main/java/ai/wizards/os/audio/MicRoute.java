@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Every Wizard OS recording listens through the phone's own microphone (James's standing contract).
+ * Every WizardOS recording listens through the phone's own microphone (James's standing contract).
  *
  * Android otherwise follows the system input route: with a Bluetooth speaker or headset connected it can hand a
  * {@code VOICE_RECOGNITION} recording to that device's mic over SCO. The take then arrives near-silent and

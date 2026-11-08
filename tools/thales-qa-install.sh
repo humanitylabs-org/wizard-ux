@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run on Thales: reinstall the Wizard OS QA build and fire the two assistant handoff intents.
+# Run on Thales: reinstall the WizardOS QA build and fire the two assistant handoff intents.
 export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools
 export ANDROID_SERIAL=emulator-5554
 set -u

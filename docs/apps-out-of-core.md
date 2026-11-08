@@ -1,6 +1,6 @@
 # Optional apps out of core (refactor plan)
 
-James, 26 Oct 2026: Wizard OS core (web shell and Android shell) stops naming feature apps. Food, the phone-app tiles, Music, the Video Editor companion desk, the hard-coded app id lists, Photos and Recorder (formerly Mizel.ai) become optional installed apps over generic, versioned device capabilities. Builds on [android-thin-shell.md](android-thin-shell.md). Reviewed with Claude Fable over two rounds (transcripts in the Wizard OS context sources, 2026-10-26-hardcoded-apps-refactor-*).
+James, 26 Oct 2026: WizardOS core (web shell and Android shell) stops naming feature apps. Food, the phone-app tiles, Music, the Video Editor companion desk, the hard-coded app id lists, Photos and Recorder (formerly Mizel.ai) become optional installed apps over generic, versioned device capabilities. Builds on [android-thin-shell.md](android-thin-shell.md). Reviewed with Claude Fable over two rounds (transcripts in the WizardOS context sources, 2026-10-26-hardcoded-apps-refactor-*).
 
 Stays core: Chats, Settings, Agents, App Store, Setup, Troubleshooter, side button, Android Apps installer bridge, generic mic/recording, Files. Miguel's `mizel` skin is a skin, not the Recorder; it stays.
 

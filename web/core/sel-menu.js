@@ -1,6 +1,6 @@
-/* Wizard OS · text selection menu (James, 12 Oct 2026)
+/* WizardOS · text selection menu (James, 12 Oct 2026)
  *
- * Long-press words in a chat and Wizard OS shows its own small menu above them instead of Android's
+ * Long-press words in a chat and WizardOS shows its own small menu above them instead of Android's
  * Copy / Share / Select all toolbar. The items are chosen in Settings → Text selection menu:
  *   Copy · Share (Android's share sheet, "From the configured wizard:" over the words when they are his) · Quote (into this
  *   thread's reply box) · Search (Wizard Search) · Select all (the whole message).
@@ -34,8 +34,8 @@
   const host = () => window.__wos || window.__wux;
   const toast = (i, t, ms) => host()?.toast?.(i, t, ms);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
-  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
+  // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
+  const OS = () => 'WizardOS';
   const svg = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
   const EDIT = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 

@@ -2,7 +2,7 @@
 name: wizard-customize
 description: "Use when the owner asks to change Wizard's look or layout."
 version: 0.1.0
-author: Wizard OS
+author: WizardOS
 license: MIT
 platforms: [linux, macos, windows]
 metadata:

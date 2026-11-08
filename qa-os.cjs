@@ -234,7 +234,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     const tid = await p.evaluate(() => __wos.wins[__wos.desks[1].focus].thread);
     ok(run && (body.session_id === tid || /\/steer$/.test(run.u)), 'a reply to the thread in front goes into that thread', JSON.stringify({ u: run?.u, sid: body.session_id, tid }));
     const steered = run && /\/steer$/.test(run.u);
-    ok(run && !/Wizard OS context/.test(JSON.stringify(body.input)) && (steered || /Wizard OS context/.test(body.instructions || '')), 'view context rides as instructions (new run) and never pollutes the message text', steered ? 'steered the live run' : 'new run');
+    ok(run && !/WizardOS context/.test(JSON.stringify(body.input)) && (steered || /WizardOS context/.test(body.instructions || '')), 'view context rides as instructions (new run) and never pollutes the message text', steered ? 'steered the live run' : 'new run');
     // With a thread open, even a new-sounding request stays in that thread (James, 9 Oct 2026: steering must
     // never spawn a thread). New threads start from the list or New chat; qa-thread-voice.cjs covers both.
     writes.length = 0;

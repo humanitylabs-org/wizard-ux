@@ -93,7 +93,7 @@ on-device acceptance (queued on forum, not run here).
 app's UID and not UID 1000), addressed to the requesting package with `setPackage`. A non-exported manifest receiver
 accepts broadcasts only from its own app UID, root or system, so `exported="false"` would drop genuine completions; it
 stays `exported="true"` but is protected by `android:permission="android.permission.SEND_DOWNLOAD_COMPLETED_INTENTS"` (AOSP DownloadProvider manifest: `protectionLevel="signature"`, requested by DownloadProvider), so a third-party app cannot send the action. Not verified on a device or on other ROMs: if completion banners never appear on some phone, check this first (the sheet still refreshes from the list). A source-level review found a raw `Thread` started for every non-negative id before the id was
-checked. Now: exact action and id >= 0, then the id must be one Wizard OS tracked (`Downloads.isTracked`), only then
+checked. Now: exact action and id >= 0, then the id must be one WizardOS tracked (`Downloads.isTracked`), only then
 `goAsync()`, with work on a single bounded worker (`DownloadsReceiverPolicy`). No device exploit was shown for the old code.
 
 Download rows are only taken off the list ("remove"); the file is never deleted.

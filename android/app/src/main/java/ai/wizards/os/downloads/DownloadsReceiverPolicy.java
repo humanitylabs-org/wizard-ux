@@ -9,7 +9,7 @@ import java.util.function.LongPredicate;
 /**
  * Pure rules for {@link DownloadsReceiver}. The receiver must stay exported (DownloadProvider, another app's UID, sends
  * DOWNLOAD_COMPLETE), so any app can send the same action. What is controlled here is the cost of a forged broadcast:
- * the id is checked against what Wizard OS tracks BEFORE any work or thread exists, and accepted work runs on one
+ * the id is checked against what WizardOS tracks BEFORE any work or thread exists, and accepted work runs on one
  * small bounded worker instead of a thread per id.
  */
 public final class DownloadsReceiverPolicy {
@@ -19,7 +19,7 @@ public final class DownloadsReceiverPolicy {
     /** Queued completions beyond the one running. A burst larger than this is refused; the list refresh still catches up. */
     public static final int MAX_QUEUE = 16;
 
-    /** True only for the exact action, a non-negative id, and an id Wizard OS started. The lookup is never reached otherwise. */
+    /** True only for the exact action, a non-negative id, and an id WizardOS started. The lookup is never reached otherwise. */
     public static boolean accept(String action, long id, LongPredicate tracked) {
         if (!ACTION.equals(action) || id < 0 || tracked == null) return false;
         return tracked.test(id);

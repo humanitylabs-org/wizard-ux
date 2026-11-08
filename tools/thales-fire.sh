@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run on Thales: fire a Wizard OS assistant handoff intent exactly as the side-key app would.
+# Run on Thales: fire a WizardOS assistant handoff intent exactly as the side-key app would.
 # usage: thales-fire.sh LISTEN|SAY [base64-text] [package]
 export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools
 export ANDROID_SERIAL=emulator-5554

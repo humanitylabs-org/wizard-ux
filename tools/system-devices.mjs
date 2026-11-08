@@ -1,4 +1,4 @@
-// Wizard OS devices: every machine this Wizard runs on or has been given access to, with live readings.
+// WizardOS devices: every machine this Wizard runs on or has been given access to, with live readings.
 // Spec: wizard-os/spec/DEVICES.md.
 //
 //  - "this" device is always present: the box the Wizard is installed on, read locally.

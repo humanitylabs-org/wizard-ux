@@ -1,4 +1,4 @@
-/* Wizard OS · in-app Downloads (James, 7 Nov 2026).
+/* WizardOS · in-app Downloads (James, 7 Nov 2026).
  *
  * Android's download manager only drops a quiet notification in the tray. On the Android app the shell now tells
  * the page when a download finishes (an event on the private wizardDownloadsPort, posted by MainActivity) and this module shows:

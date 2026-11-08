@@ -328,7 +328,7 @@ html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corne
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
 
 
-/* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
+/* System apps (fill a WizardOS parking spot): first in their group, with a second ring around the icon. */
 
 /* Opinionated (Miguel's skins): Home resources as the most compact readout: two rows (Server, then AI accounts) of
    small ring + label cells on one shared 3-column grid, no headings, warnings or freshness text; one settings gear.

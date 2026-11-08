@@ -1,4 +1,4 @@
-/* Setup — Wizard OS system app `setup` (contract: phone-setup-tailscale "Setup app").
+/* Setup — WizardOS system app `setup` (contract: phone-setup-tailscale "Setup app").
  * Design: Claude Fable, two rounds on 14 Oct 2026; Archimedes built it as specified.
  *
  * Screens are in-app layers on the shared WizardApp Back client; the frame's URL never changes:

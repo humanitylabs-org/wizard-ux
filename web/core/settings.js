@@ -5,8 +5,8 @@
   'use strict';
   const features = new Map(), mounts = new Set();
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
-  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
+  // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
+  const OS = () => 'WizardOS';
   const native = () => window.WizardOSNative;
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
   const shell = () => !native() && /WizardShell\//.test(navigator.userAgent || '');
@@ -307,7 +307,7 @@
     const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where: whereView } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
     // Feature switches live in two places with one state, Chrome-flags style (Miguel, 7 Nov 2026): here under "Try new
-    // features" and in the Wizard OS Tracker app. Both write look.json `tweaks` (Settings via WosExperience.toggle and
+    // features" and in the WizardOS Tracker app. Both write look.json `tweaks` (Settings via WosExperience.toggle and
     // WosLookSync, the Tracker via the box's feature-switch API); WosLookSync's refresh brings either side's flip to the
     // other. The section shows only when the box is on For testers (channel latest); on For everyone it is hidden and
     // experience.js keeps the switches off and locked. Views stay their own list (a way to see the shell, not a feature).
@@ -435,7 +435,7 @@
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   // Background + Mode (Miguel, 4 Nov 2026): a skin whose colours come in dark/light twins shows ONE row of
-  // backgrounds (Plain, landscape pictures, Wizard OS scenes) and a separate Dark | Light switch. Keep the
+  // backgrounds (Plain, landscape pictures, WizardOS scenes) and a separate Dark | Light switch. Keep the
   // independent Colors control too (the shared Look contract). Background and Mode never disappear into a palette name.
   const twinned = (S, family) => typeof S.setWallpaper === 'function' && typeof S.twin === 'function' && (family?.palettes || []).length > 1 && family.palettes.every(id => S.twin(id));
   const isLight = id => /-light$/.test(id);
@@ -694,7 +694,7 @@
   function deviceAboutHtml() {
     const d = window.WosDevice?.settingsState?.(); if (!d) return '';
     return `<div class="st-row static"><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
-      <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${d.notificationsAllowed ? `On · when ${esc(window.WizConfig.agent())} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
+      <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${d.notificationsAllowed ? `On · when ${esc(window.WizConfig.agent())} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for WizardOS in Android settings'}</small></span></div>
       <button class="st-row" data-dvupd data-settings-version="phone"><span class="st-tx"><b>Phone app (Android) ${esc(d.installed || '· version unavailable')}</b><small>${esc(d.updateDescription)}</small></span><span class="st-go">›</span></button>`;
   }
   register({ id: 'wizard', html(ctx) {

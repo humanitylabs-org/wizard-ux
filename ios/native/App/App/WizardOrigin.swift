@@ -45,9 +45,9 @@ enum WizardOrigin {
         return c.port.map { "\(host):\($0)" } ?? host
     }
 
-    /// The current Wizard shell: the Wizard OS title plus its core scripts. A login page or any other site doesn't pass.
+    /// The current Wizard shell: the WizardOS title plus its core scripts. A login page or any other site doesn't pass.
     static func looksLikeWizard(_ html: String) -> Bool {
-        html.contains("Wizard OS") && (html.contains("core/") || html.contains("__wosNativeBack"))
+        html.contains("WizardOS") && (html.contains("core/") || html.contains("__wosNativeBack"))
     }
 
     private static func https(_ input: String) -> String? {

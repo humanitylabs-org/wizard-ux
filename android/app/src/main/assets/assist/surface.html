@@ -222,7 +222,7 @@ const W = window.W = {
     if(inCorner()){bubble('Sent to Wizard · tap to open',t);idleClose(6000);return}
     words.hot('✓');words.gather();
     setTimeout(()=>{
-      setCard('Sent to Wizard','“'+t+'”',S.locked?'the reply waits in Wizard OS':'',
+      setCard('Sent to Wizard','“'+t+'”',S.locked?'the reply waits in WizardOS':'',
         [['Talk again',()=>N.listen()],['Open thread',()=>W.openWizard(),true]]);
       hint.show(S.locked?'back to the lock screen · or talk again':'tap Open thread to see the reply','card',0,true);
       idleClose(9000);

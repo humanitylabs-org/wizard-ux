@@ -34,7 +34,7 @@ import ai.wizards.os.device.DeviceMessageProtocol;
  * window.wizardAppsPort: the Android Apps bridge.
  *
  * Who can reach it: AndroidX addWebMessageListener injects the port only into frames whose origin is the private
- * Wizard origin; on top of that, only the MAIN frame — the Wizard OS shell itself — is answered. Hosted app frames
+ * Wizard origin; on top of that, only the MAIN frame — the WizardOS shell itself — is answered. Hosted app frames
  * never talk to native directly: the shell relay (web/core/android-relay.js) forwards messages from the Android Apps
  * frame (/android-apps/) only, and only for {@link AppsPolicy#METHODS}. Every method re-validates its arguments here.
  *
@@ -89,7 +89,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         bg.shutdown();
     }
 
-    /** Wizard OS came back to the front (after Android's installer, uninstall dialog, app info, Play): refresh. */
+    /** WizardOS came back to the front (after Android's installer, uninstall dialog, app info, Play): refresh. */
     public void onResume() {
         if (frames.isEmpty()) return;
         push("{\"type\":\"resume\"}");
@@ -111,7 +111,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         try { p.postMessage(json); } catch (RuntimeException e) { frames.remove(p); }
     }
 
-    /** The main frame must be the Wizard OS shell on the trusted origin (QA builds: the loopback fake). */
+    /** The main frame must be the WizardOS shell on the trusted origin (QA builds: the loopback fake). */
     boolean shellOnTop() {
         String u = web.getUrl();
         if (u == null) return false;
@@ -196,7 +196,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
     }
 
     /** String payload, or null. WebMessageCompat.getData() THROWS for ArrayBuffer messages (WebView 116+ delivers
-     *  them to every listener), which would crash Wizard OS on the main thread. */
+     *  them to every listener), which would crash WizardOS on the main thread. */
     static String text(WebMessageCompat message) {
         return message == null || message.getType() != WebMessageCompat.TYPE_STRING ? null : message.getData();
     }
@@ -263,7 +263,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
             }
             case "uninstall": {
                 String s = installed(p);
-                if (s.equals(activity.getPackageName())) throw new Refusal("Wizard OS can’t remove itself here");
+                if (s.equals(activity.getPackageName())) throw new Refusal("WizardOS can’t remove itself here");
                 start(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + s)));
                 return true;
             }

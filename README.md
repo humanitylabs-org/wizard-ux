@@ -1,6 +1,6 @@
 # Wizard UX
 
-**Wizard UX** (also called **Wizard Mobile** or **the Wizard app**) is the phone-first front end of Wizard OS. It's the screen you live in: the orb in the nav bar, the desks, the launcher, the inbox shade, and your chats with your Wizard.
+**Wizard UX** (also called **Wizard Mobile** or **the Wizard app**) is the phone-first front end of WizardOS. It's the screen you live in: the orb in the nav bar, the desks, the launcher, the inbox shade, and your chats with your Wizard.
 
 It is the active Wizard front end. The older React client in [`wizard-mobile`](https://github.com/humanitylabs-org/wizard-mobile) is now **legacy Wizard Mobile**. It's kept as a reference while its features are ported here.
 
@@ -27,12 +27,12 @@ node qa.cjs http://127.0.0.1:9271/
 
 The normal `npm test` command includes a tracked-file portability guard. Only explicit evidence/receipt paths are exempt. Native `android/` and `ios/` are temporarily excluded pending the separate `fix/portable-app-origin` migration.
 
-## Where it sits in Wizard OS
+## Where it sits in WizardOS
 
-**Wizard OS** is the whole system: the agent, the services, the apps and the UX. Wizard UX is one View in it.
+**WizardOS** is the whole system: the agent, the services, the apps and the UX. Wizard UX is one View in it.
 
 ```
-┌────────────────────────────── Wizard OS ──────────────────────────────┐
+┌────────────────────────────── WizardOS ──────────────────────────────┐
 │                                                                       │
 │  Wizard UX  (this repo)                                               │
 │   web shell: orb · desks · launcher · inbox · chats · reviews         │
@@ -58,8 +58,8 @@ The normal `npm test` command includes a tracked-file portability guard. Only ex
 | **Wizard Agent Service** | currently `server/` in `humanitylabs-org/wizard-mobile`; moving to its own `wizard-agent-service` repo | The back end Wizard UX talks to. It sits in front of Hermes and owns threads, runs, steers, approvals, files, read state and voice recovery |
 | **Hermes Agent** | `humanitylabs-org/hermes-agent` (fork of NousResearch) | The agent itself |
 | **Legacy Wizard Mobile** | `humanitylabs-org/wizard-mobile` | The previous React client. A porting reference that will be retired once its features are ported |
-| **Wizard OS installer** | `humanitylabs-org/wizardos` | Installs Hermes plus the supporting stack on a host |
-| **Wizard for Mac** | `humanitylabs-org/try-wizard` | Mac app that runs Wizard OS in a VM and shows the Wizard UX in a window |
+| **WizardOS installer** | `humanitylabs-org/wizardos` | Installs Hermes plus the supporting stack on a host |
+| **Wizard for Mac** | `humanitylabs-org/try-wizard` | Mac app that runs WizardOS in a VM and shows the Wizard UX in a window |
 
 Wizard UX holds no agent state of its own. Threads, runs and files live in Hermes and the Wizard Agent Service, so the same threads show up on every device and in legacy Wizard Mobile.
 
@@ -139,7 +139,7 @@ The Day, Week and Month reviews read `web/data.js` and `web/summaries.js`. Both 
 
 ## Android
 
-Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini build host) through `android-build-thales`. They're signed with the Wizard OS key, so every version installs over the previous one. The signing secrets come from the environment (`WOS_STORE_PASSWORD`, `WOS_KEY_PASSWORD`) and are never stored in the repo. The `qa` build type adds the `.qa` suffix, so QA builds install alongside the real app.
+Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini build host) through `android-build-thales`. They're signed with the WizardOS key, so every version installs over the previous one. The signing secrets come from the environment (`WOS_STORE_PASSWORD`, `WOS_KEY_PASSWORD`) and are never stored in the repo. The `qa` build type adds the `.qa` suffix, so QA builds install alongside the real app.
 
 ## Rules
 

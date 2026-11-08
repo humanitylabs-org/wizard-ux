@@ -1,7 +1,7 @@
 {
   "id": "/wizard-os-home/",
-  "name": "Wizard OS",
-  "short_name": "Wizard OS",
+  "name": "WizardOS",
+  "short_name": "WizardOS",
   "description": "Your Wizard home: desks, apps, threads and the orb.",
   "start_url": "/wizard-os-home/",
   "scope": "/wizard-os-home/",

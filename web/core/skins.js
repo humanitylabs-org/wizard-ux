@@ -1,4 +1,4 @@
-/* Wizard OS skins: one shell, many looks. Frame composition extends the original colour-only contract.
+/* WizardOS skins: one shell, many looks. Frame composition extends the original colour-only contract.
  * See docs/SKIN-FRAMES.md. Existing definitions without frame retain the Standard foundation.
  * Original palette contract (James, 11 Oct 2026: "same exact layout, feel and sizing; a skin of
  * our existing operating system"). A skin changes only:
@@ -156,8 +156,8 @@
   // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
   // files are fetched. Frozen with the scenery gate like every other skin. Landscapes Dark and Landscapes Light each rotate their own
   // half of the set, split by how bright the photo is overall (Miguel, 28 Oct 2026).
-  /* Wizard OS backgrounds (Miguel, 4 Nov 2026: "a proper main background we can call Wizard OS"). The Landscapes
-   * palettes can show a Wizard OS scene instead of the rotating photos. Each scene is baked from the supplied designer
+  /* WizardOS backgrounds (Miguel, 4 Nov 2026: "a proper main background we can call WizardOS"). The Landscapes
+   * palettes can show a WizardOS scene instead of the rotating photos. Each scene is baked from the supplied designer
    * hat (web/brand/wizard-mark-white.png, never redrawn) by tools/brand/wallpapers.html, one image per palette (night /
    * day) and per shape (wide desktop, tall phone), cover-fitted once like the photos. Per device, like Window opacity. */
   const WALL_KEY = 'wos.skin.wallpaper';

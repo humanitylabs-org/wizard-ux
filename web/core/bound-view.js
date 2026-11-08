@@ -2,8 +2,8 @@
 (() => {
  'use strict';
   const BOUND_NOT = /^\/wizard\/(files|attachments|hermes|v1|api)\b|\.(png|jpe?g|gif|webp|avif|bmp|svg|pdf|apk|zip|mp4|mov|webm|mp3|m4a|wav|ogg)$/i;
-  // Install and update pages are not views (James, 12 Oct: a Wizard OS release reply docked its download page). They
-  // are about updating an app on the phone, not something to look at beside the thread. Wizard OS's own shell paths
+  // Install and update pages are not views (James, 12 Oct: a WizardOS release reply docked its download page). They
+  // are about updating an app on the phone, not something to look at beside the thread. WizardOS's own shell paths
   // are excluded too: the shell is already in front. Matching links are skipped; a later real view still binds.
   const BOUND_INSTALL = /^\/(index\.html)?$|^\/(downloads)\/|^\/reports\/(wizard-os|wizard-lock)(\/|$)|^\/wizard-os-home\/(?!(index|desktop)\.html$)./i;
   function boundAbs(href) {

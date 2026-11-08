@@ -1,4 +1,4 @@
-/* Wizard OS: offer installation only when the browser supplies an install prompt (adapted from CineQ's pwa-install.js).
+/* WizardOS: offer installation only when the browser supplies an install prompt (adapted from CineQ's pwa-install.js).
  * Chrome's own menu can say "already installed" for ANY sibling app on the former custom origin (it checks the origin,
  * not the app). This banner uses the page's real install prompt, which checks this app's own manifest id. */
 (() => {
@@ -60,7 +60,7 @@
       else { dismissedHere = true; dismiss(); }
     } catch (error) {
       // A rejected/consumed capability is not a reason to advertise installation.
-      console.warn('Wizard OS installation prompt unavailable', error?.name || 'Error');
+      console.warn('WizardOS installation prompt unavailable', error?.name || 'Error');
     } finally { deferred = null; busy = false; render(); }
   }
 
@@ -79,7 +79,7 @@
 
   window.addEventListener('pageshow', render);
   // A service worker scoped to this app only: Chrome needs it to offer install, and the narrow scope keeps
-  // Wizard OS a separate app from every sibling on the same origin. It also keeps the shell's own files so Wizard
+  // WizardOS a separate app from every sibling on the same origin. It also keeps the shell's own files so Wizard
   // opens offline; once it is running, hand it the files this page already loaded, so the very first visit is enough.
   // The hand-over goes to whichever worker is running now AND to a newer one once it takes over: right after an update
   // `ready` can still name the previous worker, which ignores the message, so the new one would never hear it.

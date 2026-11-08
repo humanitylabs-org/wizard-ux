@@ -25,7 +25,7 @@ public final class AppsPolicy {
     public static final long MAX_BYTES = 250L * 1024 * 1024;
     static final Pattern HEX64 = Pattern.compile("[0-9a-f]{64}");
     static final Pattern PKG = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+");
-    /** Android's own installer + Wizard OS itself: never through this path. */
+    /** Android's own installer + WizardOS itself: never through this path. */
     static final Set<String> NEVER = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "ai.wizards.os", "ai.wizards.os.qa", "com.android.vending", "com.google.android.packageinstaller",
             "com.android.packageinstaller", "com.google.android.gms")));
@@ -44,7 +44,7 @@ public final class AppsPolicy {
     public static String checkRequest(String sha256, String pkg, String expectedSigner, String self) {
         if (!sha(sha256)) return "That install request has no valid checksum";
         if (!pkg(pkg)) return "That install request names no app";
-        if (NEVER.contains(pkg) || pkg.equals(self)) return "Wizard OS doesn’t install that app here";
+        if (NEVER.contains(pkg) || pkg.equals(self)) return "WizardOS doesn’t install that app here";
         if (expectedSigner != null && !expectedSigner.isEmpty() && !sha(expectedSigner)) return "That install request has a malformed signer";
         return null;
     }
@@ -92,10 +92,10 @@ public final class AppsPolicy {
         return installed && ownedBySelf ? 2 : 0;
     }
 
-    /** Ask Android to make Wizard OS the update owner (API 34+) on a first install, so other stores can't update it silently. */
+    /** Ask Android to make WizardOS the update owner (API 34+) on a first install, so other stores can't update it silently. */
     public static boolean requestOwnership(int sdk, boolean installed) { return sdk >= 34 && !installed; }
 
-    /** Wizard OS is this app's installer of record or update owner. */
+    /** WizardOS is this app's installer of record or update owner. */
     public static boolean owned(String installer, String updateOwner, String self) {
         return self != null && (self.equals(installer) || self.equals(updateOwner));
     }

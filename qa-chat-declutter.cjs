@@ -274,7 +274,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await openThread('qa_pw_work');
     const C = await S('.ch-compose');
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-    const names = [1, 2, 3].map(k => `Screenshot_20261010_06395${k}_Wizard OS.jpg`);
+    const names = [1, 2, 3].map(k => `Screenshot_20261010_06395${k}_WizardOS.jpg`);
     const nPick = writes.length;
     const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.locator(`${C} [data-chattach]`).tap()]);
     ok(fc.isMultiple(), '6 the picker allows several files in one pick');

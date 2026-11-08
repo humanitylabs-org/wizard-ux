@@ -32,9 +32,9 @@ const now = Date.now() / 1000;
 const FIX = {
   qa_rs_working: { title: 'QA rs Working reply', t: now - 10, status: 'running', att: null },
   qa_rs_fyi: { title: 'QA rs FYI answer', t: now - 20, att: { state: 'fyi', ask: 'Good Arts Law is a 1990s copyright doctrine', subject: 'Research' } },
-  qa_rs_done: { title: 'QA rs Done fix', t: now - 30, att: { state: 'done', ask: 'Sending pill is live', subject: 'Wizard OS' } },
-  qa_rs_check: { title: 'QA rs Check build', t: now - 40, att: { state: 'check', ask: 'Try the new orb timing from the side button', subject: 'Wizard OS' } },
-  qa_rs_needs: { title: 'QA rs Needs decision', t: now - 50, att: { state: 'needs_you', ask: 'Say "ship desks" if the preview feels right', subject: 'Wizard OS' } },
+  qa_rs_done: { title: 'QA rs Done fix', t: now - 30, att: { state: 'done', ask: 'Sending pill is live', subject: 'WizardOS' } },
+  qa_rs_check: { title: 'QA rs Check build', t: now - 40, att: { state: 'check', ask: 'Try the new orb timing from the side button', subject: 'WizardOS' } },
+  qa_rs_needs: { title: 'QA rs Needs decision', t: now - 50, att: { state: 'needs_you', ask: 'Say "ship desks" if the preview feels right', subject: 'WizardOS' } },
   qa_rs_old: { title: 'QA rs Old needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the UPS and Cat6 purchase', subject: 'Home' } },
   qa_rs_plain: { title: 'QA rs Plain reply', t: now - 25, att: null },
 };

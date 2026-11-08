@@ -1,8 +1,8 @@
-// QA (Android Apps, James 10 Oct): the Android Apps view inside the Wizard OS phone shell, with a FAKE native port.
+// QA (Android Apps, James 10 Oct): the Android Apps view inside the WizardOS phone shell, with a FAKE native port.
 // Checks: list renders with source badges, source chips (Play/System off by default, remembered, search spans all), search, launch goes through relay→port, row menu actions,
-// Back closes the menu then stays in Wizard OS (never exits), queue "Ready to install" + Install call carries the pinned
+// Back closes the menu then stays in WizardOS (never exits), queue "Ready to install" + Install call carries the pinned
 // sha256/package/signer, Play hand-off, relay refuses other frames / other paths / unknown methods / top-window calls,
-// and an older Wizard OS (no port) shows "Update Wizard OS to use Android Apps".
+// and an older WizardOS (no port) shows "Update WizardOS to use Android Apps".
 // Usage: QA_WEB_DIR=<wizard-ux worktree> QA_APP_DIR=<android-apps repo> [QA_SHOTS=dir] node qa-android-apps.cjs
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
@@ -131,7 +131,7 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     ok(ups.length === 1 && /3\.4\.2 → 3\.4\.3/.test(ups[0]), 'Updates shows Aegis 3.4.2 → 3.4.3', JSON.stringify(ups));
     await shot(p, 'aa-list');
     const bannerHidden = await f.$eval('#banner', e => e.hidden);
-    ok(bannerHidden, 'no "update Wizard OS" banner when the bridge is there');
+    ok(bannerHidden, 'no "update WizardOS" banner when the bridge is there');
     // Launch
     await f.click('[data-launch="org.telegram.messenger.web"]'); await p.waitForTimeout(250);
     let c = await calls(p);
@@ -171,14 +171,14 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     await f.click('#menu [data-act="uninstall"]'); await p.waitForTimeout(200);
     c = await calls(p);
     ok(c.some(x => x.method === 'uninstall' && x.params.package === 'com.Slack'), 'menu → Uninstall');
-    // Back at the app's root: the shell takes a step, Wizard OS never exits.
+    // Back at the app's root: the shell takes a step, WizardOS never exits.
     await back(p);
     st = await shellState(p);
-    ok(p.url().includes('/wizard-os-home/') && st.log.length > 0, 'Back at Android Apps root: Wizard OS stays open (shell step or "press back again")', JSON.stringify(st));
+    ok(p.url().includes('/wizard-os-home/') && st.log.length > 0, 'Back at Android Apps root: WizardOS stays open (shell step or "press back again")', JSON.stringify(st));
     await p.waitForTimeout(2300);
     await back(p);
     st = await shellState(p);
-    ok(p.url().includes('/wizard-os-home/'), 'second Back (spaced): still in Wizard OS (at most the "press back again" warning)', JSON.stringify(st));
+    ok(p.url().includes('/wizard-os-home/'), 'second Back (spaced): still in WizardOS (at most the "press back again" warning)', JSON.stringify(st));
     await p.waitForTimeout(2300);
     // Relay security
     const before = (await calls(p)).length;
@@ -212,17 +212,17 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     ok(!errs.length, 'no page errors (bridge)', errs.join(' | '));
     await ctx.close();
   }
-  /* ---------- older Wizard OS: no port ---------- */
+  /* ---------- older WizardOS: no port ---------- */
   {
     const { ctx, p, errs } = await boot(b, { bridge: false });
     const f = frame(p);
     await f.waitForFunction(() => !document.querySelector('#banner').hidden, null, { timeout: 25000 }).catch(() => {});
     const t = await f.$eval('#banner', e => ({ hidden: e.hidden, txt: e.innerText }));
-    ok(!t.hidden && /Update Wizard OS to use Android Apps/.test(t.txt), 'older Wizard OS: "Update Wizard OS to use Android Apps"', JSON.stringify(t));
+    ok(!t.hidden && /Update WizardOS to use Android Apps/.test(t.txt), 'older WizardOS: "Update WizardOS to use Android Apps"', JSON.stringify(t));
     const rows = await f.$$eval('#installed .row', r => r.length);
-    ok(rows === 2, 'older Wizard OS: shows the list the phone last sent (default sources)', String(rows));
+    ok(rows === 2, 'older WizardOS: shows the list the phone last sent (default sources)', String(rows));
     const dis = await f.$eval('[data-install="aaaaaaaaaaaa"]', e => e.disabled).catch(() => null);
-    ok(dis === true, 'older Wizard OS: Install disabled');
+    ok(dis === true, 'older WizardOS: Install disabled');
     await shot(p, 'aa-old-apk');
     ok(!errs.length, 'no page errors (no bridge)', errs.join(' | '));
     await ctx.close();

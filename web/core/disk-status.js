@@ -1,4 +1,4 @@
-/* Wizard OS · Settings › Network & security: one plain line about disk encryption (wizard-os spec/DISK_ENCRYPTION.md).
+/* WizardOS · Settings › Network & security: one plain line about disk encryption (wizard-os spec/DISK_ENCRYPTION.md).
  *   "Disk encrypted, unlocks with this box's security chip" · "Not encrypted" · "Protected by FileVault on this Mac" …
  * Source: the App Manager's read-only `wam disk status` (store-install/_disk, owner only). The line is written there,
  * so the shell never words a security claim itself; an error answer that carries its own line replaces an older one.

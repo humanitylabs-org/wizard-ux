@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// wizard-devices: the agent's handle on the Wizard OS devices registry (spec/DEVICES.md).
+// wizard-devices: the agent's handle on the WizardOS devices registry (spec/DEVICES.md).
 // The owner asks by voice ("monitor Thales too", "stop watching the old laptop"); the agent runs this.
 //
 //   wizard-devices list                         registry + live reading of every device + tailnet nodes

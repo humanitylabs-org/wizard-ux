@@ -23,7 +23,7 @@ test('published agent-name identity and owner signing identity have distinct sto
   assert.doesNotMatch(owner, /"wizard-identity"|"wizard-vault"|"wos-vault-v1-"/);
 });
 
-test('signed release gate pins the published upgrade baseline and Wizard OS signing env', () => {
+test('signed release gate pins the published upgrade baseline and WizardOS signing env', () => {
   const gate = read('tools/qa_phone_release.py');
   assert.match(gate, /OLD_SHA = '643a68d497166ed5c4164b65f9bc1c1d06cb65c42d156ab78df7baa65ca5d76b'/);
   assert.match(gate, /signed-upgrade-0\.10\.11-to-0\.10\.12/);

@@ -9,8 +9,8 @@ import android.content.Context;
 import android.util.Log;
 
 /**
- * Background updates for apps Wizard OS installed: every few hours on an unmetered network, ask the Android Apps
- * server for newer pinned builds and install them silently (Wizard OS is their update owner). A quiet notification
+ * Background updates for apps WizardOS installed: every few hours on an unmetered network, ask the Android Apps
+ * server for newer pinned builds and install them silently (WizardOS is their update owner). A quiet notification
  * appears only when one fails or Android insists on a confirm. Same pattern as update/UpdateJob.
  */
 public class AppsUpdateJob extends JobService {

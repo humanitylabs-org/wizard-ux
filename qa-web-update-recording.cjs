@@ -285,9 +285,9 @@ const markPage = P => P.p.evaluate(() => { window.__qaMark = 1; });
     ok(stopped && N.stops === 1 && S.stops.filter(s => s.id === meetingId).length === 1 && S.meeting(meetingId).status === 'ready', 'native: Stop after the reload saves the meeting once', JSON.stringify({ stops: N.stops, srv: S.stops }));
     ok(await until(async () => !((await captureRows(p)) || []).some(r => r.appId === 'mizel'), 8000), 'native: the capture owner is released after Stop');
     await p.screenshot({ path: OUT + '/native-after-stop.png' });
-    // Back never exits: from the meeting, Back lands in the app, never outside Wizard OS.
+    // Back never exits: from the meeting, Back lands in the app, never outside WizardOS.
     await p.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(600);
-    ok(p.url().startsWith(BASE) && await p.evaluate(() => !!window.__wos), 'native: Back keeps Wizard OS open', p.url());
+    ok(p.url().startsWith(BASE) && await p.evaluate(() => !!window.__wos), 'native: Back keeps WizardOS open', p.url());
     ok(!P.errs.length, 'native: no page errors', P.errs.join(' | '));
     ok(!P.foreign.length, 'native: nothing left the fixture', P.foreign.slice(0, 3).join(' '));
     summary.native = { meetingId, starts: N.starts, stops: N.stops, startCmds: N.startCmds, nativeSeqs: seqs.length, webChunks: S.webChunks.length, navs: P.navs() };

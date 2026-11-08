@@ -104,7 +104,7 @@ class Page:
         if not page:
             print('DIAG top:', top()); print('DIAG pages:', l if 'l' in dir() else None)
             print('DIAG log:', sx("logcat -d | grep -E 'AndroidRuntime|FATAL|WizardOS|chromium' | tail -40"))
-            raise RuntimeError('no Wizard OS page')
+            raise RuntimeError('no WizardOS page')
         self.writes = []; self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=20)
@@ -251,7 +251,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('input keyevent KEYCODE_HOME'); time.sleep(1.5)
         sx(f'cmd role add-role-holder --user 0 {SIDE} {PKG}'); time.sleep(2)
         sx('settings put global power_button_long_press 5')
-        check('Wizard OS is the assistant (side button)', PKG in sx(f'cmd role get-role-holders --user 0 {SIDE}'))
+        check('WizardOS is the assistant (side button)', PKG in sx(f'cmd role get-role-holders --user 0 {SIDE}'))
         sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService'); sx('settings put secure accessibility_enabled 1'); time.sleep(3)
 
         # A. James's exact case: talk, it sends, he presses Back to leave the page he was on.

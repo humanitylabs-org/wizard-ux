@@ -1,4 +1,4 @@
-/* Wizard OS — home shell prototype */
+/* WizardOS — home shell prototype */
 (async () => {
   'use strict';
   if (document.documentElement.dataset.leaving || window.WizHomeScreenPolicy?.mode) return; // single-app sessions never initialize desks
@@ -7,8 +7,8 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
-  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
+  // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
+  const OS = () => 'WizardOS';
   const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
@@ -1328,9 +1328,9 @@
     c.filter = ''; CHATS.setFilter(w, f); c.filterFrom = opts.from === undefined ? from : opts.from;
   }
 
-  /* ---------------- side button (Wizard OS Android app only) ----------------
-   * The switch lives on Home. One tap: Wizard OS asks for the microphone in place, then opens the one system page
-   * Android keeps for itself (pick Wizard OS as the assistant). Back in Wizard OS, the app pushes the new state to
+  /* ---------------- side button (WizardOS Android app only) ----------------
+   * The switch lives on Home. One tap: WizardOS asks for the microphone in place, then opens the one system page
+   * Android keeps for itself (pick WizardOS as the assistant). Back in WizardOS, the app pushes the new state to
    * window.__wosSideButton and the card turns green on its own. Once the side button has really reached Wizard
    * OS, the card disappears. */
   const NATIVE = () => window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function';
@@ -2331,13 +2331,13 @@
     V.raf = requestAnimationFrame(tick);
     return true;
   }
-  // Tell the native shell what the orb is doing, so leaving Wizard OS mid-recording shows the floating orb
+  // Tell the native shell what the orb is doing, so leaving WizardOS mid-recording shows the floating orb
   // (timer, Pause, Cancel, tap to send). Never auto-sends: going quiet only ever pauses nothing.
   function voiceElapsed() { return Math.round((V.acc || 0) + (V.state === 'listen' || V.state === 'command' ? performance.now() - (V.t0 || performance.now()) : 0)); }
   function reportVoice(s) {
     try { const n = window.WizardOSNative; if (n && typeof n.appVoice === 'function') n.appVoice(s, voiceElapsed()); } catch (e) {}
   }
-  // The floating orb's controls while Wizard OS is in the background.
+  // The floating orb's controls while WizardOS is in the background.
   window.__wosVoiceCmd = cmd => {
     if (V.state !== 'listen' && V.state !== 'paused' && V.state !== 'command') return false;
     if (cmd === 'send') finishVoice();
@@ -3234,7 +3234,7 @@
     const S = snap || sendSnap(id), v = S.view, others = S.others;
     const z = v?.z ? ` at ${v.z.level} level${v.z.day ? ` (${v.z.day})` : v.z.week ? ` (week of ${v.z.week})` : ''}` : '';
     return [
-      `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their phone.`,
+      `[WizardOS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their phone.`,
       v ? `Window in front: ${v.name} (${v.kind}${v.url ? `, ${v.url}` : ''})${z}.` : `They were on desk ${S.desk + 1} with no window open.`,
       S.screen ? `Visible on screen: ${S.screen}` : '',
       others.length ? `Also open on this desk: ${others.join(', ')}.` : '',
@@ -3247,7 +3247,7 @@
     return Object.keys(W).find(k => mainChats(W[k])) || '';
   }
   function reviewContext(v) {
-    return [`[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by voice from Wizard UX on their phone while reviewing a page this thread linked.`,
+    return [`[WizardOS context] ${window.WizConfig.owner() || 'The user'} sent this by voice from Wizard UX on their phone while reviewing a page this thread linked.`,
       `Page under review: ${v.name.replace(/^Review of /, '')} (${v.url}).`,
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
@@ -3817,7 +3817,7 @@
   // Every load starts with the orb and bars showing (James, 18 Oct); distraction-free is a per-session choice.
   store.set('zen', false);
 
-  /* ---------------- Back never leaves Wizard OS ----------------
+  /* ---------------- Back never leaves WizardOS ----------------
    * Android Back is an in-app back gesture, one step at a time:
    *   recording → menu → sheet → the focused window's own back (thread → list,
    *   framed app history, review dive) → full screen → Home desk.
@@ -4014,7 +4014,7 @@
     deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => V.state !== 'idle',
     // One main Chats window, and the new thread opens in it as soon as it is saved.
     send: async text => { closeSheets(true); const w = placeApp(mainChats, { app: 'chats', thread: null }); if (!w) throw new Error('Chats unavailable'); const it = await sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (it?.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openWizardThread(sid)); return it || null; } });
-  // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
+  // Native shell (WizardOS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
   // on Back (James's rule), just like the browser guard above.
   window.__wosNativeBack = () => {
@@ -4024,7 +4024,7 @@
     return did || 'root';
   };
   if (/WizardOS-Android\//.test(navigator.userAgent)) document.documentElement.classList.add('native-app');
-  // Assistant handoff (side-key app → Wizard OS). 'listen' opens the orb listening; 'say' shows the words as a
+  // Assistant handoff (side-key app → WizardOS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
   let threadHandoffGeneration = 0;
   window.__wosHandoff = h => {
@@ -4048,7 +4048,7 @@
       return true;
     }
     if (APP[h.action]?.kind === 'wizard') return openApp(APP[h.action]);
-    // Photos is its own app: older Wizard OS builds still ask for Settings › photos-backup (notification, native screen).
+    // Photos is its own app: older WizardOS builds still ask for Settings › photos-backup (notification, native screen).
     if (h.action === 'settings' && (h.focus === 'photos-backup' || h.focus === 'photos')) { if (!window.WizOpenApp?.('photos')) toast('▣', 'Photos backup lives in the Photos app · install it from the App Store', 3200); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent' || (typeof h.focus === 'string' && window.WosSettings?.features.some(f => f.id === h.focus) ? h.focus : undefined)); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }

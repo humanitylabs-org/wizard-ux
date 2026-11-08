@@ -1,8 +1,8 @@
-/* Wizard OS · Settings → About & updates: one update card, Automatic / Ask me, release channel; the Home pop-up.
+/* WizardOS · Settings → About & updates: one update card, Automatic / Ask me, release channel; the Home pop-up.
  *
- * Two kinds of update, two names (Miguel, 27 Oct 2026). "Wizard OS" is only the box (App Manager, Agent Service,
+ * Two kinds of update, two names (Miguel, 27 Oct 2026). "WizardOS" is only the box (App Manager, Agent Service,
  * apps): a 10–20 minute install that waits for a quiet moment, like a macOS update. The screens you use are the
- * "Interface": a new one is already on the box and only needs a Reload, so its notice never says "Wizard OS".
+ * "Interface": a new one is already on the box and only needs a Reload, so its notice never says "WizardOS".
  *
  * The box updates the one documented way: the App Manager reruns the installer (`os.sh | bash -s start`) onto the
  * release the box's channel names. Automatic does that overnight, skipping while a chat run is active (Install now
@@ -12,7 +12,7 @@
  * Channels keep their ids (stable / latest) but are shown as "For everyone" and "For testers": every merge to main
  * reaches For testers; a For testers release moves to For everyone after about 3 days with no release blocker.
  * New work ships behind off-by-default feature switches, which testers turn on in Settings › Appearance ("Try new
- * features") or in the Wizard OS Tracker app: one shared state (look.json `tweaks`).
+ * features") or in the WizardOS Tracker app: one shared state (look.json `tweaks`).
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
@@ -30,11 +30,11 @@
  * An unavailable route is reported in About; no install/policy controls are enabled without a valid response.
  *
  * One card, same look in every state; only the words change. Nothing to do = no card:
- *   behind    "Wizard OS update" · Automatic: "Installs tonight when it’s quiet" · Install now
+ *   behind    "WizardOS update" · Automatic: "Installs tonight when it’s quiet" · Install now
  *                                Ask me:    "Takes 10–20 minutes" · Install
- *   building  "Updating Wizard OS…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Install (disabled)
+ *   building  "Updating WizardOS…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Install (disabled)
  *             (quick: "Takes about 2 minutes" in both; the new interface then offers its own Reload)
- *   failed    "Wizard OS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
+ *   failed    "WizardOS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
  *   reload    the interface changed under this page (core/web-update.js) → "Interface updated" · Reload
  *
  *   WosUpdates.card()       → {state, title, line, action, label, disabled} or null
@@ -57,9 +57,8 @@
   const FRESH = 60e3;
   let st = null, at = 0, inflight = null, busy = '', off = false, issue = '';
 
-  // Product name (wizard-os#436): one word, "WizardOS", behind the off-by-default tweak wizard/wizardos-name.
-  const NAME_TWEAK = 'wizard/wizardos-name';
-  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(NAME_TWEAK) ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
+  // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
+  const OS = () => 'WizardOS';
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
@@ -97,7 +96,7 @@
 
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
-    // The interface: already on the box, a Reload away. Never called Wizard OS.
+    // The interface: already on the box, a Reload away. Never called WizardOS.
     if (window.WizWebUpdate?.pending) {
       const s = window.WizWebUpdate.reloadStatus?.() || {};
       const c = { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
@@ -108,7 +107,7 @@
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
     if (st.installing) return { state: 'building', title: `Updating ${OS()}…`, line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
-    // Wizard OS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
+    // WizardOS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
     if (st.interrupted) return { state: 'failed', title: `${OS()} update didn’t finish`, line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
     return { state: 'behind', title: `${OS()} update`, line: auto ? 'Installs tonight when it’s quiet' : takes, action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
@@ -248,6 +247,5 @@
   const tick = () => { if (!st || document.hidden) return; if (st.installing || Date.now() - at >= IDLE) load(true); };
   const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
-  window.addEventListener?.('wos:tweak-choice', e => { if (e?.detail?.id === NAME_TWEAK) changed(); });
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });
 })();

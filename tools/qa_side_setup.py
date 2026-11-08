@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Side-button switch QA (runs on Thales). Fresh API35 emulator, the Wizard OS build under test, real taps.
+"""Side-button switch QA (runs on Thales). Fresh API35 emulator, the WizardOS build under test, real taps.
 
 usage: qa_side_setup.py NEW_APK PKG [OLD_APK]
 With OLD_APK, installs it first and upgrades over it (the same path James's phone takes).
 Checks: the switch shows on Home only in the native app; one tap asks for the mic in place; after the mic it
-lands on the system assistant picker; picking Wizard OS there and coming back turns the card green on its own;
-a real side-button hold reaches Wizard OS and the card then disappears; Android's assistant gear opens Wizard OS
-on the switch; Back never leaves Wizard OS. Hermes/Wizard writes are failed by CDP. Always stops the emulator."""
+lands on the system assistant picker; picking WizardOS there and coming back turns the card green on its own;
+a real side-button hold reaches WizardOS and the card then disappears; Android's assistant gear opens WizardOS
+on the switch; Back never leaves WizardOS. Hermes/Wizard writes are failed by CDP. Always stops the emulator."""
 import fcntl, json, os, pathlib, re, socket, subprocess, sys, time, uuid
 import urllib.request
 from qa_paths import work_root
@@ -55,7 +55,7 @@ class Page:
             except Exception: pass
             if page: break
             time.sleep(0.7)
-        if not page: raise RuntimeError('no Wizard OS page')
+        if not page: raise RuntimeError('no WizardOS page')
         self.writes = []; self.id = 0
         u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups()
         h, p = host.split(':'); self.s = socket.create_connection((h, int(p)), timeout=20)
@@ -161,22 +161,22 @@ with (BASE / 'worker.lock').open('a') as lock:
         t = top(); shot('03-assistant-page')
         check('after the mic it lands on the system assistant picker', 'ManageAssist' in t or 'DefaultApp' in t or 'Settings' in t, t)
         check('mic granted', 'RECORD_AUDIO: granted=true' in sx(f'dumpsys package {PKG} | grep RECORD_AUDIO'), tapped)
-        # Pick Wizard OS the way a person would: Digital assistant app -> Wizard OS -> OK
+        # Pick WizardOS the way a person would: Digital assistant app -> WizardOS -> OK
         picked = None
-        for pat in [r'^(Default )?digital assistant app$|^Assist app$', r'^Wizard OS', r'^OK$|^Agree$']:
+        for pat in [r'^(Default )?digital assistant app$|^Assist app$', r'^WizardOS', r'^OK$|^Agree$']:
             time.sleep(1.5); picked = tap_text(pat); print('  tapped', pat, '->', picked)
         time.sleep(2); shot('04-picked')
         holders = sx('cmd role get-role-holders --user 0 android.app.role.ASSISTANT').strip()
         if PKG not in holders:
             print('  UI pick did not land (', holders, '); setting role by shell to continue the flow')
             sx(f'cmd role add-role-holder --user 0 android.app.role.ASSISTANT {PKG}'); time.sleep(2)
-        check('Wizard OS picked as the assistant in the system page', PKG in sx('cmd role get-role-holders --user 0 android.app.role.ASSISTANT'), holders)
+        check('WizardOS picked as the assistant in the system page', PKG in sx('cmd role get-role-holders --user 0 android.app.role.ASSISTANT'), holders)
         # Come back the way a person does: Back from Settings
         for _ in range(4):
             if PKG in top(): break
             sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
         time.sleep(2)
-        check('Back from Settings returns to Wizard OS', PKG in top(), top())
+        check('Back from Settings returns to WizardOS', PKG in top(), top())
         pg.close(); pg = Page(); wait_shell(pg); time.sleep(1.5)
         c = card(pg); shot('05-card-on')
         check('the card turns green on its own: Side button is on', c and c['on'] and c['step'] == 'press' and 'Hold the side button' in c['text'], c)
@@ -186,19 +186,19 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('input keyevent --longpress KEYCODE_POWER'); time.sleep(4)
         t = top(); shot('06-side-hold')
         lg = sx('logcat -d | grep -iE "corner shown|lock-screen surface" | tail -3').strip()
-        check('holding the side button reaches Wizard OS (corner orb)', 'corner shown' in lg and not used_before, lg)
+        check('holding the side button reaches WizardOS (corner orb)', 'corner shown' in lg and not used_before, lg)
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(3)
         pg.close(); pg = Page(); wait_shell(pg); time.sleep(1)
         st = json.loads(pg.ev("window.WizardOSNative.sideButton()"))
         check('after a real hold the switch reads ready and the card is gone', st['step'] == 'ready' and card(pg) is None, st)
-        # Android's assistant gear -> Wizard OS on the switch
+        # Android's assistant gear -> WizardOS on the switch
         sx('input keyevent KEYCODE_HOME'); time.sleep(1)
         o = sx(f'am start -W -n {PKG}/ai.wizards.os.assist.AssistSetupActivity'); time.sleep(3)
-        check("Android's assistant settings gear opens Wizard OS itself", re.search(re.escape(PKG) + r'/(ai\.wizards\.os)?\.MainActivity', top()), top())
+        check("Android's assistant settings gear opens WizardOS itself", re.search(re.escape(PKG) + r'/(ai\.wizards\.os)?\.MainActivity', top()), top())
         # Back never exits
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
-        check('Back at Home stays in Wizard OS', PKG in top(), top())
+        check('Back at Home stays in WizardOS', PKG in top(), top())
         crashed = 'FATAL EXCEPTION' in sx('logcat -d -b crash')
         check('no crashes', not crashed)
         check('nothing written to Wizard during QA', not pg.writes, pg.writes[:3])

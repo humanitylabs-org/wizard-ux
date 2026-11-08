@@ -1,4 +1,4 @@
-/* Agents — Wizard OS system app (Agents MVP, Lane B). Its own app, reached from Home and from System; never part
+/* Agents — WizardOS system app (Agents MVP, Lane B). Its own app, reached from Home and from System; never part
  * of Apps or the App Store.
  *
  * Screens (state only; Back walks them through the shared WizardApp facade, never out of Wizard):

@@ -59,7 +59,7 @@ import ai.wizards.os.device.DeviceBridge;
  * /wizard/v1/shares API, surviving app close, network loss and reboot; the Wizard posts it into the thread.
  *
  * Wizards without capabilities.resumable_uploads (and text-only shares) keep the previous route: a private copy
- * handed to Wizard OS, where the web picker chooses the thread.
+ * handed to WizardOS, where the web picker chooses the thread.
  */
 public class ShareActivity extends Activity {
     static final String TAG = "WizardShare";

@@ -33,7 +33,7 @@ import android.window.OnBackInvokedDispatcher;
 import ai.wizards.os.downloads.DownloadsCallerPolicy;
 
 /**
- * Wizard OS: a native home for the owner's configured Wizard OS shell.
+ * WizardOS: a native home for the owner's configured WizardOS shell.
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -49,9 +49,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     static final String ACTION_LISTEN = "ai.wizards.os.action.LISTEN";
     static final String ACTION_SAY = "ai.wizards.os.action.SAY";
-    /** Opens Wizard OS on the side-button switch (Android's assistant settings gear lands here). */
+    /** Opens WizardOS on the side-button switch (Android's assistant settings gear lands here). */
     public static final String ACTION_SIDE_BUTTON = "ai.wizards.os.action.SIDE_BUTTON";
-    /** Notifications and the Everywhere button open Wizard OS on Settings / the Unsent list / a thread. */
+    /** Notifications and the Everywhere button open WizardOS on Settings / the Unsent list / a thread. */
     public static final String ACTION_SETTINGS = "ai.wizards.os.action.SETTINGS";
     /** With ACTION_SETTINGS: the Settings feature to open on (e.g. "photos-backup"). Older web ignores it. */
     public static final String EXTRA_SETTINGS_FOCUS = "ai.wizards.os.extra.SETTINGS_FOCUS";
@@ -392,7 +392,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         });
     }
 
-    /* ---------------- Back: always a step inside Wizard OS, never an exit ---------------- */
+    /* ---------------- Back: always a step inside WizardOS, never an exit ---------------- */
 
     private void installBack() {
         if (Build.VERSION.SDK_INT >= 33) {
@@ -451,7 +451,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         device.onIntent(intent);
     }
 
-    /* ---------------- Assistant handoff (the side-key app opens Wizard OS) ----------------
+    /* ---------------- Assistant handoff (the side-key app opens WizardOS) ----------------
      * LISTEN opens the orb listening. SAY carries words (EXTRA_TEXT) that appear as a draft James sends with one
      * tap; nothing is ever sent on another app's behalf. */
     void queueHandoff(Intent intent) {
@@ -726,7 +726,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             pendingMic.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
         } else {
             pendingMic.deny();
-            Toast.makeText(this, "Wizard OS needs the microphone for the orb", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "WizardOS needs the microphone for the orb", Toast.LENGTH_LONG).show();
         }
         pendingMic = null;
     }
@@ -851,7 +851,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             everywhereSetup = false;
             boolean ok = ai.wizards.os.everywhere.EverywhereService.overlayAllowed(this);
             if (ok) ai.wizards.os.everywhere.EverywhereService.ensureRunning(this);
-            Toast.makeText(this, ok ? "Wizard Everywhere is on. It shows when you leave Wizard OS." : "Wizard Everywhere needs “Display over other apps”", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, ok ? "Wizard Everywhere is on. It shows when you leave WizardOS." : "Wizard Everywhere needs “Display over other apps”", Toast.LENGTH_LONG).show();
             if (ok) main.postDelayed(() -> offerAccessibility(true), 350);
         }
         if (a11ySetup) { a11ySetup = false; main.postDelayed(() -> offerAccessibility(false), 350); }
@@ -879,7 +879,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
 
     /* ---------------- Side button switch ----------------
-     * One tap in Wizard OS: ask for the mic in place, then land on the one system page Android keeps for itself
+     * One tap in WizardOS: ask for the mic in place, then land on the one system page Android keeps for itself
      * (the assistant pick). Coming back, the shell is told the new state and the switch updates on its own. */
     void pushSideButton() {
         if (web == null) return;
@@ -895,13 +895,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!SideButton.assistant(this)) {
             sideSetupActive = true;
             if (SideButton.openAssistantPage(this)) {
-                Toast.makeText(this, "Pick Wizard OS, then come back", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Pick WizardOS, then come back", Toast.LENGTH_LONG).show();
                 return;
             }
             sideSetupActive = false;
             Toast.makeText(this, "This phone has no assistant setting", Toast.LENGTH_LONG).show();
         } else if (!SideButton.openSideKeyPage(this)) {
-            Toast.makeText(this, "Wizard OS is your assistant. Hold the side button to talk.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "WizardOS is your assistant. Hold the side button to talk.", Toast.LENGTH_LONG).show();
         }
         pushSideButton();
     }
@@ -957,13 +957,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             }
         } else {
             ai.wizards.os.everywhere.EverywhereService.ensureRunning(this);
-            Toast.makeText(this, "Wizard Everywhere is on. It shows when you leave Wizard OS.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Wizard Everywhere is on. It shows when you leave WizardOS.", Toast.LENGTH_LONG).show();
             offerAccessibility(true);
         }
         pushEverywhere();
     }
 
-    /* ---------------- Voice typing & screenshots (Accessibility → Wizard OS) ----------------
+    /* ---------------- Voice typing & screenshots (Accessibility → WizardOS) ----------------
      * One dialog, one button, the next step only. Sideloaded on Android 13+, the switch is greyed out as a
      * "Restricted setting": the dialog walks through tap-the-grey-row-once → App info ⋮ → Allow restricted settings
      * → switch on, re-checking each time James comes back. */
@@ -982,14 +982,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             case TAP_ONCE:
                 title = "Turn on voice typing & screenshots";
                 msg = "Lets the orb type what you say into any app and attach screenshots.\n\n"
-                    + "On the next screen tap “Wizard OS voice typing” and turn it on.\n\n"
+                    + "On the next screen tap “WizardOS voice typing” and turn it on.\n\n"
                     + "If Android says “Restricted setting” or “App was denied access”, that’s expected for apps installed "
                     + "outside the Play Store: tap OK, come back here, and I’ll take you to the unlock.";
                 go = "Open Accessibility";
                 target = ai.wizards.os.everywhere.AccessibilitySetup.accessibilityPage(this);
                 break;
             case ALLOW_RESTRICTED:
-                title = "Unlock it for Wizard OS";
+                title = "Unlock it for WizardOS";
                 msg = "Android locks this for apps installed outside the Play Store.\n\n"
                     + "On the next screen tap ⋮ (top right) → Allow restricted settings, confirm, then come back here. "
                     + "I’ll take you straight to the switch.";
@@ -999,7 +999,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             default:
                 title = "Turn on voice typing & screenshots";
                 msg = "Lets the orb type what you say into any app and attach screenshots.\n\n"
-                    + "On the next screen: “Wizard OS voice typing” → turn it on → Allow. Then come back."
+                    + "On the next screen: “WizardOS voice typing” → turn it on → Allow. Then come back."
                     + (ai.wizards.os.everywhere.AccessibilitySetup.stage(this) >= ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED
                         ? "\n\nStill greyed out? App info → ⋮ → Allow restricted settings." : "");
                 go = "Open Accessibility";
@@ -1180,7 +1180,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         @JavascriptInterface
         public void voiceTypingSettings() { runOnUiThread(() -> offerAccessibility(false)); }
 
-        /** "listen" | "paused" | "think" | "idle" + elapsed ms: leaving Wizard OS mid-take shows the floating orb. */
+        /** "listen" | "paused" | "think" | "idle" + elapsed ms: leaving WizardOS mid-take shows the floating orb. */
         @JavascriptInterface
         public void appVoice(String state, long elapsedMs) {
             ai.wizards.os.everywhere.EverywhereService.appVoiceState(MainActivity.this, String.valueOf(state), elapsedMs);

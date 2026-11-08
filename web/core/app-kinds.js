@@ -3,7 +3,7 @@
  *   Agent apps  backend-only apps your agent uses (tap = its settings sheet)
  *   Agents      each agent's chats; "Build agents" opens the Agents app that makes and manages them
  *   Connectors  sign-ins to another service (AI subscriptions, bank feeds, Cloudflare...)
- * System apps (the defaults Wizard OS ships for its parking spots, wizard-os docs/SYSTEM_APPS.md) lead their group and
+ * System apps (the defaults WizardOS ships for its parking spots, wizard-os docs/SYSTEM_APPS.md) lead their group and
  * wear one accent ring. Every group ends with a "+ Get ..." tile that opens that section of the App Store.
  * The phone launcher / New desk (app.js) and the desktop app selector (desktop/desktop.js) both read this. */
 (function () {

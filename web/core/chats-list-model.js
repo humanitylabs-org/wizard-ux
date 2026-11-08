@@ -62,7 +62,7 @@ function readyGroups(rows, order) {
   return stateGroups(rows).map(g => ({ ...g, word: g.state === 'none' ? 'No status' : g.word, rows: readySort(g.rows, order) }));
 }
 /** Round 24c (Miguel, 4 Nov 2026: "they should be one and the same, just use project"): Ready grouped by each chat's
- * project, the part of its title before ' · ' ("Wizard OS · Hotkeys" → Wizard OS), a sub-header per project, its rows
+ * project, the part of its title before ' · ' ("WizardOS · Hotkeys" → WizardOS), a sub-header per project, its rows
  * in the chosen order. Projects with something waiting on him first, then the bigger ones, then A–Z; notifications
  * under 'Notifications' and titles with no project under 'Other', both last. [{ state: 'proj:<name>', word, rows }]. Pure. */
 const NOTES_PROJECT = 'Notifications', NO_PROJECT = 'Other';
@@ -72,7 +72,7 @@ const projectOf = r => {
   return (i > 0 ? t.slice(0, i).trim() : '') || NO_PROJECT;
 };
 /** round 26 (Miguel, 4 Nov 2026: the project shows once, on its group's header): a row's title under a By project
- * header, without its 'Project ·' part ("Wizard OS · Hotkeys" → Hotkeys); titles with no project stay whole. Pure. */
+ * header, without its 'Project ·' part ("WizardOS · Hotkeys" → Hotkeys); titles with no project stay whole. Pure. */
 const titleInProject = r => {
   const t = String(r?.title || ''), i = t.indexOf('·');
   if (r?.note || i <= 0 || !t.slice(0, i).trim()) return t;

@@ -31,12 +31,12 @@ import java.util.Set;
 
 /**
  * What is installed. Only apps with a launcher entry are visible (the manifest's &lt;queries&gt; MAIN/LAUNCHER filter;
- * no QUERY_ALL_PACKAGES), plus anything Wizard OS installed itself (installers always see their own installs).
+ * no QUERY_ALL_PACKAGES), plus anything WizardOS installed itself (installers always see their own installs).
  */
 public final class AppsCatalog {
     private AppsCatalog() {}
 
-    /** Every launchable app plus the ones Wizard OS installed, as JSON rows for the view and the server. */
+    /** Every launchable app plus the ones WizardOS installed, as JSON rows for the view and the server. */
     public static JSONArray list(Context c) {
         PackageManager pm = c.getPackageManager();
         Map<String, JSONObject> out = new LinkedHashMap<>();

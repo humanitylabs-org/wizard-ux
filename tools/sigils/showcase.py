@@ -27,7 +27,7 @@ sizes = ''.join(f'<div class="sz"><span>{s}px</span>' + ''.join(tile(a, s, 'flat
 bare = ''.join(f'<span class="bare" style="--c:{HOUSE[a][1]}"><i class="sgi sg-{HOUSE[a][0]}"></i></span>' for a in ORDER)
 
 page = f'''<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=color-scheme content=dark><meta name=robots content="noindex,nofollow"><title>Wizard OS · app sigils</title>
+<meta name=color-scheme content=dark><meta name=robots content="noindex,nofollow"><title>WizardOS · app sigils</title>
 <style>
 {css}
 :root{{--bg:#08070c;--card:#110e18;--line:#221e2d;--t:#ece8f6;--m:#9a93ae}}
@@ -53,7 +53,7 @@ figure{{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px}
 .pg{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 4px}}.pg figcaption{{font-size:11px}}
 foot{{display:block;margin-top:60px;color:var(--m);font-size:12px}}
 </style></head><body>
-<div class=eyebrow>Wizard OS · App icons · v1</div>
+<div class=eyebrow>WizardOS · App icons · v1</div>
 <h1>One silhouette.<br>One bite. One colour.</h1>
 <p class=lede>Every app in Wizard now wears a sigil: a single solid shape with its second meaning cut out of it. Each app has its own hue, set at the same perceived brightness so none shouts over another. The tile stays dark glass, and the glyph lights it.</p>
 <div class=hero>{hero}</div>
