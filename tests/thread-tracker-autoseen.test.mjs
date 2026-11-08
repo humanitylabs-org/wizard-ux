@@ -44,7 +44,20 @@ test('green reply group auto-Seen after continuous visible dwell; paints all ids
   h.step(1); assert.deepEqual(h.writes[0].ids, ['0', '1']); assert.deepEqual(h.writes[0].items, [{ id: '0', updated_at: 1 }, { id: '1', updated_at: 1 }]); assert.equal(h.T.dots('t'), '');
   await h.update(); h.step(); h.step(1000); assert.equal(h.writes.length, 2, 'a later unseen update re-arms the anchor');
 });
-for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['container', 'container-qa'], ['restricted', 'restricted-qa']]) {
+// James, 9 Nov 2026: "these should not be displaying in the philosopher chat ... This is for our builder agent".
+// The tracker is the main builder agent's only: any other agent's thread reads, paints and writes nothing.
+for (const [kind, agent] of [['host-profile', 'profile-qa'], ['container', 'container-qa'], ['restricted', 'restricted-qa'], ['philosopher', 'philosopher']]) {
+  test(`another agent's thread shows no tracker with the tweak on: ${kind}`, async () => {
+    for (const states of [['running'], ['done', 'done'], ['needs_you'], ['blocked']]) {
+      const h = harness(states, agent); await h.start(); h.step(); h.step(2000);
+      assert.equal(h.T.onFor(agent), false); assert.equal(h.T.onFor(''), true); assert.equal(h.T.onFor('hermes'), true);
+      assert.deepEqual(h.reads, [], 'no ledger read for another agent');
+      assert.equal(h.T.stripHtml('t', agent), ''); assert.equal(h.T.dots('t', agent), '');
+      h.T.beforeSend('t', agent, 20000); assert.deepEqual(h.writes, [], 'no auto-Seen or send-clear write');
+    }
+  });
+}
+for (const [kind, agent] of [['main', '']]) {
   test(`running strip main-versus-routed scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
     const h = harness(['running'], agent); await h.start(); h.step(); h.step(2000);
     assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
@@ -148,7 +161,7 @@ test('a 300px reply with only its 50px tail visible is not read', async () => {
   const h = harness(); h.node.getBoundingClientRect = () => ({ top: -82, bottom: 218, height: 300, left: 0, width: 400 });
   await h.start(); h.step(); h.step(1000); assert.equal(h.writes.length, 0);
 });
-for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) for (const skew of [-60000, 0, 60000]) test(`send pins server versions with client clock ${skew} in ${agent || 'main'}`, async () => {
+for (const agent of ['']) for (const skew of [-60000, 0, 60000]) test(`send pins server versions with client clock ${skew} in ${agent || 'main'}`, async () => {
   const at = 1793960000000;
   const old = { id: 'old', state: 'done', message_id: 'old', at: at - 10000, updated_at: at - 10000 };
   const running = { id: 'job', state: 'running', message_id: 'job', at: at - 10000, updated_at: at - 10000 };
@@ -159,7 +172,7 @@ for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) for (co
   assert.equal(h.writes.length, 1, 'neither a changed pinned version nor a completion after send is acknowledged');
   assert.match(h.T.dots('t', agent), /2 finished, not seen/);
 });
-for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`staged send does not POST a newer version after custody delay in ${agent || 'main'}`, async () => {
+for (const agent of ['']) test(`staged send does not POST a newer version after custody delay in ${agent || 'main'}`, async () => {
   const old = { id: 'old', state: 'done', message_id: 'm', at: 10, updated_at: 10 };
   const h = harness([old], agent); await h.start(); h.active(false);
   const lease = h.T.beforeSend('t', agent, 20, { defer: true });
@@ -170,7 +183,7 @@ test('a long reply tail visible for a second is read, not required to fill 40 pe
   const h = harness(); h.node.getBoundingClientRect = () => ({ top: -3740, bottom: 260, height: 4000, left: 0, width: 400 });
   await h.start(); h.step(); h.step(1000); assert.equal(h.writes.length, 1);
 });
-for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`send/steer acknowledges only older all-green groups in ${agent || 'main'} immediately`, async () => {
+for (const agent of ['']) test(`send/steer acknowledges only older all-green groups in ${agent || 'main'} immediately`, async () => {
   const h = harness([
     { id: 'green-a', state: 'done', message_id: 'old', at: 10000 },
     { id: 'green-b', state: 'done', message_id: 'old', at: 10000 },
@@ -193,7 +206,7 @@ test('header counts only active reply groups as open, not acknowledged history',
  assert.doesNotMatch(h.T.stripHtml('t'), /4 asks/);
 });
 
-for(const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa'])for(const commit of [false,true])test(`staged send Seen ${commit?'commits':'cancels'} in ${agent||'main'} without premature synchronization`,async()=>{
+for(const agent of [''])for(const commit of [false,true])test(`staged send Seen ${commit?'commits':'cancels'} in ${agent||'main'} without premature synchronization`,async()=>{
  const h=harness(['done'],agent);await h.start();
  const lease=h.T.beforeSend('t',agent,20000,{defer:true});
  assert.equal(h.T.stripHtml('t',agent),'','same-frame optimistic paint');assert.equal(h.writes.length,0,'not durable yet');

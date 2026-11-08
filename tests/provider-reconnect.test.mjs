@@ -76,7 +76,7 @@ test("Hermes' failed_turn notice is marked, and hidden only when a reconnect pan
   assert.equal(turns[0].a.failed, true);
   const chats = read('web/core/chats.js');
   assert.match(chats, /if \(last && reconnect && tn\.a\?\.failed\) tn = \{ \.\.\.tn, a: null \};/);
-  assert.match(chats, /turnHtml\(c, tn, k === arr\.length - 1, working, s\?\.helperStatus, s\?\.reconnect\)/);
+  assert.match(chats, /turnHtml\(c, tn, k === arr\.length - 1, working, s\?\.helperStatus, s\?\.reconnect[,)]/);
   assert.match(chats, /s\?\.safeError && !s\?\.reconnect && s\?\.queueReason !== 'provider_access' \?/);
 });
 

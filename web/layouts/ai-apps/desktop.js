@@ -662,7 +662,7 @@ export default function desktop(api) {
     const title = el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) });
     // A Working chat's ask line goes when the thread tracker is on (its dots carry it); no background
     // helper pill either way: the spinner already shows it (James, 7 Nov 2026).
-    const ask = s.workingAsk && !globalThis.WosThreadTracker?.on?.() ? s.workingAsk : null;
+    const ask = s.workingAsk && !globalThis.WosThreadTracker?.onFor?.(ttAgent(s.id)) ? s.workingAsk : null; // main agent only
     if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;

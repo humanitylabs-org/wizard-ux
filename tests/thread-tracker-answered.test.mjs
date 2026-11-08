@@ -31,7 +31,7 @@ async function fixture(items, { status = 'completed', lastUserAt, agent = '', ro
 const it = (id, state, at, extra = {}) => ({ id, title: id, state, message_id: String(at), at, created_at: at, updated_at: at, seen: false, ...extra });
 const T0 = 1793878589594.114; // the reply the red row sits on (Thu 5 Nov 18:36 Bangkok)
 
-for (const agent of ['', 'profile']) {
+for (const agent of ['']) { // main builder agent only (James, 9 Nov 2026)
   test(`owner reply from another device clears older red and amber, no local token: ${agent || 'main'}`, async () => {
     const items = [it('red', 'blocked', T0), it('amber', 'needs_you', T0 + 1), it('green', 'done', T0 + 5e6)];
     const { T, tap } = await fixture(items, { lastUserAt: iso(T0 + 2160000), agent }); // 'Clear space' 36 min later
@@ -81,18 +81,18 @@ test('unopened Chats rows with amber/red counts hydrate so their dots follow the
 });
 
 // --- Chats rows (B) ---
-function renderRow(s, trackerOn) {
+function renderRow(s, trackerOn, agent = '') {
   const block = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b, text.indexOf(a)));
   const c = vm.createContext({ window: {}, Date, JSON, Math, String, Set, Map });
   vm.runInContext(model, c); c.window.WizChatsListModel = c.WizChatsListModel;
   const lines = chats.split('\n'), pick = t => lines.find(l => l.includes(t));
-  Object.assign(c, { LIVE: { isNew: () => false, cardAt: () => 0, agentOf: () => '' }, esc: String, clip: s => s, ago: () => 'now',
+  Object.assign(c, { LIVE: { isNew: () => false, cardAt: () => 0, agentOf: () => agent }, esc: String, clip: s => s, ago: () => 'now',
     workLabel: () => 'Working', topicOn: () => false, privRow: () => false, PIN: { has: () => false, on: () => false }, BOOM: () => null,
     snoozeLast: () => false, AGS: () => null, TOPIC: null, subjectOf: () => '',
     STI: { needs: '!', working: '~' }, STI_TIP: {}, STI_LAB: { needs: 'Needs you' },
     ATT: { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' } },
     stiKind: s => s.status === 'running' ? 'working' : 'needs',
-    WosThreadTracker: { on: () => trackerOn, dots: () => '<span class="tt-dots"></span>' } });
+    WosThreadTracker: { on: () => trackerOn, onFor: a => trackerOn && (!a || a === 'hermes'), dots: () => '<span class="tt-dots"></span>' } });
   vm.runInContext([pick('const WORKING_ST ='), pick('const isWorking ='), pick('const deferredOf ='), pick('const attOf =')].join('\n')
     + '\n' + block(chats, '  function chatRow(', '  /* Ready has three orders') + '\nthis.renderRow = chatRow;', c);
   return c.renderRow(s);
@@ -115,7 +115,7 @@ test('Ready rows keep their Needs you line with the tracker on', () => {
 test('AI apps sidebar: no helper pill; Working ask line only with the tracker off', () => {
   const row = desk.slice(desk.indexOf('  function chatRow('), desk.indexOf('  let menu =', desk.indexOf('  function chatRow(')));
   assert.doesNotMatch(row, /Helper still working|ch-background/);
-  assert.match(row, /s\.workingAsk && !globalThis\.WosThreadTracker\?\.on\?\.\(\)/);
+  assert.match(row, /s\.workingAsk && !globalThis\.WosThreadTracker\?\.onFor\?\.\(ttAgent\(s\.id\)\)/, 'main agent only');
 });
 test('a user message the thread shows, newer than the list row time, also answers (voice note lag)', async () => {
   const rows = [{ id: 1, role: 'assistant', timestamp: T0 / 1000 }, { id: 2, role: 'user', timestamp: (T0 + 5000) / 1000 }];
@@ -126,7 +126,7 @@ test('a user message the thread shows, newer than the list row time, also answer
   await none.T.load('t');
   assert.match(none.T.dots('t'), /tt-dot you/);
 });
-for (const agent of ['', 'profile']) test(`routed or main: the transcript Chats shows (incl. a steer) answers older asks: ${agent || 'main'}`, async () => {
+for (const agent of ['']) test(`main: the transcript Chats shows (incl. a steer) answers older asks: ${agent || 'main'}`, async () => {
   const { T } = await fixture([it('amber', 'needs_you', T0), it('red', 'blocked', T0 + 1)], { lastUserAt: iso(T0 - 9e6), agent });
   await T.load('t', agent);
   assert.match(T.dots('t', agent), /tt-dot you/);
@@ -134,4 +134,21 @@ for (const agent of ['', 'profile']) test(`routed or main: the transcript Chats 
   assert.match(T.dots('t', agent), /tt-dot you/, 'a system note is not the owner');
   T.shown('t', agent, [{ u: { at: T0 - 9e6 }, steers: [{ text: 'go', at: T0 + 5000 }] }]);
   assert.equal(T.dots('t', agent), '');
+});
+
+// James, 9 Nov 2026: "these should not be displaying in the philosopher chat ... This is for our builder agent".
+test('another agent (Philosopher): Chats row keeps its Needs you line, bubbles carry no Reply or ids, counts never hydrate', async () => {
+  const s = { id: 'cal', title: 'Reading', status: 'running', attention: ask, preview: 'Still reading' };
+  assert.match(renderRow(s, true, 'philosopher'), /Needs you:<\/em> Approve the Google setup/, 'renders as with the tweak off');
+  assert.doesNotMatch(renderRow(s, true, ''), /Needs you:/, 'main agent unchanged');
+  const lines = chats.split('\n'), pick = t => lines.find(l => l.includes(t));
+  const c = vm.createContext({ esc: String, isFinite, WosThreadTracker: { on: () => true } });
+  vm.runInContext(pick('const msgIds =') + '\n' + pick('const quoteBtn =') + '\nthis.f = { msgIds, quoteBtn };', c);
+  assert.equal(c.f.quoteBtn(false), ''); assert.equal(c.f.msgIds({ id: 4, at: 5 }, undefined, false), '');
+  assert.match(c.f.quoteBtn(true), /data-mquote/); assert.match(c.f.msgIds({ id: 4, at: 5 }), /data-mid="4"/);
+  assert.match(chats, /turnHtml\(c, tn, k === arr\.length - 1, working, s\?\.helperStatus, s\?\.reconnect, !!globalThis\.WosThreadTracker\?\.onFor\?\.\(TAG\)\)/);
+  const { T, fetched } = await fixture([it('red', 'blocked', T0)], { counts: { 'philosopher/p': { needs_you: 1, running: 0, done_unseen: 0, blocked: 0, acknowledged: 0, total: 1 } } });
+  await T.loadCounts(true); await new Promise(r => setImmediate(r));
+  assert.ok(!fetched.some(p => p.includes('thread=p')), 'an older box counting other agents is ignored');
+  assert.equal(T.dots('p', 'philosopher'), ''); assert.equal(T.stripHtml('p', 'philosopher'), '');
 });

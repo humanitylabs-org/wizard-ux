@@ -29,7 +29,7 @@ async function fixture(agent, status = 'completed') {
   return { T, row, tap, doc, paints: () => paints };
 }
 const rowOf = (html, id) => html.match(new RegExp(`<div class="tt-row [^"]*" [^>]*data-tt-row="${id}"[^]*?</div>`))?.[0] || '';
-for (const agent of ['', 'profile', 'container', 'restricted']) {
+for (const agent of ['']) { // main builder agent only (James, 9 Nov 2026)
   test(`stopped rows show Resume; running, needs-you and done rows never do: ${agent || 'main'}`, async () => {
     const { T, row } = await fixture(agent);
     const html = T.stripHtml('t', agent);

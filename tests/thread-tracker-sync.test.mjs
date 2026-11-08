@@ -150,7 +150,7 @@ test('late Look activation hydrates every open thread and counts without reopeni
   change('unrelated/tweak wizard/thread-tracker');
   await tick();
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=t'), 'loads the already-open main-agent thread');
-  assert.ok(calls.includes('/wizard/v1/thread-items?thread=private-thread&agent=synthetic-agent'), 'preserves the open thread agent');
+  assert.ok(!calls.some(p => p.includes('private-thread')), 'another agent\'s open thread is never read (main builder agent only)');
   assert.equal(calls.filter(p => p.endsWith('/counts')).length, 1);
   assert.match(T.stripHtml('t'), /data-tt-strip/, 'running-only replies hydrate the visible strip');
   assert.match(T.dots('t'), /1 running/);
