@@ -12,6 +12,9 @@
 .wz-recovery .wz-list { margin: 16px 0; }
 .wz-recovery iframe { position: static !important; flex: 1 0 380px; width: 100%; min-height: 380px; border: 0; }
 .wz-recovery iframe[hidden] { display: none !important; }
+.wz-recovery [data-recovery-direct][hidden] { display: none !important; }
+.wz-recovery [data-recovery-direct] { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.wz-recovery [data-recovery-direct] .wz-button { text-decoration: none; }
 
 /* ---------- banners (same glass as the native update banner, .dv-update) ---------- */
 /* They live in the top strip (the phone's status bar, the desktop's top bar) as one-line pills, so they never
