@@ -1,0 +1,273 @@
+PASS fresh profile: tweak is listed in Settings › Tweaks — {"listed":true,"active":false}
+PASS fresh profile: tweak is OFF
+PASS off: no strip, no Reply, no message ids
+PASS off: nothing asked of the tracker API — []
+PASS off: no page errors — []
+PASS late/phone/nebula: thread starts open with tracker off
+PASS late/phone/nebula: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/phone/nebula: Reply appears on the already-open messages
+PASS late/phone/nebula: dropdown paints before the next frame without an API roundtrip
+PASS late/phone/nebula: disabling removes strip, Reply and dots without reload
+PASS late/phone/nebula: draft survives the Look change
+PASS late/phone/nebula: Chats list dots appear without reopening the thread
+PASS late/phone/nebula: no agent runs or steers
+PASS late/phone/nebula: no page errors — []
+PASS late/desktop/nebula: thread starts open with tracker off
+PASS late/desktop/nebula: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/desktop/nebula: Reply appears on the already-open messages
+PASS late/desktop/nebula: dropdown paints before the next frame without an API roundtrip
+PASS late/desktop/nebula: disabling removes strip, Reply and dots without reload
+PASS late/desktop/nebula: draft survives the Look change
+PASS late/desktop/nebula: Chats list dots appear without reopening the thread
+PASS late/desktop/nebula: no agent runs or steers
+PASS late/desktop/nebula: no page errors — []
+PASS late/phone/grove: thread starts open with tracker off
+PASS late/phone/grove: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/phone/grove: Reply appears on the already-open messages
+PASS late/phone/grove: dropdown paints before the next frame without an API roundtrip
+PASS late/phone/grove: disabling removes strip, Reply and dots without reload
+PASS late/phone/grove: draft survives the Look change
+PASS late/phone/grove: Chats list dots appear without reopening the thread
+PASS late/phone/grove: no agent runs or steers
+PASS late/phone/grove: no page errors — []
+PASS late/desktop/grove: thread starts open with tracker off
+PASS late/desktop/grove: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/desktop/grove: Reply appears on the already-open messages
+PASS late/desktop/grove: dropdown paints before the next frame without an API roundtrip
+PASS late/desktop/grove: disabling removes strip, Reply and dots without reload
+PASS late/desktop/grove: draft survives the Look change
+PASS late/desktop/grove: Chats list dots appear without reopening the thread
+PASS late/desktop/grove: no agent runs or steers
+PASS late/desktop/grove: no page errors — []
+PASS grouped/phone/nebula: unopened Chats dots count replies even with old backend counts
+PASS grouped/phone/nebula: three asks on one reply count as 1 ask
+PASS grouped/phone/nebula: one synthesized row with member count
+PASS grouped/phone/nebula: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"nebula","shell":"phone","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/phone/nebula: group Open jumps to its one reply
+PASS grouped/phone/nebula: group Seen clears all local dots immediately
+PASS grouped/phone/nebula: Seen sends every member id and service readback agrees
+PASS grouped/phone/nebula: asks on two current replies produce two rows
+PASS grouped/phone/nebula: newer update resurfaces only its reply dot
+PASS grouped/phone/nebula: no runs, steers or page errors — []
+PASS grouped/desktop/nebula: unopened Chats dots count replies even with old backend counts
+PASS grouped/desktop/nebula: three asks on one reply count as 1 ask
+PASS grouped/desktop/nebula: one synthesized row with member count
+PASS grouped/desktop/nebula: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"nebula","shell":"desktop","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/desktop/nebula: group Open jumps to its one reply
+PASS grouped/desktop/nebula: group Seen clears all local dots immediately
+PASS grouped/desktop/nebula: Seen sends every member id and service readback agrees
+PASS grouped/desktop/nebula: asks on two current replies produce two rows
+PASS grouped/desktop/nebula: newer update resurfaces only its reply dot
+PASS grouped/desktop/nebula: no runs, steers or page errors — []
+PASS grouped/phone/grove: unopened Chats dots count replies even with old backend counts
+PASS grouped/phone/grove: three asks on one reply count as 1 ask
+PASS grouped/phone/grove: one synthesized row with member count
+PASS grouped/phone/grove: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"grove","shell":"phone","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/phone/grove: group Open jumps to its one reply
+PASS grouped/phone/grove: group Seen clears all local dots immediately
+PASS grouped/phone/grove: Seen sends every member id and service readback agrees
+PASS grouped/phone/grove: asks on two current replies produce two rows
+PASS grouped/phone/grove: newer update resurfaces only its reply dot
+PASS grouped/phone/grove: no runs, steers or page errors — []
+PASS grouped/desktop/grove: unopened Chats dots count replies even with old backend counts
+PASS grouped/desktop/grove: three asks on one reply count as 1 ask
+PASS grouped/desktop/grove: one synthesized row with member count
+PASS grouped/desktop/grove: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"grove","shell":"desktop","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/desktop/grove: group Open jumps to its one reply
+PASS grouped/desktop/grove: group Seen clears all local dots immediately
+PASS grouped/desktop/grove: Seen sends every member id and service readback agrees
+PASS grouped/desktop/grove: asks on two current replies produce two rows
+PASS grouped/desktop/grove: newer update resurfaces only its reply dot
+PASS grouped/desktop/grove: no runs, steers or page errors — []
+PASS autoseen/phone/nebula: latest reply first line below actual strip — {"top":162.75,"stripBottom":147,"shell":"phone","skin":"nebula","doc":false,"visible":true}
+PASS autoseen/phone/nebula: green group acknowledged and Chats dots cleared
+PASS autoseen/phone/nebula: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 3, 12)","image":"linear-gradient(color(srgb 0.952941 0.937255 1 / 0.06), color(srgb 0.952941 0.937255 1 / 0.06))"}
+PASS autoseen/phone/nebula: opening dropdown is not seeing
+PASS autoseen/phone/nebula: hidden document never clears
+PASS autoseen/phone/nebula: visible later update re-arms
+PASS autoseen/phone/nebula: amber stays for manual action
+PASS autoseen/phone/nebula: tracker jump target fully below strip
+PASS autoseen/phone/nebula: no real sends or page errors — []
+PASS autoseen/phone/nebula: tweak-off original opening eye-line unchanged — {"top":108.5625,"base":101,"gap":7.5625,"strip":false}
+PASS autoseen/phone-doc/nebula: latest reply first line below actual strip — {"top":108.75,"stripBottom":93,"shell":"phone","skin":"nebula","doc":true,"visible":true}
+PASS autoseen/phone-doc/nebula: green group acknowledged and Chats dots cleared
+PASS autoseen/phone-doc/nebula: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 3, 12)","image":"linear-gradient(color(srgb 0.952941 0.937255 1 / 0.06), color(srgb 0.952941 0.937255 1 / 0.06))"}
+PASS autoseen/phone-doc/nebula: opening dropdown is not seeing
+PASS autoseen/phone-doc/nebula: hidden document never clears
+PASS autoseen/phone-doc/nebula: visible later update re-arms
+PASS autoseen/phone-doc/nebula: amber stays for manual action
+PASS autoseen/phone-doc/nebula: tracker jump target fully below strip
+PASS autoseen/phone-doc/nebula: no real sends or page errors — []
+PASS autoseen/phone-doc/nebula: tweak-off original opening eye-line unchanged — {"top":60.5625,"base":53,"gap":7.5625,"strip":false}
+PASS autoseen/desktop/nebula: latest reply first line below actual strip — {"top":110.25,"stripBottom":94,"shell":"desktop","skin":"nebula","doc":false,"visible":true}
+PASS autoseen/desktop/nebula: green group acknowledged and Chats dots cleared
+PASS autoseen/desktop/nebula: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 3, 12)","image":"linear-gradient(color(srgb 0.952941 0.937255 1 / 0.06), color(srgb 0.952941 0.937255 1 / 0.06))"}
+PASS autoseen/desktop/nebula: opening dropdown is not seeing
+PASS autoseen/desktop/nebula: hidden document never clears
+PASS autoseen/desktop/nebula: visible later update re-arms
+PASS autoseen/desktop/nebula: amber stays for manual action
+PASS autoseen/desktop/nebula: tracker jump target fully below strip
+PASS autoseen/desktop/nebula: no real sends or page errors — []
+PASS autoseen/desktop/nebula: tweak-off original opening eye-line unchanged — {"top":56.0625,"base":48,"gap":8.0625,"strip":false}
+PASS autoseen/phone/grove: latest reply first line below actual strip — {"top":162.75,"stripBottom":147,"shell":"phone","skin":"grove","doc":false,"visible":true}
+PASS autoseen/phone/grove: green group acknowledged and Chats dots cleared
+PASS autoseen/phone/grove: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 11, 7)","image":"linear-gradient(color(srgb 0.933333 0.960784 0.913725 / 0.06), color(srgb 0.933333 0.960784 0.913725 / 0.06))"}
+PASS autoseen/phone/grove: opening dropdown is not seeing
+PASS autoseen/phone/grove: hidden document never clears
+PASS autoseen/phone/grove: visible later update re-arms
+PASS autoseen/phone/grove: amber stays for manual action
+PASS autoseen/phone/grove: tracker jump target fully below strip
+PASS autoseen/phone/grove: no real sends or page errors — []
+PASS autoseen/phone/grove: tweak-off original opening eye-line unchanged — {"top":108.5625,"base":101,"gap":7.5625,"strip":false}
+PASS autoseen/phone-doc/grove: latest reply first line below actual strip — {"top":108.75,"stripBottom":93,"shell":"phone","skin":"grove","doc":true,"visible":true}
+PASS autoseen/phone-doc/grove: green group acknowledged and Chats dots cleared
+PASS autoseen/phone-doc/grove: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 11, 7)","image":"linear-gradient(color(srgb 0.933333 0.960784 0.913725 / 0.06), color(srgb 0.933333 0.960784 0.913725 / 0.06))"}
+PASS autoseen/phone-doc/grove: opening dropdown is not seeing
+PASS autoseen/phone-doc/grove: hidden document never clears
+PASS autoseen/phone-doc/grove: visible later update re-arms
+PASS autoseen/phone-doc/grove: amber stays for manual action
+PASS autoseen/phone-doc/grove: tracker jump target fully below strip
+PASS autoseen/phone-doc/grove: no real sends or page errors — []
+PASS autoseen/phone-doc/grove: tweak-off original opening eye-line unchanged — {"top":60.5625,"base":53,"gap":7.5625,"strip":false}
+PASS autoseen/desktop/grove: latest reply first line below actual strip — {"top":110.25,"stripBottom":94,"shell":"desktop","skin":"grove","doc":false,"visible":true}
+PASS autoseen/desktop/grove: green group acknowledged and Chats dots cleared
+PASS autoseen/desktop/grove: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 11, 7)","image":"linear-gradient(color(srgb 0.933333 0.960784 0.913725 / 0.06), color(srgb 0.933333 0.960784 0.913725 / 0.06))"}
+PASS autoseen/desktop/grove: opening dropdown is not seeing
+PASS autoseen/desktop/grove: hidden document never clears
+PASS autoseen/desktop/grove: visible later update re-arms
+PASS autoseen/desktop/grove: amber stays for manual action
+PASS autoseen/desktop/grove: tracker jump target fully below strip
+PASS autoseen/desktop/grove: no real sends or page errors — []
+PASS autoseen/desktop/grove: tweak-off original opening eye-line unchanged — {"top":56.0625,"base":48,"gap":8.0625,"strip":false}
+PASS phone/nebula: tweak on
+PASS phone/nebula: Chats list dots match the counts (needs 2 · running 2 · unseen 2) — [{"key":"hermes/tt-main","text":"222","n":3}]
+PASS phone/nebula: a thread without asks shows no dots
+PASS phone/nebula: the dots are visible on the phone Chats list row
+PASS phone/nebula: dots immediately left of time with an 8px gap and the group right aligned — {"shell":"phone","skin":"nebula","gap":8,"right":0,"endSpace":0,"truncated":true,"visible":true,"badge":"Helper still working","badgeBefore":true,"ordered":true}
+PASS phone/nebula: long title truncates while dots and timestamp remain visible — {"shell":"phone","skin":"nebula","gap":8,"right":0,"endSpace":0,"truncated":true,"visible":true,"badge":"Helper still working","badgeBefore":true,"ordered":true}
+PASS phone/nebula: Helper still working badge precedes dots and time — {"shell":"phone","skin":"nebula","gap":8,"right":0,"endSpace":0,"truncated":true,"visible":true,"badge":"Helper still working","badgeBefore":true,"ordered":true}
+PASS phone/nebula: collapsed strip reads "7 asks" with the three tallies — "7 asks 2 2 2"
+PASS phone/nebula: strip is directly under the title, before the messages
+PASS phone/nebula: panel hidden while collapsed
+PASS phone/nebula: expanded rows are grouped Your move / Running / Finished not seen — ["YOUR MOVE","RUNNING","FINISHED · NOT SEEN"]
+PASS phone/nebula: one action per row (Looks good / Open / ✓ Seen) — ["Looks good","Open","✓ Seen","✓ Seen"]
+PASS phone/nebula: the 'N acknowledged' fold is there
+PASS phone/nebula: panel is fully opaque
+PASS phone/nebula: tapping outside closes the list
+PASS phone/nebula: tapping a row closes the list, scrolls to the reply and highlights it
+PASS phone/nebula: chat order untouched (oldest first, latest last)
+PASS phone/nebula: the oldest reply is not on screen yet
+PASS phone/nebula: a row with no anchor loaded loads history up to it, then scrolls and highlights — {"msgs":156,"has":true,"first":"Question number 3Thu, Nov 5, 0"}
+PASS phone/nebula: ✓ Seen paints on the same frame (before the box answers)
+PASS phone/nebula: Seen was sent to the box — ["/wizard/thread-seen","/wizard/v1/thread-items/seen"]
+PASS phone/nebula: Seen persists across reload ("Nightly backup check" folded) — "Dark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS phone/nebula: acknowledged rows show hollow dots when unfolded
+PASS phone/nebula: the other device agrees (Seen is shared through the box) — "ING\nExport my notes\nWorking · since 5 d\nDark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS phone/nebula: Reply shows the quoted snippet above the composer — "Synthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n×"
+PASS phone/nebula: the send carries the hidden reply marker with the message id, the excerpt, and the user's words — "Thanks, but please also check the weekend\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistant\"}[/WIZARD_REPLY_TO_V1]"
+PASS phone/nebula: after the send the app steps back to the list (existing send-and-go), the thread is not broken — {"thread":false,"msgs":false}
+PASS phone/nebula: the quote header renders on the bubble and the marker is never visible raw — "l. Some detail.\n\nThu, Nov 5, 05:29\nCopy\nShare\nReply\nToday\nSynthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n\nThanks, but please also check the weekend\n\n07:04\nReply\nWorking · 9s"
+PASS phone/nebula: tapping the quote header scrolls to the original and highlights it
+PASS phone/nebula: Reply works on any message (also your own)
+PASS phone/nebula: the quote can be removed before sending
+PASS phone/nebula: a quote reply sent while the agent is working goes out as a steer carrying the marker — "While you work: also include Sunday\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistan"
+PASS phone/nebula: no page errors — []
+PASS desktop/nebula: tweak on
+PASS desktop/nebula: AI apps layout active — {"view":"ai-apps","layout":"ai-apps"}
+PASS desktop/nebula: Chats list dots match the counts (needs 2 · running 2 · unseen 2) — [{"key":"hermes/tt-main","text":"222","n":3}]
+PASS desktop/nebula: a thread without asks shows no dots
+PASS desktop/nebula: dots immediately left of time with an 8px gap and the group right aligned — {"shell":"desktop","skin":"nebula","gap":8,"right":34,"endSpace":34,"truncated":true,"visible":true,"badgeBefore":true,"ordered":true}
+PASS desktop/nebula: long title truncates while dots and timestamp remain visible — {"shell":"desktop","skin":"nebula","gap":8,"right":34,"endSpace":34,"truncated":true,"visible":true,"badgeBefore":true,"ordered":true}
+PASS desktop/nebula: collapsed strip reads "7 asks" with the three tallies — "7 asks 2 2 2"
+PASS desktop/nebula: strip is directly under the title, before the messages
+PASS desktop/nebula: panel hidden while collapsed
+PASS desktop/nebula: expanded rows are grouped Your move / Running / Finished not seen — ["YOUR MOVE","RUNNING","FINISHED · NOT SEEN"]
+PASS desktop/nebula: one action per row (Looks good / Open / ✓ Seen) — ["Looks good","Open","✓ Seen","✓ Seen"]
+PASS desktop/nebula: the 'N acknowledged' fold is there
+PASS desktop/nebula: panel is fully opaque
+PASS desktop/nebula: tapping outside closes the list
+PASS desktop/nebula: tapping a row closes the list, scrolls to the reply and highlights it
+PASS desktop/nebula: chat order untouched (oldest first, latest last)
+PASS desktop/nebula: the oldest reply is not on screen yet
+PASS desktop/nebula: a row with no anchor loaded loads history up to it, then scrolls and highlights — {"msgs":156,"has":true,"first":"Question number 3Thu, Nov 5, 0"}
+PASS desktop/nebula: ✓ Seen paints on the same frame (before the box answers)
+PASS desktop/nebula: Seen was sent to the box — ["/wizard/thread-seen","/wizard/v1/thread-items/seen"]
+PASS desktop/nebula: Seen persists across reload ("Nightly backup check" folded) — "Dark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS desktop/nebula: acknowledged rows show hollow dots when unfolded
+PASS desktop/nebula: the other device agrees (Seen is shared through the box) — "ING\nExport my notes\nWorking · since 5 d\nDark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS desktop/nebula: Reply shows the quoted snippet above the composer — "Synthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n×"
+PASS desktop/nebula: the send carries the hidden reply marker with the message id, the excerpt, and the user's words — "Thanks, but please also check the weekend\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistant\"}[/WIZARD_REPLY_TO_V1]"
+PASS desktop/nebula: after the send the app steps back to the list (existing send-and-go), the thread is not broken — {"thread":false,"msgs":true}
+PASS desktop/nebula: the quote header renders on the bubble and the marker is never visible raw — "l. Some detail.\n\nThu, Nov 5, 05:29\nCopy\nShare\nReply\nToday\nSynthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n\nThanks, but please also check the weekend\n\n07:04\nReply\nWorking · 9s"
+PASS desktop/nebula: tapping the quote header scrolls to the original and highlights it
+PASS desktop/nebula: Reply works on any message (also your own)
+PASS desktop/nebula: the quote can be removed before sending
+PASS desktop/nebula: a quote reply sent while the agent is working goes out as a steer carrying the marker — "While you work: also include Sunday\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistan"
+PASS desktop/nebula: no page errors — []
+PASS phone/grove: tweak on
+PASS phone/grove: Chats list dots match the counts (needs 2 · running 2 · unseen 2) — [{"key":"hermes/tt-main","text":"222","n":3}]
+PASS phone/grove: a thread without asks shows no dots
+PASS phone/grove: the dots are visible on the phone Chats list row
+PASS phone/grove: dots immediately left of time with an 8px gap and the group right aligned — {"shell":"phone","skin":"grove","gap":8,"right":0,"endSpace":0,"truncated":true,"visible":true,"badge":"Helper still working","badgeBefore":true,"ordered":true}
+PASS phone/grove: long title truncates while dots and timestamp remain visible — {"shell":"phone","skin":"grove","gap":8,"right":0,"endSpace":0,"truncated":true,"visible":true,"badge":"Helper still working","badgeBefore":true,"ordered":true}
+PASS phone/grove: Helper still working badge precedes dots and time — {"shell":"phone","skin":"grove","gap":8,"right":0,"endSpace":0,"truncated":true,"visible":true,"badge":"Helper still working","badgeBefore":true,"ordered":true}
+PASS phone/grove: collapsed strip reads "7 asks" with the three tallies — "7 asks 2 2 2"
+PASS phone/grove: strip is directly under the title, before the messages
+PASS phone/grove: panel hidden while collapsed
+PASS phone/grove: expanded rows are grouped Your move / Running / Finished not seen — ["YOUR MOVE","RUNNING","FINISHED · NOT SEEN"]
+PASS phone/grove: one action per row (Looks good / Open / ✓ Seen) — ["Looks good","Open","✓ Seen","✓ Seen"]
+PASS phone/grove: the 'N acknowledged' fold is there
+PASS phone/grove: panel is fully opaque
+PASS phone/grove: tapping outside closes the list
+PASS phone/grove: tapping a row closes the list, scrolls to the reply and highlights it
+PASS phone/grove: chat order untouched (oldest first, latest last)
+PASS phone/grove: the oldest reply is not on screen yet
+PASS phone/grove: a row with no anchor loaded loads history up to it, then scrolls and highlights — {"msgs":156,"has":true,"first":"Question number 3Thu, Nov 5, 0"}
+PASS phone/grove: ✓ Seen paints on the same frame (before the box answers)
+PASS phone/grove: Seen was sent to the box — ["/wizard/thread-seen","/wizard/v1/thread-items/seen"]
+PASS phone/grove: Seen persists across reload ("Nightly backup check" folded) — "Dark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS phone/grove: acknowledged rows show hollow dots when unfolded
+PASS phone/grove: the other device agrees (Seen is shared through the box) — "ING\nExport my notes\nWorking · since 5 d\nDark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS phone/grove: Reply shows the quoted snippet above the composer — "Synthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n×"
+PASS phone/grove: the send carries the hidden reply marker with the message id, the excerpt, and the user's words — "Thanks, but please also check the weekend\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistant\"}[/WIZARD_REPLY_TO_V1]"
+PASS phone/grove: after the send the app steps back to the list (existing send-and-go), the thread is not broken — {"thread":false,"msgs":false}
+PASS phone/grove: the quote header renders on the bubble and the marker is never visible raw — "l. Some detail.\n\nThu, Nov 5, 05:29\nCopy\nShare\nReply\nToday\nSynthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n\nThanks, but please also check the weekend\n\n07:04\nReply\nWorking · 9s"
+PASS phone/grove: tapping the quote header scrolls to the original and highlights it
+PASS phone/grove: Reply works on any message (also your own)
+PASS phone/grove: the quote can be removed before sending
+PASS phone/grove: a quote reply sent while the agent is working goes out as a steer carrying the marker — "While you work: also include Sunday\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistan"
+PASS phone/grove: no page errors — []
+PASS desktop/grove: tweak on
+PASS desktop/grove: AI apps layout active — {"view":"ai-apps","layout":"ai-apps"}
+PASS desktop/grove: Chats list dots match the counts (needs 2 · running 2 · unseen 2) — [{"key":"hermes/tt-main","text":"222","n":3}]
+PASS desktop/grove: a thread without asks shows no dots
+PASS desktop/grove: dots immediately left of time with an 8px gap and the group right aligned — {"shell":"desktop","skin":"grove","gap":8,"right":34,"endSpace":34,"truncated":true,"visible":true,"badgeBefore":true,"ordered":true}
+PASS desktop/grove: long title truncates while dots and timestamp remain visible — {"shell":"desktop","skin":"grove","gap":8,"right":34,"endSpace":34,"truncated":true,"visible":true,"badgeBefore":true,"ordered":true}
+PASS desktop/grove: collapsed strip reads "7 asks" with the three tallies — "7 asks 2 2 2"
+PASS desktop/grove: strip is directly under the title, before the messages
+PASS desktop/grove: panel hidden while collapsed
+PASS desktop/grove: expanded rows are grouped Your move / Running / Finished not seen — ["YOUR MOVE","RUNNING","FINISHED · NOT SEEN"]
+PASS desktop/grove: one action per row (Looks good / Open / ✓ Seen) — ["Looks good","Open","✓ Seen","✓ Seen"]
+PASS desktop/grove: the 'N acknowledged' fold is there
+PASS desktop/grove: panel is fully opaque
+PASS desktop/grove: tapping outside closes the list
+PASS desktop/grove: tapping a row closes the list, scrolls to the reply and highlights it
+PASS desktop/grove: chat order untouched (oldest first, latest last)
+PASS desktop/grove: the oldest reply is not on screen yet
+PASS desktop/grove: a row with no anchor loaded loads history up to it, then scrolls and highlights — {"msgs":156,"has":true,"first":"Question number 3Thu, Nov 5, 0"}
+PASS desktop/grove: ✓ Seen paints on the same frame (before the box answers)
+PASS desktop/grove: Seen was sent to the box — ["/wizard/thread-seen","/wizard/v1/thread-items/seen"]
+PASS desktop/grove: Seen persists across reload ("Nightly backup check" folded) — "Dark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS desktop/grove: acknowledged rows show hollow dots when unfolded
+PASS desktop/grove: the other device agrees (Seen is shared through the box) — "ING\nExport my notes\nWorking · since 5 d\nDark mode contrast\nWorking · since 5 d\nFINISHED · NOT SEEN\nNew app icons\nFinished · 1 d ago\n✓ Seen\n2 acknowledged · show"
+PASS desktop/grove: Reply shows the quoted snippet above the composer — "Synthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n×"
+PASS desktop/grove: the send carries the hidden reply marker with the message id, the excerpt, and the user's words — "Thanks, but please also check the weekend\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistant\"}[/WIZARD_REPLY_TO_V1]"
+PASS desktop/grove: after the send the app steps back to the list (existing send-and-go), the thread is not broken — {"thread":false,"msgs":true}
+PASS desktop/grove: the quote header renders on the bubble and the marker is never visible raw — "l. Some detail.\n\nThu, Nov 5, 05:29\nCopy\nShare\nReply\nToday\nSynthetic Wizard\nAnswer number 80. Some detail. Some detail. Some detail.\n\nThanks, but please also check the weekend\n\n07:05\nReply\nWorking · 9s"
+PASS desktop/grove: tapping the quote header scrolls to the original and highlights it
+PASS desktop/grove: Reply works on any message (also your own)
+PASS desktop/grove: the quote can be removed before sending
+PASS desktop/grove: a quote reply sent while the agent is working goes out as a steer carrying the marker — "While you work: also include Sunday\n\n[WIZARD_REPLY_TO_V1]{\"message_id\":\"259\",\"item\":\"dark-mode\",\"excerpt\":\"Answer number 80. Some detail. Some detail. Some detail.\",\"at\":1793856563000,\"role\":\"assistan"
+PASS desktop/grove: no page errors — []
+
+271 passed, 0 failed

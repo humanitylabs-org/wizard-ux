@@ -1,0 +1,95 @@
+PASS fresh profile: tweak is listed in Settings › Tweaks — {"listed":true,"active":false}
+PASS fresh profile: tweak is OFF
+PASS off: no strip, no Reply, no message ids
+PASS off: nothing asked of the tracker API — []
+PASS off: no page errors — []
+PASS late/phone/nebula: thread starts open with tracker off
+PASS late/phone/nebula: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/phone/nebula: Reply appears on the already-open messages
+PASS late/phone/nebula: dropdown paints before the next frame without an API roundtrip
+PASS late/phone/nebula: disabling removes strip, Reply and dots without reload
+PASS late/phone/nebula: draft survives the Look change
+PASS late/phone/nebula: Chats list dots appear without reopening the thread
+PASS late/phone/nebula: no agent runs or steers
+PASS late/phone/nebula: no page errors — []
+PASS late/desktop/nebula: thread starts open with tracker off
+PASS late/desktop/nebula: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/desktop/nebula: Reply appears on the already-open messages
+PASS late/desktop/nebula: dropdown paints before the next frame without an API roundtrip
+PASS late/desktop/nebula: disabling removes strip, Reply and dots without reload
+PASS late/desktop/nebula: draft survives the Look change
+PASS late/desktop/nebula: Chats list dots appear without reopening the thread
+PASS late/desktop/nebula: no agent runs or steers
+PASS late/desktop/nebula: no page errors — []
+PASS late/phone/grove: thread starts open with tracker off
+PASS late/phone/grove: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/phone/grove: Reply appears on the already-open messages
+PASS late/phone/grove: dropdown paints before the next frame without an API roundtrip
+PASS late/phone/grove: disabling removes strip, Reply and dots without reload
+PASS late/phone/grove: draft survives the Look change
+PASS late/phone/grove: Chats list dots appear without reopening the thread
+PASS late/phone/grove: no agent runs or steers
+PASS late/phone/grove: no page errors — []
+PASS late/desktop/grove: thread starts open with tracker off
+PASS late/desktop/grove: enabling hydrates the strip without reopening — ["GET /wizard/v1/thread-items/counts","GET /wizard/v1/thread-items"]
+PASS late/desktop/grove: Reply appears on the already-open messages
+PASS late/desktop/grove: dropdown paints before the next frame without an API roundtrip
+PASS late/desktop/grove: disabling removes strip, Reply and dots without reload
+PASS late/desktop/grove: draft survives the Look change
+PASS late/desktop/grove: Chats list dots appear without reopening the thread
+PASS late/desktop/grove: no agent runs or steers
+PASS late/desktop/grove: no page errors — []
+PASS grouped/phone/nebula: unopened Chats dots count replies even with old backend counts
+PASS grouped/phone/nebula: three asks on one reply count as 1 ask
+PASS grouped/phone/nebula: one synthesized row with member count
+PASS grouped/phone/nebula: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"nebula","shell":"phone","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/phone/nebula: group Open jumps to its one reply
+PASS grouped/phone/nebula: group Seen clears all local dots immediately
+PASS grouped/phone/nebula: Seen sends every member id and service readback agrees
+PASS grouped/phone/nebula: asks on two current replies produce two rows
+PASS grouped/phone/nebula: newer update resurfaces only its reply dot
+PASS grouped/phone/nebula: no runs, steers or page errors — []
+PASS grouped/desktop/nebula: unopened Chats dots count replies even with old backend counts
+PASS grouped/desktop/nebula: three asks on one reply count as 1 ask
+PASS grouped/desktop/nebula: one synthesized row with member count
+PASS grouped/desktop/nebula: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"nebula","shell":"desktop","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/desktop/nebula: group Open jumps to its one reply
+PASS grouped/desktop/nebula: group Seen clears all local dots immediately
+PASS grouped/desktop/nebula: Seen sends every member id and service readback agrees
+PASS grouped/desktop/nebula: asks on two current replies produce two rows
+PASS grouped/desktop/nebula: newer update resurfaces only its reply dot
+PASS grouped/desktop/nebula: no runs, steers or page errors — []
+PASS grouped/phone/grove: unopened Chats dots count replies even with old backend counts
+PASS grouped/phone/grove: three asks on one reply count as 1 ask
+PASS grouped/phone/grove: one synthesized row with member count
+PASS grouped/phone/grove: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"grove","shell":"phone","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/phone/grove: group Open jumps to its one reply
+PASS grouped/phone/grove: group Seen clears all local dots immediately
+PASS grouped/phone/grove: Seen sends every member id and service readback agrees
+PASS grouped/phone/grove: asks on two current replies produce two rows
+PASS grouped/phone/grove: newer update resurfaces only its reply dot
+PASS grouped/phone/grove: no runs, steers or page errors — []
+PASS grouped/desktop/grove: unopened Chats dots count replies even with old backend counts
+PASS grouped/desktop/grove: three asks on one reply count as 1 ask
+PASS grouped/desktop/grove: one synthesized row with member count
+PASS grouped/desktop/grove: settled single-line ellipsis, visible on the correct skin and shell — {"skin":"grove","shell":"desktop","ellipsis":"ellipsis","whiteSpace":"nowrap","visible":true}
+PASS grouped/desktop/grove: group Open jumps to its one reply
+PASS grouped/desktop/grove: group Seen clears all local dots immediately
+PASS grouped/desktop/grove: Seen sends every member id and service readback agrees
+PASS grouped/desktop/grove: asks on two current replies produce two rows
+PASS grouped/desktop/grove: newer update resurfaces only its reply dot
+PASS grouped/desktop/grove: no runs, steers or page errors — []
+PASS autoseen/phone/nebula: latest reply first line below actual strip — {"top":162.75,"stripBottom":147,"shell":"phone","skin":"nebula","doc":false,"visible":true}
+PASS autoseen/phone/nebula: green group acknowledged and Chats dots cleared
+PASS autoseen/phone/nebula: expanded panel continuous and opaque — {"gap":-1,"radius":"0px","base":"rgb(5, 3, 12)","image":"linear-gradient(color(srgb 0.952941 0.937255 1 / 0.06), color(srgb 0.952941 0.937255 1 / 0.06))"}
+PASS autoseen/phone/nebula: opening dropdown is not seeing
+PASS autoseen/phone/nebula: hidden document never clears
+PASS autoseen/phone/nebula: visible later update re-arms
+PASS autoseen/phone/nebula: amber stays for manual action
+PASS autoseen/phone/nebula: tracker jump target fully below strip
+PASS autoseen/phone/nebula: no real sends or page errors — []
+FATAL page.evaluate: TypeError: Cannot read properties of null (reading 'closest')
+    at eval (eval at evaluate (:370:30), <anonymous>:2:77)
+    at UtilityScript.evaluate (<anonymous>:372:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+    at /srv/work/thread-tracker-autoseen-20261106/tools/qa-thread-tracker.cjs:281:39
