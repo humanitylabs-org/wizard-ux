@@ -150,15 +150,26 @@
     }
   }
   const nameOf = id => ((typeof window !== 'undefined' && window.WosSkin?.list?.find(s => s.id === id)) || {}).name || id;
-  const guard = (a, where, fn) => function () {
-    if (a.dead) return;
-    try {
-      const result = fn.apply(this, arguments);
-      // Async hooks need the same boundary as synchronous hooks. Preserve the
-      // synchronous return contract (route handlers return literal booleans).
-      return result && typeof result.then === 'function'
-        ? Promise.resolve(result).catch(e => { fault(a, where, e); }) : result;
-    } catch (e) { fault(a, where, e); }
+  const guard = (a, where, fn) => {
+    // Only a later real event may retry a failed render part. No error-path
+    // timer or re-render; healthy siblings and the last good DOM stay intact.
+    const renderPart = String(a.id).startsWith('layout:') && where === 'on(render)';
+    let running = false, failures = 0, retryAt = 0;
+    const failed = e => {
+      if (renderPart) retryAt = Date.now() + Math.min(30000, 250 * 2 ** Math.min(failures++, 7));
+      fault(a, where, e);
+    };
+    const succeeded = value => { running = false; failures = 0; retryAt = 0; return value; };
+    return function () {
+      if (a.dead || (renderPart && (running || Date.now() < retryAt))) return;
+      if (renderPart) running = true;
+      try {
+        const result = fn.apply(this, arguments);
+        // Preserve the synchronous return contract of route handlers.
+        return result && typeof result.then === 'function'
+          ? Promise.resolve(result).then(succeeded, e => { running = false; failed(e); }) : succeeded(result);
+      } catch (e) { running = false; failed(e); }
+    };
   };
 
   /* ---------- the API a skin script receives ---------- */

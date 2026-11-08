@@ -178,9 +178,22 @@
       box.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button[data-tool]'); if (b && !b.disabled) dispatchTool(box, b.dataset.tool); });
       box.addEventListener('change', e => { const s = e.target.closest('select[data-tool]'); if (s) dispatchTool(box, s.dataset.tool, s.value); });
     }
-    const state = toolSlots.get(box), tools = owner?.tools || [], key = JSON.stringify(tools);
-    if (state.owner === owner && state.doc === owner?.doc && state.key === key) return !!tools.length;
-    state.owner = owner; state.doc = owner?.doc; state.key = key; box.replaceChildren();
+    const state = toolSlots.get(box), tools = owner?.tools || [];
+    // Labels, dots, enabled state and values are live data, not a new control.
+    // Keep a pointer gesture/focus on the same element through SDK updates.
+    const key = JSON.stringify(tools.map(({ id, kind, icon, href, options }) => ({ id, kind, icon, href, options })));
+    const refresh = (el, x) => {
+      if (x.kind === 'select') { if (el.value !== x.value) el.value = x.value; }
+      else if (!x.icon && el.textContent !== (x.text || x.label)) el.textContent = x.text || x.label;
+      if (x.kind === 'link') el.setAttribute('aria-disabled', String(!!x.disabled));
+      else el.disabled = !!x.disabled;
+      if (x.dot) el.classList.add('wtool-dot'); else el.classList.remove('wtool-dot');
+      if (el.title !== x.label) { el.setAttribute('aria-label', x.label); el.title = x.label; }
+    };
+    if (state.owner === owner && state.doc === owner?.doc && state.key === key) {
+      tools.forEach((x, i) => refresh(box.children[i], x)); return !!tools.length;
+    }
+    const children = [];
     for (const x of tools) {
       let el;
       if (x.kind === 'select') {
@@ -195,9 +208,12 @@
         if (x.dot) el.classList.add('wtool-dot');
         if (x.disabled) { if (x.kind === 'link') el.setAttribute('aria-disabled', 'true'); else el.disabled = true; }
       }
-      el.dataset.tool = x.id; el.dataset.wact = 'tool'; el.setAttribute('aria-label', x.label); el.title = x.label;
-      box.append(el);
+      el.dataset.tool = x.id; el.dataset.wact = 'tool'; refresh(el, x);
+      children.push(el);
     }
+    // Build off-DOM: a failed projection must not erase the last good strip.
+    box.replaceChildren(...children);
+    state.owner = owner; state.doc = owner?.doc; state.key = key;
     return !!tools.length;
   }
   function dispatchTool(box, id, value) {
