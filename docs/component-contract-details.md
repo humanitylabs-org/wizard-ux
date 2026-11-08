@@ -118,3 +118,5 @@ One owner per capability: [gate](app-reuse-gate.md).
 AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; an unknown cap or spend shows as text, never zero or unlimited (`tests/claude-extra-usage.test.mjs`).
 
 Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
+
+Nav counts: `WizCore.workspaceNav.chatsCount/refreshChats` = visible unread outside Working (Ready and Working stay separate; Working keeps its own count). Phone `#moons` exposes uncapped `data-needs` / `data-working` / `data-ready`.
