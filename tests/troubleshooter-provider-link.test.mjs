@@ -6,8 +6,8 @@ const source = readFileSync(new URL('../web/core/reach.js', import.meta.url), 'u
 function mount(url) {
   const calls = [], timers = new Map(), handlers = {}; let id = 0;
   const frame = { hidden: true, addEventListener(type, fn) { handlers[type] = fn; }, getAttribute() { return this.src; }, contentDocument: { location: { pathname: '/troubleshoot/' }, querySelector() { return {}; } } };
-  const details = { open: true }, button = { addEventListener() {} }, message = {}, rows = {}, remote = {};
-  const elements = { iframe: frame, details, '[data-recovery-check]': button, '[data-recovery-message]': message, '[data-recovery-rows]': rows, '[data-recovery-remote]': remote };
+  const details = { open: true }, button = { addEventListener() {} }, message = {}, rows = {}, remote = {}, direct = { hidden: true }, directLink = { removeAttribute() {} };
+  const elements = { iframe: frame, details, '[data-recovery-check]': button, '[data-recovery-message]': message, '[data-recovery-rows]': rows, '[data-recovery-remote]': remote, '[data-recovery-direct]': direct, '[data-recovery-direct-link]': directLink };
   const root = { isConnected: true, classList: { add() {}, remove() {} }, querySelector(selector) { assert.ok(elements[selector], selector); return elements[selector]; } };
   const context = { navigator: { onLine: true }, document: { hidden: false }, location: { hostname: 'wizard.test' }, Date, Event, AbortController,
     requestAnimationFrame(fn) { fn(); }, setTimeout(fn, ms) { timers.set(++id, { fn, ms }); return id; }, clearTimeout(id) { timers.delete(id); }, dispatchEvent() {},

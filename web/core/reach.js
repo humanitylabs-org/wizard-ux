@@ -33,6 +33,7 @@
     try {
       const { response, body } = await request('/troubleshoot/api/status', {}, true);
       if (!response.ok || !Array.isArray(body.checks)) throw new Error('Invalid status');
+      rememberDirect(body);
       // Repair-chat engine probes (reply-claude/chatgpt/tinfoil) say whether Troubleshooter's own AI can answer;
       // they never explain why Wizard is unreachable, so the connection pill must not blame them (James, 27 Oct).
       const relevant = check => !check.ok && !check.skipped && !String(check.id || '').startsWith('reply-');
@@ -132,10 +133,25 @@
     out.stale = generation !== epoch;
     return out;
   }
+  /* Direct line: Troubleshooter's own HTTPS port on this same Wizard address (Tailscale Serve → Troubleshooter's
+   * process, nothing else), for when the gateway route, the shell backend, the Agent Service or Hermes is stuck.
+   * The address comes from Troubleshooter's own status report when we last saw it, else the standard port 9691. */
+  const DIRECT_KEY = 'wz.troubleshoot.direct';
+  function directBase() {
+    try { const u = new URL(localStorage.getItem(DIRECT_KEY) || ''); if (u.protocol === 'https:' && u.hostname === location.hostname && u.pathname === '/troubleshoot/') return { base: `${u.origin}/troubleshoot/`, confirmed: true }; } catch (_) {}
+    if (/\.ts\.net$/i.test(String(location.hostname || ''))) return { base: `https://${location.hostname}:9691/troubleshoot/`, confirmed: false };
+    return { base: '', confirmed: false };
+  }
+  function directUrl(target) {
+    const { base } = directBase();
+    return base && base + (typeof target === 'string' && target.startsWith('/troubleshoot/') ? target.slice(14) : '');
+  }
+  let openedAt = -Infinity;
+  function rememberDirect(body) { try { if (typeof body?.direct === 'string') localStorage.setItem(DIRECT_KEY, body.direct); } catch (_) {} }
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Local entry is part of the cached shell, not a second app or a remote preflight.
   function recoveryHtml() {
-    return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
+    return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
   }
   const recoveries = new Set();
   function mountRecovery(root, url) {
@@ -144,39 +160,59 @@
     const target = typeof url === 'string' && /^\/troubleshoot\/(?:[?#]|$)/.test(url) ? url : '/troubleshoot/';
     root._recovery = true;
     const frame = root.querySelector('iframe'), details = root.querySelector('details'), button = root.querySelector('[data-recovery-check]');
-    let serial = 0, timer, remoteReady = false, remoteLoading = false, last;
+    const direct = root.querySelector('[data-recovery-direct]'), directLink = root.querySelector('[data-recovery-direct-link]');
+    let serial = 0, timer, loadTimer, remoteReady = false, remoteLoading = false, last, stale = 0;
     const connected = () => root.isConnected;
     const remoteMessage = text => { root.querySelector('[data-recovery-remote]').textContent = text; };
+    // The way out when the repair page can't load in this window: its direct line, one tap away.
+    // On the phone, a tap on Open Troubleshooter that can't load here goes straight to the direct line, once its
+    // address has been confirmed by Troubleshooter itself; otherwise the button is offered.
+    const desktop = () => { try { return document.documentElement.dataset.shell === 'desktop'; } catch (_) { return false; } };
+    const offerDirect = () => {
+      const url = directUrl(target); if (!url || remoteReady || !connected()) return;
+      directLink.href = url; if (!desktop()) directLink.removeAttribute?.('target');
+      direct.hidden = false; details.open = true;
+      if (!desktop() && directBase().confirmed && Date.now() - openedAt < 20000) { openedAt = -Infinity; location.assign(url); }
+    };
+    const failed = text => { clearTimeout(loadTimer); remoteLoading = false; frame.hidden = true; remoteReady = false; root.classList.remove('repair-ready'); details.open = true; remoteMessage(text); offerDirect(); };
     frame.addEventListener('load', () => {
       if (!frame.getAttribute('src')) return; // initial about:blank is not a failed repair-page load
-      remoteLoading = false;
+      remoteLoading = false; clearTimeout(loadTimer);
       try {
         const doc = frame.contentDocument;
-        if (!connected() || !last?.hostReachable || !doc || !/\/troubleshoot\//.test(doc.location.pathname) || !doc.querySelector('header h1')) throw Error('Repair page unavailable');
-        remoteReady = true; frame.hidden = false; root.classList.add('repair-ready'); details.open = false;
-        if (last.wizard.state === 'ok') clearTimeout(timer);
+        // The loaded document itself is the proof; it never waits on the connection checks.
+        if (!connected() || !doc || !/\/troubleshoot\//.test(doc.location.pathname) || !doc.querySelector('header h1')) throw Error('Repair page unavailable');
+        remoteReady = true; frame.hidden = false; root.classList.add('repair-ready'); details.open = false; direct.hidden = true;
+        if (last?.wizard?.state === 'ok') clearTimeout(timer);
         remoteMessage('Connected. The repair home and repair chat are below.');
-      } catch (_) { frame.hidden = true; remoteReady = false; root.classList.remove('repair-ready'); details.open = true; remoteMessage('The repair page didn’t load. Local connection help is still available.'); }
+      } catch (_) { failed('The repair page didn’t load. Local connection help is still available.'); }
     });
+    // Load the repair page straight away, alongside the checks: a tap on Open Troubleshooter shows it as soon as
+    // its own route answers, however long Wizard's health checks take (8 Nov 2026: they kept restarting while
+    // Wizard was stuck, so the page never opened). Anything slower than 8 s offers the direct line.
+    function loadRepair() {
+      if (!connected() || remoteReady || remoteLoading) return;
+      remoteLoading = true; clearTimeout(loadTimer);
+      loadTimer = setTimeout(() => { if (remoteLoading && !remoteReady) offerDirect(); }, 8000);
+      request(target, { method: 'HEAD' }).then(r => {
+        if (!connected()) { remoteLoading = false; return; }
+        if (!r.ok) throw Error('Repair page unavailable');
+        frame.src = target;
+      }).catch(() => failed('The repair page isn’t answering on Wizard’s usual address.'));
+    }
     async function run() {
       if (!connected()) { clearTimeout(timer); recoveries.delete(run); return; }
       const id = ++serial; clearTimeout(timer); button.disabled = true; button.textContent = 'Checking…';
       const c = await checks();
       if (!connected() || id !== serial) return;
-      if (c.stale) { timer = setTimeout(run, 0); return; }
-      last = c; button.disabled = false; button.textContent = 'Check again';
+      // A newer check superseded this one: retry a few times, then show what we have instead of spinning forever.
+      if (c.stale && ++stale < 3) { timer = setTimeout(run, 0); return; }
+      stale = 0; last = c; button.disabled = false; button.textContent = 'Check again';
       root.querySelector('[data-recovery-message]').textContent = c.help;
       root.querySelector('[data-recovery-rows]').innerHTML = [['internet', 'Internet'], ['tailscale', c.tailnet ? 'Tailscale / private connection' : 'Your Wizard’s connection'], ['wizard', 'Wizard']].map(([key, title]) => `<li class="wz-row" data-recovery-row="${key}"><span class="wz-main"><b>${esc(title)}</b><small>${esc(c[key].detail)}</small></span></li>`).join('');
-      if (c.hostReachable && !remoteReady && !remoteLoading) {
-        remoteLoading = true;
-        // A host HTTP error is not proof the repair page loaded. Keep help visible until its actual document loads.
-        request(target, { method: 'HEAD' }).then(r => {
-          if (!connected() || id !== serial) { remoteLoading = false; return; }
-          if (!r.ok) throw Error('Repair page unavailable');
-          frame.src = target;
-        }).catch(() => { remoteLoading = false; remoteMessage('The repair page isn’t available yet. Local connection help is still available.'); });
-      }
-      if (!c.hostReachable) { frame.hidden = true; remoteReady = false; remoteLoading = false; root.classList.remove('repair-ready'); details.open = true; remoteMessage('Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.'); }
+      // A host HTTP error is not proof the repair page loaded. Keep help visible until its actual document loads.
+      if (c.hostReachable) loadRepair();
+      if (!c.hostReachable) failed('Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.');
       if (c.wizard.state === 'ok') window.WizLive?.refresh?.();
       // Only the open failing recovery window polls; healthy checks stop. Outbox retains sole retry ownership.
       if (c.wizard.state !== 'ok' || !remoteReady) timer = setTimeout(run, 15000);
@@ -184,7 +220,7 @@
     button.addEventListener('click', run);
     recoveries.add(run);
     // Mount and paint the ordinary window before any diagnostic work starts.
-    requestAnimationFrame(() => setTimeout(run, 0));
+    requestAnimationFrame(() => setTimeout(() => { loadRepair(); run(); }, 0));
   }
   if (typeof addEventListener === 'function') {
     for (const event of ['online', 'offline', 'focus', 'visibilitychange']) addEventListener(event, () => {
@@ -199,6 +235,7 @@
     mountRecovery,
     checks,
     label,
+    directUrl,
     failure() {
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
       return cached || pending;
@@ -206,6 +243,7 @@
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
     open() {
+      openedAt = Date.now();
       try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
