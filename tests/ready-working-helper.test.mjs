@@ -157,3 +157,29 @@ test('slim and full list rows carry the running helper of an interrupted thread 
     assert.equal(harness([s]).group([s], now).working.length, 1);
   }
 });
+
+// A turn that handed off to a durable background job (a deploy or a heavy job) is waiting on it: Working,
+// labelled as such, no Resume. A genuinely dead chat keeps "Stuck" and Resume (James, 8 Nov 2026).
+const workScript = fs.readFileSync(new URL('../web/core/chat-work.js', import.meta.url), 'utf8');
+const WosWork = (() => { const w = {}; vm.runInNewContext(workScript, { window: w, document: {}, console }); return w.WosWork; })();
+const returned = { phase: 'stalled', pending: 0, returned: 2, since: now / 1000 - 258, resumeEligible: true };
+for (const layout of ['day', 'status']) {
+  test(`${layout}: returned helpers plus a running background job stay Working, not Ready`, () => {
+    const s = row({ status: 'running', waitingOn: 'helper', background: 'heavy', attention: { state: 'fyi', ask: 'Background work is still running or waiting to report back.' },
+      helperStatus: { ...returned, phase: 'background', resumeEligible: false }, runId: 'old', lastRunStatus: 'completed' }), c = harness([s], { layout });
+    assert.equal(c.group([s], now).working.length, 1);
+    assert.equal(c.group([s], now).ready.length, 0);
+    assert.equal(c.L.groups().working.length, 1);
+    assert.equal(c.L.groups().ready.length + c.L.groups().needs.length, 0);
+    assert.equal(c.needs(s), false);
+    assert.equal(c.orbCount(c.L), 0);
+  });
+}
+test('background-job wait reads as waiting, not stuck, with no Continue; a dead chat still reads Stuck with Continue', () => {
+  const wait = WosWork.helperLabel({ ...returned, phase: 'background', resumeEligible: false }, now);
+  assert.match(wait, /^Waiting on a background job · /);
+  assert.doesNotMatch(wait, /Stuck/);
+  assert.match(WosWork.helperDetail({ phase: 'background' }), /nothing is needed from you/);
+  assert.match(WosWork.helperLabel(returned, now), /^Stuck · helpers returned, no agent running/);
+  assert.match(WosWork.helperDetail(returned), /Continue resumes/);
+});
