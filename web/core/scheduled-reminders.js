@@ -104,10 +104,13 @@
   function back(){return close()?'boomerang':false}
   // Exact owner-zone time, shared by confirmation and the persistent banner (idea: Novaire #355).
   function returnLabel(r){const p=parts(Date.parse(r.due_at),r.timezone),date=new Intl.DateTimeFormat('en-GB',{timeZone:r.timezone,day:'numeric',month:'short'}).format(new Date(r.due_at));return `Back ${date} at ${p.h}:${pad(p.min)}`}
+  // The tap that commits a Snooze tells Chats on its own frame, so the screen changes like Archive's before any request returns.
+  const chosen=id=>{if(id)window.dispatchEvent(new CustomEvent('wos:snooze-chosen',{detail:{session:id}}))};
   // Someday is the existing Defer operation: no timer and no change to existing return jobs.
   // opts.restore (tweak one-tap Snooze only): an archived thread is restored first so it lands in Ready.
   async function someday(opts){
     if(!live()?.defer)throw new Error('Snooze is still loading.');
+    chosen(opts.sessionId);
     const restored=opts.restore&&live().session?.(opts.sessionId)?.archived;
     if(restored&&!await live().restore?.(opts.sessionId))throw new Error('Could not snooze · thread kept where it was.');
     if(!await live().defer(opts.sessionId))throw new Error(restored?'Could not snooze · thread restored to Ready.':'Could not snooze · thread kept where it was.');
@@ -137,7 +140,7 @@
       if(e.key==='Tab'){const fs=[...form.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')].filter(x=>x.offsetParent!==null),a=fs[0],b=fs.at(-1);if(e.shiftKey&&document.activeElement===a){e.preventDefault();b.focus()}else if(!e.shiftKey&&document.activeElement===b){e.preventDefault();a.focus()}return}
       const day=e.target.closest?.('[data-cal-day]');if(!day||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key))return;e.preventDefault();const move={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key],current=day.dataset.calDay;let next=current;if(move)next=addWallDays(current,move);else if(e.key==='Home')next=addWallDays(current,-new Date(`${current}T00:00:00Z`).getUTCDay());else if(e.key==='End')next=addWallDays(current,6-new Date(`${current}T00:00:00Z`).getUTCDay());else next=addWallMonths(current,e.key==='PageUp'?-1:1);const v=parseDate(next);form.elements['cal-month'].value=String(v.m);form.elements['cal-year'].innerHTML=years(v.y);form.elements['cal-year'].value=String(v.y);renderCalendar(form,next)
     });
-    form.onsubmit=async e=>{e.preventDefault();const error=form.querySelector('.boom-error'),submit=form.querySelector('[type=submit]');error.textContent='';if(submit.disabled||saving)return;saving=true;submit.disabled=true;try{const timezone=form.timezone.value,due_at=wallToUtc(form.date.value,form.time.value,timezone);if(Date.parse(due_at)<=Date.now())throw new Error('Choose a future date and time.');const note=form.note.value.trim().slice(0,500);let job;
+    form.onsubmit=async e=>{e.preventDefault();const error=form.querySelector('.boom-error'),submit=form.querySelector('[type=submit]');error.textContent='';if(submit.disabled||saving)return;saving=true;submit.disabled=true;try{const timezone=form.timezone.value,due_at=wallToUtc(form.date.value,form.time.value,timezone);if(Date.parse(due_at)<=Date.now())throw new Error('Choose a future date and time.');chosen(opts.sessionId);const note=form.note.value.trim().slice(0,500);let job;
       if(existing)job=await req(`${API}/${encodeURIComponent(existing.id)}`,{method:'PATCH',headers:J,body:JSON.stringify({when:{once:due_at},timezone,prompt:note,enabled:true})});
       else{const message=opts.targetKind==='message'&&Number(opts.anchorAt)>0?Number(opts.anchorAt):null,ag=live()?.agentOf?.(opts.sessionId)||'';
         job=await req(API,{method:'POST',headers:J,body:JSON.stringify({name:('Snooze · '+String(opts.title||opts.context||'Thread').replace(/\s+/g,' ').trim()).slice(0,150),kind:'return',when:{once:due_at},timezone,thread:opts.sessionId,prompt:note,...(/^[a-z][a-z0-9-]{0,30}$/.test(ag)&&ag!=='hermes'?{agent:ag}:{}),target:{message,excerpt:message?String(opts.context||'').slice(0,280):''}})})}

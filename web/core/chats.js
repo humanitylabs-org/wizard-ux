@@ -508,18 +508,20 @@ window.WizCore.chats = function createChats(H) {
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
-  // Phone Snooze follows the action setting; desktop keeps its reader open.
-  // The toast carries the return time.
-  // One action policy for every phone host; desktop keeps the already-visible reader pane.
+  // The Snooze toast carries the return time. After-actions (keepThreadOpen) governs send, unread, restore and filing;
+  // Archive and Snooze share leaveFinishedThread instead.
   const keepThreadOpen = () => H.keepThreadOpen || window.WizConfig?.chatAfterAction?.() !== 'list';
   window.addEventListener('wos:boomerang-set', e => {
     toast('◷', e.detail.label, 3200);
-    if (!keepThreadOpen() && e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
+    leaveSnoozed(e.detail.session);
   });
   window.addEventListener('wos:snooze-someday', e => {
-    if (!keepThreadOpen() && !e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
+    if (!e.detail.quiet) leaveSnoozed(e.detail.session); // a timed Snooze already left the thread on wos:boomerang-set
     if (!e.detail.quiet) toast('◷', snoozeLast() ? 'Snoozed · bottom of Ready' : 'Snoozed · out of your list', 2400); H.changed?.();
   });
+  // Snooze of an open thread lands exactly where Archive does (James, 8 Nov 2026): same leaveFinishedThread, any setting, either shell.
+  const leaveSnoozed = sid => { if (sid) for (const id of Object.keys(CH)) leaveFinishedThread(W[id], sid); };
+  window.addEventListener('wos:snooze-chosen', e => leaveSnoozed(e.detail.session)); // the commit tap itself, before any request returns
   // A scheduled Snooze was set, changed or came back: list markers, the thread banner and the Ready place follow.
   let boomPaint = 0;
   window.addEventListener('wos:boomerang', () => { clearTimeout(boomPaint); boomPaint = setTimeout(() => { for (const id of Object.keys(CH)) { const w = W[id]; if (!w) continue; if (w.thread) { if (!ch(id).held) renderThreadNow(w); } else if (!holdList(id)) renderChats(w); } }, 60); });
@@ -1775,6 +1777,14 @@ window.WizCore.chats = function createChats(H) {
     if (nx) openChat(w.id, nx);
     else { ch(w.id).trail = []; chatsBack(w); }
   }
+  // The one "I'm finished with this thread" landing, shared by Archive and Snooze (James, 8 Nov 2026): desktop opens the next
+  // chat in the drawn list, the phone goes straight to the chats list (no step up the link trail), whatever the After-actions setting.
+  function leaveFinishedThread(w, sid) {
+    if (!w || !sid || w.thread !== sid) return false;
+    if (!PHONE()) archiveAdvance(w, sid);
+    else { ch(w.id).trail = []; chatsBack(w); }
+    return true;
+  }
   // Repaint every chats list from the already-patched LIVE state on the tap's own frame. The holds that normally defer a
   // repaint (swipe tray, long press, actions sheet, reading) guard against a poll reshuffling rows under a finger; the
   // owner's own action is the one repaint that must never wait.
@@ -1813,11 +1823,9 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    // Desktop (Classic and AI apps): archiving the open thread opens the next chat in the drawn list (James, 7 Nov 2026).
-    if (a === 'done' && !PHONE() && w?.thread === sid) archiveAdvance(w, sid);
-    // Archive on the phone always returns to the chats list (James, 7 Nov 2026), whatever the After-actions setting,
-    // straight to the list even when the thread was opened from another one (no step up the link trail).
-    else if (a === 'done' && PHONE() && w?.thread === sid) { ch(w.id).trail = []; chatsBack(w); }
+    // Archive of the open thread: desktop opens the next chat in the drawn list, the phone returns to the chats list
+    // (James, 7 Nov 2026); Snooze lands the same way through the same helper.
+    if (a === 'done' && w?.thread === sid) leaveFinishedThread(w, sid);
     else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
