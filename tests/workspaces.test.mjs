@@ -172,3 +172,9 @@ test('both shells load module; bridge.handle preserves native capability; Miguel
   assert.doesNotMatch(tweak, /wizMenu|wizBtn|wsmBack|renderWiz/);
   assert.match(source, /api\?\.back.push\(close\)/);
 });
+test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address', () => {
+  assert.match(read('web/core/skin-host.js'), /\.\.\.\(\/\^https\?:/);
+  for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) {
+    const src = read(f); assert.match(src, /globalThis\.WizWorkspaces\?\.switch\(w\.id\)/); assert.match(src, /Another Wizard · tap to switch/);
+  }
+});
