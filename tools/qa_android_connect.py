@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Thales-only API35 Connect acceptance. Synthetic debug traffic; signed upgrade runs offline.
+"""Trusted-worker API35 Connect acceptance; signed upgrade runs offline.
 Usage: qa_android_connect.py DEBUG_RECEIPT GENERIC_RECEIPT OWNER_RECEIPT OLD_APK OWNER_CONFIG OUT
+Or: qa_android_connect.py --upgrade-only OWNER_RECEIPT OLD_APK OWNER_CONFIG OUT
 OWNER_CONFIG is private JSON with origin and baseline_sha256; never commit it.
 Set pre_pref_baseline=true to prove skipped-version migration from an app that
 never stored wizard_server.xml. No publishing.
@@ -11,6 +12,8 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -18,21 +21,78 @@ import xml.etree.ElementTree as ET
 
 from apk_build_config import apk_build_config
 
-SDK = Path('/opt/homebrew/share/android-commandlinetools')
-BASE = Path(os.environ.get('ANDROID_BUILDS_ROOT') or Path.home() / 'AndroidBuilds')  # worker-local build root
+FORUM = sys.platform == 'linux' and os.uname().nodename == 'forum'
+SDK = Path('/srv/work/android-sdk' if FORUM else '/opt/homebrew/share/android-commandlinetools')
+BASE = Path(os.environ.get('ANDROID_BUILDS_ROOT') or ('/srv/work/AndroidBuilds' if FORUM else Path.home() / 'AndroidBuilds'))
+SIGNER = '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
+# Emulator 37.2.12 no longer lists the old indirect SwiftShader mode and fell into SwiftShader Vulkan, then the host emulator
+# died with SIGSEGV after a successful install/start. Supported software GL with Vulkan off is the mitigation;
+# the exact crash stack is unproven (no minidump/core).
+EMULATOR_GRAPHICS = ('-gpu', 'swiftshader', '-feature', '-Vulkan')
+
+
+def emulator_exit(em, argv):
+    """The owned emulator's own exit state: returncode and, when a signal killed it, the signal name."""
+    code = em.poll() if em is not None else None
+    try:
+        name = signal.Signals(-code).name if code is not None and code < 0 else None
+    except ValueError:
+        name = 'signal ' + str(-code)
+    return dict(argv=argv, pid=em.pid if em is not None else None, returncode=code, signal=name)
+
+
+def choose_emulator_port(devices):
+    # Reuse the native share runner's serial + paired-socket availability check,
+    # bounded to the emulator's recommended console/ADB range (5554..5584/5555..5585).
+    for port in range(5584, 5553, -2):
+        if 'emulator-' + str(port) in devices:
+            continue
+        try:
+            with socket.socket() as console, socket.socket() as adb_socket:
+                console.bind(('127.0.0.1', port))
+                adb_socket.bind(('127.0.0.1', port + 1))
+            return port
+        except OSError:
+            continue
+    raise RuntimeError('no unused emulator port in the recommended range')
+
+
+def signed_artifact(receipt, config):
+    if receipt.get('status') != 'ok':
+        raise ValueError('successful signing receipt required')
+    a, = [a for a in receipt['artifacts'] if a['aapt2']['package'] == 'ai.wizards.os']
+    p = Path(receipt['job']) / 'source' / a['path']
+    if not p.resolve().is_relative_to((Path(receipt['job']) / 'source').resolve()) or p.is_symlink():
+        raise ValueError('artifact path escapes signing job')
+    if a.get('signer_sha256') != SIGNER or hashlib.sha256(p.read_bytes()).hexdigest() != a['sha256']:
+        raise ValueError('signed artifact identity mismatch')
+    if int(a['aapt2']['version_code']) != config['candidate_version_code'] or a['aapt2']['version_name'] != config['candidate_version_name']:
+        raise ValueError('candidate version mismatch')
+    fields = apk_build_config(p)
+    if fields.get('ORIGIN') != config['origin'] or fields.get('HOME_URL') != config['origin'] + '/wizard-os-home/':
+        raise ValueError('encoded owner origin mismatch')
+    if fields.get('PHOTOS_SERVER'):
+        raise ValueError('unexpected encoded photos default')
+    return p
+
 
 def main():
-    if sys.platform != 'darwin':
-        raise SystemExit('Thales/macOS required')
-    debug, generic, owner = [json.loads(Path(x).read_text()) for x in sys.argv[1:4]]
-    old, config, out = Path(sys.argv[4]), json.loads(Path(sys.argv[5]).read_text()), Path(sys.argv[6])
+    if sys.platform != 'darwin' and not FORUM:
+        raise SystemExit('Trusted Thales or forum worker required')
+    upgrade_only = sys.argv[1:2] == ['--upgrade-only']
+    if upgrade_only:
+        owner = json.loads(Path(sys.argv[2]).read_text())
+        old, config, out = Path(sys.argv[3]), json.loads(Path(sys.argv[4]).read_text()), Path(sys.argv[5])
+    else:
+        debug, generic, owner = [json.loads(Path(x).read_text()) for x in sys.argv[1:4]]
+        old, config, out = Path(sys.argv[4]), json.loads(Path(sys.argv[5]).read_text()), Path(sys.argv[6])
     assert out.resolve().is_relative_to(BASE)
-    out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=not upgrade_only)
     os.umask(0o077)
     checks = []
     completed = False
     env = os.environ.copy()
-    env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+    env.update(JAVA_HOME='/usr/lib/jvm/java-21-openjdk-amd64' if FORUM else '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
                ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(out / 'avd'))
     env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']
     (out / 'avd').mkdir(exist_ok=True)
@@ -44,15 +104,37 @@ def main():
         p = Path(receipt['job']) / 'source' / a['path']
         assert hashlib.sha256(p.read_bytes()).hexdigest() == a['sha256']
         return p
-    qa_apk = artifact(debug, 'ai.wizards.os.qa')
-    test_apk = artifact(debug, 'ai.wizards.os.qa.test')
-    generic_apk = artifact(generic, 'ai.wizards.os')
-    owner_apk = artifact(owner, 'ai.wizards.os')
+    if not upgrade_only:
+        qa_apk = artifact(debug, 'ai.wizards.os.qa')
+        test_apk = artifact(debug, 'ai.wizards.os.qa.test')
+        generic_apk = artifact(generic, 'ai.wizards.os')
+    owner_apk = signed_artifact(owner, config) if upgrade_only else artifact(owner, 'ai.wizards.os')
     assert hashlib.sha256(old.read_bytes()).hexdigest() == config['baseline_sha256']
+    if upgrade_only:
+        bt = sorted((SDK / 'build-tools').iterdir())[-1]
+        for apk in (old, owner_apk):
+            cert = run([bt / 'apksigner', 'verify', '--print-certs', apk], capture_output=True, text=True).stdout
+            assert re.search(r'Signer #1 certificate SHA-256 digest: (\w+)', cert).group(1) == SIGNER
+        badging = run([bt / 'aapt2', 'dump', 'badging', old], capture_output=True, text=True).stdout
+        assert "package: name='ai.wizards.os'" in badging
+        old_code = int(re.search(r"versionCode='(\d+)'", badging).group(1))
+        assert old_code == config['baseline_version_code'] < config['candidate_version_code']
     adb = SDK / 'platform-tools/adb'
-    serial = 'emulator-5686'
+    serial = ''
+    port = None
     def adb_run(*args, binary=False):
-        return run([adb, '-s', serial, *args], capture_output=True, text=not binary).stdout
+        try:
+            return run([adb, '-s', serial, *args], capture_output=True, text=not binary, timeout=60).stdout
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            # Capture the actual transport failure; never retry/reconnect or convert it to a pass.
+            def decoded(value):
+                return value.decode(errors='replace') if isinstance(value, bytes) else value
+            devices = subprocess.run([str(adb), 'devices', '-l'], env=env, capture_output=True, text=True, timeout=10)
+            (out / 'adb-failure.json').write_text(json.dumps(dict(serial=serial, port=port,
+                args=list(args), stdout=decoded(error.stdout), stderr=decoded(error.stderr),
+                devices=devices.stdout, devices_stderr=devices.stderr,
+                emulator_returncode=em.poll() if em is not None else None, emulator=emulator_exit(em, em_argv)), indent=2))
+            raise
     def shell(*args):
         return adb_run('shell', *args)
     def top():
@@ -63,22 +145,36 @@ def main():
     def screenshot(name):
         (out / (name + '.png')).write_bytes(adb_run('exec-out', 'screencap', '-p', binary=True))
     inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
-    lock = os.fdopen(int(inherited), 'a', closefd=False) if inherited else (BASE / 'worker.lock').open('a')
+    if FORUM and not inherited:
+        raise SystemExit('forum requires the inherited durable worker lease')
+    lock_path = Path('/srv/work/heavy/production/worker.lock') if FORUM else BASE / 'worker.lock'
+    lock = os.fdopen(int(inherited), 'a', closefd=False) if inherited else lock_path.open('a')
     em = None
+    em_argv = None
+    em_exit = None
+    def interrupted(signum, frame):
+        raise SystemExit('interrupted by signal ' + str(signum))
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    signal.signal(signal.SIGALRM, interrupted)
+    signal.alarm(900)
     with lock:
         if inherited:
-            a, b = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+            a, b = lock_path.stat(), os.fstat(lock.fileno())
             assert (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino)
         fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if inherited else 0))
         try:
-            assert serial not in run([adb, 'devices'], capture_output=True, text=True).stdout
+            port = choose_emulator_port(run([adb, 'devices'], capture_output=True, text=True).stdout)
+            serial = 'emulator-' + str(port)
+            (out / 'transport.json').write_text(json.dumps(dict(serial=serial, console_port=port, adb_port=port + 1)))
             run([SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'connect', '-k',
-                 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
+                 'system-images;android-35;google_apis;' + ('x86_64' if FORUM else 'arm64-v8a'), '-d', 'pixel_7', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
             with (out / 'emulator.log').open('w') as log:
-                em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', '5686', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=log, stderr=subprocess.STDOUT)
+                em_argv = [str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', str(port), '-no-window', '-no-snapshot', '-no-audio', *EMULATOR_GRAPHICS] + (['-accel', 'on'] if FORUM else [])
+                em = subprocess.Popen(em_argv, env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 240
             while time.monotonic() < deadline:
-                if em.poll() is not None: raise RuntimeError('emulator exited')
+                if em.poll() is not None: raise RuntimeError('emulator exited: ' + json.dumps(emulator_exit(em, em_argv)))
                 try:
                     if shell('getprop', 'sys.boot_completed').strip() == '1': break
                 except subprocess.CalledProcessError: pass
@@ -88,20 +184,21 @@ def main():
             for key in ['window_animation_scale', 'transition_animation_scale', 'animator_duration_scale']:
                 shell('settings', 'put', 'global', key, '0')
             check('API35 emulator', shell('getprop', 'ro.build.version.sdk').strip() == '35')
-            adb_run('install', '-r', qa_apk); adb_run('install', '-r', test_apk)
-            text = shell('am', 'instrument', '-w', '-e', 'class', 'ai.wizards.os.ConnectE2eTest', 'ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner')
-            (out / 'instrumentation.txt').write_text(text)
-            (out / 'instrumentation-logcat.txt').write_text(run([adb, '-s', serial, 'logcat', '-d', '-v', 'threadtime'], capture_output=True, text=True, errors='replace').stdout)
-            check('Connect UI instrumentation', 'OK (1 test)' in text and 'FAILURES' not in text, text[-3000:])
-            try: adb_run('pull', '/sdcard/Android/data/ai.wizards.os.qa/files', out / 'instrumentation-shots')
-            except subprocess.CalledProcessError: (out / 'instrumentation-shots.missing').write_text('no screenshots to pull\n')
-            adb_run('install', '-r', generic_apk)
-            shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(3)
-            check('signed generic fresh install shows Connect', 'ConnectActivity' in top(), top())
-            screenshot('signed-fresh-connect')
-            shell('input', 'keyevent', 'KEYCODE_BACK'); time.sleep(1)
-            check('signed Connect root Back retains app', 'ai.wizards.os/.ConnectActivity' in top(), top())
-            adb_run('uninstall', 'ai.wizards.os')
+            if not upgrade_only:
+                adb_run('install', '-r', qa_apk); adb_run('install', '-r', test_apk)
+                text = shell('am', 'instrument', '-w', '-e', 'class', 'ai.wizards.os.ConnectE2eTest', 'ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner')
+                (out / 'instrumentation.txt').write_text(text)
+                (out / 'instrumentation-logcat.txt').write_text(run([adb, '-s', serial, 'logcat', '-d', '-v', 'threadtime'], capture_output=True, text=True, errors='replace').stdout)
+                check('Connect UI instrumentation', 'OK (1 test)' in text and 'FAILURES' not in text, text[-3000:])
+                try: adb_run('pull', '/sdcard/Android/data/ai.wizards.os.qa/files', out / 'instrumentation-shots')
+                except subprocess.CalledProcessError: (out / 'instrumentation-shots.missing').write_text('no screenshots to pull\n')
+                adb_run('install', '-r', generic_apk)
+                shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(3)
+                check('signed generic fresh install shows Connect', 'ConnectActivity' in top(), top())
+                screenshot('signed-fresh-connect')
+                shell('input', 'keyevent', 'KEYCODE_BACK'); time.sleep(1)
+                check('signed Connect root Back retains app', 'ai.wizards.os/.ConnectActivity' in top(), top())
+                adb_run('uninstall', 'ai.wizards.os')
             # Real published signed bytes, but no live-owner traffic: install/upgrade and launch with radios disabled.
             shell('svc', 'wifi', 'disable'); shell('svc', 'data', 'disable')
             adb_run('install', old)
@@ -110,6 +207,41 @@ def main():
             # rather than the easier already-persisted-origin generic upgrade.
             adb_run('root'); adb_run('wait-for-device')
             shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
+            pref_path = '/data/user/0/ai.wizards.os/shared_prefs/wizard_server.xml'
+            before = shell('if test -e ' + pref_path + '; then cat ' + pref_path + '; fi').strip()
+            synthetic_pairing = upgrade_only and config.get('baseline_origin_mode') == 'synthetic-fixture-paired'
+            marker_path = '/data/user/0/ai.wizards.os/files/synthetic-upgrade-marker.txt'
+            marker = None
+            if synthetic_pairing:
+                # Published 82 is origin-less. This is explicit synthetic persisted-state
+                # setup on a FRESH owned emulator, not UI/account/owner-authentication proof.
+                check('published generic baseline has empty encoded defaults',
+                      not apk_build_config(old).get('ORIGIN') and not apk_build_config(old).get('HOME_URL'))
+                check('unpaired published baseline naturally shows Connect', not before and 'ConnectActivity' in top())
+                shell('am', 'force-stop', 'ai.wizards.os')
+                app_uid = re.search(r'(?:userId|appId)=(\d+)', shell('dumpsys', 'package', 'ai.wizards.os')).group(1)
+                fixture = ET.Element('map'); ET.SubElement(fixture, 'string', name='origin').text = config['origin']
+                local_pref = out / 'synthetic-wizard-server.xml'
+                local_pref.write_bytes(ET.tostring(fixture, encoding='utf-8', xml_declaration=True))
+                marker = 'SYNTHETIC-ONLY signed-upgrade retained data fixture\n'
+                local_marker = out / 'synthetic-upgrade-marker.txt'; local_marker.write_text(marker)
+                shell('mkdir', '-p', '/data/user/0/ai.wizards.os/shared_prefs', '/data/user/0/ai.wizards.os/files')
+                adb_run('push', local_pref, pref_path); adb_run('push', local_marker, marker_path)
+                shell('chown', '-R', app_uid + ':' + app_uid, '/data/user/0/ai.wizards.os/shared_prefs', '/data/user/0/ai.wizards.os/files')
+                shell('chmod', '600', pref_path, marker_path)
+                shell('restorecon', '-RF', '/data/user/0/ai.wizards.os/shared_prefs', '/data/user/0/ai.wizards.os/files')
+                shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
+                before = shell('cat', pref_path).strip()
+                check('synthetic paired baseline naturally launches without Connect',
+                      'ai.wizards.os/.MainActivity' in top() and 'ConnectActivity' not in top())
+                check('synthetic paired baseline reads the configured origin',
+                      {e.attrib.get('name'): e.text for e in ET.fromstring(before)}.get('origin') == config['origin'])
+            if upgrade_only and config.get('baseline_origin_mode') == 'empty-default-recovery':
+                check('current generic baseline has no baked origin', not apk_build_config(old).get('ORIGIN'))
+                check('current baseline naturally opens Connect without stored origin', not before and 'ConnectActivity' in top())
+            if upgrade_only and config.get('baseline_origin_mode') == 'paired':
+                values = {e.attrib.get('name'): e.text for e in ET.fromstring(before)}
+                check('old paired origin naturally exists', values.get('origin') == config['origin'])
             if config.get('pre_pref_baseline'):
                 old_fields = apk_build_config(old)
                 check('pre-preference baseline has the expected baked owner origin', old_fields.get('ORIGIN') == config['origin'])
@@ -122,11 +254,18 @@ def main():
             first = next(l.strip() for l in old_dump.splitlines() if 'firstInstallTime=' in l)
             shell('pm', 'grant', 'ai.wizards.os', 'android.permission.POST_NOTIFICATIONS')
             adb_run('install', '-r', owner_apk)
+            immediate = shell('if test -e ' + pref_path + '; then cat ' + pref_path + '; fi').strip()
+            check('install preserves the exact pre-launch origin preferences', immediate == before)
+            if synthetic_pairing:
+                check('synthetic app data marker survives in-place update', shell('cat', marker_path) == marker)
             new_dump = shell('dumpsys', 'package', 'ai.wizards.os')
             check('published release upgrades in place with same UID', bool(re.search(r'(?:userId|appId)=' + old_uid + r'\b', new_dump)) and first in new_dump)
             check('notification grant preserved', 'android.permission.POST_NOTIFICATIONS: granted=true' in new_dump)
+            check('signed release remains non-debuggable', 'DEBUGGABLE' not in new_dump)
             shell('logcat', '-c'); shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
-            check('app update never signs the owner out (no Connect after offline upgrade)', 'ai.wizards.os/.MainActivity' in top() and 'ConnectActivity' not in top(), top())
+            activity = top()  # One atomic observation, not three separate ADB round-trips.
+            (out / 'post-upgrade-top.txt').write_text(activity)
+            check('app update never signs the owner out (no Connect after offline upgrade)', 'ai.wizards.os/.MainActivity' in activity and 'ConnectActivity' not in activity, activity)
             screenshot('owner-upgrade-offline')
             # google_apis emulator supports root; read the exact release's migrated SharedPreferences.
             adb_run('root'); adb_run('wait-for-device')
@@ -140,17 +279,29 @@ def main():
             check('no native crashes', 'FATAL EXCEPTION' not in crash)
             completed = True
         finally:
+            # Recorded before our own kill, so a host crash (e.g. -11 SIGSEGV) is not masked by cleanup.
+            em_exit = emulator_exit(em, em_argv)
             if em is not None:
                 subprocess.run([str(adb), '-s', serial, 'emu', 'kill'], env=env, capture_output=True)
                 try: em.wait(timeout=30)
                 except subprocess.TimeoutExpired: em.terminate(); em.wait(timeout=20)
+                deadline = time.monotonic() + 30
+                while serial in run([adb, 'devices'], capture_output=True, text=True).stdout and time.monotonic() < deadline:
+                    time.sleep(1)
+                check('owned emulator serial is absent', serial not in run([adb, 'devices'], capture_output=True, text=True).stdout)
             receipt = {'checks': checks, 'passed': sum(x['passed'] for x in checks), 'total': len(checks),
                        'ok': completed and bool(checks) and all(x['passed'] for x in checks), 'physical_device': False,
                        'upgrade_network': 'offline, deliberately no owner traffic', 'published': False,
                        'pre_pref_baseline': config.get('pre_pref_baseline', False),
+                       'upgrade_only': upgrade_only, 'host': os.uname().nodename,
+                       'emulator_serial': serial, 'emulator_before_cleanup': em_exit, 'console_port': port, 'adb_port': port + 1 if port is not None else None,
+                       'synthetic_pairing_fixture': config.get('baseline_origin_mode') == 'synthetic-fixture-paired',
+                       'authenticated_owner_proof': False,
+                       'baseline_origin_mode': config.get('baseline_origin_mode', 'baked-preference-migration'),
                        'old_sha256': hashlib.sha256(old.read_bytes()).hexdigest(),
                        'new_sha256': hashlib.sha256(owner_apk.read_bytes()).hexdigest()}
             (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+            signal.alarm(0)
             print(json.dumps(receipt), flush=True)
     if not checks or not all(x['passed'] for x in checks): raise SystemExit(1)
 

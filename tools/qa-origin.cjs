@@ -27,6 +27,8 @@ let alerts = sampleAlerts(), refused = 0;
 const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
+  // This explicit fixture consumes every API/app route before the live-read proxy. Never forwards a request.
+  if (process.env.QA_SAMPLE_BG_ORB === '1' && require('./fixtures/backgrounds-orb.cjs')(req, res, WEB)) return;
   if (SAMPLE_ALERTS) {
     if (req.method === 'POST' && u.pathname === '/notifications/api/mark') {
       let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 4096) return json(res, 413, { error: 'Sample request too large' }); }

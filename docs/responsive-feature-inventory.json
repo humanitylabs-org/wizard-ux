@@ -1,5 +1,13 @@
 {
   "coreModules": {
+    "core/desktop-host.js": {
+      "loadedBy": ["desktop"],
+      "note": "Desktop-only lifecycle adapter boundary; no second window state or rendering. Phone adapter unchanged."
+    },
+    "core/pane-layout.js": {
+      "loadedBy": ["desktop"],
+      "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Desktop only: the phone has no pane consumer, so it no longer downloads it."
+    },
     "core/agents.js": {
       "loadedBy": [
         "phone",
@@ -221,6 +229,14 @@
       "loadedBy": [],
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
+    "core/chats-list-model.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Pure row projection, Sort/Group and visible-ID walk; all shells/layouts"
+    },
     "core/chats-view.js": {
       "loadedBy": [
         "phone",
@@ -324,12 +340,26 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/downloads.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "In-app Downloads banner and sheet; shows only where the Android bridge exists"
+    },
     "core/edge-peek.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Skin host built-in: tap or swipe the edge beside a chat thread; no-op on desktop"
+    },
+    "core/escape-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared back recency primitive; desktop keyboard adapter only. Phone navigation unchanged."
     },
     "core/experience.js": {
       "loadedBy": [
@@ -463,9 +493,18 @@
       ],
       "note": "Direct entrypoint import; Settings → About: base main commit and how far ahead/behind main"
     },
+    "core/disk-status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → Network & security: one disk encryption line from wam disk status"
+    },
     "core/orb-switcher.js": {
-      "loadedBy": [],
-      "note": "Lazy opt-in pins-only Orb radial via the phone skin-host orb adapter. Neither entrypoint imports it; desktop does not mount it. Open desktops remain on the existing swipe-up path."
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Core phone dock hold: pins-only radial, loaded by index.html and initialized with app.js shell adapter. Desktop and full-screen corner orbs unchanged; open desktops remain on swipe up."
     },
     "core/os-updates.js": {
       "loadedBy": [
@@ -655,6 +694,13 @@
       ],
       "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
     },
+    "core/thread-tracker.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Thread tracker tweak (off by default): ask strip, Chats row dots, quote Reply; shared by both shells"
+    },
     "core/tour.js": {
       "loadedBy": [
         "phone",
@@ -726,6 +772,26 @@
     }
   },
   "exceptions": {
+    "core/pane-layout.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Pane geometry for the desktop's tiled/centred/side-by-side/full-screen windows (Classic and AI apps). The phone has no panes; it loads only its own layout code."
+    },
+    "core/desktop-host.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop lifecycle API for pluggable desktop layouts; delegates existing windows and frames. Not a cross-platform feature implementation."
+    },
+    "core/orb-switcher.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Existing phone dock hold adapter promoted from a phone-only tweak. Desktop orb and full-screen phone corner orb keep their different input contracts."
+    },
+    "core/orb-switcher.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Paint for the phone dock hold adapter; no desktop radial is mounted."
+    },
     "pwa-install.js": {
       "shell": "phone",
       "classification": "native",
@@ -867,6 +933,7 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-list-model.js",
     "core/chats-view.css",
     "core/chats-view.js",
     "core/chats.css",
@@ -880,8 +947,12 @@
     "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/disk-status.js",
     "core/dom-morph.js",
+    "core/downloads.css",
+    "core/downloads.js",
     "core/edge-peek.js",
+    "core/escape-back.js",
     "core/experience.js",
     "core/features.js",
     "core/files.js",
@@ -937,6 +1008,8 @@
     "core/skins.js",
     "core/status.js",
     "core/thread-swipe-back.js",
+    "core/thread-tracker.css",
+    "core/thread-tracker.js",
     "core/tour.css",
     "core/tour.js",
     "core/update-banner.css",

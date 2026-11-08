@@ -78,7 +78,7 @@
     return true;
   }
   function reload(f, how) {
-    const doc = docOf(f.frame); if (!doc) return;
+    const doc = docOf(f.frame); if (!doc || reloading.get(f.frame) === doc) return;
     note('reload', f.appId, how); clearStrip(f.frame);
     reloading.set(f.frame, doc);
     try { f.frame.contentWindow.location.reload(); } catch (_) { try { f.frame.src = f.frame.src; } catch (__) {} }
@@ -87,7 +87,7 @@
   function paint(f, s) {
     const wait = s.armed ? (f.holds[0] || 'saving') : '';
     s.el.innerHTML = `<span class="app-upd-m"><b>${esc(appName(f.appId))}</b> updated</span>` +
-      `<button type="button" data-go class="${wait ? 'armed' : ''}">${wait ? 'Reloads after ' + esc(String(wait).toLowerCase().slice(0, 40)) : 'Reload'}</button>` +
+      `<button type="button" data-go class="${wait ? 'armed' : ''}" ${s.keeping ? 'disabled aria-busy="true"' : ''}>${s.keeping ? 'Getting ready…' : wait ? 'Reloads after ' + esc(String(wait).toLowerCase().slice(0, 40)) : 'Reload'}</button>` +
       `<button type="button" class="app-upd-x" data-x aria-label="Hide until the next update" title="Later">×</button>`;
   }
   function showStrip(f, rev) {
@@ -100,11 +100,19 @@
       const el = document.createElement('div');
       el.className = 'app-upd'; el.setAttribute('role', 'status'); el.dataset.app = f.appId;
       s = { el, rev, armed: false }; strips.set(f.frame, s);
-      el.addEventListener('click', e => {
-        const live = S.update.frames().find(x => x.frame === f.frame); if (!live) return clearStrip(f.frame);
+      el.addEventListener('click', async e => {
+        let live = S.update.frames().find(x => x.frame === f.frame); if (!live) return clearStrip(f.frame);
         if (e.target.closest('[data-x]')) { dismissed.set(f.frame, s.rev); note('dismiss', f.appId); return clearStrip(f.frame); }
         if (!e.target.closest('[data-go]')) return;
+        if (s.keeping) return;
         if (s.armed) { s.armed = false; paint(live, s); return; }          // second tap cancels the wait
+        if (live.keepable && S.update.keepDrafts) {
+          const doc = docOf(f.frame); s.keeping = true; paint(live, s);
+          try { await S.update.keepDrafts(f.frame); } catch (_) { /* Unconfirmed holds still block. */ }
+          finally { s.keeping = false; }
+          live = S.update.frames().find(x => x.frame === f.frame);
+          if (!live || docOf(f.frame) !== doc || strips.get(f.frame) !== s) return;
+        }
         if (live.holds.length) { s.armed = true; paint(live, s); note('armed', f.appId); return; }
         reload(live, 'tap');
       });

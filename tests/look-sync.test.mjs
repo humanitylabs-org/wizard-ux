@@ -20,6 +20,57 @@ function load() {
 }
 const L = load();
 
+test('desktop custom backdrop syncs across devices independently of skin and phone view', async () => {
+  const doc={version:1,skin:{id:'nebula',at:9},tweaks:{'miguel/layout':{on:true,at:9}},views:{phone:{id:'',at:9}}};
+  const box=pagesBox(doc), a=device(box), b=device(box);
+  await a.sync.sync(); await b.sync.sync();
+  a.pickBackdrop({id:'custom',wide:'wide-id',tall:'tall-id'}); await a.flush(); await b.sync.sync();
+  assert.deepEqual(b.backdrop,{id:'custom',wide:'wide-id',tall:'tall-id'});
+  assert.deepEqual(box.doc().skin,doc.skin); assert.deepEqual(box.doc().tweaks,doc.tweaks); assert.deepEqual(box.doc().views,doc.views);
+  const fresh=device(box); await fresh.sync.sync(); assert.deepEqual(fresh.backdrop,b.backdrop);
+  // An idle stale-device edit loses to a newer remote revision, like every other Look field.
+  a.pickBackdrop({id:'lake',wide:'wide-id',tall:'tall-id'});
+  const changed=box.doc(); changed.desktopBackdrop={id:'sea',at:Date.now()+10000}; box.text=JSON.stringify(changed);
+  await a.flush(); assert.equal(box.doc().desktopBackdrop.id,'sea'); assert.equal(a.backdrop.id,'sea');
+});
+test('stale built-in selection retains uploaded custom references across a two-device CAS race', async () => {
+  const box = pagesBox({ version: 1, skin: { id: 'nebula', at: 9 }, tweaks: {} });
+  const a = device(box), stale = device(box);
+  await a.sync.sync(); await stale.sync.sync();
+  a.pickBackdrop({ id: 'custom', wide: 'wide-id', tall: 'tall-id' });
+  await a.flush();
+  // This device has never seen the upload; its first-read in-flight intent
+  // rebases onto the observed revision without erasing the saved images.
+  stale.pickBackdrop({ id: 'lake' });
+  const original = box.req;
+  let injected = false;
+  const racing = device({ ...box, req: async (url, init) => {
+    const reply = await original(url, init);
+    if (!init?.method && !injected) {
+      injected = true;
+      const doc = box.doc(); doc.updated = 'concurrent-save';
+      box.text = JSON.stringify(doc); // force a genuine 409 on first PUT
+    }
+    return reply;
+  } });
+  racing.pickBackdrop({ id: 'lake' });
+  await racing.flush(); await a.sync.sync(); await stale.sync.sync();
+  const want = { id: 'lake', wide: 'wide-id', tall: 'tall-id' };
+  assert.deepEqual(a.backdrop, want);
+  assert.deepEqual(stale.backdrop, want);
+  assert.deepEqual(racing.backdrop, want);
+  assert.deepEqual(box.doc().desktopBackdrop, { ...want, at: 11 });
+  assert.deepEqual(box.doc().skin, { id: 'nebula', at: 9 });
+  a.pickBackdrop({ ...a.backdrop, id: 'custom' }); await a.flush();
+  assert.equal(box.doc().desktopBackdrop.wide, 'wide-id');
+  assert.equal(box.doc().desktopBackdrop.tall, 'tall-id');
+});
+test('malformed custom references cannot inject arbitrary URL schemes or paths', () => {
+  for(const wide of ['https://elsewhere/image','data:image/png,x','../secret','blob:abc']) {
+    assert.equal(L.parse({version:1,tweaks:{},desktopBackdrop:{id:'custom',wide,at:8}}).desktopBackdrop,undefined);
+  }
+});
+
 // The Pages file API as the Agent Service answers it (server/pages.mjs save/read).
 function pagesBox(doc = null, { routes = true } = {}) {
   const ver = t => createHash('sha1').update(t).digest('hex');
@@ -57,11 +108,14 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
   if (shells) Object.defineProperty(exp, 'views', { get: () => clone(d.views) });
   const S = {
     get chosen() { return d.skin; }, get current() { return d.skin || 'nebula'; },
+    get desktopBackdrop() { return d.backdrop || {id:'living'}; },
+    adoptDesktopBackdrop(bg) { d.backdrop = clone(bg); sync.backdropChoice(bg); },
     has: id => ['nebula', 'obsidian', 'obsidian-light', 'landscapes'].includes(id),
     set(id) { d.skin = id; sync.skinChoice(id); }, // the real WosSkin.set raises wos:skin, which reaches skinChoice
   };
   sync = L.create({ req: box.req, store: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }, exp, skin: S,
     now: clock || (() => Date.now()), later: (f, ms) => { const t = { f, ms }; timers.push(t); return t; }, cancel: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); } });
+  d.pickBackdrop = bg => { d.backdrop = clone(bg); sync.backdropChoice(bg); };
   d.sync = sync;
   d.saved = () => JSON.parse(store.get('wos.look-sync.v1') || 'null');
   d.flush = async () => { while (timers.length) { const t = timers.shift(); await t.f(); await tick(); } };

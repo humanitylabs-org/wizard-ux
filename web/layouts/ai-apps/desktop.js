@@ -2,7 +2,7 @@
  * measured at 1440 × 900 and 1280 × 800 (~/.hermes/cache/screenshots/ai-apps-ref/REPORT.md §6), with Wizard's own
  * pieces in it. Worn by the same miguel/ai-apps tweak as the phone (layout.js hands the desktop shell here).
  *
- *   - Sidebar on the left, 288 px (Claude's width, ChatGPT's panel): the Wizard's name, 🔍 (searches chats and apps)
+ *   - Sidebar on the left, 288 px (Claude's width, ChatGPT's panel): the Wizard's name, 🔍 (searches chats only)
  *     and the collapse toggle ◫ in its header; where they list Projects / GPTs / Spaces, the open apps as a grid of
  *     small icons with their names (every open app = desks, badged first then desk order, the badge on the icon; the
  *     same list as the phone drawer, the Apps icons and the Orb satellites), ending in All apps = the three-level
@@ -70,7 +70,7 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
+import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
@@ -85,7 +85,8 @@ export const TIDY_EVERY = 3600e3;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
 /** One anchor (Miguel, 4 Nov 2026): every Wizard key is left ⌥ + a key, the keys of the app in front included
  * (docs/ai-apps-view.md › App keys). These ⌥ keys are Wizard's and never go to an app (⇧ variants too): ⌥1–⌥0, ⌥[ ⌥],
- * the ⌥ arrows, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. */
+ * ⌥↑/↓, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. Horizontal arrows stay reserved
+ * from app-declared shortcuts so plain ⌥←/→ remain native word navigation, not a Wizard action. */
 export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
   'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
 /** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
@@ -97,6 +98,46 @@ export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !
 
 export default function desktop(api) {
   const doc = document, root = doc.documentElement;
+  const host = globalThis.WizDesktop?.host;
+  const chatWindows = () => (host?.windows() || []).filter(w => w.kind === 'chats');
+  const mainChatWindow = () => chatWindows().find(w => w.desk === mainChats()?.desk) || chatWindows()[0] || null;
+  const chatParts = part => chatWindows().map(w => host.chats(w.id)?.[part]).filter(n => n && n.getClientRects().length && n.getBoundingClientRect().width > 0);
+  const chatAction = act => chatWindows().map(w => host.chats(w.id)?.action(act)).find(onScreen) || null;
+  // the desks' placement containers come from the host (WizDesktop.host.placements), keyed by desk; never Classic markup
+  const placements = () => host?.placements?.() || [];
+  const placementOf = (desk, not = null) => placements().find(p => p.desk === desk && p.node !== not)?.node || null;
+  const deskOfNode = n => placements().find(p => p.node === n)?.desk ?? null;
+  const panes = globalThis.WizCore.panes;
+  const MODE_KEYS = { KeyU: 'centre', KeyJ: 'pair', KeyF: 'full', KeyT: 'tiled' };
+  const MODE_LABELS = { centre: 'Centred', pair: 'Side by side', full: 'Full screen', tiled: 'Back to tiled' };
+  const appWindows = desk => (host?.windows() || []).filter(w => w.desk === desk && w.tiled);
+  const panelWindow = () => appWindows(pane?.desk).find(w => w.appId === pane?.id) || appWindows(pane?.desk)[0] || null;
+  const paneWins = () => appWindows(pane?.desk).length;
+  let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
+  let paneGeometry = null, secondEl = null;
+  const paneVars = new Set();
+  function placePanes(s) {
+    const m = panes.get(), focus = root.hasAttribute('data-aad-focus');
+    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end.
+    const edge = ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
+    const sideWidth = focus ? 0 : root.dataset.aadSide === 'open' ? s.side[0] : RAIL;
+    const dockWidth = focus ? 0 : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
+    paneGeometry = panes.geometry({ ...m, dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+      sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!secondEl,
+    });
+    root.dataset.aadPaneSide = m.side; root.dataset.aadDockEdge = edge;
+    root.dataset.aadPaneTiled = String(paneGeometry.tiled);
+    root.dataset.aadMode = m.mode;
+    const put = (k, v) => { const key = '--aad-pane-' + k; paneVars.add(key); if (root.style.getPropertyValue(key) !== v + 'px') root.style.setProperty(key, v + 'px'); };
+    for (const [id, b] of Object.entries({ side: paneGeometry.sidebar, dock: paneGeometry.dock, main: paneGeometry.content, chat: paneGeometry.panes.chats, app: paneGeometry.panes.app, app2: paneGeometry.panes.app2 || { x: 0, y: 0, width: 0, height: 0 } })) {
+      for (const [k, v] of Object.entries(b)) put(id + '-' + k, v);
+      put(id + '-right', vw() - b.x - b.width); put(id + '-bottom', (globalThis.innerHeight || 900) - b.y - b.height);
+    }
+    for (const [slot, n] of [['chats', dockEl], ['app', pane?.el], ['app2', secondEl]]) if (n) {
+      const b = paneGeometry.panes[slot];
+      n.toggleAttribute('data-aad-mode-hidden', m.mode !== 'tiled' && (!b?.width || !b?.height));
+    }
+  }
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (name, cls = 'aad-ico') => svgIcon(doc, name, cls);
   const desks = () => api.desks.list();
@@ -126,13 +167,17 @@ export default function desktop(api) {
       glideUntil = Date.now() + FLIP_MS + 10;
     });
   }
-  const shownDesks = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden])')];
-  const homeComposer = () => [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0) || null;
+  const shownDesks = () => placements().filter(p => p.shown).map(p => p.node);
+  const homeComposer = () => chatParts('composer')[0] || null;
   root.dataset.aiApps = 'desktop';
+  api.sessions.ownList?.(); // core does not mount/paint the legacy list beneath this sidebar
   const css = el('link', '', { rel: 'stylesheet', href: api.asset('desktop.css') || '' });
   const unmountCss = api.mount(css);
   // the desks' windows are laid out in pixels from the page's sizes: again once this sheet (the sidebar, the widths) applies
-  api.listen(css, 'load', () => globalThis.dispatchEvent?.(new Event('resize')));
+  // first paint after a refresh stays clear (html[data-layout-booting], layout.css) until this sheet has applied
+  const endBoot = () => doc.documentElement.removeAttribute('data-layout-booting');
+  api.listen(css, 'load', () => { endBoot(); globalThis.dispatchEvent?.(new Event('resize')); });
+  api.listen(css, 'error', endBoot);
 
 
   /* ---------- data ---------- */
@@ -142,6 +187,9 @@ export default function desktop(api) {
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
   const readSessions = () => { sessions = api.sessions.list() || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
   const titleOf = id => { const s = sessions || readSessions(); for (const k of KINDS) { const r = (s[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
+  // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.
+  const ttAgent = id => globalThis.WizLive?.agentOf?.(id) || '';
+  const ttDots = id => { const T = globalThis.WosThreadTracker; return T?.on?.() ? T.dots(id, ttAgent(id)) : ''; };
   const appName = id => (api.apps.list().find(a => a.id === id) || desks().find(d => d.id === id) || {}).name || '';
   const badgeText = id => { const n = badgeMap[id] || 0; if (!n) return ''; const t = api.apps.badgeText?.(id); return t || (n > 99 ? '99+' : String(n)); };
   const lit = id => (badgeMap[id] || 0) > 0;
@@ -157,11 +205,11 @@ export default function desktop(api) {
   // round 8 (Miguel): text only and a small chevron, no disc before the name
   const wsName = el('span', 'aad-wsn');
   wsBtn.append(wsName, icon('down', 'aad-ico aad-wsc'));
-  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); findBtn.append(icon('search'));
+  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
   // (round 18 item 4a, Miguel: the Ready count sits on Ready's own header, as on the rail; none on ◫ any more)
   const searchBox = el('label', 'aad-search'); searchBox.hidden = true;
-  const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off' });
+  const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats', 'aria-label': 'Search chats', autocomplete: 'off' });
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
   const cancelBtn = el('button', 'aad-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
   // (round 16: no ⌂ here any more; Home = a chat's ✕, Esc, ⌥`)
@@ -178,7 +226,7 @@ export default function desktop(api) {
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
-  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); rFind.append(icon('search'));
+  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); rFind.append(icon('search'));
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); rSet.append(icon('cog'));
   const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
   rail.append(rTog, rNew, rFind, rList, rSet);
@@ -199,6 +247,28 @@ export default function desktop(api) {
   const pW = el('button', 'aad-ib aad-pw', { type: 'button' });
   const pX = el('button', 'aad-ib aad-px', { type: 'button', title: 'Hide (Esc) · it keeps running' }); pX.append(icon('hide'));
   pTop.append(pIcon, pName, pTools, pW, pX);
+  const sTop = el('div', 'aad-stop'), sName = el('span', 'aad-ptn'); sTop.hidden = true;
+  sTop.append(sName);
+  api.listen(sTop, 'mousedown', e => e.preventDefault()); // like the app bar: never takes the keyboard itself
+  const modeBars = [];
+  function windowMode(mode, slot = panes.get().focus) {
+    // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
+    flip([dockEl, pane?.el, secondEl], () => panes.set({ mode, focus: slot }));
+  }
+  function modeBar(slot) {
+    const bar = el('span', 'aad-modes', { role: 'group', 'aria-label': 'Window arrangement' });
+    const nav = el('button', 'aad-ib aad-mode-chats', { type: 'button', 'aria-label': 'Chats list', title: 'Chats list' }); nav.append(icon('side'));
+    api.listen(nav, 'click', e => { e.stopPropagation(); windowMode('tiled', 'chats'); if (pane) hidePanel({ home: false }); if (root.dataset.aadSide !== 'open') toggleSide(); });
+    bar.append(nav);
+    for (const [code, mode] of Object.entries(MODE_KEYS)) {
+      const label = MODE_LABELS[mode], key = 'Alt+Shift+' + code.slice(3);
+      const b = el('button', 'aad-ib aad-mode', { type: 'button', 'data-mode': mode, 'aria-label': label, 'aria-keyshortcuts': key, title: label + ' (' + key + ')' });
+      b.append(el('span', 'aad-mode-glyph is-' + mode, { 'aria-hidden': 'true' }));
+      api.listen(b, 'click', e => { e.stopPropagation(); windowMode(mode, slot); }); bar.append(b);
+    }
+    modeBars.push({ slot, bar }); return bar;
+  }
+  cTop.insertBefore(modeBar('chats'), cX); pTop.insertBefore(modeBar('app'), pW); sTop.append(modeBar('app2'));
   top.append(cTop, pTop);
   // a slow app: its placeholder in the panel's place from the first frame
   const pLoad = el('div', 'aad-pload', { 'aria-live': 'polite' }); pLoad.hidden = true;
@@ -219,7 +289,7 @@ export default function desktop(api) {
   const vtFoot = el('div', 'aad-vtf');
   // All apps: the list's last row, kept in view under it (the grid as a sheet, ⌥T)
   // round 16 item 7: + at the column's end (in place of All apps): the picker of installed apps neither pinned nor open
-  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more', title: 'Add an app (⌥A)' });
+  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Open another app: search all installed apps, including open and pinned apps', title: 'Open another app (Left ⌥Space · ⌥A)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
   vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
   const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
@@ -238,6 +308,14 @@ export default function desktop(api) {
   const orbBtn = el('button', 'aad-orbbtn', { type: 'button', 'aria-label': 'Wizard orb (the microphone). Click to talk, hold for a command, drag up for a new chat to type in.' });
   // round 6: the orb IS the microphone, so it wears a small one (in the composer, where the mic was, and on its own spot)
   const micG = el('span', 'aad-mic', { 'aria-hidden': 'true' }); micG.append(svgIcon(doc, 'mic', 'aad-mic-i'));
+  const micMarkup = micG.innerHTML; let orbIdentityHtml = micMarkup;
+  function paintOrbIdentity(appId) {
+    const a = appId && api.apps.list().find(a => a.id === appId), S = doc.defaultView?.WizSigil;
+    const html = a && S ? (a.sgh || S.html(a.sigil || a)) : micMarkup;
+    if (html === orbIdentityHtml) return;
+    orbIdentityHtml = html; micG.innerHTML = html;
+    if (a && S) { S.orb(micG); for (const glyph of micG.children) { glyph.style.width = '40%'; glyph.style.height = '40%'; } }
+  }
   orbBox.append(cv, fb, micG, orbBtn);
 
 
@@ -291,6 +369,8 @@ export default function desktop(api) {
    * grouping IS the priority): only the order inside each group, Newest first / Oldest first, chosen in Settings ›
    * Chats & app screens and kept where stock Chats keeps its order (api.sessions.order; its Priority or By subject
    * reads as Newest here). The sidebar's own sort control shows only when 'Show sort control in sidebar' is on. */
+  const workingOrder = () => globalThis.WizChatsListModel.workingOrderOf(api.sessions.workingOrder?.());
+  const setWorkingOrder = o => { api.sessions.setWorkingOrder?.(o); readSessions(); paintList(true); paintRail(true); };
   const readyOrder = () => groupOrder(api.sessions.order?.());
   // (round 20 item 9: off = one flat Ready; round 24c: 'status' / 'project' / 'none', the old on/off switch read as status / none, a saved 'subject' as project)
   const groupBy = () => api.storage.get('groupReady') === true ? 'status' : ['project', 'subject'].includes(api.storage.get('groupBy')) ? 'project' : 'none';
@@ -304,6 +384,7 @@ export default function desktop(api) {
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
+  api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -322,7 +403,12 @@ export default function desktop(api) {
     const tabs = clampTo(sized.tabs ?? COLS.tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25));
     const sideNow = root.dataset.aadSide === 'open' ? side : RAIL, tabsNow = root.dataset.aadTabs === 'rail' ? COLS.tabsRail : tabs;
     const appHi = Math.min(SIZE_LIMITS.app[1], W - sideNow - tabsNow - 320);
-    const app = clampTo(sized.app ?? Math.round(Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
+    // an app shown with its companion pane (Video Editor's video + Feedback) needs room for both columns: wider by
+    // default until the owner sizes the panel himself (James, 6 Nov 2026)
+    // An app with its companion (Video Editor + Feedback) needs room for two columns: the panel opens at least
+    // 900px / 62% wide while the companion shows, even over a narrower width the owner chose for single apps,
+    // and returns to that chosen width when the companion closes (James, 6 Nov 2026).
+    const app = clampTo(Math.round(paneWins() > 1 ? Math.max(sized.app ?? 0, 900, W * .62) : sized.app ?? Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
     return { side: [side, SIZE_LIMITS.side[0], hi], tabs: [tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25)], app: [app, SIZE_LIMITS.app[0], appHi] };
   }
   /* round 10 (Miguel: dragging felt laggy): a drag writes only what changed, once a frame. While a grip is held
@@ -331,6 +417,7 @@ export default function desktop(api) {
   const shownVars = {}, shownAria = {};
   function applySizes() {
     const s = sizes();
+    placePanes(s);
     for (const id of Object.keys(SIZE_VARS)) {
       const px = s[id][0] + 'px';
       if (shownVars[id] !== px) { shownVars[id] = px; root.style.setProperty(SIZE_VARS[id], px); }
@@ -349,7 +436,7 @@ export default function desktop(api) {
   /* round 14 (Miguel: the fold must feel instant): a shown desk's lone window follows it by CSS and the desks out of
    * sight keep the open sidebar's geometry (desktop.css), so a fold needs no re-tile; only a desk tiling two or more
    * windows side by side does. The shell's re-tile re-laid out every desk's app (~100 layouts) right after each fold. */
-  const needsTile = () => [...doc.querySelectorAll('#stage > .wsp')].some(w => w.querySelectorAll(':scope > .win:not(.gone)').length > 1);
+  const needsTile = () => { const groups = new Map(); for (const w of host?.windows() || []) if (w.tiled) { const n = (groups.get(w.deskId) || 0) + 1; if (n > 1) return true; groups.set(w.deskId, n); } return false; };
   function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; if (needsTile()) globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
   const relayoutSoon = () => retileSoon();
   function setSize(id, w, keep) {
@@ -362,7 +449,7 @@ export default function desktop(api) {
    * page's thread: while a grip is held their frames keep a fixed width (the window clips or shows its own background
    * at the moving edge), refitted a few times a second, and once more on release. */
   const FRAME_FIT_MS = 120;
-  const shownFrames = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden]) > .win:not(.gone) iframe')];
+  const shownFrames = () => (host?.windows() || []).filter(w => w.visible && w.tiled).map(w => host.frame(w.id)).filter(Boolean);
   function fitFrames(list) {
     for (const f of list) f.style.removeProperty('width');
     const ws = list.map(f => f.getBoundingClientRect().width);
@@ -374,12 +461,12 @@ export default function desktop(api) {
     const g = el('div', 'aad-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': GRIP_NAMES[id], title: GRIP_NAMES[id] + ' · double-click: back to default', 'data-grip': id });
     grips.append(g); grip[id] = g;
     // the sidebar grows to the right, the open-apps column and the app panel to the left
-    const sign = id === 'side' ? 1 : -1;
+    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : (id === 'side' ? 1 : -1) * (root.dataset.aadPaneSide === 'end' ? -1 : 1);
     let drag = null, cancelFrame = null;
     // (the pointer's latest x, applied once a frame: a fast mouse sends several moves a frame)
     const step = t => {
       cancelFrame = null; if (!drag || drag.at === drag.done) return;
-      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign, false);
+      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign(), false);
       if (t && t - drag.fit > FRAME_FIT_MS) { drag.fit = t; fitFrames(drag.frames); }
     };
     api.listen(g, 'pointerdown', e => {
@@ -402,13 +489,13 @@ export default function desktop(api) {
     api.listen(g, 'keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); resetSize(id); return; }
       const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!dir) return;
-      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign * (e.shiftKey ? 64 : 16), true); sizing = '';
+      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign() * (e.shiftKey ? 64 : 16), true); sizing = '';
     });
   }
   api.listen(globalThis, 'resize', () => applySizes());
   scene.append(grips);
 
-  /* ---------- search (a field over the same lists, as on the phone) ---------- */
+  /* ---------- contextual Chats search (apps stay in the global launcher) ---------- */
   let q = '';
   function setSearch(on) {
     if (on && root.dataset.aadSide === 'rail') { if (narrow()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } else { folded = false; api.storage.set('folded', false); } paintSide(); }
@@ -424,7 +511,7 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { draftWant = false; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
@@ -455,40 +542,40 @@ export default function desktop(api) {
   }
   // round 12: a Home icon is a desk (desk = its number): that desk; round 13: it opens as a tab (the New tab page goes)
   // round 15: an app opens as the panel (its desk, or a new desk for it); the All apps sheet goes
-  const goApp = (id, desk = null, then = null) => {
-    unpeek(); closeAll(); focusWant = id === CHATS ? '' : id;
+  const goApp = (id, desk = null, then = null, place = null) => {
+    unpeek(); closeAll(); wantAppFocus(id === CHATS ? '' : id);
+    if (id !== CHATS && panes.get().focus !== 'app') panes.set({ focus: 'app' });
     if (id === CHATS && (desk == null || desk === mainChats()?.desk)) { goHome(); return; }
     const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     want = id; if (!d) loading(id);
-    const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); then?.(); };
+    const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id, place); then?.(); };
     // the Chats desk stays behind the panel: Home's new chat there first (never its bare list's empty pane beside the app)
-    if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); api.after(60, go); } else go();
+    if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); }
+    // Deep links deliver their page to the frame in this same call, not a timer later.
+    go();
   };
   let chatsFresh = false;
   /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
    * takes the keyboard once it is the panel (its own typing, its own plain keys); its ⌥ keys (data-wz-key) the view
    * presses for it (App keys, at the key handler). */
-  let focusWant = '', focusing = false;
-  const paneFrame = () => [...(pane?.el?.querySelectorAll?.('.win iframe') || [])].find(f => !f.closest('.win.gone')) || null;
-  function focusFrame(tries = 0) {
+  let focusWant = '', focusing = false, focusGeneration = 0, focusHosted = null;
+  function wantAppFocus(id) { focusWant = id; focusing = false; focusHosted = null; focusGeneration++; }
+  const paneFrame = () => host?.frame(panelWindow()?.id) || null;
+  function focusFrame(tries = 0, generation = focusGeneration) {
+    if (generation !== focusGeneration) return; // an old timer cannot consume a newer request
     if (!focusWant) { focusing = false; return; }
     const f = pane && pane.id === focusWant ? paneFrame() : null;
-    if (!f || !frameReady(pane.el)) { if (tries < 60) api.after(150, () => focusFrame(tries + 1)); else { focusWant = ''; focusing = false; } return; }
+    if (!f || !frameReady()) { if (tries < 60) api.after(150, () => focusFrame(tries + 1, generation)); else { focusWant = ''; focusing = false; } return; }
+    // One host lifecycle focus per request, not once per iframe-focus retry.
+    // Some documents refuse browser focus; that must never re-enter routing.
+    const id = panelWindow()?.id;
+    if (id && focusHosted !== id) { focusHosted = id; host?.focus(id, { scroll: false }); }
+    if (generation !== focusGeneration) return;
     try { f.focus?.({ preventScroll: true }); f.contentWindow?.focus?.(); } catch (_) {}
     // (the shell can still focus the window itself right after the desk switch: once more, then it is the app's)
-    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1)); return; }
+    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1, generation)); return; }
     focusWant = ''; focusing = false;
   }
-  function appCell(a) {
-    const b = el('button', 'aad-gi', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, ...(a.id === here().app ? { 'aria-current': 'page' } : {}) });
-    const ic = el('span', 'aad-gt'), n = el('b', 'aad-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
-    ic.append(appTile(a.id), n);
-    b.append(ic, el('span', 'aad-gn', { text: a.name }));
-    b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
-    api.listen(b, 'click', () => { if (q) setSearch(false); goApp(a.id); });
-    return b;
-  }
-  const grid = (label, cells) => { const g = el('div', 'aad-grid', { role: 'list', 'aria-label': label }); g.append(...cells); return g; };
 
   /* ---------- round 15: All apps (round 16: the right column's last row, ⌥T) ----------
    * A sheet over the main area: every app as a big icon with its name (the open ones, then every installed app, then
@@ -501,17 +588,20 @@ export default function desktop(api) {
   /* the picker (round 16 item 7; the shared sheet, chrome.js): installed apps neither open nor pinned, For people open,
    * For agents folded, + Get more last (the App Store as it is); ⌥T or the column's + */
   const allOpenNow = () => !!chrome.isOpen;
-  function openAll() { if (chrome.isOpen) return; unpeek(); closeMenu(); closeWs(); if (q) setSearch(false); chrome.open({ exclude: () => refreshPins(), people: 'For people' }); }
+  function openAll() { if (chrome.isOpen) return; unpeek(); closeMenu(); closeWs(); if (q) setSearch(false); chrome.open({ includeOpen: true, people: 'For people' }); }
   function closeAll() { chrome.close(); }
   api.listen(vtAll, 'click', openAll);
 
   /* ---------- round 15: the pinned apps (round 16: the right column's top) ---------- */
-  const installedIds = () => api.apps.list().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
+  // Launcher links (e.g. Video Editor) live in kinds.dev, not the quick-app list.
+  // Validate pins against the installed catalog, never just that quick projection.
+  const pinApps = () => { const K = api.apps.kinds?.() || {}; return [...api.apps.list(), ...(K.apps || []), ...(K.dev || [])]; };
+  const installedIds = () => pinApps().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
   // (until he pins or unpins, the defaults follow the installed list: it can still be empty on the first paint)
   let pinsStored = api.storage.get('pins'), pins = pinsFrom(pinsStored, installedIds());
   const refreshPins = () => { pins = pinsFrom(Array.isArray(pinsStored) ? pinsStored : null, installedIds()); return pins; };
   const setPins = list => { pinsStored = list; pins = list; api.storage.set('pins', list); paintVt(true); };
-  const pinApp = id => setPins(togglePin(pins, id));
+  const pinApp = id => setPins(togglePin(refreshPins(), id));
 
   /* the quick actions (round 10): Open; Add to Home Screen (the Desks' own sheet, apps it would offer); the App Store
    * page (its own Update / Remove, behind the Store's own confirmations); Close for an open app (it stays installed) */
@@ -569,13 +659,21 @@ export default function desktop(api) {
     if (s.note) { wrap.dataset.note = ''; b.append(icon('bell', 'aad-ico aad-bell')); }
     // (round 26: under a By project header the row drops the project, the header says it once; the full title stays its tip)
     const t0 = inProject ? titleInProject(s) : s.title;
-    b.append(el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) }));
+    const title = el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) });
+    // A Working chat's ask line goes when the thread tracker is on (its dots carry it); no background
+    // helper pill either way: the spinner already shows it (James, 7 Nov 2026).
+    const ask = s.workingAsk && !globalThis.WosThreadTracker?.on?.() ? s.workingAsk : null;
+    if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
+    b.append(title);
+    const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
+    if (dots) b.append(dots);
     // round 22 (Miguel, 4 Nov 2026: the time says more than a status tag, and makes Newest / Oldest readable): how long
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
+    if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
@@ -595,7 +693,8 @@ export default function desktop(api) {
     for (const [k, w0] of acts) {
       const it = el('button', 'aad-pop-i' + (k === 'done' ? ' is-file' : ''), { type: 'button', role: 'menuitem', 'data-act': k });
       it.append(icon(k), el('span', '', { text: k === 'pin' && s.pinned ? 'Unpin' : w0 }));
-      api.listen(it, 'click', () => { closeMenu(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintList(true); }); });
+      // the row goes on this frame; the later pass reconciles
+      api.listen(it, 'click', () => { closeMenu(); api.sessions.act(s.id, k); readSessions(); paintList(true); api.after(120, () => { readSessions(); paintList(true); }); });
       card.append(it);
     }
     scene.append(card);
@@ -609,7 +708,7 @@ export default function desktop(api) {
   }
   function closeMenu() {
     if (!menu) return;
-    menu.card.remove(); menu.wrap.classList.remove('is-held'); menu = null; offMenuBack?.(); offMenuBack = null;
+    menu.card.remove(); menu.wrap.classList.remove('is-held'); if (menu.wrap.hasAttribute('aria-expanded')) menu.wrap.setAttribute('aria-expanded', 'false'); menu = null; offMenuBack?.(); offMenuBack = null;
   }
   /** round 19 item 2 / round 22 / round 25 (Miguel, 4 Nov 2026: sort and group right in the sidebar, as two separate
    * drop-downs, since they are two different choices): kind 'sort' lists Newest / Oldest first, kind 'group' lists
@@ -617,8 +716,8 @@ export default function desktop(api) {
   function openSortMenu(btn, kind = 'sort') {
     if (menu?.wrap === btn) { closeMenu(); return; }
     closeMenu();
-    const isSort = kind === 'sort';
-    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
+    const isWorking = kind === 'working-sort', isSort = kind === 'sort' || isWorking;
+    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isWorking ? 'Sort Working' : isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
     const item = (on, w0, attrs, fn) => {
       const it = el('button', 'aad-pop-i' + (on ? ' is-on' : ''), { type: 'button', role: 'menuitemradio', 'aria-checked': String(on), ...attrs });
       it.append(on ? icon('check') : el('span', 'aad-ico', { 'aria-hidden': 'true' }), el('span', '', { text: w0 }));
@@ -626,7 +725,8 @@ export default function desktop(api) {
       return it;
     };
     card.append(el('h3', 'aad-pop-h', { text: isSort ? 'Sort' : 'Group' }));
-    if (isSort) for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
+    if (isWorking) for (const [v, w0] of globalThis.WizChatsListModel.WORKING_SORTS) card.append(item(v === workingOrder(), w0, { 'data-working-order': v }, () => setWorkingOrder(v)));
+    else if (isSort) for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
     else for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
     scene.append(card);
     const r = btn.getBoundingClientRect();
@@ -658,8 +758,8 @@ export default function desktop(api) {
       gw.append(b);
     }
     setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), el('p', 'aad-stg-l', { text: 'Group Ready' }), gw,
-      el('p', 'aad-stg-l', { text: 'Order chats within each status' }), radios,
-      el('p', 'aad-stg-n', { text: 'Ready is in priority order (Needs you, Your call, FYI, …), this order within each. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
+      el('p', 'aad-stg-l', { text: 'Order Ready chats' }), radios,
+      el('p', 'aad-stg-n', { text: 'One list follows this order across chats. By status or project keeps the group order, with this order inside each group. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
   }
   paintSetting();
   api.desk.setting?.('ai-apps-order', setNode);
@@ -669,40 +769,40 @@ export default function desktop(api) {
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
-    const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
-    // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
-    // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
-    const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
+    const s = sessions || readSessions(), h = here();
+    // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
+    const sig = JSON.stringify([q, archiveTop(root),
+      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
-      const hitsA = apps.filter(a => a.id !== CHATS && !a.agent && !a.connector && !a.dev && matches(a, q));
       const seen = new Set(), hitsC = KINDS.flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
-      if (hitsA.length) out.push(label('Apps'), grid('Apps', hitsA.map(appCell)));
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
-      if (!hitsA.length && !hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chat or app by that name.' }));
+      if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else {
-      // the sidebar is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
-      // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
-      for (const [k, word0] of SECTIONS) {
-        const rows = s[k] || [], on = !!secOpen[k];
+      // The sidebar and its search are Chats only; app search belongs to the global launcher.
+      // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
+      for (const [k, word0] of sectionsFor(root)) {
+        const rows = k === 'working' ? globalThis.WizChatsListModel.workingSort(s[k], workingOrder()) : s[k] || [], on = !!secOpen[k];
         // round 18 item 4 (Miguel: the open sidebar built on the folded rail): Snoozed only when it holds chats, as on the rail
         if (k === 'snoozed' && !rows.length) continue;
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
         hd.append(el('span', 'aad-sec-w', { text: word0 }));
-        // round 18 item 4a: Ready's count on its own header (the rail's amber disc, the Chats badge)
-        if (k === 'ready' && rows.length) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+        // Ready keeps every row; its pill uses the same canonical unread feed as the phone menu.
+        const unread = k === 'ready' ? badgeText(CHATS) : '';
+        if (unread) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: unread }));
         hd.append(icon('down', 'aad-ico aad-sec-c'));
         // folded (round 7): a minimal tally after the chevron: Working its count with a tiny spinner, Ready its count
         if (!on && k !== 'archive' && k !== 'ready' && rows.length) hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' }));
-        if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
+        if (k === 'ready') hd.setAttribute('aria-label', `${word0}${unread ? `, ${unread} unread` : ''}${on ? '' : ', folded'}`);
+        else if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on && k === 'ready' && rows.length && groupBy() === 'none') {
-          // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready in priority order by default (the order ⌥↓ walks), a tiny
-          // muted tag on Needs you / Your call rows; 'Group Ready by status' in Settings brings the sub-headers back
+          // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready (the order ⌥↓ walks), a tiny muted tag on Needs you /
+          // Your call rows; 'Group Ready by status' in Settings brings the sub-headers back. In the chosen Sort (James,
+          // 4 Nov 2026: Newest means newest first here, not Needs you on top)
           body.append(...readyFlat(rows, readyOrder()).map(r => chatRow(r, h.thread)));
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
@@ -713,7 +813,9 @@ export default function desktop(api) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
             const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
-            gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
+            gh.append(el('span', 'aad-grp-w', { text: g.word }));
+            const n = globalThis.WizChatsListModel.unreadCount(g.rows);
+            if (n) gh.append(el('span', 'aad-grp-n', { text: n > 99 ? '99+' : String(n) }));
             body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, g.state.startsWith('proj:'))));
           }
         } else if (on) {
@@ -736,6 +838,13 @@ export default function desktop(api) {
           const sort = dd('aad-orderb', 'sort', word0.replace(' first', ''), `Sort: ${word0}. Change`, 'Sort Ready');
           row.append(hd, group, sort);
           out.push(row, body);
+        } else if (k === 'working') {
+          const row = el('div', 'aad-sech');
+          const word = globalThis.WizChatsListModel.WORKING_SORTS.find(([v]) => v === workingOrder())[1];
+          const sort = el('button', 'aad-sortb aad-working-orderb', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': `Sort Working: ${word}. Change`, title: 'Sort Working' });
+          sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
+          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'working-sort'); });
+          row.append(hd, sort); out.push(row, body);
         } else out.push(hd, body);
       }
     }
@@ -774,20 +883,21 @@ export default function desktop(api) {
     openChat(nx.id, key);
   }
   function openChat(id, key) {
+    if (panes.get().focus !== 'chats') panes.set({ focus: 'chats' });
     if (q) setSearch(false);
     railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
     paintRail(true);
   }
-  function railRow(k, n, word0, state = '', act = null) {
+  function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
     const key = state || k, sub = !!state, on = !!act && act.key === key;
-    const label = `${word0}, ${n}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
+    const label = `${word0}${n ? `, ${text}${k === 'ready' ? ' unread' : ''}` : ''}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
     const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero') + (on ? ' is-on' : ''), { type: 'button', role: 'listitem', 'data-k': key, 'aria-label': label, ...(on ? { 'aria-current': 'true' } : {}) });
     // round 23c (Miguel, 4 Nov 2026: a tally of dots looked weird past four): every row is Working's pattern, ONE mark
     // and its number: a spinner while chats work, a solid dot once ready (amber in Ready, the ink in a status), a ring
     // when snoozed; nothing waiting = the faint empty ring alone
     const kind = key === 'working' ? 'spin' : key === 'snoozed' ? 'ring' : 'dot';
     const wk = el('span', 'aad-rk-n aad-rk-wk', { 'data-n': String(n), 'aria-hidden': 'true' });
-    if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text: n > 99 ? '99+' : String(n) }));
+    if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text }));
     else wk.append(el('i', 'aad-d is-none'));
     b.append(wk, el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
     if (on && act.n > 1) b.append(el('span', 'aad-rk-p', { 'aria-hidden': 'true', text: `${act.i + 1}/${act.n}` }));
@@ -804,7 +914,8 @@ export default function desktop(api) {
     // status alone (plain chats as 'Other'), no Ready total over them
     const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
-    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, gm, groups.map(g => g.state + g.rows.length), act]);
+    const unread = badgeMap[CHATS] || 0, text = badgeText(CHATS);
+    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, unread, text, gm, groups.map(g => [g.state, g.rows.length, globalThis.WizChatsListModel.unreadCount(g.rows)]), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     // Snoozed (when there are any), Ready (only when something is ready), then Ready's statuses
@@ -812,15 +923,15 @@ export default function desktop(api) {
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
-    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
+    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', globalThis.WizChatsListModel.unreadCount(g.rows), g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
-    else if (ready.length) out.push(railRow('ready', ready.length, 'Ready', '', act));
+    else if (ready.length || unread) out.push(railRow('ready', unread, 'Ready', '', act, text));
     rList.replaceChildren(...out);
     if (fly) paintFly();
   }
   /* the hover flyout (round 19 item 1c): a small card beside the rail listing one item's chats */
   const FLY_MS = 300, FLY_OUT_MS = 220;
-  let fly = null, flyOn = null, flyOff = null;
+  let fly = null, flyOn = null, flyOff = null, flyBack = null;
   function flyWant(b, key, word0) {
     flyOff?.(); flyOff = null;
     if (fly) { if (fly.key !== key) showFly(b, key, word0); return; }
@@ -833,6 +944,7 @@ export default function desktop(api) {
       api.listen(card, 'pointerenter', () => { flyOff?.(); flyOff = null; });
       api.listen(card, 'pointerleave', flyLeave);
       scene.append(card);
+      flyBack = api.back.push(closeFly);
     }
     fly = { card, key, word: word0, at: b };
     paintFly();
@@ -854,7 +966,7 @@ export default function desktop(api) {
     card.style.left = Math.round(x) + 'px';
     card.style.top = Math.round(Math.max(8, Math.min((r?.top ?? 60) - 4, H - h - 8))) + 'px';
   }
-  function closeFly() { flyOn?.(); flyOn = null; flyOff?.(); flyOff = null; if (!fly) return; fly.card.remove(); fly = null; }
+  function closeFly() { flyBack?.(); flyBack = null; flyOn?.(); flyOn = null; flyOff?.(); flyOff = null; if (!fly) return; fly.card.remove(); fly = null; }
   let fuelSig = '';
   // (4 Nov 2026) the gauge stays without the network Home: read the AI usage feed directly and keep it polling while the foot shows
   const ownFuel = () => fuelOf(api.aiUsage?.state?.(), api.aiUsage?.provider?.());
@@ -936,7 +1048,16 @@ export default function desktop(api) {
     const p = press; press = null; if (!p) return; p.cancel?.(); p.target.classList.remove('is-pressed'); if (p.target === orbBtn) eng?.press?.(false);
     if (!run || p.moved) return;
     if (p.held) p.started.then(r => { if (r === 'voice') api.voice.command(); });
-    else api.voice.talk();
+    else talkFromOrb();
+  }
+  // The orb is visually docked in the Chats composer, but lives outside its window.
+  // A companion pane can own keyboard focus: reply to the composer, not that pane.
+  function talkFromOrb() {
+    if ((api.voice.state()?.state || 'idle') !== 'idle') return api.voice.talk();
+    const wid = orbComposer()?.closest('[data-chats]')?.dataset.chats;
+    const w = wid && host?.windows().find(w => w.id === wid && w.kind === 'chats');
+    if (w?.thread && w.thread !== '__new__') return api.voice.reply(w.id, w.thread);
+    return api.voice.talk();
   }
   api.listen(orbBtn, 'pointerdown', e => { if (!e.button) down(e, orbBtn, { drag: true }); });
   api.listen(orbBtn, 'pointermove', move);
@@ -946,14 +1067,17 @@ export default function desktop(api) {
    * orb talks on Enter; on Space only when Tab put it there (:focus-visible). Wizard's voice key stays ⌥Space. */
   api.listen(orbBtn, 'mousedown', e => e.preventDefault());
   const tabbed = n => { try { return n.matches(':focus-visible'); } catch (_) { return false; } };
-  api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || (e.key === ' ' && tabbed(orbBtn))) { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
+  api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || (e.key === ' ' && tabbed(orbBtn))) { e.preventDefault(); if (!e.repeat) talkFromOrb(); } });
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
   /* the composer (round 6, Miguel: the orb replaces the microphone): the orb sits INSIDE it, in the slot where the mic
    * was (desktop.css: the grid's 'orb' column, right, before the round Send that shows with words); off a chat, back to
    * its own spot at the bottom centre of the main area (or the end of an app's bottom row: skin-host via chrome) */
-  function orbSlot() {
+  function orbComposer() {
     if (root.dataset.aiFront === 'list') return null;   // (round 13: Home, a chat and an app tab all float the composer)
-    const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0);
+    return homeComposer();
+  }
+  function orbSlot() {
+    const c = orbComposer();
     const row = c?.querySelector('.ch-row2');
     return row ? gridSlot(row, 3) : null;
   }
@@ -975,10 +1099,10 @@ export default function desktop(api) {
   const ro = globalThis.ResizeObserver ? new ResizeObserver(() => { if (roAsked || root.dataset.aadResizing) return; roAsked = true; api.frame(() => { roAsked = false; placeOrb(); placeHome(); }); }) : null;
   function watchComposer() {
     if (!ro) return;
-    const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length) || null;
+    const c = homeComposer();
     if (c === roSeen) return;
     ro.disconnect(); roSeen = c;
-    if (c) { ro.observe(c); const w = c.closest('.win'); if (w) ro.observe(w); const ch = c.querySelector('.ch-mlabel'); if (ch) ro.observe(ch); }
+    if (c) { ro.observe(c); const slot = c.closest('[data-chats]')?.parentElement; if (slot) ro.observe(slot); const ch = c.querySelector('.ch-mlabel'); if (ch) ro.observe(ch); }
   }
   api.listen(globalThis, 'resize', syncOrb);
   api.listen(orbBox, 'transitionend', syncOrb);
@@ -989,21 +1113,19 @@ export default function desktop(api) {
    * Built on the desks as they are (round 7's thirds): the Chats desk and the app's desk are both shown (desktop.css,
    * data-aad-role on their desks), the chat between the sidebar and the panel, the app docked left of the open-apps
    * column; hiding the panel leaves its app running on its desk. */
-  const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
+  const wsps = () => placements().map(p => p.node);
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
-  /** the main Chats desk's element (its desk number is the shell's data-ws; an agent's Chats desk also holds .dchats),
-   * else the first desk holding Chats */
-  const chatsEl = () => { const m = mainChats(), all = wsps().filter(w => w.querySelector('.dchats')); return (m && all.find(w => Number(w.dataset.ws) === m.desk)) || all[0] || null; };
-  /** the real thread the main Chats desk holds (the shell mirrors it on .dchats[data-thread]); null for a new chat or its list */
-  const behindThread = () => { const t = chatsEl()?.querySelector('.dchats')?.dataset?.thread || ''; return t && t !== '__new__' ? t : null; };
-  let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
+  /** The remaining renderer adapter maps the host's Chats desk to its placement container. */
+  const chatsEl = () => { const w = mainChatWindow(); return w ? placementOf(w.desk) : null; };
+  /** Retained thread identity comes from the host, not mirrored renderer attributes. */
+  const behindThread = () => { const t = mainChatWindow()?.thread || ''; return t && t !== '__new__' ? t : null; };
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
    * other open desks (Home's own Chats desk aside), badged first, then desk order */
   function vtTabs() {
     refreshPins();
     // (round 16 item 7: parts.js appLayers, the phone's Home too; badged first until he orders them by hand: then his
     // order, i.e. the desks' order; the badge stays on the row)
-    const L = appLayers(desks(), pins, { main: mainChats()?.desk ?? null, lit, manual, names: Object.fromEntries(pins.map(id => [id, appName(id) || id])), chats: CHATS });
+    const L = appLayers(desks(), pins, { main: mainChats()?.desk ?? null, lit, manual, names: Object.fromEntries(pins.map(id => [id, pinApps().find(a => a.id === id)?.name || appName(id) || id])), chats: CHATS });
     return { pinned: L.pinned, others: L.open };
   }
   let manual = api.storage.get('vtManual') === true;
@@ -1072,6 +1194,7 @@ export default function desktop(api) {
   vtList.append?.(dropLine);
   function dragStart() {
     const g = drag; if (!g || g.on) return; g.on = true; g.hold?.(); g.hold = null;
+    g.offBack = api.back.push(() => dragEnd(false));
     try { vtList.setPointerCapture?.(g.pid); } catch (_) {}
     const rows = [...vtList.querySelectorAll('.aad-vtab')], i = rows.indexOf(g.b);
     g.rows = rows; g.oi = i; g.rects = rows.map(r => r.getBoundingClientRect());
@@ -1117,6 +1240,7 @@ export default function desktop(api) {
   }
   function dragEnd(commit) {
     const g = drag; drag = null; if (!g) return false;
+    g.offBack?.();
     g.hold?.();
     if (!g.on) return false;
     for (const r of g.rows) r.style.translate = ''; if (g.sep) g.sep.style.translate = '';
@@ -1162,7 +1286,10 @@ export default function desktop(api) {
   api.listen(vtTog, 'click', toggleTabs);
   /** a tab: its app as the panel; the one in front again hides the panel (the desk stays open) */
   function pickVt(d) {
-    if (frontDesk() === d.desk) { if (pane) hidePanel(); else goHome(); return; }
+    // The chat docked beside the panel has the keyboard (a reply was just sent there): the panel's tab brings its app
+    // forward, never hides it out from under the pointer (James, 6 Nov 2026: "Messenger became unclickable").
+    const chatHasIt = !!pane && docked && Number(api.route().desk) !== d.desk;
+    if (frontDesk() === d.desk && !chatHasIt) { if (pane) hidePanel(); else goHome(); return; }
     if (d.id === CHATS) { closeAll(); api.nav.goDesk(d.desk); return; }
     goApp(d.id, d.desk);
   }
@@ -1172,38 +1299,55 @@ export default function desktop(api) {
     api.after(120, () => { paintVt(true); paintTop(); });
   }
 
-  /* the app's title-bar tools in the panel's header (round 7's), following the app's changes */
-  let toolsMo = null, toolsSrc = null;
-  const srcTools = () => pane?.el?.querySelector(':scope > .win:not(.gone) > .wbar > .wtools') || null;
+  /* App surfaces are host-owned; late tools and companion windows use its
+   * coalesced lifecycle subscription, never Classic markup mutations. */
   function paintTools() {
-    const src = srcTools();
-    if (src !== toolsSrc) {
-      toolsMo?.disconnect(); toolsMo = null; toolsSrc = src;
-      if (src && globalThis.MutationObserver) { toolsMo = new MutationObserver(() => api.frame(paintTools)); toolsMo.observe(src, { childList: true, subtree: true, attributes: true }); }
-    }
-    pTools.replaceChildren(...(src ? [...src.children].map(c => { const n = c.cloneNode(true); if (c.tagName === 'SELECT') n.value = c.value; return n; }) : []));
-    pTools.hidden = !pTools.children.length;
+    pTools.hidden = !host?.renderTools(panelWindow()?.id, pTools);
   }
-  const srcTool = n => { const id = n?.dataset?.tool; return id && /^[a-z0-9-]{1,32}$/.test(id) ? srcTools()?.querySelector(`[data-tool="${id}"]`) || null : null; };
-  api.listen(pTools, 'click', e => { const n = e.target?.closest?.('button[data-tool]'); if (n && !n.disabled) srcTool(n)?.click(); });
-  api.listen(pTools, 'change', e => { const n = e.target?.closest?.('select[data-tool]'), o = srcTool(n); if (!o) return; o.value = n.value; o.dispatchEvent(new Event('change', { bubbles: true })); });
+  let winsDesk = null, winsN = 0;
+  // An app showing its companion (Video Editor's video + Feedback) takes the full width, as if Wider were
+  // pressed, and goes back to the side when the companion closes. Pressing Wider/Back yourself wins (James, 6 Nov 2026).
+  let wideAuto = false;
+  function autoWide(n) {
+    if (n > 1 && !wide) { wideAuto = true; setWide(true); }
+    else if (n <= 1 && wideAuto) { wideAuto = false; setWide(false); }
+  }
+  // Side by side only when the panel really has room for two columns. A narrower panel stacks the app over its
+  // companion (video on top, Feedback below), decided by the panel's measured width before paint
+  // (James, 7 Nov 2026: never a side-by-side split in a narrow window).
+  const STACK_BELOW = 960;
+  let stackEl = null;
+  const stackRo = globalThis.ResizeObserver ? new ResizeObserver(es => { for (const e of es) e.target.toggleAttribute('data-aad-stack', e.contentRect.width < STACK_BELOW); }) : null;
+  function watchStack() {
+    const el = pane?.el || null; if (el === stackEl) return;
+    if (stackEl) { stackRo?.unobserve(stackEl); stackEl.removeAttribute('data-aad-stack'); }
+    stackEl = el; if (el) { if (stackRo) stackRo.observe(el); else el.toggleAttribute('data-aad-stack', el.getBoundingClientRect().width < STACK_BELOW); }
+  }
+  function watchPaneWins() {
+    const desk = pane?.desk ?? null, n = paneWins();
+    watchStack();
+    if (desk !== winsDesk || n !== winsN) { winsDesk = desk; winsN = n; autoWide(n); applySizes(); retileSoon(); }
+  }
   const NOTE = '__note__', DRAFT = '__draft__';
-  const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
-  const noteTitle = () => noteThread(doc, '.win .dchats .pane-main')?.querySelector('.ch-head .ti b')?.textContent || 'Notification';
+  const notificationSurface = () => chatWindows().map(w => host.chats(w.id)).find(s => onScreen(s?.notification));
+  const noteOn = () => !!notificationSurface();
+  const noteTitle = () => notificationSurface()?.notificationTitle || 'Notification';
   let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
   function paintSplit(chatOn) {
     const h = here();
     if (dropped && (want === h.app || h.app !== dropped.id || Number(h.r.desk) !== dropped.desk)) dropped = null;
     if (h.app && !dropped && (want === h.app || !pane || pane.id !== h.app || Number(pane.desk) !== h.r.desk)) {
       // the app now in front becomes the panel (its desk is the one not hidden)
-      const el0 = wsps().find(w => !w.hidden && !w.querySelector('.dchats'));
+      const app = (host?.windows() || []).find(w => w.visible && w.desk === h.r.desk && w.kind !== 'chats');
+      const el0 = app && placementOf(app.desk);
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
       want = null;
     }
-    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; api.after(60, () => focusFrame()); }
+    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; const generation = focusGeneration; api.after(60, () => focusFrame(0, generation)); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!pane && wide) setWide(false);
-    const chat = pane || chatOn ? chatsEl() : null; dockEl = chat;
+    const model = panes.get(), floating = model.mode !== 'tiled';
+    const chat = pane || chatOn || floating ? chatsEl() : null; dockEl = chat;
     // (the app's desk or the Chats desk not on the stage yet, the shell draws a desk on its first visit: look again
     // shortly, a few times; no route event follows that drawing)
     if (((h.app && !pane) || ((pane || chatOn) && !chat)) && splitTries < 20) { splitTries++; api.after(150, () => paintTop()); } else splitTries = 0;
@@ -1213,50 +1357,70 @@ export default function desktop(api) {
       fixingBehind = true; const d0 = pane.desk, id0 = pane.id;
       api.sessions.newChat(); api.after(80, () => { want = id0; api.nav.goDesk(d0); api.after(600, () => { fixingBehind = false; }); });
     }
-    for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
+    const second = model.slots.includes('app2') && model.app2 && desks().find(d => d.id === model.app2 && d.id !== pane?.id && d.id !== CHATS);
+    secondEl = second ? placementOf(second.desk, chat) : null;
+    for (const w of wsps()) {
+      const r = w === pane?.el ? 'app' : w === chat ? 'chat' : w === secondEl ? 'app2' : '';
+      if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; }
+      if (r && !model.slots.includes(r === 'chat' ? 'chats' : r)) w.dataset.aadOmitted = ''; else delete w.dataset.aadOmitted;
+    }
     const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
-    docked = !!(chatOn && chat);
+    docked = !!(model.slots.includes('chats') && (chatOn || floating) && chat);
     const setState = () => {
-      if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
+      if (model.slots.includes('app') && pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
       if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
     };
     if (!docked && !wasDocked && !!(pane && chat) !== !!root.dataset.aadSplit) flip([homeComposer(), orbBox], setState); else setState();
     if (docked && !wasDocked) anim('dock');
-    applySizes();
+    applySizes(); watchPaneWins();
     if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
-    pTop.hidden = !pane; cX.hidden = !docked;
+    // One physical pane owns both the layout header and the app window. Moving
+    // the header (not cloning it) preserves its tools/listeners and iframe state.
+    const headerHost = pane?.el || top;
+    if (pTop.parentNode !== headerHost) headerHost.append(pTop);
+    // Docked windows carry their header and body on ONE animated ancestor,
+    // including the trip back to tiled. Home's undocked title stays in its row.
+    const chatHeaderHost = docked && chat ? chat : top;
+    if (cTop.parentNode !== chatHeaderHost) chatHeaderHost.append(cTop);
+    // The second app's header lives only on that window; parked nowhere when none is open.
+    if (secondEl) { if (sTop.parentNode !== secondEl) secondEl.append(sTop); } else sTop.remove();
+    sTop.hidden = !secondEl; sName.textContent = second ? appName(second.id) : '';
+    for (const { bar } of modeBars) for (const b of bar.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === model.mode));
+    pTop.hidden = !pane || !model.slots.includes('app'); cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
-    if (loadId && pane?.id === loadId) waitLoaded(pane.el); else if (loadId && !want) doneLoading();
+    if (loadId && pane?.id === loadId) waitLoaded(); else if (loadId && !want) doneLoading();
   }
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
-  let closing = null;
+  let closing = null, exitMotion = null;
   function hidePanel({ home: goBack = true } = {}) {
     if (!pane || closing) return !!pane;
     const was = pane, el0 = was.el, w0 = el0.getBoundingClientRect?.().width || 480;
     const finish = () => {
-      closing = null; if (pane !== was) return;
+      closing = null; if (pane !== was) { out?.cancel?.(); exitMotion = null; return; }
       pane = null; setWide(false); doneLoading(); anim('close');
       // (Home / Focus: the route still names the app until the new chat lands; don't take it back as the panel meanwhile)
       if (!goBack) dropped = { id: was.id, desk: Number(was.desk) };
       const m = mainChats();
       if (goBack && here().app === was.id) { if (m) api.nav.goDesk(m.desk); else api.sessions.newChat(); }
       paintSplit(!!chatThread); paintTop();
-      api.frame(() => { out?.cancel?.(); });
+      api.frame(() => { out?.cancel?.(); if (exitMotion === out) exitMotion = null; });
     };
     const out = goBack && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    exitMotion = out;
     if (out) closing = api.after(180, finish); else finish();
     return true;
   }
   // the chat column goes: Home (a new chat); the app panel (if any) stays
   function closeChat() {
     if (!docked) return false;
+    if (panes.get().mode !== 'tiled') windowMode('tiled', 'chats');
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
   }
   function setWide(on) {
     const w = !!on && !!pane; if (w === wide) { paintWide(); return; } wide = w;
-    flip([pane?.el, pTop], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
+    flip([pane?.el], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
     paintWide(); retileSoon();
   }
   function paintWide() {
@@ -1267,9 +1431,9 @@ export default function desktop(api) {
   api.listen(pX, 'click', () => hidePanel());
   // a click anywhere on the app panel's bar hands the keyboard back to the app (its buttons never keep it)
   api.listen(pTop, 'mousedown', e => e.preventDefault());
-  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { focusWant = pane.id; focusing = true; focusFrame(); } });
+  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { wantAppFocus(pane.id); focusing = true; focusFrame(); } });
   api.listen(cX, 'click', closeChat);
-  api.listen(pW, 'click', () => setWide(!wide));
+  api.listen(pW, 'click', () => { wideAuto = false; setWide(!wide); });
   // a slow app: its placeholder in the panel's place at once (faded in after a beat), gone once its frame has loaded
   let loadId = '', loadOff = null, loadWait = null;
   function loading(id) {
@@ -1279,20 +1443,17 @@ export default function desktop(api) {
     loadOff?.(); loadOff = api.after(15000, doneLoading);
   }
   function doneLoading() { loadOff?.(); loadOff = null; loadWait?.(); loadWait = null; loadId = ''; pLoad.hidden = true; delete root.dataset.aadLoading; }
-  function frameReady(w) {
-    const f = w?.querySelector?.('iframe'); if (!f) return !!w;
-    try { const d = f.contentDocument; return !d || (d.readyState === 'complete' && d.URL !== 'about:blank'); } catch (_) { return true; }
-  }
-  function waitLoaded(w) {
-    if (frameReady(w)) return doneLoading();
+  function frameReady() { return !!panelWindow() && host.frameReady(panelWindow().id); }
+  function waitLoaded() {
+    if (frameReady()) return doneLoading();
     if (loadWait) return;
-    const f = w.querySelector('iframe'); loadWait = api.listen(f, 'load', () => { if (frameReady(w)) doneLoading(); });
+    const f = paneFrame(); if (f) loadWait = api.listen(f, 'load', () => { if (frameReady()) doneLoading(); });
   }
   let animOff = null, animOn = [];
   function anim(kind) {
     animOff?.(); for (const n of animOn) delete n.dataset.aadAnim;
     const chatDesk = chatsEl();
-    animOn = (kind === 'app' ? [pane?.el, pTop] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
+    animOn = (kind === 'app' ? [pane?.el] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
     for (const n of animOn) n.dataset.aadAnim = kind;
     animOff = api.after(320, () => { for (const n of animOn) delete n.dataset.aadAnim; animOn = []; animOff = null; });
   }
@@ -1357,16 +1518,38 @@ export default function desktop(api) {
 
   /* ---------- keys (round 21 below): Esc steps back one layer: the picker, then the wide panel, then the panel hides,
    * then the chat column ---------- */
+  // Escape navigation is a surface callback, not an early layout key. Recording
+  // and the shared recency stack must finish first. A root press is consumed
+  // without sending the hidden Classic Chats window through threadBack(__new__).
+  let lastSurface = 'chat';
   const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
-  api.keys.on({ down: e => {
-    if (e.key === 'Escape' && drag?.on) { dragEnd(false); return true; }   // (round 16: Esc cancels a drag)
-    if (e.key === 'Escape' && fly) { closeFly(); return true; }   // (round 19: Esc closes the rail's flyout)
-    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || menu || wsPop || q || tidyPop) return false;
-    if (allOpenNow()) { closeAll(); return true; }
-    if (pane) { if (wide) setWide(false); else hidePanel(); return true; }
-    if (docked && !typing()) { closeChat(); return true; }
-    return false;
-  } });
+  const rememberSurface = e => {
+    let slot;
+    if (secondEl?.contains(e.target)) slot = 'app2';
+    else if (pane?.el?.contains(e.target) || pTop.contains(e.target)) slot = 'app';
+    else if (chatsEl()?.contains(e.target) || cTop.contains(e.target)) slot = 'chats';
+    if (slot) { lastSurface = slot === 'chats' ? 'chat' : 'app'; if (panes.get().focus !== slot) panes.set({ focus: slot }); }
+    else if (side.contains(e.target)) lastSurface = 'chat';
+  };
+  api.listen(doc, 'pointerdown', rememberSurface, true);
+  api.listen(doc, 'focusin', rememberSurface, true);
+  api.back.surface?.(() => {
+    // Shared registry has already offered recording and transient overlays.
+    if (panes.get().mode === 'full') {
+      // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
+      const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
+      if (frame && globalThis.WizAppServices?.back?.(frame) === 'handled') return true;
+      windowMode('tiled'); return true;
+    }
+    const a = doc.activeElement;
+    // A mixed Chats/app desk can have a focused iframe without an AI-apps pane.
+    // Do not consume its Back: the shell's focused-window fallback owns that app.
+    if (a?.tagName === 'IFRAME' && !pane?.el?.contains(a)) return false;
+    const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
+    if (appFocused) api.apps.back?.(pane.id);
+    else if (docked) closeChat();
+    return true; // bare AI apps desktop: no DOM change, no legacy navigation
+  });
   /* round 18 item 3b (Miguel): ⌥↓ / ⌥↑ walk EXACTLY Ready as this sidebar draws it (grouped by status, the chosen order
    * inside; notifications in it), top to bottom, opening each one; from elsewhere the top; past the end back to the top
    * (stock stepReady's wrap and toast). Folded or not, it is the same list. */
@@ -1397,16 +1580,21 @@ export default function desktop(api) {
   api.listen(hBack, 'click', () => focusOut());
   /** the rails come back as they are now (a side opened by hand, a chat or an app opened): the stash stays for ⌥. */
   function focusLeave() { if (!focusOn()) return; delete root.dataset.aadFocus; }
-  /** Archive / Resolve on the open item, by key or button: then the next Ready one (the one ⌥↓ would open) */
-  function nextAfterAct() {
-    // a notification stack moves to its own next one in place (core/chats.js notifAct); the list moves on after the last
-    if ((doc.querySelectorAll('.win .dchats .pane-main .ch-nstack .ch-ncard').length || 0) > 0) return;
-    const ids = readyIds(), cur = curChat(); if (!cur || ids.length < 2 || !ids.includes(cur)) return;
-    const nx = readyStep(ids, cur, 1); if (!nx || nx.id === cur) return;
-    api.after(450, () => { if (!readyIds().includes(nx.id)) return; stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id); });
-  }
-  api.listen(doc, 'click', e => { const b = e.target?.closest?.('.win .dchats .pane-main [data-chact="done"], .win .dchats .pane-main [data-chact="resolve"]'); if (b && docked) nextAfterAct(); }, true);
   let stepAt = null;
+  api.sessions.archiveOrder?.(sid => {
+    if (root.dataset.aadSide === 'rail') {
+      const key = railNow()?.key;
+      return key ? railRows(sessions || readSessions(), key, readyOrder(), groupBy()).map(r => r.id) : [];
+    }
+    const rows = [...scroll.querySelectorAll('.aad-rw[data-sid]')], row = rows.find(r => r.dataset.sid === sid);
+    if (!row) return [];
+    const group = r => {
+      for (let n = r.previousElementSibling; n; n = n.previousElementSibling) if (n.classList.contains('aad-grp')) return n;
+      return r.parentElement;
+    };
+    const section = group(row);
+    return rows.filter(r => r.parentElement === row.parentElement && group(r) === section).map(r => r.dataset.sid);
+  });
   const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
@@ -1430,20 +1618,30 @@ export default function desktop(api) {
    * only its own key (⌥A, ⌥S) and Esc. Every other ⌥ key is the view's and does nothing, so nothing acts unseen on a
    * hidden desk (no ⌥G letters, no ⌥/ pinned guide: holding ⌥ is the guide). */
   const KEY_LIKE = /^(Key[A-Z]|Digit\d|Arrow|Bracket|Backslash|Period|Comma|Minus|Equal|Backquote|Space|Slash|Enter|Semicolon|Quote)/;
-  const closeSettings = () => doc.querySelector('#dsettings .st-close')?.click?.();
+  const closeSettings = () => host?.settings.close();
   // (inside the Chats desk, which can carry [hidden] while the view shows it: on screen = it has a box)
   const onScreen = n => !!n && typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
   const snoozeOpen = () => !!doc.querySelector?.('.boom-sheet');
   // (the one on screen: a second Chats window, e.g. the chat ⌥X starts, can hold another hidden one)
-  const routeBtn = () => [...doc.querySelectorAll('.win .dchats .pane-main [data-notify-menu]')].find(onScreen) || null;
-  const chatBtn = act => [...doc.querySelectorAll(`.win .dchats .pane-main [data-chact="${act}"]`)].find(onScreen) || null;
+  const routeBtn = () => chatParts('routeButton')[0] || null;
+  const chatBtn = act => chatAction(act);
+  let leftOption = false;
+  api.listen(globalThis, 'blur', () => { leftOption = false; });
   api.keys.on({ down: e => {
+    if (e.code === 'AltLeft') leftOption = true;
+    else if (!e.altKey) leftOption = false;
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
     const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
+    // Physical LEFT Option + Space is the existing app picker, never voice.
+    // Before modal/app key dispatch: repeats are consumed without reopening it.
+    if (code === 'Space' && !sh && leftOption) return once(openAll);
+    // Native word jumps are never a view action, including with a modal or snooze sheet in front.
+    if (!sh && (code === 'ArrowLeft' || code === 'ArrowRight')) return false;
     if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
     if (settingsOpen()) return code === 'KeyS' && !sh ? once(closeSettings) : KEY_LIKE.test(code);
-    // the snooze sheet: ⌥← again = Someday (so ⌥← ⌥← snoozes with no time, Miguel 4 Nov 2026); ⌥Z closes it
-    if (snoozeOpen()) return code === 'ArrowLeft' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-someday]')?.click?.()) : code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
+    // The snooze sheet keeps ⌥Z to close; Someday is an explicit button, never an arrow shortcut.
+    if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
+    if (sh && MODE_KEYS[code]) return once(() => windowMode(MODE_KEYS[code]));
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
@@ -1477,15 +1675,15 @@ export default function desktop(api) {
     if ((code === 'Minus' || code === 'Equal') && !sh) { if (pane && !wide) setSize('app', sizes().app[0] + (code === 'Equal' ? 64 : -64), true); return true; }
     if (code === 'KeyW' && !sh && pane) { if (!e.repeat) { const d = desks().find(x => x.desk === pane.desk); if (d && !pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
     if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
-    if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
-    // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
-    // (⌥→ archive and ⌥← snooze are back as the natural pair, Miguel 4 Nov 2026; ⌥E / ⌥Z stay as letters)
-    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve', ArrowLeft: 'snooze', ArrowRight: 'done' }[code];
+    if (code === 'KeyF' && !sh && pane) { if (!e.repeat) { wideAuto = false; setWide(!wide); } return true; }
+    // The open item's own buttons change its state, never the selected thread.
+    // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
+    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
     if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
     if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
     return KEY_LIKE.test(code);
-  } });
+  }, up: e => { if (e.code === 'AltLeft' || !e.altKey) leftOption = false; } });
   const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
   /* Now playing (4 Nov 2026, minimal): a playing app's row wears data-media="playing" | "paused" and its icon small
    * bars (.aad-np, drawn by the miguel/now-playing tweak's css). Hovering the bars turns them into pause; a click
@@ -1523,14 +1721,14 @@ export default function desktop(api) {
    * for a key with nothing to point at (⌥V, ⌥C); count badges step back while ⌥ is held. */
   const focusOn = () => root.dataset.aadFocus != null;
   const frontNote = () => chatThread === NOTE || here().note;
-  const settingsOpen = () => { const n = doc.getElementById?.('dsettings'); return !!n && !n.hidden && n.parentNode === doc.body; };   // (the centred Settings panel)
+  const settingsOpen = () => host?.settings.isOpen() || false;   // the centred shared Settings panel
   api.keys.guide(() => {
     const out = [], put = (n, key, at = 'tl') => { if (shown(n)) out.push({ el: n, key, at }); }, putIn = (n, key, at = 'tl') => { if (onScreen(n)) out.push({ el: n, key, at }); };
     for (const r of side.querySelectorAll('.aad-rw[data-aad-kh]')) delete r.dataset.aadKh; khMarks.clear();
     // a modal in front: its own key on its ✕ (what is behind sits under its scrim)
     if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'A'); return out; }
-    if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
-    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); putIn(doc.querySelector('.boom-sheet [data-boom-someday]'), '←'); return out; }
+    if (settingsOpen()) { put(host?.settings.closePart(), 'S'); return out; }
+    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); return out; }
     put(orbBtn, 'Space'); putIn(homeComposer(), 'D');
     // ⌥H in the empty middle of Home too (focus or not), only while nothing covers it
     const midH = () => { if (!pane && !docked && !fly && !q && !wsPop && !menu && !tidyPop && midFree()) out.push({ el: hMid, key: 'H', at: 'mid', free: true }); };
@@ -1564,9 +1762,13 @@ export default function desktop(api) {
     const np = api.media?.list?.()[0], npRow = np && rows.find(b => b.dataset.app === np.appId);
     if (npRow) { const bars = npRow.querySelector('.aad-np'); put(np.playing && bars ? bars : tile(npRow), 'P', np.playing && bars ? 'mid' : 'bl'); }
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (docked) put(cX, 'W');
+    for (const { bar } of modeBars) for (const [code, mode] of Object.entries(MODE_KEYS)) {
+      const n = bar.querySelector('[data-mode="' + mode + '"]');
+      if (shown(n)) out.push({ el: n, key: '⇧' + code.slice(3), at: 'below', word: MODE_LABELS[mode] });
+    }
     midH();
     if (docked) {
-      for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
+      for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
     // the app in front: its own ⌥ keys (data-wz-key) on its own controls, the same keycaps as Wizard's (one anchor); a
@@ -1626,14 +1828,18 @@ export default function desktop(api) {
   function paintTop(r = api.route()) {
     if (noteOn() || r.view !== 'thread' || (r.thread && r.thread !== '__new__')) noteWant = false;
     if (r.home || r.view !== 'thread' || r.thread !== '__new__' || !onMainChats(r)) draftWant = false;
-    noteRouteIntoActions(doc, '.win .dchats .pane-main');
+    for (const w of chatWindows()) { const s = host.chats(w.id); if (onScreen(s?.notification)) s.placeNotificationRoute(); }
     const h = here(r);
+    paintOrbIdentity(h.app);
     // an app coming to the front closes the picker; a repaint with the same app in front does not (round 21: ⌥A / + with
     // an app open flashed shut on the next render)
     if (h.app && h.app !== frontApp) closeAll();
     frontApp = h.app;
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
+    // A notification in the chat column that becomes a chat (Resolve this / Have Wizard handle it, or a reply sent from
+    // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
+    if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
     // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
     // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
@@ -1662,7 +1868,9 @@ export default function desktop(api) {
       if (kind === 'app' || (kind === 'link' && d.app)) {
         const id = kind === 'app' ? d.id : d.app, path = kind === 'app' ? d.path : d.url;
         if (!id || id === CHATS) return false;
-        goApp(id, null, path ? () => api.apps.path(id, path) : null); return true;
+        // A new app must use the original URL-bearing opener. A generic launcher open
+        // may await setup, so applying path immediately afterwards loses the destination.
+        goApp(id, null, path ? () => api.apps.path(id, path) : null, go); return true;
       }
       if (kind === 'link') { unpeek(); closeAll(); return api.apps.openLink(d.url, d.title); }
       if (kind === 'draft' || kind === 'thread') {
@@ -1674,25 +1882,32 @@ export default function desktop(api) {
       return false;
     },
     // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
-    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
+    shows: desk => (!!secondEl && deskOfNode(secondEl) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && deskOfNode(dockEl) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   // Settings opens as the centred panel over the page (Claude's settings modal), never as a window beside the chat
-  root.dataset.settingsOver = '';
+  const releaseSettings = host?.settings.overlay();
   { const r = api.route(); chatsFresh = !!r.home || (r.desk === mainChats()?.desk && r.view === 'thread' && r.thread === '__new__'); }
   readSessions(); paintSide(false); paintVt(true); paintTop(); paintBadges();
+  const offHost = host?.onChange(() => { paintTop(); watchPaneWins(); });
+  const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); });
   globalThis.dispatchEvent?.(new Event('resize'));
-  if (api.route().home) soon(() => api.sessions.newChat());
+  if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
-    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
-    scene.remove(); chrome.dispose(); unmountCss(); css.remove();
-    toolsMo?.disconnect();
-    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'settingsOver', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
-    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; }
+    offPanes(); for (const v of paneVars) root.style.removeProperty(v);
+    for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode']) delete root.dataset[k];
+    closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
+    top.append(pTop); // release layout-owned chrome before restoring Classic Desks
+    top.append(cTop); sTop.remove();
+    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
+    scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
+    offHost?.();
+    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
+    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; delete w.dataset.aadModeHidden; delete w.dataset.aadStack; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
   };

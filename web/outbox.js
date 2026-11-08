@@ -10,6 +10,8 @@
   // Agent Service allows 180 seconds of STT; leave time for upload/response transit.
   const TRANSCRIBE_TIMEOUT_MS = 195000;
   const LATE_MESSAGE_MS = 6 * 60 * 60 * 1000;
+  const COUNT_CAP = /^Too many attachments including the recording\b/;
+  const countReadmits = new Set(); // re-admitted on this load; persisted before the first pump so it happens once
   // Consent belongs to this saved message, not the current screen or a bulk retry.
   const lateMessage = it => ['new', 'reply'].includes(it.kind) && it.intent !== 'command' &&
     !it.runId && !it.sentAt && !it.lateSendApproved && Number.isFinite(it.createdAt) && now() - it.createdAt > LATE_MESSAGE_MS;
@@ -25,6 +27,7 @@
     await api.transition(it.id, 'held', lateLabel(it) + ' · Send when ready.');
     return true;
   }
+  const STEER_RETRY_MS = 3000, STEER_WAIT_MS = 15 * 60e3;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
@@ -49,6 +52,16 @@
   const lostAudio = it => !!it?.audioUnreadable && !it.audioFile?.id;
   function queueRetry(it, states, ownerSend = false) {
     if (!eligible(it, states) || lostAudio(it) || (it.state === 'held' && !it.lateHeld)) return false;
+    // A model-only saved reply can show a complete chip yet Retry used to bypass
+    // the shared route owner forever. Only this explicit gesture may complete the
+    // ORIGINAL model's verifiable provider, before a request is frozen. Never use
+    // today's selected model, touch frozen bytes, or infer a routed agent's model.
+    if (it.model && !it.provider && !it.agent && !it.body && !it.steerBody) {
+      try {
+        const route = window.WosModels?.snapshot(it.sessionId, { model: it.model, provider: '' });
+        if (route?.model === it.model && route.provider && !route.agent) it.provider = route.provider;
+      } catch (_) { /* Pending/ambiguous/unavailable selection stays visibly unsent. */ }
+    }
     if (ownerSend && (it.lateHeld || lateMessage(it))) it.lateSendApproved = true;
     // Claim synchronously before the first persistence await: a double tap cannot
     // reset an in-flight attempt back to waiting and cause a second dispatch.
@@ -249,6 +262,17 @@
          [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
       it.state = 'waiting'; it.nextAt = 0;
     }
+    // James, 6 Nov 2026: "This message failed. This shouldn't have failed. Please allow it to go through." Older builds
+    // refused more than eight attachments before any request left the device (no run, no body, no dispatch). That
+    // cap is gone; a message whose only failure was it is re-admitted once, exactly as a Retry tap would (same item,
+    // same Idempotency-Key, same frozen route), and its owner's explicit send stands even if it is now old. Every
+    // other failure kind is left alone.
+    if (it.state === 'failed' && COUNT_CAP.test(it.error || '') && !it.countCapReadmitted && !it.body && !it.steerBody &&
+        !it.runId && !it.sentAt && eligible(it, ['failed']) && !lostAudio(it)) {
+      Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1),
+        useServerCopy: true, lateSendApproved: true, countCapReadmitted: true, error: '' });
+      delete it.errorStatus; countReadmits.add(it.id);
+    }
     /* Reload during a voice send (James, 22 Oct 2026: "I have to wait like five, maybe even ten seconds before it lets me
      * reload"). A tap take whose destination and model route were fixed at stage time is handed to the outbox
      * (handOff): a reload no longer waits for upload + transcription, and the new page finishes the same send under
@@ -286,6 +310,8 @@
         for (const x of JSON.parse(localStorage.getItem(LS) || '[]')) { const it = items.get(x.id); if (it && (quarantine.has(it.id) || !(await put(it)).durable)) migrated = false; }
         if (migrated) { try { localStorage.removeItem(LS); } catch (_) {} }
       } catch (_) { recovered = false; for (const id of recoveredIds) quarantine.add(id); }
+      for (const id of countReadmits) { const it = items.get(id); if (it && it.state === 'queued') await put(it); }
+      countReadmits.clear();
       // Only this version's explicit completion receipt qualifies. Old generic
       // 'handled' labels also covered pending music/app work, so keep those.
       for (const it of [...items.values()]) {
@@ -457,7 +483,6 @@
     const fileIds = [...new Set((it.files || []).filter(f => !(noFiles && f.id === it.audioFile?.id)).map(f => f.id).filter(Boolean))];
     // A run the service refused for files was never admitted: rebuild it without the recording.
     if (noFiles && it.body && /agent_files_disabled/.test(it.error || '')) it.body = '';
-    if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
     const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
     const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
@@ -492,32 +517,48 @@
         const rejected = e.status >= 400 && e.status < 500 && e.status !== 408;
         it.steerDispatch = rejected ? 'rejected' : 'started';
         await put(it); // crash before reconciliation must never replay ambiguity
-        let terminal = false;
+        let terminal = false, live = false, working = false;
         // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
         // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
         if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
           try {
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
-            terminal = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId &&
-              ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+            const same = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId;
+            terminal = same && ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+            const typed409 = e.status === 409 && e.code === 'run_not_accepting_steer';
+            // A run still queued/starting may yet become steerable: keep the message queued and re-steer until then.
+            live = same && !terminal && typed409 && ['queued', 'starting'].includes(run.status);
+            // Hermes answers 409 run_not_accepting_steer for a started run whose agent can't take steering even while it
+            // still works (claude-sonnet-5-5, 7 Nov 2026). The typed 409 proves the steer was NOT accepted, and the
+            // Agent Service holds a new turn for a session whose run is still working and launches it when that run
+            // ends: send the frozen, idempotent same-thread turn now. A 404 run_not_found for a run that still reads
+            // as working stays a failure.
+            working = same && !terminal && typed409 && ['running', 'launching', 'stopping', 'waiting_for_approval'].includes(run.status);
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
         // Stop pressed while this steer was in flight: a rejected steer never becomes a new turn.
         if (it.cancelRequested) { await finishCancel(it); return; }
-        if (terminal) {
+        if (terminal || working) {
           // Freeze from the dispatched envelope, not the current composer/route.
           // Persist the handoff BEFORE admission; a lost receipt now replays only
           // this byte-identical, idempotent new turn, never the rejected steer.
           it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
             ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
-          it.rejectedSteerRunId = it.steerTarget;
+          it.rejectedSteerRunId = it.steerTarget; delete it.steerWaitSince;
           it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
           await put(it);
+        } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
+          // Not sent yet, not lost: the next attempt re-steers (rejection proved nothing was accepted).
+          // The rejection proved the steer was not accepted: release ownership so Stop can withdraw it while it waits.
+          admitting.delete(it.id); delete it.steerDispatch;
+          it.state = 'waiting'; it.error = 'Queued · sends when the current reply can take it'; it.nextAt = now() + STEER_RETRY_MS;
+          admitting.delete(it.id); // parked with nothing in flight: a Stop now withdraws it instead of waiting on a request that is gone
+          await put(it); return;
         } else {
           it.state = rejected ? 'failed' : 'unconfirmed'; it.error = rejected ? reason(e) : unconfirmed;
           it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
-          it.nextAt = 0; await put(it); return;
+          it.nextAt = 0; admitting.delete(it.id); await put(it); return;
         }
       }
       if (receipt) return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });

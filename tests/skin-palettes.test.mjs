@@ -53,7 +53,8 @@ test('features on for everyone are plain settings where they act, not tweaks', (
   assert.doesNotMatch(s, /Built in/, 'no "built-in tweaks"');
   assert.match(s, /register\(\{ id: 'notifications-in-chats', page: 'chats'/);
   assert.match(s, /register\(\{ id: 'home-network', page: 'appearance'/);
-  assert.match(s, /const exp = s\.tweaks\.filter\(t => !t\.builtin\);/, 'Tweaks lists only contributed ones');
+  // On a desktop with standard views, the view tweaks move to the Shell view picker; built-ins stay out either way.
+  assert.match(s, /const exp = s\.tweaks\.filter\(t => !t\.builtin && !\(E\.desktopViews\?\.length && t\.layout\)\);/, 'Tweaks lists only contributed ones');
 });
 
 test('review: a new skin starts from the worn own skin\'s choices; an upgraded device keeps the retired Home map CSS for its first frame', () => {

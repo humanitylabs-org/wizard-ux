@@ -1,12 +1,13 @@
 import test from 'node:test';
+import { modelContext } from './fixtures/chats-list-model.mjs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
+const block = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a); assert.ok(a >= 0 && b > a, from + ' → ' + to); return src.slice(a, b); };
 function fixture(personal) {
-  const c = vm.createContext({ snoozeLast: () => personal, isWorking: s => s.status === 'running', deferredOf: s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)), attOf: s => s.attention, window: {}, agentName: () => 'Agent', ago: () => 'now' });
-  vm.runInContext(block('  function stiKind(', '  const stiBadge') + block('  function threadState(', '  function renderThread(') + block('  const waitsOn =', '  // Newest keeps') + '\nthis.waitsOn = waitsOn;', c);
+  const c = modelContext({ snoozeLast: () => personal, isWorking: s => s.status === 'running', deferredOf: s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)), attOf: s => s.attention, window: {}, agentName: () => 'Agent', ago: () => 'now' });
+  vm.runInContext(block('  function stiKind(', '  const stiBadge') + block('  function threadState(', '  function renderThread(') + block('  const waitsOn =', '  const readyOrdered =') + '\nthis.waitsOn = waitsOn;', c);
   return c;
 }
 for (const route of ['main', 'host-profile', 'container', 'restricted']) {

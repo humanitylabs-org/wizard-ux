@@ -2,7 +2,7 @@
  * Pinned apps fill the inner ring first, then the outer ring, in the saved pin order. Open desktops stay on swipe up.
  * Voice needs a deliberate slide and slow dwell: holding or sliding past never records.
  * The shell owns app placement, desktop previews and voice and hands them in
- * through the trusted tweak host; this module owns geometry, hit-testing, paint and the Customize sheet.
+ * through its core adapter; this module owns geometry, hit-testing, paint and the Customize sheet.
  *
  *   createOrbSwitcher(adapter)       host: { apps(), openItems(), hover(i|null), vib(ms),
  *                                     cancelGesture(), armBack(), voice: { enabled(), start(), active(), finish(),
@@ -10,7 +10,7 @@
  *   WosOrbSwitcher.open({x, y})       the radial, centred on the orb; move(x, y); release(cancelled) -> outcome
  *   WosOrbSwitcher.get()              the settings (localStorage wos.orbSwitcher.v1)
  *   WosOrbSwitcher.openSettings()     the Orb switcher sheet; back() closes the sheet, then the radial, one layer */
-export default function createOrbSwitcher(adapter) {
+window.WosCreateOrbSwitcher = function createOrbSwitcher(adapter) {
   'use strict';
   const KEY = 'wos.orbSwitcher.v1', EVT = 'wos:orb-switcher';
   const HOLDS = [200, 300, 450], MAX_PINS = 13;

@@ -66,8 +66,9 @@
     return m < 1 ? 'Updated just now' : m < 60 ? `Updated ${m} min ago` : `Updated ${clock(Math.min(...ts))}`;
   }
   const money = (minor, exp, cur) => minor == null ? '' : (cur === 'USD' ? '$' : '') + (minor / 10 ** Math.max(0, exp || 0)).toLocaleString('en-US', {minimumFractionDigits:Math.max(0, Math.min(4, exp || 0)),maximumFractionDigits:Math.max(0, Math.min(4, exp || 0))}) + (cur && cur !== 'USD' ? ' ' + cur : '');
-  function paidLine(p) {
+  function paidLine(p, provider) {
     if (!p || p.enabled === false) return '';
+    if (provider === 'claude' && p.type === 'spend') return typeof p.balanceMinor === 'number' && Number.isFinite(p.balanceMinor) ? `Usage credits: ${money(p.balanceMinor, p.exponent, p.currency)} remaining` : 'Usage credits: Balance unavailable';
     if (p.type === 'credits') return p.unlimited ? 'Credits: unlimited' : p.balanceMinor != null ? `Credits: ${money(p.balanceMinor, p.exponent, p.currency)}` : '';
     const u = money(p.usedMinor, p.exponent, p.currency), l = money(p.limitMinor, p.exponent, p.currency);
     if (p.type === 'spend' && p.enabled === true && !l) return `Extra usage: Enabled · ${u ? u + ' spent' : 'Spend unavailable'} · Balance and cap unavailable`;
@@ -105,7 +106,7 @@
         for (const l of p.limits) rows.push(`<div class="us-row ${tone(l.remainingPercent)}${p.status === 'stale' ? ' stale' : ''}" data-usage-row="${esc(p.id + ':' + l.id)}"><div class="us-t"><b>${esc(rowLabel(p, l))}</b><span class="us-p">${l.usedPercent}% used</span></div>`
           + `<div class="us-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.usedPercent}" aria-label="${esc(rowLabel(p, l))} used"><i style="width:${l.usedPercent}%"></i></div>`
           + `<small class="us-r">${esc(resetLine(l.resetsAt, now) || 'No reset time reported')}</small></div>`);
-        const pl = paidLine(p.paid); if (pl) notes.push(`${p.name}: ${pl}`);
+        const pl = paidLine(p.paid, p.provider); if (pl) notes.push(`${p.name}: ${pl}`);
       }
       return `<div class="st-group st-usage" data-usage>${head}${rows.join('') || '<div class="st-empty">No quota windows reported.</div>'}`
         + (notes.length ? `<p class="st-note us-notes">${notes.map(esc).join('<br>')}</p>` : '')

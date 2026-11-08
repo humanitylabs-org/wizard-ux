@@ -12,12 +12,20 @@ function dispatch(overlay = '') {
     window[name] = { back: () => name === overlay ? (name === 'WosShareSheet' ? 'share-sheet' : true) : false };
   }
   window.WosSettings = { cancelWait: () => state.cancelled++ };
-  const s = { window, document: { querySelector: () => null }, V: { state: overlay === 'recording' ? 'listen' : 'idle', snap: { general: overlay === 'recording' } },
+  const s = { window, document: { documentElement:{}, querySelector: () => null }, MutationObserver:class {observe(){}},queueMicrotask(){}, V: { state: overlay === 'recording' ? 'listen' : 'idle', snap: { general: overlay === 'recording' } },
     pauseCommandCapture: () => state.paused++, CHATS: { KIT: { viewer: { isOpen: () => overlay === 'viewer', close: () => true } }, closeOverlay: () => false },
     LINKS: null, closeOverview: () => false, closeReviewCoach: () => false, menuFor: null,
-    sheet: 'settings', settingsReturn: '', settingsView: { back: () => { if (!state.page) return false; state.page = ''; return true; } },
+    sheet: 'settings', rvCoach: null, settingsReturn: '', settingsView: { back: () => { if (!state.page) return false; state.page = ''; return true; } },
     closeSheets: () => { s.sheet = null; state.closed++; }, toast: () => {} };
   vm.createContext(s);
+  vm.runInContext(fs.readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8'),s);
+  s.phoneBack=window.WizEscapeBack.create();
+  vm.runInContext(source.match(/  phoneBack.watch\(\(\) => sheet,[^\n]+/)[0],s);
+  Object.assign(window.WosWelcome,{active:overlay==='WosWelcome'});
+  Object.assign(window.WizShareWizard,{isOpen:overlay==='WizShareWizard'});
+  Object.assign(window.WosShareSheet,{isOpen:()=>overlay==='WosShareSheet'});
+  Object.assign(window.WosDevice,{sheet:overlay==='WosDevice'?'recovery':null});
+  window.WizEscapeBack.installOwners(s.phoneBack,{chats:()=>s.CHATS,links:()=>s.LINKS});
   for (const name of ['backStep', 'onBack']) {
     const fn = source.match(new RegExp(`  function ${name}\\([^]*?\\n  }`));
     assert.ok(fn, `real ${name} exists`); vm.runInContext(fn[0], s);
@@ -41,7 +49,7 @@ test('one actual scrim callback closes Settings from About, not just its nested 
   assert.equal(s.sheet, null); assert.equal(state.closed, 1); assert.equal(state.page, 'about');
 });
 test('higher overlays consume outside input before Settings', () => {
-  for (const [overlay, result] of [['WosWelcome', true], ['WizShareWizard', 'share-wizard'], ['WosShareSheet', 'share-sheet'], ['viewer', 'viewer'], ['WosDevice', true]]) {
+  for (const [overlay, result] of [['WosWelcome', 'welcome'], ['WizShareWizard', 'share-wizard'], ['WosShareSheet', 'share-sheet'], ['viewer', 'viewer'], ['WosDevice', 'device']]) {
     const { s, state } = dispatch(overlay); assert.equal(s.outside(), result, overlay);
     assert.equal(s.sheet, 'settings', overlay); assert.equal(state.page, 'about', overlay); assert.equal(state.closed, 0, overlay);
   }

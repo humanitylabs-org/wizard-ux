@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Agent chat parity (AGENTS.md) for the AI apps view's chat drawer / sidebar: its rows and row actions are the MAIN
 // agent's Chats (LIVE.workGroups + the main Chats window). With a host-profile, container and restricted agent's
 // Chats window also open (and in front), every drawer action lands on the main window only, and routed windows'
@@ -29,10 +30,10 @@ function world(file, groups = {}) {
     openApp: () => calls.push(['openApp']), toast() {}, findWin: fn => Object.values(W).find(fn) || null,
     skinShowChats: () => W['w-main'], newChat() {},
   };
-  vm.createContext(ctx);
+  modelContext(ctx);
   const main = js.split('\n').find(l => l.startsWith('  const mainChats = w =>'));
   const show = file === 'app.js' ? slice(js, '  function showChats() {', '  /* Home\'s Unread and Working cards') : '';
-  const list = slice(js, '    sessionList: () => {', '    sessionAct: (sid, act) => {');
+  const list = slice(js, '    sessionList: () => window.WizChatsListModel.', '    sessionAct: (sid, act) => {');
   const act = slice(js, '    sessionAct: (sid, act) => {', '    showChats: () =>');
   vm.runInContext(`${main}\n${show}\nthis.api = { ${list} ${act} };`, ctx);
   return { api: ctx.api, calls, W };

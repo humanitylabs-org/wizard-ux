@@ -33,10 +33,13 @@ test('agent completion status still says Done', () => {
     assert.equal(name === 'ATT' ? ctx.value.done.label : name === 'PRI_LABEL' ? ctx.value[4] : ctx.value.done, 'Done', name);
   }
 });
-test('keyboard guide, hints and shortcut fallback name the Archive action', () => {
+test('remaining action labels say Archive; removed arrow hints stay absent and AI apps keeps E', () => {
   const desktop = read('web/desktop/desktop.js');
-  assert.match(desktop, /\['\[data-chact="done"\]', '→', 'Archive'\]/);
+  const layout = read('web/layouts/ai-apps/desktop.js');
+  assert.doesNotMatch(desktop, /\['\[data-chact="done"\]', '→', 'Archive'\]/);
+  assert.match(layout, /KeyZ: 'snooze', KeyE: 'done'/);
+  assert.match(layout, /\['done', 'E'\]/);
   assert.match(desktop, /act === 'done' \? 'Archive'/);
-  assert.match(desktop, /'Archive \/ Snooze'/);
+  assert.doesNotMatch(desktop, /'Archive \/ Snooze'/);
   assert.doesNotMatch(desktop, /\['\[data-chact="done"\]', '→', 'Done'\]|act === 'done' \? 'Done'/);
 });

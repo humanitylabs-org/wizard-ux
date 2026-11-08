@@ -37,7 +37,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -126,6 +126,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const canOpen = a => { if (!framed) return false; const id=openId(a); try { if (typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(id)) return true; } catch (_) {} return (S.snapshot?.shell || []).some(x => x?.id === id && x.url); };
 
   /* ---------------- pieces ---------------- */
+  // The App Manager reports only installing / installed, so the bar is indeterminate; the elapsed time shows it is alive.
+  const progressText = id => { const t = Math.max(0, Math.floor((Date.now() - (S.busyAt.get(id) || Date.now())) / 1000)); return t < 2 ? 'Installing…' : `Installing… ${t}s`; };
+  setInterval(() => { if (S.busy.size) document.querySelectorAll('[data-prog]').forEach(el => { const t = progressText(el.dataset.prog); if (el.textContent !== t) el.textContent = t; }); }, 1000);
   function icon(a, size = 'm') {
     // Catalog pictures are not an alternate identity for already-designed apps.
     // Hosted, reuse the registry-aware renderer; standalone uses the same source.
@@ -141,7 +144,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   function action(a, cls = '') {
     const state=status(a);
-    if (S.busy.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Installing…</span>`;
+    if (S.busy.has(a.id)) return `<span class="get wait ${cls}" data-installing role="status" aria-live="polite"><span class="prog-bar" aria-hidden="true"></span><span class="prog-tx" data-prog="${esc(a.id)}">${progressText(a.id)}</span></span>`;
     if (S.removing?.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Removing…</span>`;
     // A source conflict is shown by the "Source conflict" badge beside the name; nothing here pretends to resolve it.
     if(state==='conflict') return '';
@@ -400,7 +403,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || S.removing.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     if(a.install_link && S.link) S.link.error='';
-    S.busy.add(a.id); refresh();
+    S.busy.add(a.id); S.busyAt.set(a.id, Date.now()); refresh();
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       await installRelease({ ...a, operation });
@@ -419,7 +422,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
         if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), replace: true }, location.origin);
       }
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
-    finally { S.busy.delete(a.id); refresh(); }
+    finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
   }
 
   document.addEventListener('click', e => {

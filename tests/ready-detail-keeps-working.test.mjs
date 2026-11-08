@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -8,8 +9,8 @@ const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')
 const body = live.slice(live.indexOf('    async sessionInfo(id) {'), live.indexOf('    /* ---- thread actions ---- */'))
 async function hydrate(listRow, detail) {
   const L = { agentSessions: {}, sessions: [listRow], windows: {}, agentOf: () => '' }
-  const ctx = { L, AGENT_OF: new Map(), DETAIL: new Map(), otherAgent: () => false, normalize: () => detail, aq: () => '', applyLocal() {}, req: async () => ({ json: async () => ({ id: detail.id, wizard_retry_input: '' }) }) }
-  vm.runInNewContext(`L.sessionInfo=({${body}}).sessionInfo`, ctx)
+  const ctx = { L, titleRead:0, applyTitle() {}, AGENT_OF: new Map(), DETAIL: new Map(), otherAgent: () => false, normalize: () => detail, aq: () => '', applyLocal() {}, req: async () => ({ json: async () => ({ id: detail.id, wizard_retry_input: '' }) }) }
+  runWithChatsModel(`L.sessionInfo=({${body}}).sessionInfo`, ctx)
   await L.sessionInfo(detail.id)
   return L.sessions[0]
 }

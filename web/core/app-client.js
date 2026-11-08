@@ -13,7 +13,7 @@
   try { if (parent === window && !window.WizardAppIdentity) { const s = document.createElement('script'); s.src = '/wizard-os-home/core/app-identity.js'; (document.head || document.documentElement).appendChild(s); } } catch (_) {}
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
-  const requests = new Map(), companionMessages = new Set();
+  const requests = new Map(), companionMessages = new Set(), keepCallbacks = new Map();
   let toolHandler = null, orbHandler = null;
   const guardPush = history.pushState.bind(history);
   let guardBase = null, standaloneIsRoot = null;
@@ -335,6 +335,9 @@
   addEventListener('message', e => {
     if (!framed || e.source !== parent || e.origin !== ORIGIN || !e.data) return;
     const d = e.data;
+    if (d.type === 'wizard:app:keep' && d.version === VERSION && typeof d.id === 'string') {
+      Promise.resolve().then(() => keepCallbacks.get(d.keepId)?.()).then(result => parent.postMessage({type: 'wizard:app:kept', version: VERSION, id: d.id, result: result === 'kept' ? 'kept' : false}, ORIGIN), () => parent.postMessage({type: 'wizard:app:kept', version: VERSION, id: d.id, result: false}, ORIGIN));
+    }
     if (d.type === 'wizard:app:companion' && d.version === VERSION) notify(companionMessages, { from: d.from, data: d.data });
     if (d.type === 'wizard:app:admitted' && d.version === VERSION && requests.has(d.id) && e instanceof MessageEvent && e.isTrusted) {
       const pending = requests.get(d.id), fn = pending.onAdmitted; pending.onAdmitted = null;
@@ -355,12 +358,14 @@
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
     if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
   });
-  function hold(reason) {
-    if (service) return service.update.hold(reason);
+  function hold(reason, options = {}) {
+    if (service) return service.update.hold(reason, options);
     if (transportReady) {
-      const pending = request('update.hold', { reason }); let released = false;
+      const keepId = typeof options.keep === 'function' ? 'keep-' + (++requestId) : null;
+      if (keepId) keepCallbacks.set(keepId, options.keep);
+      const pending = request('update.hold', { reason, keepId }); let released = false;
       pending.catch(() => {});
-      return { release() { if (released) return; released = true; pending.then(id => request('update.release', { id })).catch(() => {}); } };
+      return { release() { if (released) return; released = true; keepCallbacks.delete(keepId); pending.then(id => request('update.release', { id })).catch(() => {}); } };
     }
     const id = {}; localHolds.set(id, String(reason || 'Unsaved work'));
     return { release() { localHolds.delete(id); } };

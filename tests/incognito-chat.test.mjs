@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
@@ -17,7 +18,7 @@ function rig(extra = {}) {
     if (!extra.manualStream) notify({ terminal: true, status: 'completed', text: 'Synthetic answer', steps: [] })
     return stream
   } }
-  vm.runInNewContext(source, context)
+  runWithChatsModel(source, context)
   let choice = true, component
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const fetchImpl = async (path, init) => {

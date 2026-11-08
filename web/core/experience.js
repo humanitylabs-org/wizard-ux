@@ -12,7 +12,13 @@
     write(value) { try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (_) {} },
   };
   const copy = value => JSON.parse(JSON.stringify(value));
+  const desktop = document.documentElement?.dataset?.shell === 'desktop';
+  const DESKTOP_VIEW = 'wos.desktop-view.v1', DESKTOP_SEED = 'wos.desktop-view-migration.v1';
+  const desktopViews = ['classic', 'ai-apps', 'orb', 'apps'];
+  let desktopView = '', desktopMigration = null;
+  try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
+  if (desktop && !desktopView) try { const seed = JSON.parse(localStorage.getItem(DESKTOP_SEED)); if (seed?.version === 1 && seed.off && typeof seed.off === 'object') desktopMigration = seed; } catch (_) {}
   let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
   // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
@@ -30,6 +36,13 @@
     return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
   const changed = () => window.dispatchEvent(new Event('wos:experience'));
+  /* For everyone keeps feature switches off (Miguel, 7 Nov 2026). The channel is the App Manager's (core/os-updates.js
+   * sends wos:channel once it has read it); the last one is kept per device so the first frame already matches.
+   * On "stable" (For everyone) every experimental tweak loads off and cannot be switched; built-in features
+   * (catalog `defaults`) and shell views (manifest `view`) are unaffected. The owner's saved choices are kept, so For testers brings them back. */
+  const CHANNEL = 'wos.channel.v1';
+  let channel = ''; try { channel = localStorage.getItem(CHANNEL) || ''; } catch (_) {}
+  const locked = () => channel === 'stable';
   const WHO = /^[a-z0-9][a-z0-9-]*$/, STANDARD = 'wizard';
   // The set a color used to bring before the split: only for a device that has no preset saved yet.
   function legacyOwner() {
@@ -146,9 +159,17 @@
     for (const id of catalog.tweaks) { if (globalIds().includes(id)) continue; const who = id.split('/')[0]; if (!out.has(who)) out.set(who, { id: who, name: names.get(who) || who, ids: [] }); out.get(who).ids.push(id); }
     return [...out.values()];
   }
-  async function apply(warm = false) {
+  let applying = Promise.resolve();
+  function apply(warm = false) { return applying = applyNow(warm); }
+  async function applyNow(warm = false) {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
+      // Retain explicit legacy offs across overlapping refreshes / interrupted migration.
+      // This local fallback is never a shared per-shell choice or a Look-sync seed.
+      if (desktop && !desktopView && !desktopMigration) {
+        desktopMigration = copy(state);
+        try { desktopMigration.materializedLayout = localStorage.getItem('wos.layout'); localStorage.setItem(DESKTOP_SEED, JSON.stringify(desktopMigration)); } catch (_) {}
+      }
       const who = wornOwner();
       // A legacy layout can boot before this deferred module; the worn family now owns it.
       if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
@@ -186,8 +207,14 @@
       const all = [...new Set([...catalog.tweaks, ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
+      if (desktop && !desktopView) migrateDesktopView(desktopMigration);
       const worn = wornView(own);
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => viewOf(id) ? id === worn : enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
+      // Keep the last canonical desktop choice if an older sync writer later omits views.
+      if (desktop && chosenView('desktop') !== undefined && desktopView !== effectiveDesktopView()) rememberDesktopView(effectiveDesktopView());
+      if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
+      const allowed = id => !(locked() && !globalIds().includes(id) && !viewOf(id));   // views are not feature switches
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id, own)), own).filter(allowed), slots, { teamAuthors: catalog.teamAuthors });
+      if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
   /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps, AI apps). One view per shell
@@ -201,9 +228,28 @@
   const shellsOf = id => { const s = manifests.get(id)?.shells; const ok = Array.isArray(s) ? SHELLS.filter(x => s.includes(x)) : []; return ok.length ? ok : [...SHELLS]; };
   const viewIds = (shell = shellHere()) => [...manifests.keys()].filter(id => viewOf(id) && shellsOf(id).includes(shell));
   const chosenView = shell => typeof state.views?.[shell] === 'string' ? state.views[shell] : undefined;
+  const layoutForView = id => { const layout = manifests.get(id)?.layout; return viewOf(id) && desktopViews.includes(layout) ? layout : ''; };
+  function rememberDesktopView(id) { desktopView = id; try { localStorage.setItem(DESKTOP_VIEW, id); localStorage.removeItem?.(DESKTOP_SEED); } catch (_) {} }
+  function migrateDesktopView(legacy) {
+    const ids = viewIds('desktop').filter(layoutForView);
+    const offs = legacy.carry || legacy.off?.[legacy.preset || legacyOwner()] || [];
+    const explicit = ids.some(id => typeof legacy.mix?.[id] === 'boolean' || offs.includes(id) || typeof recipeChoice(recipe(), id) === 'boolean');
+    const chosen = ids.find(id => enabled(id, recipe()));
+    const oldLayout = legacy.materializedLayout;
+    rememberDesktopView(chosen ? layoutForView(chosen) : explicit ? 'classic' : desktopViews.includes(oldLayout) ? oldLayout : 'ai-apps');
+  }
+  // Canonical shared per-shell intent wins, including explicit Desks ('').
+  // A supported old shared single-view choice still wins over the local default.
+  function effectiveDesktopView() {
+    const chosen = chosenView('desktop');
+    if (chosen !== undefined) return viewIds('desktop').includes(chosen) ? layoutForView(chosen) || 'classic' : 'classic';
+    const legacy = viewIds('desktop').find(id => enabled(id, recipe()));
+    return legacy ? layoutForView(legacy) || 'classic' : desktopView || 'ai-apps';
+  }
   const wornView = (own, shell = shellHere()) => {
     const chosen = chosenView(shell);
     if (chosen !== undefined) return viewIds(shell).includes(chosen) ? chosen : '';
+    if (desktop && shell === 'desktop') return viewIds(shell).find(id => layoutForView(id) === effectiveDesktopView()) || '';
     return viewIds(shell).find(id => enabled(id, own)) || '';
   };
   const cleanViews = v => Object.fromEntries(SHELLS.filter(s => typeof v?.[s] === 'string' && (v[s] === '' || ID.test(v[s]))).map(s => [s, v[s]]));
@@ -211,9 +257,23 @@
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
         shell: shellHere(),
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : t) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t).map(t => locked() && !t.builtin && !t.view ? { ...t, on: false, locked: true } : t), locked: locked(), channel });
     },
     installed, defaults, authors,
+    // Initial shell routes must see the selected view, including overlapping refreshes.
+    async whenReady() { let p; do { p = applying; await p; } while (p !== applying); },
+    get desktopView() { return desktop ? effectiveDesktopView() : null; },
+    get desktopViews() { return desktop ? desktopViews.map(id => { const l = window.WosSkinHost.layouts?.find(l => l.id === id); return { id, name: id === 'classic' ? 'Desks' : l?.name || id }; }) : []; },
+    chooseDesktopView(id) {
+      if (!desktop || !desktopViews.includes(id)) return Promise.resolve();
+      const pick = id === 'classic' ? '' : viewIds('desktop').find(v => layoutForView(v) === id);
+      if (pick === undefined) return Promise.resolve();
+      state.views = { ...cleanViews(state.views), desktop: pick }; Store.write(state);
+      rememberDesktopView(id);
+      window.WosSkinHost.setStandardLayout?.(id); changed(); // paint before I/O
+      try { window.dispatchEvent(new CustomEvent('wos:view-choice', { detail: { shell: 'desktop', id: pick } })); } catch (_) {}
+      return apply();
+    },
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
@@ -246,6 +306,8 @@
     chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+      if (item.locked) throw new Error('Feature switches are for testers. Choose For testers in Settings › About & updates.');
+      if (desktop && layoutForView(id)) return experience.chooseDesktopView(item.on ? 'classic' : layoutForView(id));
       if (item.view) {  // one view per shell type: on = this one on this type of shell, off = Desks here; the other type keeps its own
         const shell = shellHere(); if (!item.shells.includes(shell)) return;
         const pick = item.on ? '' : id;
@@ -260,6 +322,11 @@
     },
   };
   window.WosExperience = experience;
+  window.addEventListener('wos:channel', ev => {
+    const next = ev?.detail?.channel; if (!['stable', 'latest'].includes(next) || next === channel) return;
+    channel = next; try { localStorage.setItem(CHANNEL, next); } catch (_) {}
+    void apply();
+  });
   window.addEventListener('wos:skin-host-ready', apply);
   window.addEventListener('wos:own-skin', apply);
   window.addEventListener('wos:skin', () => { void experience.chooseSkin(); });

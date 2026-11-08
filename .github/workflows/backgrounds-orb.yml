@@ -1,0 +1,49 @@
+name: Backgrounds and core orb acceptance
+on:
+  pull_request:
+    paths:
+      - 'web/core/skins*'
+      - 'web/core/settings.js'
+      - 'web/core/orb-switcher*'
+      - 'web/layouts/ai-apps/desktop.css'
+      - 'web/app.js'
+      - 'web/index.html'
+      - 'qa-backgrounds-orb.cjs'
+      - 'qa-orb-radial.cjs'
+      - 'tools/fixtures/backgrounds-orb.cjs'
+      - 'tools/qa-origin.cjs'
+      - '.github/workflows/backgrounds-orb.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  appearance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - run: npx playwright install --with-deps chromium
+      - run: node qa-backgrounds-orb.cjs
+        env:
+          QA_SHOTS: qa-results/backgrounds-orb
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wizard-backgrounds-orb-appearance
+          path: qa-results/backgrounds-orb
+          retention-days: 7
+  radial-gestures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - run: npx playwright install --with-deps chromium
+      - run: node qa-orb-radial.cjs

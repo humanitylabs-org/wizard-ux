@@ -33,7 +33,7 @@ const phoneDismissed=()=>{
    const kind=phone?'phone':'desktop', ctx=await browser.newContext({viewport:phone?{width:412,height:892}:{width:1440,height:900},isMobile:phone,hasTouch:phone,serviceWorkers:'block',...(phone?{userAgent:'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/129.0.0.0 Mobile Safari/537.36'}:{})});
    const journal={kind,requests:[],writes:[],pages:{},shots:[]};contexts.push(journal);
    let available=true, pending=false, policy='auto', channel='stable';
-   const status=()=>({mode:policy,chosen:true,installed:'0.3.101',latest:pending?'0.3.102':'0.3.101',checked:true,update_available:pending,channel,channels:1});
+   const status=()=>({mode:policy,always_auto:true,chosen:true,installed:'0.3.101',latest:pending?'0.3.102':'0.3.101',checked:true,update_available:pending,channel,channels:1});
    await ctx.route('**/*',async r=>{
     const q=r.request(),u=new URL(q.url()),method=q.method(); journal.requests.push({path:u.pathname,method});
     const json=(body,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -111,8 +111,8 @@ const phoneDismissed=()=>{
       await shot(skin+'-technical');
       await tap('[data-settings-technical] summary');
       if(phone){ok(text.includes('Phone app (Android) 0.10.23')&&!text.includes('Wizard OS 0.10.23'),skin+': native app identity distinct from server');await tap('[data-dvupd]');ok(await p.evaluate(()=>__qaNativeChecks)>0,skin+': existing native check action preserved');}
-      await tap('[data-osu="ask"]');ok(policy==='ask'&&await p.locator('[data-osu="ask"]').getAttribute('aria-checked')==='true',kind+' '+skin+': Ask me action/readback');
-      await tap('[data-osu="auto"]');ok(policy==='auto',kind+' '+skin+': Automatic action/readback');
+      ok(await p.locator('[data-osu="ask"],[data-osu="auto"]').count()===0&&(await p.locator('[data-osu-auto]:visible').innerText()).includes('Install by themselves overnight'),kind+' '+skin+': no Ask me, always automatic readback');
+      ok((await p.locator('[data-osu="ch-latest"]').innerText()).trim()==='For testers'&&(await p.locator('[data-osu="ch-stable"]').innerText()).trim()==='For everyone',kind+' '+skin+': For testers / For everyone names');
       await tap('[data-osu="ch-latest"]');ok(channel==='latest',kind+' '+skin+': channel action/readback');
       await tap('[data-osu="ch-stable"]');
       await shot(skin+'-about');
@@ -120,12 +120,12 @@ const phoneDismissed=()=>{
       await p.evaluate(()=>WosUpdates.load(true)); // drain any prior coalesced read before changing the fixture
       available=false;await p.evaluate(()=>WosUpdates.load(true));
       await p.waitForFunction(()=>document.querySelector('.st-page')?.innerText.includes('could not be verified'));
-      ok((await p.locator('.st-page:visible').innerText()).includes('could not be verified')&&await p.locator('[data-osu="ask"]').count()===0,kind+' '+skin+': missing route visible and fail-closed');
+      ok((await p.locator('.st-page:visible').innerText()).includes('could not be verified')&&await p.locator('[data-osu="ch-latest"],[data-osu-auto]').count()===0,kind+' '+skin+': missing route visible and fail-closed');
       await shot(skin+'-unavailable');
       const writesBeforeRetry=journal.writes.length;
-      available=true;await tap('[data-osu="retry"]');await p.locator('[data-osu="ask"]').waitFor();
+      available=true;await tap('[data-osu="retry"]');await p.locator('[data-osu-auto]').waitFor();
       ok(journal.writes.length===writesBeforeRetry,kind+' '+skin+': retry is read-only');
-      ok(await p.locator('[data-osu="auto"]').getAttribute('aria-checked')==='true',kind+' '+skin+': read-only retry recovers verified mode');
+      ok((await p.locator('[data-osu-auto]:visible').innerText()).includes('Install by themselves overnight'),kind+' '+skin+': read-only retry recovers verified mode');
       await p.evaluate(()=>WosUpdates.load(true));
       pending=true;await p.evaluate(()=>WosUpdates.load(true));
       ok((await p.locator('.st-page:visible').innerText()).includes('Wizard OS (server) 0.3.101'),kind+' '+skin+': installed version retained beside pending update');

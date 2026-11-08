@@ -1,10 +1,12 @@
 // Real-origin browser regression; all mutations fulfilled locally, SW blocked.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const URL_ = process.env.QA_SYNTHETIC === '1' ? 'http://wizard-qa.invalid/wizard-os-home/' : process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-reply-return');
 const EXEC = process.env.QA_CHROME || undefined;
+const AFTER = process.env.QA_AFTER_ACTION || 'stay';
+if (!['stay','list'].includes(AFTER)) throw Error('QA_AFTER_ACTION must be stay or list');
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const checks = [], writes = [], errors = [];
@@ -15,7 +17,7 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
  let b;
  try {
   b = await chromium.launch({ executablePath: EXEC });
-  const ctx = await b.newContext({ viewport:{width:412,height:892}, hasTouch:true,isMobile:true,deviceScaleFactor:2, serviceWorkers:'block', userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' });
+  let ctx = await b.newContext({ viewport:{width:412,height:892}, hasTouch:true,isMobile:true,deviceScaleFactor:2, serviceWorkers:'block', userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' });
   await ctx.route('**/*', async r => {
    const q=r.request(), u=new URL(q.url()), m=q.method();
    const json=body=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
@@ -31,8 +33,14 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
    if(/\/wizard\/(thread-seen|thread-dispositions)$/.test(u.pathname)) return json({state:{initializedAt:Date.now(),threads:{}}});
    return r.continue();
   });
-  await ctx.addInitScript(()=>{localStorage.clear();localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');});
-  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
+  await ctx.addInitScript(after=>{localStorage.clear();localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.chats.afterAction.v1',after);}, AFTER);
+  let p;
+  if (process.env.QA_SYNTHETIC === '1') {
+    await ctx.close(); const F = require('./tools/qa-closed-shell.cjs'); F.setBrowser(b);
+    const fixture = await F.boot(true, null, null, { after: AFTER, rows: Array.from({length:36}, (_, i) => session(i)) });
+    ctx = fixture.c; fixture.s.actionWrites = writes; p = F.getPage();
+  } else p = await ctx.newPage();
+  p.on('pageerror',e=>errors.push(e.message));
   await p.goto(URL_+'?open=chats');await p.waitForSelector('[data-chopen="qa_return_20"]');await sleep(1500);
   if (process.env.QA_FULL === '1') { await p.locator('.win [data-wact="full"]').first().tap(); await sleep(1700); }
   async function place() { return p.evaluate(()=>{const sc=document.querySelector('.ch-scroll'),r=sc.getBoundingClientRect();const rows=[...sc.querySelectorAll('[data-chopen]')];const a=rows.find(e=>e.getBoundingClientRect().bottom>r.top);return {top:sc.scrollTop,id:a?.dataset.chopen,y:a? a.getBoundingClientRect().top-r.top:0};}); }
@@ -44,11 +52,12 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
    const before=await position(); const id=await openVisible();
    await p.locator('.ch-compose textarea').fill('QA reply '+how);
    if (how==='button') await p.locator('.ch-compose .ch-send').tap(); else await p.locator('.ch-compose textarea').press('Enter');
-   await p.waitForSelector('.ch-list', {timeout: 5000}).catch(()=>{});
+   if (AFTER === 'stay') { await p.waitForSelector('.ch-compose textarea'); ok(await p.evaluate(id => Object.values(__wos.wins).some(w => w.app === 'chats' && w.thread === id), id), 'typed reply stays on this chat ('+how+')'); await p.locator('[data-chback]').first().tap(); }
+   await p.waitForSelector('.ch-list', {timeout: 5000});
    await samples('typed reply ('+how+') returns to list position', before);
   }
   // Done from a list-opened thread.
-  { const before=await position(); const id=await openVisible(); await p.locator('[data-chact="done"]').first().tap(); await p.waitForSelector('.ch-list'); await samples('Done returns to list position over time', before); }
+  { const before=await position(); const id=await openVisible(); await p.locator('[data-chact="done"]').first().tap(); if (AFTER === 'stay') { await p.waitForSelector('.ch-compose textarea'); ok(await p.evaluate(id => Object.values(__wos.wins).some(w => w.app === 'chats' && w.thread === id), id), 'Archive stays on this chat'); await p.locator('[data-chback]').first().tap(); } await p.waitForSelector('.ch-list'); await samples('Done returns to list position over time', before); }
   ok(errors.length===0,'zero page errors',errors);
   ok(await p.evaluate(()=>!navigator.serviceWorker.controller),'service worker cannot bypass write fence');
   fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({pass,fail,checks,errors,writes,origin:URL_,live:process.env.QA_LIVE==='1'},null,2));

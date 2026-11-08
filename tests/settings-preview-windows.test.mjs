@@ -34,7 +34,7 @@ test('desktop Settings opens as a window and every way of closing the window hid
 test('desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings window, ⌥ window keys are not swallowed', () => {
   assert.equal((desk.match(/return hit\(toggleSettings\)/g) || []).length, 2);
   assert.match(desk, /function toggleSettings\(\) \{ if \(settingsFocused\(\)\) closeSettings\(\); else openSettings\(\); \}/);
-  assert.match(desk, /if \(settingsFocused\(\)\) \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
+  assert.match(desk, /watchEscape\('settings', \(\) => settingsFocused\(\), \(\) => \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
   assert.match(desk, /if \(settingsFocused\(\) && !e\.altKey\) return;/);
   assert.doesNotMatch(desk, /setEl && !setEl\.hidden && !\(e\.altKey && code === 'Comma'\)/, 'the old modal swallow of every ⌥ key is gone');
   assert.equal((desk.match(/setEl\.setAttribute\('aria-modal'/g) || []).length, 1, 'only the Home panel is a dialog, never the window');
@@ -62,7 +62,7 @@ test('desktop page previews open as a window; images still use the viewer and fi
   assert.ok(img > 0 && file > img && win > file, 'asWindow only after the image and file branches');
   assert.ok(win < go.indexOf('stack.push'), 'before the pane opens');
   // (stock; a layout placing the shell's opens, apps.routeOpens, may put it in its own panel first)
-  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = \(\) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
+  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = (?:\(\)|desk) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
   assert.match(desk, /if \(f\.preview\) \{ closeWin\(f\.id\); return 'preview'; \}/, 'Esc closes a preview window');
   assert.doesNotMatch(phone, /asWindow/, 'phone keeps its full-height link sheet');
 });

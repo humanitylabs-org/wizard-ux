@@ -207,11 +207,39 @@
       return true;
     }
   });
+  let savingChatAction = false;
+  register({ id: 'chat-after-action', page: 'chats', aliases: ['chat-after-action'],
+    html() {
+      const value = window.WizConfig?.chatAfterAction?.() || 'stay';
+      return `<div class="st-group"><h4>After actions on your phone</h4><p class="st-hint">After sending, archiving, snoozing or marking unread. Desktop chats stay open.</p><div role="radiogroup" aria-label="After actions on your phone">${[['stay', 'Stay on this chat'], ['list', 'Back to chats list']].map(([id, label]) => `<button type="button" class="st-row wz-row" data-chat-after="${id}" role="radio" aria-checked="${value === id}" tabindex="${value === id ? 0 : -1}"${savingChatAction ? ' disabled' : ''}><span class="st-tx"><b>${label}</b></span><span aria-hidden="true">${value === id ? '●' : '○'}</span></button>`).join('')}</div></div>`;
+    },
+    act(ctx, el) {
+      const button = el.closest('[data-chat-after]'); if (!button) return false;
+      if (savingChatAction) return true;
+      const value = button.dataset.chatAfter, hadFocus = document.activeElement === button;
+      savingChatAction = true;
+      const done = window.WizConfig.setChatAfterAction(value);
+      ctx.changed?.();
+      done.then(scope => ctx.toast?.('✓', scope === 'owner' ? 'Saved on your Wizard' : 'Saved on this device', 2200), e => ctx.toast?.('!', e.message, 3200)).finally(() => {
+        savingChatAction = false; ctx.changed?.();
+        if (hadFocus && document.activeElement === document.body) ctx.root?.querySelector(`[data-chat-after="${value}"]`)?.focus({ preventScroll: true });
+      });
+      return true;
+    },
+  });
+  window.addEventListener?.('wos:prefs', () => { for (const m of mounts) m.render(); });
   // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
   register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
     html() {
       return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>Reply style</b><small>Each agent keeps its own. Tell an agent how you like replies and it remembers.</small></span></div></div>`;
     },
+  });
+  register({ id: 'working-order', page: 'chats', aliases: ['working-order'], available: () => !!window.WizChatsListModel,
+    html() {
+      const M = window.WizChatsListModel, current = window.WizLive?.workingOrder?.() || 'alphabetical';
+      return `<div class="st-group"><h4>Working threads</h4><label class="st-row wz-row"><span class="st-tx"><b>Sort Working</b><small>The same order on your phone and desktop.</small></span><select data-settings-working-order aria-label="Sort Working">${M.WORKING_SORTS.map(([v, word]) => `<option value="${v}"${v === current ? ' selected' : ''}>${word}</option>`).join('')}</select></label></div>`;
+    },
+    input(ctx, el) { if (el.matches('[data-settings-working-order]')) window.WizLive?.setWorkingOrder?.(el.value); },
   });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
@@ -269,16 +297,28 @@
     if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
-    const exp = s.tweaks.filter(t => !t.builtin);
+    const exp = s.tweaks.filter(t => !t.builtin && !(E.desktopViews?.length && t.layout));
+    const views = E.desktopViews || [];
+    const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b></span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
-    const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
-    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);
+    const whereView = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
+    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where: whereView } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
-    // quick buttons. Same list whatever skin is worn; skins are looks only.
+    // Feature switches live in two places with one state, Chrome-flags style (Miguel, 7 Nov 2026): here under "Try new
+    // features" and in the Wizard OS Tracker app. Both write look.json `tweaks` (Settings via WosExperience.toggle and
+    // WosLookSync, the Tracker via the box's feature-switch API); WosLookSync's refresh brings either side's flip to the
+    // other. The section shows only when the box is on For testers (channel latest); on For everyone it is hidden and
+    // experience.js keeps the switches off and locked. Views stay their own list (a way to see the shell, not a feature).
+    // Each list is flat, A to Z, each switch labelled "by <author>".
     const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
-    const rows = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
+    const cells = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : ''));
+    const viewRows = cells.filter((_, i) => list[i].view).join('');
+    const testers = s.channel === 'latest';
+    const features = testers ? cells.filter((_, i) => !list[i].view).join('') : '';
+    // For everyone, or the channel not read yet: a switch that is on keeps its options, without the switch itself.
+    const opts = testers ? '' : list.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
+    const tryNew = testers && features ? `<div class="tw-group" data-try-features><h4>Try new features</h4><p class="st-hint">Unfinished features you can switch on to try. The team can see which ones you use only if you allow it.</p>${err}<div class="tw-list">${features}</div></div>` : '';
+    return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${tryNew ? '' : err}<div class="tw-list">${viewRows}</div></div>` : ''}${tryNew}${opts ? `<div class="tw-group"><div class="tw-list">${opts}</div></div>` : ''}${!viewRows && !tryNew ? err : ''}`;
   }
   let authorList = null;
   const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))
@@ -286,7 +326,48 @@
     tweakOpts.set(id, node); for (const m of mounts) m.render();
     return () => { if (tweakOpts.get(id) === node) { tweakOpts.delete(id); node.remove?.(); for (const m of mounts) m.render(); } };
   }
-  window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
+  window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); paintTweakCards(); });
+  /* A chat reply can carry a tweak (marker WIZARD_TWEAK_V1, core/chat-kit.js tweakIds): Look's own switch row above, bound
+   * to WosExperience. A message is history, so the card always shows the tweak's CURRENT state, never the state when it
+   * was sent. A tap paints the flipped switch on its own frame (pending), then the real state reconciles; a failure
+   * reverts with the same toast as Look. Every card on screen and Look repaint together on wos:experience. */
+  const cardPending = new Map(), ONLY = { desktop: 'Desktop only', phone: 'Phone only' };
+  function tweakCardRows(list) {
+    const E = window.WosExperience, s = E?.state;
+    if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
+    const name = who => (authorList || []).find(a => a.id === who)?.name || who;
+    return list.map(id => {
+      const t = s?.tweaks.find(x => x.id === id);
+      if (!t) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${!s || (!s.tweaks.length && !s.error) ? 'Loading tweak…' : 'This tweak isn’t installed on this Wizard'}</small></span></div>`;
+      const here = !Array.isArray(t.shells) || t.shells.includes(s.shell);
+      const on = cardPending.has(id) ? cardPending.get(id) : t.on;
+      return tweakSwitches([{ ...t, on, where: t.locked ? 'For testers only' : here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here || !!t.locked, name);
+    }).join('');
+  }
+  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
+  function tweakCard(ids) {
+    const list = cardIds(ids); if (!list.length) return '';
+    return `<div class="ch-tweak" data-chat-tweak-card="${esc(list.join(' '))}" role="group" aria-label="${list.length > 1 ? 'Tweaks' : 'Tweak'}">${tweakCardRows(list)}</div>`;
+  }
+  function paintTweakCards() {
+    for (const n of document.querySelectorAll?.('[data-chat-tweak-card]') || []) {
+      const rows = tweakCardRows(cardIds(n.dataset.chatTweakCard)); if (n.__wosRows === rows) continue;
+      const focused = n.contains(document.activeElement) ? document.activeElement.dataset?.chatTweak : '';
+      n.innerHTML = rows; n.__wosRows = rows;
+      if (focused) [...n.querySelectorAll('[data-chat-tweak]')].find(x => x.dataset.chatTweak === focused)?.focus({ preventScroll: true });
+    }
+  }
+  function tweakCardTap(btn, toast) {
+    const id = btn.dataset.chatTweak, E = window.WosExperience;
+    if (!id || !E || btn.disabled || cardPending.has(id)) return false;
+    const was = btn.getAttribute('aria-checked') === 'true';
+    cardPending.set(id, !was);
+    btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
+    paintTweakCards(); // every other card naming it, the same frame
+    const done = () => { cardPending.delete(id); paintTweakCards(); };
+    Promise.resolve().then(() => E.toggle(id)).then(done, e => { done(); toast?.('!', e?.message || 'Couldn’t change that tweak'); });
+    return true;
+  }
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
     try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
@@ -316,6 +397,10 @@
         map = Object.fromEntries(Object.entries(map).filter(([id]) => id === pick || !present.includes(id)));
         items = items.filter(t => t.id === pick || !present.includes(t.id));
       }
+      // Feature switches (not built-in, not a view) are switched only under Try new features and in the Tracker app:
+      // the New skin draft does not list them, so it cannot flip one; their current state is carried over unchanged.
+      const builtin = new Set((window.WosExperience.state?.tweaks || []).filter(t => t.builtin).map(t => t.id));
+      items = items.filter(t => t.view || builtin.has(t.id));
       draft.items = items; draft.tweaks = map;
     } catch (e) { if (ctx.skinDraft === draft && draft.seq === seq) draft.error = 'Could not load installed tweaks. Try again.'; }
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
@@ -342,7 +427,7 @@
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
-    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && twinned(S, family) ? backgroundHtml(S, family, cur) : '');
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '');
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
@@ -352,23 +437,41 @@
   // independent Colors control too (the shared Look contract). Background and Mode never disappear into a palette name.
   const twinned = (S, family) => typeof S.setWallpaper === 'function' && typeof S.twin === 'function' && (family?.palettes || []).length > 1 && family.palettes.every(id => S.twin(id));
   const isLight = id => /-light$/.test(id);
-  function backgroundHtml(S, family, cur) {
+  function backgroundHtml(S, family, cur, ctx = {}) {
     const light = isLight(cur), plain = family.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === light);
     const scenic = family.palettes.find(id => /^landscapes/.test(id) && isLight(id) === light);
-    const onScene = /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
+    const wizard = !!S.wizardBackgrounds, onScene = wizard || /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
     const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 35%, transparent), transparent 34%, transparent 66%, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 45%, transparent)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
-    const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === scenic);
-    const cards = [pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, w.id === 'landscapes' ? '' : S.wallpaperThumb(w.id))) : [])].join('');
-    const note = onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
+    const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === (wizard ? cur : scenic));
+    const cards = [wizard ? card('living', 'Living canvas', lk) : pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, S.wallpaperThumb(w.id))) : []), wizard && lk ? card('custom', 'Custom', lk, S.wallpaperThumb('custom')) : ''].join('');
+    const note = wizard && chosen === 'custom' ? 'Your image, shared with your other desktops.' : wizard && chosen === 'living' ? 'The living canvas for this color.' : onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
     const mode = `<div class="st-seg" role="radiogroup" aria-label="Mode">${[['dark', 'Dark'], ['light', 'Light']].map(([m, n]) => `<button type="button" role="radio" aria-checked="${(m === 'light') === light}" data-skinmode="${m}">${n}</button>`).join('')}</div>`;
-    return `<div class="skp-colours"><h4>Mode</h4>${mode}<h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p></div>`;
+    return `<div class="skp-colours">${wizard ? '' : `<h4>Mode</h4>${mode}`}<h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p>${wizard ? `<div class="st-actions"><button type="button" data-background-upload ${ctx.backgroundUploading ? 'disabled' : ''}>${S.desktopBackdrop?.wide ? 'Replace image' : 'Choose image'}</button>${S.desktopBackdrop?.wide ? `<button type="button" data-background-portrait ${ctx.backgroundUploading ? 'disabled' : ''}>${S.desktopBackdrop.tall ? 'Replace portrait image' : 'Add portrait image'}</button>` : ''}</div><p class="st-hint" role="status" data-background-status>${esc(ctx.backgroundUploading || 'PNG, JPEG, WebP, AVIF or GIF · up to 20 MB. Optional portrait image for tall desktop windows.')}</p>` : ''}</div>`;
+  }
+  function chooseBackgroundImage(ctx, portrait = false) {
+    if (ctx.backgroundUploading) return;
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg,image/webp,image/avif,image/gif';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]; if (!file) return;
+      ctx.backgroundUploading = 'Uploading image…'; ctx.render();
+      void window.WosSkin.uploadWallpaper(file, { portrait, onProgress(sent, total) {
+        ctx.backgroundUploading = `Uploading image… ${Math.round(sent / total * 100)}%`;
+        const status = ctx.root.querySelector('[data-background-status]'); if (status) status.textContent = ctx.backgroundUploading;
+      } }).then(() => { ctx.backgroundUploading = ''; for (const m of mounts) m.render(); }, e => {
+        ctx.backgroundUploading = ''; ctx.render(); ctx.toast?.('!', e.message || 'Could not upload image. Try again.', 4000);
+      });
+    }, { once: true });
+    input.click();
   }
   function backgroundAct(ctx, el, pick) {
     const S = window.WosSkin, cur = S.current, light = isLight(cur);
+    if (el.closest('[data-background-upload]')) { chooseBackgroundImage(ctx); return true; }
+    if (el.closest('[data-background-portrait]')) { chooseBackgroundImage(ctx, true); return true; }
     const m = el.closest('[data-skinmode]');
     if (m) { const want = m.dataset.skinmode === 'light'; if (want !== light) { const t = S.twin(cur); if (t) pick(t.id); } return true; }
     const b = el.closest('[data-bgpick]'); if (!b) return false;
     const fam = S.families.find(f => f.id === S.familyOf(cur)), id = b.dataset.bgpick;
+    if (S.wizardBackgrounds) { if (id === 'custom' && !S.desktopBackdrop?.wide) { chooseBackgroundImage(ctx); return true; } S.setWallpaper(id); ctx.render(); ctx.haptic?.(8); return true; }
     const target = fam.palettes.find(p => isLight(p) === light && (id === 'plain' ? !/^landscapes/.test(p) : /^landscapes/.test(p)));
     if (id !== 'plain') S.setWallpaper(id);
     if (target && target !== cur) pick(target); else { ctx.render(); ctx.haptic?.(8); }
@@ -422,7 +525,7 @@
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
       if (draft.saving) return true;
-      if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
+      if (tweak) { const id = tweak.dataset.draftTweak; if (!(draft.items || []).some(t => t.id === id)) return true; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, draft.base); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
@@ -437,6 +540,8 @@
     const own = el.closest('[data-ownskin]');
     // Tapping the skin you wear takes it off (back to plain color + tweaks); any other one puts it on.
     if (own) { skinAction(() => M.active?.id === own.dataset.ownskin ? M.leave() : M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
+    const view = el.closest('[data-desktop-view]');
+    if (view) { void window.WosExperience.chooseDesktopView(view.dataset.desktopView).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const my = el.closest('[data-myskin]');
@@ -796,6 +901,13 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      const choice = e.target.closest?.('[data-chat-after]');
+      if (choice && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+        const choices = [...choice.closest('[role="radiogroup"]').querySelectorAll('[data-chat-after]')];
+        const at = choices.indexOf(choice), next = e.key === 'Home' ? 0 : e.key === 'End' ? choices.length - 1 : (at + (['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1) + choices.length) % choices.length;
+        choices[next].focus(); choices[next].click(); return;
+      }
       const dialog = root.querySelector('[data-settings-feature] [aria-modal="true"]');
       if (dialog) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, dialog); return; }
       if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
@@ -818,8 +930,8 @@
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
-    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    window.addEventListener?.('wos:prefs', appsChanged); window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
@@ -850,5 +962,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

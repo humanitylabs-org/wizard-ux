@@ -2,20 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import coreContract from './orb-core-contract.mjs';
 const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 function moduleFixture(saved, host = {}) {
   const storage=new Map(saved ? [['wos.orbSwitcher.v1',JSON.stringify(saved)]]:[]), listeners=new Map();
   const window={addEventListener:(k,fn)=>listeners.set(k,fn),removeEventListener:(k,fn)=>{if(listeners.get(k)===fn)listeners.delete(k);},dispatchEvent(){}};
   const adapter={cancelGesture(){},hover(){},voice:{},apps:()=>[],openItems:()=>[],...host};
   const context={window,adapter,document:{querySelectorAll:()=>[],body:{classList:{remove(){}}}},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},CustomEvent:class{},setTimeout,clearTimeout};
-  const create=vm.runInNewContext(read('web/core/orb-switcher.js').replace('export default function createOrbSwitcher','function createOrbSwitcher')+'\n;createOrbSwitcher;',context);
+  const create=vm.runInNewContext(read('web/core/orb-switcher.js')+'\n;window.WosCreateOrbSwitcher;',context);
   return {create:()=>create(adapter),window,listeners,storage};
 }
-test('lazy radial module initializes real defaults and tears down its global listeners',()=>{
+test('core radial initializes real defaults and tears down its global listeners',()=>{
   const f=moduleFixture(),o=f.create();
   assert.equal(f.window.WosOrbSwitcher,o);assert.equal(o.active(),true);assert.equal(o.get().quickTakes,false);
   assert.equal(o.get().pins.length,0);assert.equal(o.get().holdMs,300);assert.equal(f.listeners.size,2);
-  o.dispose();o.dispose();assert.equal(o.active(),false);assert.equal(f.window.WosOrbSwitcher,undefined);assert.equal(f.listeners.size,0);
+  coreContract(o,f.window);assert.equal(o.active(),false);assert.equal(f.window.WosOrbSwitcher,undefined);assert.equal(f.listeners.size,0);
   const again=f.create();assert.equal(again.active(),true);again.dispose();assert.equal(f.listeners.size,0);
 });
 test('radial saved configuration survives reload and preserves compact geometry',()=>{
@@ -29,11 +30,15 @@ test('radial saved configuration survives reload and preserves compact geometry'
   assert.equal(slots.find(s=>s.item?.id==='calendar').ring,0);
   assert.ok(slots.every(s=>s.r1<=138));o.dispose();
 });
-test('entrypoint never loads radial module or CSS; only trusted enabled tweak requests its code',()=>{
-  assert.doesNotMatch(read('web/index.html'),/orb-switcher|orb-radial|desk-fan|preview-seed-orb/);
-  assert.doesNotMatch(read('web/desktop.html'),/orb-switcher|orb-radial|desk-fan|preview-seed-orb/);
-  assert.match(read('web/tweaks/wizard/orb-radial/tweak.js'),/api\.orb\.switcher\(\)/);
+test('phone loads core radial synchronously before shell, independent of tweak state; desktop/corner unchanged',()=>{
+  const phone=read('web/index.html');
+  assert.match(phone, /core\/orb-switcher\.css/);
+  assert.ok(phone.indexOf('src="core/orb-switcher.js"') < phone.indexOf('src="app.js"'));
+  assert.match(read('web/app.js'), /window\.WosCreateOrbSwitcher\(orbSwitcherHost\)/);
+  assert.doesNotMatch(read('web/desktop.html'),/orb-switcher|orb-radial/);
   assert.match(read('web/app.js'),/WosOrbSwitcher\?\.active\(\) && !G\.corner/);
+  assert.ok(!JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes('wizard/orb-radial'));
+  assert.ok(!JSON.parse(read('web/tweaks/wizard/profile.json')).tweaks.includes('wizard/orb-radial'));
 });
 
 test('pins survive a split desk without being replaced by its focused app or title',()=>{

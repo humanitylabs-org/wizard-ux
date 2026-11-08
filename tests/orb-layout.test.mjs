@@ -1,3 +1,4 @@
+import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Orb desktop (Miguel, 31 Oct 2026): the miguel/orb-shell tweak wears the built-in Orb layout.
 // These tests hold its contract:
 //   - phone (experimental): the same layout, Home only (layouts/orb/phone.js; guards in tests/orb-phone-home.test.mjs);
@@ -28,7 +29,7 @@ function desk({ layout = null } = {}) {
     document: { baseURI: 'https://wizard.test/wizard-os-home/', documentElement: { dataset: { shell: 'desktop' } }, createElement: el, head: { appendChild(n) { links.push(n); } }, querySelector: () => null, getElementById: () => null, addEventListener() {} },
   };
   ctx.window = ctx; ctx.window.WosSkin = { current: 'obsidian', list: [], pkgOf: () => null }; ctx.module = { exports: {} };
-  vm.runInNewContext(read('web/core/skin-host.js'), ctx);
+  runWithChatsModel(read('web/core/skin-host.js'), ctx);
   const host = ctx.window.WosSkinHost; let api = null;
   host._test.setImporter(async () => ({ default: a => { api = a; return () => calls.push(['teardown']); } }));
   const rows = { working: [{ id: 'w1', title: 'Working one', kind: 'working', actions: [] }], ready: [{ id: 'r1', title: 'Ready one', kind: 'ready', needs: true, actions: ['snooze', 'done'] }] };
@@ -79,10 +80,10 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
-  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'chats', 'list', 'newChat', 'open', 'openList', 'order', 'setOrder']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badgeText', 'badges', 'close', 'get', 'homeScreen', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'openLink', 'path', 'routeOpens', 'search', 'store']);
+  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'archiveOrder', 'chats', 'list', 'newChat', 'open', 'openList', 'order', 'ownList', 'setOrder', 'setWorkingOrder', 'workingOrder']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'back', 'badgeText', 'badges', 'close', 'get', 'homeScreen', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'openLink', 'path', 'routeOpens', 'search', 'store']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['attention', 'classic', 'emptyHome', 'home', 'look', 'setting', 'settings']);
-  assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
+  assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'reply', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
   assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
   assert.equal(D.host.panelMode, false);
@@ -126,7 +127,8 @@ test('skins and tweaks never get the layout-only lists or the command take', asy
 test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and feeds the orb voice and level', () => {
   const src = read('web/desktop/desktop.js');
   assert.match(src, /sessionAct: \(sid, act\) => \{[^}]*CHATS\.threadAct\(/);
-  assert.match(src, /KEEP = \['snooze', 'done', 'restore'\];[\s\S]{0,600}CHATS\.threadActions\(s\)\.filter\(a => KEEP\.includes\(a\)\)/, 'Snooze / Done (and Restore for the AI apps search) as Chats offers them');
+  assert.match(src, /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/, 'one row projection');
+  assert.match(read('web/core/chats-list-model.js'), /chats\.threadActions\(s, null\)\.filter\(a => \['snooze', 'done', 'restore'\]\.includes\(a\)\)/, 'Snooze / Done / Restore remain the Chats actions');
   assert.match(src, /window\.WosSkinHost\?\.voice\(st\)/); assert.match(src, /window\.WosSkinHost\?\.level\(l\)/);
   assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length/);
   assert.match(src, /removeDesktop\(d\); if \(window\.WosSkinHost\?\.emptyHome\) goHome\(\);/);
@@ -171,11 +173,11 @@ test('no desks: while a layout holds the panel everything opens in panels over H
   assert.match(fn('syncChatsPane'), /if \(sid && panelList\?\.id === base\) queueMicrotask\(\(\) => panelForward\(base, sid\)\); else if \(sid && panel\?\.id === base\) panel\.held = true; else if \(!sid && panel\?\.id === base && panel\.held\) queueMicrotask\(\(\) => panelThreadLeft\(base\)\);/);
   assert.match(fn('panelClose'), /winEl\(l\.id\)\?\.focus\(\{ preventScroll: true \}\)/, 'the keyboard goes back to the list');
   assert.match(fn('panelDock'), /if \(on && !panelListW\(\)\) \{ const id = uid\(\); W\[id\] = \{ id, app: 'chats', thread: null/);
-  assert.match(src, /leaveOnSend: id => !!\(globalThis\.WosSkinHost\?\.panelMode && panelDocked && panel\?\.id === id\),/);
+  assert.match(src, /keepThreadOpen: true/, 'desktop chat panels stay on their thread after send and state changes');
   assert.match(read('web/core/chats.js'), /!\(isNew \|\| PHONE\(\) \|\| H\.leaveOnSend\?\.\(wid\)\)\) return false;/);
-  // the keys reach the docked Chats over Home: ⌥↓/⌥↑ (also with its list folded behind a thread), ⌥→/⌥← on its thread
+  // the keys reach the docked Chats over Home: ⌥↓/⌥↑ (also with its list folded behind a thread); plain ⌥←/⌥→ stay native
   assert.match(fn('stepReady'), /const atHome = homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelWins\(\)\.some\(mainChats\)\);/);
-  assert.match(src, /const chatOpen = \(\) => \{ const f = focused\(\); return \(!homeOpen \|\| !!\(globalThis\.WosSkinHost\?\.panelMode && panelHas\(f\?\.id\)\)\) && f\?\.app/);
+  assert.match(fn('chatAct'), /homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelHas\(f\?\.id\)\)/, 'remaining Resolve action still reaches a docked panel over Home');
   assert.match(css, /@keyframes panel-in-left \{ from \{ transform: translateX\(calc\(-100% - 24px\)\); \}/);
   // it slides in from the right, a replacement settles in place, closing slides it away; reduced motion: none
   assert.match(css, /\.panel-layer \{ position: absolute; inset: 0; z-index: 140; pointer-events: none; \}/);
@@ -185,7 +187,7 @@ test('no desks: while a layout holds the panel everything opens in panels over H
 });
 
 test('Orb layout files: desktop-scoped CSS only, no second composer, no raw storage or network', () => {
-  const css = read('web/layouts/orb/layout.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@property[^{]*\{[^}]*\}/g, '');
+  const css = read('web/layouts/orb/layout.css').replace(/@import[^;]+;/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@property[^{]*\{[^}]*\}/g, '');
   const rules = [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(sel => sel && !/^(to|from|\d+%)$/.test(sel));
   assert.ok(rules.length > 40);
   for (const sel of rules) for (const part of sel.split(/,(?![^(]*\))/)) {

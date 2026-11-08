@@ -140,7 +140,8 @@
       st.setProperty('--sk-win', `rgba(${w[0] | 0},${w[1] | 0},${w[2] | 0},${glass})`); root.dataset.winGlass = '';
     }
     // space layers belong to Nebula only
-    const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
+    const space = a === 0 && !wizardImage(SKINS[a]) ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
+    imageState(SKINS[Math.round(p)]);
     const near = Math.round(p);
     if (near !== shown) { shown = near; root.dataset.skin = SKINS[near].id; window.WosSkinHost?.preview(SKINS[near].id); const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = SKINS[near].t.bg; }
     applyFrame(SKINS[near]);
@@ -170,15 +171,42 @@
     { id: 'glass', name: 'Glass', who: 'The hat in frosted glass over soft colour.' },
   ];
   let wall = (() => { try { const v = localStorage.getItem(WALL_KEY); return WALLS.some(w => w.id === v) ? v : 'landscapes'; } catch (_) { return 'landscapes'; } })();
+  // Wizard desktop has its own choice: never adopt a Mizel preference or change the phone.
+  const WIZARD_WALL_KEY = 'wos.skin.wallpaper.wizard.desktop';
+  const CUSTOM_WALL_KEY = 'wos.skin.wallpaper.wizard.custom';
+  const fileId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(id);
+  let customWall = (() => { try { const v = JSON.parse(localStorage.getItem(CUSTOM_WALL_KEY)); return fileId(v?.wide) ? { wide: v.wide, ...(fileId(v.tall) ? { tall: v.tall } : {}) } : null; } catch (_) { return null; } })();
+  let wizardWall = (() => { try { const v = localStorage.getItem(WIZARD_WALL_KEY); return (v === 'custom' && customWall) || WALLS.some(w => w.id === v) ? v : 'living'; } catch (_) { return 'living'; } })();
+  const desktopBackdrop = () => ({ id: wizardWall, ...(customWall || {}) });
+  function adoptDesktopBackdrop(v) {
+    if (!v || !['living', 'custom', ...WALLS.map(w => w.id)].includes(v.id) || (v.id === 'custom' && !fileId(v.wide))) throw new Error('Unknown background');
+    wizardWall = v.id;
+    customWall = fileId(v.wide) ? { wide: v.wide, ...(fileId(v.tall) ? { tall: v.tall } : {}) } : null;
+    try { wizardWall === 'living' ? localStorage.removeItem(WIZARD_WALL_KEY) : localStorage.setItem(WIZARD_WALL_KEY, wizardWall); customWall ? localStorage.setItem(CUSTOM_WALL_KEY, JSON.stringify(customWall)) : localStorage.removeItem(CUSTOM_WALL_KEY); } catch (_) {}
+    paint(pos); wake();
+    dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: wizardWall, desktopBackdrop: desktopBackdrop() } }));
+  }
+  const wizardBackgrounds = skin => root.dataset.shell === 'desktop' && skin.family === 'wizard';
+  const wizardImage = skin => wizardBackgrounds(skin) && wizardWall !== 'living';
+  function imageState(skin) {
+    // Material belongs to the Wizard palette, never to its selected backdrop.
+    if (wizardBackgrounds(skin)) root.dataset.wizardBackgrounds = '';
+    else delete root.dataset.wizardBackgrounds;
+    if (wizardImage(skin) || /^landscapes/.test(skin.id)) root.dataset.imageBackground = '';
+    else delete root.dataset.imageBackground;
+  }
   const WIZ = {
     memo: {},
     get(id, light, W, H) {
-      const file = `${id}${light ? '-light' : ''}-${H > W * 1.1 ? 'tall' : 'wide'}`, key = `${W}x${H}@${BGL.dpr}`;
+      const tall = H > W * 1.1;
+      const file = id === 'custom' ? `/wizard/files/${encodeURIComponent(tall && customWall?.tall || customWall?.wide || '')}/content` : `/wizard-os-home/core/skins/wizard/${id}${light ? '-light' : ''}-${tall ? 'tall' : 'wide'}.webp`, key = `${W}x${H}@${BGL.dpr}`;
       let m = this.memo[file];
-      if (!m) { m = this.memo[file] = { im: new Image(), ready: false, key: '', c: null }; m.im.decoding = 'async'; m.im.onload = () => { m.ready = true; wake(); }; m.im.src = `/wizard-os-home/core/skins/wizard/${file}.webp`; }
+      if (!m) { m = this.memo[file] = { im: new Image(), ready: false, key: '', c: null }; m.im.decoding = 'async'; m.im.onload = () => { m.ready = true; wake(); }; m.im.src = file; }
       if (!m.ready) return null;
       if (m.key !== key) { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), im = m.im, k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
-        x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h); m.c = o; m.key = key; }
+        x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
+        if (id === 'custom') LANDSCAPES.dark.shade(x, o); // Shared photo legibility policy; built-ins are already baked.
+        m.c = o; m.key = key; }
       return m.c;
     },
   };
@@ -202,9 +230,12 @@
       cover(slot, W, H) {
         const im = slot.im, o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
           w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
+        this.shade(x, o); slot.c = o;
+      },
+      shade(x, o) {
           // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
           const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, `rgba(11,10,16,${scrim[0]})`); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, `rgba(11,10,16,${scrim[1]})`);
-        x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o;
+        x.fillStyle = g; x.fillRect(0, 0, o.width, o.height);
       },
       // the window itself changed size: the same photo (never the next one), cropped again for the new size
       resize(s, W, H) { for (const slot of Object.values(s.img)) if (slot.ready && slot.im) this.cover(slot, W, H); },
@@ -214,8 +245,8 @@
         s.img = {}; s.cur = at; s.from = null; s.fadeAt = 0; s.shownAt = BGL.t; s.n = n;
         this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
       },
-      draw(c, s, t, dt, W, H) {
-        if (wall !== 'landscapes') { const w = WIZ.get(wall, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = this.LIGHT ? '#ece8f6' : '#0B0A10'; c.fillRect(0, 0, W, H); } return; }
+      draw(c, s, t, dt, W, H, selected = wall) {
+        if (selected !== 'landscapes') { const w = WIZ.get(selected, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = SKINS[Math.round(pos)].t.bg; c.fillRect(0, 0, W, H); } return; }
         const cur = s.img[s.cur];
         if (cur?.ready && t - s.shownAt > this.HOLD) {
           const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
@@ -406,18 +437,19 @@
     const c = BGL.cv[k], x = BGL.cx[k];
     c.style.opacity = op.toFixed(3);
     if (op < .002) return;
-    const id = SKINS[i].id, R = BG[id]; if (!R) return;
+    const image = wizardImage(SKINS[i]), id = image ? 'landscapes' : SKINS[i].id, R = BG[id]; if (!R) return;
     if (!BGL.st[id]) { BGL.st[id] = {}; R.init.call(R, BGL.st[id], BGL.W, BGL.H); }
-    x.setTransform(BGL.dpr, 0, 0, BGL.dpr, 0, 0); R.draw.call(R, x, BGL.st[id], BGL.t, dt, BGL.W, BGL.H);
+    x.setTransform(BGL.dpr, 0, 0, BGL.dpr, 0, 0); R.draw.call(R, x, BGL.st[id], BGL.t, dt, BGL.W, BGL.H, image ? wizardWall : wall);
   }
   // Motion belongs to the scenery gate (core/scenery.js): it calls draw() ~30 fps only while Home is live, and
   // still() once after a change (skin picked, resize) so a frozen scene still shows the right skin.
-  const needs = () => BGL.a !== 0 || BGL.f > .002;
+  const needs = () => BGL.a !== 0 || BGL.f > .002 || wizardImage(SKINS[BGL.a]);
   function drawAll(dt) {
     if (!BGL.cv.length) return;
     BGL.t += dt;
     const { a, b, f } = BGL;
-    const opA = a === 0 ? 0 : (b === 0 ? 1 - f : 1), opB = (b === a || b === 0) ? 0 : f;
+    const blank = i => i === 0 && !wizardImage(SKINS[i]);
+    const opA = blank(a) ? 0 : (blank(b) ? 1 - f : 1), opB = (b === a || blank(b)) ? 0 : f;
     drawLayer(0, a, opA, dt); drawLayer(1, b, opB, dt);
   }
   const LAYER = { name: 'skin', fps: 30, active: () => BGL.cv.length > 0 && needs(), draw: dt => drawAll(dt), still: () => drawAll(0), off: () => BGL.cv.forEach(c => { if (c.style.opacity !== '0') c.style.opacity = 0; }) };
@@ -460,16 +492,34 @@
       const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
       return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
     },
-    // Background (Landscapes palettes only): 'landscapes' (the photos) or a Wizard OS hat background. Per device.
+    // One catalogue/renderer for Mizel (both shells) and Wizard desktop; choices stay independent.
+    get wizardBackgrounds() { return wizardBackgrounds(SKINS[Math.round(pos)]); },
+
     wallpapers: Object.freeze(WALLS.map(w => Object.freeze({ ...w }))),
     // a small preview of a background in the current palette (night or day)
-    wallpaperThumb(id) { const light = /-light$/.test(SKINS[Math.round(pos)].id); return id === 'landscapes' ? `/wizard-os-home/skins/landscapes/preview${light ? '' : '-dark'}.webp` : `/wizard-os-home/core/skins/wizard/${id}${light ? '-light' : ''}-thumb.webp`; },
-    get wallpaper() { return wall; },
-    get wallpaperable() { return /^landscapes/.test(SKINS[Math.round(pos)].id); },
+    get desktopBackdrop() { return desktopBackdrop(); },
+    adoptDesktopBackdrop,
+    async uploadWallpaper(file, { portrait = false, onProgress } = {}) {
+      if (!file || !/^image\/(jpeg|png|webp|avif|gif)$/.test(file.type) || !file.size || file.size > 20 * 1024 * 1024) throw new Error('Choose a PNG, JPEG, WebP, AVIF or GIF image up to 20 MB.');
+      if (portrait && !customWall) throw new Error('Choose your main image first.');
+      if (!window.WizUploads?.supported()) throw new Error('Wizard Files is not ready. Try again shortly.');
+      // Decode before sending: a renamed non-image must never replace a working backdrop.
+      const image = await createImageBitmap(file); image.close();
+      const receipt = await window.WizUploads.upload(file, { onProgress });
+      if (!fileId(receipt?.id)) throw new Error('Wizard Files returned an invalid image.');
+      // Read the current choice after upload, not its stale pre-upload snapshot.
+      adoptDesktopBackdrop({ id: 'custom', ...(portrait ? { ...customWall, tall: receipt.id } : { wide: receipt.id }) });
+      return desktopBackdrop();
+    },
+    wallpaperThumb(id) { if (id === 'custom') return customWall ? `/wizard/files/${encodeURIComponent(customWall.wide)}/content` : ''; const light = /-light$/.test(SKINS[Math.round(pos)].id); return id === 'landscapes' ? `/wizard-os-home/skins/landscapes/preview${light ? '' : '-dark'}.webp` : `/wizard-os-home/core/skins/wizard/${id}${light ? '-light' : ''}-thumb.webp`; },
+    get wallpaper() { return this.wizardBackgrounds ? wizardWall : wall; },
+    get wallpaperable() { return this.wizardBackgrounds || /^landscapes/.test(SKINS[Math.round(pos)].id); },
     setWallpaper(id) {
+      const wizard = this.wizardBackgrounds;
+      if (wizard) { adoptDesktopBackdrop({ ...desktopBackdrop(), id }); return id; }
       if (!WALLS.some(w => w.id === id)) throw new Error('Unknown background');
-      wall = id; try { id === 'landscapes' ? localStorage.removeItem(WALL_KEY) : localStorage.setItem(WALL_KEY, id); } catch (_) {}
-      wake(); try { dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: id } })); } catch (_) {}
+      else { wall = id; try { id === 'landscapes' ? localStorage.removeItem(WALL_KEY) : localStorage.setItem(WALL_KEY, id); } catch (_) {} }
+      paint(pos); wake(); try { dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: id } })); } catch (_) {}
       return id;
     },
     // Window opacity: null = the skin's own glass. setGlass(null) returns to it.

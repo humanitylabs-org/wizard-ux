@@ -5,8 +5,8 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const src = read('web/store/store.js');
 const action = src.slice(src.indexOf('  function action('), src.indexOf('  const row ='));
 const render = (state, {busy = false, installed = false, open = false, reason = '', architecture = 'amd64'} = {}) =>
-  Function('status', 'S', 'architectureReason', 'esc', 'key', 'isInstalled', 'canOpen', 'openId', `${action}; return action({id:'fixture'}, 'big');`)(
-    () => state, {busy: new Set(busy ? ['fixture'] : []), architecture}, () => reason, x => x, () => 'fixture', () => installed, () => open, () => 'fixture');
+  Function('status', 'S', 'architectureReason', 'esc', 'key', 'isInstalled', 'canOpen', 'openId', 'progressText', `${action}; return action({id:'fixture'}, 'big');`)(
+    () => state, {busy: new Set(busy ? ['fixture'] : []), architecture}, () => reason, x => x, () => 'fixture', () => installed, () => open, () => 'fixture', () => 'Installing…');
 test('Store semantics preserve action precedence, hooks and compatibility while colouring each status', () => {
   for (const [state, options, cls, label] of [
     ['get', {}, '', 'Get'], ['installed', {installed:true,open:true}, 'open', 'Open'],

@@ -147,8 +147,8 @@
       return `hsl(${h} 72% 62%)`;
     },
     glyph(a) {
-      // Agents share the company hat; privacy changes its cutout, hue identifies the agent.
-      return A.isPrivate(a) ? 'hat-private' : 'hat';
+      // Home owns the company hat. The main agent wears Hermes; private agents keep the keyed hat.
+      return a?.is_default ? 'hermes' : A.isPrivate(a) ? 'hat-private' : 'hat';
     },
     sigil(a, cls = 'ag-sig') {
       const g = A.glyph(a), c = A.colour(a);

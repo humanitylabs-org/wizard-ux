@@ -7,8 +7,10 @@
  *   web/index.html    mobile shell entry (orb, desks, gestures)   → app.js, orb.js, styles.css
  *   web/desktop.html  desktop shell entry (tiling, keys, palette) → desktop/*
  * A shell never loads the other shell's code: shell-select.js picks one before anything else loads. */
-(() => {
+((root) => {
   'use strict';
+  // Classic boot and ES layout imports can both evaluate this file; preserve the original helper instances.
+  if (root.WizCore?.ago && root.WizCore?.store && root.WizCore?.emoOf) return;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -18,16 +20,17 @@
     set(k, v) { try { localStorage.setItem(prefix + k, JSON.stringify(v)); } catch (e) {} },
   });
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  // Short relative time; the owner's calendar (Wizard OS settings clock) for anything older than a day.
-  const ago = iso => {
-    const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
-    const m = Math.round((Date.now() - t) / 6e4);
-    if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (m < 24 * 60) return Math.round(m / 60) + 'h';
-    const d = window.WizConfig ? window.WizConfig.dayParts(t) : { dow: new Date(t).getDay(), d: new Date(t).getDate() }; return `${DOW[d.dow]} ${d.d}`;
+  // Shared Chats labels: relative hours for a full 24h, even across midnight; then the owner's calendar day.
+  // `now` is injectable for fixed-clock consumers/tests. AI apps' shortTime is an alias of this same function.
+  const ago = (at, now = Date.now()) => {
+    const t = typeof at === 'number' ? at : Date.parse(at || ''); if (!isFinite(t)) return '';
+    const elapsed = now - t, m = Math.round(elapsed / 6e4);
+    if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (elapsed < 864e5) return Math.round(m / 60) + 'h';
+    const d = root.WizConfig ? root.WizConfig.dayParts(t) : { dow: new Date(t).getDay(), d: new Date(t).getDate() }; return `${DOW[d.dow]} ${d.d}`;
   };
   const emoOf = (() => {
     let EMO = {}, at = 0;
-    return id => { if (Date.now() - at > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} at = Date.now(); } return EMO[`direct:${id}`] || window.WizBrand.html; };
+    return id => { if (Date.now() - at > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} at = Date.now(); } return EMO[`direct:${id}`] || root.WizBrand.html; };
   })();
-  window.WizCore = Object.assign(window.WizCore || {}, { esc, clip, norm, store, ago, emoOf, DOW });
-})();
+  root.WizCore = Object.assign(root.WizCore || {}, { esc, clip, norm, store, ago, emoOf, DOW });
+})(typeof window === 'object' ? window : globalThis);

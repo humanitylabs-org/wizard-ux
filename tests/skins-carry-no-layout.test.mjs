@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Skins are colours only (James and Miguel, 1 Nov 2026). Picking Dark, Light or Landscapes must never change the Chats
 // list, dock, Home or launcher on its own. Miguel's old Mizel layout is retired (2 Nov 2026): no tweak carries it, so
 // every skin runs the stock shell.
@@ -35,7 +36,7 @@ async function boot(skin, saved) {
   const storage = new Map([['wos.skin', skin], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', defaultsMigrated: true, machinesHomeMoved: true, ...saved })]]);
   let active = [];
   const window = { WosSkin: { current: skin, families: [], familyOf: () => '' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
-  vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {}, documentElement: { dataset: { skin } } }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
+  runWithChatsModel(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {}, documentElement: { dataset: { skin } } }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   await window.WosExperience.refresh();
   return { active, mix: JSON.parse(storage.get('wos.skin-tweaks.v1')).mix || {} };
 }

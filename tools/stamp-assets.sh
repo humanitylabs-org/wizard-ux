@@ -12,6 +12,21 @@
 set -eu
 root="${1:?usage: stamp-assets.sh <web-root>}"
 cd "$root"
+# Return an already-stamped tree to its canonical form before hashing it. Production hotfix images layer a small
+# web/ overlay onto the last image, so the input can already carry the previous release token. Without this pass,
+# rerunning the stamper leaves phones on the old URLs even though the served JavaScript changed.
+find . -name '*.html' -type f | while IFS= read -r page; do
+  sed -i.stamp -E \
+    -e 's#<meta name="wos-release" content="[0-9a-f]+">##g' \
+    -e 's#((src|href)="(/wizard-os-home/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.(js|css))\?v=[0-9a-f]{12}"#\1"#g' \
+    "$page"
+done
+find . -name '*.js' -type f ! -name data.js ! -name summaries.js | while IFS= read -r f; do
+  grep -qE "(from|import)[[:space:]]*\(?[[:space:]]*['\"]\.\.?/" "$f" || continue
+  sed -i.stamp -E "s#((from|import)[[:space:]]*\(?[[:space:]]*(['\"])\.\.?/[A-Za-z0-9._/-]+\.js)\?v=[0-9a-f]{12}(['\"])#\1\4#g" "$f"
+done
+find . -name '*.stamp' -type f -exec rm -f {} +
+
 # Owner-generated data (data.js, summaries.js) changes at runtime: never part of the token, never stamped.
 v=$(find . -type f ! -name data.js ! -name summaries.js | LC_ALL=C sort | xargs sha1sum | sha1sum | cut -c1-12)
 find . -name '*.html' -type f | while IFS= read -r page; do

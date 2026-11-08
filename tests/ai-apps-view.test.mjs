@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // AI apps view (Miguel, 2 Nov 2026): the ChatGPT / Claude / Perplexity phone layout as a third shell view beside Orb
 // and Apps (miguel/ai-apps, off by default; the views are mutually exclusive; all off = Desks). Guards:
 //   - packaging: an ordinary Miguel tweak named 'Different shell view - AI apps', manifest view, never a default, off in
@@ -50,16 +51,21 @@ class El {
   get title() { return this.attrs.title || ''; } set title(v) { this.attrs.title = String(v); }
   get value() { return this.attrs.value || ''; } set value(v) { this.attrs.value = String(v); }
   setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; }
+  hasAttribute(k) { return k in this.attrs; }
+  toggleAttribute(k, on) { const v = on === undefined ? !(k in this.attrs) : !!on; if (v) this.attrs[k] = ''; else delete this.attrs[k]; return v; }
   append(...n) { for (const c of n) { if (c == null) continue; if (typeof c === 'string') { this._text += c; continue; } c.remove(); c.parentNode = this; this.children.push(c); } }
+  insertBefore(n, ref) { n.remove(); n.parentNode = this; const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, n); return n; }
   replaceChildren(...n) { for (const c of this.children) c.parentNode = null; this.children = []; this._text = ''; this.append(...n); }
   remove() { if (this.parentNode) { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; } }
   get childElementCount() { return this.children.length; }
+  contains(n) { return n === this || this.all().includes(n); }
   get isConnected() { let n = this; while (n.parentNode) n = n.parentNode; return n.tagName === 'HTML'; }
   all() { return this.children.flatMap(c => [c, ...c.all()]); }
   querySelectorAll(sel) { sel = sel.replace(/\s*>\s*/g, ' '); return this.all().filter(n => matchesSel(n, sel)); }
   querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
   closest(sel) { for (let n = this; n && n.tagName; n = n.parentNode) if (matchesSel(n, sel)) return n; return null; }
   getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, width: 300, height: 44, right: 300, bottom: 44 }; }
+  getClientRects() { return [this.getBoundingClientRect()]; } // visibility overrides are supplied by individual geometry fixtures
   focus() {} decode() { return Promise.resolve(); }
   addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); } removeEventListener(t, fn) { this.listeners[t] = (this.listeners[t] || []).filter(f => f !== fn); }
   dispatchEvent(e) { e.target ||= this; for (let n = this; n; n = n.parentNode) for (const fn of [...(n.listeners?.[e.type] || [])]) fn(e); return true; }
@@ -67,6 +73,8 @@ class El {
 class FakePointerEvent { constructor(type, init = {}) { Object.assign(this, init, { type }); } preventDefault() { this.defaultPrevented = true; } stopPropagation() {} }
 
 function world({ shell = 'phone', route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' } } = {}) {
+  const paneContext = {}; vm.runInNewContext(read('web/core/pane-layout.js'), paneContext);
+  globalThis.WizCore = { ...globalThis.WizCore, panes: paneContext.WizCore.panes };
   const html = new El('html'), body = new El('body'), device = new El('div'), dock = new El('div'), orbWrap = new El('div');
   html.append(body); body.append(device); device.append(dock); dock.append(orbWrap);
   const docListeners = {};
@@ -79,13 +87,15 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
       archive: [{ id: 'a1', title: 'Old money talk', kind: 'archive', unread: false, pinned: false, actions: ['pin', 'rename', 'restore', 'snooze'] }] },
     desks: [{ desk: 1, id: 'wizard', name: 'Chats' }, ...['mail', 'music', 'money', 'notes', 'maps'].map((id, i) => ({ desk: i + 2, id, name: id[0].toUpperCase() + id.slice(1) }))] };
   const apps = ['mail', 'music', 'money', 'notes', 'maps', 'movies'].map(id => ({ id, name: id[0].toUpperCase() + id.slice(1) }));
+  const backWindow = {}; vm.runInNewContext(read('web/core/escape-back.js'), {window:backWindow});
+  const dispatcher = backWindow.WizEscapeBack.create();
   const api = {
     env: { shell, edgeInset: 24 }, route: () => ({ ...st.route }), on: (t, fn) => { (st.on[t] ||= []).push(fn); return () => {}; },
     listen: (t, type, fn) => { if (t === doc) doc.addEventListener(type, fn); else if (t?.addEventListener) t.addEventListener(type, fn); return () => {}; },
     mount: n => { device.append(n); return () => n.remove(); },
     after: (ms, fn) => { const h = { ms, fn, dead: false }; st.timers.push(h); return () => { h.dead = true; }; },
     frame: fn => { fn(0); return () => {}; },
-    back: { push: fn => { st.backs.push(fn); return () => { const i = st.backs.indexOf(fn); if (i >= 0) st.backs.splice(i, 1); }; } },
+    back: { surface: fn => { st.surface = fn; return () => { st.surface = null; }; }, push: fn => { st.backs.push(fn); const release = dispatcher.push(fn); return () => { release(); const i = st.backs.indexOf(fn); if (i >= 0) st.backs.splice(i, 1); }; } },
     gesture: { intent: dx => dx > 60, claim: id => { (st.claims ||= []).push(id); return true; } },
     agents: { list: () => [{ id: 'hermes', label: 'Oscar', main: true }] },
     workspaces: { list: () => [{ id: 'this', name: 'Miguel', current: true, owner: 'Miguel Collins' }, { id: 'g1', name: 'Carlos', org: 'Acme', current: false }], refresh() {} },
@@ -95,17 +105,58 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
     desks: { list: () => st.desks.map(d => ({ ...d })) },
     desk: { settings: p => st.settings.push(p ?? '') },
     voice: { tap: () => st.orbDown.push('tap') },
-    phone: { orb: () => orbWrap, mark: () => null, desks: () => st.desks, swipes: m => { st.swipes = m; return () => { st.swipes = null; }; } },
+    // the shell adapter's own scope (app.js chatsSurfaces): each Chats window's shared surface
+    phone: { chats: () => [...html.querySelectorAll('.win.app-chats')].map(win => ({ get composer() { return win.querySelector('.ch-compose'); }, get notification() { return win.querySelector('.ch-thread.ch-notif-thread'); } })), orb: () => orbWrap, mark: () => null, desks: () => st.desks, swipes: m => { st.swipes = m; return () => { st.swipes = null; }; } },
     storage: { get: k => k in st.store ? JSON.parse(JSON.stringify(st.store[k])) : null, set: (k, v) => { st.store[k] = JSON.parse(JSON.stringify(v)); } },
   };
   orbWrap.addEventListener('pointerdown', e => st.orbDown.push(e.pointerId));
   const fire = (type, target, extra = {}) => { const e = new FakePointerEvent(type, { target, isPrimary: true, pointerId: 7, clientX: 100, clientY: 400, button: 0, ...extra }); for (const fn of docListeners[type] || []) fn(e); if (!e.stopped) target?.dispatchEvent?.(e); return e; };
   const emit = (t, v) => { for (const fn of st.on[t] || []) fn(v); };
+  // Adapt this legacy DOM fixture at the same host boundary as the real shell.
+  // Layout code itself must not infer app identity from Classic markup.
+  const hostWindow = {}; vm.runInNewContext(read('web/core/desktop-host.js'), { window: hostWindow, queueMicrotask, console });
+  const hostFrames = new Map(), inferredGroups = new WeakSet();
+  const windows = () => {
+    hostFrames.clear(); const rows = [];
+    for (const group of html.querySelectorAll('#stage > .wsp')) {
+      const isChat = !!group.querySelector('.dchats');
+      if (group.dataset.ws == null) inferredGroups.add(group);
+      const desk = inferredGroups.has(group) ? (isChat ? st.desks.find(d => d.id === 'wizard')?.desk : st.route.desk) : Number(group.dataset.ws);
+      if (inferredGroups.has(group)) group.dataset.ws = desk;
+      const appId = isChat ? 'wizard' : st.desks.find(d => d.desk === desk)?.id || st.route.app;
+      const wins = group.querySelectorAll('.win');
+      for (const win of wins.length ? wins : [group]) {
+        const id = win.dataset.win ||= 'fixture-' + rows.length, frame = win.querySelector('iframe');
+        hostFrames.set(id, frame);
+        const chatBody = isChat && (win.querySelector('.pane-main') || win.querySelector('.dchats'));
+        if (chatBody) chatBody.dataset.chats = id;
+        rows.push({ id, desk, deskId: 'group-' + desk, kind: isChat ? 'chats' : frame ? 'frame' : 'settings', appId, thread: isChat ? win.querySelector('.dchats')?.dataset.thread : null, tiled: !win.classList.contains('gone'), visible: !group.hidden, focused: false });
+      }
+    }
+    return rows;
+  };
+  const chatsWindow = { WizCore: { chats: () => ({ forget() {} }) } };
+  vm.runInNewContext(read('web/core/chats-view.js'), { window: chatsWindow, document: doc, URL, URLSearchParams, console });
+  globalThis.WizChatsHost = chatsWindow.WizChatsHost;
+  const sharedChats = chatsWindow.WizChatsHost.create({ win: id => windows().find(w => w.id === id), root: () => html });
+  const hostController = hostWindow.WizDesktop.attach({ windows, has: id => windows().some(w => w.id === id), frame: id => hostFrames.get(id), openApp: () => true, close: () => false,
+    chats: id => sharedChats.surface(id),
+    placements: () => { windows(); return [...html.querySelectorAll('#stage > .wsp')].map(n => ({ desk: Number(n.dataset.ws), node: n, shown: !n.hidden })); },
+    settings: () => { const n = doc.querySelector('#dsettings'); return { isOpen: !!n && !n.hidden && n.parentNode === body, closePart: n?.querySelector('.st-close') }; },
+    closeSettings: () => { const b = doc.querySelector('#dsettings .st-close'); b?.click?.(); return !!b; },
+    settingsOverlay: () => { html.dataset.settingsOver = ''; return () => { delete html.dataset.settingsOver; }; },
+    focus: id => { (st.hostFocus ||= []).push(id); return true; }, renderTools: (_, slot) => { slot.replaceChildren(); return false; } });
+  globalThis.WizDesktop = hostWindow.WizDesktop;
+  st.hostChanged = hostController.changed;
   const run = () => { const t = st.timers.splice(0); for (const h of t) if (!h.dead) h.fn(); };
   const q = s => html.querySelector(s), qa = s => html.querySelectorAll(s);
-  return { api, st, html, device, orbWrap, fire, emit, run, q, qa, doc };
+  return { api, st, html, device, orbWrap, fire, emit, run, q, qa, doc, escape: () => !!dispatcher.run({surface:st.surface}) };
 }
-const layout = () => import(new URL('web/layouts/ai-apps/layout.js', root).href);
+// The host picks each shell's own entry (core/skin-host.js files: desktop -> desktop.js; the phone -> layout.js).
+const layout = async () => {
+  const [phone, desk] = await Promise.all([import(new URL('web/layouts/ai-apps/layout.js', root).href), import(new URL('web/layouts/ai-apps/desktop.js', root).href)]);
+  return { default: api => (api.env.shell === 'desktop' ? desk : phone).default(api) };
+};
 
 test('packaging: an ordinary Miguel view tweak, off by default; the desktop wears AI apps, the phone keeps its stock view', async () => {
   const man = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
@@ -113,7 +164,7 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(cat.tweaks.includes('miguel/ai-apps') && !cat.defaults.includes('miguel/ai-apps'), 'listed, never a default');
   assert.ok(prof.tweaks.includes('miguel/ai-apps') && prof.off.includes('miguel/ai-apps'), 'off in his profile until he turns it on');
-  assert.ok(!/ai-apps/.test(read('web/core/experience.js')), 'no migration turns it on');
+  assert.ok(!/miguel\/ai-apps/.test(read('web/core/experience.js')), 'the standard desktop choice never depends on a personal tweak');
   const p = fixture({ shell: 'phone' });
   await p.mount('miguel/ai-apps'); await settle();
   assert.equal(p.host.layout, 'classic', 'desktop only (Miguel, 4 Nov 2026): the phone keeps its stock view');
@@ -126,14 +177,27 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   const host = read('web/core/skin-host.js');
   assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
-  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored AI apps layout goes back to Desks');
+  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
+});
+
+test('standard AI apps and the personal tweak are idempotent and release cannot remove the standard view', async () => {
+  const d = fixture({ shell: 'desktop' });
+  d.host.setStandardLayout('ai-apps'); await settle();
+  assert.ok(!d.ctx.localStorage.getItem('wos.layout'), 'desktop default must not leak into the phone legacy layout key');
+  await d.mount('miguel/ai-apps'); await settle();
+  assert.equal(d.host.layout, 'ai-apps');
+  await d.clear(); assert.equal(d.host.layout, 'ai-apps');
+  d.ctx.localStorage.setItem('wos.layout', 'orb');
+  d.host.setStandardLayout('classic'); assert.equal(d.host.layout, 'classic');
+  d.host.setStandardLayout('ai-apps'); assert.equal(d.host.layout, 'ai-apps');
+  assert.equal(d.ctx.localStorage.getItem('wos.layout'), 'orb', 'desktop changes preserve an existing phone choice');
 });
 
 test('scoped and quiet: every rule needs the worn layout on the phone; skin tokens only; no timers or storage of its own', () => {
   const css = read('web/layouts/ai-apps/layout.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\("[^"]*"\)/g, 'url()');
   const body = css.replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '').replace(/@media[^{]*\{/g, '');
   for (const sel of [...body.matchAll(/([^{}]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(Boolean)) for (const part of sel.split(/,(?![^(]*\))/))
-    assert.ok(/^html\[data-shell="phone"\]\[data-layout="ai-apps"\]/.test(part.trim()), `unscoped: ${part.trim()}`);
+    assert.ok(/^html\[data-shell="phone"\]\[data-layout="ai-apps"\]/.test(part.trim()) || /^html\[data-shell="desktop"\]\[data-layout="ai-apps"\]\[data-(chats-owner|layout-booting)\]/.test(part.trim()), `unscoped: ${part.trim()}`);   // the desktop's two first-frame rules (core/skin-host.js boot)
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i.test(css), 'colours are skin tokens');
   assert.ok(!/font(-size)?\s*:[^;}]*\b\d+px/.test(css), 'type in rem');
   const tw = read('web/tweaks/miguel/ai-apps/tweak.css').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -170,10 +234,10 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.q('.aad-strip'), null, 'round 15: no tab strip'); assert.equal(w.q('.aad-tplus'), null, 'no New tab +');
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.vcSheet, 'open', 'the picker'); assert.ok(w.q('.vc-sheet.vc-pick')); assert.equal(w.st.newChats, 0, 'no new chat for it');
-  assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['movies'], 'only installed apps neither pinned (Music, Mail, Money) nor open (Notes, Maps)');
+  assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['mail', 'music', 'money', 'notes', 'maps', 'movies'], 'desktop app search includes installed, open and pinned apps');
   assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
   assert.ok(w.q('.vc-pick .vc-more'), '+ Get more last');
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'ready:true'], 'round 18 item 4: Snoozed only when it holds chats (as on the rail)');
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'archive:false'], 'round 18 item 4: Snoozed only when it holds chats (as on the rail); Archive last (James, 6 Nov 2026)');
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
   assert.equal(w.q('.aad-viewall'), null, 'no View all: the sidebar is the chat list');
   w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
@@ -190,8 +254,8 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.vcSheet, undefined, 'a pick closes the picker');
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
   w.q('.vc-pick .vc-more').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'app-store', 'Get more = the App Store as it is');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyR' }), true, 'round 21: ⌥R folds the apps column (the right one)');
-  assert.equal(w.html.dataset.aadTabs, 'rail'); keys[2].down({ altKey: true, code: 'KeyR' }); assert.equal(w.html.dataset.aadTabs, 'open');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyR' }), true, 'round 21: ⌥R folds the apps column (the right one)');
+  assert.equal(w.html.dataset.aadTabs, 'rail'); keys[1].down({ altKey: true, code: 'KeyR' }); assert.equal(w.html.dataset.aadTabs, 'open');
   // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
   w.q('.aad-rw[data-sid="r2"] .aad-more').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Snooze', 'Archive']);
@@ -212,18 +276,18 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
-  assert.equal(keys.length, 3, 'Ctrl/⌘+Shift+S, Esc for the app panel / chat column (round 7), the view\'s ⌥ keys');
+  assert.equal(keys.length, 2, 'Ctrl/⌘+Shift+S and the view’s ⌥ keys; Escape belongs to the core dispatcher');
   assert.equal(w.st.guides.length, 1, 'round 21: one hold-⌥ guide, the view\'s targets (no app letters any more)');
   const chips = w.st.guides[0]();
   assert.ok(Array.isArray(chips), 'the guide lists chips');
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc closes the picker'); assert.equal(w.html.dataset.vcSheet, undefined);
-  assert.equal(keys[1].down({ key: 'Escape' }), false, 'Esc with nothing open: not the layout\'s');
+  assert.equal(w.escape(), true, 'Esc closes the picker'); assert.equal(w.html.dataset.vcSheet, undefined);
+  assert.equal(w.escape(), true, 'bare AI apps root consumes Escape without legacy navigation');
   assert.equal(keys[0].down({ ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'S' }), true); assert.equal(w.html.dataset.aadSide, 'open');
   assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   assert.equal(keys[0].down({ altKey: true, code: 'KeyS', key: 's' }), false, 'the ⌥ keys stay the shell\'s');
   // round 15: the top row holds a docked chat's title + ✕ and the app panel's header (no tab strip)
-  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']);
+  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']); // parked until an app owns it
   assert.equal(w.q('.aad-top .aad-ws'), null, 'the switcher lives in the sidebar header');
   assert.equal(w.q('.aad-wsn').textContent, 'Miguel'); assert.match(w.q('.aad-ws').getAttribute('aria-label'), /Workspace: Miguel/);
   w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
@@ -268,18 +332,22 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   assert.match(css, /:is\(\.ch-newchat, \.nc-classic\) \{ display: none !important; \}/, 'Home has no greeting');
   assert.match(css, /\.ch-row2 \{\s*display: grid !important;[^}]*min-height: 52px;[^}]*border-radius: 26px;/, 'a 52 px pill composer (r 26)');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
+  // The orb identity reuses WizSigil's already-rendered glyph markup, not a
+  // second renderer. Keep that narrow exception visible; forbid other sinks.
+  assert.match(js, /const html = a && S \? \(a\.sgh \|\| S\.html\(a\.sigil \|\| a\)\) : micMarkup;/);
+  const withoutSigilMarkup = js.replace('micG.innerHTML', 'micGlyph').replace('micG.innerHTML = html', 'micGlyph = html');
+  assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(withoutSigilMarkup), 'no independent markup, timers, storage or fetches beyond the shared sigil glyph');
   assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS, MIC \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
   assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;/);
 });
 
 test('desktop core hooks: the adapter lists chats with Chats\' own actions, shows the Chats desk, a New chat in it; Settings over the page', () => {
   const dj = read('web/desktop/desktop.js');
-  const fn = dj.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    \/\/ The thread's own actions/)[1];
+  const fn = dj.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    \/\/ The thread's own actions/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
   const CHATS = { threadActions: x => x.id === 'w' ? [] : x.id === 'a' ? ['restore', 'snooze'] : ['snooze', 'stop_watch', 'done'] };
-  const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
+  const out = runWithChatsModel(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
   assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
@@ -291,13 +359,13 @@ test('desktop core hooks: the adapter lists chats with Chats\' own actions, show
 test('nothing hidden: failed / interrupted chats and By day\'s Yesterday / Past week are in Ready (both adapters)', () => {
   // (Miguel, 4 Nov 2026: "the grouping and sorting doesn't always show everything"): this view has no Errors or day
   // sections, so stock's errors / yesterday / pastWeek groups must land in Ready, a failed one ranked with Needs you.
-  for (const [file, re] of [['web/desktop/desktop.js', /sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    \/\/ The thread's own actions/], ['web/app.js', /sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    sessionAct/]]) {
+  for (const [file, re] of [['web/desktop/desktop.js', /sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    \/\/ The thread's own actions/], ['web/app.js', /sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/]]) {
     const fn = read(file).match(re)[1];
     const s = (id, extra = {}) => ({ id, title: id, status: 'completed', ...extra });
     const LIVE = { ok: true, readyRank: () => 5, isNew: () => false, cardAt: () => '',
       workGroups: () => ({ errors: [s('e', { status: 'interrupted' })], working: [s('w', { status: 'running' })], ready: [s('r')], yesterday: [s('y')], pastWeek: [s('p')], deferred: [], archive: [s('a')] }) };
     const CHATS = { threadActions: () => [], stiKind: x => x.status === 'interrupted' ? 'failed' : 'none' };
-    const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: {} });
+    const out = runWithChatsModel(`(${fn})()`, { LIVE, CHATS, window: {} });
     const all = ['working', 'ready', 'snoozed', 'archive'].flatMap(k => out[k].map(r => r.id)).sort();
     assert.deepEqual(all, ['a', 'e', 'p', 'r', 'w', 'y'], file + ': every chat is listed somewhere');
     assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.state, r.rank]))), [['e', 'failed', 1], ['r', 'none', 5], ['y', 'none', 5], ['p', 'none', 5]], file);
@@ -322,7 +390,7 @@ test('top bar: ☰ (the unread badge) · Home · the workspace switcher (Home on
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
   const rows = w.q('.aa-scroll').children.map(n => n.className.split(' ').find(c => /^aa-(grid|app|more|all|div|sec|sec-b|chat|viewall|empty)$/.test(c)));
-  assert.deepEqual(rows.map(c => c || 'aa-sech'), ['aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sech', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
+  assert.deepEqual(rows.map(c => c || 'aa-sech'), ['aa-sech', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sech', 'aa-sec-b', 'aa-sec', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
   assert.equal(w.q('.aa-scroll .aa-grid'), null, 'no app grid and no All apps in the drawer');
   assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['r1:ready', 'r2:ready'], 'Ready open; Working and Archive folded at first');
   assert.ok(w.q('.aa-chat[data-sid="r1"] .aa-st').classList.contains('is-new') && w.q('.aa-chat[data-sid="r1"] .aa-pin'), 'new dot, pin mark');
@@ -355,7 +423,52 @@ test('top bar: ☰ (the unread badge) · Home · the workspace switcher (Home on
   assert.equal(w.q('.aa-top'), null); assert.equal(w.html.dataset.aiApps, undefined); assert.equal(w.html.dataset.viewChrome, undefined);
 });
 
-test('search covers chats (archive too) and apps; a chat row opens its thread; a long press opens its menu, mapped to Chats\' own actions', async () => {
+test('desktop contextual Chats search never recommends apps; local input, rail, Back and thread actions stay intact', async () => {
+  const w = world({ shell: 'desktop' }), keys = [];
+  Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n,
+    keys: { on: h => { keys.push(h); return () => {}; }, guide: () => () => {} },
+    orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} },
+    voice: { state: () => ({ state: 'idle' }), talk() {}, command() {} } });
+  const ordinaryApps = w.api.apps.list;
+  w.api.apps.list = () => [...ordinaryApps(), { id: 'browser', name: 'Browser' }, { id: 'app-only', name: 'Apponlycounterexample' }];
+  w.st.sessions.ready[0].title = 'Browser research';
+  w.st.sessions.archive[0].title = 'Old browser discussion';
+  w.st.sessions.archive.push({ ...w.st.sessions.ready[0] }); // same thread in two buckets: one result
+  const off = (await layout()).default(w.api);
+  const ids = () => w.qa('.aad-scroll .aad-rw').map(n => n.dataset.sid);
+  const sections = () => w.qa('.aad-sec').map(n => [n.dataset.sec, n.getAttribute('aria-expanded')]);
+  const originalSections = sections(), originalIds = ids();
+  const input = q => { const f = w.q('.aad-q'); f.value = q; f.dispatchEvent(new FakePointerEvent('input')); };
+  for (const s of ['.aad-find', '.aad-rfind', '.aad-q']) assert.equal(w.q(s).getAttribute('aria-label'), 'Search chats');
+  assert.equal(w.q('.aad-q').getAttribute('placeholder'), 'Search chats');
+  w.q('.aad-find').dispatchEvent(new FakePointerEvent('click'));
+  const readSessions = w.api.sessions.list;
+  w.api.sessions.list = () => { throw Error('typing must use the existing local projection'); };
+  input('browser');
+  w.api.sessions.list = readSessions;
+  assert.deepEqual(ids(), ['r1', 'a1'], 'synchronous current + archive thread matches, deduplicated');
+  assert.equal(w.q('.aad-scroll [data-app]'), null, 'installed Browser never enters contextual results');
+  assert.deepEqual(w.qa('.aad-scroll .aad-lab').map(n => n.textContent), ['Chats']);
+  for (const term of ['Apponlycounterexample', 'no-such-chat']) {
+    input(term); assert.deepEqual(ids(), []); assert.equal(w.q('.aad-scroll [data-app]'), null);
+    assert.equal(w.q('.aad-empty').textContent, 'No chats by that name.');
+    w.q('.aad-q').dispatchEvent(new FakePointerEvent('keydown', { key: 'Enter' }));
+    assert.deepEqual(w.st.opened, [], 'Enter on empty results must not open an app or thread');
+  }
+  input(''); assert.deepEqual(sections(), originalSections); assert.deepEqual(ids(), originalIds);
+  input('browser'); w.q('.aad-cancel').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.q('.aad-search').hidden, true); assert.deepEqual(sections(), originalSections);
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'rail');
+  w.q('.aad-rfind').dispatchEvent(new FakePointerEvent('click')); input('browser'); assert.deepEqual(ids(), ['r1', 'a1']);
+  assert.equal(w.escape(), true); assert.equal(w.q('.aad-search').hidden, true); assert.deepEqual(sections(), originalSections);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyK' }), true); input('browser');
+  w.q('.aad-rw[data-sid="a1"] .aad-row').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.st.opened, ['thread:a1'], 'exact archive thread clicked, no app open');
+  assert.deepEqual(w.st.acts, []); assert.equal(w.q('.aad-search').hidden, true);
+  off();
+});
+
+test('phone search still covers chats (archive too) and apps; a chat row opens its thread; a long press opens its menu, mapped to Chats\' own actions', async () => {
   const w = world();
   (await layout()).default(w.api);
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
@@ -399,7 +512,7 @@ test('desktop: covered AI apps panel apps never receive front-only service admis
   const js = read('web/desktop/desktop.js');
   const expression = js.match(/isFront: (\(\) => .*?), back: \(\) => closeWorkflow/)[1];
   for (const hidden of [false, true]) for (const hosted of [false, true]) {
-    const value = vm.runInNewContext('(' + expression + ')()', { WosSkinHost: { panelMode: true }, panelHas: () => true, w: { id: 'qa-app' }, pal: { hidden }, CHATS: { isHosted: () => hosted }, homeOpen: true });
+    const value = runWithChatsModel('(' + expression + ')()', { WosSkinHost: { panelMode: true }, panelHas: () => true, w: { id: 'qa-app' }, pal: { hidden }, CHATS: { isHosted: () => hosted }, homeOpen: true });
     assert.equal(value, hidden && !hosted, 'palette=' + !hidden + ', hosted=' + hosted);
   }
 });
@@ -534,18 +647,18 @@ test('round 4: the composer: no voice button of its own (the orb talks), the mic
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
   const app = read('web/app.js'), host = read('web/core/skin-host.js');
-  const fn = app.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    sessionAct/)[1];
+  const fn = app.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
   const CHATS = { threadActions: x => x.id === 'w' ? [] : x.id === 'a' ? ['restore', 'snooze'] : ['snooze', 'stop_watch', 'done'] };
-  const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
+  const out = runWithChatsModel(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
   assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
   const act = app.match(/sessionAct: (\(sid, act\) => \{[\s\S]*?\n    \}),\n    showChats/)[1];
   const calls = [], ctx = { window: { WosChatPins: { toggle: () => true } }, toast: (...a) => calls.push(['toast', a[1]]), showChats: () => ({ id: 'c1' }),
     CHATS: { openRenameSheet: (w, id) => calls.push(['rename', w, id]), threadAct: (w, id, a) => calls.push(['act', w, id, a]) } };
-  const run = vm.runInNewContext(`(${act})`, ctx);
+  const run = runWithChatsModel(`(${act})`, ctx);
   run('s1', 'pin'); run('s1', 'rename'); run('s1', 'done'); run('s1', 'unread');
   assert.deepEqual(calls, [['toast', 'Pinned'], ['rename', 'c1', 's1'], ['act', 'c1', 's1', 'done'], ['act', 'c1', 's1', 'unread']]);
   assert.match(app, /showChats: \(\) => !!showChats\(\),\n    newChat: \(\) => \{ const w = showChats\(\); if \(!w\) return false; CHATS\.openChat\(w\.id, '__new__'\); return true; \},/);
@@ -555,7 +668,7 @@ test('core hooks: the phone adapter lists chats with Chats\' own actions and act
   assert.match(host, /settings: page => \{ if \(live\(\)\) shell\.openSettings\?\.\(typeof page === 'string' && \/\^\[a-z-\]\{1,24\}\$\/\.test\(page\) \? page : undefined\); \},/);
   // workspaces: this Wizard first, then the managed ones from the devices registry
   const ws = host.match(/list: \(\) => \{\n          if \(!live\(\) \|\| !isDoc\) return \[\];([\s\S]*?)\n        \},\n        refresh/)[1];
-  const list = vm.runInNewContext(`(() => {${ws}})()`, { window: { WosResources: { state: { devices: { this: { wizard: 'Miguel' }, managed: [{ id: 'g', name: 'Carlos', org: 'Acme' }, null] } } }, WizConfig: { agent: () => 'Oscar', owner: () => 'Miguel' } } });
+  const list = runWithChatsModel(`(() => {${ws}})()`, { window: { WosResources: { state: { devices: { this: { wizard: 'Miguel' }, managed: [{ id: 'g', name: 'Carlos', org: 'Acme' }, null] } } }, WizConfig: { agent: () => 'Oscar', owner: () => 'Miguel' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(list)), [{ id: 'this', name: 'Miguel', org: '', current: true, owner: 'Miguel' }, { id: 'g', name: 'Carlos', org: 'Acme', current: false }]);
 });
 
@@ -634,13 +747,13 @@ test('round 5: the drawer IS the chat list: Archive, Working, Ready sections tha
   (await layout()).default(w.api);
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   const heads = () => w.qa('.aa-sec').map(h => `${h.textContent}:${h.getAttribute('aria-expanded')}`);
-  assert.deepEqual(heads(), ['Archive:false', 'Working:false', 'Snoozed:false', 'Ready:true'], 'the stock Chats order (Archive on top), round 13: Snoozed above Ready, Ready open at first');
+  assert.deepEqual(heads(), ['Working:false', 'Snoozed:false', 'Ready:true', 'Archive:false'], 'the stock Chats order (Archive last: James, 6 Nov 2026), round 13: Snoozed above Ready, Ready open at first');
   assert.ok(w.qa('.aa-sec').every(h => h.tagName === 'BUTTON' && h.classList.contains('aa-lab')), 'the Recents label\'s look, a button');
   assert.equal(w.qa('.aa-lab').filter(h => h.textContent === 'Recents').length, 0, 'no Recents');
   // Archive opens: its rows come from the real archive list (the trusted session hook), with Restore in their menu
   w.q('.aa-sec[data-sec="archive"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(heads(), ['Archive:true', 'Working:false', 'Snoozed:false', 'Ready:true']);
-  assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['a1:archive', 'r1:ready', 'r2:ready']);
+  assert.deepEqual(heads(), ['Working:false', 'Snoozed:false', 'Ready:true', 'Archive:true']);
+  assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['r1:ready', 'r2:ready', 'a1:archive']);
   assert.deepEqual(w.st.store.sections, { archive: true, working: false, snoozed: false, ready: true }, 'remembered on this device (api.storage)');
   w.q('.aa-sec[data-sec="ready"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aa-chat').map(b => b.dataset.sid), ['a1'], 'Ready folds too');
@@ -650,10 +763,14 @@ test('round 5: the drawer IS the chat list: Archive, Working, Ready sections tha
   // a fresh layout on this device reads the stored choice
   const w2 = world(); w2.st.store.sections = { archive: true, working: true, ready: false };
   (await layout()).default(w2.api); w2.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w2.qa('.aa-sec').map(h => h.getAttribute('aria-expanded')), ['true', 'true', 'false', 'false']);
-  assert.deepEqual(w2.qa('.aa-chat').map(b => b.dataset.sid), ['a1', 'w1']);
+  assert.deepEqual(w2.qa('.aa-sec').map(h => h.getAttribute('aria-expanded')), ['true', 'false', 'false', 'true']);
+  assert.deepEqual(w2.qa('.aa-chat').map(b => b.dataset.sid), ['w1', 'a1']);
+  // Miguel's "Archive on top" tweak is the only way to put Archive first in the phone drawer
+  const w3 = world(); w3.html.dataset.tweaks = 'wizard/unified-inbox miguel/archive-top';
+  (await layout()).default(w3.api); w3.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w3.qa('.aa-sec').map(h => h.textContent), ['Archive', 'Working', 'Snoozed', 'Ready'], 'archive-top: Archive first');
   const { SECTIONS, sectionsOpen } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
-  assert.deepEqual(SECTIONS.map(x => x[0]), ['archive', 'working', 'snoozed', 'ready']);
+  assert.deepEqual(SECTIONS.map(x => x[0]), ['working', 'snoozed', 'ready', 'archive']);
   assert.deepEqual(sectionsOpen(null), { archive: false, working: false, snoozed: false, ready: true }, 'Snoozed folded at first');
   assert.deepEqual(sectionsOpen({ ready: 'x', archive: true }), { archive: true, working: false, snoozed: false, ready: true }, 'only booleans are taken');
 });
@@ -680,7 +797,7 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
   assert.match(host, /const ORB_SWIPE_ACTS = \{ up: \['home', 'new'\], side: \[\], down: \[\] \};/);
   const calls = []; const focused = []; const ta = { value: 'hi', focus: o => focused.push(o), setSelectionRange: (a, b) => calls.push([a, b]) };
   const w0 = { id: 'c1' }; const ctx = { sheet: null, closeSheets() {}, pillOvOpen: () => false, closeOverview() {}, showChats: () => w0, CHATS: { openChat: (id, t) => calls.push([id, t]) }, winEl: id => ({ querySelector: () => (id === 'c1' ? ta : null) }) };
-  vm.runInNewContext(fn + '; orbSwipeNew();', ctx);
+  runWithChatsModel(fn + '; orbSwipeNew();', ctx);
   assert.deepEqual(calls, [['c1', '__new__'], [2, 2]]); assert.equal(JSON.stringify(focused), '[{"preventScroll":true}]');
 });
 
@@ -723,7 +840,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
   const calls = [], items = [{ id: 'a', title: '**Pay** card', time: 300, read: false, app: 'money', priority: 4 }, { id: 'b', message: 'Backup done\nok', time: 100, read: true }, { id: 'c', title: 'old', time: 50, archived: true }];
   const ctx = { isDoc: true, window: { WosBell: { items: () => items } }, inboxThreads: new Map([['wizard/unified-inbox', { list: true, act: (a, i) => calls.push([a, i]) }]]) };
-  vm.runInNewContext(src + ';globalThis.withNoteRows = withNoteRows; globalThis.inboxAct = inboxAct;', ctx);
+  runWithChatsModel(src + ';globalThis.withNoteRows = withNoteRows; globalThis.inboxAct = inboxAct;', ctx);
   const rows = JSON.parse(JSON.stringify(ctx.withNoteRows([{ id: 'r9', at: new Date(200000).toISOString() }])));
   assert.deepEqual(rows.map(r => r.id), ['notif:a', 'r9', 'notif:b'], 'new ones among the chats by time, snoozed last, archived left out');
   assert.deepEqual([rows[0].title, rows[0].note, rows[0].unread, rows[0].actions, rows[2].title, rows[2].actions], ['money · Pay card', true, true, ['snooze', 'done'], 'Wizard · Backup done', ['restore', 'done']], 'each row names where it came from');
@@ -736,7 +853,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   const f = folded.find(r => r.count === 3);
   assert.ok(f && f.id === 'notif:m2' && f.title === 'Money (3) · Villa · Apple · Grab', 'Money is one row: name, count, newest titles');
   assert.ok(folded.some(r => r.id === 'notif:a' && r.count === 1), 'priority 4 keeps its own row');
-  vm.runInNewContext('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
+  runWithChatsModel('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
   assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { read: true, archived: true }]);
   assert.match(host, /open: id => \{ if \(!live\(\) \|\| typeof id !== 'string' \|\| !id\) return; if \(id\.startsWith\(NOTE_ID\)\) inboxAct\(NOTE_ID_OPEN, id\.slice\(NOTE_ID\.length\)\); else shell\.openThread\(id\); \},/);
   assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && noteAct\(id, action\)/);
@@ -759,7 +876,7 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
   const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /chrome\.open\(\{ exclude: \(\) => refreshPins\(\), people: 'For people' \}\);/, 'round 16 item 7: the + is the shared picker (no All apps grid)');
+  assert.match(dj, /chrome\.open\(\{ includeOpen: true, people: 'For people' \}\);/, 'round 16 item 7: the + remains the shared picker (no All apps grid), now including open and pinned apps');
   const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
   assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
@@ -855,14 +972,15 @@ test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every k
   assert.match(js, /if \(code === 'KeyV' \|\| code === 'KeyC' \|\| code === 'KeyD'\) return false;/, '⌥V ⌥C ⌥D stay the shell\'s voice keys');
   assert.match(js, /if \(code === 'KeyW' && !sh && pane\) \{ if \(!e\.repeat\) \{ const d = desks\(\)\.find\(x => x\.desk === pane\.desk\); if \(d && !pins\.includes\(d\.id\)\) closeDesk\(d\); else hidePanel\(\); \} return true; \}/, '⌥W closes the panel\'s app (a pinned one hides)');
   assert.match(js, /if \(code === 'KeyW' && !sh && docked\) \{ if \(!e\.repeat\) closeChat\(\); return true; \}/, '⌥W: the docked chat back to Home');
-  assert.match(js, /\{ KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve', ArrowLeft: 'snooze', ArrowRight: 'done' \}\[code\]/, '⌥→ archive, ⌥← snooze (Miguel 4 Nov 2026): the natural pair is back');
-  assert.match(js, /if \(snoozeOpen\(\)\) return code === 'ArrowLeft' && !sh \? once\(\(\) => doc\.querySelector\('\.boom-sheet \[data-boom-someday\]'\)/, '⌥← again in the snooze sheet = Someday');
-  assert.match(js, /\[\['snooze', '←'\], \['done', '→'\], \['resolve', 'X'\]\]/, 'the keycaps on Snooze / Archive read ← / →');
+  assert.match(js, /\{ KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' \}\[code\]/, '⌥E Archive and ⌥Z Snooze retain their existing meanings');
+  assert.match(js, /if \(!sh && \(code === 'ArrowLeft' \|\| code === 'ArrowRight'\)\) return false;/, 'native horizontal word navigation is never consumed, even by a modal');
+  assert.match(js, /if \(snoozeOpen\(\)\) return code === 'KeyZ' && !sh \? once\(\(\) => doc\.querySelector\('\.boom-sheet \[data-boom-close\]'\)/, '⌥Z still closes the snooze sheet; no arrow-to-Someday');
+  assert.match(js, /\[\['snooze', 'Z'\], \['done', 'E'\], \['resolve', 'X'\]\]/, 'keycaps on Snooze / Archive match their existing letters');
   assert.ok(!/appFor|appChips|home\.letters|keys\.legend|keyLegend/.test(js), 'no app letters, no legend card');
   assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar key');
   assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
   // every other ⌥ key is consumed (nothing acts unseen on a hidden desk): no ⌥G letters, no ⌥/ pinned guide, no ⌥←/→
-  assert.match(js, /return KEY_LIKE\.test\(code\);\n  \} \}\);/);
+  assert.match(js, /return KEY_LIKE\.test\(code\);\n  \}, up: e => \{ if \(e\.code === 'AltLeft' \|\| !e\.altKey\) leftOption = false; \} \}\);/, 'unclaimed Alt keys remain consumed; keyup only clears physical-left-Option tracking');
   // the hints: a keycap on each target, only the view's (the shell draws nothing of its own then)
   for (const k of ["'Space'", "'D'", "'H'", "'O'", "'L'", "'K'", "'N'", "'S'", "'R'", "'A'", "'T'", "'W'", "'F'", "'− ='", "'↓'", "'↑'", "']'", "'['", "'B'"]) assert.ok(js.includes(`, ${k}`), `chip ${k}`);
   assert.match(js, /rows\.forEach\(\(b, k\) => \{ if \(k < 10\) put\(tile\(b\), String\(\(k \+ 1\) % 10\)\); \}\);/, 'the first ten rows wear 1–9 and 0');
@@ -923,23 +1041,23 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked column'); assert.equal(w.q('.aad-cx').hidden, false);
   assert.equal(w.q('.aad-tt').textContent, 'Ready one'); assert.equal(chatDesk.dataset.aadRole, 'chat');
   const n0 = w.st.newChats;
-  assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc closes the column'); assert.equal(w.st.newChats, n0 + 1, 'Home = a new chat');
+  assert.equal(w.escape(), true, 'Esc closes the column'); assert.equal(w.st.newChats, n0 + 1, 'Home = a new chat');
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aadChat, undefined, 'Home: no column');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyW' }), true, '⌥W too'); assert.equal(w.st.newChats, n0 + 2);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyW' }), true, '⌥W too'); assert.equal(w.st.newChats, n0 + 2);
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
   w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, n0 + 3, 'and its ✕');
-  // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
+  // the rail (round 12; round 13: the expanded list's order, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n),
-    ['Working 1', '  Needs you 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
+    ['Working 1', '  Needs you 1', '  Done 0'], 'By status keeps read-only groups navigable but counts only unread');
   w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
   w.st.setting[1].querySelector('[data-aad-group="status"]').dispatchEvent(new FakePointerEvent('click'));
   // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
-  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1\. Click opens the first; hover lists them$/);
+  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1 unread\. Click opens the first; hover lists them$/);
   w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aadSide, 'rail', 'never expands'); assert.equal(w.st.opened.at(-1), 'thread:r1');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
@@ -947,7 +1065,7 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.ok(w.q('.aad-rk[data-k="needs"]').classList.contains('is-on'), 'its group marked');
   w.q('.aad-rk[data-k="done"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'thread:r2'); assert.equal(w.html.dataset.aadSide, 'rail');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'open', 'the toggle is the only thing that expands');
-  assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state + ':' + g.textContent), ['needs:Needs you1', 'done:Done1'], 'the rail\'s statuses as sub-headers with counts, in its order');
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state + ':' + g.textContent), ['needs:Needs you1', 'done:Done'], 'status subheaders hide the count for read groups');
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + ' .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }'), 'Archive a step quieter');
   assert.match(css, /\.aad-tally::after \{ content: attr\(data-n\);/);
@@ -1022,7 +1140,8 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
     for (const f of ['web/layouts/ai-apps/layout.js', 'web/layouts/ai-apps/desktop.js']) assert.ok((read(f).match(/api\.aiUsage\?\.live\?\.\(foot\)/g) || []).length >= 2, f);
   }
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
-  for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state: CHATS\.stiKind\?\.\(s\) \|\| '',/);
+  for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/);
+  assert.match(read('web/core/chats-list-model.js'), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state,/);
 });
 test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offers it for the home screen through the stock Desks sheet', async () => {
   {
@@ -1073,10 +1192,10 @@ test('desktop app panel: an app\'s title-bar tools (Morning Report\'s ‹ date �
   assert.ok(!/> \.wbar \{ display: none; \}/.test(css), 'never display: none (an app would think its tools are gone, or never see them)');
   assert.match(css, /> \.wbar \{ display: flex; position: absolute;[^}]*visibility: hidden; pointer-events: none; \}/);
   assert.match(js, /pTop\.append\(pIcon, pName, pTools, pW, pX\);/, 'round 15: the tools in the app panel\'s header');
-  assert.match(js, /querySelector\(':scope > \.win:not\(\.gone\) > \.wbar > \.wtools'\)/, 'mirrored from the window\'s own tools');
-  assert.match(js, /srcTool\(n\)\?\.click\(\)/, 'a tap goes to the window\'s own tool (the app\'s channel)');
-  assert.match(js, /o\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'a pick too');
-  assert.match(js, /toolsMo\?\.disconnect\(\);\n\s*for \(const k of \['aiApps'/, 'released on teardown');
+  assert.match(js, /host\?\.renderTools\(panelWindow\(\)\?\.id, pTools\)/, 'shared validated tools renderer, not cloned Classic controls');
+  assert.match(js, /host\?\.onChange\(/, 'late registration and replacements follow lifecycle changes');
+  assert.doesNotMatch(js, /srcTools|srcTool|toolsMo|cloneNode/, 'no mirrored tools or DOM observers');
+  assert.match(js, /offHost\?\.\(\);\n\s*for \(const k of \['aiApps'/, 'released on teardown');
 });
 
 test('round 9 desktop: no veil over the skin\'s background (Home, beside a panel); only panels and the composer have surfaces', () => {
@@ -1221,8 +1340,8 @@ test('round 16 item 7: layer membership (pinned / open / picker disjoint; a pinn
   }
   assert.deepEqual(w.qa('.vc-pick .vc-fold').map(b => b.className), ['vc-fold vc-fold-agents'], 'no Already open row');
   assert.deepEqual(w.qa('.vc-pick .vc-sec-h > span').map(n => n.textContent), ['For people'], 'one For people section, open');
-  assert.deepEqual(w.qa('.vc-pick .vc-list[data-kind="apps"] .vc-app').map(b => b.dataset.app), ['movies', 'paper'], 'installed apps neither open (Mail, Music, Money, Notes, Maps) nor pinned');
-  const fold = w.q('.vc-pick .vc-fold-agents'); assert.equal(fold.getAttribute('aria-expanded'), 'false', 'For agents folded'); assert.equal(fold.querySelector('.vc-count').textContent, '3', 'Bot, Helper, Bank (Notes is open)');
+  assert.deepEqual(w.qa('.vc-pick .vc-list[data-kind="apps"] .vc-app').map(b => b.dataset.app), ['mail', 'maps', 'money', 'movies', 'music', 'paper'], 'desktop search includes open and pinned apps and launcher links');
+  const fold = w.q('.vc-pick .vc-fold-agents'); assert.equal(fold.getAttribute('aria-expanded'), 'false', 'For agents folded'); assert.equal(fold.querySelector('.vc-count').textContent, '4', 'Bot, Notes, Helper, Bank, whether open or not');
   fold.dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.vc-pick .vc-sub-h > span').map(n => n.textContent), ['Agent apps', 'Agents', 'Connectors']);
   assert.ok(w.q('.vc-pick .vc-list-more .vc-more'), '+ Get more, last'); assert.equal(w.q('.vc-pick .vc-store'), null, 'no store text button');
@@ -1354,8 +1473,8 @@ test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), a
   w.q('.aad-vtab.is-pinned[data-app="maps"]').dispatchEvent(new FakePointerEvent('contextmenu', { clientX: 10, clientY: 10 }));
   w.q('.aad-appmenu .aad-pop-i[data-act="unpin"]').dispatchEvent(new FakePointerEvent('click'));
   assert.ok(!pinsNow().includes('maps'), 'Unpin');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open', '⌥A the picker (round 21)');
-  keys[1].down({ key: 'Escape' });
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open', '⌥A the picker (round 21)');
+  w.escape();
   // the tidy (6 s after load): Maps (30 h) closes, Money is pinned, Movies is recent
   for (const tm of w.st.timers.filter(x => x.ms === 6000)) tm.fn();
   assert.deepEqual(closed, [2], 'only the stale unpinned one');
@@ -1406,7 +1525,7 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(!\(api\.desks\.close\?\.\(d\.desk\)\)\) api\.apps\.close\?\.\(d\.id\);/, '✕: the stock close of that desk');
   assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
-  assert.ok(css.includes(`${P}[data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }`), 'a docked chat and the panel never overlap');
+  assert.ok(css.includes('--aad-chat-w: var(--aad-pane-chat-width)') && css.includes('--aad-app-w: var(--aad-pane-app-width)'), 'both docked widths come from the tested core geometry');
   assert.ok(css.includes(`${P}[data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }`), 'the orb steps aside under the picker');
   const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
   assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);
@@ -1418,12 +1537,12 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
 test('round 13: Snoozed from the stock snooze state, with and without the snooze-someday tweak; order; the rail matches', async () => {
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) {
     const src = read(f);
-    const fn = src.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n/)[1];
+    const fn = src.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n/)[1];
     const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
     const z = s('z', { deferred: true, deferredAt: '2026-11-02T10:00:00Z', lastUserAt: '2026-11-02T09:00:00Z' });
     const za = s('za', { deferred: true, deferredAt: '2026-11-02T10:00:00Z', status: 'waiting_for_approval' });
     const woke = s('wk', { deferred: true, deferredAt: '2026-11-02T08:00:00Z', lastUserAt: '2026-11-02T09:00:00Z' });
-    const run = G => vm.runInNewContext(`(${fn})()`, { LIVE: { ok: true, workGroups: () => G, isNew: () => false, cardAt: () => '' }, CHATS: { threadActions: () => ['snooze', 'done'] }, window: { WosChatPins: { has: () => false } }, Date });
+    const run = G => runWithChatsModel(`(${fn})()`, { LIVE: { ok: true, workGroups: () => G, isNew: () => false, cardAt: () => '' }, CHATS: { threadActions: () => ['snooze', 'done'] }, window: { WosChatPins: { has: () => false } }, Date });
     // stock: the snoozed chats in their own group (G.deferred)
     const stock = run({ working: [s('w')], ready: [s('r'), za], deferred: [z], archive: [s('a')] });
     assert.equal(JSON.stringify(stock.snoozed.map(x => x.id + ':' + x.kind)), '["z:snoozed"]', `${f}: stock`); assert.equal(JSON.stringify(stock.ready.map(x => x.id)), '["r","za"]', `${f}: a snoozed chat that needs an approval stays in Ready`);
@@ -1435,7 +1554,9 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   const { w, store } = deskWorld();
   w.st.sessions.snoozed = [{ id: 'z1', title: 'Later one', kind: 'snoozed', unread: false, pinned: false, actions: ['restore', 'done'] }, { id: 'z2', title: 'Later two', kind: 'snoozed', unread: false, pinned: false, actions: ['restore'] }];
   (await layout()).default(w.api);
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'snoozed:false', 'ready:true'], 'Archive, Working, Snoozed, Ready; Snoozed folded');
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'snoozed:false', 'ready:true', 'archive:false'], 'Working, Snoozed, Ready, Archive last; Snoozed folded');
+  { const d2 = deskWorld(); d2.w.html.dataset.tweaks = 'miguel/archive-top'; (await layout()).default(d2.w.api);
+    assert.deepEqual(d2.w.qa('.aad-sec').map(h => h.dataset.sec), ['archive', 'working', 'ready'], 'archive-top: Archive first in the desktop sidebar'); }
   assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-w').textContent, 'Snoozed');
   assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-tally').getAttribute('data-n'), '2', 'its count when folded');
   w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
@@ -1445,7 +1566,7 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   // the phone's drawer: the same sections
   const p = world(); p.st.sessions.snoozed = w.st.sessions.snoozed;
   (await layout()).default(p.api); p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(p.qa('.aa-sec').map(h => h.dataset.sec), ['archive', 'working', 'snoozed', 'ready']);
+  assert.deepEqual(p.qa('.aa-sec').map(h => h.dataset.sec), ['working', 'snoozed', 'ready', 'archive']);
 });
 
 /* Round 14 (Miguel, 3 Nov 2026: "perfect"): phone, sidebar and skin fixes (the desktop tab strip is on hold for a new
@@ -1526,7 +1647,7 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
     list.dispatchEvent(new FakePointerEvent('pointermove', { pointerId: 1, clientX: 20, clientY: y }));
     assert.ok(r.classList.contains('is-drag') && list.dataset.drag === '', 'it floats');
     assert.equal(w.q('.aad-vtdrop').hidden, false, 'the drop line shows');
-    if (esc) assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc cancels');
+    if (esc) assert.equal(w.escape(), true, 'Esc cancels');
     else list.dispatchEvent(new FakePointerEvent('pointerup', { pointerId: 1 }));
     w.run(); rects();
   };
@@ -1606,7 +1727,11 @@ test('round 18 parts: Ready sorts (stock Priority / Newest / Oldest), grouped li
   assert.deepEqual(P.readyGroups(rows, 'newest').map(g => g.state + ':' + ids(g.rows).join()), ['needs:notif:n1,c2', 'approval:c4', 'fyi:notif:n3,c1', 'deferred:notif:n2', 'none:c3'], 'grouped in the rail\'s order (STATES), the order inside');
   assert.deepEqual(P.readyGroups(rows, 'oldest').map(g => g.state + ':' + ids(g.rows).join()), ['needs:c2,notif:n1', 'approval:c4', 'fyi:c1,notif:n3', 'deferred:notif:n2', 'none:c3']);
   assert.equal(P.readyGroups(rows, 'priority').at(-1).word, 'No status');
-  assert.deepEqual(ids(P.readyFlat(rows, 'newest')), P.readyGroups(rows, 'newest').flatMap(g => ids(g.rows)));
+  // One list (the default) is the chosen Sort alone, never Needs you hoisted to the top (James, 4 Nov 2026)
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest')), ids(P.readySort(rows, 'newest')), 'One list, Newest: newest first');
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest', 'none')), ['c4', 'c3', 'notif:n1', 'notif:n3', 'c2', 'c1', 'notif:n2']);
+  assert.deepEqual(ids(P.readyFlat(rows, 'oldest', 'none')), ids(P.readySort(rows, 'oldest')), 'One list, Oldest: oldest first');
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest', 'status')), P.readyGroups(rows, 'newest').flatMap(g => ids(g.rows)), 'By status: the groups in turn');
   assert.deepEqual(P.readyStep(['a', 'b', 'c'], null, 1), { id: 'a', wrapped: false }, 'from elsewhere: the top');
   assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'x', -1), { id: 'a', wrapped: false });
   assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'b', 1), { id: 'c', wrapped: false });
@@ -1686,7 +1811,13 @@ test('round 18 phone: the tidy line under + opens the sentence sheet; the tidy t
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   const ready = () => w.qa('#aa-sec-ready [data-sid]').map(n => n.dataset.sid);
   assert.deepEqual(ready(), ['notif:x', 'r2', 'r1'], 'Newest');
-  const sort = w.q('.aa-sort'); assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
+  // This fixture's selector parser splits on whitespace, even inside attribute values.
+  const sort = w.qa('.aa-sort').find(n => n.getAttribute('aria-label') === 'Order Ready');
+  assert.ok(sort, 'Ready keeps its own control beside Working');
+  const workingSort = w.qa('.aa-sort').find(n => n.getAttribute('aria-label') === 'Sort Working');
+  assert.ok(workingSort, 'Working has its separate control');
+  assert.equal(workingSort.value, 'alphabetical');
+  assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
   sort.value = 'oldest'; sort.dispatchEvent(new FakePointerEvent('change'));
   assert.deepEqual(sets, ['oldest']); assert.deepEqual(ready(), ['r1', 'r2', 'notif:x'], 'Oldest');
 });
@@ -1696,8 +1827,8 @@ test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, t
   assert.match(host, /READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'the stock key (core/chats.js)');
   assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
   assert.match(read('web/core/chats.js'), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
-  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /rank: CHATS\.stiKind\?\.\(s\) === 'failed' \? 1 : Number\.isFinite\(LIVE\.readyRank\?\.\(s\)\) \? LIVE\.readyRank\(s\) : undefined/, f + ': the stock rank on each row (a failed chat with Needs you)');
-  assert.match(host, /note: true, rank: Number\(it\.priority\) >= 4 \? 1 : Number\(it\.priority\) === 3 \? 2 : 3/, 'notifications rank like stock Priority (4–5 / 3 / the rest)');
+  assert.match(read('web/core/chats-list-model.js'), /rank: state === 'failed' \? 1 : Number\.isFinite\(live\.readyRank\?\.\(s\)\) \? live\.readyRank\(s\) : undefined/, 'the shared stock rank on each row (a failed chat with Needs you)');
+  assert.match(host, /note: true, sortTitle: row\.sortTitle, rank: row\.rank/, 'notification rank comes from the shared model');
 });
 
 test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥O workspaces, ⌥1–9 + ⌥0 and ⌥[ ] the right column, ⌥⇧[ ] move a row, ⌥− / ⌥= the panel, ⌥W on Home and ⌥⇧digit inert', async () => {
@@ -1737,7 +1868,9 @@ test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥
 });
 
 /* ---------- round 19 (Miguel, 3 Nov 2026) ---------- */
-test('round 19 parts: the order inside each group (Newest / Oldest; stock Priority and By subject read as Newest), a rail item\'s chats, the current item, short times', async () => {
+test('round 19 parts: the order inside each group (Newest / Oldest; stock Priority and By subject read as Newest), a rail item\'s chats, the current item, short times', async t => {
+  const tz = process.env.TZ; process.env.TZ = 'UTC';
+  t.after(() => { if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz; });
   const P = await import('../web/layouts/ai-apps/parts.js');
   assert.deepEqual(P.GROUP_ORDERS.map(o => o[1]), ['Newest first', 'Oldest first']);
   for (const [o, want] of [['newest', 'newest'], ['oldest', 'oldest'], ['priority', 'newest'], ['subject', 'newest'], [undefined, 'newest']]) assert.equal(P.groupOrder(o), want);
@@ -1745,21 +1878,30 @@ test('round 19 parts: the order inside each group (Newest / Oldest; stock Priori
   const s = { snoozed: [{ id: 'z1' }], ready: [{ id: 'n1', state: 'needs', at: at(1) }, { id: 'n2', state: 'needs', at: at(3) }, { id: 'f1', state: 'fyi', at: at(2) }, { id: 'p1', state: 'none', at: at(4) }] };
   const ids = l => l.map(r => r.id);
   assert.deepEqual(ids(P.railRows(s, 'needs', 'newest')), ['n2', 'n1']); assert.deepEqual(ids(P.railRows(s, 'needs', 'oldest')), ['n1', 'n2']);
-  assert.deepEqual(ids(P.railRows(s, 'ready', 'newest')), ['n2', 'n1', 'f1', 'p1'], 'Ready = the whole grouped list (what ⌥↓ walks)');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'newest')), ['p1', 'n2', 'f1', 'n1'], 'One list defaults to Newest across statuses (what ⌥↓ walks)');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'oldest', 'none')), ['n1', 'f1', 'n2', 'p1'], 'One list, Oldest across statuses');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'newest', 'status')), ['n2', 'n1', 'f1', 'p1'], 'By status keeps priority groups, Newest inside each');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'oldest', 'status')), ['n1', 'n2', 'f1', 'p1'], 'By status keeps priority groups, Oldest inside each');
   assert.deepEqual(ids(P.railRows(s, 'snoozed', 'newest')), ['z1']);
   assert.deepEqual(P.railActive(s, 'n1', '', 'newest'), { key: 'needs', i: 1, n: 2 }, 'derived: its status group');
-  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest'), { key: 'ready', i: 1, n: 4 }, 'the item last clicked while the chat is in it');
-  assert.deepEqual(P.railActive(s, 'p1', 'needs', 'newest'), { key: 'ready', i: 3, n: 4 }, 'a plain chat: Ready');
+  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest'), { key: 'ready', i: 3, n: 4 }, 'the item last clicked while the chat is in it, at its Newest position');
+  assert.deepEqual(P.railActive(s, 'p1', 'needs', 'newest'), { key: 'ready', i: 0, n: 4 }, 'a plain chat: Ready, at its Newest position');
+  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'oldest', 'list'), { key: 'ready', i: 0, n: 4 }, 'One list position follows Oldest too');
+  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest', 'groups'), { key: 'needs', i: 1, n: 2 }, 'By status keeps the current status group and its position');
   assert.equal(P.railActive(s, null, 'needs', 'newest'), null, 'Home: nothing current');
   assert.deepEqual(P.railNext(['a', 'b', 'c'], null), { id: 'a', wrapped: false }); assert.deepEqual(P.railNext(['a', 'b', 'c'], 'c'), { id: 'a', wrapped: true });
-  const now = new Date(2026, 10, 3, 15, 0).getTime();
+  const now = Date.UTC(2026, 10, 3, 5); // fixed UTC clock: yesterday afternoon is still less than 24h ago
   assert.equal(P.shortTime(new Date(now - 5 * 60e3).toISOString(), now), '5m'); assert.equal(P.shortTime(new Date(now - 3 * 3600e3).toISOString(), now), '3h');
-  assert.equal(P.shortTime(new Date(2026, 10, 2, 9).toISOString(), now), 'Yesterday'); assert.equal(P.shortTime(new Date(2026, 9, 12, 9).toISOString(), now), '12 Oct');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 10, 2, 14)).toISOString(), now), '15h');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 10, 2, 1)).toISOString(), now), 'Mon 2');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 9, 12, 9)).toISOString(), now), 'Mon 12');
   assert.equal(P.shortTime('', now), '');
 });
 
 test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap, the group marked with its place; the hover flyout (300 ms), a pick, Esc; nothing expands', async () => {
   const { w, keys } = deskWorld();
+  let order = 'newest';
+  w.api.sessions.order = () => order; w.api.sessions.setOrder = o => { order = o; return true; };
   const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
   const row = (id, title, state, h) => ({ id, title, kind: 'ready', state, at: at(h), unread: false, pinned: false, actions: ['snooze', 'done'] });
   w.st.sessions.ready = [row('n1', 'Needs old', 'needs', 1), row('n2', 'Needs mid', 'needs', 2), row('n3', 'Needs new', 'needs', 3), row('f1', 'An fyi', 'fyi', 4), row('p1', 'Plain', 'none', 5)];
@@ -1781,8 +1923,19 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));   // One list
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'round 22: One list on the rail');
   assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), true, 'switching grouping keeps the current chat marked on the visible Ready row');
-  assert.equal(click('ready'), 'n3', 'another item: its first chat (Ready = the whole grouped list)');
-  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'n2');
+  assert.equal(click('ready'), 'p1', 'another item: its first chat (One list = Newest across statuses)');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'f1');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '2/5');
+  assert.deepEqual([click('ready'), click('ready'), click('ready'), click('ready')], ['n3', 'n2', 'n1', 'p1'], 'One list walks Newest, then wraps to the newest chat');
+  for (const [sort, want] of [['oldest', ['n1', 'n2', 'n3', 'f1', 'p1']], ['newest', ['p1', 'f1', 'n3', 'n2', 'n1']]]) {
+    w.st.setting[1].querySelector(`[data-aad-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
+    w.st.timers.length = 0; w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
+    w.st.timers.find(h => h.ms === 300 && !h.dead).fn();
+    assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), want, `One list flyout follows ${sort}, not priority groups`);
+    w.q(`.aad-fly-i[data-sid="${want[0]}"]`).dispatchEvent(new FakePointerEvent('click')); go(want[0]);
+    assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5');
+    assert.deepEqual(want.map(() => click('ready')), [...want.slice(1), want[0]], `One list rail follows ${sort}, including wrap`);
+  }
   assert.equal(click('snoozed'), 's1'); assert.equal(w.q('.aad-rk[data-k="snoozed"] .aad-rk-p'), null, 'one chat: no 1/1');
   // ⌥↓ still walks the whole Ready
   const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
@@ -1802,7 +1955,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   go('n1'); assert.equal(w.q('.aad-rk[data-k="needs"] .aad-rk-p').textContent, '3/3');
   // Esc closes it (before closing the chat)
   w.st.timers.length = 0; w.q('.aad-rk[data-k="fyi"]').dispatchEvent(new FakePointerEvent('pointerenter')); w.st.timers.find(h => h.ms === 300 && !h.dead).fn();
-  assert.ok(w.q('.aad-fly')); assert.equal(keys.find(h => h.down({ key: 'Escape' }) === true) !== undefined, true);
+  assert.ok(w.q('.aad-fly')); assert.equal(w.escape(), true);
   assert.equal(w.q('.aad-fly'), null, 'Esc closes the flyout'); assert.equal(w.html.dataset.aadChat, 'on', 'and only the flyout');
   // no rail item expands the sidebar; the source never calls the old openSection
   assert.ok(!/openSection\(/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'no rail item expands the sidebar');
@@ -1821,7 +1974,7 @@ test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) 
   assert.equal(node.querySelector('[data-aad-sortshown]'), null, 'round 22: no "Show sort control" switch any more'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
   const b = w.q('.aad-sech .aad-orderb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
   const g = w.q('.aad-sech .aad-groupb'); assert.ok(g, 'round 25: grouping is its own drop-down'); assert.equal(g.querySelector('.aad-sortb-w').textContent, 'One list');
-  assert.deepEqual(w.qa('.aad-sech .aad-sortb').map(n => n.classList.contains('aad-groupb') ? 'group' : 'sort'), ['group', 'sort'], 'Group, then Sort');
+  assert.deepEqual(w.qa('.aad-sech .aad-sortb').filter(n => !n.classList.contains('aad-working-orderb')).map(n => n.classList.contains('aad-groupb') ? 'group' : 'sort'), ['group', 'sort'], 'Group, then Sort');
   b.dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort'], 'round 25: the sort menu holds only the order');
   assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false']);
@@ -1890,14 +2043,14 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   assert.ok(!open.some(c => /^(W|F|Z|E|X|B)@/.test(c)), 'nothing to close, widen or act on at Home');
   assert.ok(!open.some(c => /^(V|C|G|\/|I|\\|\.|,|T@aad-vall)/.test(c)), 'no keycap for keys with no target or gone keys');
   // folded: the rail's buttons, no H / O (their header is away)
-  keys[2].down({ altKey: true, code: 'KeyL' });
+  keys[1].down({ altKey: true, code: 'KeyL' });
   const rail = chips();
   for (const want of ['L@aad-rtog', 'K@aad-rfind', 'N@aad-rnew', 'S@aad-rset']) assert.ok(rail.includes(want), `rail: ${want}`);
   assert.ok(!rail.some(c => /^(H@aad-wsn|O)@?/.test(c)), 'no H on the (gone) name, no O');
   assert.ok(rail.includes('H@aad-hmid'), 'app keys round: ⌥H in the empty middle of Home, folded or not');
-  keys[2].down({ altKey: true, code: 'KeyL' });
+  keys[1].down({ altKey: true, code: 'KeyL' });
   // ⌥H Home: the orb (Space) and ◫ back (H) only
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true);
   assert.deepEqual(chips(), ['Space@aad-orbbtn', 'H@aad-hback', 'H@aad-hmid'], 'focus: ◫ and the middle wear H');
   assert.ok(raw().find(c => c.el.className === 'aad-hmid').free === true && raw().find(c => c.el.className === 'aad-hmid').at === 'mid', 'the middle spot is known empty (no hit test), centred');
   const css = read('web/layouts/ai-apps/desktop.css');
@@ -1915,22 +2068,22 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   const before = { side: w.html.dataset.aadSide, tabs: w.html.dataset.aadTabs, folded: store.folded, tabsFolded: store.tabsFolded };
   assert.equal(before.side, 'open'); assert.equal(before.tabs, 'open');
   const writes = JSON.stringify(store);
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true, '⌥H is the view\'s');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true, '⌥H is the view\'s');
   assert.equal(w.html.dataset.aadFocus, '', 'focus on'); assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(w.html.dataset.aadTabs, 'rail');
   assert.equal(JSON.stringify(store), writes, 'nothing stored: the stash is in memory only');
-  keys[1].down({ key: 'Escape' });
+  w.escape();
   assert.equal(w.html.dataset.aadFocus, '', 'Esc leaves focus (and its stash) alone');
-  keys[2].down({ altKey: true, code: 'Backquote' });
+  keys[1].down({ altKey: true, code: 'Backquote' });
   assert.equal(w.html.dataset.aadFocus, undefined, 'back (⌥`, the stock Home key, is the same key quietly)');
   assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar back open'); assert.equal(w.html.dataset.aadTabs, 'open', 'the apps column back open');
   // a folded sidebar before focus stays folded after
-  keys[2].down({ altKey: true, code: 'KeyL' }); assert.equal(w.html.dataset.aadSide, 'rail');
-  keys[2].down({ altKey: true, code: 'KeyH' }); keys[2].down({ altKey: true, code: 'KeyH' });
+  keys[1].down({ altKey: true, code: 'KeyL' }); assert.equal(w.html.dataset.aadSide, 'rail');
+  keys[1].down({ altKey: true, code: 'KeyH' }); keys[1].down({ altKey: true, code: 'KeyH' });
   assert.equal(w.html.dataset.aadSide, 'rail', 'exactly as it was: folded stays folded');
   // a side opened by hand at Home ends it (the rails back); ⌥H then hides everything again (a fresh stash)
-  keys[2].down({ altKey: true, code: 'KeyH' }); keys[2].down({ altKey: true, code: 'KeyR' });
+  keys[1].down({ altKey: true, code: 'KeyH' }); keys[1].down({ altKey: true, code: 'KeyR' });
   assert.equal(w.html.dataset.aadFocus, undefined, 'a side by hand ends it');
-  keys[2].down({ altKey: true, code: 'KeyH' }); assert.equal(w.html.dataset.aadFocus, '', '⌥H after that: Home again, not a stale restore');
+  keys[1].down({ altKey: true, code: 'KeyH' }); assert.equal(w.html.dataset.aadFocus, '', '⌥H after that: Home again, not a stale restore');
   w.q('.aad-hback').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadFocus, undefined, 'the ◫ at the top left comes back too');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /focusStash = \{ folded, vtFolded, thread: [^;]+, app: pane \? \{ id: pane\.id, desk: Number\(pane\.desk\) \} : null, wide, widths: \{ \.\.\.sized \} \};/, 'the stash: both sides, the chat, the app, wide, the widths');
@@ -1945,22 +2098,40 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
 });
 
-test('round 20 item 9 / round 22: Ready is one flat list in priority order by default (each row its time since the last message, no status tags); Group Ready by status brings the sub-headers back', async () => {
-  const { w, store } = deskWorld();
+test('round 20 item 9 / round 22: Ready defaults to One list following the chosen Sort (each row its time since the last message, no status tags); By status keeps priority groups', async t => {
+  t.mock.method(Date, 'now', () => new Date(2026, 10, 4, 15).getTime());
+  const { w, store, keys } = deskWorld();
+  let order = 'newest';
+  w.api.sessions.order = () => order; w.api.sessions.setOrder = o => { order = o; return true; };
   w.st.sessions.ready[0].state = 'fyi'; w.st.sessions.ready[1].state = 'needs';
   w.st.sessions.ready[0].at = new Date(Date.now() - 5 * 60e3).toISOString(); w.st.sessions.ready[1].at = new Date(Date.now() - 3 * 3600e3).toISOString();
+  w.st.sessions.ready.push({ id: 'r3', title: 'Plain middle', kind: 'ready', state: 'none', at: new Date(Date.now() - 3600e3).toISOString(), actions: [] });
   (await layout()).default(w.api);
   assert.equal(w.q('.aad-grp'), null, 'no sub-headers');
-  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid), ['r2', 'r1'], 'priority order: Needs you first');
+  const ready = () => w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid);
+  assert.deepEqual(ready(), ['r1', 'r3', 'r2'], 'One list, Newest: newer FYI and plain chat before older Needs you');
   assert.equal(w.q('.aad-tag'), null, 'round 22: no status tags');
-  const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 2, 'round 22: each Ready row shows how long ago');
-  assert.deepEqual(times.map(t => t.textContent), ['3h', '5m'], 'its time since the last message (Needs you first)');
+  const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 3, 'round 22: each Ready row shows how long ago');
+  assert.deepEqual(times.map(t => t.textContent), ['5m', '1h', '3h'], 'its time since the last message (newest first)');
+  for (const [sort, want] of [['oldest', ['r2', 'r3', 'r1']], ['newest', ['r1', 'r3', 'r2']]]) {
+    w.q('.aad-orderb').dispatchEvent(new FakePointerEvent('click'));
+    w.q(`.aad-sortmenu [data-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
+    assert.deepEqual(ready(), want, `One list follows ${sort} from the sidebar Sort control`);
+    assert.equal(w.q('.aad-grp'), null, 'sorting never adds status groups');
+    for (const code of ['ArrowDown', 'ArrowUp']) for (let i = 0; i < want.length; i++) {
+      w.st.route = { home: false, view: 'thread', thread: want[i], desk: 1 }; w.emit('route', w.st.route);
+      assert.ok(keys.some(h => h.down({ altKey: true, code, key: code }) === true));
+      const step = code === 'ArrowDown' ? 1 : -1;
+      assert.equal(w.st.opened.at(-1), 'thread:' + want[(i + step + want.length) % want.length], `${sort}: ⌥${code} walks the drawn One list, wrapping`);
+    }
+  }
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rw:focus-within\) \.aad-time \{ visibility: hidden; \}/, 'the ⋯ takes its place on hover');
   const sw = w.q('[data-aad-group="status"]'); assert.ok(sw, 'the Settings choice'); assert.equal(sw.getAttribute('aria-checked'), 'false', 'off at first'); assert.equal(w.q('[data-aad-group="none"]').getAttribute('aria-checked'), 'true', 'One list at first');
   sw.dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupReady, true);
-  assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi'], 'grouped: the sub-headers');
-  assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 2, 'grouped: the times too');
+  assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi', 'none'], 'grouped: the sub-headers');
+  assert.deepEqual(ready(), ['r2', 'r1', 'r3'], 'By status still puts Needs you before FYI and plain chats, even with Newest selected');
+  assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 3, 'grouped: the times too');
 });
 
 test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons', () => {
@@ -1970,7 +2141,7 @@ test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the
   assert.match(c, /if \(noteQuiet\(\)\) return '';   \/\/ the quiet thread lists them in its own stack/, 'no second More-from list');
   assert.match(c, /if \(stay\.length > 1\) \{/, 'Archive / Snooze in a stack stays and opens the next one');
   assert.match(c, /const at = stay\.findIndex\(i => i\.id === n\.id\), nx = stay\[at \+ 1\] \|\| stay\[at - 1\];/);
-  assert.match(read('web/layouts/ai-apps/desktop.js'), /\.ch-nstack \.ch-ncard'\)\.length \|\| 0\) > 0\) return;/, 'the list does not jump to the next Ready chat while the stack has more');
+  assert.doesNotMatch(read('web/layouts/ai-apps/desktop.js'), /nextAfterAct/, 'no automatic next Ready navigation, with or without a notification stack');
   for (const f of ['desktop.css', 'layout.css']) assert.match(read('web/layouts/ai-apps/' + f), /\.ch-tacts > \.ch-tacts-gap \{ flex: 1 0 0; height: 0; \}/, f + ': Snooze / Archive on the far side, wrapping together');
 });
 
@@ -1999,9 +2170,9 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   }
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(code === 'KeyB' && !sh\) \{ if \(!e\.repeat && docked && frontNote\(\)\) routeBtn\(\)\?\.click\?\.\(\); return true; \}/, '⌥B: where these go');
-  assert.match(js, /const routeBtn = \(\) => \[\.\.\.doc\.querySelectorAll\('\.win \.dchats \.pane-main \[data-notify-menu\]'\)\]\.find\(onScreen\) \|\| null;/, 'the routing line on screen (live: after ⌥X a hidden Chats window held the first one)');
+  assert.match(js, /const routeBtn = \(\) => chatParts\('routeButton'\)\[0\] \|\| null;/, 'the shared routing line on screen (hidden Chats windows are excluded by geometry)');
   assert.match(js, /if \(act\) \{ if \(!e\.repeat\) chatBtn\(act\)\?\.click\?\.\(\); return true; \}/, 'round 21: ⌥Z / ⌥E / ⌥X click the open item\'s own Snooze / Archive / Resolve');
-  assert.match(js, /\[data-chact="done"\], \.win \.dchats \.pane-main \[data-chact="resolve"\]'\); if \(b && docked\) nextAfterAct\(\);/, 'Archive / Resolve (button or key) then the next Ready one');
+  assert.doesNotMatch(js, /nextAfterAct/, 'Archive / Resolve never auto-advance the desktop chat');
   assert.ok(!read('web/layouts/ai-apps/home.js').match(/APP_LETTERS = \[\.\.\.'[^']*B/), 'B is no app letter any more');
 });
 
@@ -2014,16 +2185,60 @@ test('round 21: a modal in front (the app picker, Settings) takes only its own �
   assert.match(js, /if \(allOpenNow\(\)\) return code === 'KeyA' && !sh \? once\(closeAll\) : KEY_LIKE\.test\(code\);/, 'the picker: ⌥A closes it, every other ⌥ key is taken');
   assert.match(js, /if \(settingsOpen\(\)\) return code === 'KeyS' && !sh \? once\(closeSettings\) : KEY_LIKE\.test\(code\);/, 'Settings: ⌥S closes it');
   assert.match(js, /if \(allOpenNow\(\)\) \{ put\(doc\.querySelector\('\.vc-sheet \.vc-x'\), 'A'\); return out; \}/);
-  assert.match(js, /if \(settingsOpen\(\)\) \{ put\(doc\.querySelector\('#dsettings \.st-close'\), 'S'\); return out; \}/);
+  assert.match(js, /if \(settingsOpen\(\)\) \{ put\(host\?\.settings.closePart\(\), 'S'\); return out; \}/);
   // the picker open: ⌥V (voice) is taken too; ⌥A again closes it
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyV' }), true, 'voice waits until the picker is closed');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar stays as it is behind it');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, undefined);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyV' }), true, 'voice waits until the picker is closed');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar stays as it is behind it');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, undefined);
   // nothing open: the view's keys act, voice is the shell's
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyV' }), false, '⌥V: the shell\'s new voice chat');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
-  keys[2].down({ altKey: true, code: 'KeyL' });
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyV' }), false, '⌥V: the shell\'s new voice chat');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
+  keys[1].down({ altKey: true, code: 'KeyL' });
+});
+
+test('desktop cold Store opens synchronously in the app pane and deferred Home cannot steal it', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const chat = new El('div'); chat.className = 'wsp'; chat.dataset.ws = '1';
+  const dc = new El('div'); dc.className = 'dchats'; chat.append(dc);
+  const app = new El('div'); app.className = 'wsp'; app.dataset.ws = '8';
+  const win = new El('div'); win.className = 'win focus';
+  const frame = new El('iframe'); frame.focus = () => { w.doc.activeElement = frame; };
+  frame.contentWindow = { focus() {} }; win.append(frame); app.append(win);
+  stage.append(chat, app); w.html.children[0].append(stage);
+  w.st.route = { home: true, desk: 1, view: 'home', thread: null };
+  let router, opened = 0;
+  w.api.apps.routeOpens = h => { router = h; };
+  w.api.apps.openDesk = (id, place) => {
+    assert.equal(id, 'app-store'); place(8); opened++;
+    w.st.desks.push({ desk: 8, id, name: 'Store' });
+    w.st.route = { home: false, desk: 8, view: 'desk', thread: null };
+    w.emit('route', w.st.route);
+  };
+  (await layout()).default(w.api);
+  let placed = null;
+  router.open('app', { id: 'app-store' }, desk => { placed = desk; });
+  assert.equal(placed, 8, 'the already-checked open is placed on the app desk, never re-gated');
+  assert.equal(opened, 1, 'frame exists before deep-link delivery, not 60ms later');
+  assert.equal(app.dataset.aadRole, 'app', 'separate app pane');
+  const header = w.q('.aad-ptop');
+  assert.equal(header.parentNode, app, 'the header and window share the animated desk on the opening frame');
+  assert.equal(app.dataset.aadAnim, 'app');
+  assert.equal(header.dataset.aadAnim, undefined, 'no independent header entrance');
+  const drafts = w.st.newChats;
+  w.run();
+  assert.equal(w.st.newChats, drafts, 'the deferred mount-time Home task cannot steal the Store');
+  assert.equal(w.doc.activeElement, frame, 'the opened app receives focus');
+  const shell = read('web/desktop/desktop.js');
+  const attach = shell.indexOf('window.WosSkinHost?.attach({');
+  assert.ok(attach >= 0);
+  assert.ok(shell.indexOf('await window.WosExperience?.whenReady?.();') > attach);
+  assert.ok(shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();') > attach);
+  assert.ok(shell.indexOf('C.deeplink.consume();') > shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();'), 'cold links wait for the same open router');
+  const css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(css, /\.win:not\(\.gone\):not\(\.drag\) \.wbody iframe \{ pointer-events: auto;/);
+  assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important;/, 'resizing still shields app frames');
 });
 
 test('round 21 desktop: one left/right model: apps and their links on the right (one window, taken to the page), other links in the same panel, no view beside a thread, an app\'s Reply in the left column with the app kept', async () => {
@@ -2103,6 +2318,41 @@ test('a reload with an app in front: the thread the Chats desk holds docks besid
   const dj = noComments(read('web/desktop/desktop.js'));
   assert.match(dj, /const shownBeside = \(\) => \{[^\n]*H0\.routeShows\(i\)[^\n]*\};/);
   assert.match(dj, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\),[^\n]*\.\.\.\(homeOpen \? \[\] : shownBeside\(\)\)\],/);
+});
+
+/* James, 6 Nov 2026 ("Messenger became unclickable"): an app panel beside the docked chat, a reply sent in the chat (its
+ * desk current), then the app tab or the app itself clicked. The tab hid the panel out from under the pointer, and the
+ * panel's iframe (a [hidden], unfocused desk to the shell) took no pointer events at all. */
+test('after a reply in the docked chat, the app panel beside it stays clickable: its tab brings it forward, never hides it', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 };
+  (await layout()).default(w.api);
+  w.emit('route', w.st.route); w.run();
+  assert.equal(appDesk.dataset.aadRole, 'app'); assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.html.dataset.aadSplit, 'on');
+  // the chat docked beside it takes the keyboard (its row clicked, a reply typed and sent): the Chats desk is current
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.emit('render'); w.run();
+  assert.equal(w.html.dataset.aiFront, 'chat'); assert.equal(w.html.dataset.aadChat, 'on', 'the chat stays open in its column');
+  assert.equal(appDesk.dataset.aadRole, 'app', 'the app stays beside it'); assert.equal(w.html.dataset.aadSplit, 'on');
+  const tab = w.q('.aad-vtab[data-desk="4"]'); assert.ok(tab.classList.contains('is-on'), 'its tab still lit (the panel)');
+  const gone0 = w.st.gone.length, news0 = w.st.newChats;
+  tab.dispatchEvent(new FakePointerEvent('click')); w.run();
+  assert.deepEqual(w.st.gone.slice(gone0), [4], 'the tab takes its app forward (its desk), not Home');
+  assert.equal(w.st.newChats, news0, 'no new chat in place of the reply');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
+  assert.equal(appDesk.dataset.aadRole, 'app', 'the panel is still there'); assert.equal(w.html.dataset.aadSplit, 'on');
+  assert.equal(w.html.dataset.aadChat, 'on', 'and the chat still open beside it'); assert.equal(w.html.dataset.aiFront, 'app');
+  // in front now: the same tab again hides it, as before (round 15)
+  const g1 = w.st.gone.length, n1 = w.st.newChats; w.q('.aad-vtab[data-desk="4"]').dispatchEvent(new FakePointerEvent('click')); w.run();
+  console.log('QA second', JSON.stringify({ gone: w.st.gone.slice(g1), news: w.st.newChats - n1, role: appDesk.dataset.aadRole, split: w.html.dataset.aadSplit }));
+  assert.ok(!w.st.gone.slice(g1).includes(4), 'the tab in front again: hidden (never re-opened)');
+  // the panel's iframe is a pointer target while its desk is [hidden] to the shell and its window unfocused
+  const css = noComments(read('web/layouts/ai-apps/desktop.css')), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
+  assert.ok(css.includes(`${P} #stage > .wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }`), 'a role pane\'s iframe takes the click');
+  assert.ok(css.indexOf('.wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe') < css.indexOf('[data-aad-resizing] iframe { pointer-events: none !important; }'), 'the resize guard still wins');
+  assert.match(read('web/desktop/desktop.css'), /\.win:not\(\.focus\) \.wbody iframe \{ pointer-events: none; \}/, 'the Classic rule this overrides (no !important)');
 });
 
 test('round 21 phone: an app (or its link) opens full screen on its own desk, taken to the page; an app\'s Reply opens the chat and Back returns to the app; other links stay stock', async () => {
@@ -2223,7 +2473,7 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   // ⌥ + Music's row digit: Music becomes the panel and its frame takes the keyboard
   const rows = w.qa('.aad-vtab'), i = rows.findIndex(r => r.dataset.app === 'music');
   assert.ok(i >= 0 && i < 10, 'Music has a digit');
-  keys[2].down({ altKey: true, code: 'Digit' + ((i + 1) % 10) });
+  keys[1].down({ altKey: true, code: 'Digit' + ((i + 1) % 10) });
   assert.deepEqual(w.st.gone.at(-1), 3, 'its desk');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 3 }; w.emit('route', w.st.route);
   assert.equal(appDesk.dataset.aadRole, 'app', 'Music is the panel');
@@ -2249,14 +2499,14 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   claimK = true;
   assert.ok(chips().includes('H@aad-pti'), '⌥H with an app in front: on the panel\'s app icon');
   assert.ok(!chips().includes('H@aad-hmid'), 'the middle is the app\'s now: no middle H');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true, '⌥H works with an app in front'); assert.equal(w.html.dataset.aadFocus, '');
-  keys[2].down({ altKey: true, code: 'KeyH' });
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true, '⌥H works with an app in front'); assert.equal(w.html.dataset.aadFocus, '');
+  keys[1].down({ altKey: true, code: 'KeyH' });
   // plain keys are never the view's and press nothing (they go on to the app as its own typing)
   for (const k of [{ key: ' ', code: 'Space' }, { key: 'j', code: 'KeyJ' }, { key: 'ArrowRight', code: 'ArrowRight' }, { key: 'Enter', code: 'Enter' }]) for (const h of keys) assert.notEqual(h.down({ ...k, altKey: false }), true, `${k.code} passes through`);
   assert.equal(clicks.length, 2, 'plain j does nothing');
   // a click on the row picks it the same way
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /const goApp = \(id, desk = null, then = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
+  assert.match(js, /const goApp = \(id, desk = null, then = null, place = null\) => \{\n\s+unpeek\(\); closeAll\(\); wantAppFocus\(id === CHATS \? '' : id\);/, 'every pick (key, click, an Open) asks for the keyboard with a fresh retry generation');
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'one keycap style: no outlined app keycaps');
   assert.match(js, /if \(!sh && appFront\(\)\) \{ const t = appTarget\(appKeyOf\(code\)\); if \(t\) \{ if \(!e\.repeat\) pressApp\(t\); return true; \} \}/, 'app before the view\'s letters, after the modals, voice and the composer\'s accents');
@@ -2337,4 +2587,147 @@ test('a remembered rail key cannot hide the current chat marker after switching 
  assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','list').key,'ready');
  assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','groups').key,'needs');
  assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','groups').key,'needs');
+});
+
+
+for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 'project']) test(`shared model: ${order}/${mode} sidebar, rail flyouts and keyboard draw exactly its IDs; phone uses the same Sort`, async () => {
+  const P = await import('../web/layouts/ai-apps/parts.js');
+  const M = globalThis.WizChatsListModel;
+  const at = h => `2026-11-05T${String(h).padStart(2, '0')}:00:00Z`;
+  const rows = [
+    { id: 'needs', title: 'Alpha · Needs', state: 'needs', at: at(1) },
+    { id: 'new', title: 'Beta · New', state: 'done', at: at(9) },
+    { id: 'approval', title: 'Alpha · Approval', state: 'approval', at: at(2) },
+    { id: 'failed', title: 'Beta · Failed', state: 'failed', at: at(8) },
+    { id: 'notif:n', title: 'Mail · Note', note: true, rank: 2, at: at(7) },
+    { id: 'tie-b', title: 'Beta · B', state: 'fyi', at: at(6) },
+    { id: 'tie-a', title: 'Beta · A', state: 'fyi', at: at(6) },
+    { id: 'notif:read', title: 'Read', note: true, snoozed: true, at: at(11) },
+  ].map(r => ({ ...r, kind: 'ready', actions: [] }));
+  const { w, keys } = deskWorld();
+  w.api.sessions.order = () => order;
+  w.api.storage.set('groupBy', mode);
+  w.api.storage.set('groupReady', mode === 'status');
+  w.st.sessions = { ready: rows, working: [], snoozed: [], archive: [] };
+  (await layout()).default(w.api);
+  const drawn = M.visibleIds(rows, order, mode);
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid), drawn, 'sidebar');
+  // Walk via the real layout key handler; notifications route through the same row identity.
+  let cur = null;
+  for (const id of drawn) {
+    w.st.route = cur?.startsWith('notif:') ? { home: false, view: 'thread', thread: '__new__', notification: cur.slice(6), desk: 1 } : { home: false, view: 'thread', thread: cur, desk: 1 };
+    w.emit('route', w.st.route);
+    assert.ok(keys.some(h => h.down({ altKey: true, code: 'ArrowDown' }) === true));
+    assert.equal(w.st.opened.at(-1), 'thread:' + id, 'keyboard reaches drawn row');
+    cur = id;
+  }
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
+  const groups = mode === 'none' ? [{ state: 'ready' }] : mode === 'project' ? P.projectGroups(rows, order) : P.readyGroups(rows, order);
+  for (const g of groups) {
+    w.st.timers.length = 0;
+    w.q(`.aad-rk[data-k="${g.state}"]`).dispatchEvent(new FakePointerEvent('pointerenter'));
+    w.st.timers.find(t => t.ms === 300 && !t.dead).fn();
+    assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), P.railRows({ ready: rows }, g.state, order).map(r => r.id), 'flyout');
+    assert.equal(w.escape(), true, 'core Back dispatcher closes the flyout');
+  }
+  const phone = world(); phone.st.sessions = { ready: rows, working: [], snoozed: [], archive: [] }; phone.api.sessions.order = () => order;
+  (await layout()).default(phone.api);
+  phone.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(phone.qa('.aa-chat').map(n => n.dataset.sid), M.visibleIds(rows, order, 'none'), 'phone drawer Sort');
+});
+
+test('desktop AI apps sidebar and rail flyout keep phone hours across midnight with a fixed clock', async t => {
+  const now = Date.UTC(2026, 10, 3, 5);
+  t.mock.method(Date, 'now', () => now);
+  const { w, keys } = deskWorld();
+  w.st.sessions.ready = [{ id: 'midnight', title: 'Yesterday afternoon', kind: 'ready', state: 'fyi', at: new Date(now - 15 * 3600e3).toISOString(), actions: [] }];
+  w.st.sessions.working = []; w.st.sessions.snoozed = []; w.st.sessions.archive = [];
+  (await layout()).default(w.api);
+  assert.equal(w.q('.aad-rw[data-sid="midnight"] .aad-time').textContent, '15h');
+  keys[1].down({ altKey: true, code: 'KeyL' });
+  w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
+  w.st.timers.find(x => x.ms === 300 && !x.dead).fn();
+  assert.equal(w.q('.aad-fly-i[data-sid="midnight"] .aad-fly-at').textContent, '15h');
+});
+
+test('left Option Space opens one existing picker without voice; release and unrelated modifiers preserve ownership', async () => {
+  const { w, keys } = deskWorld(); let voices = 0; w.api.voice.talk = () => voices++;
+  (await layout()).default(w.api); const h = keys[1];
+  h.down({ code: 'AltLeft', altKey: true });
+  assert.equal(h.down({ code: 'Space', altKey: true }), true);
+  const sheet = w.q('.vc-sheet'); assert.ok(sheet);
+  h.down({ code: 'Space', altKey: true, repeat: true }); h.up({ code: 'AltLeft', altKey: false });
+  assert.equal(w.q('.vc-sheet'), sheet); assert.equal(voices, 0);
+  w.escape(); h.down({ code: 'AltRight', altKey: true }); h.down({ code: 'Space', altKey: true });
+  assert.equal(voices, 1, 'Right Option chord retains its prior web meaning');
+  h.up({ code: 'AltRight', altKey: false });
+  h.down({ code: 'AltLeft', altKey: true }); h.down({ code: 'Space', altKey: true, ctrlKey: true });
+  assert.equal(w.q('.vc-sheet'), null); assert.equal(voices, 1);
+});
+
+test('launcher-link Video Editor remains searchable while open, Pin paints/persists and remount keeps Unpin', async () => {
+  const mount = async saved => {
+    const d = deskWorld(); Object.assign(d.store, saved || {});
+    d.w.api.apps.kinds = () => ({ apps: d.w.api.apps.list(), dev: [{ id: 'video-editor', name: 'Video Editor' }] });
+    d.w.st.desks.push({ id: 'video-editor', name: 'Video Editor', desk: 9 });
+    (await layout()).default(d.w.api); return d;
+  };
+  const { w, store } = await mount(); w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(w.q('.vc-app[data-app="video-editor"]'), 'open launcher links still appear in installed search'); w.escape();
+  w.q('.aad-vtab[data-app="video-editor"]').dispatchEvent(new FakePointerEvent('contextmenu'));
+  w.q('.aad-appmenu [data-act="pin"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(store.pins.includes('video-editor')); assert.equal(w.q('.aad-vtab[data-app="video-editor"]').dataset.group, 'pin');
+  const reloaded = await mount(store); const tab = reloaded.w.q('.aad-vtab[data-app="video-editor"]'); assert.equal(tab.dataset.group, 'pin');
+  tab.dispatchEvent(new FakePointerEvent('contextmenu')); reloaded.w.q('.aad-appmenu [data-act="unpin"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(!reloaded.store.pins.includes('video-editor')); assert.equal(reloaded.w.q('.aad-vtab[data-app="video-editor"]').dataset.group, 'open');
+});
+
+test('desktop app panel: an app with its companion pane (Video Editor video + Feedback) shows side-by-side CSS columns and a wider panel, never two windows stacked in one box, even when the shell has not re-tiled that desk (James, 6 Nov 2026)', () => {
+  const css = read('web/layouts/ai-apps/desktop.css').replace(/\/\*[\s\S]*?\*\//g, ''), js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  const desk = css.match(/\.wsp\[data-aad-role\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) \{([^}]*)\}/);
+  assert.ok(desk, 'a desk with two shown windows has its own rule');
+  assert.match(desk[1], /display: flex !important/, 'columns come from CSS, not from a shell re-tile that is skipped while another desk is current');
+  const multi = css.match(/\.wsp\[data-aad-role\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) > \.win:not\(\.gone\) \{([^}]*)\}/);
+  assert.match(multi[1], /position: relative !important; inset: auto !important/, 'the shell\'s pixel boxes cannot stack the two windows');
+  assert.match(css, /> \.win:not\(\.gone\):not\(\.win:not\(\.gone\) ~ \.win\) \{ flex: 1 1 0 !important; \}/, 'the app takes all the room the companion leaves');
+  assert.match(multi[1], /flex: 0 0 clamp\(300px, 30%, 380px\) !important/, 'a companion is a narrow side column, not a third of the panel');
+  assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
+  assert.match(js, /paneWins\(\) > 1 \? Math\.max\(sized\.app \?\? 0, 900, W \* \.62\) : sized\.app \?\?/, 'the panel widens for two columns even over a narrow saved width, and returns to it after');
+  assert.match(js, /if \(n > 1 && !wide\) \{ wideAuto = true; setWide\(true\); \}/, 'an app with its companion opens full width');
+  // James, 7 Nov 2026: never a side-by-side split in a narrow window.
+  assert.match(js, /const STACK_BELOW = 960;/, 'two columns only from 960px of panel');
+  assert.match(js, /e\.target\.toggleAttribute\('data-aad-stack', e\.contentRect\.width < STACK_BELOW\)/, 'the panel width, measured before paint, decides stacking');
+  assert.match(css, /\[data-aad-stack\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) \{ flex-direction: column !important;/, 'a narrow panel stacks the app over its companion');
+  assert.match(js, /else if \(n <= 1 && wideAuto\) \{ wideAuto = false; setWide\(false\); \}/, 'and goes back to the side when the companion closes');
+  assert.match(js, /api\.listen\(pW, 'click', \(\) => \{ wideAuto = false; setWide\(!wide\); \}\)/, 'the owner\'s own Wider/Back press wins');
+  assert.match(js, /host\?\.onChange\(\(\) => \{ paintTop\(\); watchPaneWins\(\); \}\)/, 'a companion opening or closing re-sizes the panel through the host');
+  assert.match(js, /const desk = pane\?\.desk \?\? null, n = paneWins\(\)/, 'both group identity and count are observed');
+  assert.doesNotMatch(js, /winsMo|querySelectorAll\?\.\(':scope > \.win/, 'no Classic child observers remain');
+});
+
+test('desktop open chat stays on the same thread through Ready → Working → Ready and Archive', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const desk = new El('div'); desk.className = 'wsp';
+  const win = new El('div'); win.className = 'win';
+  const chats = new El('div'); chats.className = 'dchats';
+  const pane = new El('div'); pane.className = 'pane-main';
+  const done = new El('button'); done.dataset.chact = 'done';
+  pane.append(done); chats.append(pane); win.append(chats); desk.append(win); stage.append(desk); w.doc.body.append(stage);
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 };
+  const off = (await layout()).default(w.api);
+  const original = w.st.sessions.ready.shift(), opens = w.st.opened.length, news = w.st.newChats;
+  const held = () => {
+    w.emit('render'); w.run();
+    assert.equal(w.st.route.thread, 'r1'); assert.equal(w.html.dataset.aadChat, 'on');
+    assert.equal(w.st.opened.length, opens, 'no next Ready selection'); assert.equal(w.st.newChats, news, 'no implicit close');
+  };
+  w.st.sessions.working.push({ ...original, kind: 'working' }); held();
+  w.st.sessions.working = w.st.sessions.working.filter(s => s.id !== 'r1');
+  w.st.sessions.ready.unshift(original); held();
+  w.fire('click', done); w.run(); // previously queued nextAfterAct and selected r2
+  w.st.sessions.ready.shift(); w.st.sessions.archive.push({ ...original, kind: 'archive' }); held();
+  w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.newChats, news + 1, 'manual ✕ still closes');
+  off();
 });

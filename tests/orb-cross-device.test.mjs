@@ -1,60 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { fixture, read } from './fixtures/tweaks.mjs';
+import { readFileSync } from 'node:fs';
+const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
-// An already-ON package, not an OFF/ON toggle. Real host + real tweak setup;
-// only the network/module boundary is controlled. This is not handset telemetry.
-function client(mode = 'recover') {
-  const f = fixture();
-  let starts = 0, disposals = 0, release;
-  const imports = [];
-  f.host._test.setImporter(async url => {
-    if (!url.includes('/core/orb-switcher.js')) {
-      const src = read('web/tweaks/wizard/orb-radial/tweak.js').replace('export default function setup', 'function setup');
-      return vm.runInNewContext(`(() => { ${src}; return {default:setup}; })()`, f.ctx);
-    }
-    imports.push(url);
-    if (mode === 'delayed') await new Promise(r => { release = r; });
-    if (mode === 'fail' || (mode === 'recover' && imports.length === 1)) throw new TypeError('Failed to fetch dynamically imported module');
-    return { default: () => { starts++; return { dispose() { disposals++; } }; } };
-  });
-  return { f, imports, get starts() { return starts; }, get disposals() { return disposals; }, release: () => release?.() };
+// Core loads before app.js, not through a per-device saved tweak membership or lazy import.
+function client(choice) {
+  const storage = new Map([['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, mix: { 'wizard/orb-radial': choice } })], ['wos.orbSwitcher.v1', JSON.stringify({ pins: ['home'], holdMs: 450 })]]);
+  const window = { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} };
+  const context = { window, document: { querySelectorAll: () => [], body: { classList: { remove() {} } } }, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, CustomEvent: class {}, setTimeout, clearTimeout };
+  vm.runInNewContext(read('web/core/orb-switcher.js'), context);
+  return window.WosCreateOrbSwitcher({ apps: () => [], cancelGesture() {}, hover() {} });
 }
 
-test('already ON: independent client retries a failed lazy module without a toggle; healthy client stays single', async () => {
-  for (const mode of ['recover', 'healthy']) {
-    const c = client(mode);
-    await c.f.mount('wizard/orb-radial');
-    assert.equal(c.starts, 1, `${mode}: active membership must have an installed handler before load settles`);
-    assert.deepEqual(Array.from(c.f.host.tweakState), ['wizard/orb-radial']);
-    if (mode === 'recover') {
-      assert.equal(c.imports.length, 2);
-      assert.notEqual(c.imports[0], c.imports[1], 'an ES module rejection is cached by URL; retry needs a distinct key');
-    } else assert.equal(c.imports.length, 1);
-    await c.f.clear();
-    assert.equal(c.disposals, 1);
-  }
+test('independent clients with saved ON, OFF or missing radial membership all install a ready core handler', () => {
+  const clients = [true, false, undefined].map(client);
+  for (const c of clients) { assert.equal(c.active(), true); assert.equal(c.get().holdMs, 450); assert.deepEqual(Array.from(c.get().pins), ['home']); }
+  clients[0].dispose(); assert.equal(clients[1].active(), true); assert.equal(clients[2].active(), true);
+  clients.forEach(c => c.dispose());
 });
 
-test('already ON: unrecoverable lazy failure cannot report an active radial; explicit refresh can recover', async () => {
-  const c = client('fail');
-  await c.f.mount('wizard/orb-radial');
-  assert.equal(c.starts, 0);
-  assert.deepEqual(Array.from(c.f.host.tweakState), []);
-  assert.match(c.f.toasts.join('\n'), /wizard\/orb-radial turned off.*Failed to fetch/);
-  c.f.host._test.setImporter(async url => url.includes('/core/') ? { default: () => { c.f.ctx.window.handler = true; return { dispose() {} }; } } : { default: api => api.orb.switcher() });
-  await c.f.mount('wizard/orb-radial');
-  assert.equal(c.f.ctx.window.handler, true);
-  await c.f.clear();
-});
-
-test('turning OFF while an already-ON lazy load is unresolved cannot resurrect a handler', async () => {
-  const c = client('delayed');
-  const pending = c.f.mount('wizard/orb-radial');
-  while (!c.imports.length) await new Promise(r => setImmediate(r));
-  await c.f.clear();
-  c.release(); await pending;
-  assert.equal(c.starts, 0);
-  assert.deepEqual(Array.from(c.f.host.tweakState), []);
+test('no cached rejected lazy-import path or tweak teardown can strand the core handler', () => {
+  assert.doesNotMatch(read('web/core/skin-host.js'), /orb-switcher\.js|api\.orb =|orbRetry/);
+  assert.doesNotMatch(read('web/core/orb-switcher.js'), /import\(/);
+  const entry = read('web/index.html');
+  assert.ok(entry.indexOf('src="core/orb-switcher.js"') < entry.indexOf('src="app.js"'));
+  assert.match(read('web/app.js'), /WosCreateOrbSwitcher\(orbSwitcherHost\)/);
 });

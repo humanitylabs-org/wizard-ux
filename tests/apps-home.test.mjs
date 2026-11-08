@@ -214,7 +214,7 @@ test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb st
 });
 
 test('Desks unchanged: the desktop and phone stock paths never meet Apps CSS unless worn; Apps wears on the desktop too', async () => {
-  const css = read('web/layouts/apps/layout.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = read('web/layouts/apps/layout.css').replace(/@import[^;]+;/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const sel of [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(x => !/^(from|to)$/.test(x))) for (const part of sel.split(/,(?![^(]*\))/))
     assert.ok(/^html\[data-shell="(phone|desktop)"\]\[data-layout="apps"\]/.test(part.trim()), `unscoped: ${part.trim()}`);
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(css + read('web/layouts/apps/chrome.css')), 'colours are tokens');
@@ -230,9 +230,18 @@ test('Desks unchanged: the desktop and phone stock paths never meet Apps CSS unl
     W: { a: { app: 'frame', appId: 'mail' }, c: { app: 'frame', appId: 'notes' }, d: { app: 'chats' }, e: { app: 'frame', appId: 'music' } },
     appOf: w => w.app === 'chats' ? { id: 'wizard', name: 'Wizard' } : { id: w.appId, name: w.appId[0].toUpperCase() + w.appId.slice(1) }, winTitle: () => '' });
   assert.deepEqual(JSON.parse(JSON.stringify(run())), [{ desk: 0, id: 'mail', name: 'Mail' }, { desk: 2, id: 'wizard', name: 'Chats' }, { desk: 3, id: 'music', name: 'Music' }]);
-  assert.match(dj, /openAppDesk: id => \{[^\n]*if \(at >= 0\) \{ goWs\(at\); return true; \}\n\s+if \(ws\[cur\]\.wins\.length\) \{ ws\.push\(freshDesk\(\)\); return openApp\(a, \{ ws: ws\.length - 1 \}\) !== false; \} return openApp\(a\) !== false; \},/);
+  const openSrc = dj.slice(dj.indexOf('openAppDesk: ') + 'openAppDesk: '.length, dj.indexOf('    // A layout placing the shell', dj.indexOf('openAppDesk: '))).trim().replace(/,$/, '');
+  const ws = [{ wins: ['mail'], focus: 'mail' }], calls = [];
+  const open = vm.runInNewContext(`(${openSrc})`, { ws, cur: 0, W: { mail: { appId: 'mail' } }, APP: { mail: { id: 'mail' }, store: { id: 'store' } }, freshDesk: () => ({ wins: [] }), goWs: desk => calls.push(['go', desk]), openApp: (app, opts) => { calls.push(['open', app.id, opts?.ws]); return true; } });
+  assert.equal(open('mail'), true); assert.deepEqual(calls.pop(), ['go', 0], 'reuse existing app desk');
+  assert.equal(open('store'), true); assert.deepEqual(calls.pop(), ['open', 'store', 1], 'normal opens still get their own desk');
+  assert.equal(open('store', desk => { calls.push(['trusted', desk]); return true; }), true);
+  assert.deepEqual(calls.pop(), ['trusted', 2], 'a routed, already-checked open keeps its original continuation');
+  ws[0].wins = [];
+  assert.equal(open('store'), true); assert.deepEqual(calls.pop(), ['open', 'store', undefined], 'empty current desk remains the stock target');
+  assert.equal(open('unknown'), false);
   const host = read('web/core/skin-host.js');
-  assert.match(host, /openDesk: id => live\(\) && typeof id === 'string' && id \? !!\(shell\.openAppDesk \? shell\.openAppDesk\(id\) : shell\.openApp\?\.\(id\)\) : false,/);
+  assert.match(host, /openDesk: \(id, place = null\) => live\(\) && typeof id === 'string' && id \? !!\(shell\.openAppDesk \? shell\.openAppDesk\(id, typeof place === 'function' \? place : null\) : shell\.openApp\?\.\(id\)\) : false,/);
   assert.match(host, /list: \(\) => \{ const l = live\(\) \? \(shell\.deskApps \|\| shell\.phoneDesks\)\?\.\(\) : null;/);
 });
 
@@ -265,7 +274,7 @@ test('the phone adapter lists one entry per desk (Home and empty desks left out)
   assert.match(host, /desks: \(\) => \{ const l = live\(\) \? shell\.phoneDesks\?\.\(\) : null;/);
   assert.match(host, /Object\.freeze\(\{ id: 'apps', name: 'Apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
-  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored Apps layout goes back to Desks');
+  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only an unowned stale Apps layout goes back to Desks');
   assert.ok(!/Math\.random/.test(read('web/layouts/apps/layout.js')));
 });
 

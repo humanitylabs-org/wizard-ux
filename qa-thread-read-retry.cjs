@@ -11,13 +11,13 @@ const FALLBACK = process.env.QA_FALLBACK_WEB || require('node:path').join(requir
 let pass = 0, fail = 0;
 const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d !== '' ? ' ' + JSON.stringify(d) : ''}`); };
 const now = Date.now() / 1000, sleep = ms => new Promise(r => setTimeout(r, ms));
-const S = ['t_once', 't_many', 't_tap', 't_leave', 't_403', 't_404'].map((id, i) => ({ id, title: 'QA ' + id, source: 'wizard-mobile', message_count: 2, last_active: now - 600 - i * 60, started_at: now - 3600, archived: false, hidden: false, status: null, preview: 'answer ' + id }));
+const S = ['t_once', 't_many', 't_tap', 't_leave', 't_403', 't_404', 't_early', 't_pend'].map((id, i) => ({ id, title: 'QA ' + id, source: 'wizard-mobile', message_count: 2, last_active: now - 600 - i * 60, started_at: now - 3600, archived: false, hidden: false, status: null, preview: 'answer ' + id }));
 const rows = id => [
   { id: 1, role: 'user', content: 'question ' + id, timestamp: now - 900 },
   { id: 2, role: 'assistant', content: 'Answer for ' + id + '.', timestamp: now - 880 },
 ];
 // failuresLeft[id] = how many message reads fail before one succeeds (Infinity = keep failing until changed)
-const failuresLeft = { t_once: 1, t_many: 3, t_tap: Infinity, t_leave: Infinity, t_403: Infinity, t_404: Infinity };
+const failuresLeft = { t_once: 1, t_many: 3, t_tap: Infinity, t_leave: Infinity, t_403: Infinity, t_404: Infinity, t_early: Infinity, t_pend: Infinity };
 const reads = {};
 
 (async () => {
@@ -35,7 +35,7 @@ const reads = {};
       if (failuresLeft[id] > 0) {
         failuresLeft[id]--;
         if (id === 't_403') return json(403, { error: { message: 'sign in' } });
-        if (id === 't_404') return json(404, { error: { message: 'not found' } });
+        if (id === 't_404' || id === 't_early' || id === 't_pend') return json(404, { error: { message: 'not found' } });
         if (id === 't_many') return json(502, { error: { message: 'bad gateway' } });
         return r.abort('connectionreset'); // a dropped read, like a phone network blip
       }
@@ -71,7 +71,7 @@ const reads = {};
     return { answer: /Answer for/.test(el?.querySelector('.ch-msgs')?.innerText || ''), err: el?.querySelector('.ch-empty')?.innerText || '', retry: !!el?.querySelector('[data-chretry]'), skel: !!el?.querySelector('.ch-skel.thread') };
   }, pane);
   const open = id => p.evaluate(id => __wos.openWizardThread(id), id);
-  const back = async () => { await p.locator(`${pane} [data-chback]`).first().tap(); await p.waitForSelector(`${pane} .ch-list`, { timeout: 5000 }).catch(() => {}); await sleep(300); };
+  const back = async () => { await p.evaluate(() => document.getElementById('wosWelcome')?.remove()); await p.locator(`${pane} [data-chback]`).first().tap(); await p.waitForSelector(`${pane} .ch-list`, { timeout: 5000 }).catch(() => {}); await sleep(300); };
   const until = async (fn, ms) => { const t = Date.now(); while (Date.now() - t < ms) { const s = await state(); if (fn(s)) return { s, ms: Date.now() - t }; await sleep(100); } return { s: await state(), ms: null }; };
 
   // 1. One dropped read: no error box, recovers by itself.
@@ -120,6 +120,31 @@ const reads = {};
   ok(/no longer here/.test(s404.s.err) && !s404.s.retry && !/Retrying/.test(s404.s.err), 'a missing thread says it is gone, with no retry loop', s404.s);
   await sleep(2000); const n404 = reads.t_404.length; await sleep(8000); // settle the open's own reads, then watch for a loop
   ok(reads.t_404.length === n404, 'a missing thread stops being read (no retry loop)', { before: n404, after: reads.t_404.length, gaps: reads.t_404.map(t => t - reads.t_404[0]) });
+
+  await back();
+
+  // 7. A brand-new thread the list already shows Working (its first message is queued): Hermes has no history yet
+  // and answers 404. That is "not yet", never "no longer here"; the pane keeps polling and shows the message when it lands.
+  S.find(x => x.id === 't_early').status = 'running'; S.find(x => x.id === 't_early').message_count = 0;
+  await p.evaluate(() => WizLive.refresh?.());
+  await sleep(500);
+  await open('t_early');
+  await sleep(3500);
+  const early = await state();
+  ok(!/no longer here/.test(early.err) && reads.t_early.length >= 2, 'a Working thread with no history yet is not "no longer here" and keeps being read', { ...early, reads: reads.t_early.length });
+  failuresLeft.t_early = 0;
+  const landed = await until(s => s.answer, 9000);
+  ok(landed.s.answer && !landed.s.err, 'its messages appear by themselves once Hermes has the thread', landed);
+  await back();
+
+  // 8. A brand-new thread with a message waiting in this device's outbox: the pending bubble shows, never the gone notice.
+  await p.evaluate(async () => { await WosOutbox.stage({ kind: 'reply', sessionId: 't_pend', model: 'qa', provider: 'qa', text: 'my first message' }); });
+  await open('t_pend');
+  await sleep(3500);
+  const pend = await p.evaluate(s => { const el = document.querySelector(s); return { gone: /no longer here/.test(el?.innerText || ''), bubble: /my first message/.test(el?.querySelector('.ch-msgs')?.innerText || '') }; }, pane);
+  ok(!pend.gone && pend.bubble, 'a thread with a pending send shows the message instead of the gone notice', pend);
+  ok((reads.t_pend || []).length >= 2, 'and the pane keeps polling', (reads.t_pend || []).length);
+  await p.screenshot({ path: path.join(process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath(''), 'thread-new-pending.png') });
 
   ok(errs.length === 0, 'no page errors', errs);
   console.log(`\n${pass} passed, ${fail} failed`);

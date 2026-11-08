@@ -34,7 +34,7 @@ test('hover ✕ closes a desktop', () => {
 test('right-click offers Close desktop', () => {
   assert.match(source, /addEventListener\('contextmenu',[\s\S]*desktopMenu\(b, e.clientX, e.clientY\)/);
   assert.match(fn('desktopMenu'), /label: 'Close desktop'.*closeDesktop\(ws.indexOf\(d\)\)/);
-  assert.match(fn('escStep'), /WosContextMenu\?\.back\(\)/);
+  assert.match(fs.readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8'), /add\('context',[^\n]+WosContextMenu.back\(\)/);
   const menu = fs.readFileSync(new URL('../web/core/context-menu.js', import.meta.url), 'utf8');
   for (const event of ['pointerdown', 'blur', 'scroll', 'resize']) assert.ok(menu.includes(`addEventListener('${event}'`));
   assert.match(menu, /abort.abort\(\)/);

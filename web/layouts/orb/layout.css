@@ -1,3 +1,6 @@
+/* The built-in view owns this CSS dependency even with personal tweak scripts off. */
+@import url("../../tweaks/miguel/orb-shell/tweak.css");
+
 /* Orb layout (desktop only; layout.js). Everything is scoped to html[data-shell="desktop"][data-layout="orb"], so the
  * phone and the classic desktop never see a rule of it. The Home scene is the approved concept's night scene on every
  * skin (its colours are the wearing tweak's --ob-* tokens). There are no desks: whatever opens shows in the shell's

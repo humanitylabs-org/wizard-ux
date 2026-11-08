@@ -217,7 +217,7 @@
     card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
-    if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); back(); } }, true); } catch (e) {} });
+    if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); back(); } }, true); } catch (e) {} });
     // The name field takes focus with a mouse and keyboard; on a phone the keyboard waits for a tap on the field.
     const fine = (() => { try { return matchMedia('(pointer: fine)').matches; } catch (e) { return false; } })();
     if (focus) requestAnimationFrame(() => { const nm = fine && card.querySelector('.wl-naming input:not([disabled])');

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,7 +18,7 @@ function harness(shell = 'web/app.js') {
     WizSigil: { of: () => ({ color: 'purple' }), html: () => '<i></i>' },
     WosBell: { readyCount: () => 0, unreadCount: () => 0, readyMore: () => false, inChats: () => false, isOff: () => false },
   };
-  c.window = c; vm.createContext(c); vm.runInContext(live, c); vm.runInContext(nav, c);
+  c.window = c; modelContext(c); vm.runInContext(live, c); vm.runInContext(nav, c);
   const L = c.WizLive, N = c.WizCore.workspaceNav;
   L.ok = true; L.seen = { initializedAt: 1, threads: {} };
   // Execute the actual shell's badge publication statement, not a test-owned copy of its rule.

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -11,7 +12,7 @@ function setup() {
   const L = { sessions: [{ id: 's', status: 'completed', runId: 'old' }], agentSessions: {} };
   const OB = { _items: new Map() };
   const c = { L, OB, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => a !== 'hermes', AGENT_OF: new Map(), Date: class extends Date { static now() { return now; } } };
-  vm.runInNewContext(source.slice(start, end) + '\nthis.api = {syncPending,applyPend,PEND,TAPS,RELEASED};', c);
+  runWithChatsModel(source.slice(start, end) + '\nthis.api = {syncPending,applyPend,PEND,TAPS,RELEASED};', c);
   const it = { id: 'send', sessionId: 's', kind: 'reply', createdAt: now, state: 'sending', text: 'next' };
   const sync = () => c.api.syncPending(OB);
   const poll = (status, key = 'old', lastRunStatus = '', runId = '') => { L.sessions = [{ id: 's', status, lastRunKey: key, lastRunStatus, runId }]; c.api.applyPend(L.sessions[0]); return L.sessions[0]; };

@@ -10,7 +10,9 @@ const js = read('web/desktop/desktop.js'), html = read('web/desktop.html'), css 
 test('Chats windows get a float button beside ✕; other windows do not', () => {
   assert.match(js, /w\.app === 'chats' \? `<button data-wact="hud" title="Float over every desk \(\$\{MOD\}P\)"/);
   assert.match(js, /if \(act === 'hud'\) return hudOn\(id\);/);
-  assert.match(js, /if \(act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\);\s*\n\s*if \(act === 'close'\) return closeWin\(id\);/);
+  assert.match(js, /if \(act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\);\s*\n\s*if \(act === 'close'\) return desktopHost\.close\(id\);/);
+  // The new boundary must still use the original leave/custody-aware close.
+  assert.match(js, /close: id => \{ closeWin\(id\); return !W\[id\]; \}/);
   // Borderless frames hide title-bar buttons except ✕: the float button is re-shown next to it.
   assert.match(css, /html\[data-skin-frame="borderless"\] \.wbar > \[data-wact\^="hud"\] \{[^}]*display: grid/);
 });
@@ -49,7 +51,7 @@ test('keys, voice and chat actions follow the keyboard into the HUD; desk routes
   assert.match(js, /function closeWin\(id, internal = false\) \{\n(?:\s*if \(!internal && !canLeave\(id\)\) return;\n)?\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
   assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ hudFocus\(\); return; \}/);
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);
-  assert.match(js, /function toNewChat\(wid, why\) \{\n\s*const w = W\[wid\]; if \(hud\?\.id === wid \|\|/);
+  assert.doesNotMatch(js, /function toNewChat/);
 });
 
 test('the heads-up chat is fully opaque (James: floating text panels are solid)', () => {
@@ -91,6 +93,7 @@ test('Back / Esc in the floating chat leaves its thread even with Home or a full
   assert.ok(esc.indexOf('const hb = hudBack(); if (hb) return hb;') > 0);
   assert.ok(esc.indexOf('hudBack()') < esc.indexOf("if (homeOpen) return '';"));
   assert.ok(esc.indexOf('hudBack()') < esc.indexOf('if (ws[cur].mono)'));
+  assert.ok(esc.indexOf('hudBack()') < esc.indexOf('WizAppServices?.back'), 'floating chat focus wins over the app behind it');
   const src = js.slice(js.indexOf('function hudBack('), js.indexOf('function hudClose('));
   for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
     const w = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) }, other = { id: 'd', app: 'chats', thread: 'desk' }, calls = [];

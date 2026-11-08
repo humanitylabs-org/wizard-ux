@@ -26,6 +26,12 @@
   'use strict';
   const PATH = '/wizard/v1/pages/wizard-look/look.json', META = 'wos.look-sync.v1';
   const ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/, SKIN = /^[a-z0-9][a-z0-9-]{0,47}$/;
+  const BACKGROUNDS = ['living', 'custom', 'landscapes', 'lake', 'valley', 'moonrise', 'sea', 'clouds', 'glass'];
+  const fileId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(id);
+  function backdrop(v) {
+    if (!v || !BACKGROUNDS.includes(v.id) || (v.id === 'custom' && !fileId(v.wide))) return null;
+    return { id: v.id, ...(fileId(v.wide) ? { wide: v.wide, ...(fileId(v.tall) ? { tall: v.tall } : {}) } : {}), at: at(v.at) };
+  }
   const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const SHELLS = ['desktop', 'phone'];
   const at = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
@@ -41,6 +47,7 @@
     if (isObj(j.tweaks)) for (const [id, t] of Object.entries(j.tweaks)) if (ID.test(id) && isObj(t) && typeof t.on === 'boolean') out.tweaks[id] = { on: t.on, at: at(t.at) };
     if (isObj(j.defaults)) for (const [id, t] of Object.entries(j.defaults)) if (ID.test(id) && isObj(t) && typeof t.on === 'boolean') (out.defaults ||= {})[id] = { on: t.on, at: at(t.at) };
     if (isObj(j.views)) for (const s of SHELLS) { const v = j.views[s]; if (isObj(v) && typeof v.id === 'string' && (v.id === '' || ID.test(v.id))) (out.views ||= {})[s] = { id: v.id, at: at(v.at) }; }
+    const bg = backdrop(j.desktopBackdrop); if (bg) out.desktopBackdrop = bg;
     return out;
   }
   // Per choice, newest wins; a tie keeps the box's.
@@ -54,6 +61,15 @@
       const a = box?.views?.[s], b = mine?.views?.[s], v = b && (!a || b.at > a.at) ? b : a;
       if (v) (out.views ||= {})[s] = v;
     }
+    const a = box?.desktopBackdrop, b = mine?.desktopBackdrop;
+    if (a || b) {
+      const selected = b && (!a || b.at > a.at) ? b : a;
+      // A built-in choice from a stale device may not know the uploaded files.
+      // Keep those references independently; an explicit replacement wide image
+      // still replaces the pair, including intentionally omitted portrait art.
+      const files = selected.wide ? selected : (a?.wide ? a : b);
+      out.desktopBackdrop = { id: selected.id, ...(files?.wide ? { wide: files.wide, ...(files.tall ? { tall: files.tall } : {}) } : {}), at: selected.at };
+    }
     return out;
   }
   const onIds = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();
@@ -62,6 +78,7 @@
     const out = { version: 1, skin: doc.skin && keep(doc.skin) ? doc.skin : null, tweaks: Object.fromEntries(Object.entries(doc.tweaks).filter(([, t]) => keep(t))) };
     for (const [id, t] of Object.entries(doc.defaults || {})) if (keep(t)) (out.defaults ||= {})[id] = t;
     for (const s of SHELLS) if (doc.views?.[s] && keep(doc.views[s])) (out.views ||= {})[s] = doc.views[s];
+    if (doc.desktopBackdrop && keep(doc.desktopBackdrop)) out.desktopBackdrop = doc.desktopBackdrop;
     return out;
   };
   // The view each shell type wears by its own choice ({ desktop: id, phone: '' }); a type without one is left out.
@@ -90,16 +107,16 @@
     // What a set switches on here: retired ids on the box are never worn, or this device would never match the box and
     // re-apply every tweak on every pass (settle() after each apply: a reload storm that flickers the whole shell).
     const wear = doc => onIds(doc).filter(live);
-    const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks, ...(meta.pending.defaults ? { defaults: meta.pending.defaults } : {}), ...(meta.pending.views ? { views: meta.pending.views } : {}) } })); } catch (_) {} };
+    const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks, ...(meta.pending.defaults ? { defaults: meta.pending.defaults } : {}), ...(meta.pending.views ? { views: meta.pending.views } : {}), ...(meta.pending.desktopBackdrop ? { desktopBackdrop: meta.pending.desktopBackdrop } : {}) } })); } catch (_) {} };
     let clock = 0;
-    const observe = d => { clock = Math.max(clock, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0), ...Object.values(d?.views || {}).map(t => t.at || 0), ...Object.values(d?.defaults || {}).map(t => t.at || 0)); };
+    const observe = d => { clock = Math.max(clock, d?.desktopBackdrop?.at || 0, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0), ...Object.values(d?.views || {}).map(t => t.at || 0), ...Object.values(d?.defaults || {}).map(t => t.at || 0)); };
     observe(meta.pending);
     const stamp = () => ++clock;
     // Before the first observation (also restored storage), or while a request
     // is in flight, an intent needs that response as its causal base. An idle
     // choice already has an observed base: a newer remote writer can beat it.
     // Traverse every field together; never restamp an already-sent choice on 409.
-    const choices = doc => [doc.skin, ...Object.values(doc.tweaks || {}), ...Object.values(doc.views || {}), ...Object.values(doc.defaults || {})].filter(Boolean);
+    const choices = doc => [doc.skin, doc.desktopBackdrop, ...Object.values(doc.tweaks || {}), ...Object.values(doc.views || {}), ...Object.values(doc.defaults || {})].filter(Boolean);
     let unbased = new WeakSet(choices(meta.pending));
     const intent = t => { if (!boxDoc || busy) unbased.add(t); return t; };
     function baseChoices() {
@@ -114,7 +131,7 @@
       }
       unbased = new WeakSet();
     }
-    const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0 || Object.keys(meta.pending.defaults || {}).length > 0;
+    const dirty = () => !!meta.pending.desktopBackdrop || !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0 || Object.keys(meta.pending.defaults || {}).length > 0;
     // Experience modules from before per-shell views have no `views`: they keep the old one-view-everywhere meaning.
     const perShell = () => { try { return isObj(exp.views); } catch (_) { return false; } };
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
@@ -124,6 +141,8 @@
       if (typeof s === 'string' && SKIN.test(s)) doc.skin = { id: s, at: 0 };
       for (const id of mixOn(exp.mix)) if (live(id)) doc.tweaks[id] = { on: true, at: 0 };
       if (perShell()) for (const [shell, id] of Object.entries(exp.views)) (doc.views ||= {})[shell] = { id, at: 0 };
+      // Backdrops are independent of the active skin and phone. Never seed an implicit Living default.
+      const bg = backdrop(skin.desktopBackdrop); if (bg && bg.id !== 'living') doc.desktopBackdrop = { ...bg, at: 0 };
       return doc;
     }
     const defaultChoices = () => exp.defaultChoices || {};
@@ -154,12 +173,17 @@
       applying = true;
       try {
         if (doc.skin && doc.skin.id !== skin.current && skin.has(doc.skin.id)) skin.set(doc.skin.id);
+        if (doc.desktopBackdrop && skin.adoptDesktopBackdrop) {
+          const { at: _at, ...bg } = doc.desktopBackdrop;
+          if (!same(bg, skin.desktopBackdrop)) skin.adoptDesktopBackdrop(bg);
+        }
         const want = wear(doc), views = shellViews(doc);
         if (!same(want, mixOn(exp.mix).filter(live)) || (perShell() && !same(views, exp.views)) || !defaultsMatch(doc)) exp.adopt(Object.fromEntries(want.map(id => [id, true])), perShell() ? views : undefined, wornDefaults(doc));
       } finally { applying = false; }
     }
     // Drop only what this pass delivered; a change made meanwhile stays queued.
     function sent(p) {
+      if (p.desktopBackdrop && meta.pending.desktopBackdrop?.at === p.desktopBackdrop.at) delete meta.pending.desktopBackdrop;
       if (p.skin && meta.pending.skin && meta.pending.skin.at === p.skin.at) meta.pending.skin = null;
       for (const [id, t] of Object.entries(p.tweaks)) if (meta.pending.tweaks[id]?.at === t.at) delete meta.pending.tweaks[id];
       for (const [s, t] of Object.entries(p.views || {})) if (meta.pending.views?.[s]?.at === t.at) delete meta.pending.views[s];
@@ -179,7 +203,7 @@
           baseChoices(); // also covers a synced device choosing while GET/PUT was in flight
           const pending = JSON.parse(JSON.stringify(meta.pending));
           let want = null;
-          if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.skin || Object.keys(mine.views || {}).length || dirty()) want = mine; } // seed; an untouched empty device never writes
+          if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.desktopBackdrop || mine.skin || Object.keys(mine.views || {}).length || dirty()) want = mine; } // seed; an untouched empty device never writes
           else if (dirty()) want = merge(doc, pending);
           // First sync of a device whose old local set is bigger than the box's seeds: its seeds replace them; real changes stay.
           else if (!meta.synced && onIds(local()).length > onIds(seeds(doc)).filter(live).length) want = merge(changes(doc), local());
@@ -230,6 +254,10 @@
       if (applying || !ID.test(String(id)) || typeof value !== 'boolean' || !Object.hasOwn(defaultChoices(), id)) return;
       (meta.pending.defaults ||= {})[id] = intent({ on: value, at: stamp() }); save(); schedule();
     }
+    function backdropChoice(value) {
+      const bg = backdrop(value); if (applying || !bg) return;
+      meta.pending.desktopBackdrop = intent({ ...bg, at: stamp() }); save(); schedule();
+    }
     function skinChoice(id) {
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;
       meta.pending.skin = intent({ id, at: stamp() }); save(); schedule();
@@ -251,7 +279,7 @@
       if (!same(want, onIds(mine))) { applying = true; try { exp.adopt(Object.fromEntries(want.map(id => [id, true]))); } finally { applying = false; } }
     }
     return {
-      sync, schedule, tweakChoice, viewChoice, defaultChoice, skinChoice, settle,
+      sync, schedule, tweakChoice, viewChoice, defaultChoice, skinChoice, backdropChoice, settle,
       start() {
         if (off || refresh) return;
         const poll = async () => {
@@ -272,12 +300,13 @@
   const sync = create({
     req: (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(15000) }),
     store: localStorage, exp: E, active: () => !document.hidden,
-    skin: { get chosen() { return S.chosen; }, get current() { return S.current; }, has: id => S.list.some(s => s.id === id), set: id => S.set(id) },
+    skin: { get chosen() { return S.chosen; }, get current() { return S.current; }, get desktopBackdrop() { return S.desktopBackdrop; }, adoptDesktopBackdrop: bg => S.adoptDesktopBackdrop(bg), has: id => S.list.some(s => s.id === id), set: id => S.set(id) },
   });
   window.WosLookSync.current = sync;
   window.addEventListener('wos:tweak-choice', e => e.detail?.scope === 'default' ? sync.defaultChoice(e.detail?.id, e.detail?.on) : sync.tweakChoice(e.detail?.id, e.detail?.on));
   window.addEventListener('wos:view-choice', e => sync.viewChoice(e.detail?.shell, e.detail?.id));
   window.addEventListener('wos:skin', e => sync.skinChoice(e.detail));
+  window.addEventListener('wos:wallpaper', e => { if (e.detail?.desktopBackdrop) sync.backdropChoice(e.detail.desktopBackdrop); });
   // Wait for experience's first migration before publishing this device's seeds.
   let started = false, woke = 0;
   const begin = () => {

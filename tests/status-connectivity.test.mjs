@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,7 +19,7 @@ function setup(online = true, fetch = failedProbe) {
   ctx.WizReach = { calls: 0, opened: 0, checked: 0, failure() { this.calls++; return { message: 'Wizard’s Agent Service isn’t responding.', short: 'Reconnecting…' }; }, open() { this.opened++; },
     async checks() { this.checked++; return { tailnet: true, internet: { state: 'ok', detail: 'Working · 80 ms' }, tailscale: { state: 'bad', detail: 'Can’t reach your Wizard' }, wizard: { state: 'wait', detail: 'Waiting for the connection' } }; } };
   ctx.WosOutbox = { waiting: false, retries: 0, listeners: [], unsent() { return this.waiting ? [{ state: 'waiting' }] : []; }, onChange(fn) { this.listeners.push(fn); }, retryAll() { this.retries++; } };
-  vm.runInNewContext(source, ctx); ctx.WizCore.status.attach({});
+  runWithChatsModel(source, ctx); ctx.WizCore.status.attach({});
   return { ctx, L, state: () => ctx.WizCore.status.state.net, event(name, event = {}) { (events[name] || []).forEach(fn => fn(event)); }, advance(ms) { clock += ms; }, tap(selector = '[data-app]') { (events.click || []).forEach(fn => fn({ type: 'click', isTrusted: true, button: 0, target: { closest: sel => sel.split(',').includes(selector) ? {} : null } })); }, openPill() { this.banner().handlers.click({ target: { closest: sel => sel === '[data-wxoffopen]' ? {} : null } }); }, success() { L.at++; L.ok = true; L.error = ''; L.emit(); }, settle() { const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); },
     // The pop-up's grace: a failure must last this long before anything covers the screen.
     grace() { clock += 8100; const fns = [...timers.values()]; timers.clear(); for (const fn of fns) fn(); ctx.WizCore.status.refresh(); },

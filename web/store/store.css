@@ -180,3 +180,10 @@ html[data-color-scheme="light"] :is(.remove-action, .rm-go) { color: color-mix(i
 .src-list dd b { color: var(--green); font-weight: 700; }
 html[data-color-scheme="light"] .src-list dd b { color: var(--ink); }
 .src-note { margin-top: 10px; }
+
+/* Install progress: indeterminate bar along the pill's bottom edge (the App Manager reports no percentage). */
+.get[data-installing] { position: relative; overflow: hidden; padding-bottom: 3px; }
+.get[data-installing] .prog-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: color-mix(in srgb, var(--wz-accent, var(--violet)) 22%, transparent); }
+.get[data-installing] .prog-bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 3px; background: var(--wz-accent, var(--violet)); animation: prog-sweep 1.3s ease-in-out infinite; }
+@keyframes prog-sweep { from { left: -40%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .get[data-installing] .prog-bar::after { animation: none; left: 0; width: 100%; opacity: .6; } }

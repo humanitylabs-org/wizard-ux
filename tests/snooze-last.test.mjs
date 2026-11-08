@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -6,7 +7,7 @@ const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const block = (s, from, to) => { const a = s.indexOf(from), b = s.indexOf(to, a); assert.ok(a >= 0 && b > a); return s.slice(a, b); };
 function fixture(last) {
-  const c = vm.createContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 }, WosSkinHost: { snoozeOrder: last ? 'last' : 'default' } } });
+  const c = modelContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 }, WosSkinHost: { snoozeOrder: last ? 'last' : 'default' } } });
   vm.runInContext(block(live, '  const DAY = 864e5;', '  // Agent Service owns box-wide preferences.') + block(live, '  const sectionTime =', '  async function fetchDispositions()') + '\nthis.group = groupWork; this.priority = byPriority; this.oldest = byOldest;', c);
   return c;
 }
@@ -33,7 +34,7 @@ test('stock (no tweak, or no skin host) Snooze still leaves Ready; approvals sta
   }
 });
 test('subject grouping renders the entire snoozed tail after all awake subjects', () => {
-  const c = vm.createContext({ snoozeLast: () => true, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, subjectSort: (a, f) => a.sort(f), esc: s => s });
+  const c = modelContext({ snoozeLast: () => true, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt }, stiKind: () => 'none', subjOrder: () => [], esc: s => s });
   vm.runInContext(block(chats, '  function readyBody(', '  /* Android Back on the list'), c);
   const html = c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`);
   assert.ok(html.indexOf('<row>s</row>') > html.indexOf('<row>b</row>'));
@@ -43,14 +44,14 @@ test('stock subject grouping is unchanged: same HTML as readyBody without the sn
   const src = block(chats, '  function readyBody(', '  /* Android Back on the list');
   const stockSrc = src.split('\n').filter(l => !l.includes('snoozeLast()')).join('\n');
   assert.notEqual(stockSrc, src);
-  const run = code => { const c = vm.createContext({ snoozeLast: () => false, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, subjectSort: (a, f) => a.sort(f), esc: s => s }); vm.runInContext(code, c);
+  const run = code => { const c = modelContext({ snoozeLast: () => false, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt }, stiKind: () => 'none', subjOrder: () => [], esc: s => s }); vm.runInContext(code, c);
     return c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`); };
   assert.equal(run(src), run(stockSrc));
 });
 test('shared attention groups (Inbox, moons, Home): a snoozed approval is not Needs you only with snoozeOrder last', () => {
   const src = block(live, '    groups(agent = \'\') {', '    async refresh() {').replace(/,\s*$/, '');
   const run = last => {
-    const c = vm.createContext({ Date, snoozeLast: () => last, isDeferred: s => !!s.deferred && !s.archived, WORKING: new Set(['running']), WEEK: 7 * 864e5, seenKeyOf: s => s.id, assistantAt: s => s.at, hasNew: () => true });
+    const c = modelContext({ Date, snoozeLast: () => last, isDeferred: s => !!s.deferred && !s.archived, WORKING: new Set(['running']), WEEK: 7 * 864e5, seenKeyOf: s => s.id, assistantAt: s => s.at, hasNew: () => true });
     vm.runInContext(`this.L = { sessionsFor: () => this.rows, deferred: {}, seenOf: () => ({}), ${src.trim()} };`, Object.assign(c, { rows: [
       { id: 'appr', status: 'waiting_for_approval', deferred: true, at: new Date().toISOString() },
       { id: 'run', status: 'running', deferred: true, at: new Date().toISOString() },

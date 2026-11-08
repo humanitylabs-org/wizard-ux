@@ -25,6 +25,12 @@
     "/favicon.ico": "204 empty"
   },
   "paths": {
+    "/wizard-os-home/api/diagnostics/scroll-capture": {
+      "status": "not-exercised",
+      "source": "web/core/app-capture.js",
+      "kind": "write-or-stream",
+      "note": "Android-native storage diagnostics only; these three browser flows have no native bridge. Privacy projection and collector transport are covered by capture-storage-diagnostics.test.mjs and an explicit synthetic private-collector probe. Refuse and collect any unexpected attempt here."
+    },
     "/wizard/v1/agents": {
       "status": "catalogued",
       "source": "web/agents/agents.js",
@@ -232,6 +238,12 @@
     "/wizard/views/{}": {
       "status": "not-exercised",
       "source": "web/core/apps.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_disk": {
+      "status": "not-exercised",
+      "source": "web/core/disk-status.js",
       "kind": "read",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
@@ -848,6 +860,12 @@
       "kind": "navigation",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/photos": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
     "/android-apps": {
       "status": "not-exercised",
       "source": "web/store/store-status.js",
@@ -919,6 +937,12 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
+    "/wizard-os-home/core/skins/wizard/{}{}-{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Orientation-specific built-in image; exercised in background browser proofs, not these three request proofs. Refused and collected if reached."
+    },
     "/wizard-os-home/core/skins/wizard/{}{}-thumb.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
@@ -926,12 +950,6 @@
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
     "/wizard-os-home/skins/landscapes/preview{}.webp": {
-      "status": "not-exercised",
-      "source": "web/core/skins.js",
-      "kind": "read",
-      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
-    },
-    "/wizard-os-home/core/skins/wizard/{}.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
       "kind": "read",
@@ -1008,6 +1026,24 @@
         }
       ],
       "note": "Only GET is admitted by the proof fixture. Route writes remain refused."
+    },
+    "/wizard/v1/thread-items": {
+      "status": "not-exercised",
+      "source": "web/core/thread-tracker.js",
+      "kind": "read",
+      "note": "Thread tracker is an off-by-default tweak; none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/background-results": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/background-results/{}/continue": {
+      "status": "not-exercised",
+      "source": "web/core/chat-power.js",
+      "kind": "write-or-stream",
+      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
     }
   }
 }

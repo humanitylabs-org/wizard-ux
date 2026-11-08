@@ -30,6 +30,8 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
+import ai.wizards.os.downloads.DownloadsCallerPolicy;
+
 /**
  * Wizard OS: a native home for the owner's configured Wizard OS shell.
  *
@@ -70,6 +72,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
+    /** In-app Downloads (ai.wizards.os.downloads): events waiting for the shell to take them on the private downloads port. */
+    private final java.util.ArrayDeque<String> pendingDownloads = new java.util.ArrayDeque<>();
+    private int downloadsTries;
+    private final ai.wizards.os.downloads.Downloads.Listener downloadsListener = json -> main.post(() -> queueDownloadPush(json));
     private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
@@ -108,6 +114,74 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                     }
                     new Bridge().captureScreen(data);
                 });
+    }
+
+    /** Bumped on the UI thread at every main-frame page start: an admitted Downloads message is stale after a load. */
+    private volatile androidx.webkit.JavaScriptReplyProxy downloadsReply; // main-frame shell document's port, set only after admission
+    private volatile long downloadsReplyEpoch = -1;
+    private volatile long downloadsEpoch;
+    private final java.util.concurrent.ExecutorService downloadsIo = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    /**
+     * In-app Downloads port (web/core/downloads.js): the same main-frame/origin boundary as wizardScreenPort, and the
+     * ONLY way the page reaches the downloads list. It replaces four frame-blind JavascriptInterface methods that every
+     * hosted-app iframe could call. Rules and tests: downloads/DownloadsCallerPolicy. Without WEB_MESSAGE_LISTENER the
+     * port is simply absent (fail closed). A denied message gets no answer and runs nothing.
+     */
+    private void installDownloadsPort(WebView target) {
+        if (!DownloadsCallerPolicy.supported(
+                androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER))) return;
+        java.util.Set<String> origins = new java.util.HashSet<>();
+        origins.add(ai.wizards.os.device.AppState.primaryOrigin(this));
+        try {
+            androidx.webkit.WebViewCompat.addWebMessageListener(target, DownloadsCallerPolicy.NAME, origins,
+                    (view, message, sourceOrigin, isMainFrame, reply) -> onDownloadsMessage(target, view, message, sourceOrigin, isMainFrame, reply));
+        } catch (RuntimeException e) {
+            android.util.Log.w("WizardDownloads", "addWebMessageListener failed: no downloads port", e);
+        }
+    }
+
+    private final DownloadsCallerPolicy.Actions downloadsActions = new DownloadsCallerPolicy.Actions() {
+        @Override public String list() { return ai.wizards.os.downloads.Downloads.listJson(MainActivity.this); }
+        @Override public String open(String id) { return ai.wizards.os.downloads.Downloads.open(MainActivity.this, id); }
+        @Override public String cancel(String id) { return ai.wizards.os.downloads.Downloads.cancel(MainActivity.this, id); }
+        @Override public String remove(String id) { return ai.wizards.os.downloads.Downloads.remove(MainActivity.this, id); }
+    };
+
+    /** Runs on the UI thread (WebView listener thread): admission, then the work, with the navigation re-checked. */
+    private void onDownloadsMessage(WebView target, WebView view, androidx.webkit.WebMessageCompat message, Uri sourceOrigin,
+                                    boolean isMainFrame, androidx.webkit.JavaScriptReplyProxy reply) {
+        final String primary = DownloadsCallerPolicy.normalizeOrigin(ai.wizards.os.device.AppState.primaryOrigin(this));
+        final String source = sourceOrigin == null ? null
+                : DownloadsCallerPolicy.originOf(sourceOrigin.getScheme(), sourceOrigin.getHost(), sourceOrigin.getPort());
+        final DownloadsCallerPolicy.Verdict verdict = DownloadsCallerPolicy.admit(true,
+                view == target && web == target, isMainFrame, primary, source, web == null ? null : web.getUrl());
+        if (verdict != DownloadsCallerPolicy.Verdict.ALLOW) return; // no answer, no action
+        // Events (download finished, ...) go back through the proxy of the last ADMITTED main-frame message, onto the port the shell
+        // module holds privately. A denied frame never gets here, so it can never become the event target.
+        downloadsReply = reply;
+        downloadsReplyEpoch = downloadsEpoch;
+        // getData() throws for ArrayBuffer messages; only plain strings are requests.
+        final String data = message != null && message.getType() == androidx.webkit.WebMessageCompat.TYPE_STRING ? message.getData() : null;
+        final DownloadsCallerPolicy.Request req = DownloadsCallerPolicy.parse(data);
+        if (req == null) return;
+        final long epoch = downloadsEpoch;
+        if (!req.isList()) { // open / cancel / remove: admitted and carried out in this one UI-thread task, so no load can land between
+            String out = DownloadsCallerPolicy.handle(verdict, data, downloadsActions);
+            if (out != null) postDownloadsReply(reply, out, target, epoch, primary);
+            return;
+        }
+        try {
+            downloadsIo.execute(() -> { // the list reads DownloadManager off the UI thread; the answer is re-checked before it is posted
+                final String out = DownloadsCallerPolicy.execute(req, downloadsActions);
+                main.post(() -> postDownloadsReply(reply, out, target, epoch, primary));
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ignored) { } // the activity is going away
+    }
+
+    private void postDownloadsReply(androidx.webkit.JavaScriptReplyProxy reply, String out, WebView target, long epoch, String primary) {
+        if (!DownloadsCallerPolicy.stillCurrent(epoch, downloadsEpoch, web == target, primary, web == null ? null : web.getUrl())) return;
+        try { reply.postMessage(out); } catch (RuntimeException ignored) { }
     }
 
     @Override
@@ -184,6 +258,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 java.util.Collections.singleton(HomeScreenShortcuts.origin(this)));
         }
         installScreenPort(web);
+        installDownloadsPort(web);
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
         if (photos != null) photos.detach();
         photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
@@ -272,6 +347,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
+                downloadsEpoch++; // a new page load revokes every earlier Downloads admission
                 setKeepAwake(false);
                 if (apps != null) apps.onVaultPageStarted();
             }
@@ -410,6 +486,39 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
     };
 
+    /** Hands one Downloads event (start | done | failed | sync) to the shell; retries while the shell is still loading. */
+    private void queueDownloadPush(String json) {
+        if (json == null) return;
+        if (pendingDownloads.size() >= 8) pendingDownloads.pollFirst();
+        pendingDownloads.addLast(json);
+        downloadsTries = 0;
+        main.removeCallbacks(deliverDownloads);
+        main.post(deliverDownloads);
+    }
+
+    private final Runnable deliverDownloads = new Runnable() {
+        @Override
+        public void run() {
+            final String json = pendingDownloads.peekFirst();
+            if (json == null || web == null) return;
+            // Download names go only to the main-frame shell document that has talked to us on the port in THIS page load.
+            final String primary = DownloadsCallerPolicy.normalizeOrigin(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this));
+            final androidx.webkit.JavaScriptReplyProxy proxy = downloadsReply;
+            final String envelope = proxy != null && downloadsReplyEpoch == downloadsEpoch
+                    && DownloadsCallerPolicy.canPush(primary, web.getUrl()) ? DownloadsCallerPolicy.eventEnvelope(json) : null;
+            if (envelope == null) { // not the shell right now (loading, another page, port not opened yet): retry briefly, then the page's own list read catches up
+                if (++downloadsTries < 60) main.postDelayed(this, 300); else pendingDownloads.clear();
+                return;
+            }
+            try { proxy.postMessage(envelope); } catch (RuntimeException e) { // the document went away: try again for a while
+                if (++downloadsTries < 60) main.postDelayed(this, 300); else pendingDownloads.clear();
+                return;
+            }
+            pendingDownloads.remove(json);
+            if (!pendingDownloads.isEmpty()) main.post(this);
+        }
+    };
+
     private void downloadOutside(String url, String userAgent, String disposition, String mime) {
         Uri u = Uri.parse(url);
         if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
@@ -423,7 +532,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
             String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
             if (cookie != null) r.addRequestHeader("Cookie", cookie);
-            ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+            long downloadId = ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+            try { ai.wizards.os.downloads.Downloads.track(this, downloadId, name, mime); } catch (RuntimeException ignored) { } // the list is extra; the download itself already runs
             Toast.makeText(this, "Downloading " + name + " · it'll be in Downloads", Toast.LENGTH_SHORT).show();
         } catch (RuntimeException e) {
             openOutside(u); // no download manager / storage refused: let the browser fetch it
@@ -729,9 +839,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
+        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
         resumed = true;
+        ai.wizards.os.downloads.Downloads.addListener(downloadsListener);
+        queueDownloadPush(ai.wizards.os.downloads.DownloadsPolicy.eventJson("sync", null)); // a download may have finished while away
         if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
         if (mizel != null) mizel.setPcmForeground(true);
         if (everywhereSetup) {
@@ -804,6 +917,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
         resumed = false;
+        ai.wizards.os.downloads.Downloads.removeListener(downloadsListener);
         main.removeCallbacks(reachRetry);
         super.onPause();
     }
@@ -936,6 +1050,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
         if (photos != null) { photos.detach(); photos = null; }
+        downloadsIo.shutdownNow();
         if (audio != null) { audio.detach(); audio = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();

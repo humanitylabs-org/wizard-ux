@@ -66,20 +66,8 @@ async function boot(b, vp = { width: 412, height: 892 }, seed = {}, enable = tru
   return { ctx, p };
 }
 async function ready(p, enable = true) {
-  await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok && window.WosExperience && !WosExperience.state.busy && WosExperience.state.tweaks.some(t => t.id === 'wizard/orb-radial'), null, { timeout: 30000 });
-  if (!enable) { await sleep(1200); return; }
-  const isOn = await p.evaluate(() => WosExperience.state.tweaks.find(t => t.id === 'wizard/orb-radial').on);
-  if (!isOn) {
-    ok(await p.evaluate(() => !window.WosOrbSwitcher && !document.querySelector('.wor,.wor-scrim,link[href*="orb-radial/tweak.css"],script[src*="orb-switcher"]') && !performance.getEntriesByType('resource').some(r=>/orb-switcher\.(js|css)/.test(r.name))), 'OFF before opt-in: no radial module, CSS, listeners or elements');
-    await p.evaluate(() => __wos.openSheet('settings')); await sleep(350);
-    await p.locator('[data-st-page="appearance"], [data-st="look"]').first().click(); await sleep(500);
-    await p.locator('[data-tweak-toggle="wizard/orb-radial"]').scrollIntoViewIfNeeded();
-    await shot(p, 'orb-radial-tweak-settings-off');
-    await p.locator('[data-tweak-toggle="wizard/orb-radial"]').click();
-    await p.waitForFunction(() => WosExperience.state.tweaks.find(t=>t.id==='wizard/orb-radial').on && !WosExperience.state.busy);
-    await shot(p, 'orb-radial-tweak-settings-on');
-    await p.evaluate(() => __wos.closeSheets());
-  }
+  await p.waitForFunction(() => window.__wos?.live?.ok && window.WosExperience && !WosExperience.state.busy && window.WosOrbSwitcher?.active(), null, { timeout: 30000 });
+  ok(!await p.locator('[data-tweak-toggle="wizard/orb-radial"]').count(), 'radial is core, not a tweak switch');
   await p.waitForFunction(() => window.WosOrbSwitcher?.active());
   await p.waitForFunction(() => window.WizCore.apps && document.querySelector('#search'), null, { timeout: 10000 });
   await sleep(1200);
@@ -105,7 +93,7 @@ const st = p => p.evaluate(() => ({ idx: __wos.idx, n: __wos.desks.length, voice
 // The desk whose section sits nearest the viewport's left edge (the one actually in view), not the label.
 const visibleDesk = p => p.evaluate(() => { let best = null, bd = 1e9; for (const el of document.querySelectorAll('.track > .desk')) { const d = Math.abs(el.getBoundingClientRect().left); if (d < bd) { bd = d; best = el; } } return __wos.desks.findIndex(d => d.id === best?.dataset.did); });
 async function press(p, o, ms = 480) { await T(p, 'touchStart', o.x, o.y); await sleep(ms); }
-async function hold(p, o, ms = 480) { await press(p, o, ms); }
+async function hold(p, o, ms = 480) { await press(p, o, ms); await p.waitForFunction(() => window.WosOrbSwitcher?.isOpen); }
 const release = p => T(p, 'touchEnd');
 async function closeAnyRadial(p) { await release(p).catch(() => {}); await sleep(300); }
 async function openDeskFor(p, names) { for (const n of names) { await p.evaluate(n => window.__wos.handleText(n, 'command', false, 100, null), n).catch(() => {}); await sleep(700); } }
@@ -116,10 +104,12 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   try {
-  const {ctx:offCtx,p:off}=await boot(b,undefined,{},false);
-  const unloaded=()=>off.evaluate(()=>({global:!!window.WosOrbSwitcher,elements:document.querySelectorAll('.wor,.wor-scrim').length,loaded:performance.getEntriesByType('resource').some(r=>/orb-switcher\.(js|css)|orb-radial\/(tweak\.js|tweak\.css)/.test(r.name))}));
-  const offState=await unloaded();ok(!offState.global&&!offState.elements&&!offState.loaded,'fresh default OFF: no radial module, CSS or DOM',JSON.stringify(offState));
-  let oo=await orbXY(off);await press(off,oo,650);ok(await off.evaluate(()=>__wos.voice==='command'&&__wos.V.kind==='command'),'fresh OFF physical hold starts ordinary command');await cancelTake(off);await release(off);await offCtx.close();
+  for (const oldChoice of [true, false]) {
+    const {ctx:oldCtx,p:old}=await boot(b,undefined,{'wos.skin-tweaks.v1':JSON.stringify({version:1,off:{},preset:'none',mix:{'wizard/orb-radial':oldChoice}})});
+    const oo=await orbXY(old);await press(old,oo,650);
+    ok(await radialOpen(old) && await old.evaluate(()=>__wos.voice==='idle'), 'legacy '+oldChoice+' choice: core hold opens radial, never a recording');
+    await release(old);await oldCtx.close();
+  }
   const {ctx,p}=await boot(b);let o=await orbXY(p),ws,s;
   ok(await p.evaluate(()=>WosOrbSwitcher.get().pins.length===0&&!('showOpen' in WosOrbSwitcher.get())&&!WosOrbSwitcher.get().quickTakes),'real defaults: no pins, no desktop switch, quick takes OFF');
   await hold(p,o,900);ws=await wedges(p);ok(ws.length===2&&ws.every(w=>w.kind==='voice'||w.kind==='custom'),'empty radial contains only voice + Customize');
@@ -236,12 +226,13 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   await p.evaluate(() => __wos.goDesk(0)); await sleep(700);
 
 
-  // Tweak disable is a real teardown. A reload then requests no module/CSS at all.
-  await p.evaluate(()=>WosExperience.toggle('wizard/orb-radial'));await p.waitForFunction(()=>!window.WosOrbSwitcher&&!WosExperience.state.busy);await sleep(300);
-  ok(await p.locator('.wor,.wor-scrim,link[href*="orb-radial/tweak.css"]').count()===0,'hot OFF removes module instance, sheet, radial and CSS');
-  o=await orbXY(p);await hold(p,o,650);ok(await p.evaluate(()=>__wos.voice==='command'&&__wos.V.kind==='command'),'hot OFF hold returns to ordinary command');await cancelTake(p);await release(p);
-  await p.reload({waitUntil:'load'});await ready(p,false);
-  ok(await p.evaluate(()=>!window.WosOrbSwitcher&&!performance.getEntriesByType('resource').some(r=>/orb-switcher\.(js|css)|orb-radial\/(tweak\.js|tweak\.css)/.test(r.name))),'saved OFF reload requests zero radial assets');
+  // A retired switch is harmless and cannot disable a core phone capability.
+  await p.evaluate(()=>WosExperience.toggle('wizard/orb-radial'));
+  ok(await p.evaluate(()=>WosOrbSwitcher.active()),'retired toggle cannot tear down core handler');
+  await p.reload({waitUntil:'load'});await ready(p);
+  o=await orbXY(p);await hold(p,o,650);
+  ok(await radialOpen(p)&&await p.evaluate(()=>__wos.voice==='idle'),'reload always restores ready radial without recording');
+  await release(p);
   ok(p.errs.length===0,'no browser JS errors',JSON.stringify(p.errs));await ctx.close();
   const {ctx:smallCtx,p:small}=await boot(b,{width:360,height:780});await setPins(small,['wizard','wizard-calendar','notes','stories']);const so=await orbXY(small);await hold(small,so);const sg=await geo(small);
   ok(sg.every(w=>w.r1<=138&&w.x>=8&&w.x<=352),'360 px compact radial fits without enlarging target radius');await release(small);await smallCtx.close();

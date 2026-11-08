@@ -21,7 +21,7 @@ function look(shell, ownSkins = false) {
     document: { activeElement: null }, location: { host: 'example.test' }, WizCore: {}, WosSkin: S };
   if (ownSkins) {
     s.WosMySkin = { recipes: [], active: null, on() {}, create(draft) { this.created = JSON.parse(JSON.stringify(draft)); } };
-    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [{ id: 'sample', on: true }] } };
+    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [{ id: 'sample', on: true, builtin: true }] } };   // built in: the New skin draft lists built-ins and views, not feature switches
   }
   s.window = s;
   vm.runInNewContext(source, s);
@@ -192,10 +192,12 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin shares Look's
   h.s.WosExperience.defaults = async () => ({ ...defaults });
   h.view.render();
   const visible = id => id === 'miguel/ai-apps' ? shell === 'desktop' : id === 'test/phone' ? shell === 'phone' : true;
-  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id));
+  // No channel read yet: only views show; feature switches appear under "Try new features" on For testers.
+  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id) && !!t.view, t.id);
   h.act('data-newskin', '');
   for (let n = 0; n < 10; n++) await Promise.resolve();
-  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-draft-tweak="${t.id}"`), visible(t.id), t.id);
+  // Feature switches (test/ordinary) are not offered in the draft; their saved state is carried over unchanged.
+  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-draft-tweak="${t.id}"`), visible(t.id) && !!t.view, t.id);
   assert.deepEqual(JSON.parse(JSON.stringify(h.view.context.skinDraft.tweaks)), defaults, 'filter presentation, not other-shell state');
   h.input('data-skin-name', 'Keep both devices'); h.act('data-draft-tweak', 'miguel/orb-shell');
   h.act('data-skin-create', '');

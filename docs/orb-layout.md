@@ -88,7 +88,7 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   ⌥N a new chat, a notification): the same glass, full height, as an extension of the list; it grows out of the list's
   edge and folds back into it. It is as wide as fits before the orb (up to a third of the screen); where it can't fit
   beside a full-size orb (laptop screens) the orb steps down in size where it stands (never below 45%), so it stays
-  visible and clickable. Send, Done, Snooze (also ⌥→ / ⌥←), ‹, ✕ or Esc close it and give the keyboard back to the
+  visible and clickable. Send, Archive, Snooze, ‹, ✕ or Esc close it and give the keyboard back to the
   list, so ⌥↓ goes straight on to the next one. Another thread replaces it, with a quiet ‹ back.
 - **An app opens in the right third** (a satellite, the search pill, a link), one at a time (another replaces it, with ‹);
   ✕, Esc or ⌥⇧A hide it (it keeps running, see below). A chat and an app can be open together.

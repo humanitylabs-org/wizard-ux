@@ -1,3 +1,9 @@
+// The shells already ran these as classic scripts; import them only where they have not (node tests), so the
+// browser never fetches them a second time as modules.
+if (!globalThis.WizChatsListModel) await import('../../core/chats-list-model.js');
+if (!globalThis.WizCore?.ago) await import('../../core/core.js');
+const { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep } = globalThis.WizChatsListModel;
+export { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep };
 /* The AI apps view's shared marks and words (phone layout.js and desktop.js): one icon set, one row-menu order, so the
  * drawer on the phone and the sidebar on the desktop draw and say the same things. 24-unit outline paths, drawn with
  * currentColor by the caller's CSS. No DOM at import time. */
@@ -50,9 +56,15 @@ export function svgIcon(doc, name, cls) {
 /** The first letter of a name, for a workspace disc. */
 export const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();
 /* The chats in Wizard's own sections (round 5, Miguel: in place of Recents and View all), in the stock Chats order
- * (Archive on top, then Working, then Ready nearest the thumb), each header like their Recents label. Round 13
- * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready). */
-export const SECTIONS = [['archive', 'Archive'], ['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready']];
+ * (Working, then Ready, Archive last: James, 6 Nov 2026), each header like their Recents label. Round 13
+ * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready).
+ * Miguel's "Archive on top" tweak (miguel/archive-top) is the only way to put Archive first: sectionsFor(root). */
+export const SECTIONS = [['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready'], ['archive', 'Archive']];
+const ARCHIVE_TOP = [SECTIONS[3], ...SECTIONS.slice(0, 3)];
+/** True when the owner wears Miguel's "Archive on top" tweak (the host lists worn tweaks in <html data-tweaks>). */
+export const archiveTop = root => String(root?.dataset?.tweaks || root?.getAttribute?.('data-tweaks') || '').split(/\s+/).includes('miguel/archive-top');
+/** The section order to draw: stock (Archive last), or Archive first under the archive-top tweak. */
+export const sectionsFor = root => archiveTop(root) ? ARCHIVE_TOP : SECTIONS;
 /** Every list the sidebar / drawer shows, for searches and signatures. */
 export const KINDS = ['working', 'snoozed', 'ready', 'archive'];
 /** What an open section with no rows says. */
@@ -66,24 +78,9 @@ export function sectionsOpen(stored) {
 /* Round 7 (Miguel, 2 Nov 2026): the stock Chats statuses (core/chats.js stiKind: what a thread wants from him), in Chats'
  * own order of urgency, with Chats' own words. The rail groups Ready by them and marks each chat with its colour; a
  * notification row is FYI unless it is urgent. */
-export const STATES = [['needs', 'Needs you'], ['approval', 'Needs approval'], ['failed', 'Error'], ['check', 'Your call'], ['fyi', 'FYI'], ['done', 'Done'], ['deferred', 'Snoozed'], ['none', 'Ready']];
-const KNOWN = new Set(STATES.map(s => s[0]));
 /** Round 16 (Miguel, 3 Nov 2026): the folded 52 px rail's short words, one under each count (the full STATES words in
  * its tip): Snoozed, Ready, then Ready's statuses. */
 export const RAIL_WORDS = Object.freeze({ working: 'Working', snoozed: 'Snoozed', ready: 'Ready', needs: 'Needs you', approval: 'Needs approval', failed: 'Error', check: 'Your call', fyi: 'FYI', done: 'Done', deferred: 'Snoozed', none: 'Other' });   // round 23b: whole words (Miguel), wrapping to two lines when needed
-/** One row's status: the shell's own (row.state), else what the row says (needs / a note). */
-export function stateOf(r) {
-  const s = r && typeof r.state === 'string' ? r.state : '';
-  if (KNOWN.has(s)) return s;
-  if (r?.note && r.snoozed) return 'deferred';   // round 18: a read (kept) notification sits with the snoozed, as in stock
-  return r?.needs ? 'needs' : r?.note ? 'fyi' : 'none';
-}
-/** Ready grouped by status in STATES order: [{ state, word, rows }], empty groups left out. */
-export function stateGroups(rows) {
-  const by = new Map(STATES.map(([k]) => [k, []]));
-  for (const r of rows || []) by.get(stateOf(r)).push(r);
-  return STATES.map(([state, word]) => ({ state, word, rows: by.get(state) })).filter(g => g.rows.length);
-}
 /* Round 8 (Miguel, 2 Nov 2026: the rail's coloured first letters were confusing): each Ready chat on the folded rail is
  * its stock Chats status icon (core/chats.js STI, the Orb desktop's thin column of status icons), the same drawings:
  * [tag, attrs] parts; class f = filled in the status colour, k / kd = the cut-out mark in the panel's colour. */
@@ -102,24 +99,6 @@ export function stateIcon(doc, state, cls) {
   const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', cls);
   for (const [tag, attrs] of STATE_ICON[state] || STATE_ICON.none) { const p = doc.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v); s.append(p); }
   return s;
-}
-/** The notification Chats shows in place of a thread (a New chat holding the note: .ch-notif-thread), if one is on
- * screen; the AI apps view treats it exactly like a chat (never Home). */
-export function noteThread(doc, scope = '') {
-  for (const n of doc.querySelectorAll(`${scope} .ch-thread.ch-notif-thread`.trim())) {
-    if (typeof n.getClientRects === 'function' && !n.getClientRects().length) continue;
-    return n;
-  }
-  return null;
-}
-/** A notification's Badge | Chats choice joins its actions (round 7): moved into the thread's own sticky action row
- * (.ch-tacts), first, so the note reads like a chat with one action row. Chats' click handler finds it there too
- * (.ch-notif-route [data-notify-route]); a repaint puts it back above the message, so call again on renders. */
-export function noteRouteIntoActions(doc, scope = '') {
-  const t = noteThread(doc, scope); if (!t) return false;
-  const route = t.querySelector('.ch-notif-route'), acts = t.querySelector('.ch-tacts');
-  if (!route || !acts || route.parentNode === acts || route.classList?.contains?.('is-quiet')) return false;   // (round 20: the quiet line stays under the note)
-  acts.insertBefore(route, acts.firstChild); return true;
 }
 /** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
  * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)
@@ -253,74 +232,6 @@ export function tidySentence(doc, key, onPick, cls) {
  * wos.chats.readyOrder.v1, shared across devices through the box preferences), so both views always agree. A stored
  * 'subject' (stock's By subject) reads as Priority here (the view has no subject groups). Notifications sort in the
  * same list by the same rule (never appended separately); read ones (snoozed) stay at the end, by time. */
-export const READY_SORTS = Object.freeze([['priority', 'Priority'], ['newest', 'Newest'], ['oldest', 'Oldest']]);
-export const sortOf = o => o === 'newest' || o === 'oldest' ? o : 'priority';
-export const PRIORITY_TIP = 'Priority: needs approval first, then Needs you, Your call, FYI, Done, then the rest; newest first within each. ' +
-  'Notifications rank by their own priority (4–5 with Needs you, 3 with Your call, the rest with FYI).';
-const atOf = r => Date.parse(r?.at) || 0;
-/** A row's Priority rank (stock live.js readyRank: 0 approval, 1 needs you, 2 your call, 3 FYI, 4 done, 5 no status,
- * 9 snoozed at the bottom); the shell sends it as row.rank, else it is read from the row's status. */
-export function rankOf(r) {
-  if (Number.isFinite(r?.rank)) return r.rank;
-  if (r?.note) return r.needs ? 1 : 3;
-  return { approval: 0, needs: 1, failed: 1, check: 2, fyi: 3, done: 4, deferred: 9 }[r?.state] ?? 5;
-}
-/** Ready in the chosen order (pure). Newest / Oldest: approvals first and snoozed last (stock's pins), time in
- * between; Priority: by rank, newest first inside each. Read notifications last, newest first (Oldest: oldest). */
-export function readySort(rows, order) {
-  const o = sortOf(order), list = (rows || []).slice(), later = list.filter(r => r.note && r.snoozed), main = list.filter(r => !(r.note && r.snoozed));
-  const t = (a, b) => (o === 'oldest' ? atOf(a) - atOf(b) : atOf(b) - atOf(a)) || String(a.title || '').localeCompare(String(b.title || ''));
-  const pin = r => { const k = rankOf(r); return k === 0 ? 0 : k === 9 ? 2 : 1; };
-  main.sort(o === 'priority' ? (a, b) => rankOf(a) - rankOf(b) || t(a, b) : (a, b) => pin(a) - pin(b) || t(a, b));
-  later.sort(t);
-  return [...main, ...later];
-}
-/** Round 18 item 4 (Miguel, 3 Nov 2026: the open sidebar built on the folded rail): Ready grouped by status exactly
- * as the rail counts it (stateGroups: STATES order), each group's rows in the chosen order (group first, then the sort
- * inside it); plain chats last under 'No status'. [{ state, word, rows }]. Pure. */
-export function readyGroups(rows, order) {
-  return stateGroups(rows).map(g => ({ ...g, word: g.state === 'none' ? 'No status' : g.word, rows: readySort(g.rows, order) }));
-}
-/** Round 24c (Miguel, 4 Nov 2026: "they should be one and the same, just use project"): Ready grouped by each chat's
- * project, the part of its title before ' · ' ("Wizard OS · Hotkeys" → Wizard OS), a sub-header per project, its rows
- * in the chosen order. Projects with something waiting on him first, then the bigger ones, then A–Z; notifications
- * under 'Notifications' and titles with no project under 'Other', both last. [{ state: 'proj:<name>', word, rows }]. Pure. */
-export const NOTES_PROJECT = 'Notifications', NO_PROJECT = 'Other';
-export const projectOf = r => {
-  if (r?.note) return NOTES_PROJECT;
-  const t = String(r?.title || '').replace(/\s+/g, ' ').trim(), i = t.indexOf('·');
-  return (i > 0 ? t.slice(0, i).trim() : '') || NO_PROJECT;
-};
-/** round 26 (Miguel, 4 Nov 2026: the project shows once, on its group's header): a row's title under a By project
- * header, without its 'Project ·' part ("Wizard OS · Hotkeys" → Hotkeys); titles with no project stay whole. Pure. */
-export const titleInProject = r => {
-  const t = String(r?.title || ''), i = t.indexOf('·');
-  if (r?.note || i <= 0 || !t.slice(0, i).trim()) return t;
-  return t.slice(i + 1).trim() || t;
-};
-export function projectGroups(rows, order) {
-  const by = new Map();
-  for (const r of rows || []) { const k = projectOf(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
-  const tail = k => k === NO_PROJECT ? 2 : k === NOTES_PROJECT ? 1 : 0, waits = k => by.get(k).filter(r => rankOf(r) <= 1).length;
-  return [...by.keys()].sort((a, b) => tail(a) - tail(b) || waits(b) - waits(a) || by.get(b).length - by.get(a).length || a.localeCompare(b))
-    .map(k => ({ state: 'proj:' + k, word: k, rows: readySort(by.get(k), order) }));
-}
-/** Ready's grouping: 'status' (sub-headers per status), 'project' (per project) or 'none' (one list, still in the
- * status order). Any other value reads as 'none'. */
-export const GROUP_MODES = Object.freeze([['status', 'By status'], ['project', 'By project'], ['none', 'One list']]);
-export const groupMode = m => m === 'status' || m === 'project' ? m : 'none';
-/** The grouped Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). */
-export const readyFlat = (rows, order, mode) => (groupMode(mode) === 'project' ? projectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
-/** The ⌥↓ / ⌥↑ step through a list of ids (stock stepReady): from the one in front, the next / previous, wrapping;
- * from elsewhere, the top. Returns { id, wrapped } (null when the list is empty). */
-export function readyStep(ids, cur, dir) {
-  const n = (ids || []).length; if (!n) return null;
-  const i = cur == null ? -1 : ids.indexOf(cur);
-  if (i < 0) return { id: ids[0], wrapped: false };
-  const j = (i + (dir < 0 ? -1 : 1) + n) % n;
-  return { id: ids[j], wrapped: dir > 0 ? j < i : j > i };
-}
-
 /* ---------- round 19 (Miguel, 3 Nov 2026): the order inside each group, and the folded rail used as it is ----------
  * Grouping by status already IS the priority, so the desktop sidebar offers only the order inside each group: Newest
  * first / Oldest first (Settings › Chats & app screens). Saved where stock Chats keeps its order (the same key); a
@@ -328,7 +239,7 @@ export function readyStep(ids, cur, dir) {
 export const GROUP_ORDERS = Object.freeze([['newest', 'Newest first'], ['oldest', 'Oldest first']]);
 export const groupOrder = o => o === 'oldest' ? 'oldest' : 'newest';
 /** The chats behind one rail item, in the order the open sidebar draws them: 'snoozed' (as listed), 'ready' (all of
- * Ready, grouped: what ⌥↓ walks), or one of Ready's statuses (that group only). */
+ * Ready in the chosen Group/Sort: what ⌥↓ walks), or one of Ready's statuses (that group only). */
 export function railRows(s, key, order, mode) {
   if (key === 'working') return (s?.working || []).slice();
   if (key === 'snoozed') return (s?.snoozed || []).slice();
@@ -356,19 +267,8 @@ export function railActive(s, cur, last, order, mode) {
 }
 /** A rail item clicked: its first chat, or (when the chat in front is already in it) the next one, wrapping. */
 export const railNext = (ids, cur) => readyStep(ids, cur, 1);
-/** A short time for the flyout's rows: '5m', '3h', 'Yesterday', 'Mon', '12 Oct' ('' when unknown). Pure (now passed in). */
-export function shortTime(at, now) {
-  const t = Date.parse(at); if (!t) return '';
-  const d = Math.max(0, now - t), m = Math.floor(d / 60e3);
-  if (m < 1) return 'now'; if (m < 60) return m + 'm';
-  const h = Math.floor(m / 60), day = x => { const z = new Date(x); z.setHours(0, 0, 0, 0); return z.getTime(); };
-  const days = Math.round((day(now) - day(t)) / 864e5);
-  if (days === 0) return h + 'h';
-  if (days === 1) return 'Yesterday';
-  const z = new Date(t);
-  if (days < 7) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][z.getDay()];
-  return z.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][z.getMonth()];
-}
+/** Sidebar and flyout use the phone/core labels, including elapsed hours across midnight. */
+export const shortTime = (typeof window === 'object' ? window : globalThis).WizCore.ago;
 
 /* ---------- round 19 item 4 (Miguel, 3 Nov 2026): the phone Home's dock ----------
  * The pinned apps live in a dock just above the composer (up to 2 rows × 4 = 8 a page; more pins page sideways with

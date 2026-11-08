@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -15,7 +16,7 @@ function store(fail) {
     keyOf: s => s.id, seenKeyOf: s => s.id, applyLocal() {}, addSynthetic() {}, merge: () => null, readLocal: () => null,
     later: a => a, writeLocal() {}, putSeen: async () => ({}), localStorage: { setItem() {} }, window: {},
     fetchSessions: async () => { if (fail.now) { const e = new Error('read failed'); e.status = fail.status; throw e; } return { sessions: [{ id: 't1' }] }; } };
-  vm.runInNewContext(`L.refreshAgents = ({${body}}).refreshAgents; L.statusFor = a => L.agentStatus[a] || { ok: false, error: '' };`, c);
+  runWithChatsModel(`L.refreshAgents = ({${body}}).refreshAgents; L.statusFor = a => L.agentStatus[a] || { ok: false, error: '' };`, c);
   return L;
 }
 

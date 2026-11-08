@@ -24,7 +24,8 @@ function fixture({ opaque = false, blocked = true } = {}) {
   frame.contentWindow = frameWindow;
   frame.style = {}; const calls = [], ups = [], hidden = [];
   const el = { dataset: { win: 'fixture' }, querySelector: selector => selector === 'iframe' ? frame : null, classList: { remove() {} }, style: { setProperty() {} } };
-  const sandbox = { window: {}, W: {}, APP: {}, LINKS: null, fields: () => ({ bind() {} }), focusWin() {}, onKey: (e, inside) => calls.push({ e, inside }), keyHints: { up: e => ups.push(e), hide: () => hidden.push(true) } };
+  const focused = [];
+  const sandbox = { window: {}, W: {}, APP: {}, LINKS: null, fields: () => ({ bind() {} }), desktopHost: { focus: (id, opts) => focused.push({ id, ...opts }) }, onKey: (e, inside) => calls.push({ e, inside }), keyHints: { up: e => ups.push(e), hide: () => hidden.push(true) } };
   vm.runInNewContext(source.slice(start, end) + '\nthis.watchFrame = watchFrame;', sandbox);
   // Common app/modal capture handler: blocks propagation to document, but not
   // other listeners on this same window. This is actual DOM stopPropagation
@@ -35,8 +36,12 @@ function fixture({ opaque = false, blocked = true } = {}) {
     const e = { key: '3', code: 'Digit3', altKey: true, stopped: false, defaultPrevented: false, stopPropagation() { this.stopped = true; }, preventDefault() { this.defaultPrevented = true; }, ...props };
     frameWindow.fire(type, e); if (!e.stopped) doc.fire(type, e); return e;
   }
-  return { frameWindow, doc, frame, key, calls, ups, hidden };
+  return { frameWindow, doc, frame, key, calls, ups, hidden, focused };
 }
+test('first iframe pointerdown focuses synchronously through host without stealing app focus', () => {
+  const f = fixture(); f.doc.fire('pointerdown');
+  assert.deepEqual(f.focused, [{ id: 'fixture', scroll: false }]);
+});
 test('desktop chords reach the owning dispatcher past app window capture stopPropagation', () => {
   const f = fixture(); const e = f.key();
   assert.equal(f.calls.length, 1); assert.equal(f.calls[0].e, e); assert.equal(f.calls[0].inside, true);

@@ -8,6 +8,7 @@
     "layout"
   ],
   "description": "Desktop: the orb in the middle with your apps around it, your chats beside it and what you open on the side, instead of desks. Phone (experimental): the same orb on Home, the rest as it is. One view per device type (desktop, phone); all off = Desks",
+  "layout": "orb",
   "view": "Orb",
   "shells": [
     "desktop",

@@ -90,6 +90,7 @@
   window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
   window.__wosNativeBack = () => {
     if (window.WosSelMenu?.back?.()) return 'selection';
+    if (window.WosDownloads?.back?.()) return 'downloads';
     if (window.WosChat?.viewer?.close?.()) return 'media';
     if (window.WizLinks?.backMenu?.()) return 'link-menu';
     if (links?.back()) return 'link';

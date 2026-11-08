@@ -93,7 +93,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -161,15 +161,27 @@
     if (!box) {
       box = document.createElement('span'); box.className = 'wtools';
       bar.insertBefore(box, [...bar.children].find(c => c.matches('button, .wb, .wpin, .wroute-slot')) || null);
-      const send = (id, value) => { try { if (valid(st, st.doc)) st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); } catch (_) {} };
+    }
+    renderTools(st.frame, box);
+    bar.classList.add('has-tools');
+    return true;
+  }
+  // Both desktop renderers use the same validated model and verified-document
+  // dispatch. A layout-owned slot is not a clone of Classic's titlebar.
+  const toolSlots = new WeakMap();
+  function renderTools(frame, box) {
+    const st = frames.get(frame), owner = st && valid(st, st.doc) ? st : null;
+    if (!toolSlots.has(box)) {
+      toolSlots.set(box, { owner: null, key: '' });
       // Own the gesture: a tap here is never a title-bar double tap, a drag or a window action.
       for (const ev of ['pointerdown', 'dblclick']) box.addEventListener(ev, e => e.stopPropagation());
-      box.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button[data-tool]'); if (b && !b.disabled) send(b.dataset.tool); });
-      box.addEventListener('change', e => { const s = e.target.closest('select[data-tool]'); if (s) send(s.dataset.tool, s.value); });
+      box.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button[data-tool]'); if (b && !b.disabled) dispatchTool(box, b.dataset.tool); });
+      box.addEventListener('change', e => { const s = e.target.closest('select[data-tool]'); if (s) dispatchTool(box, s.dataset.tool, s.value); });
     }
-    const key = JSON.stringify(st.tools); if (box.dataset.key === key) return true;
-    box.dataset.key = key; box.replaceChildren();
-    for (const x of st.tools) {
+    const state = toolSlots.get(box), tools = owner?.tools || [], key = JSON.stringify(tools);
+    if (state.owner === owner && state.doc === owner?.doc && state.key === key) return !!tools.length;
+    state.owner = owner; state.doc = owner?.doc; state.key = key; box.replaceChildren();
+    for (const x of tools) {
       let el;
       if (x.kind === 'select') {
         el = document.createElement('select'); el.className = 'wtool wtool-pick';
@@ -186,8 +198,14 @@
       el.dataset.tool = x.id; el.dataset.wact = 'tool'; el.setAttribute('aria-label', x.label); el.title = x.label;
       box.append(el);
     }
-    bar.classList.add('has-tools');
-    return true;
+    return !!tools.length;
+  }
+  function dispatchTool(box, id, value) {
+    const held = toolSlots.get(box), st = held?.owner;
+    if (!st || !valid(st, held.doc)) return false;
+    const tool = st.tools?.find(x => x.id === id);
+    if (!tool || tool.disabled || (value === undefined ? tool.kind !== 'button' : tool.kind !== 'select' || !tool.options.some(o => o.value === value))) return false;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); return true; } catch (_) { return false; }
   }
   /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
   const ORB_ICONS = new Set(['plus', 'mic', 'record', 'stop', 'send', 'search', 'edit']);
@@ -208,7 +226,7 @@
     const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
     try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
   }
-  function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
+  function setTools(st, list) { st.tools = cleanTools(st, list); const shown = paintTools(st); window.dispatchEvent(new CustomEvent('wizard:app-tools')); return shown; }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
   // never owner links, arbitrary same-origin frames or off-origin apps. Label comes from the catalog.
   async function identity(st, doc, method, args) {
@@ -238,11 +256,15 @@
     if (st.doc && st.doc !== doc) reset(st);
     st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
     const check = () => { if (!valid(st, doc)) throw fault('App frame is no longer authorized'); st.lastAlive = Date.now(); };
-    const hold = reason => {
+    const hold = (reason, options = {}) => {
       check(); if (st.holds.size >= 64) throw fault('Too many update holds');
       const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
+      // A draft is skippable only after its owner confirms durable readback.
+      // Capture holds never opt into this contract, even with a keep callback.
+      const draft = typeof options.keep === 'function' && !/record|captur|voice|audio/i.test(reason) ? {keep: options.keep, doc, generation: 0, kept: false} : null;
+      if (draft) { st.drafts ||= new Map(); st.drafts.set(id, draft); }
       let released = false;
-      return { release() { if (released) return; released = true; st.holds.delete(id); changed(); } };
+      return { release() { if (released) return; released = true; st.holds.delete(id); st.drafts?.delete(id); changed(); } };
     };
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
     const start = async (opts, attaching = false) => {
@@ -260,11 +282,13 @@
         const safe = {}; for (const key of ['kind','mime','audio','pcm','chunkMs','maxMs','maxBytes','systemAudio','meta','seqBase','offsetMs','preparedId','resumeId']) if(opts?.[key] !== undefined) safe[key]=opts[key];
         session = await (attaching ? resource.attach(st.appId) : safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
         if (!session) { release(); check(); return null; }
-        let finished;
+        const finished = {};
         const finish = method => {
           check();
-          if (!finished) finished = Promise.resolve().then(() => session[method]()).then(r => { release(); return r; }, e => { finished = null; throw e; });
-          return finished;
+          // Stop and explicit Discard are distinct intents. The resource arbitrates their race;
+          // sharing one promise here used to turn a Discard into another Stop.
+          if (!finished[method]) finished[method] = Promise.resolve().then(() => session[method]()).then(r => { release(); return r; }, e => { delete finished[method]; throw e; });
+          return finished[method];
         };
         check();
         const observe = (method, fn) => {
@@ -479,7 +503,7 @@
   }
   function busy() {
     reconcile();
-    if ([...frames.values()].some(st => st.holds.size)) return true;
+    if ([...frames.values()].some(st => [...st.holds.keys()].some(id => !st.drafts?.get(id)?.kept))) return true;
     try {
       const s = window.WizAppCapture?.getState?.();
       if (s && (s.hold || s.active || s.recording || s.session || s.appId || /record|start|stop|permission/.test(s.state || s.status || ''))) return true;
@@ -531,7 +555,7 @@
       if (d.op === 'share.ack') value = svc.share.ack(d.args?.id);
       if (d.op === 'capture.pending') value = await svc.capture.pending();
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
-      if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
+      if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason, typeof d.args?.keepId === 'string' ? {keep: () => keepMessage(st, d.args.keepId)} : {}), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n, { more: d.args?.more === true });
       if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
       if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
@@ -668,21 +692,65 @@
     let cap;
     try { cap = window.WizAppCapture?.reloadCheck?.(); } catch (_) { cap = { safe: false, reason: 'capture' }; }
     if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
-    const keeps = cap.safe ? cap.keeps || null : null, blocking = [];
-    if (!cap.safe) blocking.push({ appId: null, kind: 'capture', reason: cap.reason || 'capture' });
-    for (const st of frames.values()) for (const reason of st.holds.values()) {
-      const capture = CAPTURE_HOLD.test(reason);
-      if (capture && keeps && st.appId === keeps.appId) continue;
-      blocking.push({ appId: st.appId, kind: capture ? 'capture' : 'work', reason });
+    let keeps = cap.safe ? cap.keeps || null : null; const blocking = [];
+    // A live Android meeting with no stored row (phone storage broken): keep only the meeting app's own frame,
+    // and only while it holds a recording. Every other app's capture holds keep blocking.
+    if (cap.safe && !keeps && cap.meetingApp) {
+      const st = [...frames.values()].find(f => f.appId === cap.meetingApp && [...f.holds.values()].some(r => CAPTURE_HOLD.test(r)));
+      if (st) keeps = { appId: st.appId };
     }
-    return { ok: !blocking.length, keeps, blocking, recording: blocking.some(b => b.kind === 'capture') };
+    if (!cap.safe) blocking.push({ source: 'capture', appId: cap.appId || null, kind: 'capture', reason: cap.reason || 'capture', startedAt: cap.startedAt || null });
+    for (const st of frames.values()) for (const [id, reason] of st.holds) {
+      if (st.drafts?.get(id)?.kept) continue;
+      const capture = CAPTURE_HOLD.test(reason);
+      // App-owned holds are released only by their owner. Durable shared storage cannot prove an
+      // app has no private in-memory work. Only the existing native-survival contract passes here.
+      if (capture && keeps && st.appId === keeps.appId) continue;
+      blocking.push({ source: 'frame', appId: st.appId, kind: capture ? 'capture' : 'work', reason, keepable: !!st.drafts?.has(id) });
+    }
+    // A blocker says reload is unsafe, not that a known recording will eventually end.
+    return { ok: !blocking.length, keeps, capture: cap, blocking, recording: cap.waitForEnd === true };
   }
-  // Right before location.reload() with a kept meeting: let capture writes land, then take the kept app's
-  // frames out. Its own leave guard (a beforeunload prompt meant for a standalone tab) would otherwise stop the
-  // reload; removing a frame fires no beforeunload. The recorder and its journal live outside the frame.
+  // Preparation is non-destructive: an async flush may reveal new work and abort the reload.
+  // All frames share one 1.5s budget. Late callbacks, edits and document changes cannot admit reload.
+  async function keepDrafts(frame = null) {
+    reconcile();
+    const now = typeof performance === 'undefined' ? () => Date.now() : () => performance.now();
+    const deadline = now() + 1500;
+    await Promise.all([...frames.values()].filter(st => !frame || st.frame === frame).flatMap(st => [...(st.drafts || [])].map(async ([id, draft]) => {
+      if (draft.kept || !valid(st, draft.doc)) return;
+      const generation = draft.generation;
+      let timer;
+      try {
+        // Timers cannot run during synchronous persistence; check the clock at both boundaries.
+        const result = await Promise.race([Promise.resolve().then(() => now() < deadline ? draft.keep() : false), new Promise(resolve => { timer = setTimeout(() => resolve(false), Math.max(0, deadline - now())); })]);
+        if (result === 'kept' && now() < deadline && valid(st, draft.doc) && st.drafts?.get(id) === draft && generation === draft.generation) draft.kept = true;
+      } catch (_) { /* No confirmation means the original hold stays. */ }
+      finally { clearTimeout(timer); }
+    })));
+    changed();
+    return reloadPlan();
+  }
+  function keepMessage(st, keepId) {
+    return new Promise(resolve => {
+      const id = uid(), doc = st.doc;
+      const done = e => {
+        if (e.source !== st.frame.contentWindow || e.origin !== ORIGIN || !valid(st, doc) || e.data?.type !== 'wizard:app:kept' || e.data.version !== VERSION || e.data.id !== id) return;
+        finish(e.data.result === 'kept' ? 'kept' : false);
+      };
+      const finish = result => { clearTimeout(timer); removeEventListener('message', done); resolve(result); };
+      const timer = setTimeout(() => finish(false), 1500);
+      addEventListener('message', done);
+      try { st.frame.contentWindow.postMessage({type: 'wizard:app:keep', version: VERSION, id, keepId}, ORIGIN); } catch (_) { finish(false); }
+    });
+  }
   async function prepareReload(plan) {
+    if (plan?.keeps) await window.WizAppCapture?.prepareReload?.();
+  }
+  // Commit only after the caller's final safety check, synchronously adjacent to location.reload().
+  // Removing the kept frame avoids its standalone beforeunload prompt; its recorder lives in the shell.
+  function commitReload(plan) {
     if (!plan?.keeps) return;
-    try { await window.WizAppCapture?.prepareReload?.(); } catch (_) {}
     for (const st of [...frames.values()]) if (st.appId === plan.keeps.appId) {
       // Come back to the same place in the app (the meeting being recorded): frames keep only path + query.
       try { const l = st.frame.contentWindow.location; if (valid(st) && l.hash && l.hash !== '#' && l.hash !== '#/') sessionStorage.setItem(RETURN_KEY, JSON.stringify({ appId: st.appId, path: l.pathname + l.search, hash: l.hash.slice(0, 512), at: Date.now() })); } catch (_) {}
@@ -695,7 +763,7 @@
     reconcile();
     return [...frames.values()].filter(st => valid(st)).map(st => {
       let visible = true; try { if (st.isVisible) visible = st.isVisible() === true; } catch (_) { visible = false; }
-      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds.values()], suspect: !!st.suspect });
+      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds].filter(([id]) => !st.drafts?.get(id)?.kept).map(([,reason]) => reason), keepable: [...(st.drafts?.values() || [])].some(d => !d.kept), suspect: !!st.suspect });
     });
   }
   // One-shot, after a reload that kept a recording: put the kept app's frame back on the route it showed.
@@ -785,10 +853,11 @@
     } catch (_) { done?.(false); return false; }
   }
   window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+    titlebar: Object.freeze({ render: renderTools }),
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
-    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
+    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, keepDrafts, prepareReload, commitReload, frames: updateFrames }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
 })();

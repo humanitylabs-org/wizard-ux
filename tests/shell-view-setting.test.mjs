@@ -24,7 +24,7 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
   s.WizCore = { refreshApps: async () => {} };
   s.WizChatsHost = { defaultId: () => 'wizard-chats', installed: () => [] };
   s.WosSkin = { current: 'obsidian-light', list: ['obsidian', 'obsidian-light'], families: [], familyOf: () => null };
-  s.WosSkinHost = { personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, loadTweaks: async ids => { active = [...ids]; loads.push([...ids]); } };
+  s.WosSkinHost = { layouts:[{id:'ai-apps', name:'AI apps', credit:'designed by Miguel'}], personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, setStandardLayout(id) { this.layout=id; }, loadTweaks: async ids => { active = [...ids]; loads.push([...ids]); } };
   s.fetch = async url => {
     const path = String(url.pathname || url).split('/wizard-os-home/')[1] || '';
     if (/^tweaks\/|^core\/slots\.json/.test(path)) return { ok: true, status: 200, json: async () => JSON.parse(read('web/' + path.replace(/\?.*$/, ''))) };
@@ -37,23 +37,27 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
   // a tap on a Look row, as the click handler passes it to the Look feature
   const on = (attr, dataset) => view.dispatch({ classList: { contains: () => false }, closest: sel => sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'look' } } : sel === attr ? { dataset } : null });
   const tap = id => on('[data-tweak-toggle]', { tweakToggle: id });
-  const views = () => active.filter(id => VIEWS.includes(id));
-  return { s, root, view, tap, storage, views, active: () => [...active], loads, E: s.WosExperience };
+  const views = () => s.WosExperience.state.tweaks.filter(t=>t.on && VIEWS.includes(t.id)).map(t=>t.id);
+  return { s, root, view, tap, storage, views, active: () => [...new Set([...active, ...s.WosExperience.state.tweaks.filter(t=>t.view && t.on).map(t=>t.id)])], loads, E: s.WosExperience };
 }
 // the switches as rendered: [id, name, on]
 const switches = html => [...html.matchAll(/data-tweak-toggle="([^"]+)" role="switch" aria-checked="(true|false)"[^>]*><span class="st-tx"><b>([^<]+)<\/b>/g)].map(m => [m[1], m[3], m[2] === 'true']);
 // in VIEWS order (Orb, Apps) whatever the list's order (one flat A-to-Z list since main's #820)
-const viewSwitches = html => VIEWS.map(v => switches(html).find(([id]) => id === v)).filter(Boolean);
+const viewSwitches = html => VIEWS.map((v,i) => switches(html).find(([id]) => id === v) || (new RegExp(`data-desktop-view="${['orb','apps'][i]}" role="radio" aria-checked="(true|false)"`).exec(html) || []).map((_,n,a)=>n===0 ? [v, ['Different shell view - Orb','Different shell view - Apps'][i], a[1]==='true'] : null)[0]).filter(Boolean);
 const look = async b => { b.view.focus('look'); await tick(); return b.root.innerHTML; };
 
 for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Miguel's Tweaks list has both shell views as plain switches, off`, async () => {
   const b = box({ shell }); await b.E.refresh();
   const html = await look(b);
-  assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'the Settings row is gone');
+  if(shell==='phone') assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'phone unchanged'); else {
+    const picker = html.match(/<div role="radiogroup" aria-label="Shell view">([^]*?)<\/div>/)?.[1];
+    assert.match(picker, /data-desktop-view="ai-apps"/);
+    assert.doesNotMatch(picker, /designed by|credit|<small>/i, 'layout picker ignores even supplied credit metadata; skin and tweak names stay unchanged');
+  }
   assert.deepEqual(viewSwitches(html), [['miguel/orb-shell', 'Different shell view - Orb', false], ['miguel/apps-home', 'Different shell view - Apps', false]]);
   // one flat list (Miguel, 1 Nov 2026): no author sections, each row says who made it
   assert.doesNotMatch(html, /tw-author|data-tweakauthor|All of /, 'no per-author quick buttons');
-  for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?class="tw-by">${shell === 'desktop' ? 'Desktop' : 'Phone'} view · by (Miguel|miguel)<`), id + ' labelled by Miguel, for this device type');
+  if(shell==='phone') for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?class="tw-by">${shell === 'desktop' ? 'Desktop' : 'Phone'} view · by (Miguel|miguel)<`), id + ' labelled by Miguel, for this device type');
   assert.deepEqual(b.views(), [], 'a fresh device wears no view (Desks)');
 });
 
@@ -81,6 +85,7 @@ test('turning one on turns the other off; off again = Desks; one tweak reload pe
 
 test('AI apps is a third shell view: on turns Orb and Apps off, Orb or Apps on turns it off, off again = Desks', async () => {
   const b = box(); await b.E.refresh();
+  await b.E.chooseDesktopView('classic');
   const worn = () => b.active().filter(id => [...VIEWS, 'miguel/ai-apps'].includes(id));
   b.tap('miguel/orb-shell'); await tick();
   b.tap('miguel/ai-apps'); await tick(); assert.deepEqual(worn(), ['miguel/ai-apps'], 'AI apps on turns Orb off');
@@ -105,9 +110,10 @@ test('a device that stores both on wears only the first in catalog order (Orb), 
 
 for (const shell of ['desktop', 'phone']) test(`${shell}: each switch wears its layout; both off is exactly the stock shell`, async () => {
   for (const [id, layout] of [['', 'classic'], ['miguel/orb-shell', 'orb'], ['miguel/apps-home', 'apps']]) {
-    const b = box({ shell }); await b.E.refresh(); if (id) { b.tap(id); await tick(); }
+    const b = box({ shell }); await b.E.refresh(); if (shell==='desktop' && !id) await b.E.chooseDesktopView('classic'); if (id) { b.tap(id); await tick(); }
     const f = fixture({ shell });
-    await f.host.loadTweaks(b.views(), f.slots, { teamAuthors: ['miguel'] });
+    if(shell==='desktop') f.host.setStandardLayout(b.E.desktopView);
+    await f.host.loadTweaks(shell==='desktop'?[]:b.views(), f.slots, { teamAuthors: ['miguel'] });
     await new Promise(r => setTimeout(r, 20));
     assert.equal(f.host.layout, layout, `${shell} ${id || 'Desks'}`);
     if (!id) {
@@ -123,10 +129,11 @@ for (const shell of ['desktop', 'phone']) test(`${shell}: each switch wears its 
 
 test('core keeps only the exclusivity: no Shell view row, no chooseView, no Miguel ids; the old switch tweak stays retired', () => {
   const settings = read('web/core/settings.js'), exp = read('web/core/experience.js'), css = read('web/core/settings.css');
-  assert.doesNotMatch(settings, /shellView|data-shellview|Shell view/);
+  assert.match(settings, /data-desktop-view/);
+  assert.doesNotMatch(settings, /data-shellview/);
   assert.doesNotMatch(css, /\.sv-(group|seg)/);
   assert.doesNotMatch(exp, /chooseView/);
-  assert.match(settings, /const exp = s\.tweaks\.filter\(t => !t\.builtin\);/, 'views are listed like any tweak');
+  assert.match(settings, /E\.desktopViews\?\.length && t\.layout/, 'built-in desktop views are not duplicate personal switches');
   for (const f of ['web/core/settings.js', 'web/core/experience.js']) assert.doesNotMatch(read(f), /orb-shell|apps-home/, f);
   for (const [id, name, label] of [['orb-shell', 'Different shell view - Orb', 'Orb'], ['apps-home', 'Different shell view - Apps', 'Apps']]) {
     const m = JSON.parse(read(`web/tweaks/miguel/${id}/manifest.json`));
@@ -150,7 +157,7 @@ test('per shell type: the desktop wears AI apps while the phone wears Orb; each 
   const storage = new Map();
   const worn = b => b.active().filter(id => [...VIEWS, 'miguel/ai-apps'].includes(id));
   const desk = box({ storage }); await desk.E.refresh();
-  desk.tap('miguel/ai-apps'); await tick();
+  await desk.E.chooseDesktopView('ai-apps'); await tick();
   const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
   assert.deepEqual(worn(phone), [], 'the desktop choice leaves the phone on Desks');
   phone.tap('miguel/orb-shell'); await tick();

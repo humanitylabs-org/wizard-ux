@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Skins are colours only (2 Nov 2026: Miguel's old Mizel layout is retired). The chat list layout, its Layout picker
 // and Yesterday filter, and what Chats shows when you come back to its desk are the same on every skin.
 import test from 'node:test';
@@ -15,7 +16,7 @@ function layoutFor(skin, stored, groupSwitch = false) {
   const end = src.indexOf('  const archiveAfterDays');
   assert.ok(start > 0 && end > start, 'chatLayout block found');
   const ctx = { document: { documentElement: { dataset: { skin, tweaks: 'miguel/layout miguel/model-pills' } } }, localStorage: { getItem: () => stored }, ...(groupSwitch ? { getComputedStyle: () => ({ getPropertyValue: k => k === '--wos-chats-group-switch' ? ' on' : '' }) } : {}) };
-  vm.createContext(ctx);
+  modelContext(ctx);
   return vm.runInContext(src.slice(start, end) + '; chatLayout()', ctx);
 }
 

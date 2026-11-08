@@ -77,6 +77,21 @@ html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--in
 /* Settings › Look › Window opacity: once the owner picks a value, every window (framed or borderless, every skin) uses
    the shared glass token, so one number sets them all. Untouched = each skin exactly as shipped. */
 html[data-win-glass] .win { background: var(--sk-win); }
+/* Wizard desktop keeps its own opaque palette materials on canvas AND images.
+   Strip only alpha; mixing over --wz-panel would change the palette's surface tint. */
+html[data-shell="desktop"][data-wizard-backgrounds] :is(.dsettings, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .pal-card, .keys-card, .inbox, .bar, .now-card, .home-card, .home .rs-widget, .home-unsent, .home-tools button) {
+  background: color(from var(--glass-2) srgb r g b / 1);
+  color: var(--ink);
+}
+html[data-shell="desktop"][data-wizard-backgrounds] .win {
+  background: color(from var(--sk-win) srgb r g b / 1);
+  color: var(--ink);
+}
+/* Other image skins retain their existing Appearance v1 surface policy. */
+html[data-shell="desktop"][data-image-background]:not([data-wizard-backgrounds]) :is(.win, .dsettings, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .pal-card, .keys-card, .inbox, .bar, .now-card, .home-card, .home .rs-widget, .home-unsent, .home-tools button) {
+  background: var(--wz-panel, var(--wz-base, var(--bg)));
+  color: var(--wz-text, var(--ink));
+}
 :where(html:not([data-skin="nebula"])) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 :where(html:not([data-skin="nebula"])) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 :where(html:not([data-skin="nebula"])) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }

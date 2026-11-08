@@ -1,3 +1,4 @@
+import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Notifications about an app are that app's (Miguel, 4 Nov 2026: the agent's "Oscar" group held Sniper scans, backup
 // checks and Marketplace sales). A sender tags an item `app:<id>` (the Notifications cron relay's CRON_JOB_APPS, the
 // notify tool's `app`); core lists it under that app (name, mark, fold) and routes it by that app's own choice: in
@@ -124,8 +125,23 @@ test('sidebar / AI apps rows (skin-host noteRows) fold and name them under the a
   const items = [{ id: 's1', title: 'Sniper daily scan', time: 30, from: 'sniper', fromName: 'Sniper', priority: 2 }, { id: 's2', title: 'Daily Sniper outcome', time: 20, from: 'sniper', fromName: 'Sniper', priority: 2 },
     { id: 'o1', title: 'Release review', time: 10, priority: 2 }, { id: 'o2', title: 'Whiteboard', time: 5, priority: 2 }];
   const ctx = { isDoc: true, window: { WizConfig: { agent: () => 'Oscar' }, WosBell: { items: () => items } }, inboxThreads: new Map([['p', { list: true, act() {} }]]) };
-  vm.runInNewContext(src + ';globalThis.noteRows = noteRows;', ctx);
+  runWithChatsModel(src + ';globalThis.noteRows = noteRows;', ctx);
   const rows = JSON.parse(JSON.stringify(ctx.noteRows()));
   assert.deepEqual(rows.map(r => r.title), ['Sniper (2) · Sniper daily scan · Daily Sniper outcome', 'Oscar (2) · Release review · Whiteboard']);
   assert.equal(rows[0].app, 'sniper');
+});
+
+
+test('host note groups retain max-member Check rank; Needs you never folds and state/rank agree', () => {
+  const host = read('web/core/skin-host.js');
+  const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
+  const items = [{ id: 'new', title: 'New low', time: 30, priority: 1 }, { id: 'check', title: 'Older check', time: 20, priority: 3 }, { id: 'urgent', title: 'Urgent older', time: 10, priority: 5 }];
+  const ctx = { isDoc: true, window: { WizConfig: { agent: () => 'Wizard' }, WosBell: { items: () => items } }, inboxThreads: new Map([['p', { list: true, act() {} }]]) };
+  runWithChatsModel(src + ';globalThis.noteRows = noteRows;', ctx);
+  const rows = ctx.noteRows(), M = ctx.window.WizChatsListModel;
+  assert.equal(rows.length, 2, 'priority4+ is excluded from folding before projection');
+  const folded = rows.find(r => r.count === 2), urgent = rows.find(r => r.needs);
+  assert.equal(folded.rank, 2); assert.equal(M.stateOf(folded), 'fyi');
+  assert.equal(urgent.id, 'notif:urgent'); assert.equal(urgent.count, 1);
+  for (const row of rows) assert.equal(M.stateOf(row) === 'needs', M.rankOf(row) <= 1);
 });

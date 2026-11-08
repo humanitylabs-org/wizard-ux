@@ -20,7 +20,7 @@ function fixture(id='morning-report') {
  vm.runInNewContext(source,{window,location,URL,addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{hidden:false,readyState:'loading',addEventListener(){},createElement:t=>new El(t)},CustomEvent:class{},navigator:{},JSON});
  const detach=window.WizAppServices.attach(frame,{appId:id,path:app.url,isVisible:()=>true});
  child.document=child.document; const service=window.WizAppServices.connect(child,{});
- return {bar,child,posted,detach,service};
+ return {bar,child,posted,detach,service,frame,titlebar:window.WizAppServices.titlebar};
 }
 const tools=[{id:'older',kind:'button',icon:'prev',label:'Older report'},{id:'date',kind:'select',label:'Report date',value:'2026-10-21',options:[{value:'2026-10-21',label:'Wed 21 Oct'},{value:'2026-10-20',label:'Tue 20 Oct'}]},{id:'newer',kind:'button',icon:'next',label:'Newer report',disabled:true},{id:'pdf',kind:'link',text:'PDF',label:'Open PDF',href:'api/reports/2026-10-21.pdf'}];
 const box=f=>f.bar.children.find(c=>c.className==='wtools');
@@ -55,6 +55,25 @@ test('clearing or closing removes them',()=>{
  const g=fixture(); g.service.titlebar.set(tools); g.detach(); assert.equal(box(g),undefined);
 });
 test('a reloaded document cannot set tools',()=>{ const f=fixture(); f.child.document={}; assert.throws(()=>f.service.titlebar.set(tools)); });
+test('layout-owned slots share validated tools, preserve controls on no-op paint, and reject stale documents',()=>{
+ const f=fixture(), slot=new El('span');
+ assert.equal(f.titlebar.render(f.frame,slot),false);
+ f.service.titlebar.set(tools); assert.equal(f.titlebar.render(f.frame,slot),true);
+ const control=slot.children[1]; f.titlebar.render(f.frame,slot); assert.equal(slot.children[1],control,'keep picker identity during unrelated paints');
+ const click=id=>slot.listeners.click.forEach(fn=>fn({stopPropagation(){},target:{closest:()=>({dataset:{tool:id}})}}));
+ const pick=value=>slot.listeners.change.forEach(fn=>fn({target:{closest:()=>({dataset:{tool:'date'},value})}}));
+ click('older'); assert.equal(f.posted.at(-1).id,'older');
+ pick('2026-10-20'); assert.equal(f.posted.at(-1).value,'2026-10-20');
+ const n=f.posted.length; click('newer'); click('missing'); pick('not-an-option'); assert.equal(f.posted.length,n);
+ f.child.document={}; click('older'); assert.equal(f.posted.length,n,'stale document cannot receive tool actions');
+ assert.equal(f.titlebar.render(f.frame,slot),false); assert.equal(slot.children.length,0,'clear tools after reload');
+});
+test('layout tools clear when a frame closes or the slot switches to no app',()=>{
+ const f=fixture(),slot=new El('span'); f.service.titlebar.set(tools); f.titlebar.render(f.frame,slot);
+ f.detach(); assert.equal(f.titlebar.render(f.frame,slot),false); assert.equal(slot.children.length,0);
+ const g=fixture(); g.service.titlebar.set(tools); g.titlebar.render(g.frame,slot); assert.equal(slot.children.length,4);
+ assert.equal(g.titlebar.render(null,slot),false); assert.equal(slot.children.length,0);
+});
 test('search, QR and settings icons are shell-drawn, with an optional attention dot',()=>{
  const f=fixture(); f.service.titlebar.set([{id:'qr',kind:'button',icon:'qr',label:'My QR codes'},{id:'search',kind:'button',icon:'search',label:'Search'},{id:'settings',kind:'button',icon:'settings',label:'Settings',dot:true},{id:'odd',kind:'button',icon:'<svg>',label:'Odd'}]);
  const [qr,search,settings,odd]=box(f).children;

@@ -37,9 +37,11 @@
   };
   const clean = s => String(s || '')
     .replace(/\n*^\[WIZARD_REPLY_V1\]\n[\s\S]*?\n^\[\/WIZARD_REPLY_V1\][ \t]*$/m, ' ') // a Notifications Reply's framed item (quoted lines can't close it)
+    .replace(/\n*\[WIZARD_REPLY_TO_V1\]\{[^\n]*?\}(?:\n[\s\S]*?)?\[\/WIZARD_REPLY_TO_V1\]/g, ' ') // a Thread tracker quote
     .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
+    .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
@@ -65,10 +67,10 @@
     return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
-    const status = ALIASES[raw] || raw || undefined;
+    const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
     const lastUserAt = optIso(item.wizard_last_user_at ?? item.last_user_at);
     const lastAssistantAt = optIso(item.wizard_last_assistant_at ?? item.last_assistant_at);
     const latest = item.latest_message && typeof item.latest_message === 'object' ? item.latest_message : null;
@@ -105,6 +107,10 @@
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
       background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
+      // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs). Only the
+      // off-by-default wizard/background-continue tweak shows it (chat-power.js) or discovers more (below).
+      backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '') && item.wizard_background_result?.session_id === id
+        ? { id: item.wizard_background_result.id } : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -205,6 +211,7 @@
   const LIST_DEADLINE = 30000;
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
+    const read = ++titleRead;
     const out = []; let snapshot = '', meta = null, resets = 0;
     const overrides = JSON.stringify(listOverrides(agent));
     for (let offset = 0; offset < 100000; ) {
@@ -226,10 +233,10 @@
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta }; }
+      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta, titleRead:read }; }
       if (!rows.length) throw new Error('Incomplete session window');
-      if (!full) return { sessions:out, complete:false, meta };
-      if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta });
+      if (!full) return { sessions:out, complete:false, meta, titleRead:read };
+      if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta, titleRead:read });
     }
     throw new Error('Session window limit reached');
   }
@@ -241,13 +248,14 @@
     try { for(const k of Object.keys(localStorage)) if(k.startsWith(TITLE_PREFIX)) localStorage.removeItem(k); } catch {}
     window.WizCore?.chatSearch?.reset?.();
   }
-  window.addEventListener('wizard-account-change',clearTitleIndex);
+  window.addEventListener('wizard-account-change',()=>{ RENAMES.clear(); clearTitleIndex(); });
   function indexRow(raw,scope) {
     if(!raw?.id || (raw.agent || 'hermes')!==(scope || 'hermes')) return null;
     return normalize({...raw,listVersion:1,agent:scope||'',agent_id:scope||'hermes',updatedAt:raw.cardTime||raw.updatedAt,activityAt:raw.cardTime||raw.activityAt,previewAt:raw.cardTime||raw.previewAt});
   }
   async function fetchTitleIndex(scope='') {
     if(TITLE_LOADING.has(scope)) return TITLE_LOADING.get(scope);
+    const read = ++titleRead;
     const task=(async()=>{
       let cursor='', snapshot='', offset=0, build='', rows=[], epoch=titleEpoch;
       const overrides=JSON.stringify(listOverrides(scope));
@@ -278,6 +286,7 @@
         if(rows.length>10000) throw new Error('Title index limit reached');
         if(value.has_more && !cursor) { offset+=value.data.length; continue; }
         if(value.archive_cursor) { cursor=value.archive_cursor; offset=0; continue; }
+        rows.forEach(s=>applyTitle(s,read));
         const entry={build,rows}; TITLE_INDEX.set(scope,entry);
         if(!scope && titleAccount) try { const data=JSON.stringify(entry); if(data.length<2000000) localStorage.setItem(key,data); } catch {}
         store.emit(); return;
@@ -285,6 +294,44 @@
     })().catch(e=>{if(e.status===403) clearTitleIndex();}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
     TITLE_LOADING.set(scope,task); return task;
   }
+  /* Saved background results (Agent Service GET /wizard/background-results, wizard-agent-service #14).
+   * Off by default: runs only while the wizard/background-continue tweak is on. Read-only discovery merged into
+   * Chats; it never starts a model. A result older than the normal list window adds its original thread once.
+   * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
+  function backgroundOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/background-continue'); } catch (_) { return false; } }
+  let backgroundPollTimer = null, backgroundPollUntil = 0;
+  // Results this device already continued (or found stale). A discovery read that started before the tap can land
+  // after it; it must never bring the Continue panel back. Ids are per result, so this only ever grows a little.
+  const BACKGROUND_SETTLED = new Set();
+  function scheduleBackgroundPoll() {
+    if (backgroundPollTimer || document.hidden) return;
+    if (!backgroundPollUntil) backgroundPollUntil = Date.now() + 60000;
+    if (Date.now() > backgroundPollUntil) return;
+    backgroundPollTimer = setTimeout(() => { backgroundPollTimer = null; if (!document.hidden) L.refresh(); }, 1000);
+  }
+  async function mergeBackgroundResults(sessions, isCurrent = () => true) {
+    if (!backgroundOn()) { for (const s of sessions) if (s.backgroundResult) s.backgroundResult = null; return; }
+    let p;
+    try { p = await (await req('/wizard/background-results', listSignal())).json(); }
+    catch (e) { return; } // an older Agent Service lacks this route; normal Chats still works
+    if (!isCurrent()) return;
+    if (!backgroundOn()) { for (const s of sessions) s.backgroundResult = null; return; }
+    if (p?.scanning) scheduleBackgroundPoll();
+    else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
+    const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(id => id && !BACKGROUND_SETTLED.has(id)));
+    // The listing is authoritative: a result continued elsewhere (another device) clears here too.
+    for (const s of sessions) if (s.backgroundResult && (WORKING.has(s.status) || !pending.has(s.backgroundResult.id))) s.backgroundResult = null;
+    // Only the main agent's threads: the Service route is scoped to the main agent (agent_id hermes).
+    const byId = new Map(sessions.map(row => [row.id, row]));
+    for (const raw of Array.isArray(p?.sessions) ? p.sessions : []) {
+      const s = normalize(raw); if (!s || !s.backgroundResult || !pending.has(s.backgroundResult.id)) continue;
+      const current = byId.get(s.id);
+      // A thread that is working again keeps its own run in charge; never replace it with a manufactured state.
+      if (current) { if (WORKING.has(current.status)) continue; current.backgroundResult = s.backgroundResult; current.attention = s.attention; }
+      else { sessions.push(s); byId.set(s.id, s); }
+    }
+  }
+  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/background-continue') setTimeout(() => L.refresh(), 0); });
   const FULL_EVERY = 3 * 60 * 1000;
   const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
   const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
@@ -309,9 +356,9 @@
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
-  const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
+  const inWorking = s => window.WizChatsListModel.isListWorking(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
-  const cardAt = s => inWorking(s) || isErr(s)
+  const cardAt = s => (WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s)) || isErr(s)
     ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
     : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
   const newestFirst = (l, r) => {
@@ -337,6 +384,8 @@
     archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
     compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
+    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
+    workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
@@ -496,17 +545,15 @@
   // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
-  const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
+  const isDeferred = s => window.WizChatsListModel.deferred(s);
   // Priority ranks every status line, so Done threads (nothing left to do) sink below FYI answers and unlabelled
   // threads come last: with only needs you / check ranked, most of Ready tied and Priority read like Newest.
-  const ATT_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
-  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : ATT_RANK[s.attention?.state] || 5;
-  const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+  const readyRank = s => window.WizChatsListModel.sessionRank(s, { approval: needsApproval(s), snoozeLast: snoozeLast() });
+  const byPriority = list => window.WizChatsListModel.orderSessions(list, 'priority', { at: cardAt, rank: readyRank });
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
   // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
   // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
-  const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
-  const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
+  const byOldest = list => window.WizChatsListModel.orderSessions(list, 'oldest', { at: cardAt, rank: readyRank });
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
@@ -516,8 +563,8 @@
       const t = sectionTime(s);
       if (s.archived) g.archive.push(s);
       else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
-      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
@@ -528,7 +575,7 @@
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready.sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
+    g.ready = window.WizChatsListModel.orderSessions(g.ready, 'newest', { at: cardAt, rank: readyRank });
     return g;
   }
   async function fetchDispositions() {
@@ -545,9 +592,44 @@
    * the thread back. Restoring an archived thread remembers when, in the key Wizard uses, so it lands in Ready. */
   const RESTORED_KEY = 'wizard.mobile.restored-threads.v1';
   const OVER = new Map(); // id -> { archived?, deferred?, restoredAt? } while a write is in flight
+  // A title write has its own reconciliation fence: disposition actions settle on
+  // time alone, but a cached list/detail can still carry the old title after PATCH.
+  const RENAMES = new Map();
+  let titleRead = 0;
+  const titleScope = s => `${s.agent || 'hermes'}:${s.id}`;
+  function applyTitle(s, read = 0, authoritative = false) {
+    const o = RENAMES.get(titleScope(s)); if (!o) return s;
+    if (o.settled && read > o.settled) {
+      if (authoritative && read > o.confirmed) { o.title = s.title; o.confirmed = read; o.dirty = false; }
+      // A differing snapshot may be stale OR another owner's newer edit. Only
+      // a fresh canonical detail read can distinguish them; never pin forever.
+      else if (!authoritative && s.title !== o.title && read > o.confirmed) o.dirty = true;
+    }
+    s.title = o.title; return s;
+  }
+  function confirmTitle(store, id, entry) {
+    if (entry.reading || (entry.confirmed && !entry.dirty)) return;
+    // Lists/indexes are cached snapshots; a new detail GET goes to canonical
+    // session storage. Another owner's rename may win before ours is observed.
+    entry.reading = store.sessionInfo(id).then(s => {
+      if (s && RENAMES.get(titleScope(s)) === entry) {
+        paintTitle(store, s, entry.title); writeSnap(store); store.emit();
+      }
+    }).catch(() => {}).finally(() => { entry.reading = null; });
+  }
+  function paintTitle(store, session, title) {
+    const key = titleScope(session);
+    const rows = [...store.sessions, ...Object.values(store.agentSessions).flat(), ...DETAIL.values(),
+      ...[...SPACE_ROWS.values()].map(e => e.row), ...[...TITLE_INDEX.values()].flatMap(e => e.rows)];
+    for (const row of rows) if (row && titleScope(row) === key) row.title = title;
+    session.title = title;
+  }
   const readRestored = () => { try { const v = JSON.parse(localStorage.getItem(RESTORED_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } };
   const writeRestored = v => { try { localStorage.setItem(RESTORED_KEY, JSON.stringify(v)); } catch (e) {} };
-  function applyLocal(s) {
+  function applyLocal(s, read = 0) {
+    applyTitle(s, read);
+    const rename = RENAMES.get(titleScope(s));
+    if (rename?.settled && (!rename.confirmed || rename.dirty)) confirmTitle(L, s.id, rename);
     const r = readRestored()[s.id];
     if (r && !s.deferred) {
       const latest = Math.max(...[s.lastUserAt, s.lastAssistantAt, s.activityAt].map(v => Date.parse(v ?? '')).filter(isFinite));
@@ -705,6 +787,7 @@
       const [id, entry] = SPACE_QUEUE.shift(); spaceReads++;
       (async () => {
         const agent = L.agentOf(id);
+        const read = ++titleRead;
         try {
           const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`, listSignal())).json();
           const s = normalize(p.session || p);
@@ -716,6 +799,7 @@
             AGENT_OF.set(id, s.agent);
           }
           if (agent) s.agent = agent;
+          applyTitle(s, read);
           entry.row = s.hidden ? null : s;
           entry.failed = false;
         } catch (_) { entry.row = null; entry.failed = true; }
@@ -758,9 +842,9 @@
       const d = archiveAfterDays(), t = sectionTime(s);
       return !!d && isFinite(t) && t <= Date.now() - d * DAY;
     },
-    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // Visible unread: idle threads the Chats list shows unread (not working, hidden, archived or snoozed). Focus badges
     // (agents, Spaces) count only these, so a dot never points at nothing.
-    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -774,6 +858,14 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    workingOrder: () => { try { return window.WizChatsListModel.workingOrderOf(localStorage.getItem('wos.chats.workingOrder.v1')); } catch (_) { return 'alphabetical'; } },
+    setWorkingOrder: o => {
+      if (!window.WizChatsListModel.WORKING_SORTS.some(([v]) => v === o)) return false;
+      try { if (localStorage.getItem('wos.chats.workingOrder.v1') === o) return true; localStorage.setItem('wos.chats.workingOrder.v1', o); } catch (_) {}
+      // Paint now, reconcile the shared preference afterwards, just like Ready.
+      window.dispatchEvent(new Event('wos:prefs'));
+      putPrefs({ workingOrder: o }); return true;
+    },
     prefOps,
     cardAt,
     groups(agent = '') {
@@ -781,10 +873,10 @@
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[seenKeyOf(s)]?.deferred;
-        if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
+        if (globalThis.WizChatsListModel.isListWorking(s)) { working.push(s); continue; }
+        if (snoozeLast() && isDeferred(s)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
-        if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
@@ -795,6 +887,8 @@
       for (const g of [needs, ready, working]) g.sort((a, b) => t(b) - t(a));
       return { needs, ready, working };
     },
+    // chat-power.js: a Continue tap settled this saved background result (#14); hide it for good on this device.
+    backgroundSettled(id) { if (typeof id === 'string' && id) BACKGROUND_SETTLED.add(id); for (const s of this.sessions || []) if (s.backgroundResult?.id === id) s.backgroundResult = null; },
     async refresh() {
       if (this.loading) return this.loading;
       this.loading = (async () => {
@@ -815,7 +909,7 @@
             const d = deferred[seenKeyOf(s)];
             delete s.deferred; delete s.deferredAt; delete s.restoredAt;
             if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
-            applyLocal(s);
+            applyLocal(s, got.titleRead);
           }
           // A settled action stays applied until a list read that started after it lands.
           for (const [k, o] of OVER) if (o.settled && o.settled < started) OVER.delete(k);
@@ -843,6 +937,14 @@
           const got = await fetchSessions(full, '', early);
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
+          const backgroundSessions = this.sessions;
+          if (backgroundOn()) {
+            // Paint the ordinary list and start routed reads without waiting for optional discovery.
+            void mergeBackgroundResults(backgroundSessions, () => this.sessions === backgroundSessions).then(() => {
+              if (this.sessions !== backgroundSessions) return;
+              writeSnap(this); this.emit();
+            }).catch(() => {});
+          } else { void mergeBackgroundResults(backgroundSessions); }
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
           // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.
@@ -870,7 +972,7 @@
             const d = deferred[seenKeyOf(s)];
             delete s.deferred; delete s.deferredAt; delete s.restoredAt;
             if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
-            applyLocal(s);
+            applyLocal(s, got.titleRead);
           }
           addSynthetic(list, id);
           window.WosModels?.reconcile(list);
@@ -938,17 +1040,24 @@
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
-    markSeen(ids) {
+    // `after` (optional promise<boolean>): record the click-time activity/count now but persist it only if the
+    // promise resolves true; a refused or errored confirmation never marks newer content read.
+    markSeen(ids, { after = null } = {}) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
       const list = all;
       if (!list.length) return;
-      let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
-      const threads = { ...state.threads };
-      for (const s of list) threads[seenKeyOf(s)] = recordFor(s, ts);
-      state = { ...state, threads };
-      this.seen = state; writeLocal(state); this.emit();
-      putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+      const records = list.map(s => [seenKeyOf(s), recordFor(s, ts)]);
+      const write = deferred => {
+        let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
+        const threads = { ...state.threads };
+        for (const [k, r] of records) threads[k] = deferred ? later(threads[k], r) : r;
+        state = { ...state, threads };
+        this.seen = state; writeLocal(state); this.emit();
+        putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+      };
+      if (after) { Promise.resolve(after).then(ok => { if (ok === true) write(true); }, () => {}); return; }
+      write(false);
     },
     async markUnread(ids) {
       const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
@@ -1017,7 +1126,7 @@
       await req('/wizard/hermes/api/sessions' + aq(id), { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id, ...(agent ? { agent } : {}) }) });
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
-      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
+      if (opts.fileIds?.length) body.wizard_file_ids = [...new Set(opts.fileIds)];
       const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
@@ -1038,14 +1147,14 @@
           if (!M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
-          if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
+          if (opts.fileIds?.length) steer.wizard_file_ids = [...new Set(opts.fileIds)];
           await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer${aq(id)}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
         } catch (e) { if (e.code === 'dispatch_already_attempted' || ![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
-      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
+      if (opts.fileIds?.length) body.wizard_file_ids = [...new Set(opts.fileIds)];
       const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
@@ -1070,6 +1179,7 @@
       return rows;
     },
     async searchSessions(q, agent = '', signal, onBatch) {
+      const read = ++titleRead;
       const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
       const settled=await Promise.allSettled(scopes.map(async scope=>{
         const found=[]; let snapshot='', resets=0, legacy=false;
@@ -1092,6 +1202,7 @@
             if((raw.agent||'hermes')!==(scope||'hermes')) continue;
             const s=body ? {...(available.find(s=>s.id===raw.id)||indexRow({id:raw.id,agent:raw.agent,title:'Chat'},scope)),searchSnippet:raw.snippet} : normalize(raw);
             if(!s) continue;
+            applyTitle(s, read);
             if(signal?.aborted) throw new DOMException('Aborted','AbortError');
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
@@ -1118,10 +1229,11 @@
         for(const s of TITLE_INDEX.get(scope)?.rows||[]) rows.set(`${scope}:${s.id}`,s);
         for(const s of (scope?this.agentSessions[scope]||[]:this.sessions)) rows.set(`${scope}:${s.id}`,s);
       }
-      return [...rows.values()];
+      return [...rows.values()].map(s=>applyTitle(s));
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
+      const read = ++titleRead;
       let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
@@ -1148,6 +1260,7 @@
       if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
+      applyTitle(s, read, true);
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
       // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
@@ -1163,23 +1276,28 @@
     },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
-    async _act(id, patch, write) {
+    async _act(id, patch, write, capMs = 60000) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
       const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
-      try { await write(s); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
+      // Safety: a write that never answers must not pin the thread out of its list (or block the next tap) forever; after capMs it counts as failed and the thread is restored (Close & file polls for up to 10 minutes, so it gets 11).
+      let stall; const cap = new Promise((_, no) => { stall = setTimeout(() => no(new Error('write timed out')), capMs); });
+      try { await Promise.race([write(s), cap]); clearTimeout(stall); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
       catch (e) {
-        if (OVER.get(id) === entry) OVER.delete(id);
+        clearTimeout(stall); if (OVER.get(id) === entry) OVER.delete(id);
         const c = this.session(id);
         if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.deferredAt === undefined) delete c.deferredAt; if (snap.restoredAt === undefined) delete c.restoredAt; }
         this.emit(); return false;
       }
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
-    archive(id, { file = false } = {}) {
+    archive(id, { file = false, confirmed = null } = {}) {
       // Done marks the thread read too, so it stays read on every client and if it is ever restored.
-      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id, confirmed ? { after: confirmed } : {});
       return this._act(id, { archived: true, deferred: false }, async s => {
+        // Tracker Dismiss reuses Done's same-frame paint and rollback. It may
+        // persist only after every version-validated Seen result confirms it.
+        if (confirmed && !await confirmed) throw new Error('Seen version changed');
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
         const ag = this.agentOf(id);
@@ -1190,7 +1308,7 @@
           r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-      });
+      }, file ? 11 * 60000 : 60000);
     },
     // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
     async stopWatching(id, agent) {
@@ -1226,14 +1344,25 @@
     async rename(id, title) {
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
       if (!s || !t || this.busy(id)) return false;
+      const key = titleScope(s), previous = RENAMES.get(key);
+      if (previous && !previous.settled) return false;
       if (t === s.title) return true;
-      const before = { title: s.title };
-      Object.assign(s, { title: t }); this.emit();
+      const before = s.title, entry = { title:t, settled:0, confirmed:0 };
+      RENAMES.set(key, entry); paintTitle(this, s, t); this.emit();
       try {
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
         if (!r.ok) { let msg = ''; try { msg = (await r.json())?.error?.message || ''; } catch (e) {} throw Object.assign(new Error(msg || 'rename failed'), { status: r.status }); }
+        entry.settled = ++titleRead;
+        confirmTitle(this, id, entry);
+        writeSnap(this);
         setTimeout(() => this.refresh(), 50); return true;
-      } catch (e) { const c = this.session(id); if (c) Object.assign(c, before); this.emit(); return /already in use/i.test(e.message) ? 'taken' : false; }
+      } catch (e) {
+        if (RENAMES.get(key) === entry) {
+          if (previous) RENAMES.set(key, previous); else RENAMES.delete(key);
+          paintTitle(this, s, before);
+        }
+        this.emit(); return /already in use/i.test(e.message) ? 'taken' : false;
+      }
     },
     // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
     restore(id) {

@@ -15,7 +15,6 @@
     "miguel/machines-home",
     "wizard/app-borders",
     "wizard/unified-inbox",
-    "wizard/orb-radial",
     "wizard/new-send-list",
     "miguel/no-desk-close",
     "miguel/archive-top",
@@ -25,7 +24,10 @@
     "miguel/calm-offline",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "wizard/thread-tracker",
+    "wizard/desktop-chats",
+    "wizard/background-continue"
   ],
   "defaults": [
     "wizard/unified-inbox"

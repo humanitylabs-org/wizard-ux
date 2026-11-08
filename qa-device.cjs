@@ -141,56 +141,46 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     }, reason);
     const count = async () => (await dev(p)).calls.filter(c => c === 'updateInstall').length;
     const click = () => p.evaluate(() => document.querySelector('#dvUpdate [data-upd="go"]')?.click());
-    await state('music');
-    ok(/installs when music stops/.test(await p.locator('#dvUpdate').innerText()) && /Install now/.test(await p.locator('#dvUpdate').innerText()), 'deferred music explains hold and offers Install now');
-    let n = await count(); await click();
-    ok(await count() === n + 1, 'deferred music Install now calls native updateInstall');
-    await sleep(3200); ok(apkRequests.length === 0 && feeds.length === 0, 'reason-aware APK never fetches the feed or opens an APK');
-    await state('mic');
-    ok(/microphone in use/.test(await p.locator('#dvUpdate').innerText()), 'bare mic is not labelled a recording');
+    const text = () => p.locator('#dvUpdate').innerText();
+    // Ready and deferred share one owner action (Install now); the banner never promises an automatic restart (#1093).
+    let n;
+    for (const reason of ['music', 'mic', 'take', null]) {
+      await state(reason);
+      const t = await text(), label = reason || 'legacy';
+      ok(/Wizard OS 0\.9\.99 is ready/.test(t) && /Install now/.test(t) && !/installs|by itself|restart|Tap again/i.test(t), `deferred ${label}: plain ready text with Install now`, t);
+      n = await count(); await click();
+      ok(await count() === n + 1, `deferred ${label}: first idle Install now calls native updateInstall`);
+    }
     await p.evaluate(() => window.__wos.openSettings()); await sleep(300);
     n = await count(); await p.evaluate(() => document.querySelector('[data-dvupd]')?.click());
     ok(await count() === n + 1, 'deferred Settings row installs rather than checks');
     await p.evaluate(() => window.__wos.closeSheets());
-    await state('take');
-    ok(/installs after this recording/.test(await p.locator('#dvUpdate').innerText()), 'take hold text preserved');
-    n = await count(); await click();
-    ok(await count() === n && /Tap again to stop the recording and update/.test(await p.locator('#dvUpdate').innerText()), 'take first tap arms confirmation without installing');
-    await click(); ok(await count() === n + 1, 'take second tap asks native installer (native keeps live-take fence)');
-    await click(); await sleep(4200); n = await count(); await click();
-    ok(await count() === n, 'take confirmation expires after four seconds');
-    await state(null);
-    // Old APK: native music is playing but no Wizard take is live. Model its media state without real audio.
-    await p.evaluate(() => {
-      const music = document.createElement('audio'); music.id = 'qa-playing-music';
-      Object.defineProperties(music, { paused: { value: false }, ended: { value: false } });
-      document.body.appendChild(music);
-    });
-    ok(await p.evaluate(() => !document.querySelector('#qa-playing-music').paused && !__dev.active && __wos.voice === 'idle' && !('reason' in __dev.upd)), 'legacy fixture has playing music, no reason and no live take');
-    n = await count(); await click();
-    ok(await count() === n + 1, 'legacy deferred Install now calls native updateInstall');
-    ok(/Installs by itself once music or recording stops/.test(await p.locator('#dvUpdate').innerText()), 'legacy deferred tap explains automatic install after music or recording');
+    // Old APK still deferred 2.5 s after Install now (a stale in-process mic claim): an honest recovery path, no APK escape.
+    await state(null); await click(); await sleep(2800);
+    ok(/If no recording is active, force stop Wizard OS/.test(await text()), 'legacy refusal explains the force-stop recovery');
     await shot(p, '22-legacy-deferred');
-    await sleep(5500); // Longer than the removed three-second fallback, and the five-second acceptance window.
+    await sleep(2700); // Longer than the removed three-second fallback, and the five-second acceptance window.
     ok(apkRequests.length === 0 && apkNavigations.length === 0, 'legacy deferred: zero APK requests or navigations after 5.5 seconds', JSON.stringify({apkRequests, apkNavigations}));
     ok(feeds.length === 0, 'legacy deferred: zero latest.json fetches after 5.5 seconds', JSON.stringify(feeds));
     fs.writeFileSync(path.join(SHOTS, 'update-network.json'), JSON.stringify({web: WEB, waitMs:5500, apkRequests, apkNavigations, feeds}, null, 2));
-    // A legacy APK cannot honor the reason-aware stop-and-install confirmation either.
+    // A genuine live take: Install now never installs, stops or sends it.
     await p.evaluate(() => {
-      __dev.active = 'qa-legacy-take';
+      __dev.active = 'qa-live-take';
       __dev.takes[__dev.active] = {id:__dev.active, state:'recording', startedAt:Date.now(), data:[]};
+      WosDevice.event('update', __dev.upd);
     });
-    n = await count(); await click();
-    ok(await count() === n + 1, 'legacy live-take tap still calls native updateInstall');
-    ok(await p.evaluate(() => __dev.active === 'qa-legacy-take') && /Installs by itself once music or recording stops/.test(await p.locator('#dvUpdate').innerText()), 'legacy live take stays intact with truthful automatic-install text');
+    ok(/Finish your recording first/.test(await text()), 'live take: banner asks to finish the recording first');
+    n = await count(); await click(); await click();
+    ok(await count() === n && await p.evaluate(() => __dev.active === 'qa-live-take'), 'live take: Install now does not call native and the take stays intact');
     await p.evaluate(() => {
-      __dev.active = null; delete __dev.takes['qa-legacy-take'];
-      document.querySelector('#qa-playing-music').remove();
+      __dev.active = null; delete __dev.takes['qa-live-take'];
       __dev.upd = {state:'ready',version:'0.9.99',versionCode:99};
       WosDevice.event('update', __dev.upd);
     });
+    // Reading the banner is not consent: only its Install now button starts installation.
     n = await count(); await p.locator('#dvUpdate .dv-um').click();
-    ok(await count() === n + 1, 'ready-state banner tap calls native updateInstall');
+    ok(await count() === n, 'ready-state banner body tap does not install');
+    await click(); ok(await count() === n + 1, 'ready-state Install now calls native updateInstall');
     ok(JSON.stringify(writes0) === JSON.stringify([W.runs.length,W.uploads.length,W.sessions.size,W.transcribes]), 'update scenarios produce zero agent writes');
     ok(errs.length === 0, 'no page errors (deferred updater)', errs.join(' | '));
     await shot(p, '22-deferred');

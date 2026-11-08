@@ -24,6 +24,15 @@
     raw[id] = Math.max(0, n | 0);
     if (was !== !!plus) { counts[id] = -1; } apply(id);
   }
+  // One projection for every Chats/Ready pill; list membership remains a separate workflow concern.
+  // Reuse the loaded unified list and canonical visibility/read rules: no reads, receipts or migration here.
+  // Unread rows that are still Working stay out of the Chats count; Working is counted on its own.
+  function chatsCount(live) {
+    const threads = chatUnreadCount(live);
+    // Preserve app notification routing, but never badge read/snoozed inbox items as Ready did.
+    const inbox = window.WosBell?.unreadCount?.() || 0;
+    return threads + inbox;
+  }
   function chatUnreadCount(live) {
     if (!live?.ok || typeof live.unified !== 'function' || typeof live.visibleUnread !== 'function' || typeof live.workGroups !== 'function') return 0;
     try {
@@ -32,13 +41,8 @@
       return Math.max(0, Array.isArray(unread) ? unread.filter(row => !working.has(row)).length : 0);
     } catch (_) { return 0; }
   }
-  // One projection for every Chats notification badge; Ready remains a separate workflow count.
-  // Reuse the loaded unified list and canonical visibility/read rules: no reads, receipts or migration here.
   function refreshChats(live, id = 'wizard') {
-    const threads = chatUnreadCount(live);
-    // Preserve app notification routing, but never badge read/snoozed inbox items as Ready did.
-    const inbox = window.WosBell?.unreadCount?.() || 0;
-    setCount(id, threads + inbox, inbox > 0 && !!window.WosBell?.readyMore?.());
+    setCount(id, chatsCount(live), !!window.WosBell?.unreadCount?.() && !!window.WosBell?.readyMore?.());
   }
   function carry(map) {
     const next = map && typeof map === 'object' ? map : {};
@@ -62,7 +66,7 @@
   function icon(desk, wins, appOf) {
     const S = window.WizSigil;
     if (!S) return '';
-    if (desk.home) return '<span class="dsg" style="--c:#C9BEFF"><i class="sgi sg-home" aria-hidden="true"></i></span>';
+    if (desk.home) return '<span class="dsg"><i class="sgi sg-hat" aria-hidden="true"></i></span>';
     const ids = desk.wins || [], focused = wins[desk.focus] || wins[ids[0]];
     if (!focused) return '<span class="dsg empty" aria-hidden="true"></span>';
     const a = appOf(focused) || {}, sigil = a.sigil || a, s = S.of(sigil);
@@ -75,5 +79,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatUnreadCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatUnreadCount, chatsCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
 })();

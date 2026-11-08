@@ -1,3 +1,6 @@
+/* The built-in view owns this CSS dependency even with personal tweak scripts off. */
+@import url("../../tweaks/miguel/apps-home/tweak.css");
+
 /* Apps view (layouts/apps/layout.js): Home as a standard home screen, one app icon per desk; phone (layout.js) and
  * desktop (desktop.js, a launchpad). Loaded only while the Apps layout is worn (html[data-layout="apps"]); every rule is
  * scoped to one shell. Colours are the wearing tweak's skin-layer tokens (--ap-*: miguel/apps-home tweak.css). The +

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -24,7 +25,7 @@ function workGroups(sessions) {
   };
   context.input = sessions;
   context.now = Date.UTC(2026, 9, 24, 12);
-  vm.createContext(context);
+  modelContext(context);
   vm.runInContext(`${source.slice(firstStart, firstEnd)}\n${source.slice(secondStart, secondEnd)}\nthis.result = groupWork(input, now);`, context);
   return JSON.parse(JSON.stringify(context.result));
 }
@@ -63,7 +64,7 @@ test('archived stale-running threads remain recoverable without steering stale r
     agentName: () => 'Wizard',
     ago: () => 'just now',
   };
-  vm.createContext(context);
+  modelContext(context);
   vm.runInContext(`${chatsSource.slice(workingStart, workingEnd)}\n${chatsSource.slice(actionsStart, actionsEnd)}\n${chatsSource.slice(stateStart, stateEnd)}\nthis.actions = threadActions; this.state = threadState; this.working = isWorking;`, context);
 
   for (const runtimeKind of kinds) {

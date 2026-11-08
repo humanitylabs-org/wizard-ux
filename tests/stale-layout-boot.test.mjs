@@ -65,8 +65,13 @@ for (const shell of ['phone', 'desktop']) for (const id of ['orb', 'apps', ...(s
   test(`${shell} supported ${id} ${input} still paints and requests its layout at boot`, () => {
     const f = boot({ shell, ...(input === 'stored' ? { initialStorage: { 'wos.layout': id } } : { query: '?layout=' + id }) });
     assert.equal(f.boot.layout, id); assert.equal(f.boot.dataset, id);
-    assert.ok(f.boot.css.some(h => h.includes('/layouts/' + id + '/layout.css')));
-    assert.ok(f.imports.some(h => h.includes('/layouts/' + id + '/layout.js')));
+    // each shell requests only its own entry (core/skin-host.js files: phone orb -> phone-boot.css (Orb tokens only) + phone.js; desktop AI apps ->
+    // desktop-boot.css + desktop.js); the rest keep layout.css / layout.js
+    const [css, js] = { 'phone:orb': ['phone-boot.css', 'phone.js'], 'desktop:ai-apps': ['desktop-boot.css', 'desktop.js'] }[shell + ':' + id] || ['layout.css', 'layout.js'];
+    if (css) assert.ok(f.boot.css.some(h => h.includes('/layouts/' + id + '/' + css)));
+    else assert.ok(!f.boot.css.some(h => h.includes('/layouts/' + id + '/')), 'no blocking sheet for a layout that brings its own');
+    assert.ok(f.imports.some(h => h.includes('/layouts/' + id + '/' + js)));
+    assert.equal(f.imports.filter(h => h.includes('/layouts/')).length, 1, 'one entry import, never the other shell\'s');
     assert.equal(f.lsMap.get('wos.layout'), id);
   });
 }

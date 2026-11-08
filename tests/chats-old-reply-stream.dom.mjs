@@ -41,7 +41,7 @@ function harness({ status = 'running', pending = false, transcript = rows } = {}
   };
   win.WizConfig = { agent: () => 'Fixture Wizard', timeZone: () => 'Asia/Tokyo', dayStart: now => Math.floor(now / 86400000) * 86400000 };
   win.WizBrand = { html: '' };
-  for (const file of ['core/core.js', 'core/chat-kit.js', 'live.js', 'core/chats.js']) win.eval(source(file));
+  for (const file of ['core/core.js', 'core/chat-kit.js', 'core/chats-list-model.js', 'live.js', 'core/chats.js']) win.eval(source(file));
   const live = win.WizLive;
   live.sessions = [{ id: SID, runtime: 'direct', title: 'Old replay fixture', status, runId: pending ? 'run-B' : 'run-A', updatedAt: new Date().toISOString() }];
   const items = pending ? [{ id: 'old-send', kind: 'reply', state: 'sent', runId: 'run-A', sessionId: SID, text: 'What is that file?', files: [], sentAt: Date.now() - 30000, createdAt: Date.now() - 35000 }] : [];

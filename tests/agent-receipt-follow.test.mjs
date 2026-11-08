@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -9,9 +10,9 @@ test('direct thread detail learns the server agent before the first scoped histo
   const pins = new Map(), detail = new Map();
   const body = src.slice(src.indexOf('    async sessionInfo(id) {'), src.indexOf('    /* ---- thread actions ---- */'));
   const L = { agentSessions: {}, sessions: [], windows: {}, agentOf: id => pins.get(id) || '' };
-  const c = { L, AGENT_OF: pins, DETAIL: detail, otherAgent: id => id && id !== 'hermes', normalize: raw => raw,
+  const c = { L, titleRead:0, applyTitle() {}, AGENT_OF: pins, DETAIL: detail, otherAgent: id => id && id !== 'hermes', normalize: raw => raw,
     aq: () => '', applyLocal: () => {}, req: async () => ({ json: async () => ({ session: { id: 'quick-thread', agent: 'quick', wizard_retry_input: 'hello' } }) }) };
-  vm.runInNewContext(`L.sessionInfo = ({${body}}).sessionInfo`, c);
+  runWithChatsModel(`L.sessionInfo = ({${body}}).sessionInfo`, c);
   await L.sessionInfo('quick-thread');
   assert.equal(pins.get('quick-thread'), 'quick');
   assert.equal(L.agentSessions.quick[0].id, 'quick-thread');
@@ -31,7 +32,7 @@ test('accepted agent receipt is polled in its own scope and completion refreshes
     syncPending: () => false, otherAgent: id => id && id !== 'hermes', setTimeout: fn => timers.push(fn),
     req: async url => { calls.push(url); return { json: async () => ({ run_id: 'run-quick', session_id: 'thread', status }) }; } };
   const body = src.slice(src.indexOf('  function attachOutbox() {'), src.indexOf("  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox)"));
-  vm.runInNewContext(body + '\nattachOutbox();', c);
+  runWithChatsModel(body + '\nattachOutbox();', c);
   onSent({ id: 'send-quick', kind: 'new', agent: 'quick', sessionId: 'thread', runId: 'run-quick' });
   await settle();
   assert.deepEqual(calls, ['/wizard/hermes/v1/runs/run-quick?agent=quick']);

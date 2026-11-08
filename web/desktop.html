@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="core/scheduled-reminders.css">
   <link rel="stylesheet" href="core/chats-view.css">
   <link rel="stylesheet" href="core/chat-power.css">
+  <link rel="stylesheet" href="core/thread-tracker.css">
   <link rel="stylesheet" href="core/resources.css">
   <link rel="stylesheet" href="core/polish.css">
   <link rel="stylesheet" href="core/context-menu.css">
@@ -38,10 +39,12 @@
   <link rel="stylesheet" href="core/own-views.css">
   <link rel="stylesheet" href="core/update-banner.css">
   <link rel="stylesheet" href="core/links.css">
+  <link rel="stylesheet" href="core/downloads.css">
   <link rel="stylesheet" href="core/appearance-host.css">
   <link rel="stylesheet" href="core/sigils.css">
   <link rel="stylesheet" href="core/app-route.css">
   <link rel="stylesheet" href="core/skins.css">
+  <script src="core/escape-back.js"></script>
   <script src="core/skin-host.js"></script>
   <script type="module" src="core/thread-swipe-back.js"></script>
   <script src="core/edge-peek.js"></script>
@@ -56,7 +59,7 @@
   <header id="bar" class="bar">
     <div class="bar-l">
       <div class="bar-start" data-slot="bar-start"></div>
-      <button id="logo" class="logo" title="Home (⌥`)" aria-label="Home" aria-keyshortcuts="Alt+`" aria-current="false"><span class="desktop-home-icon" style="--c:#C9BEFF"><i class="sgi sg-home" aria-hidden="true"></i></span></button>
+      <button id="logo" class="logo" title="Home (⌥`)" aria-label="Home" aria-keyshortcuts="Alt+`" aria-current="false"><span class="desktop-home-icon" style="--c:color(srgb 0.78823529 0.74509804 1)"><i class="sgi sg-hat" aria-hidden="true"></i></span></button>
       <nav id="wsList" class="ws-list" aria-label="Workspaces"></nav>
     </div>
     <div class="bar-c">
@@ -101,6 +104,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="core/core.js"></script>
+  <script src="core/pane-layout.js"></script>
   <script src="core/config.js"></script>
   <script src="core/reach.js"></script>
   <script src="core/status.js"></script>
@@ -127,6 +131,7 @@
   <script src="core/app-setup.js"></script>
   <link rel="stylesheet" href="core/app-setup.css">
   <script src="core/web-update.js"></script>
+  <script src="core/chats-list-model.js"></script>
   <script src="live.js"></script>
   <script src="outbox.js"></script>
   <script src="core/share-sheet.js"></script>
@@ -134,6 +139,7 @@
   <script src="core/composer-input.js"></script>
   <script src="core/attach-chip.js"></script>
   <script src="core/chat-pins.js"></script>
+  <script src="core/thread-tracker.js"></script>
   <script src="core/chat-topic-emojis-data.js"></script>
   <script src="core/chat-topic-emojis.js"></script>
   <script src="core/chat-models.js"></script>
@@ -163,10 +169,12 @@
   <script src="core/mic.js"></script>
   <script src="core/os-updates.js"></script>
   <script src="core/box-source.js"></script>
+  <script src="core/disk-status.js"></script>
   <script src="core/schedules.js"></script>
   <script src="core/own-views.js"></script>
   <script src="core/screen-text.js"></script>
   <script src="core/links.js"></script>
+  <script src="core/downloads.js"></script>
   <script src="core/voice.js"></script>
   <script src="core/bridge.js"></script>
   <script src="core/focused-field.js"></script>
@@ -184,6 +192,7 @@
   <script src="core/tour.js"></script>
   <script src="core/setup-launch.js"></script>
   <script src="core/welcome.js"></script>
+  <script src="core/desktop-host.js"></script>
   <script src="desktop/desktop.js"></script>
 </body>
 </html>

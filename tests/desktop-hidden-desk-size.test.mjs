@@ -30,7 +30,7 @@ function harness({ mono = [false, false], wins = [['a'], ['b']], home = false, b
     wsEl: i => hosts[i], winEl: id => nodes[id],
     splitOf: d => d.split, toggleMono() {},
   });
-  vm.runInContext(source, ctx);
+  vm.runInContext(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8') + '\nconst C = globalThis.WizCore;\n' + source, ctx);
   return { ctx, nodes, body, hosts, reads, writes, run: () => vm.runInContext('layout()', ctx) };
 }
 

@@ -1,3 +1,4 @@
+[data-settings-working-order] { font: inherit; font-size: 0.8125rem; max-width: 48%; color: var(--wz-text); background: var(--wz-surface); border: 1px solid var(--wz-border); border-radius: 8px; padding: 6px; }
 /* Schedules uses the existing Settings cards and confirmation sheet in both shells. */
 .sc-group > .st-actions { margin: 0 0 16px; }
 .sc-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }

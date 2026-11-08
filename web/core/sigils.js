@@ -16,14 +16,14 @@
  */
 (() => {
   'use strict';
-  const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "card", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "dollar", "eye", "files", "gauge", "globe", "heart", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "news", "notes", "pages", "pin", "podcast", "profile", "projects", "recall", "scope", "search", "secret", "shield", "side", "signal", "social", "spark", "tag", "track", "usuals", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents']);
-  // Colours are stored without '#' so this generated table holds no literal colour (style gate); added back here.
-  const HOUSE = Object.fromEntries(Object.entries({"calendar":["calendar","FE98AB"],"mizel":["mic","FE9C8C"],"shopping":["bag","FFA15C"],"wisdom":["wisdom","FEC25D"],"cinequeue":["cine","E9CF06"],"trackhunt":["track","ABE355"],"android-apps":["android","50DA79"],"topics":["eye","0ED8BB"],"messenger":["chats","00D6CF"],"wizard-signal":["signal","0AD3E3"],"meditation":["meditate","12CFF6"],"files":["files","56C8FE"],"wizard-search":["search","81B7FF"],"projects":["projects","A0AEFE"],"wizard":["hat","C1AAFF"],"social":["social","EF90FE"],"wizard-music":["music","FF8FD3"],"iching":["iching","E5C9A3"],"console":["console","A9B6C4"],"legacy-wizard":["wizard","BDB5D8"],"v-day":["day","FF9F6D"],"v-week":["week","D6A0FE"],"v-month":["month","99B5E8"],"v-inbox":["inbox","11DBA2"],"usuals":["usuals","FE9E79"],"side-button":["side","C1B1E1"],"maps":["pin","CDDA2D"],"app-store":["apps","ABA9FE"],"system":["gauge","83C9CC"],"notifications":["bell","FEC076"],"morning-report":["coffee","FF9F71"],"news":["news","FE9A9D"],"wizard-calendar":["calendar","FE98AB"],"secret-drop":["secret","05D6CE"],"browser":["globe","11CFF9"],"transcriber":["wave","F98CF1"],"wizard-chatgpt":["spark","06DC92"],"wizard-claude":["burst","FF9C89"],"wizard-agent-service":["hub","88B9EC"],"wizard-tinfoil":["shield","A1C0CF"],"wizard-cloudflare":["cloud","FFA245"],"wizard-shopping":["bag","FFA15C"],"sniper":["scope","FB99B2"],"card-benefits":["card","65D86D"],"money":["dollar","75D291"],"second-hand":["tag","C4DD39"],"profiles":["profile","C1AAFF"],"defleur-video":["clip","94B1FF"],"wizard-podcasts":["podcast","FBC60E"],"notes":["notes","FF94BD"],"wizard-notes":["notes","FF94BD"],"morning":["coffee","FF9F71"],"wizard-files":["files","56C8FE"],"photos":["image","68BCFF"],"troubleshooter":["wrench","7CCCC2"],"wizard-ux":["wizard","A9AEED"],"agents":["agents","9BB1F5"],"wizard-mail":["mail","09D0F0"],"wizard-microsoft":["mail","7ABEE6"],"wizard-google":["mail","77CEB8"],"smart-home":["home","0FD6CB"],"wizard-health":["heart","FE99A6"],"wizard-apple-health":["heart","FA99B4"],"wizard-whoop":["heart","DFACA8"],"wizard-oura":["heart","B9B4E5"],"wizard-garmin":["heart","81C6E2"],"wizard-polar":["heart","E3A6C2"],"wizard-coros":["heart","E8AA94"],"wizard-fitbit":["heart","85CCB3"],"wizard-withings":["heart","8DC7CA"],"wizard-youtube-music":["music","FB99B2"],"wizard-monarch":["dollar","C7D69B"],"wizard-simplefin":["dollar","92C8B9"],"wizard-brightdata":["globe","83BCE2"],"wizard-twitterapi":["social","84C7D3"],"backup":["cloud","6CC9EA"],"contacts":["social","FF8BE5"],"carlos-crm-demo":["social","C2AFE7"],"maverick-command":["console","EAAB78"],"pr-board":["projects","8DCBA9"],"setup":["wrench","9EB5DB"]}).map(([id, [glyph, hex]]) => [id, [glyph, '#' + hex]]));
+  const NAMES = new Set([...["android", "apps", "bag", "bank", "bell", "bolt", "burst", "calendar", "camera", "card", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "dollar", "eye", "files", "foot", "gauge", "globe", "heart", "home", "hub", "iching", "image", "inbox", "letter", "mail", "meditate", "mic", "month", "music", "news", "notes", "pages", "pages-chart", "pages-stack", "pin", "podcast", "profile", "projects", "recall", "recorder", "router", "scope", "seal", "search", "secret", "setup", "shelf", "shield", "side", "signal", "social", "spark", "tag", "tasks", "tasks-check", "track", "usuals", "voice", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents', 'hermes']);
+  const colour = value => `#${value}`;
+  const HOUSE = Object.fromEntries(Object.entries({"calendar":["calendar","FE98AB"],"mizel":["mic","FE9C8C"],"shopping":["bag","FFA15C"],"wisdom":["wisdom","FEC25D"],"cinequeue":["cine","E9CF06"],"trackhunt":["track","ABE355"],"android-apps":["android","50DA79"],"topics":["eye","0ED8BB"],"messenger":["chats","00D6CF"],"wizard-signal":["signal","0AD3E3"],"meditation":["meditate","12CFF6"],"files":["files","56C8FE"],"wizard-search":["search","81B7FF"],"projects":["projects","A0AEFE"],"wizard":["hermes","7A5CFF"],"social":["social","EF90FE"],"wizard-music":["music","FF8FD3"],"iching":["iching","E5C9A3"],"console":["console","A9B6C4"],"legacy-wizard":["wizard","BDB5D8"],"v-day":["day","FF9F6D"],"v-week":["week","D6A0FE"],"v-month":["month","99B5E8"],"v-inbox":["inbox","F6C90F"],"usuals":["usuals","FE9E79"],"side-button":["side","C1B1E1"],"maps":["pin","CDDA2D"],"app-store":["apps","7A5CFF"],"system":["gauge","83C9CC"],"notifications":["bell","FEC076"],"morning-report":["coffee","FF9F71"],"news":["news","FE9A9D"],"wizard-calendar":["calendar","FE98AB"],"secret-drop":["secret","05D6CE"],"browser":["globe","11CFF9"],"transcriber":["wave","F98CF1"],"wizard-chatgpt":["spark","06DC92"],"wizard-claude":["burst","FF9C89"],"wizard-agent-service":["hub","88B9EC"],"wizard-tinfoil":["shield","A1C0CF"],"wizard-cloudflare":["cloud","FFA245"],"wizard-shopping":["bag","FFA15C"],"sniper":["scope","FB99B2"],"card-benefits":["card","65D86D"],"money":["dollar","75D291"],"second-hand":["tag","C4DD39"],"profiles":["profile","7A5CFF"],"defleur-video":["clip","94B1FF"],"wizard-podcasts":["podcast","FBC60E"],"notes":["notes","FF94BD"],"wizard-notes":["notes","FF94BD"],"morning":["coffee","FF9F71"],"wizard-files":["files","56C8FE"],"photos":["image","68BCFF"],"troubleshooter":["wrench","7CCCC2"],"wizard-ux":["wizard","A9AEED"],"agents":["agents","7A5CFF"],"messages":["chats","00D6CF"],"recorder":["recorder","FE9C8C"],"sasquatch":["foot","0CD9AF"],"tasks":["tasks","ABE355"],"knowledge":["shelf","94B1FF"],"setup":["setup","C1B1E1"],"settings":["setup","C1B1E1"],"wizard-connection-router":["router","7AC9D7"],"wizard-simplefin":["bank","D2D826"],"wizard-google":["search","75BAFF"],"wizard-youtube-music":["music","FE93C4"],"wizard-voice-service":["voice","E696FF"],"wizard-mail":["mail","09D0F0"],"wizard-microsoft":["mail","7ABEE6"],"smart-home":["home","0FD6CB"],"wizard-health":["heart","FE99A6"],"wizard-apple-health":["heart","FA99B4"],"wizard-whoop":["heart","DFACA8"],"wizard-oura":["heart","B9B4E5"],"wizard-garmin":["heart","81C6E2"],"wizard-polar":["heart","E3A6C2"],"wizard-coros":["heart","E8AA94"],"wizard-fitbit":["heart","85CCB3"],"wizard-withings":["heart","8DC7CA"],"wizard-monarch":["dollar","C7D69B"],"wizard-brightdata":["globe","83BCE2"],"wizard-twitterapi":["social","84C7D3"],"backup":["cloud","6CC9EA"],"contacts":["social","FF8BE5"],"carlos-crm-demo":["social","C2AFE7"],"maverick-command":["console","EAAB78"],"pr-board":["projects","8DCBA9"]}).map(([id, [glyph, color]]) => [id, [glyph, colour(color)]]));
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries({"movies":"cinequeue","food":"usuals","meditate":"meditation"})) HOUSE[id] = HOUSE[old];
 
-  const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
-  const FALLBACK = ["#FE9A9A", "#FFA332", "#D2D826", "#1DDC8D", "#07D4D6", "#4CCAFF", "#94B1FF", "#C7A8FE", "#FE8AEA"];
+  const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes","wizard-google":"google","wizard-youtube-music":"youtube-music"};
+  const FALLBACK = ["FE9A9A", "FFA332", "D2D826", "1DDC8D", "07D4D6", "4CCAFF", "94B1FF", "C7A8FE", "FE8AEA"].map(colour);
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
   // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).
   const ICON = /^\/(?!\/)[A-Za-z0-9._~\/-]+\.(?:svg|png|webp)$/;
@@ -112,5 +112,64 @@
   // A sigil that isn't an app (search rows, the command row): glyph name + colour.
   function chip(tag, cls, glyph, color) { return `<${tag} class="${cls ? cls + ' ' : ''}sgt" style="--c:${color}">${named(glyph)}</${tag}>`; }
 
-  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
+  // Orb identity is a white glyph, NOT the package tile used by launchers.
+  // Keep this opt-in at the consumer: ordinary app icons must remain untouched.
+  const orbMasks = new Map();
+  function whitePixels(data, width, height) {
+    const out = new Uint8ClampedArray(data.length);
+    // Sample just inside each edge, avoiding rounded transparent corners. A
+    // transparent glyph keeps its alpha; an opaque tile loses its background.
+    const at = (x, y) => (y * width + x) * 4;
+    const edge = [[.5,.06],[.5,.94],[.06,.5],[.94,.5]].map(([x,y]) => at(Math.min(width-1,Math.floor(x*width)),Math.min(height-1,Math.floor(y*height))));
+    let transparent = 0; for (let i = 3; i < data.length; i += 4) if (data[i] < 16) transparent++;
+    const opaque = transparent > width*height*.1 ? [] : edge.filter(i => data[i+3] > 240);
+    const bg = [0,1,2].map(c => opaque.map(i => data[i+c]).sort((a,b)=>a-b)[Math.floor(opaque.length/2)] || 0);
+    for (let i = 0; i < data.length; i += 4) {
+      const distance = Math.hypot(data[i]-bg[0],data[i+1]-bg[1],data[i+2]-bg[2]);
+      const alpha = opaque.length >= 3 ? Math.max(0,Math.min(1,(distance-48)/40)) : 1;
+      out[i] = out[i+1] = out[i+2] = 255; out[i+3] = Math.round(data[i+3]*alpha);
+    }
+    return out;
+  }
+  function orb(node) {
+    if (!node) return;
+    const paint = (el, raster = false) => {
+      el.dataset.orbGlyph = '';
+      for (const [key,value] of Object.entries({background:raster?'none':'white',filter:'none',color:'white','border-radius':'0','box-shadow':'none'})) el.style.setProperty(key,value,'important');
+      if (raster) for (const key of ['mask','-webkit-mask']) el.style.setProperty(key,'none','important');
+    };
+    node.querySelectorAll('.sgi,.sglogo').forEach(el => {
+      if (el.hasAttribute('data-orb-glyph')) return;
+      const raster = el.classList.contains('sglogo') || el.classList.contains('sgimg');
+      if (!raster) { paint(el); return; }
+      const property = el.classList.contains('sglogo') ? '--logo' : '--sg';
+      const raw = el.style.getPropertyValue(property), match = /^url\(['"]?(.*?)['"]?\)$/.exec(raw);
+      // Fail closed to an existing white app glyph, never show the coloured tile
+      // while loading, or on an unsafe URL/decode/canvas failure.
+      const fallback = el.ownerDocument.createElement('i'); fallback.className = 'sgi sg-apps'; paint(fallback); el.replaceWith(fallback);
+      const src = match?.[1]; if (!src || !(ICON.test(src) || LOGO.test(src))) return;
+      if (!orbMasks.has(src)) {
+        if (orbMasks.size >= 128) orbMasks.delete(orbMasks.keys().next().value);
+        orbMasks.set(src, new Promise(resolve => {
+          const image = new Image(); image.onload = () => {
+            try {
+              const canvas = node.ownerDocument.createElement('canvas');
+              const scale = Math.min(128/image.naturalWidth,128/image.naturalHeight);
+              canvas.width = Math.max(1,Math.round(image.naturalWidth*scale)); canvas.height = Math.max(1,Math.round(image.naturalHeight*scale));
+              const ctx = canvas.getContext('2d', {willReadFrequently:true});
+              ctx.drawImage(image,0,0,canvas.width,canvas.height);
+              const pixels = ctx.getImageData(0,0,canvas.width,canvas.height); pixels.data.set(whitePixels(pixels.data,canvas.width,canvas.height)); ctx.putImageData(pixels,0,0);
+              resolve(canvas.toDataURL());
+            } catch (_) { resolve(null); }
+          }; image.onerror = () => resolve(null); image.src = src;
+        }));
+      }
+      orbMasks.get(src).then(url => {
+        if (!url || !node.contains(fallback)) return; // stale desk/icon decode
+        const image = node.ownerDocument.createElement('img'); image.alt = ''; image.className = 'sgi sg-orb-raster'; paint(image,true); image.style.objectFit = 'contain'; image.style.width = fallback.style.width; image.style.height = fallback.style.height; image.src = url; fallback.replaceWith(image);
+      });
+    });
+  }
+
+  window.WizSigil = { of, html, named, box, chip, orb, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
 })();

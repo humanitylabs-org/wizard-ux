@@ -20,7 +20,7 @@ test('notification-only Ready survives an empty default main-agent Chats list', 
   assert.ok(src.indexOf('const listNotes =') < src.indexOf('else if (filtered && !hit.length'));
 });
 
-test('Home Ready counts unread and snoozed notification rows but not completed rows or an off inbox', async () => {
+test('Ready inventory retains unread and snoozed notification rows but not completed rows or an off inbox', async () => {
   let items=[{id:'unread',read:false},{id:'snoozed',read:true},{id:'done',archived:true}], events=[];
   const window={WosSkinHost:{inboxList:true},WizCore:{backendApps:()=>[{id:'notifications'}]},dispatchEvent:e=>events.push(e.type)};
   const ctx={window,document:{querySelectorAll:()=>[],addEventListener(){}},location:{origin:'https://wizard.example.test'},addEventListener(){},setInterval(){},setTimeout(){},CustomEvent:class{constructor(type){this.type=type;}},fetch:async url=>({ok:true,json:async()=>url.includes('/items')?{items}:{unread:1,needs:1}})};
@@ -34,11 +34,11 @@ test('Home Ready counts unread and snoozed notification rows but not completed r
   await bell.mark(['unread','snoozed'],{archived:true}); assert.equal(bell.readyCount(),0);
 });
 
-test('Home retains the notification Ready inventory; phone and desktop publish Chats through the shared unread projection', () => {
-  // Ready's action inventory remains on Home, never on a notification badge.
-  for(const [file,n] of [['web/app.js',1],['web/desktop/desktop.js',0]]) {
+test('Home and both shells use the shared unread projection, never the notification Ready inventory', () => {
+  for(const file of ['web/app.js','web/desktop/desktop.js']) {
     const src=read(file);
-    assert.equal((src.match(/\+ \(window\.WosBell\?\.readyCount\?\.\(\) \|\| 0\)/g)||[]).length,n,file);
+    assert.doesNotMatch(src,/\+ \(window\.WosBell\?\.readyCount\?\.\(\) \|\| 0\)/,file);
+    assert.match(src,/workspaceNav\.chatsCount\(LIVE\)/);
     assert.match(src,/workspaceNav\.refreshChats\(LIVE,/);
     assert.match(src,/addEventListener\('wizard:notifications',/);
   }

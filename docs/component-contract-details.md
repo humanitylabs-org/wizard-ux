@@ -58,7 +58,8 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) | device-local pin lists |
 | Snooze thread/message: relative dates, Someday, Other date… last; success via threadBack | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
-| Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
+| Thread tracker answered rule | `WosThreadTracker` (`thread-tracker.js`): amber/red answered once the owner's latest message (session `lastUserAt`, or a newer shown user bubble or steer via `shown()` from Chats) is newer than the anchor reply (any device; local send tokens paint instantly) | own answered state |
+| Durable send, saved Retry, failed Dismiss; >6h hold; a steer refused (409 `run_not_accepting_steer`) while the run works waits/re-steers (queued run) or sends the idempotent same-thread follow-up (started run) | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) | — |
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) | shared/native import; separate comment, agent + chat; durable |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |

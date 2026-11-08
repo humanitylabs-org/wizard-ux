@@ -42,7 +42,7 @@ test('desktop and phone show first-observed interface revision and installed ser
     assert.doesNotMatch(root.innerHTML, /<details data-settings-technical open|code this document loaded|the Android app update separately/);
     assert.match(root.innerHTML, /Wizard OS \(server\) 0\.3\.15/);
     assert.doesNotMatch(root.innerHTML, /data-settings-observed-full[^>]*>bbbb/);
-    assert.match(root.innerHTML, /data-osu="auto"/); assert.match(root.innerHTML, /data-osu="ask"/);
+    assert.match(root.innerHTML, /data-osu-auto/); assert.match(root.innerHTML, /data-osu="auto"[^>]*>Automatic<\/button><button type="button" data-osu="ask"[^>]*>Ask me</, 'Automatic / Ask me in both shells (wizard-app-manager#483)'); assert.match(root.innerHTML, /data-osu="ch-latest"[^>]*>For testers</);
   }
 });
 test('native data is rendered by the same registered About owner, never a shell-specific markup callback', async () => {
@@ -76,10 +76,10 @@ test('retry reads the original connector and only a verified response restores c
   const {s,calls} = await harness(() => online ? [200,status] : [404,{}]);
   online = true;
   s.WosUpdates.act({closest: () => ({ dataset: { osu: 'retry' } })}, {});
-  assert.doesNotMatch(s.WosUpdates.html(), /data-osu="ask"/, 'stale controls cannot flash during retry');
+  assert.doesNotMatch(s.WosUpdates.html(), /data-osu-auto|data-osu="ch-/, 'stale controls cannot flash during retry');
   assert.match(s.WosUpdates.html(), /disabled aria-busy="true"[^>]*>Checking…/, 'retry acknowledges the tap before the read resolves');
   await tick(); await tick();
-  assert.match(s.WosUpdates.html(), /data-osu="ask"/);
+  assert.match(s.WosUpdates.html(), /data-osu-auto/);
   const updates = calls.filter(c => c.url.endsWith('/store-install/_updates'));
   assert.equal(updates.length, 2); assert.equal(updates[1].url, updates[0].url);
   assert.equal(calls.filter(c => c.method === 'POST').length, 0);

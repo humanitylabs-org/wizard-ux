@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -24,7 +25,7 @@ function harness() {
       const value = replies.get(key);
       return { ok: !!value, status: 404, json: async () => ({ session: value }) };
     } };
-  c.window = c; vm.runInNewContext(src, c);
+  c.window = c; runWithChatsModel(src, c);
   return { L: c.WizLive, c, calls, replies, agents, peak: () => peak, advance: ms => { now += ms; } };
 }
 const row = (id, agent = '', extra = {}) => ({ id, title: id, status: 'completed', agent, last_active: Date.now()/1000 - 20*86400, ...extra });

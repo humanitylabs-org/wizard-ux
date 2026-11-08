@@ -24,8 +24,9 @@ test('view mount preserves the same Settings modal/page while classic navigation
 });
 test('AI apps sets the everywhere-modal contract before preparing its Home chat', () => {
   const ai=readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url),'utf8');
-  const at=ai.indexOf("root.dataset.settingsOver = '';");
-  assert.ok(at>=0 && at<ai.lastIndexOf('if (api.route().home) soon(() => api.sessions.newChat());'));
+  const at=ai.indexOf('const releaseSettings = host?.settings.overlay();');
+  assert.match(source, /settingsOverlay: \(\) => \{/);
+  assert.ok(at>=0 && at<ai.lastIndexOf('if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });'));
   assert.match(source,/scrim.addEventListener\('click', \(\) => closeSettings\(\)\)/);
-  assert.match(source,/if \(settingsFocused\(\)\) \{ if \(settingsView.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
+  assert.match(source,/watchEscape\('settings', \(\) => settingsFocused\(\), \(\) => \{ if \(settingsView.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
 });

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ function device(req, initial = {}) {
   const ctx = { req, console, Event: class { constructor(type) { this.type = type; } }, setInterval() {},
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
     addEventListener: (k, fn) => handlers[k] = fn };
-  ctx.window = { dispatchEvent: e => events.push(e.type) }; vm.createContext(ctx);
+  ctx.window = { dispatchEvent: e => events.push(e.type) }; modelContext(ctx);
   vm.runInContext(live.slice(live.indexOf("  const PREFS_URL ="), live.indexOf('  const sectionTime =')) + '\nthis.api = { pullPrefs, putPrefs };', ctx);
   return { ...ctx.api, store, events, handlers };
 }
@@ -18,10 +19,11 @@ test('archive, Compact, Newest/Oldest and subject ordering synchronize to a fres
   let state = { archiveAfterDays: 7, compact: false, readyOrder: 'newest', subjectOrder: [] };
   const req = async (url, init = {}) => { assert.equal(url, '/wizard/v1/ui-preferences'); if (init.method === 'PUT') state = { ...state, ...JSON.parse(init.body) }; return { ok: true, json: async () => ({ ...state }) }; };
   const a = device(req); await tick();
-  await a.putPrefs({ archiveAfterDays: 0, compact: true }); await a.putPrefs({ readyOrder: 'oldest', subjectOrder: ['Work', 'Home'] });
+  await a.putPrefs({ archiveAfterDays: 0, compact: true }); await a.putPrefs({ readyOrder: 'oldest', workingOrder: 'oldest', subjectOrder: ['Work', 'Home'] });
   const b = device(req); await tick();
   assert.equal(b.store.get('wos.chats.archiveAfter.v1'), '0'); assert.equal(b.store.get('wos.chats.compact.v1'), '1');
   assert.equal(b.store.get('wos.chats.readyOrder.v1'), 'oldest'); assert.equal(b.store.get('wos.chats.subjectOrder.v1'), '["Work","Home"]');
+  assert.equal(b.store.get('wos.chats.workingOrder.v1'), 'oldest');
   assert.ok(b.events.includes('wos:prefs'));
 });
 test('old or unavailable service preserves local choices; failed writes are not silently called saved', async () => {

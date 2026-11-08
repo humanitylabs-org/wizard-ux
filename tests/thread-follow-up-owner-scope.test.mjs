@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // A main thread and a routed agent thread can share one id. Every watcher control must act on the row the owner
 // pressed, never on whichever owner an id-only lookup happens to find first.
 import test from 'node:test';
@@ -25,7 +26,7 @@ function harness({ stopped = 1 } = {}) {
     setTimeout: () => 0,
     req: async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return { json: async () => ({ ok: true, stopped }) }; },
   };
-  vm.createContext(ctx);
+  modelContext(ctx);
   const rows = slice(live, '    session(id) {', '    chatUrl(id)');
   const stop = slice(live, '    async stopWatching(id, agent) {', '    async _defer(id, deferred)');
   const agentOf = slice(live, '    agentOf(id) {', '    pinAgent(id, agent)');
@@ -112,7 +113,7 @@ test('Chats windows resolve their own row before acting and Stop scopes to that 
     focusedAgent: f => f?.kind === 'agent' ? f.key : '',
     focusOf: w => (w?.focus && ['agent', 'space'].includes(w.focus.kind) ? w.focus : null) };
   const mainOnly = { id: 'M', status: 'completed' }; ctx.LIVE.sessions.push(mainOnly);
-  vm.createContext(ctx);
+  modelContext(ctx);
   vm.runInContext(`${winAgent}\nthis.api = { winAgent, rowOf };`, ctx);
   assert.equal(ctx.api.rowOf('mainWin', 'X'), ctx.LIVE.sessions[0]);
   assert.equal(ctx.api.rowOf('routedWin', 'X'), ctx.LIVE.agentSessions[ROUTED][0]);

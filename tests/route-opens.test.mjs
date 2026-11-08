@@ -79,6 +79,17 @@ test('on: the layout places opens; go() is the stock way and its value comes bac
   assert.equal(api.apps.path('files', '/files/b'), false, 'stale handles are inert');
 });
 
+test('a routed app can place its original checked opener on a desk exactly once', async () => {
+  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('orb'); await H.host.whenLayoutReady();
+  H.adapter.openAppDesk = (id, place) => { assert.equal(id, 'app-store'); return place(3); };
+  H.api.apps.routeOpens({ open(kind, d, go) { H.api.apps.openDesk(d.id, go); go(7); return true; } });
+  const placed = [];
+  const result = H.host.routeOpen('app', { id: 'app-store' }, desk => { placed.push(desk); return true; });
+  assert.deepEqual(placed, [3]); assert.equal(result.value, true);
+  H.host.setLayout('classic'); await H.host.whenLayoutReady();
+  assert.equal(H.api.apps.openDesk('app-store', () => assert.fail('stale API')), false);
+});
+
 test('the layout API lists the new app hooks (and only layouts get them)', async () => {
   const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('orb'); await settle();
   for (const k of ['routeOpens', 'path', 'openLink']) assert.equal(typeof H.api.apps[k], 'function', k);
@@ -90,7 +101,7 @@ test('every shell entry point asks the layout first, with the stock path as its 
   const R = "window.WosSkinHost?.routeOpen?.(";
   // a notification's Open (inboxAct 'app' -> WizOpenApp), the Morning button, the launcher, commands: WizOpenApp / openApp
   assert.match(src, /const go = \(\) => !!newWin\(\{ app: 'frame', appId: id, url: rel, workflow: true, returnWid: ws\[cur\]\.focus \}\);\n\s*\/\/[^\n]*\n\s*const r = window\.WosSkinHost\?\.routeOpen\?\.\('app', \{ id, path: rel \}, go\); if \(r\) return true;\n\s*return go\(\);/);
-  assert.ok(src.includes(`if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && ${R}'app', { id: a.id, path: '' }, () => openApp(a, opts))) return true;`), 'openApp: an app (never a given desk) where the layout shows apps');
+  assert.ok(src.includes(`if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && ${R}'app', { id: a.id, path: opts.path || '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;`), 'openApp: an app (never a given desk) where the layout shows apps, at a spoken route\'s page when given');
   // a link tapped in a reply (chats.js H.openLink -> openAppLink)
   assert.ok(src.includes(`const r = ${R}'link', { url, title: String(title || ''), app: a ? a.id : '' }, go); if (r) return true;`));
   // a page link anywhere in the shell (core/links.js: a reply's link no app owns, a link inside an app)

@@ -8,6 +8,8 @@
 const { chromium } = require('./tools/qa-playwright.cjs');
 const BASE = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const RESOLVE = process.env.QA_RESOLVE || '';
+const AFTER = process.env.QA_AFTER_ACTION || 'stay';
+if (!['stay','list'].includes(AFTER)) throw Error('QA_AFTER_ACTION must be stay or list');
 const WD = process.env.QA_WEB_DIR || '';
 const SHOTS = process.env.QA_SHOTS || '';
 const fs = require('fs'), path = require('path');
@@ -16,6 +18,12 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
 const MIME = f => f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript';
 
 async function boot(b, { desktop = false, hold = false } = {}) {
+  if (process.env.QA_SYNTHETIC === '1') {
+    const fixture = require('./tools/qa-closed-shell.cjs'); fixture.setBrowser(b);
+    const R = { hold, answer: { cmd: { route: 'view' }, ms: 5 } };
+    const { c: ctx, s } = await fixture.boot(!desktop, null, null, { after: AFTER, hold, router: R });
+    return { ctx, p: fixture.getPage(), writes: s.actionWrites, errs: fixture.report.errors, R };
+  }
   const ctx = await b.newContext(desktop ? { viewport: { width: 1440, height: 900 }, ignoreHTTPSErrors: true }
     : { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, executablePath: process.env.QA_CHROME });
   const writes = []; const R = { hold, answer: { cmd: { route: 'view' }, ms: 5 } };
@@ -40,7 +48,7 @@ async function boot(b, { desktop = false, hold = false } = {}) {
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', e => { const st = String(e.stack || ''); if (/wizard-os-home\//.test(st) || !/https?:\/\//.test(st)) errs.push(String(e)); });
-  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); } catch (e) {} });
+  await p.addInitScript(after => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.chats.afterAction.v1', after); } catch (e) {} }, AFTER);
   await p.goto(BASE + (desktop ? 'desktop.html' : ''), { waitUntil: 'load' });
   if (desktop) await p.waitForFunction(() => window.__wux && window.WosLive?.ok !== false, null, { timeout: 30000 });
   else await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 });
@@ -78,7 +86,8 @@ async function typeAndSend(p, wid, text) {
     ok(runs(writes).some(w => w.body.includes('QA send and go typed reply')), 'typed reply: delivered to Wizard', JSON.stringify(writes.map(w => w.u)));
     ok(runs(writes).some(w => w.body.includes(tid) || w.u.includes(tid)) || runs(writes).some(w => /steer|\/v1\/runs$/.test(w.u)), 'typed reply: went to the thread it was typed in');
     ok(!runs(writes).some(w => /\/api\/sessions$/.test(w.u)), 'typed reply: no new thread was created');
-    ok((await threadOf(p, wid)) === null, 'typed reply: window pops back to the chat list', String(await threadOf(p, wid)));
+    ok((await threadOf(p, wid)) === (AFTER === 'list' ? null : tid), 'typed reply: follows ' + AFTER + ' setting', String(await threadOf(p, wid)));
+    if (AFTER === 'stay') await p.locator(`.win[data-win="${wid}"] [data-chback]`).first().tap();
     ok(await p.locator(`.win[data-win="${wid}"] .ch-row`).count() > 0, 'typed reply: the list is on screen');
     ok(await p.evaluate(() => __wos.idx) === 1, 'typed reply: stays on the Chats desk');
     // Back from the list after a send: the app stays open (Back never exits).
@@ -95,7 +104,8 @@ async function typeAndSend(p, wid, text) {
     ok((await threadOf(p, wid)) === '__new__', 'phone: New chat composer is open');
     await typeAndSend(p, wid, 'QA send and go new chat');
     ok(runs(writes).some(w => w.body.includes('QA send and go new chat')), 'new chat: delegated');
-    ok((await threadOf(p, wid)) === null, 'new chat: window pops back to the chat list', String(await threadOf(p, wid)));
+    const current = await threadOf(p, wid);
+    ok(AFTER === 'list' ? current === null : !!current && current !== '__new__', 'new chat: follows ' + AFTER + ' setting', String(current));
     ok(errs.length === 0, 'no page errors (new chat)', errs.join(' | '));
     await ctx.close();
   }
@@ -106,7 +116,8 @@ async function typeAndSend(p, wid, text) {
     const tid = await openRow(p, wid);
     await typeAndSend(p, wid, 'QA send and go offline reply');
     await shot(p, '3-offline-reply-sending');
-    ok((await threadOf(p, wid)) === null, 'offline reply: still pops back to the list');
+    ok((await threadOf(p, wid)) === (AFTER === 'list' ? null : tid), 'offline reply: follows ' + AFTER + ' setting');
+    if (AFTER === 'stay') await p.locator(`.win[data-win="${wid}"] [data-chback]`).first().tap();
     // Sending pill (James, 10 Oct 2026): a small floating pill, never a section that pushes the threads down.
     const pill = p.locator(`.win[data-win="${wid}"] .ch-pill`);
     ok(await p.locator(`.win[data-win="${wid}"] [data-sec="sending"]`).count() === 0, 'offline reply: no Sending section in the list');
@@ -132,7 +143,7 @@ async function typeAndSend(p, wid, text) {
     await p.evaluate(([id, sid]) => __wos.chats.sendVoiceTo(id, sid, new Blob([new Uint8Array(4000)], { type: 'audio/webm' })), [wid, tid]);
     await p.waitForTimeout(2500);
     ok(writes.length > 0, 'voice reply: sent to Wizard', JSON.stringify(writes.map(w => w.u)));
-    ok((await threadOf(p, wid)) === null, 'voice reply: window pops back to the chat list', String(await threadOf(p, wid)));
+    ok((await threadOf(p, wid)) === (AFTER === 'list' ? null : tid), 'voice reply: follows ' + AFTER + ' setting', String(await threadOf(p, wid)));
     ok(errs.length === 0, 'no page errors (voice reply)', errs.join(' | '));
     await ctx.close();
   }

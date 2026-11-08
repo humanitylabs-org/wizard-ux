@@ -33,6 +33,7 @@ function client(origin, rows = new Map()) {
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WosAgents: { isOther: a => !!a, get: () => ({ permissions: {} }) },
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
@@ -62,7 +63,7 @@ async function fixture(t, options = {}) {
       if (options.beforeRead) await options.beforeRead();
       return json(options.readStatus || 200, { run_id: options.otherRun || runId, session_id: options.otherSession || sessionId, status: options.runStatus || 'completed' });
     }
-    if (req.url === '/wizard/hermes/v1/runs') {
+    if (req.url.split('?')[0] === '/wizard/hermes/v1/runs') {
       if (options.admitStatus) return json(options.admitStatus, { error: 'QA request rejected' });
       const key = req.headers['idempotency-key'];
       if (admitted.has(key)) assert.equal(admitted.get(key), body, 'idempotent replay is byte-identical');
@@ -75,9 +76,9 @@ async function fixture(t, options = {}) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const c = client(`http://127.0.0.1:${server.address().port}`);
   t.after(async () => { c.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
-  const enqueue = () => c.api.enqueue({ kind: 'reply', sessionId, steerRunId: runId,
+  const enqueue = () => c.api.enqueue({ kind: 'reply', sessionId, steerRunId: runId, ...(options.agent ? { agent: options.agent } : {}),
     text: 'Follow up in this same thread', model: 'test-model', provider: 'test-provider', instructions: 'Keep original instructions', files: [{ id: 'drop_attachment' }] });
-  return { ...c, calls, admitted, enqueue, origin: `http://127.0.0.1:${server.address().port}` };
+  return { ...c, calls, admitted, options, enqueue, origin: `http://127.0.0.1:${server.address().port}` };
 }
 
 for (const status of ['completed', 'failed', 'cancelled', 'interrupted', 'expired']) {
@@ -106,6 +107,104 @@ test('a forgotten-run steer never falls back while the run still reads as workin
   const f = await fixture(t, { ...forgotten, runStatus: 'running' }); const it = await f.enqueue();
   assert.equal((await settled(f.api, it.id)).state, 'failed');
   assert.equal(f.admitted.size, 0);
+});
+// Owner's screenshot, 7 Nov 2026: a message sent while the run was queued/starting showed
+// "Not sent · Run is not currently accepting steer input". It must wait, never fail, never double-send.
+// (A run that has STARTED but whose agent can't steer is covered below: it becomes a queued same-thread turn.)
+for (const runStatus of ['queued', 'starting']) {
+  test(`a steer refused while the run is ${runStatus} waits instead of failing, then continues once the run ends`, async t => {
+    const f = await fixture(t, { runStatus }); const it = await f.enqueue();
+    const waiting = await settled(f.api, it.id);
+    assert.equal(waiting.state, 'waiting', waiting.error);
+    assert.match(waiting.error, /Queued/);
+    assert.equal(f.admitted.size, 0);
+    f.options.runStatus = 'completed'; waiting.nextAt = 0; await f.api.pump();
+    const sent = await settled(f.api, it.id);
+    assert.equal(sent.state, 'sent', sent.error);
+    assert.equal(f.admitted.size, 1);
+    assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 2);
+  });
+}
+// Codex review on #1141: Stop while waiting must withdraw; stale wait marker must not outlive the wait; routed threads.
+test('Stop while a refused steer waits withdraws the message and never sends it', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'waiting');
+  const out = await Promise.race([f.api.cancel(it.id), new Promise(r => setTimeout(() => r('HUNG'), 2000))]);
+  assert.equal(out.outcome, 'cancelled'); assert.equal(f.admitted.size, 0);
+});
+test('the wait marker is cleared once the run ends and the message continues as a normal turn', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.ok(waiting.steerWaitSince);
+  f.options.runStatus = 'completed'; waiting.nextAt = 0; await f.api.pump();
+  const sent = await settled(f.api, it.id); assert.equal(sent.state, 'sent', sent.error);
+  assert.equal(sent.steerWaitSince, undefined);
+});
+for (const runStatus of ['queued', 'running']) {
+  test(`a routed (agent-scoped) thread's refused steer is ${runStatus === 'queued' ? 'kept queued' : 'sent as a follow-up'} on the same agent route`, async t => {
+    const f = await fixture(t, { runStatus, agent: 'ops' }); const it = await f.enqueue();
+    const done = await settled(f.api, it.id);
+    assert.equal(done.state, runStatus === 'queued' ? 'waiting' : 'sent', done.error);
+    for (const c of f.calls) assert.match(c.path, /[?&]agent=ops(&|$)/, `unscoped call: ${c.method} ${c.path}`);
+    assert.equal(f.admitted.size, runStatus === 'queued' ? 0 : 1);
+  });
+}
+test('a queued-run steer that becomes steerable is delivered as a steer, once', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');
+  f.options.accepted = true; waiting.nextAt = 0; await f.api.pump();
+  const sent = await settled(f.api, it.id); assert.equal(sent.state, 'sent', sent.error);
+  assert.equal(sent.steered, true); assert.equal(f.admitted.size, 0);
+});
+test('Stop while a rejected steer waits for a queued run withdraws the message instead of hanging', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');
+  const out = await Promise.race([f.api.cancel(it.id), new Promise(r => setTimeout(() => r({ outcome: 'HUNG' }), 1000))]);
+  assert.notEqual(out.outcome, 'HUNG', 'cancel must settle');
+  assert.equal(f.admitted.size, 0);
+});
+test('a run that never becomes steerable stops waiting and fails visibly', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');
+  f.api.get(it.id).steerWaitSince = Date.now() - 16 * 60e3; waiting.nextAt = 0; await f.api.pump();
+  assert.equal((await settled(f.api, it.id)).state, 'failed'); assert.equal(f.admitted.size, 0);
+});
+// Hermes (stock) answers 409 run_not_accepting_steer for a run whose agent has no steer() even while the run reads
+// 'running' (claude-sonnet-5-5, 7 Nov 2026). A typed 409 proves non-acceptance; the Agent Service holds a new turn
+// for a session whose run is still working, so the follow-up goes out as one frozen, idempotent same-thread turn.
+for (const status of ['running', 'launching', 'stopping', 'waiting_for_approval']) {
+  test(`a typed 409 steer rejection while the run reads ${status} sends one queued same-thread follow-up`, async t => {
+    const f = await fixture(t, { runStatus: status }); const it = await settled(f.api, (await f.enqueue()).id);
+    assert.equal(it.state, 'sent', it.error);
+    assert.equal(it.error, '');
+    assert.equal(it.steered, false);
+    assert.equal(it.rejectedSteerRunId, runId);
+    assert.equal(f.admitted.size, 1);
+    assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 1, 'the steer is never sent twice');
+    const posts = f.calls.filter(x => x.path === '/wizard/hermes/v1/runs');
+    assert.equal(posts.length, 1, 'exactly one new-turn POST');
+    assert.equal(posts[0].key, it.id);
+    assert.deepEqual(JSON.parse(posts[0].body), { input: it.text, model: 'test-model', provider: 'test-provider', require_model_lock: true, wizard_file_ids: ['drop_attachment'], session_id: sessionId, instructions: 'Keep original instructions' });
+    assert.equal(it.steerBody, undefined); assert.equal(it.steerRunId, '');
+  });
+}
+test('a lost receipt on the queued follow-up replays the same frozen admission, never the steer', async t => {
+  const f = await fixture(t, { runStatus: 'running', loseAdmission: true }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'waiting');
+  assert.equal(f.api.retry(it.id), true);
+  assert.equal((await settled(f.api, it.id)).state, 'sent');
+  assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 1);
+  const posts = f.calls.filter(x => x.path === '/wizard/hermes/v1/runs');
+  assert.equal(posts.length, 2); assert.equal(posts[0].body, posts[1].body); assert.equal(posts[0].key, posts[1].key);
+  assert.equal(f.admitted.size, 1);
+});
+test('reload after a lost receipt on the queued follow-up replays admission, not steering', async t => {
+  const f = await fixture(t, { runStatus: 'running', loseAdmission: true }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'waiting'); f.close();
+  const restored = client(f.origin, f.rows); t.after(restored.close);
+  await restored.api.load(); assert.equal(restored.api.retry(it.id), true);
+  assert.equal((await settled(restored.api, it.id)).state, 'sent');
+  assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 1);
+  assert.equal(f.admitted.size, 1);
 });
 test('lost continuation receipt retries its frozen admission, never the rejected steer', async t => {
   const f = await fixture(t, { loseAdmission: true }); const it = await f.enqueue();
@@ -174,7 +273,10 @@ for (const status of [408, 425, 429, 500, 503, 403, 413]) test(`ordinary admissi
   assert.equal(new Set(f.calls.map(c => c.body)).size, 1);
 });
 for (const options of [
-  { accepted: true }, { runStatus: 'running' }, { runStatus: 'queued' }, { runStatus: 'stopping' },
+  { accepted: true }, { runStatus: 'running', ...forgotten }, { runStatus: 'queued', ...forgotten }, { runStatus: 'stopping', ...forgotten },
+  { runStatus: 'running', otherRun: 'another-run' }, { runStatus: 'running', otherSession: 'another-session' }, { runStatus: 'running', readStatus: 503 },
+  { runStatus: 'running', rejection: { error: { code: 'model_lock_mismatch', message: 'Route changed' } } },
+  { runStatus: 'running', rejection: { error: 'untyped conflict' } }, { runStatus: 'running', steerStatus: 403 },
   { readStatus: 503 }, { otherRun: 'another-run' }, { otherSession: 'another-session' },
   { rejection: { error: { code: 'model_lock_mismatch', message: 'Route changed' } } },
   { rejection: { error: 'untyped conflict' } }, { steerStatus: 403 },
@@ -186,7 +288,10 @@ for (const options of [
 });
 
 test('a failed old-client item recovers on Retry after the run finishes', async t => {
-  const f = await fixture(t, { runStatus: 'running' }); const item = await f.enqueue();
+  // Old clients failed every steer rejection on a working run. Today a typed run_not_accepting_steer on a working
+  // run is sent as a queued follow-up, so the historical failed item is built from a different typed rejection.
+  const f = await fixture(t, { runStatus: 'running', rejection: { error: { code: 'model_lock_mismatch', message: 'Route changed' } } });
+  const item = await f.enqueue();
   assert.equal((await settled(f.api, item.id)).state, 'failed');
   // Restore a historical rejected item. Older clients kept only the rejection
   // text, so Retry must obtain a fresh typed rejection rather than infer one.

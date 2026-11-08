@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 // Lightweight synthetic execution of the real list renderer, not a DOM/browser substitute.
 // Peripheral services and row markup are stubbed; section selection, collapse and footer assembly are production code.
 import fs from 'node:fs';
@@ -15,7 +16,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
     LIVE: { cardAt: s => s.activityAt || s.updatedAt, ok: true, statusFor: () => ({ ok: true }), searchRows: () => rows, sessionsFor: () => rows, workGroups: input => Object.fromEntries(Object.keys(groups).map(k => [k, input.filter(r => r.section === k)])), isNew: () => false, archiveAfterDays: 7 },
     syncListTitle: no, closeStream: no, winAgent: empty, STATUS: {}, focusOf: () => null, notes: () => ({ awake: [], later: [] }), focusMatches: () => true,
     PIN: { partition: rows => ({ pinned: rows.filter(s => pinned.includes(s.id)), rest: rows.filter(s => !pinned.includes(s.id)) }) }, snoozeLast: () => false, owner: () => w.id, newDrafts: () => [], esc: String,
-    matchFilters: () => [], OUTBOX: null, sendPill: empty, PW: null, byStatus: () => status, readyOrdered: identity,
+    matchFilters: () => [], OUTBOX: null, sendPill: empty, PW: null, byStatus: () => status, readyOrdered: identity, workingOrdered: identity, workingOrderBar: () => '<div class="ch-rdy-bar" aria-label="Order Working"></div>',
     SEC_PAGE: 40, STALE_LIST: 120000, waitsOn: () => false, deferredOf: () => false, isWorking: () => false, attOf: () => null,
     archSel: empty, readyBody: (list, row) => list.map(row).join(''), chatRow: (s, snip, tag) => `<div class="ch-row" data-chopen="${s.id}">${tag ? `<span class="ch-search-status">${tag}</span>` : ''}</div>`,
     listPlace: () => null, storedListPlace: () => null, compactOn: () => false, focusedAgent: empty, focusStrip: empty,
@@ -23,7 +24,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
     secOpen: Object.fromEntries(Object.keys(groups).map(k => [k, k !== 'archive'])), SEC_OPEN_KEY: 'synthetic-sections',
     localStorage: { setItem: (...args) => writes.push(args) }, track: { querySelector: () => el }, Date,
   };
-  vm.createContext(ctx);
+  modelContext(ctx);
   vm.runInContext(fs.readFileSync(new URL('../../web/core/chat-search.js', import.meta.url), 'utf8'), ctx);
   Object.assign(ctx.window.WizCore.chatSearch, { query: () => footer ? bs : null, cancel: no, scanning: r => r.busy, footer: r => `<div class="ch-bodysearch${r.busy ? ' busy' : ''}" data-chbs="${r.busy ? 'busy' : 'done'}">Synthetic search status</div>` });
   const constants = source.slice(source.indexOf('  const SECTIONS_DAY ='), source.indexOf('\n', source.indexOf('  const SECTIONS_STATUS =')));

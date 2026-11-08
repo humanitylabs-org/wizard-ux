@@ -5,9 +5,9 @@ import {readFileSync} from 'node:fs';
 const src=readFileSync(new URL('../web/core/app-client.js',import.meta.url),'utf8');
 function fixture(){
  let handler;const sent=[],timers=[],parent={postMessage:m=>sent.push(m)},requests=new Map();class NativeMessage{constructor(x){Object.assign(this,x);}}
- const c={ORIGIN:'https://wizard.test',VERSION:1,framed:true,parent,MessageEvent:NativeMessage,requests,requestId:0,setTimeout:f=>(timers.push(f),timers.length),clearTimeout(){},addEventListener:(_,fn)=>handler=fn};
+ const c={ORIGIN:'https://wizard.test',VERSION:1,framed:true,parent,MessageEvent:NativeMessage,requests,keepCallbacks:new Map(),requestId:0,setTimeout:f=>(timers.push(f),timers.length),clearTimeout(){},addEventListener:(_,fn)=>handler=fn};
  const request=src.slice(src.indexOf('  function request('),src.indexOf('  function back()'));
- const listener=src.slice(src.indexOf("  addEventListener('message', e => {"),src.indexOf('  function hold(reason)'));
+ const listener=src.slice(src.indexOf("  addEventListener('message', e => {"),src.indexOf('  function hold('));
  const facade=src.split('\n').find(l=>l.includes('readyExtension: Object.freeze'));
  vm.runInNewContext(request+listener+'\nthis.api=({'+facade.trim()+'}).readyExtension;',c);
  return{api:c.api,sent,timers,requests,reply:data=>handler(new NativeMessage({source:parent,origin:c.ORIGIN,isTrusted:true,data:{version:1,id:sent.at(-1).id,...data}})),spoof:data=>handler(new NativeMessage({source:parent,origin:c.ORIGIN,isTrusted:false,data:{version:1,id:sent.at(-1).id,...data}}))};

@@ -24,15 +24,18 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
     stage: { addEventListener: (_name, fn) => { submit = fn; } },
     mainChats: x => x?.app === 'chats' && !x.agent, focused: () => w, hud: null, homeOpen: false,
     document: { activeElement: null, documentElement: {} }, getComputedStyle: () => ({getPropertyValue: () => optIn ? 'on' : ''}), setTimeout: (fn, ms) => timers.push({ fn, ms }),
-    CHATS: { openNewDraft: () => { w.thread = '__new__'; }, sendVoiceTo: () => { w.thread = null; } },
+    CHATS: { sendVoiceTo: () => { context.leaveAfterSend('qa', sid, sid === '__new__'); } },
     syncChatsPane() { attr = w.thread || ''; }, focusInside() {}, log() {}, toast() {},
     rp: { wid: 'qa', sid }, r: { blob: {} }, extraFiles: [], sealed: false,
     modelRoute: {}, stagedId: null, transcript: '',
   });
-  const start = source.indexOf('  function keepNewSendList(') >= 0 ? source.indexOf('  function keepNewSendList(') : source.indexOf('  function toNewChat(');
-  vm.runInContext(source.slice(start, source.indexOf('  function stepThread(', start)), context);
+  const shared = fs.readFileSync(path.join(root, 'web/core/chats.js'), 'utf8');
+  const start = shared.indexOf('  function leaveAfterSend('), end = shared.indexOf('\n  }', start) + 4;
+  Object.assign(context, { keepThreadOpen: () => true, H: { keepThreadOpen: true }, PHONE: () => false, hosted: new Map(),
+    ch: () => ({trail: [], readNav: 0}), save() {}, threadBack() {}, renderChats() {}, applyLayout() {}, deskOf: () => 0 });
+  vm.runInContext(shared.slice(start, end), context);
   return { w, desk, width, get attr() { return attr; },
-    text() { submit({ target: { closest: () => form } }); w.thread = null; attr = ''; },
+    text() { context.leaveAfterSend('qa', sid, sid === '__new__'); attr = w.thread || ''; },
     voice() {
       const line = source.split('\n').find(x => x.includes('if (rp) { CHATS.sendVoiceTo(') || x.includes('if (rp) { const stayOnList'));
       assert.ok(line, 'actual composer-mic handoff branch found');
@@ -41,8 +44,8 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
     drain() { for (let n = 0; n < timers.length; n++) timers[n].fn(); },
   };
 }
-for (const mode of ['text', 'voice']) test(`default OFF keeps shared-main ${mode} post-send shortcut`, () => {
-  const f = fixture({optIn:false, count:1, viewport:1920}); f[mode](); f.drain(); assert.equal(f.w.thread,'__new__'); assert.equal(f.attr,'__new__');
+for (const mode of ['text', 'voice']) test(`new ${mode} keeps the shared new-send list return`, () => {
+  const f = fixture({optIn:false, count:1, viewport:1920}); f[mode](); f.drain(); assert.equal(f.w.thread,null); assert.equal(f.attr,'');
 });
 for (const viewport of [1280, 1920, 2560]) for (const mode of ['text', 'voice']) {
   test(`half-width desktop ${viewport}: new ${mode} keeps list past the shell timer`, () => {
@@ -62,8 +65,8 @@ for (const viewport of [595,1190,1920]) for (const mode of ['text', 'voice']) te
 test('fullscreen new send also keeps shared list return', () => {
   const f = fixture({ mono: true }); f.text(); f.drain(); assert.equal(f.w.thread, null);
 });
-for (const mode of ['text','voice']) for(const count of [1,2]) test(`existing ${mode} reply (${count} windows) keeps established shell shortcut`, () => {
-  const f = fixture({ sid: 'qa_existing', count }); f[mode](); f.drain(); assert.equal(f.w.thread, '__new__');
+for (const mode of ['text','voice']) for(const count of [1,2]) test(`existing ${mode} reply (${count} windows) stays on the same thread`, () => {
+  const f = fixture({ sid: 'qa_existing', count }); f[mode](); f.drain(); assert.equal(f.w.thread, 'qa_existing');
 });
 test('pre-existing narrow new-text guard is retained', () => {
   const f = fixture({ narrow: true }); f.text(); f.drain(); assert.equal(f.w.thread, null);

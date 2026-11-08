@@ -16,15 +16,38 @@ function models() {
   M.options[0].isGlobalDefault = true; M.ready = true;
   return M;
 }
+test('new chat on Sol exposes catalogue Sonnet immediately without changing the default', () => {
+  const M = models();
+  M.options = M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
+    { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] },
+    { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-4-6', 'claude-sonnet-5-5'] },
+    { slug: 'claude-subscription-directsdk-experimental', authenticated: true, models: ['claude-sonnet-5[1m]'] },
+  ] }, true);
+  const before = M.defaultOption();
+  const cur = M.snapshot('');
+  assert.equal(cur.model, 'gpt-6.1-sol');
+  assert.equal(cur.provider, 'openai-codex');
+  const { html, list } = M.popHtml({ mode: 'new', cur, all: false });
+  const match = html.match(/data-mpick="(\d+)"[^>]*><span class="mn"><b>Sonnet<\/b>/);
+  assert.ok(match, 'Sonnet is a first-open compact row, not hidden behind More models');
+  const picked = list[Number(match[1])];
+  assert.equal(picked.value, 'claude-sonnet-5-5');
+  assert.equal(picked.provider, 'anthropic');
+  assert.ok(M.options.includes(picked), 'the row points at the existing catalogue route');
+  assert.equal(M.defaultOption(), before);
+  assert.equal(M.snapshot('').model, 'gpt-6.1-sol');
+  assert.equal(M.snapshot('').provider, 'openai-codex');
+});
+
 const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'private-1', private: true }];
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
-test('compact menu reads bottom-up from the thumb: Opus, Astra, Sol last, Private agent above, More models on top', () => {
+test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
-  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Astra', 'Sol']);
+  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
-  assert.equal(list.length, 4); // every row maps to a pickable option
+  assert.equal(list.length, 5); // every row maps to a pickable option
 });
 
 test('in a private chat the private models sit by the thumb and the main models move above', () => {
@@ -35,11 +58,11 @@ test('in a private chat the private models sit by the thumb and the main models 
   assert.ok(o.indexOf('## Models') < o.indexOf('## Private agent'));
 });
 
-test('More models expands to the other families once each, above the primary three', () => {
+test('More models expands to the other families once each, above the primary four', () => {
   const M = models();
   const { html } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: true, priv: [] });
   const o = order(html);
-  assert.deepEqual(o.slice(-3), ['Opus', 'Astra', 'Sol']);
+  assert.deepEqual(o.slice(-4), ['Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.ok(o.includes('Fable') || o.includes('Claude Fable'));
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
 });

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -11,7 +12,7 @@ import { fixture } from './fixtures/tweaks.mjs';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const kitCtx = { window: null, URL, Intl, Date, navigator: {}, location: { origin: 'https://wizard.example', href: 'https://wizard.example/' },
   document: { addEventListener() {}, querySelector() { return null; } }, addEventListener() {} };
-kitCtx.window = kitCtx; vm.createContext(kitCtx); vm.runInContext(read('web/core/chat-kit.js'), kitCtx);
+kitCtx.window = kitCtx; modelContext(kitCtx); vm.runInContext(read('web/core/chat-kit.js'), kitCtx);
 const KIT = kitCtx.WosChat;
 const chats = read('web/core/chats.js');
 const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
@@ -20,8 +21,8 @@ const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexO
 function render(rows, { on, start = 'collapsed', chosen = null }) {
   const ctx = { getComputedStyle: () => ({ getPropertyValue: name => name === '--wos-reply-summary' && on ? ' on' : name === '--wos-reply-regenerate' ? '' : '' }),
     document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Fixture' }, WosSkinHost: { replySummary: { get: () => ({ start }) } } }, KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null,
-    replyCard: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
-  vm.createContext(ctx);
+    replyCard: () => '', msgIds: () => '', quoteBtn: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
+  modelContext(ctx);
   vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
   return KIT.parseRows(rows).map((tn, i, all) => ctx.turnHtml({ texts: [], ...(chosen ? { rsum: new Map(chosen) } : {}) }, tn, i === all.length - 1, false, null, null)).join('');
 }
@@ -73,7 +74,7 @@ test('off (stock): output is byte-identical to a reply that carries no ask', () 
 test('only the two toggle buttons switch a reply, the choice is kept per reply across repaints, and keys work', () => {
   const h = slice("    const rsb = e.target.closest('[data-reply-summary]');", "    if (e.target.closest('[data-chearlier]'))");
   const ctx = { CH: {}, ch: id => (ctx.CH[id] = ctx.CH[id] || {}), id: 'w1' };
-  vm.createContext(ctx); vm.runInContext(`${line('  const setSummaryOpen = ').replace(/\n$/, '')}${chats.slice(chats.indexOf('  const setSummaryOpen = ') + line('  const setSummaryOpen = ').length, chats.indexOf('  };\n', chats.indexOf('  const setSummaryOpen = ')) + 5)}this.click = e => { ${h} return false; };`, ctx);
+  modelContext(ctx); vm.runInContext(`${line('  const setSummaryOpen = ').replace(/\n$/, '')}${chats.slice(chats.indexOf('  const setSummaryOpen = ') + line('  const setSummaryOpen = ').length, chats.indexOf('  };\n', chats.indexOf('  const setSummaryOpen = ')) + 5)}this.click = e => { ${h} return false; };`, ctx);
   const node = (cls = []) => ({ hidden: false, classes: new Set(cls), focused: false, focus() { this.focused = true; },
     classList: { contains: c => node.cur.classes.has(c) } });
   const msg = { classes: new Set(['msg', 'a', 'has-rsum']), classList: { toggle(c, on) { on ? msg.classes.add(c) : msg.classes.delete(c); }, contains: c => msg.classes.has(c) } };
