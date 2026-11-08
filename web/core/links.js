@@ -86,12 +86,47 @@
     if (!seen.has(u.href)) list.unshift(u);
     return V.open(list.map(item), Math.max(0, list.findIndex(x => x.href === u.href)));
   }
+  // Wizard's own servers never go into Browser Reader (James, 7 Nov 2026: clips-pipeline links failed there).
+  // They open the way they did before Reader: this origin in-app, every other origin in the owner's browser.
+  // Reader cannot sign in to them, and its render browser is refused private/tailnet hosts anyway.
+  const WIZARD_HOSTS = /(^|\.)(ts\.net|wizard\.aiwizards\.com|wizard001\.com)$/;
+  const PRIVATE_HOST = /(^|\.)(localhost|local|internal|lan|home|home\.arpa)$|^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)|^\[|^[^.]+$/;
+  function wizardHost(u) {
+    const host = String(u?.hostname || '').toLowerCase().replace(/\.$/, '');
+    if (!host || host === location.hostname.toLowerCase() || WIZARD_HOSTS.test(host) || PRIVATE_HOST.test(host)) return true;
+    try { return host === new URL(window.WizConfig?.raw?.settings?.network?.base_url).hostname.toLowerCase(); } catch (_) { return false; }
+  }
+  // Hosts Reader could not read because they block it or need a sign-in open straight in the owner's browser on
+  // the next tap (one tap, never "Reader could not read this page" first). Owner-local, hostname and time only.
+  const DIRECT_KEY = 'wos.readerDirect.v1', DIRECT_TTL = 14 * 864e5, DIRECT_MAX = 200, DIRECT_REASONS = new Set(['blocked', 'signin', 'private']);
+  function directHosts() { try { const v = JSON.parse(localStorage.getItem(DIRECT_KEY) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } }
+  function direct(u) { const at = directHosts()[String(u?.hostname || '').toLowerCase()]; return typeof at === 'number' && Date.now() - at < DIRECT_TTL; }
+  function rememberDirect(u, reason) {
+    if (!DIRECT_REASONS.has(reason) || !u?.hostname) return;
+    const now = Date.now(), all = directHosts(); all[u.hostname.toLowerCase()] = now;
+    const kept = Object.entries(all).filter(([h, t]) => /^[a-z0-9.-]{1,253}$/.test(h) && typeof t === 'number' && now - t < DIRECT_TTL).sort((a, b) => b[1] - a[1]).slice(0, DIRECT_MAX);
+    try { localStorage.setItem(DIRECT_KEY, JSON.stringify(Object.fromEntries(kept))); } catch (_) {}
+  }
+  // Reader asks for this when it cannot read a page it was just sent to. The phone hands it to its browser natively;
+  // a desktop browser only opens a tab while the owner's tap is still fresh (a popup blocker otherwise drops it), so
+  // without one this declines and Reader keeps its visible "Open in your browser" button.
+  let readerHome = () => '';
+  function handoff(u, reason) {
+    rememberDirect(u, reason);
+    const b = bridge();
+    if (NATIVE) { if (typeof b?.openInBrowser !== 'function') return false; try { b.openInBrowser(u.href); return true; } catch (_) { return false; } }
+    if (navigator.userActivation && !navigator.userActivation.isActive) return false;
+    // Open from this window's own task: the request arrives from the Reader frame's script.
+    setTimeout(() => external(u), 0); return true;
+  }
   function nice(u) {
     const p = decodeURIComponent(u.pathname.replace(/\/+$/, '').split('/').filter(Boolean).pop() || u.hostname);
     return p.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
   function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null, readerApp = () => null, readerOpen = null } = {}) {
+    // Only a mount that names its Reader (the shell's) owns the identity; auxiliary mounts (App Setup) must not replace it.
+    if (arguments[0]?.readerApp) readerHome = () => { const app = readerApp(), t = app?.url ? abs(app.url) : null; return t && inApp(t) ? t.pathname.replace(/[^/]*$/, '') : ''; };
     const el = document.createElement('section');
     el.className = `linksheet ${mode}`; el.setAttribute('aria-label', 'Link'); el.hidden = true;
     el.innerHTML = `<div class="ls-scrim" data-ls="close"></div><div class="ls-panel"><header class="ls-bar">
@@ -139,6 +174,7 @@
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (isFile(u)) return download(u, doc);
       if (!inApp(u)) {
+        if (wizardHost(u) || direct(u)) { browse(u); return true; }
         const app = readerApp(), target = app?.url ? abs(app.url) : null;
         if (target && inApp(target)) {
           target.searchParams.set('url', u.href);
@@ -377,7 +413,12 @@
       const u = abs(a.getAttribute('href'), win.location.href); if (!u || !/^https?:$/.test(u.protocol)) return;
       if (u.origin === ORIGIN && isImage(u)) { if (viewImage(u, doc)) { e.preventDefault(); e.stopPropagation(); } return; }
       if (!leaves(u, a.getAttribute('target'))) return;
+      // Reader's automatic hand-off: declined (not prevented) when the original cannot open without a fresh tap.
+      // Only the installed Reader's own frame may hand off and remember a host; any other app's link is an ordinary one.
+      const auto = a.getAttribute?.('data-wizard-browse') === 'auto' && home !== '/' && home === readerHome();
+      if (auto && (u.origin === ORIGIN || !handoff(u, a.getAttribute('data-wizard-reason') || ''))) return;
       e.preventDefault(); e.stopPropagation();
+      if (auto) return;
       if (a.hasAttribute?.('data-wizard-browse')) return browse(u);
       go(u);
     }, true);

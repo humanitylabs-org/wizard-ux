@@ -22,7 +22,11 @@ const row = (extra = {}) => ({ id: 'wos-count-capped', kind: 'new', intent: 'mes
   text: 'Jonathan tried installing Wizard in alongside mode — synthetic fixture', files: files.map(f => ({ ...f })),
   audio: new Blob(['aaaa'], { type: 'audio/webm' }), audioType: 'audio/webm', audioFile: { ...files[20] }, ...extra });
 
+<<<<<<< HEAD
 function client(origin, rows, clock) {
+=======
+function client(origin, rows, clock, agents = null) {
+>>>>>>> origin/main
   const timers = new Set();
   const indexedDB = { open() {
     const r = {};
@@ -45,6 +49,10 @@ function client(origin, rows, clock) {
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
     WizConfig: { transcribe: async () => ({ text: 'unused' }), voicePrompt: () => '' },
+<<<<<<< HEAD
+=======
+    ...(agents ? { WosAgents: agents } : {}),
+>>>>>>> origin/main
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { api: ctx.WosOutbox, close: () => { for (const t of timers) clearTimeout(t); } };
@@ -53,7 +61,11 @@ async function until(fn) {
   for (let i = 0; i < 400; i++) { const value = fn(); if (value) return value; await new Promise(r => setTimeout(r, 5)); }
   throw Error('condition not reached');
 }
+<<<<<<< HEAD
 async function fixture(t, items, rows = new Map(items.map(it => [it.id, structuredClone(it)]))) {
+=======
+async function fixture(t, items, rows = new Map(items.map(it => [it.id, structuredClone(it)])), agents = null) {
+>>>>>>> origin/main
   const calls = [], clock = { now: created + 13 * 3600e3 };
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -62,7 +74,11 @@ async function fixture(t, items, rows = new Map(items.map(it => [it.id, structur
     res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value));
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
+<<<<<<< HEAD
   const origin = `http://127.0.0.1:${server.address().port}`, page = client(origin, rows, clock);
+=======
+  const origin = `http://127.0.0.1:${server.address().port}`, page = client(origin, rows, clock, agents);
+>>>>>>> origin/main
   t.after(async () => { page.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
   await page.api.load(); await page.api.pump();
   return { ...page, rows, clock, calls, runs: () => calls.filter(c => c.path.startsWith('/wizard/hermes/v1/runs')) };
@@ -159,3 +175,25 @@ test('drafts and file-chip markers keep every file', () => {
   const items = Array.from({ length: 21 }, (_, n) => ({ id: n.toString(16).padStart(32, '0'), name: `a${n}.png`, mime: 'image/png' }));
   assert.equal(K.helm(`<helm_attachments>${JSON.stringify({ items })}</helm_attachments>`).attachments.length, 21);
 });
+<<<<<<< HEAD
+=======
+
+// Main versus routed agents (host profile, container, restricted): the same re-admit and no count cap on every route;
+// a restricted agent without file access still gets every screenshot while its recording stays in the owner's custody.
+const AGENTS = { profile: { id: 'profile', kind: 'host-profile' }, container: { id: 'container', kind: 'container' },
+  restricted: { id: 'restricted', kind: 'restricted', permissions: { files: 'none' } } };
+const agentsApi = { isOther: id => !!AGENTS[id], get: id => AGENTS[id] || null, isPrivate: () => false };
+for (const agent of ['', 'profile', 'container', 'restricted']) {
+  test(`count-cap re-admit and every file on the ${agent || 'main'} route`, async t => {
+    const f = await fixture(t, [row(agent ? { agent } : {})], undefined, agentsApi);
+    await until(() => f.api.get('wos-count-capped')?.state === 'sent');
+    const runs = f.runs();
+    assert.equal(runs.length, 1, 'one admission');
+    assert.equal(runs[0].path, '/wizard/hermes/v1/runs' + (agent ? `?agent=${agent}` : ''), 'admitted on its own agent route');
+    const body = JSON.parse(runs[0].body);
+    assert.equal(body.agent || '', agent);
+    const expected = agent === 'restricted' ? files.slice(0, 20).map(x => x.id) : files.map(x => x.id);
+    assert.deepEqual(body.wizard_file_ids, expected, agent === 'restricted' ? 'all 20 screenshots, recording kept back' : 'all 21 files');
+  });
+}
+>>>>>>> origin/main

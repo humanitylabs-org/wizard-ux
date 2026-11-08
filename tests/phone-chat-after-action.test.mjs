@@ -22,6 +22,10 @@ function fixture({ phone = true, after = 'stay', sid = 'same', fail = false, def
     KIT: { drafts: { clear() {}, get: () => ({}), set() {} } },
     isWorking: () => false, joinWords: (a, b) => [a, b].filter(Boolean).join('\n'), focusOf: () => null,
     viewContext: () => 'Synthetic context', renderChats() {}, applyLayout() {}, deskOf: () => 0, toast() {},
+<<<<<<< HEAD
+=======
+    setDraft(_wid, text, files) { c.draft = text; c.files = files; },
+>>>>>>> origin/main
     pendRef: x => x, follow() {},
   };
   vm.createContext(context);
@@ -88,3 +92,18 @@ for (const opts of [{ reject: true }, { mismatch: true }]) test(`unconfirmed sha
 test('setting rejects invalid tokens without writing', async () => {
   const f = configFixture(); await assert.rejects(f.C.setChatAfterAction('back')); assert.equal(f.storage.has('wos.chats.afterAction.v1'), false);
 });
+<<<<<<< HEAD
+=======
+
+for (const phone of [true, false]) test(`${phone ? 'phone' : 'desktop'} typed disk failure while staying: the visible composer shows the words again`, async () => {
+  const f = fixture({ phone, after: 'stay', fail: true }); f.c.draft = '';
+  await f.context.sendChat('chat', 'Synthetic typed reply'); // the composer's Send (chats.js: sendChat(id, text))
+  assert.equal(f.w.thread, 'same', 'still on the thread');
+  assert.equal(f.c.draft, 'Synthetic typed reply', 'words back in the open composer, not only the saved draft');
+});
+test('typed disk failure after moving on: the newer visit keeps its own composer', async () => {
+  const f = fixture({ after: 'stay', fail: true, deferred: true }); const sent = f.context.sendChat('chat', 'Synthetic typed reply');
+  f.w.thread = 'other'; f.c.readNav++; f.c.draft = 'Other thread words'; f.release(); await sent;
+  assert.equal(f.c.draft, 'Other thread words');
+});
+>>>>>>> origin/main

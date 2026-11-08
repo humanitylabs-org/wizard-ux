@@ -70,6 +70,10 @@ final class ScreenMode {
     private final String origin;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    // Screenshot recognition (read-image, ~seconds) and native-chrome translate (~sub-second) are independent
+    // network calls with no shared state; a second thread keeps the slow picture read from queueing behind the
+    // fast translate call that the page fires first every run (translateScreen() in screen.html).
+    private final ExecutorService pictureIo = Executors.newSingleThreadExecutor();
 
     private Root root;
     private WebView page, search;
@@ -335,11 +339,12 @@ final class ScreenMode {
 
     private void picture(String id) {
         final byte[] img = shot;
-        io.execute(() -> {
+        pictureIo.execute(() -> {
             String reply;
             if (img == null || img.length == 0) reply = "{\"error\":\"This screen blocked capture, so there is no picture to read\"}";
             else try {
-                JSONObject r = new JSONObject(post("/wizard-search/api/read-image", img, "image/jpeg"));
+                // geometry: where each line sits, so Translate paints picture text over it (older Search: lines only)
+                JSONObject r = new JSONObject(post("/wizard-search/api/read-image?geometry=1", img, "image/jpeg"));
                 reply = r.toString();
                 Log.i(TAG, "screen picture lines=" + (r.optJSONArray("lines") == null ? 0 : r.optJSONArray("lines").length()));
             } catch (Exception e) {

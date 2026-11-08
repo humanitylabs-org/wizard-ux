@@ -1412,12 +1412,20 @@ window.WizCore.chats = function createChats(H) {
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
     const lastAt = LST.at || LST.cachedAt || 0, age = lastAt ? Date.now() - lastAt : 0, since = lastAt ? `last updated ${agoText(lastAt)}` : '';
     const spin = '<i class="ch-spin" aria-hidden="true"></i>';
-    const syncBar = (cls, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${inner}${extra}</div>`;
-    const sync = c.ptrState === 'busy' ? syncBar('', `${spin}<span>Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}</span>`)
-      : LST.error ? syncBar('off', `<span><b>Not up to date</b>${since ? ` · ${esc(since)}` : ''} · ${esc(reachLabel('read'))}</span>`, troubleshoot)
-      : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
-      : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
-      : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
+    // One quiet row, never a pill pushing the list down (James, 7 Nov 2026): a status dot, the line (ellipsis when long;
+    // the whole line stays in the row's title) and a compact "Troubleshoot" text action at its right end, which opens
+    // the Troubleshooter exactly like every other data-chtroubleshoot control.
+    const dot = '<i class="ch-sync-dot" aria-hidden="true"></i>';
+    const act = '<button type="button" class="ch-sync-act" data-chtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button>';
+    // The text's title carries the whole line as plain text (its parts are already escaped); the visible labels stay
+    // literal markup so app-parity-gate sees them.
+    const syncBar = (cls, lead, inner, extra = '', title = inner) => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${lead}<span title="${title}">${inner}</span>${extra}</div>`;
+    const notUp = (cls, lead, rest) => syncBar(cls, lead, `<b>Not up to date</b>${rest}`, act, `Not up to date${rest}`);
+    const sync = c.ptrState === 'busy' ? syncBar('', spin, `Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}`)
+      : LST.error ? notUp('off', dot, ` · ${esc(reachLabel('read'))}${since ? ` · ${esc(since)}` : ''}`)
+      : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
+      : LST.ok && age > STALE_LIST ? notUp('stale', LST.loading ? spin : dot, ` · ${esc(since)}${LST.loading ? ' · updating…' : ''}`)
+      : c.ptrState === 'done' ? syncBar('ok', '', '<span>Up to date</span>', '', 'Up to date') : '';
     const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
@@ -1677,7 +1685,9 @@ window.WizCore.chats = function createChats(H) {
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
       const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
-      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt)}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+      // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
+      const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
+      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn()}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;
@@ -1721,6 +1731,18 @@ window.WizCore.chats = function createChats(H) {
   // opened from it is that agent's row; anything else (All, the main agent, a main thread opened from a link while
   // an agent is focused) keeps the shared lookup. Watcher actions then scope to this row's own owner.
   const rowOf = (wid, sid) => { const a = winAgent(W[owner(wid)]); return (a && LIVE.sessionFor ? LIVE.sessionFor(sid, a) : null) || LIVE.session(sid); };
+  /* Thread tracker Resume = an ordinary owner message through this window's own send path; it never takes the composer's
+   * draft, quote or files and never leaves the thread (the spinner flips in the tracker). The agent comes from this
+   * window's scope (the row it shows, else its own agent), carried explicitly; if the id-only lookup names a different
+   * agent the send is refused (the tracker restores the rows) rather than delivered to the wrong agent. */
+  function resumeTracked(id, w, text) {
+    const sid = w.thread, how = 'tapping Resume in the thread tracker', A = AGS(), row = rowOf(id, sid);
+    const other = a => !!a && (!A || A.isOther(a));
+    const scoped = (other(row?.agent) ? row.agent : '') || winAgent(W[owner(id)] || w) || '';
+    if (scoped !== ((LIVE.agentOf && LIVE.agentOf(sid)) || '')) return Promise.resolve(null);
+    const it = sendChat(id, text, how, null, { sid, away: true, instructions: viewContext(id, how), ...(scoped ? { agent: scoped } : {}) });
+    PW?.follow(id); return it;
+  }
   function agentRec(id) {
     const A = AGS();
     if (!id) { const d = A?.get(A.defaultId()); return d || { id: 'hermes', label: window.WizConfig.agent(), privacy: 'standard', appearance: { glyph: 'wizard' }, model: {}, is_default: true }; }
@@ -1728,6 +1750,27 @@ window.WizCore.chats = function createChats(H) {
   }
   // The agent name used in composer hints and receipts: the open agent's label, else the main agent's name.
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
+  // Read the drawn list, not workGroups(): filters, Space Focus, sort, folded sections and
+  // Show more have already decided what is here. Keep that order while a phone shows its thread.
+  function archiveListOrder(wid, sid) {
+    const own = window.WosSkinHost?.chatArchiveOrder?.(sid);
+    if (own != null) return own;
+    const el = elOf(wid + '::list') || elOf(wid);
+    const rows = [...(el?.querySelectorAll('.ch-list [data-chopen]') || [])];
+    const row = rows.find(r => r.dataset.chopen === sid);
+    if (!row) return ch(wid).archiveOrder || [];
+    const section = row.closest('.ch-sec, .ch-search-results') || row.closest('.ch-list');
+    return rows.filter(r => (r.closest('.ch-sec, .ch-search-results') || r.closest('.ch-list')) === section).map(r => r.dataset.chopen);
+  }
+  function archiveAdvance(w, sid) {
+    const ids = archiveListOrder(w.id, sid).filter(id => id === sid || (rowOf(w.id, id) && !rowOf(w.id, id).archived));
+    const at = ids.indexOf(sid), nx = at < 0 ? null : ids[at + 1] || ids[at - 1];
+    ch(w.id).archiveOrder = ids;
+    // Reuse the ordinary opener: it saves the draft and clears the link trail. Back goes to
+    // the list, never the archived thread. No neighbour also discards that trail explicitly.
+    if (nx) openChat(w.id, nx);
+    else { ch(w.id).trail = []; chatsBack(w); }
+  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
@@ -1755,7 +1798,16 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
+<<<<<<< HEAD
     if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
+=======
+    // Desktop (Classic and AI apps): archiving the open thread opens the next chat in the drawn list (James, 7 Nov 2026).
+    if (a === 'done' && !PHONE() && w?.thread === sid) archiveAdvance(w, sid);
+    // Archive on the phone always returns to the chats list (James, 7 Nov 2026), whatever the After-actions setting,
+    // straight to the list even when the thread was opened from another one (no step up the link trail).
+    else if (a === 'done' && PHONE() && w?.thread === sid) { ch(w.id).trail = []; chatsBack(w); }
+    else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
+>>>>>>> origin/main
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
@@ -2100,8 +2152,9 @@ window.WizCore.chats = function createChats(H) {
   const assistantStamp = turns => { const a = (turns || []).findLast(t => t.a && t.a.final !== false)?.a; return a ? JSON.stringify([a.at, a.text]) : ''; };
   // Hide protocol trailers even when their opening marker spans token chunks.
   const streamAnswer = value => {
-    let s = String(value || '');
-    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '<helm_attachments>'];
+    // A whole tweak card is mid-reply (its own line): drop it and keep streaming; a half-typed one is cut below.
+    let s = String(value || '').replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n');
+    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '[WIZARD_TWEAK_V1]', '<helm_attachments>'];
     for (const marker of markers) {
       const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
       for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
@@ -2637,7 +2690,7 @@ window.WizCore.chats = function createChats(H) {
     if (p.state === 'held' && p.lateHeld) return `<span class="pst">${esc(OUTBOX.lateLabel(p))}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Send</button>` : recover}<button type="button" class="pbtn ghost" data-obdiscard="${esc(p.id)}">Discard</button>`;
     if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span>${recover}<button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button>` : ''}${p.audio || p.audioFile || p.body ? recover : `<button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`}<button type="button" class="pbtn ghost" data-obdismissfailed="${esc(p.id)}">Dismiss</button>`;
-    if (p.state === 'waiting') return `<span class="pst wait">${esc(reachLabel('send'))}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>${troubleshoot}`;
+    if (p.state === 'waiting') return `<span class="pst wait">${esc(p.steerWaitSince ? 'Queued · sends when the current reply can take it' : reachLabel('send'))}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>${troubleshoot}`;
     const agent = esc(window.WizConfig.agent());
     if (p.state === 'sent') {
       // Admission is not delivery: keep the saved request held through its automatic resend.
@@ -2801,9 +2854,10 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid]; if (!w) return;
     if (INC?.active(wid) && !INC.close(wid)) return;
     if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
+    const listOrder = archiveListOrder(wid, sid);
     if (w.thread) saveDraft(wid);
     closeRowSheet();
-    const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
+    const c = ch(wid); c.archiveOrder = listOrder; c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
     c.err = ''; c.failN = 0; clearTimeout(c.retryT); // a read error belongs to the thread that failed, never the next one opened
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
@@ -3045,6 +3099,9 @@ window.WizCore.chats = function createChats(H) {
       if (carried) c.carry = carried;
       if (sealed) sealed.putBack(); else if (here && !voice) { KIT.drafts.set(dkey, text, tray); if (reply) KIT.drafts.setReply(dkey, reply); }
       if (left) left.restore();
+      // Stayed on the thread (phone "Stay on the chat", desktop): the cleared composer shows the words again now,
+      // unless the window has moved on since the tap.
+      else if (here && !voice && !sealed && W[wid] === w && c.readNav === navAtSend && w.thread === sid) { setDraft(wid, text, tray); renderChats(w); }
       if (audio) throw e; // a recording: its caller keeps its own copy and reports it, as before
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
@@ -3135,12 +3192,18 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; if (H.captureBusy?.()) { renderChats(w); toast('!', 'Finish recording before starting Incognito', 2600); return true; } const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (window.WizCore.incognitoOptIn?.enabled(a)) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
+    // A tweak card's switch: flips on this frame, Settings › Look's toggle underneath (core/settings.js tweakCardTap).
+    const twk = e.target.closest('[data-chat-tweak]'); if (twk) { window.WosSettings?.tweakCardTap?.(twk, (i, t) => toast(i, t, 2400)); return true; }
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
     if (globalThis.WosThreadTracker?.on()) {
+<<<<<<< HEAD
       // Resume = an ordinary owner message through this same send path; it never takes the composer's draft,
       // quote or files and never leaves the thread (the spinner flips here).
       const resume = text => { const sid = w.thread, how = 'tapping Resume in the thread tracker';
         const it = sendChat(id, text, how, null, { sid, away: true, instructions: viewContext(id, how) }); PW?.follow(id); return it; };
+=======
+      const resume = text => resumeTracked(id, w, text);
+>>>>>>> origin/main
       if (globalThis.WosThreadTracker.click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a), resume })) return true;
       const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; }
     }

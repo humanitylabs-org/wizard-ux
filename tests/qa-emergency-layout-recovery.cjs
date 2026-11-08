@@ -16,7 +16,7 @@ const report={synthetic:true,cases:[],failures:[]};const save=()=>fs.writeFileSy
   },skin);
   await context.route('**/*',async r=>{const q=r.request(),u=new URL(q.url());if(u.origin!==origin)return r.abort();
    if(!['GET','HEAD'].includes(q.method())){row.writes.push(q.method()+' '+u.pathname);return r.fulfill({status:403,json:{error:'synthetic read-only smoke'}});}
-   if(u.pathname.endsWith('/layouts/ai-apps/layout.js')){row.imports.push(u.search);if(mode==='missing')return r.fulfill({status:503,body:'Synthetic forced import failure'});}
+   if(u.pathname.endsWith('/layouts/ai-apps/desktop.js')){row.imports.push(u.search);if(mode==='missing')return r.fulfill({status:503,body:'Synthetic forced import failure'});}
    if(u.pathname==='/wizard/hermes/api/sessions')return r.fulfill({json:{object:'list',data:[thread],has_more:false,total:1}});
    if(u.pathname==='/wizard/hermes/api/sessions/qa-thread')return r.fulfill({json:{session:thread}});
    if(u.pathname==='/wizard/hermes/api/sessions/qa-thread/messages')return r.fulfill({json:{data:[{id:'u',role:'user',content:'Synthetic request.'},{id:'a',role:'assistant',content:'Synthetic completed reply.'}],has_more:false}});

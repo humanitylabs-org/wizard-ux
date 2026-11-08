@@ -25,7 +25,8 @@
     "miguel/orb-shell",
     "miguel/apps-home",
     "miguel/ai-apps",
-    "wizard/thread-tracker"
+    "wizard/thread-tracker",
+    "wizard/desktop-chats"
   ],
   "defaults": [
     "wizard/unified-inbox"

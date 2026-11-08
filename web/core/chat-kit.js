@@ -25,6 +25,22 @@
       } catch (e) { /* a malformed marker is hidden, not shown */ }
     }
     return out;
+<<<<<<< HEAD
+=======
+  }
+  // [WIZARD_TWEAK_V1]{"id":"wizard/desktop-chats"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
+  // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
+  const TWEAK_ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
+  function tweakIds(s) {
+    const out = [];
+    for (const m of String(s || '').matchAll(TWEAK_RE)) {
+      try {
+        const p = JSON.parse(m[1]);
+        for (const v of [p?.id, ...(Array.isArray(p?.ids) ? p.ids : [])]) { const id = typeof v === 'string' ? v.trim() : ''; if (TWEAK_ID.test(id) && !out.includes(id) && out.length < 8) out.push(id); }
+      } catch (e) { /* hidden, not shown */ }
+    }
+    return out;
+>>>>>>> origin/main
   }
   // <helm_attachments>{"items":[…]}</helm_attachments>: port of normalizers.ts helmPresentation.
   const HELM = /<\s*(\/?)\s*helm_attachments\s*>/gi;
@@ -97,6 +113,7 @@
     .replace(/\[WIZARD_FILE_CHIPS_V1\][\s\S]*?\[\/WIZARD_FILE_CHIPS_V1\]/g, '')
     .replace(/\[WIZARD_CLOSE_AND_FILE_V1\][\s\S]*?\[\/WIZARD_CLOSE_AND_FILE_V1\]/g, '')
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, '')
+    .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // unterminated: to the end
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
@@ -174,17 +191,19 @@
         newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
-        const t = h.text;
+        const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw);
         if (!cur) newTurn(null);
         else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
-        if (!t) { if (!h.attachments.length) cur.steps++; continue; }
+        if (!t && !tweaks.length) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
-        if (cur.a) cur.notes.push(cur.a.text);
-        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+        // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
+        const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8);
+        if (cur.a?.text) cur.notes.push(cur.a.text);
+        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
@@ -1053,5 +1072,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

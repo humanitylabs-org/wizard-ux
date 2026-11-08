@@ -134,3 +134,19 @@ test('desktop host: layout toolbars never crash a shell whose app services lack 
   const src = await readFile(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
   assert.match(src, /renderTools: \(frame, slot\) => window\.WizAppServices\?\.titlebar\?\.render\?\.\(frame, slot\) === true/);
 });
+
+test('placement containers: the host hands a layout frozen { desk, node, shown } rows from the shell adapter, never its markup', () => {
+  const f = fixture(); assert.deepEqual(JSON.parse(JSON.stringify(f.host.placements())), [], 'no adapter placements: none');
+  const a = { id: 'desk-a' }, b = { id: 'desk-b' };
+  f.adapter.placements = () => [{ desk: 0, node: a, shown: true }, { desk: NaN, node: b, shown: 0 }, { desk: 2, node: null, shown: true }, null];
+  const rows = f.host.placements();
+  assert.ok(Object.isFrozen(rows) && rows.every(Object.isFrozen));
+  assert.equal(rows.length, 2, 'rows without a container are dropped');
+  assert.equal(rows[0].node, a); assert.equal(rows[0].desk, 0); assert.equal(rows[0].shown, true);
+  assert.equal(rows[1].node, b); assert.equal(rows[1].desk, null, 'an unnumbered container never matches a desk'); assert.equal(rows[1].shown, false);
+  // the Classic adapter is where the shell's own container markup is read
+  const desktop = read('web/desktop/desktop.js');
+  assert.match(desktop, /placements: \(\) => \[\.\.\.stage\.children\]\.filter\(n => n\.classList\?\.contains\('wsp'\)\)\.map\(n => \(\{ desk: Number\(n\.dataset\.ws\), node: n, shown: !n\.hidden \}\)\)/);
+  const ai = read('web/layouts/ai-apps/desktop.js');
+  assert.doesNotMatch(ai, /dataset\.ws\b|#stage|\.wsp\b/, 'AI apps reads placement only from the host');
+});

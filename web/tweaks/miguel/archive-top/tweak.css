@@ -1,4 +1,4 @@
-/* Archive first in every Chats layout, desktop and phone: core already does this for By status (#790), so this adds
+/* Archive first in every Chats layout, desktop and phone (stock puts it last: James, 6 Nov 2026), By status and
    By day (Archive above Errors, Working, Ready, Yesterday, Past week, Snoozed; that order is kept below it).
    Skins that arrange the phone list themselves keep their own (higher-specificity) order; theirs already puts Archive first. */
 html[data-tweaks~="miguel/archive-top"] .ch-list .ch-scroll { display: flex; flex-direction: column; }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "desktop.js": [
     "#stage > .wsp:not([hidden])",
@@ -10,3 +11,6 @@
     ".win.app-chats"
   ]
 }
+=======
+{}
+>>>>>>> origin/main

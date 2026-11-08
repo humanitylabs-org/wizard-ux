@@ -26,7 +26,18 @@ const results = [], captures = [];
      if (action === 'unread') await p.evaluate(({ phone, id }) => (phone ? __wos.chats : __wux.chats).threadAct(id, 'badge-read-ready', 'unread'), { phone, id });
      if (action === 'typed') { await root.locator('.ch-compose textarea').fill('Synthetic phone action reply'); await root.locator('.ch-send')[phone ? 'tap' : 'click'](); }
      if (action === 'voice') await p.evaluate(({ phone, id }) => (phone ? __wos.chats : __wux.chats).sendVoiceTo(id, 'badge-read-ready', new Blob([new Uint8Array(4000)], { type: 'audio/webm' })), { phone, id });
+<<<<<<< HEAD
      const expected = phone && after === 'list' ? null : 'badge-read-ready';
+=======
+     // Archive (James, 7 Nov 2026): the phone returns to the chats list; desktop opens the next chat in the list.
+     let expected = phone && after === 'list' ? null : 'badge-read-ready';
+     if (action === 'archive' && phone) expected = null;
+     if (action === 'archive' && !phone) {
+      await p.waitForFunction(({ id }) => (__wux.wins[id]?.thread ?? null) !== 'badge-read-ready', { id });
+      expected = await p.evaluate(({ id }) => __wux.wins[id]?.thread ?? null, { id });
+      assert(expected !== 'badge-read-ready', 'desktop archive opens the next chat or the list, never stays: ' + expected);
+     }
+>>>>>>> origin/main
      await p.waitForFunction(({ phone, id, expected }) => ((phone ? __wos : __wux).wins[id]?.thread ?? null) === expected, { phone, id, expected });
      if (action === 'unread' && expected) assert(await p.evaluate(() => WizLive.isNew(WizLive.session('badge-read-ready'))), 'explicit unread survives its synchronous repaint');
      if (action === 'archive') assert(await p.evaluate(() => WizLive.session('badge-read-ready').archived), 'archive changed record state');

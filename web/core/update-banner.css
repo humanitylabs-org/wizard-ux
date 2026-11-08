@@ -5,11 +5,11 @@
  * core/web-update.js). One look in both shells; each shell places it for its form factor:
  * phone = glass strip under the status bar, desktop = one-line pill in the top bar. */
 .dv-update { position: absolute; left: 10px; right: 10px; top: calc(40px + var(--safe-t)); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 18px;
-  background: var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--wz-text, var(--ink, #f4f0ff)); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: 0 10px 30px rgba(0, 0, 0, .32); font-size: 13.5px; }
+  background: var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text, var(--ink)); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: var(--wz-shadow, none); font-size: .84375rem; }
 .dv-update[hidden] { display: none; }
 .dv-ui { color: var(--violet-2); font-size: 15px; }
 .dv-um { flex: 1; min-width: 0; font-weight: 600; }
-.dv-update button { padding: 7px 14px; border-radius: 99px; background: var(--wz-accent, var(--violet)); color: var(--wz-on-accent, #fff); font-weight: 700; font-size: 13px; }
+.dv-update button { padding: 7px 14px; border-radius: 99px; background: var(--wz-accent, var(--violet)); color: var(--wz-on-accent, var(--bg)); font-weight: 700; font-size: .8125rem; }
 .dv-update button.later { padding: 7px 9px; background: transparent; color: var(--ink-3); }
 /* Web update banner: which thread it came from (James, 12 Oct). Top row: message · Thread · Reload; the list of
  * threads drops below when one update carries several. */
@@ -17,7 +17,7 @@
 .dv-wtop { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .dv-update.web .dv-um { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dv-update.web .dv-um.two { display: flex; flex-direction: column; line-height: 1.25; white-space: normal; }
-.dv-um.two small { font-size: 11.5px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-3)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-um.two small { font-size: .71875rem; font-weight: 500; color: var(--wz-text-secondary, var(--ink-3)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dv-um.two b { white-space: normal; font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* a long thread name wraps once rather than being cut */
 .dv-update button.dv-wt { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 12px; }
 .dv-update.web .dv-wtop > button[data-web="go"] { flex: none; padding: 7px 12px; }
@@ -35,7 +35,7 @@
  * Threads ▾ drops a list under the bar. */
 #dvWeb[data-shell="desktop"] { position: relative; left: auto; right: auto; top: auto; z-index: auto; flex-direction: row; align-items: center; gap: 0;
   height: 26px; min-width: 0; flex-shrink: 1; max-width: min(calc(50vw - 150px), 520px); padding: 0 3px 0 10px; border-radius: 8px; font-size: 12px;
-  background: var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: none;   }
+  background: var(--wz-panel, var(--wz-base, var(--bg))); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: none; }
 #dvWeb[data-shell="desktop"] .dv-wtop { gap: 6px; min-width: 0; flex: 1; }
 #dvWeb[data-shell="desktop"] .dv-um.two { flex-direction: row; align-items: baseline; gap: 6px; white-space: nowrap; min-width: 0; }
 #dvWeb[data-shell="desktop"] .dv-um.two small { font-size: 11.5px; flex: none; }
@@ -119,7 +119,7 @@
 .osu-pop[data-state="reload"] { flex-wrap: wrap; }
 .osu-pop[data-state="reload"] .osu-pop-tx { flex-basis: calc(100% - 160px); }
 .osu-pop[data-state="reload"] .osu-pop-tx span { display: block; overflow: visible; -webkit-line-clamp: unset; }
-.wos-reload-reason { margin: 7px 0 2px; color: var(--wz-text-secondary, var(--ink-2, #d9d2f0)); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.wos-reload-reason { margin: 7px 0 2px; color: var(--wz-text-secondary, var(--ink-2)); font-size: .75rem; line-height: 1.4; overflow-wrap: anywhere; }
 .wos-reload-rescue { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-top: 8px; }
 .wos-reload-rescue button { min-height: 44px; padding: 8px 14px; border-radius: 99px; background: var(--wz-accent, var(--violet)); color: var(--wz-on-accent, var(--bg)); font: inherit; font-weight: 650; }
 .wos-reload-rescue button:last-child { background: transparent; color: var(--wz-text-secondary, var(--ink-2)); border: 1px solid var(--wz-border, var(--line-2)); }
@@ -127,7 +127,7 @@
 .osu-card:has(.wos-reload-rescue) { flex-wrap: wrap; }
 /* The reason belongs to the banner, not a second rectangular panel. */
 .wos-reload-detail { background: transparent; color: var(--wz-text, var(--ink)); }
-.wos-reload-dot { display: inline-block; width: 5px; height: 5px; margin: 0 6px 2px 0; border-radius: 50%; background: var(--wz-accent, var(--violet, #8f63ff)); }
+.wos-reload-dot { display: inline-block; width: 5px; height: 5px; margin: 0 6px 2px 0; border-radius: 50%; background: var(--wz-accent, var(--violet)); }
 #dvWeb[data-shell="desktop"]:has(.wos-reload-detail) { height: auto; min-height: 26px; flex-direction: column; align-items: stretch; padding: 4px 7px 6px 10px; border-radius: 14px; }
 /* An expanded alert grows down from the bar, never above the viewport. */
 #bar:has(#dvWeb .wos-reload-detail) .bar-r { align-self: start; align-items: flex-start; padding-top: 3px; }
