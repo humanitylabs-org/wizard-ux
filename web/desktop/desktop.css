@@ -31,8 +31,10 @@ html[data-layout-recovery="chats"] [data-layout-recovery-chat] .pane-main { disp
   background: linear-gradient(rgba(8, 5, 18, .82), rgba(8, 5, 18, .82)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-bottom: 1px solid rgba(205, 190, 255, .08);  -webkit-app-region: drag; user-select: none; }
 .bar button, .bar nav { -webkit-app-region: no-drag; }
 /* The Mac app draws its window buttons (red/yellow/green) over the top-left of a full-size web view;
- * keep the bar's content clear of them. Plain browsers reserve nothing. */
-html[data-native-chrome="mac"] .bar { padding-left: 96px; }
+ * keep the bar's content clear of them. Plain browsers reserve nothing. With TitleBarDoubleClick on,
+ * the app sets --wz-titlebar-left to where the buttons end in page pixels (follows zoom, 0 in full
+ * screen); without it the fixed 96px stays (try-wizard#19). */
+html[data-native-chrome="mac"] .bar { padding-left: max(8px, var(--wz-titlebar-left, 96px)); }
 html[data-native-chrome="mac"] .bar-l { min-width: 0; }
 html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .bar-l, .bar-r { display: flex; align-items: center; gap: 6px; }

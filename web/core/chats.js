@@ -470,8 +470,10 @@ window.WizCore.chats = function createChats(H) {
     // 'Needs you:' line either: the tracker's dots carry the asks (James, 7 Nov 2026). Tracker off keeps the line.
     const inWorking = working || !!window.WizChatsListModel?.isListWorking(s); // a background helper is Working too
     const trackedAsk = inWorking && at && ['needs_you', 'check'].includes(at.state) && !!globalThis.WosThreadTracker?.onFor?.(LIVE.agentOf ? LIVE.agentOf(s.id) : ''); // main agent only
+    // The named failure reason (wizard/failure-reason tweak, core/chat-models.js runError) replaces "Error: <your message>".
+    const rerr = needs && !working ? window.WosModels?.runError?.(s) : null;
     const pv = trackedAsk ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
-      : working && at && ['needs_you', 'check'].includes(at.state) ? `<em class="att ${A.cls}">${A.label}:</em> ` + esc(clip(at.ask, 140)) : s.reconnect && needs ? esc(s.reconnect.name) + ' sign-in expired' : working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+      : working && at && ['needs_you', 'check'].includes(at.state) ? `<em class="att ${A.cls}">${A.label}:</em> ` + esc(clip(at.ask, 140)) : s.reconnect && needs ? esc(s.reconnect.name) + ' sign-in expired' : rerr ? esc(rerr.line) : working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
       : needs ? lab + esc(clip(s.preview || '', 110))
       : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
       : at ? lab + esc(clip(at.ask, 140))
@@ -2321,6 +2323,9 @@ window.WizCore.chats = function createChats(H) {
       }
       const from = Math.max(0, all.length - c.show), shown = all.slice(from);
       let day = '';
+      // A named failure reason (wizard/failure-reason tweak) is a notice in the failed panel, not a Wizard reply:
+      // it hides Hermes' generic failed_turn bubble and the duplicate "Reply not sent" line.
+      const runErr = !working && !!window.WosModels?.runError?.(s);
       // Renames show where they happened ("Renamed from …"), so the old name still finds its place in the thread.
       const firstAt = shown.length ? turnAt(shown[0]) : Infinity;
       const rns = (s?.renames || []).map(r => ({ ...r, ms: r.at * 1000 })).filter(r => from === 0 || !(r.ms < firstAt)).sort((a, b) => a.ms - b.ms);
@@ -2331,10 +2336,10 @@ window.WizCore.chats = function createChats(H) {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect, !!globalThis.WosThreadTracker?.onFor?.(TAG));
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect || !!runErr, !!globalThis.WosThreadTracker?.onFor?.(TAG));
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
-        + (s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
+        + (!runErr && s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c, s)).join('')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');

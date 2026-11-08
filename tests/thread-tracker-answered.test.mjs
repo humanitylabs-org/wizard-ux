@@ -146,7 +146,7 @@ test('another agent (Philosopher): Chats row keeps its Needs you line, bubbles c
   vm.runInContext(pick('const msgIds =') + '\n' + pick('const quoteBtn =') + '\nthis.f = { msgIds, quoteBtn };', c);
   assert.equal(c.f.quoteBtn(false), ''); assert.equal(c.f.msgIds({ id: 4, at: 5 }, undefined, false), '');
   assert.match(c.f.quoteBtn(true), /data-mquote/); assert.match(c.f.msgIds({ id: 4, at: 5 }), /data-mid="4"/);
-  assert.match(chats, /turnHtml\(c, tn, k === arr\.length - 1, working, s\?\.helperStatus, s\?\.reconnect, !!globalThis\.WosThreadTracker\?\.onFor\?\.\(TAG\)\)/);
+  assert.match(chats, /turnHtml\(c, tn, k === arr\.length - 1, working, s\?\.helperStatus, s\?\.reconnect \|\| !!runErr, !!globalThis\.WosThreadTracker\?\.onFor\?\.\(TAG\)\)/);
   const { T, fetched } = await fixture([it('red', 'blocked', T0)], { counts: { 'philosopher/p': { needs_you: 1, running: 0, done_unseen: 0, blocked: 0, acknowledged: 0, total: 1 } } });
   await T.loadCounts(true); await new Promise(r => setImmediate(r));
   assert.ok(!fetched.some(p => p.includes('thread=p')), 'an older box counting other agents is ignored');
