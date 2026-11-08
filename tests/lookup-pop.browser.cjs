@@ -10,7 +10,7 @@ const fs = require('fs'), path = require('path'), http = require('http'), assert
 const root = path.resolve(__dirname, '..');
 const SHOTS = process.env.QA_SHOTS || '';
 const LONG = 'The demiurge appears in Plato\'s Timaeus as a craftsman who shapes the world from a model. ' + 'Filler sentence about nothing in particular. '.repeat(40);
-const OTHER = 'SECOND-MESSAGE-MUST-NOT-LEAK about Gnostic emanations.';
+const OTHER = 'SECOND-MESSAGE-MUST-NOT-LEAK about Gnostic emanations, and also Plato\'s Timaeus.';
 const ANSWER = 'Plato\'s Timaeus is a late dialogue in which a divine craftsman, the demiurge, shapes the ordered cosmos from pre-existing chaos.';
 const MODEL = 'claude-haiku-4-5';
 const PAGE = `<!doctype html><html data-skin="${process.env.QA_SKIN || 'nebula'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -120,6 +120,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await select('m1', "Plato's Timaeus"); await menu(); await look(); await sleep(300);
     await select('m1', 'craftsman'); await sleep(500);
     assert.equal(await pop(), null, 'newer selection closes'); assert.ok(closed >= 1, 'newer selection aborts the fetch');
+    // the very same words picked in ANOTHER message are a newer selection, not the old one
+    closed = 0; mode = 'hold';
+    await select('m1', "Plato's Timaeus"); await menu(); await look(); await sleep(200);
+    await select('m2', "Plato's Timaeus"); await sleep(500);
+    assert.equal(await pop(), null, 'same text elsewhere closes it'); assert.ok(closed >= 1, 'and aborts the fetch'); await cleanup();
     mode = (n) => n === 1 ? 'hold' : 'good'; closed = 0; calls = [];
     await select('m1', "Plato's Timaeus"); await menu(); await look(); await sleep(200);
     await page.evaluate(() => { const s = getSelection(); WosLookup.open({ text: 'craftsman', before: 'a ', after: ' who', range: s.getRangeAt(0) }); });
@@ -147,6 +152,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     assert.equal((await pop()).text, 'Select a word or short phrase to explain.'); assert.equal(await page.locator('[data-lk-retry]').count(), 0, 'no retry for a local notice'); assert.equal(calls.length, 0); await cleanup();
     await select('m2', 'Gnostic emanations'); await menu(); await look(); await waitState('done'); assert.equal(calls[0].text, 'Gnostic emanations'); assert.ok(calls[0].before.includes('SECOND-MESSAGE-MUST-NOT-LEAK')); await cleanup();
 
+    // 12a. A chat selection whose thread scope cannot be resolved fails closed
+    await page.evaluate(() => { window.__lkScope = window.__wos.chats.lookupScope; window.__wos.chats.lookupScope = () => null; });
+    await select('m1', "Plato's Timaeus"); const lost = await menu(); assert.ok(!lost.includes('lookup'), 'unresolved scope never offers Look up: ' + lost);
+    await page.evaluate(() => { window.__wos.chats.lookupScope = window.__lkScope; getSelection().removeAllRanges(); });
+    await sleep(300);
     // 12. Private thread: no Look up at all
     await page.evaluate(() => { window.__private = true; });
     await select('m1', "Plato's Timaeus"); const priv = await menu(); assert.ok(!priv.includes('lookup'), 'private threads never offer Look up: ' + priv);

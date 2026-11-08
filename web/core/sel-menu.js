@@ -137,7 +137,8 @@
   function lookupOk(c) {
     if (c.lk || !window.WosLookup?.open) return false;
     if (!c.wid && !c.block?.closest?.('.msg')) return false;
-    try { const s = c.wid ? host()?.chats?.lookupScope?.(c.wid) : null; if (s && s.private) return false; } catch (e) { return false; }
+    // Fail closed: a chat selection whose thread scope cannot be resolved (or is private) never offers Look up.
+    try { if (c.wid) { const s = host()?.chats?.lookupScope?.(c.wid); if (!s || s.private) return false; } } catch (e) { return false; }
     return true;
   }
   function place() {
@@ -177,7 +178,8 @@
     }
     if (id === 'lookup') {
       // Paint first: the popover opens on this tap's frame; the words stay selected under it, only the menu steps aside.
-      const L = window.WosLookup, sc = (c.wid && host()?.chats?.lookupScope?.(c.wid)) || {}, cx = L.contextOf(c.range);
+      const L = window.WosLookup, cx = L.contextOf(c.range); let sc = {};
+      if (c.wid) { try { sc = host()?.chats?.lookupScope?.(c.wid); } catch (e) { sc = null; } if (!sc || sc.private) return hide(); } // re-checked at the tap, never sent unscoped
       hide(); L.open({ text: c.text, before: cx.before, after: cx.after, frame: sc.frame || '', agent: sc.agent || '', session: sc.session || '', range: c.range });
       return;
     }

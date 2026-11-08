@@ -47,6 +47,7 @@
     const text = (m ? m[2] : flat(rawText)).trim();
     return { text, before: (before + (m ? m[1] : '')).slice(-SIDE), after: ((m ? m[3] : '') + after).slice(0, SIDE) };
   }
+  const sameRange = r => !range || (r.startContainer === range.startContainer && r.startOffset === range.startOffset && r.endContainer === range.endContainer && r.endOffset === range.endOffset);
   const tooBig = t => t.length > MAX_CHARS || t.split(/\s+/).length > MAX_WORDS;
 
   /* ---- popover ---- */
@@ -161,7 +162,8 @@
       const s = sel(), t = s && !s.isCollapsed ? String(s).replace(/\s+/g, ' ').trim() : '';
       if (!t && held) { held = false; return; }
       held = false;
-      if (!t || t !== flat(term).trim()) close();
+      // Still the same words only when it is the very same place in the page (same text elsewhere is a newer selection).
+      if (!t || t !== flat(term).trim() || !sameRange(s.getRangeAt(0))) close();
     });
     document.addEventListener('scroll', () => { if (status !== 'closed') place(); }, true);
     window.addEventListener('resize', () => { if (status !== 'closed') place(); });

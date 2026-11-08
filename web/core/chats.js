@@ -1757,7 +1757,7 @@ window.WizCore.chats = function createChats(H) {
     const w = W[id]; if (!w) return null;
     const sid = w.thread && w.thread !== '__new__' ? String(w.thread) : '';
     const agent = winAgent(w) || (sid && LIVE.agentOf ? LIVE.agentOf(sid) : '') || '';
-    const priv = !!INC?.active(id) || !!(sid && LIVE.isPrivate?.(sid)) || !!(agent && AGS()?.isPrivate(agentRec(agent)));
+    const priv = !!INC?.active(id) || !!(sid && LIVE.isPrivate?.(sid)) || !!AGS()?.isPrivate(agentRec(agent)); // '' is the default agent, checked too
     let title = ''; try { title = winTitle(w) || ''; } catch (e) {}
     return { session: sid, agent, private: priv, frame: `${agentName(agent)}${title ? ' · ' + title : ''}`.slice(0, 80) };
   }
