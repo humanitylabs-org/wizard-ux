@@ -1,4 +1,4 @@
-/* Wizard OS · AI Look up popover (ported from Wisdom's Look up → "AI explanation", humanitylabs-org/wisdom).
+/* Wizard OS · AI Look up popover (ported from the reading app's Look up → "AI explanation").
  *
  * Select words in a chat message, tap Look up in the selection menu (core/sel-menu.js): a compact opaque popover opens
  * under the words (above them when there is no room) and a fast model streams a 1-2 sentence plain explanation of the
@@ -10,7 +10,7 @@
  *   WosLookup.isOpen        → bool (selection menu stays out of its way)   WosLookup.contextOf(range) → {before, after}
  *   WosLookup.state         → QA probe { open, status, text, term, model }
  *
- * Rules kept from Wisdom: a newer lookup, Back, an outside tap or close aborts the request and a superseded answer can
+ * Rules kept from that port: a newer lookup, Back, an outside tap or close aborts the request and a superseded answer can
  * never paint; deltas are provisional ("…" trails them) and only the validated done text with the exact fast model is
  * shown as final; the answer is selectable and copyable; an error shows a compact Retry. No answer is stored.
  */
@@ -41,7 +41,7 @@
     } catch (e) { return { before: '', after: '' }; }
     return { before: flat(b.toString()).slice(-SIDE), after: flat(f.toString()).slice(0, SIDE) };
   }
-  // Wisdom trims quotes and punctuation round the term; what is trimmed goes back to the context so the passage reads whole.
+  // The port trims quotes and punctuation round the term; what is trimmed goes back to the context so the passage reads whole.
   function normalise(rawText, before, after) {
     const m = /^([\s"'“‘(\[]*)([\s\S]*?)([\s"'”’)\],.;:!?]*)$/.exec(flat(rawText));
     const text = (m ? m[2] : flat(rawText)).trim();

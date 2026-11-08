@@ -1,4 +1,4 @@
-/* Wizard OS · AI Look up popover (core/lookup-pop.js). Wisdom's "AI explanation" popover in Appearance v1 tokens:
+/* Wizard OS · AI Look up popover (core/lookup-pop.js). The reading app's "AI explanation" popover in Appearance v1 tokens:
  * fully opaque panel (--wz-panel over --wz-base), follows the live skin; the kit's dark defaults are the standalone fallback.
  * Selectable/copyable text is opted in with the chat selection rule in core/chats.css. */
 .wos-lookup {
