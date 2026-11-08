@@ -167,6 +167,39 @@ test('repeated words: two places stay two, one place read twice stays one, a con
   assert.match(h.pill(), /1 not placed/);
 });
 
+test('#1101: repeated picture text keeps every occurrence unless two valid boxes overlap', async () => {
+  const run = async (lines, boxes) => {
+    const h = await harness(); h.identity(); h.pictured({ lines, boxes });
+    const sent = h.next('translate').items; h.thaiEnglish();
+    h.node('#tCopy').fire('click');
+    h.node('#tAsk').fire('click');
+    return { h, sent, rows: Array.from(h.st.picRows, q => [q.tr, q.bi >= 0]), copy: h.next('copy').text, ask: h.next('ask').text };
+  };
+  // two boxless identical lines: two rows, two lines in Copy/Ask, one translate item
+  let r = await run([THAI[0], THAI[0]], [null, null]);
+  assert.deepEqual(r.sent, [THAI[0]], 'the translate request may deduplicate');
+  assert.equal(JSON.stringify(r.rows), JSON.stringify([[EN[0], false], [EN[0], false]]));
+  assert.equal(r.copy, [EN[0], EN[0]].join('\n'));
+  assert.equal(r.ask, [THAI[0], THAI[0]].join('\n') + '\n\nEnglish:\n' + [EN[0], EN[0]].join('\n'));
+  // older Search (no boxes at all) behaves the same
+  r = await run([THAI[0], THAI[1], THAI[0]], undefined);
+  assert.equal(JSON.stringify(r.rows), JSON.stringify([[EN[0], false], [EN[1], false], [EN[0], false]]));
+  // boxless then placed, and placed then boxless: two rows, the placed one keeps its overlay
+  for (const boxes of [[null, BOX[0]], [BOX[0], null]]) {
+    r = await run([THAI[0], THAI[0]], boxes);
+    assert.equal(JSON.stringify(r.rows), JSON.stringify(boxes.map(b => [EN[0], !!b])), JSON.stringify(boxes));
+    assert.deepEqual(r.h.painted().map(p => p.t), [EN[0]], 'the placed occurrence is painted once');
+    assert.equal(r.copy, [EN[0], EN[0]].join('\n'));
+  }
+  // two valid overlapping boxes: one row; two separate valid places: two rows
+  r = await run([THAI[0], THAI[0]], [BOX[0], [0.11, 0.301, 0.69, 0.339]]);
+  assert.equal(JSON.stringify(r.rows), JSON.stringify([[EN[0], true]]));
+  assert.equal(r.copy, EN[0]);
+  r = await run([THAI[0], THAI[0]], [BOX[0], BOX[2]]);
+  assert.equal(JSON.stringify(r.rows), JSON.stringify([[EN[0], true], [EN[0], true]]));
+  assert.equal(r.h.painted().length, 2);
+});
+
 test('James: three distinct captions close together all get placed, not just the first (synthetic text, not a real screenshot)', async () => {
   const lines = ['สวัสดีครับ', 'วันนี้อากาศดี', 'ไปเดินเล่นกันไหม'], en = ['Hello', 'The weather is nice today', 'Shall we go for a walk?'];
   // three boxes with moderate, imprecise overlap against the first (50 % and 75 %), as a loose model box or tight
