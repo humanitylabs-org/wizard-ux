@@ -14,7 +14,7 @@ const fake = async body => (await fetch(ORIGIN + '/__fake/state', { method:'POST
 const reset = async () => (await fetch(ORIGIN + '/__fake/reset', { method:'POST' })).json();
 const log = async () => (await fetch(ORIGIN + '/__fake/log')).json();
 const count = (items, method, p, since = 0) => items.filter(e => e.method === method && e.path === p && e.t >= since).length;
-const URLS = { wiz:'https://wizard.tail1234.ts.net/', auth:'https://login.tailscale.com/a/example-sign-in' };
+const URLS = { wiz:'https://wizard.example.test/', auth:'https://login.tailscale.com/a/example-sign-in' };
 async function context(browser, mode) {
   const ctx = await browser.newContext(mode === 'phone' ? {viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'} : {viewport:{width:1440,height:900},deviceScaleFactor:1});
   await ctx.grantPermissions(['clipboard-read','clipboard-write'],{origin:ORIGIN});
@@ -26,7 +26,8 @@ async function context(browser, mode) {
 }
 async function frame(p) {
   await p.waitForFunction(() => !!document.querySelector('iframe[src*="setup/"]'));
-  const f = p.frames().find(f => /\/setup\/(?:index.html)?(?:[?#]|$)/.test(f.url()));
+  const iframe = await p.locator('iframe[src*="setup/"]').first().elementHandle();
+  const f = await iframe.contentFrame();
   await f.waitForFunction(() => !!window.__setup); return f;
 }
 const text = (f,s) => f.locator(s).innerText();
@@ -51,7 +52,7 @@ async function decode(browser,el) {
 (async()=>{
  const b = await pw.chromium.launch();
  for(const mode of ['phone','desktop']) {
-  await reset(); await fake({owner:'Robin'});
+  await reset(); await fake({owner:'Robin', phone:{wizard_url:URLS.wiz}});
   const {ctx,p,outside,errors} = await context(b,mode);
   await p.goto(BASE+(mode === 'desktop' ? 'desktop.html?shell=desktop' : '?shell=phone'));
   const f = await frame(p);
@@ -69,7 +70,7 @@ async function decode(browser,el) {
   ok(!(await f.locator('.step').count()),`${mode}: Setup uses the shared component, no private step UI`);
   await change(f,{phone:{step:'https'}},'https');
   ok((await text(f,'[data-phone-connect]')).includes('HTTPS'),`${mode}: HTTPS guidance`);
-  await change(f,{phone:{step:'serving'}},'serving');
+  await change(f,{phone:{step:'serving',wizard_url:URLS.wiz}},'serving');
   if(mode==='desktop') {
    await f.waitForFunction(()=>document.querySelector('.pc-qr')?.dataset.drawn);
    ok(await decode(b,f.locator('.pc-qr'))==='wizard://connect?origin='+encodeURIComponent(new URL(URLS.wiz).origin),'desktop: rendered QR decodes to native Connect URI');
@@ -77,6 +78,7 @@ async function decode(browser,el) {
   await f.locator('[data-pc="copy"]').first().click();
   ok(await f.evaluate(()=>navigator.clipboard.readText())===new URL(URLS.wiz).origin,`${mode}: Copy uses plain HTTPS origin`);
   await change(f,{phone:{step:'phone_seen'}},'phone_seen');
+  if (await f.locator('[data-pc-flow]').count()) await f.locator('[data-pc="flow-close"]').click();
   ok((await text(f,'.pc-ok')).includes('connected'),`${mode}: connected state`);
   await f.locator('[data-pc="again"]').click();
   ok(await f.locator('[data-pc-flow]').isVisible(),`${mode}: Connect another device opens the shared flow`);
@@ -115,7 +117,9 @@ async function decode(browser,el) {
   await f.locator('[data-act="back"]').click();await sleep(300);const at=Date.now();await sleep(2300);
   ok(count(await log(),'GET','/wizard/v1/setup/phone',at)===0,`${mode}: no polling on checklist`);
   ok(errors.length===0,`${mode}: no page errors`,errors);
-  await p.reload();await sleep(2200);
+  // Close the existing app before testing first-run launch policy; restored windows are not auto-launches.
+  await p.evaluate(mode => { const shell=mode==='phone'?__wos:__wux; for(const w of Object.values(shell.wins)) if(w.appId==='setup') shell.closeWin(w.id); },mode);
+  await sleep(400); await p.reload();await sleep(2200);
   ok(!p.frames().some(f=>/\/setup\/index.html/.test(f.url())),`${mode}: second launch does not auto-open Setup`);
   await ctx.close();
  }
