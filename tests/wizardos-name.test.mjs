@@ -108,9 +108,14 @@ test('app update banner repaints when the tweak is toggled', () => {
   const b = banner('');
   b.show({ state: 'available', version: '0.10.27', versionCode: 91 });
   assert.match(b.html(), /Wizard OS 0\.10\.27/);
+  // wos:experience is what WosExperience dispatches once data-tweaks holds the new set.
+  assert.equal(b.listeners['wos:tweak-choice'], undefined, 'no repaint before the tweaks are applied');
   b.document.documentElement.dataset.tweaks = ID;
-  b.listeners['wos:tweak-choice']({ detail: { id: ID, on: true } });
+  b.listeners['wos:experience']();
   assert.match(b.html(), /WizardOS 0\.10\.27/);
+  b.document.documentElement.dataset.tweaks = '';
+  b.listeners['wos:experience']();
+  assert.match(b.html(), /Wizard OS 0\.10\.27/);
 });
 
 test('Text selection menu subtitle follows the tweak', () => {

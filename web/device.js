@@ -336,8 +336,9 @@
     permission: () => [`Allow ${OS()} to install updates, then come back`, 'Allow'],
     error: u => [u.message || 'Update failed', 'Retry'],
   };
-  // The banner repaints when the WizardOS name tweak is toggled, without a reload.
-  window.addEventListener?.('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/wizardos-name') { try { renderUpdate(); } catch (_) {} } });
+  // The banner repaints when the WizardOS name tweak is toggled, without a reload. wos:experience fires after the
+  // tweaks are applied to data-tweaks (wos:tweak-choice fires before), and also for recipe or other-device changes.
+  window.addEventListener?.('wos:experience', () => { if (upd) { try { renderUpdate(); } catch (_) {} } });
   function renderUpdate() {
     let el = $('#dvUpdate');
     const u = upd, t = u && UPD_TEXT[u.state];
