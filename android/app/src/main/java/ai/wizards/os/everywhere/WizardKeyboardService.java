@@ -160,104 +160,83 @@ public class WizardKeyboardService extends AccessibilityService {
     /* ------------------------------------------------------------------ typing */
 
     /**
-     * Types the words where the cursor is: Archimedes Anywhere's insertText, copied verbatim. Strategy 1 is the
-     * accessibility InputConnection (commitText at the cursor, works in Obsidian/WebViews/everything on Android 13+),
-     * verified by re-reading the field; strategy 2 is a clipboard paste that restores the old clipboard.
+     * Types the words where the cursor is: Archimedes Anywhere's insertText. Strategy 1 is the accessibility
+     * InputConnection (commitText at the cursor, works in Obsidian/WebViews/everything on Android 13+). Once
+     * commitText has been issued the words are typed: the clipboard is never touched for them ({@link InsertPolicy}),
+     * because a web editor publishes its text to accessibility late and a re-read cannot tell "typed" from "not yet
+     * visible". Strategy 2 is a clipboard paste that restores the old clipboard, only when there is no
+     * InputConnection (older Android, IME unavailable) or the commit itself threw.
      * Never replaces the whole field (ACTION_SET_TEXT rewrote Obsidian documents).
      */
     public boolean insertText(String text) {
-        // Find target for capitalization context
-        AccessibilityNodeInfo target = findEditable();
-        if (target == null) target = lastFocusedNode;
-
-        // Trim leading whitespace
         text = text.stripLeading();
+        boolean icAvailable = false, commitIssued = false, webEditor = true, verifiable = false, textChanged = false;
 
-        // Get the field text BEFORE insertion (via accessibility node) for verification
-        String fieldTextBefore = null;
-        AccessibilityNodeInfo verifyNode = target;
-        if (verifyNode != null && verifyNode.getText() != null) {
-            fieldTextBefore = verifyNode.getText().toString();
-        }
-
-        // Strategy 1: InputConnection (API 33+) — works in ALL apps including Obsidian
+        // Strategy 1: InputConnection (API 33+) — works in ALL apps including Obsidian. No accessibility tree walk and
+        // no sleep before the commit: the surrounding text comes from the InputConnection itself.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             try {
                 InputMethod inputMethod = getInputMethod();
-                if (inputMethod != null) {
-                    InputMethod.AccessibilityInputConnection ic = inputMethod.getCurrentInputConnection();
-                    if (ic != null) {
-                        // Get surrounding text for context-aware behavior
-                        SurroundingText surrounding = ic.getSurroundingText(50, 50, 0);
-                        
-                        if (surrounding != null) {
-                            CharSequence before = surrounding.getText().subSequence(
-                                0, surrounding.getSelectionStart());
-                            CharSequence after = surrounding.getText().subSequence(
+                InputMethod.AccessibilityInputConnection ic = inputMethod == null ? null : inputMethod.getCurrentInputConnection();
+                if (ic != null) {
+                    icAvailable = true;
+                    // Cheap state only before the commit: the cached node and its cached text (no tree walk, no IPC).
+                    final AccessibilityNodeInfo node = lastFocusedNode;
+                    final CharSequence beforeText = node == null ? null : node.getText();
+                    SurroundingText surrounding = ic.getSurroundingText(50, 50, 0);
+                    if (surrounding != null) {
+                        CharSequence before = surrounding.getText().subSequence(0, surrounding.getSelectionStart());
+                        CharSequence after = surrounding.getText().subSequence(
                                 surrounding.getSelectionEnd(), surrounding.getText().length());
-                            
-                            // Smart leading space: if cursor is right after a word character
-                            // (no space between), prepend a space
-                            if (before.length() > 0) {
-                                char lastBefore = before.charAt(before.length() - 1);
-                                if (Character.isLetterOrDigit(lastBefore) || lastBefore == ')' || lastBefore == '"') {
-                                    text = " " + text;
-                                }
-                            }
-                            
-                            // Context-aware capitalization
-                            text = adjustCapitalizationFromContext(
-                                before.toString(), text);
-                            
-                            // Smart trailing space: don't add if next char is space/punctuation
-                            if (text.endsWith(" ") && after.length() > 0) {
-                                char nextChar = after.charAt(0);
-                                if (nextChar == ' ' || nextChar == '.' || nextChar == ',' 
-                                    || nextChar == '!' || nextChar == '?' || nextChar == ';'
-                                    || nextChar == ':' || nextChar == ')') {
-                                    text = text.stripTrailing();
-                                }
-                            }
-                        } else {
-                            // No surrounding text — capitalize first letter
-                            text = capitalizeFirst(text);
-                        }
-                        
-                        ic.commitText(text, 1, null);
-                        
-                        // Verify insertion via accessibility node (not InputConnection which may be stale)
-                        try {
-                            Thread.sleep(100); // Wait for field to update
-                        } catch (InterruptedException ie) { /* ignore */ }
-                        
-                        // Re-find the editable node to get fresh text
-                        AccessibilityNodeInfo freshNode = findEditable();
-                        if (freshNode == null) freshNode = lastFocusedNode;
-                        String fieldTextAfter = null;
-                        if (freshNode != null) {
-                            freshNode.refresh(); // Force refresh from the view
-                            if (freshNode.getText() != null) {
-                                fieldTextAfter = freshNode.getText().toString();
+                        // Smart leading space: if cursor is right after a word character (no space between), prepend one
+                        if (before.length() > 0) {
+                            char lastBefore = before.charAt(before.length() - 1);
+                            if (Character.isLetterOrDigit(lastBefore) || lastBefore == ')' || lastBefore == '"') {
+                                text = " " + text;
                             }
                         }
-                        
-                        // If we can verify and text didn't change, commitText silently failed
-                        if (fieldTextBefore != null && fieldTextAfter != null 
-                                && fieldTextBefore.equals(fieldTextAfter)) {
-                            Log.w(TAG, "commitText silently failed — field text unchanged. Falling through to clipboard.");
-                            throw new Exception("Stale InputConnection — field text unchanged after commitText");
+                        // Context-aware capitalization
+                        text = adjustCapitalizationFromContext(before.toString(), text);
+                        // Smart trailing space: don't add if next char is space/punctuation
+                        if (text.endsWith(" ") && after.length() > 0) {
+                            char nextChar = after.charAt(0);
+                            if (nextChar == ' ' || nextChar == '.' || nextChar == ',' || nextChar == '!' || nextChar == '?'
+                                    || nextChar == ';' || nextChar == ':' || nextChar == ')') {
+                                text = text.stripTrailing();
+                            }
                         }
-                        
-                        return true;
+                    } else {
+                        // No surrounding text — capitalize first letter
+                        text = capitalizeFirst(text);
+                    }
+                    ic.commitText(text, 1, null);
+                    commitIssued = true;
+                    // After the words are in: web editors (Notes) and unknown nodes are trusted at once, no wait.
+                    webEditor = node == null || InsertPolicy.isWebEditor(node);
+                    if (!webEditor && beforeText != null) {
+                        // Reliable native editor: poll in short steps, leave the moment the text moves.
+                        verifiable = true;
+                        for (int waited = 0; waited < InsertPolicy.VERIFY_CAP_MS && !textChanged && verifiable; waited += InsertPolicy.VERIFY_STEP_MS) {
+                            try { Thread.sleep(InsertPolicy.VERIFY_STEP_MS); }
+                            catch (InterruptedException ie) { Thread.currentThread().interrupt(); verifiable = false; break; }
+                            node.refresh();
+                            CharSequence now = node.getText();
+                            if (now == null) verifiable = false;
+                            else textChanged = !beforeText.toString().contentEquals(now);
+                        }
                     }
                 }
             } catch (Exception e) {
                 Log.w(TAG, "InputConnection strategy failed: " + e.getMessage());
-                // Fall through to clipboard method
             }
         }
+        if (InsertPolicy.afterCommit(icAvailable, commitIssued, webEditor, verifiable, textChanged) == InsertPolicy.Outcome.TYPED) return true;
+        if (!InsertPolicy.clipboardAllowed(icAvailable, commitIssued, webEditor, verifiable, textChanged)) return false;
 
-        // Strategy 2: Clipboard paste (fallback for older Android or when IME unavailable)
+        // Strategy 2: Clipboard paste (fallback for older Android or when IME unavailable). Only here may the words
+        // touch the clipboard, and only when they were not typed.
+        AccessibilityNodeInfo target = findEditable();
+        if (target == null) target = lastFocusedNode;
         if (target == null) return false;
         android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
                 getSystemService(CLIPBOARD_SERVICE);
