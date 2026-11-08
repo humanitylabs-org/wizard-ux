@@ -69,7 +69,7 @@ only keycap in the middle is ⌥H's, in the empty middle of Home while nothing c
 | --- | --- |
 | ⌥H | Home: both sides, the chat and the app away; again = back exactly as it was (the workspace name; the app panel's icon; the empty middle of Home; ◫ at the top left while away). ⌥` the same |
 | ⌥O | Workspaces (the ▾ next to the name) |
-| ⌥K | Search chats and apps (🔍) |
+| ⌥K | Search chats only (🔍); global ⌘K / Ctrl+K still searches apps |
 | ⌥L | Fold / unfold the left sidebar (its ◫); Ctrl/⌘⇧S too |
 | ⌥N | New chat (+) |
 | ⌥S | Settings (the cog); again closes it |

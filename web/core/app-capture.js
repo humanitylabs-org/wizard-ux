@@ -66,43 +66,119 @@
       timer = setTimeout(() => reject(fail(code, code === 'storage_failed' ? 'On-device audio storage timed out (timeout).' : code === 'recovery_timeout' ? 'Recorder recovery timed out. Your audio is kept (RECOVERY_TIMEOUT).' : 'Audio stop timed out; the take is kept. Retry Send or Discard.', { detail: 'timeout' })), ms);
     })]).finally(() => clearTimeout(timer));
   }
+  // Use the existing append-only private diagnostics collector (no backend/APK restart).
+  // Build every field here: never forward exceptions, rows, blobs, metadata or lock client IDs.
+  function storageDiagnostic(operation, error, started, info = {}) {
+    try {
+      if (!W.WizardOSNative || typeof W.fetch !== 'function') return;
+      const code = error ? storageFailure(error).detail : 'ok';
+      const mode = ['readonly', 'readwrite'].includes(info.mode) ? info.mode : null;
+      const phase = ['lock', 'rows', 'native_status', 'native_recover', 'save', 'complete'].includes(info.phase) ? info.phase : null;
+      const key = [operation, code, mode, phase].join(':');
+      const seen = storageDiagnostic.seen ||= new Set();
+      if (seen.has(key) || seen.size >= 24) return;
+      seen.add(key);
+      const number = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+      const result = { db: DB_NAME, requestedVersion: 1, code, mode, phase,
+        elapsedMs: number(Math.max(0, Math.round(Date.now() - started))), blocked: info.blocked === true,
+        oldVersion: number(info.oldVersion), newVersion: number(info.newVersion), actualVersion: number(info.actualVersion),
+        sessionCount: number(info.sessionCount) };
+      // These are aggregate control metadata only. A hung estimate/query must not delay the report.
+      const metadata = Promise.allSettled([
+        Promise.resolve().then(() => navigator.storage?.estimate?.()).then(v => {
+          result.quota = number(v?.quota); result.usage = number(v?.usage);
+        }),
+        Promise.resolve().then(() => W.indexedDB?.databases?.()).then(list => {
+          const db = list?.find(v => v.name === DB_NAME); if (db) result.actualVersion = number(db.version);
+        }),
+        Promise.resolve().then(() => navigator.locks?.query?.()).then(v => {
+          if (v) { result.heldLocks = v.held?.filter(l => l.name === LOCK).length || 0;
+            result.pendingLocks = v.pending?.filter(l => l.name === LOCK).length || 0; }
+        })
+      ]);
+      let timer;
+      void Promise.race([metadata, new Promise(resolve => { timer = setTimeout(resolve, 300); })]).then(() => {
+        clearTimeout(timer);
+        let platform = ''; try { platform = W.WizardOSNative.platform?.() || ''; } catch (_) {}
+        const version = /^android:([0-9]+\.[0-9]+\.[0-9]+)$/.exec(platform)?.[1];
+        const model = /\b(SM-[A-Z0-9-]{1,20})\b/.exec(navigator.userAgent || '')?.[1] || 'Android-WebView';
+        const payload = { schema: 1, session: { id: 'web-storage', model, ...(version ? { appVersion: version } : {}) },
+          events: [{ method: 'storage.' + operation, data: { result } }] };
+        return W.fetch('/wizard-os-home/api/diagnostics/scroll-capture', { method: 'POST', credentials: 'same-origin',
+          redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(3000), keepalive: true });
+      }).catch(() => {}); // Diagnostics never alter capture custody or admission.
+    } catch (_) {}
+  }
   function openDB() {
     if (!dbPromise) dbPromise = new Promise((resolve, reject) => {
-      if (!W.indexedDB) return reject(fail('storage_unavailable', 'Durable capture storage is unavailable.', { detail: 'unavailable' }));
+      const started = Date.now(), info = { blocked: false };
+      if (!W.indexedDB) { const e = fail('storage_unavailable', 'Durable capture storage is unavailable.', { detail: 'unavailable' }); storageDiagnostic('open', e, started, info); return reject(e); }
       let settled = false, req;
       const finish = (error, db) => {
         if (settled) { db?.close(); return; }
         settled = true; clearTimeout(timer);
+        storageDiagnostic('open', error, started, { ...info, actualVersion: db?.version });
         if (error) reject(storageFailure(error)); else resolve(db);
       };
-      const timer = setTimeout(() => finish({ detail: 'timeout' }), 1500);
+      // Phone storage shares disk/CPU with native recording and voice capture. This is
+      // an I/O budget, not the instant Send/start budget (bounded() keeps that separate).
+      const timer = setTimeout(() => finish({ detail: 'timeout' }), 5000);
       try { req = indexedDB.open(DB_NAME, 1); } catch (e) { finish(e); return; }
-      req.onupgradeneeded = () => {
+      req.onupgradeneeded = e => {
+        info.oldVersion = e.oldVersion; info.newVersion = e.newVersion;
         if (settled) { req.transaction?.abort(); return; }
         req.result.createObjectStore('sessions', { keyPath: 'id' });
         req.result.createObjectStore('chunks', { keyPath: ['id', 'seq'] }).createIndex('id', 'id');
       };
       req.onsuccess = () => {
         const db = req.result;
-        db.onversionchange = () => { db.close(); dbPromise = null; };
+        const forget = () => { db.close(); if (dbPromise === opening) dbPromise = null; };
+        db.onversionchange = forget;
+        db.onclose = forget; // unexpected WebView/backend closure must not poison later takes
         finish(null, db);
       };
       req.onerror = () => finish(req.error);
-      req.onblocked = () => finish({ detail: 'blocked' });
+      req.onblocked = e => { info.blocked = true; info.oldVersion = e.oldVersion; info.newVersion = e.newVersion; finish({ detail: 'blocked' }); };
     });
     const opening = dbPromise;
     opening.catch(() => { if (dbPromise === opening) dbPromise = null; });
     return opening;
   }
-  async function transaction(stores, mode, work) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(stores, mode); let result;
-      const timer = setTimeout(() => { try { tx.abort(); } catch (_) {} reject(fail('storage_failed', 'On-device audio storage timed out (timeout).')); }, 1500);
-      tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
-      tx.onerror = tx.onabort = () => { clearTimeout(timer); reject(tx.error || fail('storage_failed', 'Capture could not be saved.')); };
-      try { result = work(tx); } catch (e) { tx.abort(); reject(e); }
-    });
+  async function transaction(stores, mode, work, retry = true) {
+    const opening = openDB(), db = await opening, started = Date.now();
+    try {
+      return await new Promise((resolve, reject) => {
+        let tx, timer, result, settled = false;
+        const finish = error => {
+          if (settled) return;
+          settled = true; clearTimeout(timer);
+          // Retain code-only diagnostics beside main's bounded connection retry.
+          if (error || mode === 'readwrite') storageDiagnostic('transaction', error, started, { mode, actualVersion: db.version });
+          if (error) reject(error); else resolve(result);
+        };
+        try { tx = db.transaction(stores, mode); } catch (e) { finish(e); return; }
+        timer = setTimeout(() => {
+          // Latch the timeout before synchronous abort events can replace its
+          // cause. Promise retry runs in a later microtask, after this abort.
+          finish(fail('storage_failed', 'On-device audio storage timed out (timeout).', { detail: 'timeout' }));
+          try { tx.abort(); } catch (_) {}
+        }, 5000);
+        tx.oncomplete = () => finish();
+        tx.onabort = () => finish(tx.error || fail('storage_failed', 'Capture could not be saved.', { detail: 'AbortError' }));
+        tx.onerror = () => {}; // default IDB error handling aborts; wait for that terminal event
+        try { result = work(tx); } catch (e) { try { tx.abort(); } catch (_) {} finish(e); }
+      });
+    } catch (e) {
+      // A cached connection can be closed/stalled after WebView reload or an abort.
+      // Forget only THIS connection; an older failure must not clear a newer open.
+      if (dbPromise === opening) dbPromise = null;
+      db.close();
+      const detail = e?.detail || e?.name;
+      if (retry && ['timeout', 'UnknownError', 'InvalidStateError', 'AbortError'].includes(detail))
+        return transaction(stores, mode, work, false);
+      throw e; // quota/security failures remain strict; keep the queued audio for Retry
+    }
   }
   async function rows() {
     let values;
@@ -140,7 +216,7 @@
     if (JSON.stringify(meta).length > 16384) throw fail('invalid_options', 'Capture metadata is too large.');
     return meta;
   }
-  async function acquire(wait = false) {
+  async function acquire(wait = false, retry = true) {
     if (!navigator.locks) throw fail('capture_lock_unavailable', 'This browser cannot safely arbitrate the microphone.');
     let release;
     const held = new Promise(resolve => { release = resolve; });
@@ -160,6 +236,11 @@
         if (e.name === 'AbortError') { const owner = [...ownedRows.values()].find(r => ['recording', 'starting', 'recoverable'].includes(r.status)); reject(fail('busy', 'Microphone held by ' + (owner?.appId || 'another capture window'), { appId: owner?.appId || null })); }
         else reject(e);
       });
+    }).catch(e => {
+      // A transient Web Locks backend failure is not corrupt audio storage. Never
+      // retry a genuine busy/abort or steal an unavailable lock from another page.
+      if (retry && e?.name === 'UnknownError') return acquire(wait, false);
+      throw e;
     });
   }
   function wav(chunks, bytes) {
@@ -215,6 +296,30 @@
       u.startMs += s.row.pcm ? u.bytes / 32 : 0; u.parts = []; u.bytes = 0;
     }
   }
+  // Native meetings upload full-quality audio to the meeting backend themselves; the on-device
+  // PCM copy is only a partial backup. A slow or broken phone store must never block or stop them.
+  function dropLocalBackup(s, e) {
+    if (s.noLocal) return;
+    s.noLocal = true; s.queue.length = 0; s.queuedBytes = 0; s.error = null; s.partial = true;
+    emit(s, 'warn', 'On-device backup is unavailable (' + storageFailure(e).detail + '). Recording continues to the meeting server.');
+    changed();
+  }
+  async function softStore(s, work) {
+    if (!s.meetingNative) return work();
+    if (s.noLocal) return undefined;
+    try { return await work(); }
+    catch (e) {
+      // Ownership/native errors still refuse; only storage failures fall back.
+      if (typeof e?.code === 'string' && !/^(storage_|recovery_timeout)/.test(e.code)) throw e;
+      dropLocalBackup(s, e); return undefined;
+    }
+  }
+  function noLocalResult(s) {
+    recoveryLive.delete(s.row.id);
+    return { id: s.row.id, blob: new Blob([], { type: s.row.mime || 'audio/wav' }), mime: s.row.mime || 'audio/wav', startedAt: s.row.startedAt,
+      durationMs: s.final?.durationMs ?? 0, meta: { ...s.row.meta, ...(s.final?.meta ? { native: s.final.meta } : {}) },
+      streamChunks: [], durable: false, storageError: 'local_backup_skipped', partial: true };
+  }
   function drain(s) {
     if (s.drainPromise) return s.drainPromise;
     s.drainPromise = drainQueue(s).finally(() => { s.drainPromise = null; });
@@ -222,6 +327,7 @@
   }
   async function drainQueue(s) {
     if (s.persistencePending || s.memoryOnly) return;
+    if (s.noLocal) { s.queue.length = 0; s.queuedBytes = 0; return; }
     while (s.queue.length && !s.discard) {
       const { blob, source, startMs } = s.queue[0];
       const track = s.row.tracks?.[source] || { seq: 0, bytes: 0, startMs: startMs || 0 };
@@ -238,6 +344,7 @@
         s.row = row; ownedRows.set(row.id, structuredClone(row)); s.queue.shift(); s.queuedBytes = Math.max(0, (s.queuedBytes || 0) - blob.size); s.error = null;
         uploadChunk(s, source, blob, startMs ?? (track.startMs + track.bytes / 32));
       } catch (e) {
+        if (s.meetingNative) { dropLocalBackup(s, e); return; }
         s.error = storageFailure(e);
         s.partial = true; changed();
         // Only instant takes may hand off an in-memory result. Durable recorders stay strict.
@@ -289,18 +396,21 @@
         } finally { cleanup(s); }
       }
       const save = async () => {
+        if (s.noLocal) return noLocalResult(s);
         if (s.persistencePending) await s.persistence;
         let writes;
         do { writes = s.writes; await writes; await drain(s); if (s.error) throw s.error; }
         while (!s.discard && !s.memoryOnly && (s.queue.length || writes !== s.writes));
         if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
+        if (s.noLocal) return noLocalResult(s);
         if (s.queue.length || s.error) throw s.error || fail('storage_failed', 'Capture was not saved.');
         for (const source of Object.keys(s.uploads || {})) uploadChunk(s, source, null, 0, true);
         if (s.final?.meta) s.row.meta = { ...s.row.meta, native: s.final.meta };
         if (s.final?.partial) s.partial = true;
         const row = { ...s.row, status: 'pending', partial: !!s.partial, durationMs: s.final?.durationMs ?? (s.row.durationMs || (s.row.pcm && !s.row.native ? 0 : (s.pausedAt || s.stopAt) - s.row.startedAt - (s.pausedTotal || 0))) };
         recoveryLive.delete(row.id);
-        await put(row); if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
+        await softStore(s, () => put(row)); if (s.noLocal) return noLocalResult(s);
+        if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
         s.row = row; return result(row);
       };
       let out;
@@ -416,7 +526,7 @@
       onLevel(fn) { if (typeof fn !== 'function') throw fail('invalid_callback', 'A level listener is required.'); s.levels.add(fn); return () => s.levels.delete(fn); },
       stop() { return finish(s); },
       async pause() {
-        if(active===s && s.borrow){s.borrow.pausedByHandoff=false;const marker=s.row.meta.handoffs?.find(x=>x.id===s.borrow.id);if(marker)marker.pausedByHandoff=false;await put(s.row);if(s.row.native)await s.engine.pause();emit(s,'state',{paused:true,recording:true});changed();return;}
+        if(active===s && s.borrow){s.borrow.pausedByHandoff=false;const marker=s.row.meta.handoffs?.find(x=>x.id===s.borrow.id);if(marker)marker.pausedByHandoff=false;await softStore(s, () => put(s.row));if(s.row.native)await s.engine.pause();emit(s,'state',{paused:true,recording:true});changed();return;}
         if (active !== s || s.phase !== 'recording') return;
         if (!s.engine.pause) throw fail('pause_unavailable', 'This recorder cannot pause.');
         await s.engine.pause(); s.pausedAt = Date.now(); s.phase = 'paused'; emit(s,'state',{paused:true,recording:true}); changed();
@@ -505,7 +615,7 @@
           changing=(async()=>{
             if(on) { const stream=await request; if(s.inputStopped||s.discard) {stream.getTracks().forEach(t=>t.stop());return;} attachSystem(stream); }
             else {
-              const tap=systemTap; if(tap) {await flushTap(tap); systemEndMs=Math.ceil(tap.ms); tap.input.disconnect();tap.an.disconnect();tap.node.disconnect();await s.writes;await drain(s);uploadChunk(s,'them',null,0,true);await put(s.row);}
+              const tap=systemTap; if(tap) {await flushTap(tap); systemEndMs=Math.ceil(tap.ms); tap.input.disconnect();tap.an.disconnect();tap.node.disconnect();await s.writes;await drain(s);uploadChunk(s,'them',null,0,true);await softStore(s, () => put(s.row));}
               s.hasSystemAudio=false;s.systemAnalyser=null;systemTap=null;
               const display=s.display;s.display=null;display?.getTracks().forEach(t=>t.stop());
             }
@@ -554,7 +664,7 @@
       if(receipt?.status!=='paused' || receipt.open!==true || receipt.id!==eventId || receipt.meetingId!==s.row.meta.meetingId) throw fail('handoff_unavailable','Native microphone release was not confirmed.');
       receipt.micReleased=true; // ABI v1 begin returns only after capture join, flush and mic release
       s.borrow=receipt;s.row.meta.handoffs ||= [];s.row.meta.handoffs.push({...receipt,status:'paused'});
-      try { await put(s.row); } catch(e) { d.recHandoffEnd(eventId);s.borrow=null;throw e; }
+      try { await softStore(s, () => put(s.row)); } catch(e) { d.recHandoffEnd(eventId);s.borrow=null;throw e; }
       s.phase='handoff';changed();return {...receipt};
     }
     const wasPaused = s.phase === 'paused', hadSystemAudio = s.hasSystemAudio;
@@ -575,7 +685,7 @@
       s.borrow.atMediaMs=(s.opts.offsetMs||0)+(s.row.durationMs||0);
       s.row.meta.handoffs ||= [];
       s.row.meta.handoffs.push({ ...s.borrow, status:'paused' });
-      await put(s.row);
+      await softStore(s, () => put(s.row));
       if (active!==s || s.finishPromise) throw fail('stale_handoff','Meeting was stopped during handoff.');
       s.pausedAt ||= Date.now(); s.borrow.micReleased=true;
       emit(s,'state',{recording:true,paused:true,hasSystemAudio:false,handoffId:eventId});
@@ -604,23 +714,23 @@
     if (!s || s.borrow?.id!==eventId || !s.borrow.micReleased) throw fail('stale_handoff','This microphone loan is not active.');
     const b=s.borrow, marker=s.row.meta.handoffs.find(x=>x.id===eventId);
     Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
-    await put(s.row); // marker survives even if reacquiring the microphone fails
+    await softStore(s, () => put(s.row)); // marker survives even if reacquiring the microphone fails
     if(s.row.native === 'wizard-meetings') {
       const receipt=JSON.parse(W.WizardOSDevice.recHandoffEnd(eventId)||'null'); // stopped voice already returned the native lease
       if(receipt?.id!==eventId || receipt.open!==false)throw fail('handoff_unavailable','Native microphone return was not confirmed.');
-      marker.pausedByHandoff=receipt.pausedByHandoff;marker.resumeStatus=receipt.status;await put(s.row);
+      marker.pausedByHandoff=receipt.pausedByHandoff;marker.resumeStatus=receipt.status;await softStore(s, () => put(s.row));
       s.borrow=null;s.phase=receipt.status==='recording'?'recording':'paused';changed();
       if(s.closeRequested) void finish(s).catch(()=>{}); // its app was closed during the loan
       return {...marker};
     }
     s.phase='paused'; s.borrow=null;
     // App closed while the orb borrowed its mic: never reopen the microphone for a closed app; save the take.
-    if(s.closeRequested) { marker.resumeStatus='closed'; await put(s.row); changed(); void finish(s).catch(()=>{}); return {...marker}; }
+    if(s.closeRequested) { marker.resumeStatus='closed'; await softStore(s, () => put(s.row)); changed(); void finish(s).catch(()=>{}); return {...marker}; }
     if(b.pausedByHandoff && !s.finishPromise) {
       try { await reopenBorrowedEngine(s); s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt; s.pausedAt=0; s.phase='recording'; marker.resumeStatus='recording'; }
       catch(e) { marker.resumeStatus='failed'; s.error=e; emit(s,'warn','Meeting remains paused: microphone could not resume.'); }
     } else marker.resumeStatus='paused';
-    await put(s.row);
+    await softStore(s, () => put(s.row));
     emit(s,'state',{recording:true,paused:s.phase==='paused',hasSystemAudio:false}); changed();
     return {...marker};
   }
@@ -785,6 +895,7 @@
     return null;
   }
   function meetingBridge() { return attachedMeetingBridge || W.wizardNative?.meetings || (W.wizardMizelPort ? nativeMeetingPort() : null); }
+  const MEETING_APP = 'mizel'; // the app that owns native Android meetings
   let recoveryLease = null;
   function yieldRecovery() {
     if (!recoveryLease) return;
@@ -793,11 +904,12 @@
   async function recoverLocked(lease) {
     const check = () => { if (lease?.cancelled) throw fail('recovery_yielded', 'Recovery yielded to microphone start.'); };
     check();
-    let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
+    if (lease) lease.phase = 'rows';
+    let all = await rows(); if (lease) lease.sessionCount = all.length; check(); recoveryError = null; ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
     const meeting = meetingBridge(); let meetingStatus = null;
     const readMeetingStatus = async () => {
       let st;
-      try { st = await meeting.status(); }
+      try { if (lease) lease.phase = 'native_status'; st = await meeting.status(); }
       catch (_) { st = null; }
       check();
       if (typeof st?.recording !== 'boolean') recoveryError = fail('native_owner_uncertain', 'Native recorder status is unknown.');
@@ -809,7 +921,7 @@
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
       if (st?.recording && st.meetingId && !all.some(r=>r.native==='wizard-meetings' && r.nativeId===st.meetingId)) {
-        const row={id:crypto.randomUUID(),appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
+        const row={id:crypto.randomUUID(),appId:MEETING_APP,kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
           status:'recoverable',partial:true,startedAt:Date.now()-(st.mediaMs||0),durationMs:st.mediaMs||0,seq:0,bytes:0,pcm:true,mime:'audio/wav',meta:{meetingId:st.meetingId}};
         recoveryLive.add(row.id);await put(row);all=await rows();
       }
@@ -829,6 +941,7 @@
       try {
       if (row.native && row.nativeId) {
         const a = adapter({ kind: row.kind }, row);
+        if (lease) lease.phase = 'native_recover';
         const recovered = await a.recover?.(row); check();
         if (recovered?.live) { recoveryLive.add(row.id); await put({ ...row, status: 'recoverable', partial: true, recoveryError: null }); continue; }
         recoveryLive.delete(row.id);
@@ -841,6 +954,7 @@
       }
       // No assumption that an empty take succeeded: expose even zero-byte partial
       // metadata so the task can show interrupted start rather than silently erase it.
+      if (lease) lease.phase = 'save';
       await put({ ...row, status: 'pending', partial: true });
       } catch (e) {
         check(); recoveryError = e;
@@ -868,12 +982,16 @@
     finally { expired = true; }
   }
   async function recover() {
-    let unlock, lease;
+    // The active capture already owns this page's microphone lease. Re-requesting
+    // it only manufactures busy errors (and repeated full session scans).
+    if (active) return;
+    let unlock, lease; const started = Date.now();
     try { unlock = await acquireBounded();
-      if (active?.instant) return;
-      lease = { unlock, cancelled: false }; recoveryLease = lease;
-      recoveryError = null; await bounded(recoverLocked(lease), 4500, 'recovery_timeout'); }
-    catch (e) { if (e.code === 'recovery_yielded') return; if (e.code !== 'busy') { recoveryError = e; throw e; }
+      if (active) return;
+      lease = { unlock, cancelled: false, phase: 'rows' }; recoveryLease = lease;
+      recoveryError = null; await bounded(recoverLocked(lease), 20000, 'recovery_timeout');
+      storageDiagnostic('recovery', recoveryError, started, { phase: 'complete', sessionCount: lease.sessionCount }); }
+    catch (e) { if (e.code === 'recovery_yielded') return; storageDiagnostic('recovery', e, started, { phase: lease?.phase || 'lock', sessionCount: lease?.sessionCount }); if (e.code !== 'busy') { recoveryError = e; throw e; }
       const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
     finally { if (lease) lease.cancelled = true; if (recoveryLease === lease) recoveryLease = null; unlock?.(); changed(); }
   }
@@ -948,6 +1066,7 @@
     // WebAudio activation happens synchronously in the gesture, before IDB awaits.
     try {
       let native = adapter(opts);
+      s.meetingNative = native?.name === 'wizard-meetings';
       if (!native) {
         const AC = W.AudioContext || W.webkitAudioContext; if (AC && !s.ctx) { s.ctx = new AC(); void s.ctx.resume().catch(() => {}); }
         if (opts.systemAudio && !s.displayPromise) {
@@ -975,24 +1094,26 @@
       } else {
       s.stage = 'shared capture store'; live(await ready);
       s.stage = 'microphone lock'; s.unlock = await acquire(true); live();
-      s.stage = 'recovery check'; live(await recoverLocked());
+      s.stage = 'recovery check'; live(await softStore(s, () => recoverLocked()));
       if (recoveryError?.code === 'native_owner_uncertain') throw recoveryError;
-      const recoverable = live(await rows()).find(r => r.appId === appId && r.status === 'recoverable');
+      const recoverable = (live(await softStore(s, rows)) || []).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
-        const row = live(await rows()).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
+        const mem = ownedRows.get(opts.resumeId);
+        const row = (live(await softStore(s, rows)) || []).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable') ||
+          (mem?.memoryOnly && mem.appId === appId && mem.status === 'recoverable' ? mem : null);
         if (!row) throw fail('not_recoverable', 'No native recording is available to resume.');
-        s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row);
+        s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row); s.meetingNative = native?.name === 'wizard-meetings';
         if (!native) throw fail('native_unavailable', 'Restore the native bridge before resuming this take.');
       }
       // The persistence request is advisory; the IDB write itself is mandatory.
       try { void navigator.storage?.persist?.().catch(() => {}); } catch (_) {}
-      s.stage = 'saving the take'; live(await put(s.row));
+      s.stage = 'saving the take'; live(await softStore(s, () => put(s.row)));
       }
       if (native) {
         s.row.native = native.name || 'configured';
         if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
-        if (!s.instant) live(await put(s.row));
+        if (!s.instant) live(await softStore(s, () => put(s.row)));
         s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
         s.stage = 'native recorder';
         s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
@@ -1006,7 +1127,7 @@
         if (s.engine.detach) s.offs.push(s.engine.detach);
       } else { s.stage = 'browser microphone'; await browserEngine(s); live(); }
       s.row.status = 'recording'; s.row.startedAt = opts.resumeId ? s.row.startedAt : Date.now();
-      if (!s.instant) { s.stage = 'saving the take'; await put(s.row); }
+      if (!s.instant) { s.stage = 'saving the take'; await softStore(s, () => put(s.row)); }
       s.settled = true; live();
       s.phase = s.nativeState?.paused ? 'paused' : 'recording';if(s.nativeState?.paused)s.pausedAt=Date.now(); if (!s.instant) s.writes = s.writes.then(() => drain(s)); changed();
       if (s.instant) {
@@ -1097,12 +1218,34 @@
     // Busy/yielded recovery is not a settled take. Never offer a live orphan for upload/ack.
     return Promise.all((await rows()).filter(r => r.appId === appId && r.status === 'pending').map(result));
   }
+  // Phone storage broken, but the Android meeting service is still recording (it uploads by itself): hand the
+  // app a resumable in-memory take so it reattaches after a reload instead of asking the owner to Resume here
+  // (James, 6 Nov 2026: reload must be seamless mid-meeting). Nothing is invented: the service names the meeting.
+  async function nativeLiveTake(appId) {
+    if (active || appId !== MEETING_APP) return null;
+    const b = meetingBridge(); if (!b?.status) return null;
+    let st; try { st = await bounded(Promise.resolve(b.status()), 3000, 'native_timeout'); } catch (_) { return null; }
+    if (st?.recording !== true || typeof st.meetingId !== 'string' || !st.meetingId || active) return null;
+    let row = [...ownedRows.values()].find(r => r.native === 'wizard-meetings' && r.nativeId === st.meetingId && r.status === 'recoverable');
+    if (!row) {
+      row = { id: 'live-' + st.meetingId, appId, kind: 'meeting', native: 'wizard-meetings', nativeId: st.meetingId, status: 'recoverable',
+        partial: true, startedAt: Date.now() - (st.mediaMs || 0), durationMs: st.mediaMs || 0, seq: 0, bytes: 0, pcm: true, mime: 'audio/wav',
+        meta: { meetingId: st.meetingId }, memoryOnly: true };
+      ownedRows.set(row.id, row);
+    }
+    recoveryLive.add(row.id); ownershipLoaded = true; changed();
+    return { id: row.id, blob: new Blob([], { type: 'audio/wav' }), mime: 'audio/wav', startedAt: row.startedAt, durationMs: row.durationMs || 0,
+      meta: { ...row.meta, captureRecovery: { resumable: true, error: null } }, streamChunks: [], partial: true };
+  }
   async function pending(appId) {
     validate(appId, {});
     const memory = [...memoryTakes.values()].filter(t => t.session.row.appId === appId).map(t => t.result);
     if (memory.length) return memory; // keep a retry usable even while the store is unavailable
-    await ready; await recover();
-    const selected = (await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    let all;
+    try { await bounded(ready, 3000, 'storage_failed'); await recover(); all = await bounded(rows(), 3000, 'storage_failed'); }
+    catch (e) { const t = await nativeLiveTake(appId); if (t) return [t]; throw e; }
+    const selected = all.filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    if (!selected.length) { const t = recoveryError && await nativeLiveTake(appId); if (t) return [t]; }
     // Expose safely repaired browser takes even if an unrelated native bridge is indeterminate.
     // But [] is used by app owners as positive empty-custody proof: never forge that proof from unknown truth.
     if (!selected.length && (recoveryError || unknownMeetingActive || !ownershipLoaded ||
@@ -1176,7 +1319,34 @@
     yieldRecovery(); return true;
   }
   function reloadCheck() {
+    // The Android app's meeting port (MeetingRecorderService) records and uploads on its own through a page reload.
+    const androidMeetingPort = () => !!W.wizardMizelPort;
+    const deviceTake = () => JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null');
+    // A steady Android meeting (MeetingRecorderService) that records and uploads on its own through a reload.
+    function steadyLiveMeeting() {
+      const s = active;
+      if (!s || attachedMeetingBridge || W.wizardNative?.meetings || !androidMeetingPort()) return false;
+      const isMeeting = r => r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
+      if (!isMeeting(s.row) || !s.engine || !['recording', 'paused'].includes(s.phase) || s.borrow || s.borrowWork ||
+        s.finishPromise || s.error || s.engineDetached || s.interrupted || s.discard) return false;
+      return ![...recoveryLive].map(id => ownedRows.get(id)).some(r => r && r.id !== s.row.id && !isMeeting(r));
+    }
+    // James, 6 Nov 2026 ("make reloads work live"): with the Android meeting port, the meeting service records
+    // and uploads on its own through a reload, and phone storage / native takes survive a reload by definition.
+    // Only audio held by this page (a starting take, page-memory takes, a browser engine, a mic loan) can be lost,
+    // so custody doubt about stored takes never forces the owner to stop a meeting.
+    const androidLive = () => {
+      if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !androidMeetingPort() || preparations.size || memoryTakes.size) return null;
+      if (active && !steadyLiveMeeting()) return null;
+      // Only meetings survive a reload: an active or unreadable device recorder (orb note) keeps blocking.
+      try { if (deviceTake()?.id) return null; } catch (_) { return null; }
+      const r = active?.row?.native === 'wizard-meetings' ? active.row :
+        [...ownedRows.values()].filter(x => x.native === 'wizard-meetings').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
+      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : { appId: MEETING_APP },
+        recheck: true, durable: false, nativeMeeting: true };
+    };
     const no = reason => {
+      if (['capture_custody_uncertain', 'native_owner_uncertain'].includes(reason)) { const ok = androidLive(); if (ok) return ok; }
       const row = active?.row || [...memoryTakes.values()][0]?.session?.row || [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean) || [...ownedRows.values()].find(r => r.status !== 'pending');
       return { safe: false, reason, keeps: null, appId: row?.appId || null, startedAt: row?.startedAt || null, recheck: !active && preparations.size === 0 };
     };
@@ -1186,15 +1356,21 @@
     if (memoryTakes.size) return no('capture'); // this page still owns audio until the app acknowledges handoff
     let uncertain = !ownershipLoaded || recoveryError ? 'capture_custody_uncertain' : null;
     if (!uncertain && (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status)))) uncertain = 'native_owner_uncertain';
-    if (uncertain && !pageHoldsNoAudio) return no(uncertain);
-    try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
+    if (uncertain && !pageHoldsNoAudio && !(uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())) return no(uncertain);
+    try { if (deviceTake()?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
-    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && !!W.wizardMizelPort;
+    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && androidMeetingPort();
     const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
     if (!uncertain && [...ownedRows.values()].some(r => r.status !== 'pending' && !(active && r.id === active.row.id) && !recoveryLive.has(r.id))) uncertain = 'capture_custody_uncertain';
+    // A steady Android meeting records and uploads on its own through a reload, and anything stored on the
+    // phone survives a reload by definition. Phone-storage doubt (a broken/slow backup store, an older take
+    // still waiting for Retry save) is therefore no reason to make the owner stop the meeting to reload
+    // (James, 6 Nov 2026: "make reloads work live"). Page-memory audio (memoryTakes) still blocks above.
+    if (uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())
+      return { safe: true, reason: null, keeps: keep(active.row), recheck: true, durable: false, uncertain };
     if (uncertain && !pageHoldsNoAudio) return no(uncertain);
     if (active) {
       const s = active;
@@ -1213,11 +1389,14 @@
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
     // IndexedDB rows and Android services survive reload. Unknown custody is not page-held audio;
     // retain the uncertainty (never a durable/empty-custody proof) and leave recovery to the next boot.
+    // The meeting service may record with no stored row (phone storage broken); the shell keeps that app's frame
+    // only if it is the one holding a recording.
+    const port = survives ? { nativeMeeting: true, meetingApp: MEETING_APP } : {};
     if (uncertain && pageHoldsNoAudio) return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
-      recheck: true, durable: false, uncertain };
+      recheck: true, durable: false, uncertain, ...port };
     return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
       recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
-        [...ownedRows.values()].every(r => r.status === 'pending') };
+        [...ownedRows.values()].every(r => r.status === 'pending'), ...port };
   }
   /* Host-only rescue. Metadata exposed to notices is app + date only, never a title/content.
    * A stored browser row belongs to a previous page unless it is the active session. Native

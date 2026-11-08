@@ -89,7 +89,7 @@ async function mount(browser, svc, { shell, skin, tweaks, storage, docScroll = f
       return json({ thread: b.thread, items: svc.view(), counts: svc.counts() });
     }
     if (p === '/wizard/v1/thread-items') return json({ thread: url.searchParams.get('thread'), items: url.searchParams.get('thread') === 'tt-main' ? svc.view() : [], counts: svc.counts() });
-    if (p === '/wizard/hermes/api/sessions' && m === 'GET') return json({ data: [session('tt-main', 'Wizard polish round', svc.rows.length), session('tt-other', 'Plain old thread', 2)], has_more: false });
+    if (p === '/wizard/hermes/api/sessions' && m === 'GET') return json({ data: svc.sessionRows ? svc.sessionRows() : [session('tt-main', 'Wizard polish round', svc.rows.length), session('tt-other', 'Plain old thread', 2)], has_more: false });
     const one = p.match(/^\/wizard\/hermes\/api\/sessions\/(tt-[a-z]+)(\/messages)?$/);
     if (one && m === 'GET') {
       if (!one[2]) return json({ session: session(one[1], one[1] === 'tt-main' ? 'Wizard polish round' : 'Plain old thread', one[1] === 'tt-main' ? svc.rows.length : 2) });
@@ -133,7 +133,9 @@ const strip = page => page.locator('[data-tt-strip]').first();
 const msgText = (page, mid) => page.evaluate(m => document.querySelector(`.msg[data-mid="${m}"]`)?.textContent.trim().slice(0, 60) || null, mid);
 const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = document.querySelector(s); if (!n) return false; const r = n.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 2; }, sel);
 
-(async () => {
+module.exports = { mount, service };
+
+if (require.main === module) (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}) });
   try {
     /* ---- 1. fresh profile: off, and offered in Settings ---- */

@@ -10,6 +10,7 @@
     ".dchats",
     ".win .dchats .pane-main",
     ".win .dchats .pane-main",
+
     "#dsettings .st-close",
     ".win .dchats .pane-main [data-notify-menu]",
     ".win .dchats .pane-main [data-chact=\"${act}\"]",

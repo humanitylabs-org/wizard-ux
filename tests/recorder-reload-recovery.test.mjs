@@ -15,7 +15,7 @@ function extract(from,to,ctx) {
 }
 function capture(overrides={}) {
   const ctx={active:null,memoryTakes:new Map(),preparations:new Map(),ownedRows:new Map(),recoveryLive:new Set(),unknownMeetingActive:false,
-    ownershipLoaded:true,recoveryError:null,recoveryLease:null,configuredNative:{},attachedMeetingBridge:null,W:{},...overrides};
+    ownershipLoaded:true,recoveryError:null,recoveryLease:null,configuredNative:{},attachedMeetingBridge:null,W:{},MEETING_APP:'mizel',...overrides};
   // This fail-closed matrix models an in-page adapter; the Android/no-page-audio
   // matrix lives in reload-page-audio-custody.test.mjs with configuredNative:null.
   extract('  function reloadCheck()', '  // Last moment before the shell reloads',ctx);
@@ -309,7 +309,7 @@ test('unknown native status cannot become an empty app-custody proof, but repair
   const row={id:'browser',appId:'fixture',status:'pending',bytes:32000};let data=[];
   const c={validate(){},memoryTakes:new Map(),ready:Promise.resolve(),recover:async()=>{},rows:async()=>data,result:async r=>r,
     recoveryError:Object.assign(Error('native unknown'),{code:'native_owner_uncertain'}),unknownMeetingActive:false,ownershipLoaded:true,ownedRows:new Map(),
-    fail:(code,message)=>Object.assign(Error(message),{code})};
+    fail:(code,message)=>Object.assign(Error(message),{code}),bounded:p=>p,nativeLiveTake:async()=>null};
   extract('  async function pending(appId)', '  async function ack(',c);
   await assert.rejects(c.pending('fixture'),e=>e.code==='native_owner_uncertain');
   data=[row];c.ownedRows.set(row.id,row);assert.equal((await c.pending('fixture'))[0],row);
@@ -438,4 +438,65 @@ test('a different native take appearing during flush cannot inherit the prior ta
   f.web.reload('tap');f.timers.find(([,ms])=>ms===900)[0]();await tick();
   f.plan={ok:true,keeps:{appId:'fixture',id:'new',meetingId:'new'}};finish();await tick();
   assert.equal(f.reloads,0);assert.equal(commits,0);
+});
+// James, 6 Nov 2026: "make reloads work live". A steady Android meeting must not be held hostage by
+// phone-storage doubt (broken backup store, an older take still awaiting Retry save).
+test('steady Android meeting reloads live despite phone-storage custody doubt',()=>{
+  const row={id:'live',appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:'m2',meta:{meetingId:'m2'}};
+  const active={row,phase:'recording',engine:{}},W={wizardMizelPort:{}};
+  for(const o of [{recoveryError:new Error('storage timed out')},{ownershipLoaded:false},
+    {ownedRows:new Map([['live',{...row,status:'recording'}],['old',{id:'old',appId:'mizel',native:'wizard-meetings',nativeId:'m1',status:'retained'}]])}]){
+    const c=capture({active,W,...o}).reloadCheck();assert.equal(c.safe,true);assert.equal(c.keeps.meetingId,'m2');
+  }
+  // Still blocks: mic lent to the orb, page-memory audio, a non-surviving (browser) recorder.
+  assert.equal(capture({active:{...active,borrow:{}},W,recoveryError:new Error('x')}).reloadCheck().safe,false);
+  assert.equal(capture({active,W,recoveryError:new Error('x'),memoryTakes:new Map([['t',{session:{row}}]])}).reloadCheck().safe,false);
+  assert.equal(capture({active,W:{},recoveryError:new Error('x')}).reloadCheck().safe,false);
+});
+
+// James, 6 Nov 2026 (second report): after a reload the meeting keeps recording natively but this page may not own
+// it (phone storage broken, stale device flag). Reload must still be allowed; page-held audio still blocks.
+test('Android meeting port: reload allowed when only stored-take doubt blocks',()=>{
+  const W={wizardMizelPort:{}};
+  for(const o of [{recoveryError:new Error('storage timed out')},{ownershipLoaded:false},{unknownMeetingActive:true},{recoveryLease:{},recoveryError:new Error('storage timed out')}]){
+    const c=capture({W,configuredNative:null,...o}).reloadCheck();assert.equal(c.safe,true);
+  }
+  assert.equal(capture({W,configuredNative:null,memoryTakes:new Map([['t',{session:{row:{}}}]])}).reloadCheck().safe,false);
+  assert.equal(capture({W,configuredNative:null,preparations:new Map([['p',{}]])}).reloadCheck().safe,false);
+  assert.equal(capture({W,configuredNative:null,active:{row:{id:'b',appId:'x',kind:'voice'},phase:'recording',engine:{}}}).reloadCheck().safe,false);
+  assert.equal(capture({W:{},configuredNative:null,recoveryLease:{},recoveryError:new Error('x')}).reloadCheck().safe,false);
+  assert.equal(capture({configuredNative:null,W:{...W,WizardOSDevice:{recActive:()=>'{"id":"v"}'}}}).reloadCheck().reason,'device_recording');
+});
+test('rowless Android meeting keeps only the Recorder frame; other apps and device notes still block',()=>{
+  const W={wizardMizelPort:{}};
+  const c=capture({W,configuredNative:null,recoveryError:new Error('storage timed out')}).reloadCheck();
+  assert.equal(c.safe,true);assert.equal(c.keeps?.id,undefined);assert.equal(c.keeps?.appId ?? c.meetingApp,'mizel');
+  // Codex review: an active or unreadable device recorder is not a surviving meeting.
+  assert.equal(capture({W:{...W,WizardOSDevice:{recActive:()=>'{"id":"note"}'}},configuredNative:null,recoveryError:new Error('x')}).reloadCheck().safe,false);
+  assert.equal(capture({W:{...W,WizardOSDevice:{recActive:()=>{throw Error('x')}}},configuredNative:null,recoveryError:new Error('x')}).reloadCheck().safe,false);
+  // Another app's capture hold is never waived by the meeting exemption.
+  const f=service({safe:true,keeps:null,nativeMeeting:true,meetingApp:'mizel'},'messenger');f.facade.update.hold('Messenger recording upload');
+  assert.equal(f.plan().ok,false);
+  const g=service({safe:true,keeps:null,nativeMeeting:true,meetingApp:'mizel'});g.facade.update.hold('Mizel recording');
+  const p=g.plan();assert.equal(p.ok,true);assert.equal(p.keeps.appId,'mizel');
+});
+
+// James, 6 Nov 2026 ("I need to go back into the recorder and resume it manually"): with phone storage broken,
+// the Android meeting service still names its live meeting, so Recorder reattaches by itself after a reload.
+test('broken phone storage: pending hands Recorder the live Android meeting so it reattaches without Resume here',async()=>{
+  let st={recording:true,meetingId:'mt_live',mediaMs:60000};
+  const c={validate(){},memoryTakes:new Map(),active:null,ready:Promise.resolve(),
+    recover:async()=>{throw Object.assign(Error('storage timed out'),{code:'recovery_timeout'});},rows:async()=>{throw Error('broken');},
+    recoveryError:null,unknownMeetingActive:false,ownershipLoaded:false,ownedRows:new Map(),recoveryLive:new Set(),changed(){},
+    meetingBridge:()=>({status:async()=>st}),bounded:p=>p,Blob,Date,MEETING_APP:'mizel',
+    fail:(code,message)=>Object.assign(Error(message),{code})};
+  extract('  async function nativeLiveTake(appId)', '  async function ack(',c);
+  const [take]=await c.pending('mizel');
+  assert.equal(take.meta.meetingId,'mt_live');assert.equal(take.meta.captureRecovery.resumable,true);
+  assert.equal(c.ownedRows.get(take.id).memoryOnly,true);assert(c.recoveryLive.has(take.id));
+  // Only the meeting service's own named meeting, only for Recorder, never invented.
+  await assert.rejects(c.pending('messenger'),e=>e.code==='recovery_timeout');
+  st={recording:false};c.ownedRows.clear();c.recoveryLive.clear();
+  await assert.rejects(c.pending('mizel'),e=>e.code==='recovery_timeout');
+  st={recording:true};await assert.rejects(c.pending('mizel'),e=>e.code==='recovery_timeout');
 });

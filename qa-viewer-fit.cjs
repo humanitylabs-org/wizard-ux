@@ -25,7 +25,7 @@ async function boot(b, shell) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== new URL(ORIGIN).hostname) return m === 'GET' ? r.continue() : r.abort();
+    if (u.hostname !== new URL(ORIGIN).hostname) return r.abort();
     const sh = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (sh && (m === 'GET' || m === 'HEAD')) {
       const f = decodeURIComponent(sh[1]) || (phone ? 'index.html' : 'desktop.html'), p = path.join(WEB, 'web', f);
@@ -45,7 +45,7 @@ async function boot(b, shell) {
     if (u.pathname === '/wizard/v1/apps') return json(r, { apps: [] });
     return json(r, {});
   });
-  await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
+  await ctx.addInitScript(() => { try { localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   const p = await ctx.newPage(); p.errs = [];
   p.on('pageerror', e => p.errs.push(String(e)));
   await p.goto(ORIGIN + '/qa-start').catch(() => {});
@@ -84,10 +84,14 @@ const shot = async (p, n) => { if (SHOTS) { await p.evaluate(() => { const v = d
 (async () => {
   const b = await pw[ENGINE].launch();
   try {
-    for (const shell of ['phone', 'desktop']) {
+    for (const shell of ['phone', 'desktop']) for (const skin of ['nebula', 'sepia']) {
       const { ctx, p, writes } = await boot(b, shell);
+      await p.evaluate(skin => { document.getElementById('wosWelcome')?.remove(); window.WosSkin.set(skin); }, skin);
+      await sleep(1000);
+      ok(await p.evaluate(skin => document.documentElement.dataset.skin === skin, skin), `${shell}: ${skin}: skin applied`);
       const cases = [
-        ['tall phone screenshot 786x1704', 786, 1704],
+        ['tall phone screenshot 1080x2340', 1080, 2340],
+        ['very long screenshot 1080x8000', 1080, 8000],
         ['just taller than the stage 1000x2000', 1000, 2000],
         ['wide 2400x900', 2400, 900],
         ['square 1200x1200', 1200, 1200],
@@ -96,17 +100,11 @@ const shot = async (p, n) => { if (SHOTS) { await p.evaluate(() => { const v = d
         const url = await makeImg(p, w, h);
         await open(p, url, name);
         const g = await geo(p), long = await p.evaluate(() => !!window.WosChat.viewer.state.long);
-        if (long) {
-          // A long-screenshot mode (fit the width, scroll) owns very tall images when the viewer has one.
-          ok(Math.abs(g.pic.w - (g.stage.r - g.stage.l)) < 1.5 && Math.abs(g.pic.t - g.stage.t) < 1.5, `${shell}: ${name}: long mode fits the width from the top`, g);
-          ok(true, `${shell}: ${name}: (long mode scrolls; covered by its own suite)`);
-          ok(g.pic.t >= g.topB - 0.6, `${shell}: ${name}: clear of the title bar`, g);
-        } else {
-          ok(inside(g), `${shell}: ${name}: whole picture inside the stage`, g);
-          ok(touchesAnEdge(g), `${shell}: ${name}: fitted (fills the stage width or height)`, g);
-          ok(g.pic.t >= g.topB - 0.6 && g.pic.b <= g.barT + 0.6, `${shell}: ${name}: clear of the title bar and the Share/Save bar`, g);
-        }
-        await shot(p, `${ENGINE}-${shell}-${w}x${h}`);
+        ok(!long, `${shell}: ${name}: never width-fit on open (James, 6 Nov 2026)`);
+        ok(inside(g), `${shell}: ${name}: whole picture inside the stage`, g);
+        ok(touchesAnEdge(g), `${shell}: ${name}: fitted (fills the stage width or height)`, g);
+        ok(g.pic.t >= g.topB - 0.6 && g.pic.b <= g.barT + 0.6, `${shell}: ${name}: clear of the title bar and the Share/Save bar`, g);
+        await shot(p, `${process.env.QA_LABEL || 'after'}-${ENGINE}-${shell}-${skin}-${w}x${h}`);
         await p.evaluate(() => window.WosChat.viewer.close());
       }
       // Zoom still works from the fitted state, and resetting returns to the fitted picture.
@@ -120,18 +118,36 @@ const shot = async (p, n) => { if (SHOTS) { await p.evaluate(() => { const v = d
       await sleep(450);
       const z = await p.evaluate(() => window.WosChat.viewer.state.scale);
       ok(z > 1.5, `${shell}: double-tap zooms in`, { z });
+      const cdp = await ctx.newCDPSession(p);
+      const drag = async (x0,y0,x1,y1,two=false) => {
+        const points = t => [{x:x0+(x1-x0)*t,y:y0+(y1-y0)*t}, ...(two ? [{x:cx+35+45*t,y:cy}] : [])];
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points(0)});
+        for(let n=1;n<=10;n++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:points(n/10)});await sleep(25);}
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(300);
+      };
+      if(shell==='phone') await drag(cx,cy+70,cx,cy-70);
+      else { await p.mouse.move(cx,cy+70);await p.mouse.down();await p.mouse.move(cx,cy-70,{steps:10});await p.mouse.up();await sleep(300); }
+      ok(await p.evaluate(()=>WosChat.viewer.state.open && WosChat.viewer.state.y < 0),`${shell}: zoomed image pans vertically`);
       if (shell === 'phone') { await p.touchscreen.tap(cx, cy); await sleep(120); await p.touchscreen.tap(cx, cy); }
       else { await p.mouse.click(cx, cy); await sleep(120); await p.mouse.click(cx, cy); }
       await sleep(450);
       const g1 = await geo(p), long1 = await p.evaluate(() => !!window.WosChat.viewer.state.long);
-      ok(g1.scale === 1 && (long1 || inside(g1)) && Math.abs(g1.pic.h - g0.pic.h) < 1, `${shell}: second double-tap returns to the fitted picture`, { g0, g1, long1 });
+      ok(g1.scale === 1 && !long1 && inside(g1) && Math.abs(g1.pic.h - g0.pic.h) < 1, `${shell}: second double-tap returns to the fitted picture`, { g0, g1, long1 });
       // Back closes the viewer.
       if (shell === 'phone') await p.evaluate(() => window.__wosNativeBack && window.__wosNativeBack());
       else await p.keyboard.press('Escape');
       await sleep(300);
       ok(!(await p.evaluate(() => window.WosChat.viewer.isOpen())), `${shell}: Back closes the viewer`);
+      await open(p,url,'pinch and dismiss');
+      if(shell==='phone') {
+        await drag(cx-35,cy,cx-90,cy,true);
+        ok(await p.evaluate(()=>WosChat.viewer.state.scale > 1.2),`${shell}: pinch zoom works`);
+        await open(p,url,'pull down'); await drag(cx,cy-80,cx,cy+120);
+      } else { await p.mouse.move(cx,cy-80);await p.mouse.down();await p.mouse.move(cx,cy+120,{steps:10});await p.mouse.up();await sleep(300); }
+      ok(!(await p.evaluate(()=>WosChat.viewer.isOpen())),`${shell}: pull down closes contained image`);
+      await cdp.detach();
       ok(!p.errs.length, `${shell}: no page errors`, p.errs.slice(0, 3));
-      ok(!writes.filter(x => !/thread-seen/.test(x)).length, `${shell}: no writes`, writes);
+      ok(writes.every(x => x === 'POST /wizard/v1/ui-preferences/seed' || x === 'POST /wizard/thread-seen'), `${shell}: only known bootstrap writes attempted (refused/synthetic before any network)`, writes);
       await ctx.close();
     }
   } finally { await b.close(); }

@@ -112,5 +112,64 @@
   // A sigil that isn't an app (search rows, the command row): glyph name + colour.
   function chip(tag, cls, glyph, color) { return `<${tag} class="${cls ? cls + ' ' : ''}sgt" style="--c:${color}">${named(glyph)}</${tag}>`; }
 
-  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
+  // Orb identity is a white glyph, NOT the package tile used by launchers.
+  // Keep this opt-in at the consumer: ordinary app icons must remain untouched.
+  const orbMasks = new Map();
+  function whitePixels(data, width, height) {
+    const out = new Uint8ClampedArray(data.length);
+    // Sample just inside each edge, avoiding rounded transparent corners. A
+    // transparent glyph keeps its alpha; an opaque tile loses its background.
+    const at = (x, y) => (y * width + x) * 4;
+    const edge = [[.5,.06],[.5,.94],[.06,.5],[.94,.5]].map(([x,y]) => at(Math.min(width-1,Math.floor(x*width)),Math.min(height-1,Math.floor(y*height))));
+    let transparent = 0; for (let i = 3; i < data.length; i += 4) if (data[i] < 16) transparent++;
+    const opaque = transparent > width*height*.1 ? [] : edge.filter(i => data[i+3] > 240);
+    const bg = [0,1,2].map(c => opaque.map(i => data[i+c]).sort((a,b)=>a-b)[Math.floor(opaque.length/2)] || 0);
+    for (let i = 0; i < data.length; i += 4) {
+      const distance = Math.hypot(data[i]-bg[0],data[i+1]-bg[1],data[i+2]-bg[2]);
+      const alpha = opaque.length >= 3 ? Math.max(0,Math.min(1,(distance-48)/40)) : 1;
+      out[i] = out[i+1] = out[i+2] = 255; out[i+3] = Math.round(data[i+3]*alpha);
+    }
+    return out;
+  }
+  function orb(node) {
+    if (!node) return;
+    const paint = (el, raster = false) => {
+      el.dataset.orbGlyph = '';
+      for (const [key,value] of Object.entries({background:raster?'none':'white',filter:'none',color:'white','border-radius':'0','box-shadow':'none'})) el.style.setProperty(key,value,'important');
+      if (raster) for (const key of ['mask','-webkit-mask']) el.style.setProperty(key,'none','important');
+    };
+    node.querySelectorAll('.sgi,.sglogo').forEach(el => {
+      if (el.hasAttribute('data-orb-glyph')) return;
+      const raster = el.classList.contains('sglogo') || el.classList.contains('sgimg');
+      if (!raster) { paint(el); return; }
+      const property = el.classList.contains('sglogo') ? '--logo' : '--sg';
+      const raw = el.style.getPropertyValue(property), match = /^url\(['"]?(.*?)['"]?\)$/.exec(raw);
+      // Fail closed to an existing white app glyph, never show the coloured tile
+      // while loading, or on an unsafe URL/decode/canvas failure.
+      const fallback = el.ownerDocument.createElement('i'); fallback.className = 'sgi sg-apps'; paint(fallback); el.replaceWith(fallback);
+      const src = match?.[1]; if (!src || !(ICON.test(src) || LOGO.test(src))) return;
+      if (!orbMasks.has(src)) {
+        if (orbMasks.size >= 128) orbMasks.delete(orbMasks.keys().next().value);
+        orbMasks.set(src, new Promise(resolve => {
+          const image = new Image(); image.onload = () => {
+            try {
+              const canvas = node.ownerDocument.createElement('canvas');
+              const scale = Math.min(128/image.naturalWidth,128/image.naturalHeight);
+              canvas.width = Math.max(1,Math.round(image.naturalWidth*scale)); canvas.height = Math.max(1,Math.round(image.naturalHeight*scale));
+              const ctx = canvas.getContext('2d', {willReadFrequently:true});
+              ctx.drawImage(image,0,0,canvas.width,canvas.height);
+              const pixels = ctx.getImageData(0,0,canvas.width,canvas.height); pixels.data.set(whitePixels(pixels.data,canvas.width,canvas.height)); ctx.putImageData(pixels,0,0);
+              resolve(canvas.toDataURL());
+            } catch (_) { resolve(null); }
+          }; image.onerror = () => resolve(null); image.src = src;
+        }));
+      }
+      orbMasks.get(src).then(url => {
+        if (!url || !node.contains(fallback)) return; // stale desk/icon decode
+        const image = node.ownerDocument.createElement('img'); image.alt = ''; image.className = 'sgi sg-orb-raster'; paint(image,true); image.style.objectFit = 'contain'; image.style.width = fallback.style.width; image.style.height = fallback.style.height; image.src = url; fallback.replaceWith(image);
+      });
+    });
+  }
+
+  window.WizSigil = { of, html, named, box, chip, orb, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
 })();

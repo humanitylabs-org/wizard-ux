@@ -6,6 +6,7 @@
 .tt-dot.you { background: var(--tt-you); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tt-you) 16%, transparent); }
 .tt-dot.done { background: var(--tt-done); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tt-done) 14%, transparent); }
 .tt-dot.bad { background: var(--tt-bad); }
+.tt-dot.stopped { background: transparent; border: 1.5px solid var(--wz-text-muted, #888); animation: none; }
 .tt-dot.ack { background: transparent; border: 1.5px solid var(--wz-text-muted, color-mix(in srgb, currentColor 50%, transparent)); }
 .tt-dot.run { width: 12px; height: 12px; background: transparent; border: 2px solid color-mix(in srgb, var(--tt-run) 28%, transparent); border-top-color: var(--tt-run); animation: tt-spin 1s linear infinite; }
 @keyframes tt-spin { to { transform: rotate(360deg); } }

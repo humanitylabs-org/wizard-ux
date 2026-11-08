@@ -174,6 +174,9 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-row {
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw:hover .aad-row, html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-cur .aad-row { background: var(--aad-hover); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-held .aad-row { background: var(--aad-held); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-row-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.43 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-row:has(.aad-working-ask) { height: auto; min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-working-ask { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--wz-warning, var(--amber, var(--aad-ink))); font-size: 0.75rem; font-weight: 400; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-working-helper { display: inline-block; margin-top: 2px; color: var(--wz-text-secondary, var(--aad-ink-2)); background: var(--wz-surface, var(--aad-panel)); font-size: 0.6875rem; font-weight: 400; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-kind="archive"] .aad-row-t { color: var(--aad-ink-2); }
 /* a notification among the chats (round 5): a small, quiet bell before the title (the secondary ink), the same row */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-bell { width: 15px; height: 15px; margin-right: -2px; color: var(--aad-ink-2); stroke-width: 1.8; }
@@ -419,6 +422,10 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-ai-front="list"]) #s
 /* Both visible panes are directly interactive: their first click reaches the app.
  * The resizing iframe guard below remains stronger (!important). */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not([hidden]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }
+/* The app panel beside a docked chat is still a [hidden] desk to the shell while the chat's desk is current (after a
+ * reply), and its window is not the focused one: its iframe stays a pointer target all the same (James, 6 Nov 2026:
+ * "Messenger became unclickable"). */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }
 
 /* ---------- round 9 (Miguel, 2 Nov 2026): the sidebar resizable by drag (round 13: the only panel left) ----------
  * The width is the owner's (kept per device), set by desktop.js as --aad-side-w; the folded rail keeps its own. */
@@ -503,7 +510,16 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools > .wtool-pick { ma
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] { visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; transform: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] { inset: 0 var(--aad-rs) 0 var(--aad-side) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] { z-index: 3; inset: 0 var(--aad-rs) 0 calc(100% - var(--aad-app-w) - var(--aad-rs)) !important; background: var(--aad-canvas); box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 10%, transparent); }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) { inset: 0 !important; width: auto !important; height: auto !important; max-width: none !important; margin: 0 !important; border-radius: 0; border-color: transparent !important; box-shadow: none !important; }
+/* a desk with two or more windows (an app and its companion pane, e.g. Video Editor's video + Feedback) shows them as
+ * side-by-side columns inside the panel, laid out by CSS alone: stacking both at inset 0 hid the app under its
+ * transparent companion, and the shell's pixel columns only exist once it re-tiles that desk, which it skips while
+ * another desk is current (James, 6 Nov 2026). The first window (the app) takes all the room left; a companion is a narrow side column
+ * (300-380px), so the editor is not squeezed into two thirds of the panel (James, 6 Nov 2026). */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:has(> .win:not(.gone) ~ .win:not(.gone)) { display: flex !important; flex-direction: row; align-items: stretch; gap: 8px; box-sizing: border-box; padding: 0 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:has(> .win:not(.gone) ~ .win:not(.gone)) > .win.gone { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:has(> .win:not(.gone) ~ .win:not(.gone)) > .win:not(.gone) { position: relative !important; inset: auto !important; width: auto !important; height: auto !important; min-width: 0; flex: 0 0 clamp(300px, 30%, 380px) !important; max-width: none !important; margin: 0 !important; border-radius: 0; box-shadow: none !important; background: var(--aad-canvas); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:has(> .win:not(.gone) ~ .win:not(.gone)) > .win:not(.gone):not(.win:not(.gone) ~ .win) { flex: 1 1 0 !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) { inset: 0 !important; width: auto !important; height: auto !important; max-width: none !important; margin: 0 !important; border-radius: 0; border-color: transparent !important; box-shadow: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) > .wbar { display: flex; position: absolute; top: 0; right: 0; width: 1px; height: 1px; overflow: hidden; visibility: hidden; pointer-events: none; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] > .win:not(.gone)::after { display: none !important; }
 /* the Home composer moves into the room left of the panel (never under it) */

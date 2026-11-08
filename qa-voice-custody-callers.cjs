@@ -20,7 +20,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route',apps:'/wizard/v1/apps'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
-   if(p==='/wizard/v1/apps'&&process.env.QA_LOCAL_ONLY==='1')return json({apps:[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Mizel.ai',url:'/fixture-mizel/'}]});
+   if(p==='/wizard/v1/apps'&&process.env.QA_LOCAL_ONLY==='1')return json({apps:fixture?.apps||[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Mizel.ai',url:'/fixture-mizel/'}]});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
    if(p.endsWith('/route'))return json({cmd:state.cmd,ms:5});
    if(p==='/wizard/files/upload'){
@@ -33,6 +33,12 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
     const body=JSON.parse(q.postData());state.calls ||= [];state.calls.push({key:q.headers()['idempotency-key'],body:q.postData()});state.posts.push(body);if(state.down)return json({error:'offline'},503);
     const key=q.headers()['idempotency-key'];if(!state.runs.has(key))state.runs.set(key,{run_id:'run-fixture-'+state.runs.size,status:'queued'});if(state.dropReceipt){state.dropReceipt=false;return r.abort('connectionreset');}return json(state.runs.get(key),202);
    }
+   if((fixture?.orb||fixture?.typedRoute)&&p==='/wizard/v1/setup')return json({first_run:false});
+   if(fixture?.orb&&p==='/wizard/hermes/v1/runs/orb-original-active-run'&&q.method()==='GET')return json({run_id:'orb-original-active-run',status:'running',runtime:{model,provider,model_lock:'accepted'}});
+   if(fixture?.orb&&p.endsWith('/steer')&&q.method()==='POST'){
+    state.steers||=[];state.steers.push({path:p,query:u.search,body:JSON.parse(q.postData())});
+    return json({accepted:true,run_id:decodeURIComponent(p.split('/runs/')[1].split('/')[0]),status:'queued'});
+   }
    if(p.endsWith('/api/sessions')&&q.method()==='POST')return json({session:{id:JSON.parse(q.postData()).id}});
    if(p.includes('/api/sessions/')&&q.method()==='GET'){
     if(!fixture)return json({session:sessions[0],messages:sessions[0].messages});
@@ -43,7 +49,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(p.endsWith('/api/sessions'))return state.listDown?json({error:'offline'},503):json({sessions:state.emptyList?[]:(fixture?fixture.sessions.filter(s=>(s.agent||'')===(u.searchParams.get('agent')||'')):sessions),has_more:false});
    if(p.endsWith('/api/jobs'))return json({jobs:[]});
    if(p.endsWith('/v1/runs'))return json({runs:[]});
-   if(p.endsWith('/api/model/options'))return json({model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
+   if(p.endsWith('/api/model/options'))return json(fixture?.modelOptions||{model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
    if(p.endsWith('/agents'))return json({agents:fixture?.agents||[{id:'hermes',label:'Wizard',is_default:true,status:'running',model:{model,provider}},{id:'research',label:'Research',status:'running',model:{model,provider}}]});
    if(p.includes('/thread-seen'))return json({seen:{}});
    if(p.endsWith('/resources'))return json({resources:[]});
@@ -55,22 +61,36 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await ctx.addInitScript(({allFail,model,provider,fixture})=>{
    localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.model.pref.v1',JSON.stringify({model,provider}));
    if(fixture&&!sessionStorage.getItem('dismissFixture')){sessionStorage.setItem('dismissFixture','1');localStorage.setItem('wos.skin',fixture.skin);}
+   if(fixture?.orb||fixture?.typedRoute){localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.welcome.v1','done');}
+   if(fixture?.orb&&fixture.layout)localStorage.setItem('wos.desktop-view.v1',fixture.layout);
    window.__fault={all:allFail};const put=IDBObjectStore.prototype.put,open=indexedDB.open.bind(indexedDB),set=Storage.prototype.setItem;
    IDBObjectStore.prototype.put=function(...args){if(__fault.all||__fault.idb)throw new DOMException('Injected device save failure','QuotaExceededError');return put.apply(this,args);};
    indexedDB.open=function(...args){return open(...args);};
    Storage.prototype.setItem=function(k,v){if(__fault.all&&(k.startsWith('wos.outbox.fallback')))throw new DOMException('Injected full storage','QuotaExceededError');return set.call(this,k,v);};
   },{allFail,model,provider,fixture});
+  if(process.env.QA_LAUNCHER_ONLY==='1')await ctx.addInitScript(()=>{ window.__launcherMediaStarts=0; const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); navigator.mediaDevices.getUserMedia=(...a)=>{window.__launcherMediaStarts++;return original(...a);}; });
   const p=await ctx.newPage();if(fixture)p.setDefaultTimeout(12000);p.on('pageerror',e=>state.errors.push(String(e)));
   await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
+  if(fixture?.retainedTyped){
+   // Seed before opening a thread; recovery, not a stage event in a live panel,
+   // owns the retained-row scenario. Never share a context with fresh Send.
+   state.retainedId=await p.evaluate(async ({sid,model,text})=>{const it=await WosOutbox.stage({kind:'reply',sessionId:sid,model,provider:'',text});await WosOutbox.transition(it.id,'failed','No confirmed model route · choose a model before retrying');return it.id;},{sid,model:fixture.retainedTyped.model,text:fixture.retainedTyped.text});
+   await p.reload();await p.waitForFunction(id=>!!(window.__wos||window.__wux)?.chats&&WosOutbox?.recoveryComplete&&WosOutbox.get(id)?.state==='failed',state.retainedId);
+  }
   await p.evaluate(()=>WosModels.load());await p.waitForFunction(()=>window.WosModels?.snapshot()?.model);await sleep(250);
+  if(fixture?.orb||fixture?.typedRoute)await p.evaluate(async()=>{await WosExperience.whenReady();await WosSkinHost.whenLayoutReady();await WosAgents.load();await WizLive.refreshAgents();});
   const wid=await p.evaluate(({sid,fixture})=>{const A=window.__wos||window.__wux;const existing=fixture&&Object.values(A.wins).find(w=>w.app==='chats');const w=existing||(A.openWin?A.openWin({app:'chats'}):null);const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');if(!fixture)A.chats.openChat(id,sid);if(window.__wos)A.goDesk(A.desks.findIndex(d=>d.wins.includes(id)));A.focusWin?.(id);return id;},{sid,fixture:!!fixture});
-  try{await p.waitForSelector(fixture?`[data-chats="${wid}${desktop?'::list':''}"] .ch-focus-strip`:`[data-chats="${wid}"] textarea`);}catch(e){if(fixture){await p.screenshot({path:path.join(out,'boot-failure.png')});fs.writeFileSync(path.join(out,'boot-failure.json'),JSON.stringify(await p.evaluate(wid=>({wid,agents:WosAgents.list,ready:WosAgents.ready,wins:(window.__wos||window.__wux).wins,html:document.querySelector(`[data-chats="${wid}"]`)?.outerHTML}),wid),null,2));}throw e;}
+  if(fixture?.orb||fixture?.typedRoute){await p.evaluate(({wid,sid})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sid);A.focusWin?.(wid);}, {wid,sid});}
+  try{await p.waitForSelector(fixture&&!fixture.orb&&!fixture.typedRoute?`[data-chats="${wid}${desktop?'::list':''}"] .ch-focus-strip`:`[data-chats="${wid}"] textarea`);}catch(e){if(fixture){await p.screenshot({path:path.join(out,'boot-failure.png')});fs.writeFileSync(path.join(out,'boot-failure.json'),JSON.stringify(await p.evaluate(wid=>({wid,agents:WosAgents.list,ready:WosAgents.ready,wins:(window.__wos||window.__wux).wins,html:document.querySelector(`[data-chats="${wid}"]`)?.outerHTML}),wid),null,2));}throw e;}
   const take=async()=>{await p.evaluate(()=>document.activeElement?.blur());await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForFunction(()=>__wos.voice==='listen');await sleep(1100);await p.evaluate(()=>__wos.finishVoice());};
   const rows=()=>p.evaluate(()=>[...WosOutbox._items.values()].map(x=>({id:x.id,state:x.state,kind:x.kind,text:x.text,typed:x.typed,sealKey:x.sealKey,blob:x.audio?.size,files:x.files,sessionId:x.sessionId,model:x.model,provider:x.provider,durable:x.durable,steered:x.steered,runId:x.runId,steerRunId:x.steerRunId,storageError:x.storageError,nativeId:x.nativeId})));
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
   return {ctx,p,state,wid,take,rows,done};
  }
+ if(process.env.QA_LAUNCHER_ONLY==='1'){await require('./qa-launcher-shortcut-pin.cjs')({boot,ok,sleep,sid,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,synthetic:true,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_TYPED_ROUTE_ONLY==='1'){await require('./qa-typed-send-route-retry.cjs')({boot,ok,sleep,sid,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,synthetic:true,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_ORB_ONLY==='1'){await require('./qa-desktop-orb-thread-pin.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_DISMISS_ONLY==='1'){await require('./qa-failed-send-dismiss.cjs')({boot,ok,sleep,sid,model,provider,out,browser});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,smoke:process.env.QA_DISMISS_SMOKE==='1',results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_PARITY_ONLY==='1'){await require('./qa-responsive-remainder.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_LOCAL_ONLY==='1'){await require('./qa-local-command-completion.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}

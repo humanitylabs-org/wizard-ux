@@ -115,7 +115,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   const desks = () => (api.desks?.list || api.phone?.desks)?.() || [];
   // (AI apps round 16, opt-in: the picker of installed apps that are neither open nor pinned; see open(opts))
   let pick = null;
-  function list() { const ex = new Set(pick?.exclude?.() || []); return notOpen(api.apps.list(), openIds()).filter(a => !ex.has(a.id)); }
+  function list() { const ex = new Set(pick?.exclude?.() || []); return notOpen(api.apps.list(), pick?.includeOpen ? [] : openIds()).filter(a => !ex.has(a.id)); }
   function tile(a, cls = 'vc-tile') {
     const t = el('span', cls, { 'aria-hidden': 'true' }); t.style.setProperty('--c', colourOf(a));
     t.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
@@ -141,7 +141,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   function row(a) {
     const b = el('button', 'vc-app' + (a.system ? ' vc-sys' : ''), { type: 'button', role: 'listitem', 'data-app': a.id, 'aria-label': 'Open ' + a.name });
     b.append(tile(a), el('span', 'vc-name', { text: a.name }));
-    api.listen(b, 'click', () => { close(); if (api.apps.openAny && kindsOf()) api.apps.openAny(a.id); else if (api.apps.openDesk) api.apps.openDesk(a.id); else api.apps.open(a.id); });
+    api.listen(b, 'click', () => { const reuse = pick?.includeOpen && desks().some(d => d.id === a.id); close(); if (reuse && goOpen) goOpen(a.id); else if (api.apps.openAny && kindsOf()) api.apps.openAny(a.id); else if (api.apps.openDesk) api.apps.openDesk(a.id); else api.apps.open(a.id); });
     return b;
   }
   /* Installed, by kind (Miguel, 2 Nov 2026: "the different types of apps", as the launcher groups them): Apps, Agent apps,
@@ -153,7 +153,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   const AGENT_KINDS = new Set(['wiz', 'agents', 'conns']);
   const kindsOf = () => { const k = api.apps.kinds?.(); return k && typeof k === 'object' ? k : null; };
   function installedGroups(K) {
-    const open = new Set([CHATS, ...(openIds() || []), ...(pick?.exclude?.() || [])]);
+    const open = new Set([CHATS, ...(pick?.includeOpen ? [] : openIds() || []), ...(pick?.exclude?.() || [])]);
     const of = k => k === 'apps' ? [...(K.apps || []), ...(K.dev || [])].sort((x, y) => (!!y.system - !!x.system) || String(x.name).localeCompare(String(y.name), undefined, { sensitivity: 'base' })) : K[k] || [];
     return KINDS.map(([k, label]) => [k, label, of(k).filter(a => a && a.id && !open.has(a.id) && matches(a, q))]);
   }

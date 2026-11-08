@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { compare, interiorROI, longMetrics, pageBudget, decodePNG } = require('../tools/viewer-qa-oracles.cjs');
+const { compare, interiorROI, containedMetrics, decodePNG } = require('../tools/viewer-qa-oracles.cjs');
 const raster = () => ({ width: 100, height: 60, rgba: Buffer.alloc(100 * 60 * 4, 255) });
 test('strict fixed interior rejects one-channel transparency; exterior is diagnostic only', () => {
   const meta = { width: 100, height: 60, radii: [18], borders: [1], padding: [8], exclusions: [] }, roi = interiorROI(meta);
@@ -14,12 +14,13 @@ test('strict fixed interior rejects one-channel transparency; exterior is diagno
   assert.equal(compare(a, leak, roi).changed, 1);
   assert.throws(() => interiorROI({ ...meta, exclusions: [{ left: 0, top: 0, right: 100, bottom: 60 }] }), /No nonempty/);
 });
-test('phone budget and footer use rendered long image, not object-fit letterbox proxy', () => {
-  const g = { state: { open: true, long: true, scale: 1, y: 0 }, natural: { width: 240, height: 4800 }, stage: { width: 412, height: 721, bottom: 775 }, image: { bottom: 8294 } };
-  assert.equal(longMetrics(g).minY, -7519);
-  const budget = pageBudget(g); assert(budget * .85 * 721 >= 7519);
-  assert.equal(longMetrics({ ...g, state: { ...g.state, y: -7519 }, image: { bottom: 775 } }).remaining, 0);
-  assert.throws(() => longMetrics({ ...g, state: { ...g.state, open: false } }));
+test('James correction, 6 Nov 2026: phone oracle rejects scroll-on-open and any image beyond the stage', () => {
+  const g = { state: { open: true, long: false, scale: 1 }, stage: { left: 0, right: 393, top: 54, bottom: 775 }, image: { left: 148, right: 245, top: 54, bottom: 775 } };
+  assert.equal(containedMetrics(g).footerBottom,775);
+  assert.throws(() => containedMetrics({ ...g, state: { ...g.state, long: true } }));
+  assert.throws(() => containedMetrics({ ...g, image: { ...g.image, bottom: 8294 } }));
+  assert.throws(() => containedMetrics({ ...g, image: { ...g.image, left: -1 } }));
+  assert.throws(() => containedMetrics({ ...g, state: { ...g.state, open: false } }));
 });
 test('trusted pointer helper cannot suppress click/capture or reopen after dismissal', () => {
   const s = fs.readFileSync(new URL('../tools/viewer-qa-repair.cjs', import.meta.url), 'utf8');

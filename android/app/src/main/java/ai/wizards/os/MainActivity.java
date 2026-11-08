@@ -729,6 +729,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
+        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
         resumed = true;
