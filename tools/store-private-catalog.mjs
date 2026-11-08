@@ -47,7 +47,7 @@ export function mergeRows(rows,installed={}) {
       installed_source:text(i?.source,64),installed_commit:text(i?.commit,40),installed_app_id:text(i?.launcher_id,64)};
   });
 }
-export function withPrivateCatalog(upstream,read=privateApps,{home=stateDir(),sourceRead=()=>cached(home),refreshSource=()=>refresh(home),now=Date.now}={}) {
+export function withPrivateCatalog(upstream,read=privateApps,{home=stateDir(),sourceRead=()=>cached(home),refreshSource=()=>refresh(home),now=Date.now,betaRead=null}={}) {
   let publicRows=[],publicAt=0,publicError=false,inflight=null,sourceFlight=null,legacy=[],legacyError=false;
   async function publicSnapshot(force=false) {
     if(!force && publicAt && now()-publicAt<60000) return;
@@ -79,8 +79,10 @@ export function withPrivateCatalog(upstream,read=privateApps,{home=stateDir(),so
     try {legacy=read();legacyError=false;} catch {legacyError=true;}
     let installed={}; try {if(existsSync(join(home,'installed.json'))) installed=readJSON(join(home,'installed.json'));} catch {}
     const alpha=(source?.snapshot?.apps || []).map(a=>({...a,source:source.snapshot.source.id,source_name:source.snapshot.source.name,channel:'alpha',private:true,type:a.type || 'view',category:a.category || 'app',tags:['alpha'],publisher:source.snapshot.source.name,url:`https://github.com/${a.repo}/tree/${a.commit}`}));
-    const rows=mergeRows([...publicRows,...legacy,...alpha],installed);
-    const statuses=[{id:'standard',name:'Standard',stale:publicError,error:publicError?'index_unavailable':null},{id:'owner-private',name:'Private test',stale:legacyError,error:legacyError?'private_catalog_unavailable':null},...(source?[{id:source.snapshot?.source.id || 'alpha',name:source.snapshot?.source.name || 'Wizard Alpha',...source.status}]:[])];
+    // Beta: private GitHub repositories shared with the signed-in account (store-beta-source.mjs). Signed out => nothing.
+    const beta=betaRead ? await betaRead({force:q.get('refresh')==='1'}).catch(()=>null) : null;
+    const rows=mergeRows([...publicRows,...legacy,...alpha,...(beta?.rows || [])],installed);
+    const statuses=[{id:'standard',name:'Standard',stale:publicError,error:publicError?'index_unavailable':null},{id:'owner-private',name:'Private test',stale:legacyError,error:legacyError?'private_catalog_unavailable':null},...(source?[{id:source.snapshot?.source.id || 'alpha',name:source.snapshot?.source.name || 'Wizard Alpha',...source.status}]:[]),...(beta?.signedIn?[{id:'beta',name:'Beta (GitHub)',stale:beta.stale===true,error:beta.error || null}]:[])];
     if(path.startsWith('/apps/')) {
       const a=rows.find(x=>x.repo===path.slice(6)); return a?{status:200,body:{...a,sources:statuses}}:{status:404,body:{error:'not_found',sources:statuses}};
     }
