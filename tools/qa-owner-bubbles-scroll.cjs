@@ -42,10 +42,12 @@ const check = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 
           const nb = [...document.querySelectorAll('.ch-msgs')].find(n => n.getClientRects().length);
           const doc = !!nb.closest('.wos-doc-thread'), sc = doc ? document.scrollingElement : nb;
           const top0 = sc.scrollTop, last = [...nb.querySelectorAll('.msg.a .bub')].pop();
-          for (let i = 0; i < 5; i++) { const p = document.createElement('p'); p.textContent = 'Streaming more words into the reply. '.repeat(8); last.appendChild(p); await new Promise(r => setTimeout(r, 250)); }
+          const steps = [];
+          for (let i = 0; i < 5; i++) { const p = document.createElement('p'); p.textContent = 'Streaming more words into the reply. '.repeat(8); last.appendChild(p); await new Promise(r => setTimeout(r, 250)); steps.push(sc.scrollTop); }
+          window.__qaSteps = steps;
           await new Promise(r => setTimeout(r, 400));
           const latest = [...document.querySelectorAll('[data-chlatest]')].some(b => !b.hidden && b.getClientRects().length > 0);
-          return { top0, top1: sc.scrollTop, max: sc.scrollHeight - sc.clientHeight, latest };
+          return { top0, top1: sc.scrollTop, max: sc.scrollHeight - sc.clientHeight, latest, steps };
         });
         check(`${tag}: streaming growth does not yank the thread`, Math.abs(res.top1 - res.top0) <= 2 && res.max - res.top1 > 100, { before, ...res });
         check(`${tag}: ↓ Latest appears for new content below`, res.latest, res);

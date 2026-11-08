@@ -111,6 +111,7 @@ window.WosChatPower = function chatPower(A) {
     RP.save(c.eyeRec = { sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
       scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: bottomGap(nb) < 80,
       working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
+    c.seenH = contentH(nb); // what the reader has seen; growth past this never pulls him down
   }
   // Jump to the bottom once: his own send (pin: keeps his new message in view while it paints) or ↓ Latest (no pin).
   function follow(wid, pin = true) {
