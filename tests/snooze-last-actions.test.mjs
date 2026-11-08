@@ -7,7 +7,7 @@ const boom = readFileSync(new URL('../web/core/scheduled-reminders.js', import.m
 function someday({ archived = false, restoreOK = true, deferOK = true } = {}) {
   const calls = [], events = [], s = { id: 's', archived };
   const L = { session: () => s, restore: async () => { calls.push('restore'); return restoreOK; }, defer: async () => { calls.push('defer'); return deferOK; } };
-  const c = vm.createContext({ live: () => L, close: () => calls.push('close'), window: { dispatchEvent: e => events.push(e) }, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o.detail; } } });
+  const c = vm.createContext({ chosen: () => {}, live: () => L, close: () => calls.push('close'), window: { dispatchEvent: e => events.push(e) }, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o.detail; } } });
   vm.runInContext(boom.slice(boom.indexOf('  async function someday('), boom.indexOf('  // A timed Snooze also takes')), c);
   return { run: opts => c.someday({ sessionId: 's', ...opts }), calls, events };
 }

@@ -25,8 +25,9 @@ function fixture(desktopHost = true, afterAction = 'stay') {
   vm.createContext(context);
   vm.runInContext(cut(core, '  const keepThreadOpen =', "  window.addEventListener('wos:boomerang-set'"), context);
   vm.runInContext(cut(core, '  function leaveAfterSend(', '\n  function ',), context);
+  vm.runInContext(cut(core, '  function leaveFinishedThread(', '\n  // Repaint every chats list'), context);
   vm.runInContext(cut(core, '  async function threadAct(', '\n  /* Threads and alerts'), context);
-  vm.runInContext(cut(core, "  window.addEventListener('wos:boomerang-set'", '  // A scheduled Snooze'), context);
+  context.snoozeLast = () => false; vm.runInContext(cut(core, "  window.addEventListener('wos:boomerang-set'", '  // A scheduled Snooze'), context);
   vm.runInContext(cut(desktop, '  if (LIVE) LIVE.onChange(', '\n  OUTBOX?.onChange('), context);
   return { context, w, row, listeners, backs };
 }
@@ -55,9 +56,11 @@ for (const after of ['stay', 'list']) test(`desktop archiving the only open thre
   assert.equal(f.w.thread, null);
   assert.deepEqual(opened, []);
 });
-for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const name of ['wos:boomerang-set', 'wos:snooze-someday']) test(`${desktopHost ? 'desktop' : 'phone'} ${name}, preference ${after}`, () => {
-  const f = fixture(desktopHost, after); f.listeners[name]({ detail: { session: 'same', label: 'Later' } });
-  assert.equal(f.w.thread, desktopHost || after === 'stay' ? 'same' : null);
+// Snooze now lands like Archive (James, 8 Nov 2026; tests/snooze-lands-like-archive.test.mjs): the open thread is left on every host and setting.
+for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const name of ['wos:boomerang-set', 'wos:snooze-someday']) test(`${desktopHost ? 'desktop' : 'phone'} ${name} leaves the open thread like Archive, preference ${after}`, () => {
+  const f = fixture(desktopHost, after); Object.assign(f.context, { elOf: () => null, openChat: () => {} }); vm.runInContext(cut(core, '  function archiveListOrder(', '\n  async function threadAct('), f.context);
+  f.listeners[name]({ detail: { session: 'same', label: 'Later' } });
+  assert.equal(f.w.thread, null);
 });
 test('phone opt-in reply returns to the list and desktop hosted reply stays in place', () => {
   const phone = fixture(false, 'list'); phone.context.leaveAfterSend('chat', 'same', false);
