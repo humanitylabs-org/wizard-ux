@@ -47,6 +47,7 @@
     add('pin-sheet', () => W.WizHomeScreenApps?.state?.open, () => W.WizHomeScreenApps.back());
     add('tour', () => W.WosTour?.helpOpen || W.WosTour?.desk?.active || (W.WosTour?.active && W.WosTour.step !== W.WosTour.REPLY), () => { const t=W.WosTour, r=t.desk?.active ? (t.desk.finish('skip'), 'tour') : t.back(); h.afterTour?.(); return r; });
     add('share', () => W.WosShareSheet?.isOpen?.(), () => W.WosShareSheet.back());
+    add('lookup', () => W.WosLookup?.isOpen, () => W.WosLookup.back());
     add('selection', () => W.WosSelMenu?.state?.open, () => W.WosSelMenu.back());
     add('context', () => W.WosContextMenu?.isOpen, () => W.WosContextMenu.back());
     add('route', () => W.WosAppRoute?.isOpen?.(), () => W.WosAppRoute.back());

@@ -2,11 +2,7 @@
 
 Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share recency. `WosSkinHost` boots AI apps (`wos.desktop-view.v1`, `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`); ownList excludes legacy lists. `WizAppServices.back` keeps root apps; unowned frames yield.
 
-[Contracts](component-contract-details.md).
-
-[Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
-
-[Reuse gate](app-reuse-gate.md).
+[Contracts](component-contract-details.md). [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). [Reuse gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); ranked paged hits |
 
@@ -83,7 +79,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Brand hat | `WizBrand` (`brand.js`) |
 | Links: outside → Reader (own/failed direct), sheet/window, long-press; `data-wizard-browse`=original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
 | Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java`, `DownloadsCallerPolicy.java` (docs/android-downloads-port.md) |
-| Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
+| Selection actions, AI Look up | `WosSelMenu` (`sel-menu.js`), `WosLookup` (`lookup-pop.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` (`screen-text.js`) |
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); native `WizardKeyboardService.insertText`; voice.js; `WosMic` (`mic.js`) |

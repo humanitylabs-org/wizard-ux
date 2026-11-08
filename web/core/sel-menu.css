@@ -22,3 +22,5 @@
 }
 .selmenu button:active { background: rgba(143, 99, 255, .26); }
 .selmenu svg { width: 19px; height: 19px; fill: none; stroke: var(--violet-2, #b99bff); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.selmenu.tight { max-width: calc(100vw - 16px); }
+.selmenu.tight button { min-width: 44px; padding: 6px 5px; }
