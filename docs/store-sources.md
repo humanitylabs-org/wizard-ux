@@ -56,4 +56,17 @@ On success the Store posts `wizard:apps-changed`, closes the review and the app 
 - Existing `tests/qa-store-router.cjs` and `tools/qa-store-installs.cjs` retain their fixture acceptance scenarios.
 - `InstallLinkTest.java` covers native raw-query transport and rejected authorities/paths. **Native unit/build/device verification remains queued for Thales; no local Gradle build or deployment is implied.**
 
-Follow-up, not included here: **Apps → Sources → Sign in to GitHub**. Private previews currently use only the existing server-side GitHub credential.
+## Sources and GitHub sign-in
+
+`Sources` sits next to `Refresh` on the Store home and opens one sheet on the Store's own sheet layer (`web/store/store-github.js`, driven by `store.js`; one Back level, tap outside closes it, opaque `--wz-*` surface with dark fallbacks). It reads and drives the App Manager's owner-gated `store-install/_github` endpoints; the browser never sees a token, device code or client id.
+
+- Signed out: a plain explanation and `Sign in to GitHub`. The tap paints "Getting your code…" on its own frame, posts `_github/start`, then shows the short code, a copy button and `Open github.com/login/device`. The Store asks `GET _github` about every 2 s only while the sheet is open, the code is pending and the page is visible; it stops on close, Back, expiry, denial and sign-in.
+- Signed in: `Signed in as <username>` and `Sign out`. Sign out paints at once and rolls back with a toast if the App Manager refuses. A sign-in that comes from the Wizard's settings (`source: env`) says it cannot be removed here.
+- Not configured: a plain note and no button. Expired, denied and error: a plain message and `Try again`.
+- When a sign-in finishes, and after sign-out, the Store reloads its catalog with `refresh=1`, so Beta apps appear or disappear without a page reload.
+
+**Scope caveat.** GitHub OAuth Apps have no read-only scope for private repositories, so the sign-in asks for GitHub's `repo` scope (plus `read:packages` for private images). The token stays on this Wizard (0600), is used server-side only for read calls and installs, and Sign out deletes it.
+
+**Beta source** (`tools/store-beta-source.mjs`, merged by `withPrivateCatalog`). With a GitHub credential present, the adapter lists the private repositories tagged `wizard-app` that the account can see, resolves each repository's HEAD commit, reads `wizard.md` at that commit through the same fixed-endpoint, redirect-refusing, size-capped reader as link previews (`githubReader`), and shows only the restricted display projection as `source: beta`, `private: true`. Rows whose manifest fails the projection are skipped. Results are cached for 5 minutes and `refresh=1` bypasses the cache; a failed refresh keeps the last rows and reports `beta_unavailable` in `sources`. Without a credential there are no Beta rows and no GitHub requests. A Beta row installs through the existing link selection (`{source:'link', repo, commit}`), so the App Manager checks that exact commit with this Wizard's GitHub login.
+
+Verification: `node --test tests/store-github.test.mjs tests/store-beta-source.test.mjs` and `node tests/qa-store-github-signin.cjs` (fixture-only; phone 390×844 touch and desktop 1280×800 through the real shells, Nebula with a live switch to Sepia, a 5 s delayed backend proving each tap paints first, nested Back, tap outside, polling while hidden).
