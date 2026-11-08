@@ -50,8 +50,8 @@ test('popover contract: Wisdom endpoint shape, exact fast model, abort fences, n
 });
 
 test('popover is opaque, skinned by --wz-* tokens, selectable, and owns one Back layer', () => {
-  assert.match(popCss, /background: var\(--wz-panel, #[0-9a-f]{6}\)/); assert.ok(!/rgba\([^)]*\)\s*[,;]?\s*backdrop|backdrop-filter/.test(popCss), 'no glass');
-  for (const t of ['--wz-text', '--wz-border', '--wz-accent', '--wz-radius', '--wz-font-ui']) assert.ok(popCss.includes(t), t);
+  assert.match(popCss, /background: var\(--wz-panel\);/); assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(popCss), 'no literal colours: tokens only (the kit defaults are the dark standalone fallback)'); assert.ok(!/rgba\([^)]*\)\s*[,;]?\s*backdrop|backdrop-filter/.test(popCss), 'no glass');
+  for (const t of ['--wz-text', '--wz-border', '--wz-accent', '--wz-radius', '--wz-font-ui', '--wz-text-lg']) assert.ok(popCss.includes(t), t);
   assert.match(chatsCss, /\.wos-lookup \.lk-body \*[^{]*\{ user-select: text;/); assert.match(chatsCss, /\.wos-lookup \.lk-retry[^{]*\{ user-select: none;/);
   assert.match(read('core/escape-back.js'), /add\('lookup', \(\) => W\.WosLookup\?\.isOpen, \(\) => W\.WosLookup\.back\(\)\)/);
   for (const page of ['index.html', 'desktop.html']) { const h = read(page); assert.ok(h.includes('core/lookup-pop.js') && h.includes('core/lookup-pop.css'), page); assert.ok(h.indexOf('core/sel-menu.js') < h.indexOf('core/lookup-pop.js')); }
