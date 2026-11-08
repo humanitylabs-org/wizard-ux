@@ -70,7 +70,10 @@ export function cleanRegistry(raw) {
     if (!ID_RE.test(id) || !name || mseen.has(id)) continue;
     mseen.add(id);
     const where = clip(m.where, 120), peer = clip(m.peer, 64).toLowerCase();
-    managed.push({id, name, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m), ...withAccess(m.access)});
+    // A saved address is navigation only, never permission to manage the target.
+    let url = ''; try { const u = new URL(clip(m.url, 2048)); if (['http:', 'https:'].includes(u.protocol) && !u.username && !u.password) url = u.href; } catch (_) {}
+    const workspace = { ...(url ? {url} : {}), ...(['company', 'managed', 'remote'].includes(m.kind) ? {kind: m.kind} : {}), ...(['owner', 'technical-admin', 'member'].includes(m.role) ? {role: m.role} : {}) };
+    managed.push({id, name, ...workspace, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m), ...withAccess(m.access)});
     if (managed.length >= 12) break;
   }
   return {version: 1, this: thisBox, devices, hide: names(j.hide), groups, ...(managed.length ? {managed} : {})};

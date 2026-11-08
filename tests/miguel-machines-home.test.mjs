@@ -486,8 +486,8 @@ test('final review 2: exposure dates must be real; an open warning from a last r
     assert.match(src, /online: S\.devFresh \? d\.status === 'online' : null/, who);
     assert.match(src, /roleText: 'Main' \+ \(main\.stale \? ' · last reading' : ''\)/, who);
     assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
-    assert.match(src, /if \(open && !wsmBack\) wsmBack = api\.back\?\.push\?\.\(/, who + ': the workspace menu is the top Back layer');
-    assert.match(src, /function renderWiz\(\) \{\n    syncWsmBack\(\);/, who);
+    assert.match(read('web/core/workspaces.js'), /api\?\.back.push\(close\)/, who + ': shared workspace menu is the top Back layer');
+    assert.match(src, /api.workspaces.switch\(d.ws\)/, who);
     assert.equal((src.match(/\$\{S\.backupRead === 'ok' \? '' : ' \(last reading\)'\}`/g) || []).length, 3, who + ': Home and Settings backup age say when it is a saved copy');
     assert.match(src, /% left\$\{aiStale\(\) \? ' \(last reading\)' : ''\}`/, who);
     assert.match(src, /sub = JSON\.stringify\(\[S\.ws, !!S\.devFresh, S\.backupRead \|\| '',/, who);
@@ -512,7 +512,8 @@ test('machines-home: Home is one glance; the full views live in Settings › Sys
   assert.ok(man.capabilities.includes('settings'));
   for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}'`), page);
   assert.match(src, /api\.slot\.mount\('dock-end', barBox, -1\)/, 'desktop: the glance sits in the top bar');
-  assert.match(src, /fillTabs\(homeWs\)/, 'the Wizard switcher travels with the glance');
+  assert.match(src, /fillTabs\(wsBar\)/, 'the Settings network tabs remain');
+  assert.match(src, /api.workspaces\?\.snapshot\(\)/, 'the shared Wizard registry owns the list');
   assert.match(src, /api\.settings\?\.open\?\.\(d\.go\)/, 'strip parts open their Settings page');
   assert.doesNotMatch(src, /h\('header', \{ cls: 'mh-top' \}/, 'no separate switcher above the strip');
   assert.match(host, /if \(caps\.has\('settings'\)\) api\.settings = Object\.freeze/);

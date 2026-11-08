@@ -770,6 +770,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/workspaces.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared native-first saved Wizard switcher"
+    },
     "core/workspace-sync.js": {
       "loadedBy": [
         "phone",
@@ -1032,6 +1036,8 @@
     "core/welcome.js",
     "core/workspace-navigation.js",
     "core/workspace-sync.js",
+    "core/workspaces.css",
+    "core/workspaces.js",
     "favicon.ico",
     "icon-192.png",
     "kit/controls.css",
