@@ -112,9 +112,28 @@
         el.setRangeText(t, start, end, 'end');
       }
       else {
+        // Contenteditable: go through the browser's own editing pipeline, as a keyboard does (beforeinput + input,
+        // IME and CodeMirror stay in sync). Hand-editing the DOM and faking an input event let an attached Android
+        // IME re-commit the same words (dictation pasted twice). Manual insertion is only the fallback.
+        const doc = seal.doc, selection = doc.defaultView.getSelection();
+        let t = String(text), native = false;
+        const away = doc.activeElement; // the user may have moved to another field while STT ran: give focus back to it after
+        try {
+          // Same neighbour spacing as plain fields; only the caret's own text node counts, so a new line never gains a space.
+          const c = seal.range.startContainer, o = seal.range.startOffset, prev = c.nodeType === 3 ? c : c.childNodes[o - 1];
+          const before = c.nodeType === 3 ? (o ? c.data[o - 1] : '') : prev?.nodeType === 3 ? prev.data.slice(-1) : '';
+          if (before && !/\s/.test(before) && /^[^\s.,;:!?)]/.test(t)) t = ' ' + t;
+          if (!el.contains(doc.activeElement)) el.focus({ preventScroll: true });
+          selection.removeAllRanges(); selection.addRange(seal.range);
+          native = !!doc.execCommand('insertText', false, t);
+        } catch (_) { native = false; }
+        if (away && away !== doc.body && !el.contains(away) && away.isConnected) {
+          try { away.focus({ preventScroll: true }); } catch (_) { /* element no longer focusable */ }
+        }
+        if (native) { refresh(); return true; } // the native input event already fired; never add a second
         const r = seal.range; r.deleteContents();
-        const node = seal.doc.createTextNode(String(text)); r.insertNode(node); r.setStartAfter(node); r.collapse(true);
-        const selection = seal.doc.defaultView.getSelection(); selection.removeAllRanges(); selection.addRange(r);
+        const node = doc.createTextNode(String(text)); r.insertNode(node); r.setStartAfter(node); r.collapse(true);
+        selection.removeAllRanges(); selection.addRange(r);
       }
       el.dispatchEvent(new seal.doc.defaultView.InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: String(text) }));
       // Do not steal focus back from a different field while STT was running.

@@ -127,7 +127,7 @@ async function cases(browser) {
   ok(p.url().startsWith(HOME) && !(await state(p)).full, 'app Back leaves fullscreen, never exits shell');
   frame = await app(f);
   await frame.locator('#ce').click(); await frame.evaluate(() => { const r = document.createRange(); r.selectNodeContents(ce.querySelector('b')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
-  await take(f); ok(await frame.locator('#ce').textContent() === 'one spoken words three', 'contenteditable inserts sealed DOM range without HTML interpretation');
+  await take(f); ok((await frame.locator('#ce').textContent()).replace(/\u00a0/g, ' ') === 'one spoken words three', 'contenteditable inserts sealed DOM range without HTML interpretation (native insert may use a non-breaking space)');
   await frame.locator('#shadow').locator('#sh').click(); await frame.evaluate(() => shadow.shadowRoot.querySelector('input').setSelectionRange(7, 10));
   await take(f); ok(await frame.locator('#shadow').locator('#sh').inputValue() === 'shadow spoken words text', 'open shadow input uses same helper');
   // Long-press still owns command mode even with a focused editable field.
