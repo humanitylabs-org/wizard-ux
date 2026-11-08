@@ -86,7 +86,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` (`screen-text.js`) |
-| Dictation into a focused field | `WizCore` focused field (`focused-field.js`, native insert); mono voice (`voice.js`); mic choice `WosMic` (`mic.js`) |
+| Dictation into a focused field | `WizCore` focused field (`focused-field.js`); native `WizardKeyboardService.insertText`; `voice.js`; `WosMic` (`mic.js`) |
 | Local commands | `WosCommands` (`commands.js`) |
 | Screen capture | `WosScreenCapture`(`screen-capture.js`),`WosCaptureTools`; `ScreenMode`/`screen.html` |
 | Screen | `ScreenMode`: picture caption placement (`screen.html`); independent picture-read executor (`ScreenMode.java`) |
