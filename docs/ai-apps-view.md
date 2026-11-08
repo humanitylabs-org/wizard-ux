@@ -32,7 +32,8 @@ Phone (`web/layouts/ai-apps/layout.js`, `layout.css`, `home.js`):
 - An app fills the screen under the same top bar; the orb sits in the app's own bottom row (Orb bar standard).
 - A take (tap the orb) uses the stock voice controls, painted with the skin's tokens.
 
-Desktop (`desktop.js`, `desktop.css`):
+Desktop (`desktop.js`, `desktop.css`; the host's blocking first-frames sheet is `desktop-boot.css`. The desktop never
+requests the phone's `layout.js` / `layout.css`: `core/skin-host.js` LAYOUTS `files` names each shell's own entry):
 - Left: the chats sidebar (search, sections, New chat), foldable to a 52 px rail of counts (Snoozed, Ready and Ready's
   statuses). The open sidebar is built on the rail: Ready's count sits on its header (the rail's amber disc, none on
   ◫), Ready is grouped by the rail's statuses (sub-headers with counts, its chats under each in the chosen order),

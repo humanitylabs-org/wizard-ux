@@ -101,7 +101,7 @@ test('every shell entry point asks the layout first, with the stock path as its 
   const R = "window.WosSkinHost?.routeOpen?.(";
   // a notification's Open (inboxAct 'app' -> WizOpenApp), the Morning button, the launcher, commands: WizOpenApp / openApp
   assert.match(src, /const go = \(\) => !!newWin\(\{ app: 'frame', appId: id, url: rel, workflow: true, returnWid: ws\[cur\]\.focus \}\);\n\s*\/\/[^\n]*\n\s*const r = window\.WosSkinHost\?\.routeOpen\?\.\('app', \{ id, path: rel \}, go\); if \(r\) return true;\n\s*return go\(\);/);
-  assert.ok(src.includes(`if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && ${R}'app', { id: a.id, path: '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;`), 'openApp: an app (never a given desk) where the layout shows apps');
+  assert.ok(src.includes(`if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && ${R}'app', { id: a.id, path: opts.path || '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;`), 'openApp: an app (never a given desk) where the layout shows apps, at a spoken route\'s page when given');
   // a link tapped in a reply (chats.js H.openLink -> openAppLink)
   assert.ok(src.includes(`const r = ${R}'link', { url, title: String(title || ''), app: a ? a.id : '' }, go); if (r) return true;`));
   // a page link anywhere in the shell (core/links.js: a reply's link no app owns, a link inside an app)

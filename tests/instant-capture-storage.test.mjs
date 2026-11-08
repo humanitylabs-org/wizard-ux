@@ -55,7 +55,7 @@ test('failed engine Stop then Discard ignores failed storage and releases mic an
 test('Discard after inputStopped + failed durable save works (the old permanent trap)',async()=>{const f=fixture({instant:false,storage:'QuotaExceededError'});await f.enqueue('AB');await assert.rejects(f.c.finish(f.s),e=>e.code==='storage_failed');assert.equal(f.s.inputStopped,true);await f.c.cancelSession(f.s);assert.equal(f.c.active,null);assert.equal(f.mic,false);assert.equal(f.lock,false);});
 test('Discard during actual in-flight Stop waits, then deletes the take',async()=>{let done;const f=fixture({stop:()=>new Promise(r=>done=r)});await f.enqueue('AB');const stopping=f.c.finish(f.s);await tick();const discarding=f.c.cancelSession(f.s);await tick();assert.equal(f.s.discard,undefined);done({blob:new Blob(['C']),durationMs:2345});await stopping;await discarding;assert.equal(f.sessions.size,0);assert.equal(f.s.discard,true);assert.equal(f.c.active,null);});
 test('Discard never hangs on engine cancellation or removal',async()=>{const f=fixture({storage:'hang',cancel:()=>new Promise(()=>{})});await f.enqueue('AB');const before=Date.now();await f.c.cancelSession(f.s);assert.ok(Date.now()-before<4000);assert.equal(f.mic,false);assert.equal(f.lock,false);assert.equal(f.c.active,null);});
-for(const native of [undefined,'wizard-meetings','wizard-device'])test('non-instant strict durable contract retained: '+native,async()=>{const f=fixture({instant:false,storage:'QuotaExceededError'});f.s.row.native=native;await f.enqueue('AB');await assert.rejects(f.c.finish(f.s),e=>e.code==='storage_failed'&&e.detail==='QuotaExceededError');assert.equal(f.s.memoryOnly,undefined);assert.equal(f.s.queue.length>0,true);assert.equal(f.mic,false);assert.equal(f.lock,true);await f.c.cancelSession(f.s);});
+for(const native of [undefined,'wizard-device'])test('non-instant strict durable contract retained: '+native,async()=>{const f=fixture({instant:false,storage:'QuotaExceededError'});f.s.row.native=native;await f.enqueue('AB');await assert.rejects(f.c.finish(f.s),e=>e.code==='storage_failed'&&e.detail==='QuotaExceededError');assert.equal(f.s.memoryOnly,undefined);assert.equal(f.s.queue.length>0,true);assert.equal(f.mic,false);assert.equal(f.lock,true);await f.c.cancelSession(f.s);});
 test('failed in-memory assembly keeps bytes and exposes retry/discard with mic released',async()=>{class BrokenBlob {constructor(){throw Error('synthetic-memory');}}const f=fixture({storage:'QuotaExceededError',memoryBlob:BrokenBlob});await f.enqueue('AB');await assert.rejects(f.c.finish(f.s),e=>e.code==='memory_result_failed');assert.ok(f.s.memoryParts.length);assert.equal(f.mic,false);await f.c.cancelSession(f.s);assert.equal(f.lock,false);});
 test('error detail rejects arbitrary content and preserves known DOMException names only',()=>{const f=fixture();for(const error of [{message:'private',detail:'private',name:'private'},{name:'QuotaExceededError',message:'private'}]){const e=f.c.storageFailure(error);assert.doesNotMatch(e.message,/private/);assert.ok(['UnknownError','QuotaExceededError'].includes(e.detail));assert.equal(e.cause,undefined);}});
 function opening(mode) {
@@ -67,3 +67,31 @@ function opening(mode) {
 test('IDB blocked open fails with a code, and closes a late connection',async()=>{const f=opening('blocked');await assert.rejects(f.c.openDB(),e=>e.detail==='blocked');f.request.result=f.db;f.request.onsuccess();assert.equal(f.closed,1);});
 test('never-resolving IDB open times out, resets retry, and closes late success',async()=>{const f=opening('hang');await assert.rejects(f.c.openDB(),e=>e.detail==='timeout');await tick();assert.equal(f.c.dbPromise,null);f.request.result=f.db;f.request.onsuccess();assert.equal(f.closed,1);});
 test('healthy IDB closes on versionchange so another page can upgrade',async()=>{const f=opening('ok');assert.equal(await f.c.openDB(),f.db);f.db.onversionchange();assert.equal(f.closed,1);assert.equal(f.c.dbPromise,null);});
+
+// James, 6 Nov 2026: Mizel failed to start/stop with "On-device audio storage timed out". Native meetings upload
+// full-quality audio to the meeting backend; the phone store is only a backup and must never block or stop them.
+for(const storage of ['QuotaExceededError','UnknownError'])test('native meeting keeps recording and stops cleanly when phone storage fails: '+storage,async()=>{
+  const f=fixture({instant:false,storage,stop:async()=>({partial:true,durationMs:4000,meta:{meetingId:'m1',backendOwned:true}})});
+  f.s.row.native='wizard-meetings';f.s.meetingNative=true;f.s.row.mime='audio/wav';
+  const warns=[];f.c.emit=(s,kind,msg)=>{if(kind==='warn')warns.push(msg);};
+  await f.enqueue('AB');
+  const out=await f.c.finish(f.s);
+  assert.equal(out.meta.native.backendOwned,true);assert.equal(out.durationMs,4000);assert.equal(out.durable,false);
+  assert.equal(f.s.noLocal,true);assert.equal(f.s.phase,'stopped');assert.equal(f.mic,false);assert.equal(f.lock,false);
+  assert.ok(warns.some(w=>/Recording continues/.test(w)));
+});
+// James, 6 Nov 2026: pressing the orb during a Mizel meeting failed with "On-device audio storage timed out".
+// The phone's backup store must not block the orb's microphone loan or its return.
+test('orb borrows and returns a native meeting mic when phone storage fails',async()=>{
+  const f=fixture({instant:false,storage:'UnknownError'});
+  load('  function beginVoiceBorrow(', '  function deviceAdapter(',f.c);
+  const calls=[];
+  f.c.W={WizardOSDevice:{recHandoffVersion:()=>1,recStartBorrowed(){},
+    recHandoffBegin:(id,m)=>{calls.push('begin');return JSON.stringify({status:'paused',open:true,id,meetingId:m});},
+    recHandoffEnd:id=>{calls.push('end');return JSON.stringify({id,open:false,status:'recording',pausedByHandoff:true});}}};
+  Object.assign(f.s.row,{native:'wizard-meetings',pcm:true,meta:{meetingId:'m1'}});f.s.meetingNative=true;f.s.phase='recording';
+  const b=await f.c.beginVoiceBorrow('handoff-0001');
+  assert.equal(b.micReleased,true);assert.equal(f.s.phase,'handoff');assert.equal(f.s.noLocal,true);
+  const m=await f.c.endVoiceBorrow('handoff-0001',{status:'captured'});
+  assert.equal(m.resumeStatus,'recording');assert.equal(f.s.phase,'recording');assert.deepEqual(calls,['begin','end']);
+});

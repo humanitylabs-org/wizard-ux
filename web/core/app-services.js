@@ -161,15 +161,27 @@
     if (!box) {
       box = document.createElement('span'); box.className = 'wtools';
       bar.insertBefore(box, [...bar.children].find(c => c.matches('button, .wb, .wpin, .wroute-slot')) || null);
-      const send = (id, value) => { try { if (valid(st, st.doc)) st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); } catch (_) {} };
+    }
+    renderTools(st.frame, box);
+    bar.classList.add('has-tools');
+    return true;
+  }
+  // Both desktop renderers use the same validated model and verified-document
+  // dispatch. A layout-owned slot is not a clone of Classic's titlebar.
+  const toolSlots = new WeakMap();
+  function renderTools(frame, box) {
+    const st = frames.get(frame), owner = st && valid(st, st.doc) ? st : null;
+    if (!toolSlots.has(box)) {
+      toolSlots.set(box, { owner: null, key: '' });
       // Own the gesture: a tap here is never a title-bar double tap, a drag or a window action.
       for (const ev of ['pointerdown', 'dblclick']) box.addEventListener(ev, e => e.stopPropagation());
-      box.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button[data-tool]'); if (b && !b.disabled) send(b.dataset.tool); });
-      box.addEventListener('change', e => { const s = e.target.closest('select[data-tool]'); if (s) send(s.dataset.tool, s.value); });
+      box.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button[data-tool]'); if (b && !b.disabled) dispatchTool(box, b.dataset.tool); });
+      box.addEventListener('change', e => { const s = e.target.closest('select[data-tool]'); if (s) dispatchTool(box, s.dataset.tool, s.value); });
     }
-    const key = JSON.stringify(st.tools); if (box.dataset.key === key) return true;
-    box.dataset.key = key; box.replaceChildren();
-    for (const x of st.tools) {
+    const state = toolSlots.get(box), tools = owner?.tools || [], key = JSON.stringify(tools);
+    if (state.owner === owner && state.doc === owner?.doc && state.key === key) return !!tools.length;
+    state.owner = owner; state.doc = owner?.doc; state.key = key; box.replaceChildren();
+    for (const x of tools) {
       let el;
       if (x.kind === 'select') {
         el = document.createElement('select'); el.className = 'wtool wtool-pick';
@@ -186,8 +198,14 @@
       el.dataset.tool = x.id; el.dataset.wact = 'tool'; el.setAttribute('aria-label', x.label); el.title = x.label;
       box.append(el);
     }
-    bar.classList.add('has-tools');
-    return true;
+    return !!tools.length;
+  }
+  function dispatchTool(box, id, value) {
+    const held = toolSlots.get(box), st = held?.owner;
+    if (!st || !valid(st, held.doc)) return false;
+    const tool = st.tools?.find(x => x.id === id);
+    if (!tool || tool.disabled || (value === undefined ? tool.kind !== 'button' : tool.kind !== 'select' || !tool.options.some(o => o.value === value))) return false;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); return true; } catch (_) { return false; }
   }
   /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
   const ORB_ICONS = new Set(['plus', 'mic', 'record', 'stop', 'send', 'search', 'edit']);
@@ -208,7 +226,7 @@
     const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
     try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
   }
-  function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
+  function setTools(st, list) { st.tools = cleanTools(st, list); const shown = paintTools(st); window.dispatchEvent(new CustomEvent('wizard:app-tools')); return shown; }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
   // never owner links, arbitrary same-origin frames or off-origin apps. Label comes from the catalog.
   async function identity(st, doc, method, args) {
@@ -697,13 +715,16 @@
   // All frames share one 1.5s budget. Late callbacks, edits and document changes cannot admit reload.
   async function keepDrafts(frame = null) {
     reconcile();
+    const now = typeof performance === 'undefined' ? () => Date.now() : () => performance.now();
+    const deadline = now() + 1500;
     await Promise.all([...frames.values()].filter(st => !frame || st.frame === frame).flatMap(st => [...(st.drafts || [])].map(async ([id, draft]) => {
       if (draft.kept || !valid(st, draft.doc)) return;
       const generation = draft.generation;
       let timer;
       try {
-        const result = await Promise.race([Promise.resolve().then(() => draft.keep()), new Promise(resolve => { timer = setTimeout(() => resolve(false), 1500); })]);
-        if (result === 'kept' && valid(st, draft.doc) && st.drafts?.get(id) === draft && generation === draft.generation) draft.kept = true;
+        // Timers cannot run during synchronous persistence; check the clock at both boundaries.
+        const result = await Promise.race([Promise.resolve().then(() => now() < deadline ? draft.keep() : false), new Promise(resolve => { timer = setTimeout(() => resolve(false), Math.max(0, deadline - now())); })]);
+        if (result === 'kept' && now() < deadline && valid(st, draft.doc) && st.drafts?.get(id) === draft && generation === draft.generation) draft.kept = true;
       } catch (_) { /* No confirmation means the original hold stays. */ }
       finally { clearTimeout(timer); }
     })));
@@ -832,6 +853,7 @@
     } catch (_) { done?.(false); return false; }
   }
   window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+    titlebar: Object.freeze({ render: renderTools }),
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),

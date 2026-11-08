@@ -5,8 +5,8 @@
       "note": "Desktop-only lifecycle adapter boundary; no second window state or rendering. Phone adapter unchanged."
     },
     "core/pane-layout.js": {
-      "loadedBy": ["phone", "desktop"],
-      "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Phone has no visual pane consumer yet."
+      "loadedBy": ["desktop"],
+      "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Desktop only: the phone has no pane consumer, so it no longer downloads it."
     },
     "core/agents.js": {
       "loadedBy": [
@@ -339,6 +339,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/downloads.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "In-app Downloads banner and sheet; shows only where the Android bridge exists"
     },
     "core/edge-peek.js": {
       "loadedBy": [
@@ -758,6 +765,11 @@
     }
   },
   "exceptions": {
+    "core/pane-layout.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Pane geometry for the desktop's tiled/centred/side-by-side/full-screen windows (Classic and AI apps). The phone has no panes; it loads only its own layout code."
+    },
     "core/desktop-host.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -929,6 +941,8 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/downloads.css",
+    "core/downloads.js",
     "core/edge-peek.js",
     "core/escape-back.js",
     "core/experience.js",
@@ -953,7 +967,6 @@
     "core/own-views.js",
     "core/pages.css",
     "core/pages.js",
-    "core/pane-layout.js",
     "core/phone-connect.css",
     "core/phone-connect.js",
     "core/photos-relay.js",

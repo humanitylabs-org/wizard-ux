@@ -20,24 +20,26 @@
   const EVENTS = ['route', 'render', 'voice', 'sent', 'beside', 'home'];
   /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
    * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
-   * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
+   * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. files: { <shell>: { css, js } }
+   * names that shell's own entry instead (css '' = none), so a shell never downloads another shell's layout code. */
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
     // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
     // phone = the same orb scene on Home only (layouts/orb/phone.js).
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: 'phone-boot.css', js: 'phone.js' }) }) }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true, files: Object.freeze({ desktop: Object.freeze({ css: 'desktop-boot.css', js: 'desktop.js' }) }) }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
+  const layoutFile = (L, kind) => { const f = L.files?.[env().shell]; return f ? f[kind] || '' : kind === 'css' ? 'layout.css' : 'layout.js'; };
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
   let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
-  const escapeSurfaces = new Set(), chatListOwners = new Set();
+  const escapeSurfaces = new Set(), chatListOwners = new Set(), chatArchiveOrders = new Map();
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   let layoutFailed = null;          // a chat-owning layout whose code could not load: Classic's list comes back (never a blank desktop)
   /* Who draws the chat list. True from the first frame for a layout that owns chats (decided synchronously at boot, before
@@ -390,8 +392,8 @@
     if (L) document.documentElement.dataset.layout = id; else delete document.documentElement.dataset.layout;
     paintChatsOwner();
     if (layoutCss && (!L || layoutCss.dataset.layoutPkg !== id)) { layoutCss.remove(); layoutCss = null; }
-    if (L && L.css && !layoutCss) {
-      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = layoutUrl(id, 'layout.css'); l.dataset.layoutPkg = id;
+    if (L && L.css && !layoutCss && layoutFile(L, 'css')) {
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = layoutUrl(id, layoutFile(L, 'css')); l.dataset.layoutPkg = id;
       l.setAttribute('blocking', 'render'); document.head.appendChild(l); layoutCss = l; requested.push(l.href);
     }
   }
@@ -409,7 +411,7 @@
     layoutFailed = null; paintChatsOwner();
     const L = layoutOf(id); const key = 'layout:' + id;
     if (!L || !L.js || !shell || disabled.has(key)) return layoutLoadFailed(id);
-    const href = layoutUrl(id, 'layout.js'); requested.push(href);
+    const href = layoutUrl(id, layoutFile(L, 'js')); requested.push(href);
     let mod;
     // Three retries after the first failure. A distinct URL avoids a cached
     // rejected module entry; a superseded selection must never mount late.
@@ -867,6 +869,9 @@
     return {
       // The orb's recorder plus a local command take (the held orb / ⌥C); call command() again to finish it.
       voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined,
+        // Layout-only: a layout-docked composer owns its mic even while a companion app has keyboard focus.
+        reply: (wid, sid) => live() && typeof wid === 'string' && typeof sid === 'string' && sid && sid !== '__new__'
+          ? shell.recordReply?.(wid, sid) : false,
         /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
          * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
          * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */
@@ -901,6 +906,14 @@
           if (!live() || !shell.ownsChatList) return () => {};
           chatListOwners.add(a); shell.ownsChatList(true);
           const off = () => { chatListOwners.delete(a); a.offs.delete(off); shell.ownsChatList(chatsClaimed()); };
+          a.offs.add(off); return off;
+        },
+        // Archive alone advances within the section the layout actually drew. Return its ordered
+        // chat IDs for this row (empty = no neighbour), not a separately sorted session list.
+        archiveOrder(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          chatArchiveOrders.set(a, guard(a, 'sessions.archiveOrder', fn));
+          const off = () => { chatArchiveOrders.delete(a); a.offs.delete(off); };
           a.offs.add(off); return off;
         },
         // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
@@ -1089,6 +1102,9 @@
       phone: Object.freeze({
         home: () => live() ? shell.homeHost?.() || null : null,
         orb: () => live() ? shell.orbHost?.() || null : null,
+        // The shared Chats surfaces of the phone's Chats windows (WizChatsHost: composer, notification, parts), so a
+        // layout reaches them without the shell's window markup.
+        chats: () => { const l = live() ? shell.chatsSurfaces?.() : null; return Object.freeze(Array.isArray(l) ? l.filter(Boolean) : []); },
         // The desks in order, one app each: [{ desk, id, name }] (Home and empty desks left out). nav.goDesk(desk) opens one.
         desks: () => { const l = live() ? shell.phoneDesks?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
         // An app's mark as the dock draws it (logo or sigil, colour; 'wizard' = Chats), as a fresh element the layout
@@ -1704,6 +1720,13 @@
     setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },
     chatsClaimed,
+    chatArchiveOrder(sid) {
+      for (const [a, fn] of chatArchiveOrders) if (!a.dead && chatListOwners.has(a)) {
+        const ids = fn(sid);
+        if (Array.isArray(ids)) return ids.filter(id => typeof id === 'string' && !id.startsWith(NOTE_ID));
+      }
+      return null;
+    },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
     /* app.js / desktop.js / bound-view.js: an open the shell starts by itself (apps.routeOpens). A holder that placed it

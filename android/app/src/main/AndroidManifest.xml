@@ -301,6 +301,14 @@
             android:authorities="${applicationId}.outshare"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <!-- In-app Downloads: DownloadManager says a download Wizard OS started has finished (system broadcast from another app, so exported; only ids Wizard OS tracked are acted on). -->
+        <receiver
+            android:name=".downloads.DownloadsReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
         <!-- Android Apps: install session results, and the background update job for apps Wizard OS installed. -->
         <receiver
             android:name=".apps.AppsInstallReceiver"
