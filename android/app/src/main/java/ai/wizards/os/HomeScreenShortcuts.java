@@ -195,7 +195,7 @@ public final class HomeScreenShortcuts {
         if (bitmap == null) return "error";
         String shortcutId = HomeScreenPolicy.identity(origin(c),app), token = UUID.randomUUID().toString();
         c.getSharedPreferences("home-screen-pins",Context.MODE_PRIVATE).edit().putString(shortcutId,token)
-            .putString(shortcutId + ":name",name).putString(shortcutId + ":icon",png).apply();
+            .putString(shortcutId + ":name",name).putString(shortcutId + ":icon",png).commit(); // the icon badge draws on this; must survive a process kill right after the pin
         Intent launch = new Intent(c,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(taskUri(c,app))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_NEW_TASK);
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,shortcutId).setShortLabel(name).setLongLabel(name)
