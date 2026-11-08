@@ -1,0 +1,8 @@
+{
+  "key": "layout-import-emergency-95e077e21-20261106",
+  "host": "forum",
+  "lane": "light",
+  "cwd": "/srv/work/layout-import-emergency-20261106",
+  "argv": ["env", "QA_PLAYWRIGHT=/srv/work/tt-late-git/node_modules/playwright", "QA_OUT=/srv/work/layout-import-emergency-20261106/evidence", "node", "tests/qa-emergency-layout-recovery.cjs"],
+  "timeout_seconds": 300
+}
