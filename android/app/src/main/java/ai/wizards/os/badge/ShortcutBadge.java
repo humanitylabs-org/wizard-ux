@@ -32,7 +32,7 @@ final class ShortcutBadge implements BadgeSync.Mechanism {
         SharedPreferences pins = c.getSharedPreferences("home-screen-pins", Context.MODE_PRIVATE);
         String png = pins.getString(id + ":icon", null), name = pins.getString(id + ":name", null);
         // The shell page stores the plain icon at each pin/refresh; without it there is nothing to draw on yet.
-        if (png == null || name == null) { Log.i(UnreadBadges.TAG, "shortcut: no base icon yet"); return false; }
+        if (png == null || name == null) { Log.i(UnreadBadges.TAG, "shortcut: no base icon yet (icon=" + (png != null) + " name=" + (name != null) + ")"); return false; }
         Bitmap base = HomeScreenShortcuts.decodeIcon(png);
         if (base == null) return false;
         ShortcutInfo s = new ShortcutInfo.Builder(c, id).setShortLabel(name).setLongLabel(name)
