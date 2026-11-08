@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { fixture, read } from './fixtures/tweaks.mjs';
 
 const key = 'wos.layout-fault.v1';
-test('layout callback faults preserve the original stack and selected navigation, not tweak state', async () => {
+test('layout callback threshold preserves the original stack and reports the disabled layout, not tweaks', async () => {
   const f = fixture({ shell: 'desktop', desktopView: null });
   await f.host.whenLayoutReady();
   const errors = []; f.ctx.console = { warn() {}, error: (...args) => errors.push(args) };
@@ -15,12 +15,11 @@ test('layout callback faults preserve the original stack and selected navigation
   await f.host._test.loadLayout('ai-apps');
   for (let i = 0; i < 3; i++) f.host.rendered('thread', f.thread);
   const record = JSON.parse(f.lsMap.get(key));
-  assert.equal(record.layout, 'ai-apps'); assert.equal(record.reason, 'callback-error');
+  assert.equal(record.layout, 'ai-apps'); assert.equal(record.reason, 'error');
   assert.match(record.stack, /late layout hook failed/); assert.match(record.where, /render/);
-  assert.ok(!f.host.state.disabled.includes('layout:ai-apps'));
-  assert.equal(f.host.layoutState.active, true, 'a callback fault cannot remove the owner navigation');
-  assert.equal(f.toasts.filter(t => t.includes('turned off')).length, 0);
-  assert.ok(errors.some(args => args[0] === '[layout] callback-error:'));
+  assert.ok(f.host.state.disabled.includes('layout:ai-apps'));
+  assert.equal(f.toasts.filter(t => t.includes('turned off')).length, 1);
+  assert.ok(errors.some(args => args[0] === '[layout] error:'));
   assert.equal(f.lsMap.get('wos.desktop-view.v1'), undefined, 'never persists the failure as a new view choice');
 });
 test('import failure is diagnosable and a normal switch cannot erase the last failure', async () => {

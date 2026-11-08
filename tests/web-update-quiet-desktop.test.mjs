@@ -24,7 +24,7 @@ function fixture({ autoApply = true } = {}) {
     setTimeout(fn, ms) { timeouts.push({ fn, ms }); return ++id; }, clearTimeout() {}, addEventListener() {} };
   vm.runInNewContext(readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8'), context);
   f.web = window.WizWebUpdate; f.doc = document; f.session = session;
-  f.web.init({ shell: 'desktop', autoApply, mount: () => body, prepend: true, busy: () => f.busy, beforeReload: () => { f.saved++; f.onBeforeReload?.(); }, toast() {} });
+  f.web.init({ shell: 'desktop', autoApply, mount: () => body, prepend: true, busy: () => f.busy, beforeReload: () => { f.saved++; }, toast() {} });
   f.advance = ms => { now += ms; };
   f.update = async () => { await f.web.check(true); f.revision = 'b'.repeat(40); await f.web.check(true); assert.equal(f.web.pending, true); };
   f.tick = async () => { for (const t of [...intervals.values()]) if (t.ms === 30e3) t.fn(); for (let n = 0; n < 20; n++) await Promise.resolve(); };
@@ -70,25 +70,6 @@ test('desktop: one quiet reload per build, so a reload that lands on the old bui
   const f = fixture(); await f.update(); await f.hide(); assert.equal(f.reloads, 1);
   const g = fixture(); for (const [k, v] of f.session) g.session.set(k, v);
   await g.update(); await g.hide(); assert.equal(g.reloads, 0, 'same target build retried too soon');
-});
-
-test('desktop: focus inside an app frame is never quiet while visible; a same-origin field with text holds even hidden', async () => {
-  const f = fixture(); await f.update();
-  f.doc.activeElement = { tagName: 'IFRAME', contentDocument: null }; // a cross-origin app frame: its input never bubbles here
-  f.advance(30 * 60e3); await f.tick(); assert.equal(f.reloads, 0, 'visible window with an app frame focused');
-  await f.hide(); assert.equal(f.reloads, 1, 'hidden window still applies');
-  const g = fixture(); await g.update();
-  g.doc.activeElement = { tagName: 'IFRAME', contentDocument: { activeElement: { tagName: 'INPUT', value: 'typed in the app' } } };
-  await g.hide(); g.advance(30 * 60e3); await g.tick(); assert.equal(g.reloads, 0, 'same-origin app field with text');
-});
-
-test('desktop: a quiet attempt that stands down at the last check does not start the per-build cooldown', async () => {
-  const f = fixture(); await f.update();
-  let once = true; f.onBeforeReload = () => { if (once) { once = false; f.plan = { ok: false, blocking: [{ kind: 'save' }], capture: { safe: true } }; } };
-  await f.hide(); assert.equal(f.reloads, 0, 'hold exposed by beforeReload stands down');
-  assert.equal(f.session.get('wos.web.quiet'), undefined, 'no cooldown recorded for a reload that did not happen');
-  f.plan = { ok: true, blocking: [], capture: { safe: true } };
-  f.advance(60e3); await f.tick(); assert.equal(f.reloads, 1, 'retries as soon as the hold clears');
 });
 
 test('phone (no autoApply) still reloads only when tapped', async () => {

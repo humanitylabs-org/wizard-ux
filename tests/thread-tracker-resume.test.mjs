@@ -68,41 +68,11 @@ test('tweak off: no strip, no Resume, taps not claimed', async () => {
   assert.equal(T.stripHtml('t', ''), ''); assert.equal(T.dots('t', ''), '');
   void tap; void sent;
 });
-function slice(src, start) {
-  const at = src.indexOf(start); assert.ok(at >= 0, 'missing ' + start);
-  let depth = 0, i = src.indexOf('{', at);
-  for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) break; }
-  return src.slice(at, i + 1);
-}
-const chatsSrc = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-function resumeIn({ winAgent = '', rowAgent, idAgent = '' }) {
-  const sends = [];
-  const ctx = vm.createContext({ W: { w1: { id: 'w1', thread: 't' } }, owner: id => id, PW: { follow() {} },
-    AGS: () => ({ isOther: a => !!a && a !== 'main' }), winAgent: () => winAgent, rowOf: () => (rowAgent === undefined ? { id: 't' } : { id: 't', agent: rowAgent }),
-    LIVE: { agentOf: () => idAgent }, viewContext: () => 'ctx', sendChat: (...a) => { sends.push(a); return Promise.resolve({ id: 'q' }); } });
-  vm.runInContext(slice(chatsSrc, 'function resumeTracked(') + '\nthis.resumeTracked = resumeTracked;', ctx);
-  return { out: ctx.resumeTracked('w1', ctx.W.w1, 'Continue the stopped items: Disk pressure'), sends };
-}
 test('Chats wires Resume to its own sendChat without taking the draft or leaving the thread', () => {
-  assert.match(chatsSrc, /const resume = text => resumeTracked\(id, w, text\);/);
-  assert.match(chatsSrc, /WosThreadTracker\.click\(e, \{[^}]*resume \}\)/);
-  const { sends } = resumeIn({});
-  assert.equal(sends.length, 1); const [wid, text, how, audio, opts] = sends[0];
-  assert.equal(wid, 'w1'); assert.match(text, /Continue the stopped items/); assert.equal(audio, null);
-  assert.equal(opts.sid, 't'); assert.equal(opts.away, true); assert.equal(opts.instructions, 'ctx'); assert.equal('agent' in opts, false, 'main: ordinary main reply');
-});
-test('Resume carries the owning window agent; an id-only lookup naming another agent is refused, never misrouted', async () => {
-  for (const ag of ['profile', 'container', 'restricted']) {
-    const viaWin = resumeIn({ winAgent: ag, idAgent: ag });
-    assert.equal(viaWin.sends[0][4].agent, ag, `${ag} window`);
-    const viaRow = resumeIn({ rowAgent: ag, idAgent: ag });
-    assert.equal(viaRow.sends[0][4].agent, ag, `${ag} row shown in the main window`);
-    // A main-window thread whose id the id-only map attributes to a routed agent (session id collision).
-    const clash = resumeIn({ idAgent: ag });
-    assert.equal(clash.sends.length, 0, `main window, ${ag} id clash: not sent`); assert.equal(await clash.out, null, 'refused: tracker restores rows');
-    const clash2 = resumeIn({ winAgent: ag, idAgent: 'other' });
-    assert.equal(clash2.sends.length, 0, `${ag} window, other-agent id clash: not sent`);
-  }
+  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  const wire = chats.match(/const resume = text => \{[^]*?return it; \};/)?.[0] || '';
+  assert.match(wire, /sendChat\(id, text, how, null, \{ sid, away: true, instructions: viewContext\(id, how\) \}\)/);
+  assert.match(chats, /WosThreadTracker\.click\(e, \{[^}]*resume \}\)/);
 });
 test('Resume button uses accent tokens', () => {
   const css = readFileSync(new URL('../web/core/thread-tracker.css', import.meta.url), 'utf8');

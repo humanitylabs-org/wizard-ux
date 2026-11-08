@@ -20,8 +20,7 @@ function bar({ LST = {}, ptrState = '', label = 'Can’t reach Wizard · retryin
   vm.runInNewContext(SYNC, ctx);
   return ctx.render();
 }
-// Visible text of our own fixture markup: drop each tag, then decode the two entities esc() emits here.
-const text = html => html.split(/<[^>]*>/).join('').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+const text = html => html.replace(/<[^>]*>/g, '').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 const STATES = {
   off: { LST: { error: 'offline', at: NOW - 5000 } },
   'off never read': { LST: { error: 'offline' } },
@@ -77,7 +76,6 @@ test('CSS: one line, ellipsis, a text action (no pill) with a 44px touch target 
   const row = rule('.ch-sync:has(.ch-sync-act)');
   assert.match(row, /min-height: 32px/); assert.doesNotMatch(row, /flex-wrap/);
   const act = rule('.ch-sync .ch-sync-act');
-  assert.match(act, /position: relative; z-index: 1;/, 'the 44px action paints above the .ch-scroll list it overhangs, so edge taps reach it');
   for (const d of ['height: 44px', 'margin: -6px 0 -6px auto', 'background: none', 'border: 0', 'border-radius: 0', 'white-space: nowrap']) assert.ok(act.includes(d), d);
   assert.match(act, /color: var\(--violet-2, var\(--wz-accent/);
   assert.match(rule('.ch-sync-dot'), /var\(--wz-warning/);

@@ -42,16 +42,15 @@ test('production open reports blocked versions and closes late connection',async
   assert.equal(closed,1);assert.equal(f.sent[0].payload.events[0].data.result.blocked,true);
 });
 test('production transaction reports sync InvalidStateError without leaking exception text',async()=>{
-  const f=fixture();vm.runInContext(`dbPromise=Promise.resolve({version:1,close(){},transaction(){throw Object.assign(Error('private'),{name:'InvalidStateError'})}})`,f.c);
-  // Isolate diagnostics from the separately covered bounded reopen/retry policy.
-  await assert.rejects(f.c.transaction(['sessions'],'readwrite',()=>{},false),e=>e.name==='InvalidStateError');await turn();
+  const f=fixture();vm.runInContext(`dbPromise=Promise.resolve({version:1,transaction(){throw Object.assign(Error('private'),{name:'InvalidStateError'})}})`,f.c);
+  await assert.rejects(f.c.transaction(['sessions'],'readwrite',()=>{}),e=>e.name==='InvalidStateError');await turn();
   assert.equal(f.sent[0].payload.events[0].method,'storage.transaction');assert.equal(f.sent[0].payload.events[0].data.result.code,'InvalidStateError');
   assert.doesNotMatch(JSON.stringify(f.sent),/private/);
 });
 test('stalled transaction emits timeout before a synchronous abort event, preserving exact cause',async()=>{
   const f=fixture();const tx={abort(){this.onabort?.();}};f.c.tx=tx;
-  vm.runInContext('dbPromise=Promise.resolve({version:1,close(){},transaction(){return tx;}})',f.c);
-  await assert.rejects(f.c.transaction(['sessions'],'readwrite',()=>{},false),e=>e.detail==='timeout');await turn();
+  vm.runInContext('dbPromise=Promise.resolve({version:1,transaction(){return tx;}})',f.c);
+  await assert.rejects(f.c.transaction(['sessions'],'readwrite',()=>{}),e=>e.detail==='timeout');await turn();
   assert.equal(f.sent.length,1);assert.equal(f.sent[0].payload.events[0].data.result.code,'timeout');
 });
 test('recovery breadcrumbs name only fixed stages and counts, never row values',()=>{

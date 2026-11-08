@@ -23,7 +23,7 @@ test('full mode is a last-priority surface, after recording and transient overla
  const start=ui.indexOf('  api.back.surface?.(() => {'), end=ui.indexOf('    const a = doc.activeElement;',start);
  assert.ok(start>0 && end>start);
  const prefix=ui.slice(start,end).replace('  api.back.surface?.(() => {','');
- const surface=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode,doc:{activeElement:null},pane:null,lastSurface:'chat',chatsEl:()=>null});
+ const surface=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode});
  registry.push(()=>{closes++;});registry.run({recording:()=>true,surface});assert.equal(mode,'full');assert.equal(closes,0);
  registry.run({surface});assert.equal(closes,1);assert.equal(mode,'full');registry.run({surface});assert.equal(mode,'tiled');
 });
@@ -44,7 +44,7 @@ test('shifted mode shortcuts precede app dispatch but yield to existing modal gu
 test('window modes keep the tiled panes\' skin colour, opaque, never the grey panel mix', () => {
  const skinsJs = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
  const shellTokens = readFileSync(new URL('../web/kit/shell-tokens.css', import.meta.url), 'utf8');
- const decl = (src, sel, prop) => { const i = src.indexOf(sel); assert.ok(i >= 0, sel); const body = src.slice(src.indexOf('{', i) + 1, src.indexOf('}', i)); const m = body.match(new RegExp('(?:^|[;\\s])' + prop.replace(/[\\^$.*+?()[\]{}|-]/g, '\\$&') + ':\\s*([^;]+);')); assert.ok(m, sel + ' ' + prop); return m[1].replace(/\s*!important\s*$/, '').trim(); };
+ const decl = (src, sel, prop) => { const i = src.indexOf(sel); assert.ok(i >= 0, sel); const body = src.slice(src.indexOf('{', i) + 1, src.indexOf('}', i)); const m = body.match(new RegExp('(?:^|[;\\s])' + prop.replace(/[-]/g, '\\-') + ':\\s*([^;]+);')); assert.ok(m, sel + ' ' + prop); return m[1].replace(/\s*!important\s*$/, '').trim(); };
  const A = 'html[data-shell="desktop"][data-layout="ai-apps"]', NT = A + ':not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role]';
  const split = s => { const out = []; let d = 0, cur = ''; for (const ch of s) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && !d) { out.push(cur.trim()); cur = ''; } else cur += ch; } out.push(cur.trim()); return out; };
  const call = (s, name) => { const m = s.match(new RegExp('^' + name + '\\((.*)\\)$', 's')); return m && m[1]; };

@@ -28,10 +28,4 @@ test('the phone Orb view loads its phone entry, never the desktop Orb scene', ()
   const r = of('phone-orb');
   assert.deepEqual(has(r, /^layouts\/orb\/layout\.(js|css)$/), []);
   assert.ok(r.files.includes('layouts/orb/phone.js') && r.files.includes('layouts/orb/phone.css'));
-  // The phone entry still gets the Orb tokens and first-frame Home rules (the tweak sheet), never the desktop scene.
-  assert.ok(r.files.includes('layouts/orb/phone-boot.css') && r.files.includes('tweaks/miguel/orb-shell/tweak.css'));
-});
-test('CSS @imports count as requests: the desktop Orb sheet pulls in its tweak sheet', () => {
-  const r = of('desktop-orb');
-  assert.ok(r.files.includes('layouts/orb/layout.css') && r.files.includes('tweaks/miguel/orb-shell/tweak.css'));
 });

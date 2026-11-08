@@ -8,7 +8,7 @@ const read = name => readFileSync(process.env.QA_REVIEW_CORE ? `${process.env.QA
 function capture(patch={}) {
   const source=read('app-capture'),start=source.indexOf('  function reloadCheck()'),end=source.indexOf('  // Last moment before the shell reloads',start);
   assert(start>=0&&end>start);
-  const c={MEETING_APP:'mizel',active:null,memoryTakes:new Map(),preparations:new Map(),recoveryLease:null,configuredNative:null,attachedMeetingBridge:null,
+  const c={active:null,memoryTakes:new Map(),preparations:new Map(),recoveryLease:null,configuredNative:null,attachedMeetingBridge:null,
     ownedRows:new Map(),recoveryLive:new Set(),ownershipLoaded:true,recoveryError:null,unknownMeetingActive:false,
     W:{wizardMizelPort:{}},ready:Promise.resolve(),recover:async()=>{},...patch};
   vm.runInNewContext(source.slice(start,end),c);return c;
@@ -52,8 +52,7 @@ for(const mode of ['native_claim_pending','unloaded','native_owner_uncertain','r
 for(const [name,patch,reason] of [
   ['active take',{active:{row:{id:'live'},phase:'recording',engine:{}}},'capture_custody_uncertain'],
   ['preparation',{preparations:new Map([['synthetic-warm',{}]])},'capture_starting'],
-  // Android's meeting port survives reload and the lease only reads phone storage (James, 6 Nov 2026).
-  ['recovery lease (no Android meeting port)',{recoveryLease:{},W:{}},'capture_custody_uncertain'],
+  ['recovery lease',{recoveryLease:{}},'capture_custody_uncertain'],
   ['attached in-page meeting bridge',{attachedMeetingBridge:{}},'capture_custody_uncertain'],
   ['Mac meeting bridge',{W:{wizardNative:{meetings:{}}}},'capture_custody_uncertain'],
   ['configured in-page native engine',{configuredNative:{}},'capture_custody_uncertain'],
