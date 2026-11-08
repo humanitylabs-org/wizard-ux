@@ -56,7 +56,7 @@ HOUSE = {
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
-    'wizard':        ('hermes',   '#7A5CFF', None),   # main Chats is Hermes; Home owns the company hat
+    'wizard':        ('hat',      296, None),   # owner: Wizard app icons stay Wizard, not Hermes
     'social':        ('social',   322, None),
     'wizard-music':  ('music',    344, None),
     'iching':        ('iching',   75,  0.06),
@@ -98,6 +98,8 @@ HOUSE = {
     'photos':        ('image',    244, None),   # Photos: a picture frame, in the gap between Files and Search
     'troubleshooter':('wrench',   186, 0.08),
     'wizard-ux':     ('wizard',   280, 0.09),
+    'hermes-agent':  ('hat',      296, None),
+    'hermes-frontend-3': ('hat',   296, None),
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
     'agents':        ('agents',   '#7A5CFF', None),   # front hat #7A5CFF too (style.css)
@@ -144,8 +146,7 @@ HOUSE_ONLY = ['notes', 'wizard-notes']
 #   hat          supplied company hat (Home and non-default standard agents)
 #   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
 #   agents       tools/sigils/agent_hats.py: two layered hats, private green behind main purple
-#   hermes       Hermes product mark (the main agent)
-MASKS = ('hat', 'hat-private', 'agents', 'hermes')
+MASKS = ('hat', 'hat-private', 'agents')
 # Real products wear their own brand mark (web/brand/apps/<mark>.svg; sources in tools/sigils/README.md, "Brand marks").
 # html() adds `sgb sgb-<mark>` next to the house glyph; a skin opts in by styling .sgb-<mark> (Miguel's skins do, in
 # web/skins/*/skin.css), so any other skin still shows the house glyph unchanged.
@@ -154,8 +155,6 @@ BRAND = {
     'wizard-claude':     'claude',
     'wizard-chatgpt':    'chatgpt',
     'wizard-tinfoil':    'tinfoil',
-    'hermes-agent':      'hermes',
-    'hermes-frontend-3': 'hermes',
     'wizard-google':     'google',
     'wizard-youtube-music': 'youtube-music',
 }
