@@ -24,7 +24,8 @@ test('each palette rotates only its own photos, split by overall brightness, and
 test('the Landscapes package and Miguel\'s shell rules cover both palettes', () => {
   const css = read('web/skins/landscapes/skin.css');
   assert.doesNotMatch(css, /data-skin="landscapes"\]/, 'shared rules use ^="landscapes"');
-  assert.match(css, /html\[data-skin="landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.msg\.u \.bub \{ background: rgba\(0, 0, 0, \.07\)/);
+  assert.match(css, /html\[data-skin="landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.msg\.u \.bub \{ background: var\(--wz-owner-message\)/);
+  assert.match(css, /html\[data-skin="landscapes-light"\]:root \{ --wz-owner-message: color-mix\(in srgb, var\(--ink\) 16%, var\(--bg\)\)/, 'Light owner bubble: opaque ink glass (James, 8 Nov 2026)');
   // Skins are colours only (James, Miguel, 1 Nov 2026): no shell file asks which skin is worn to pick a layout.
   for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /'landscapes', 'landscapes-light'/, f);
   assert.doesNotMatch(read('web/desktop/desktop.css'), /data-skin="landscapes"\]/);

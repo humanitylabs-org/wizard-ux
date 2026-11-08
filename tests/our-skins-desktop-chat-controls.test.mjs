@@ -45,7 +45,8 @@ test('Landscapes desktop accents are frosted white, not core violet', () => {
     const r = rule(landscapes, `${L} ${sel}`);
     assert.ok(r, `Landscapes styles ${sel}`);
     assert.doesNotMatch(r, VIOLET, `${sel} has no violet`);
-    assert.match(r, /rgba\(255, 255, 255|#fff|rgba\(0, 0, 0/, `${sel} uses white glass or ink`);
+    // Owner bubbles use the opaque owner token, which Landscapes sets from its white ink (James, 8 Nov 2026).
+    assert.match(r, /rgba\(255, 255, 255|#fff|rgba\(0, 0, 0|var\(--wz-owner-message\)/, `${sel} uses white glass or ink`);
   }
 });
 

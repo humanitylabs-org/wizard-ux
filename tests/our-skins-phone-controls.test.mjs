@@ -47,8 +47,9 @@ test('Landscapes phone controls are frosted white glass, not core violet', () =>
     const r = rule(landscapes, `${L} ${sel}`);
     assert.ok(r, `Landscapes phone styles ${sel}`);
     assert.doesNotMatch(r, VIOLET, `${sel} has no violet`);
-    assert.match(r, /rgba\(255, 255, 255|#fff/, `${sel} uses white glass or ink`);
+    assert.match(r, /rgba\(255, 255, 255|#fff|var\(--wz-owner-message\)/, `${sel} uses white glass or ink`);
   }
+  assert.match(landscapes, /html\[data-skin\^="landscapes"\]:root \{ --wz-owner-message: color-mix\(in srgb, var\(--ink\) /, 'owner token is white ink glass, not violet');
   assert.equal(rule(landscapes, `${L} .dock :is(.orb, .orb-fallback)`), null, 'the orb keeps its Wizard violet (Miguel, 27 Oct 2026)');
 });
 
