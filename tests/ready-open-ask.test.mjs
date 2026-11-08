@@ -11,7 +11,7 @@ function badge(s) {
   const line = chats.split('\n').find(l => l.includes('const backgroundBadge ='));
   return vm.runInContext(line + '\nbackgroundBadge(s)', context);
 }
-test('QR delivered while helper builds button remains Ready with a muted helper badge', () => {
+test('QR delivered while helper builds button keeps its ask and muted helper badge', () => {
   assert.match(badge({ status: 'completed', attention: { state: 'needs_you', ask: 'Scan the QR' }, background: 'helper' }), /Helper still working/);
   assert.match(chats, /\$\{backgroundBadge\(s\)\}/);
 });

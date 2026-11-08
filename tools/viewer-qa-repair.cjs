@@ -1,6 +1,6 @@
 'use strict';
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
-const { decodePNG, compare, interiorROI, longMetrics } = require('./viewer-qa-oracles.cjs');
+const { decodePNG, compare, interiorROI, containedMetrics } = require('./viewer-qa-oracles.cjs');
 const hash = b => require('node:crypto').createHash('sha256').update(b).digest('hex');
 const write = (out, name, data) => fs.writeFileSync(path.join(out, name + '.json'), JSON.stringify(data, null, 2) + '\n');
 // Serialize this exact function into the page. Let Chromium parse modern CSS
@@ -219,36 +219,18 @@ async function opacity({ p, out, name, settle }) {
   }
 }
 async function phoneBottom({ p, ctx, out, drag, open, state, capture }) {
-  const ledger = [];
-  const measure = async label => {
-    const g = await p.evaluate(label => { const i = document.querySelector('.mv-stage img'), s = i.parentElement; return { label, state: WosChat.viewer.state, natural: { width: i.naturalWidth, height: i.naturalHeight }, image: i.getBoundingClientRect().toJSON(), stage: s.getBoundingClientRect().toJSON(), active: document.activeElement?.className }; }, label);
-    ledger.push({ ...g, measured: longMetrics(g) }); write(out, 'phone-footer-measurements', ledger); return g;
-  };
-  const env = await p.evaluate(() => ({ shell: document.documentElement.dataset.shell, ua: navigator.userAgent, touch: navigator.maxTouchPoints }));
-  assert.equal(env.shell, 'phone'); assert(/Android/.test(env.ua) && env.touch > 0);
-  await open(3); const g0 = await measure('initial'), b = g0.stage, x = b.x + b.width / 2, delta = b.height * .6;
-  const hit = await p.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.mv-stage'), { x, y: b.y + b.height * .8 }); assert(hit, 'phone drag begins on real stage');
+  // James, 6 Nov 2026: footer is visible immediately; reading requires explicit zoom.
+  await open(3);
+  const g = await p.evaluate(() => { const i = document.querySelector('.mv-stage img'), s = i.parentElement; return { state: WosChat.viewer.state, image: i.getBoundingClientRect().toJSON(), stage: s.getBoundingClientRect().toJSON() }; });
+  write(out, 'phone-footer-measurements', { ...g, measured: containedMetrics(g) });
+  await capture('phone-long-contained');
+  const b = g.stage, x = b.x + b.width / 2, y = b.y + b.height / 2;
+  await p.touchscreen.tap(x,y); await p.waitForTimeout(120); await p.touchscreen.tap(x,y); await p.waitForTimeout(300);
+  assert((await state()).scale > 1.02, 'explicit zoom makes long screenshot readable');
   const cdp = await ctx.newCDPSession(p);
   try {
-    await drag(cdp, [{ x, y: b.y + b.height * .8 }], [{ x, y: b.y + b.height * .2 }]);
-    const first = await measure('first drag'); assert(first.state.y < 0, 'pan moves screenshot');
-    // Test keys as an independent input, retain focus and state diagnostics before
-    // touch recovery; do not refocus the page or mask missing keyboard delivery.
-    await p.keyboard.press('PageDown'); const key = await measure('one PageDown');
-    assert(key.state.y < first.state.y || Math.abs(longMetrics(key).remaining) < 2, 'PageDown progresses reading');
-    const limit = Math.ceil(longMetrics(key).remaining / delta) + 3; assert(limit <= 40, 'bounded geometry-derived drag budget');
-    let current = key;
-    for (let n = 0; n < limit && longMetrics(current).remaining > 1; n++) {
-      const prior = current.state.y;
-      await drag(cdp, [{ x, y: b.y + b.height * .8 }], [{ x, y: b.y + b.height * .2 }]); current = await measure('drag ' + (n + 2));
-      assert(current.state.y < prior || longMetrics(current).remaining < 2, 'every drag progresses or reaches clamp');
-    }
-    await p.waitForTimeout(350); current = await measure('settled clamp'); const m = longMetrics(current);
-    assert(Math.abs(current.state.y - m.minY) < 2, 'actual state reaches production bottom clamp');
-    assert(Math.abs(m.footerBottom - m.stageBottom) < 2, 'actual image footer reaches stage bottom');
-    await drag(cdp, [{ x, y: b.y + b.height * .8 }], [{ x, y: b.y + b.height * .2 }]); const over = await measure('extra drag at bottom');
-    assert(Math.abs(over.state.y - m.minY) < 2 && (await state()).open, 'extra drag cannot overscroll or close');
-    await capture('phone-long-bottom');
+    await drag(cdp,[{x,y:y+80}],[{x,y:y-80}]);
+    const moved = await state(); assert(moved.open && moved.y < 0, 'zoomed image still pans');
   } finally { await cdp.detach(); }
 }
 module.exports = { zoom, opacity, phoneBottom, panelPaint, paintCalibration, phoneGestures };

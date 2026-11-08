@@ -567,7 +567,8 @@
       });
     },
     frame: id => winEl(id)?.querySelector('iframe') || null,
-    renderTools: (frame, slot) => window.WizAppServices?.titlebar.render(frame, slot) === true,
+    // A shell whose app services predate layout-owned toolbars still starts the layout: no tools, no crash (James, 6 Nov 2026).
+    renderTools: (frame, slot) => window.WizAppServices?.titlebar?.render?.(frame, slot) === true,
     openApp: id => Object.hasOwn(APP, id) && openApp(APP[id]) !== false,
     focus: (id, opts) => {
       // A layout already chose the visible panes. Keyboard focus is not a
@@ -2986,7 +2987,10 @@
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
     voiceState: () => ({ state: VOICE.state, command: !!commandTake, mode: vMode }),
-    talk: () => VOICE.state === 'idle' ? talkNew('Click the orb') : talk('send'),
+    // Only an open Chats thread changes the ordinary orb's idle action: talk() pins
+    // its reply target before capture. Lists, New chat, Home and other apps retain
+    // the general new-chat action; an in-flight take retains its stop-only action.
+    talk: () => { if (VOICE.state !== 'idle') return talk('send'); const f = focused(); return (f?.app === 'chats' || CHATS.isHosted(f?.id)) && f?.thread && f.thread !== '__new__' ? talk() : talkNew('Click the orb'); },
     voiceTap: () => talk('send'),
     voiceCancel: () => vMode === 'dictate' ? dictate('cancel') : talk('cancel'),
     command: () => commandVoice(),
@@ -3050,6 +3054,24 @@
       if (!w) return false;
       window.WizAppServices?.back(winEl(w.id)?.querySelector('iframe'));
       return true; // atRoot/notReady never means close the app
+    },
+    layoutRecovery(on) {
+      // Reuse the real Chats window, list renderer, delegates and live updates.
+      // This is a minimal sidebar, not a switch to the Classic desktop. No
+      // workspace, Look, thread, draft or layout choice is rewritten here.
+      const root = document.documentElement;
+      for (const el of document.querySelectorAll('[data-layout-recovery-chat]')) delete el.dataset.layoutRecoveryChat;
+      if (!on) { delete root.dataset.layoutRecovery; return; }
+      root.dataset.layoutRecovery = 'chats';
+      let w = findWin(mainChats);
+      if (!w) w = newWin({ app: 'chats', thread: null });
+      if (!w) return;
+      focusWin(w.id);
+      const el = winEl(w.id); if (!el) return;
+      el.dataset.layoutRecoveryChat = '';
+      CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
+      if (w.thread) CHATS.renderChats(w);
+      syncChatsPane(w.id);
     },
     ownsChatList(on) {
       if (ownsChatList === !!on) return;

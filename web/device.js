@@ -321,7 +321,7 @@
     installing: () => ['Restarting into the update…', ''],
     confirm: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
     installer: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
-    deferred: u => [Date.now() < updateConfirmUntil ? 'Tap again to stop the recording and update' : deferredText(u), 'Install now'],
+    deferred: u => [Date.now() < updateConfirmUntil ? (u.meetingResumeAfterUpdate && window.WizAppCapture?.getState?.()?.meetingId ? 'Tap again to pause the meeting and update' : 'The update waits until this recording ends') : deferredText(u), 'Install now'],
     permission: () => ['Allow Wizard OS to install updates, then come back', 'Allow'],
     error: u => [u.message || 'Update failed', 'Retry'],
   };

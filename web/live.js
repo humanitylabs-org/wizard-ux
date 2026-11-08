@@ -313,9 +313,9 @@
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
-  const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
+  const inWorking = s => window.WizChatsListModel.isListWorking(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
-  const cardAt = s => inWorking(s) || isErr(s)
+  const cardAt = s => (WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s)) || isErr(s)
     ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
     : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
   const newestFirst = (l, r) => {
@@ -519,8 +519,8 @@
       const t = sectionTime(s);
       if (s.archived) g.archive.push(s);
       else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
-      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
@@ -798,9 +798,9 @@
       const d = archiveAfterDays(), t = sectionTime(s);
       return !!d && isFinite(t) && t <= Date.now() - d * DAY;
     },
-    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // Visible unread: idle threads the Chats list shows unread (not working, hidden, archived or snoozed). Focus badges
     // (agents, Spaces) count only these, so a dot never points at nothing.
-    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -829,10 +829,10 @@
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[seenKeyOf(s)]?.deferred;
-        if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
+        if (globalThis.WizChatsListModel.isListWorking(s)) { working.push(s); continue; }
+        if (snoozeLast() && isDeferred(s)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
-        if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;

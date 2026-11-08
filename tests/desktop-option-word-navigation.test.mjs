@@ -45,14 +45,19 @@ function ai({ modal = '', typing = false, docked = true } = {}) {
   const context = {
     allOpenNow: () => modal === 'all', settingsOpen: () => modal === 'settings', snoozeOpen: () => modal === 'snooze',
     KEY_LIKE: /^(Key[A-Z]|Digit\d|Arrow|Bracket|Space)/,
-    typing: () => typing, appFront: () => false, docked, pane: null,
+    typing: () => typing, appFront: () => false, docked, pane: null, leftOption: false,
     doc: { querySelector: selector => ({ click: act(selector) }) },
     chatBtn: name => ({ click: act(name) }), settings: act('settings'), openAll: act('all'),
     closeAll: act('closeAll'), closeSettings: act('closeSettings'),
     stepReady: act('ready'), vtRows: () => [],
   };
   vm.createContext(context);
-  const src = between(layout, '  api.keys.on({ down: e => {\n    if (!e.altKey', '\n  const vtRows = ');
+  // The live left-Option picker adds physical-key bookkeeping before altKey's
+  // guard. Extract the complete production handler, not its former first line.
+  const start = layout.includes("  api.keys.on({ down: e => {\n    if (e.code === 'AltLeft')")
+    ? "  api.keys.on({ down: e => {\n    if (e.code === 'AltLeft')"
+    : '  api.keys.on({ down: e => {\n    if (!e.altKey';
+  const src = between(layout, start, '\n  const vtRows = ');
   vm.runInContext('var down; var api = {keys:{on(h){down=h.down;}}};\n' + src, context);
   return { calls, key: (code, extra = {}) => context.down(event(code, extra)) };
 }

@@ -45,10 +45,9 @@ function interiorROI(meta) {
   }
   throw Error('No nonempty background-only panel interior');
 }
-function longMetrics(g) {
-  assert(g.state.open && g.state.long && g.state.scale === 1, 'long-reading state must remain open/unzoomed');
-  const minY = Math.min(0, g.stage.height - g.natural.height * g.stage.width / g.natural.width);
-  return { minY, remaining: g.state.y - minY, footerBottom: g.image.bottom, stageBottom: g.stage.bottom };
+function containedMetrics(g) {
+  assert(g.state.open && !g.state.long && g.state.scale === 1, 'James, 6 Nov 2026: images open contained, never width-fit scrolling');
+  assert(g.image.left >= g.stage.left - .6 && g.image.right <= g.stage.right + .6 && g.image.top >= g.stage.top - .6 && g.image.bottom <= g.stage.bottom + .6, 'entire image box within stage');
+  return { footerBottom: g.image.bottom, stageBottom: g.stage.bottom };
 }
-function pageBudget(g) { const m = longMetrics(g); return Math.ceil(m.remaining / (g.stage.height * .85)) + 2; }
-module.exports = { decodePNG, compare, interiorROI, longMetrics, pageBudget };
+module.exports = { decodePNG, compare, interiorROI, containedMetrics };

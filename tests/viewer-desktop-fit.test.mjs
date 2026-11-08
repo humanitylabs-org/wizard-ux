@@ -16,10 +16,19 @@ function fitting(shell, W, H, r) {
 test('desktop initial fit never opts into width-fit long reading, even on a narrow host', () => {
   for (const [W,H] of [[1440,760],[720,400],[360,500]]) for (const r of [2.168,20,1,.3]) assert.equal(fitting('desktop',W,H,r).long,false);
 });
-test('phone preserves tall reading and ordinary landscape/square containment', () => {
-  assert.equal(fitting('phone',393,720,8).long,true);
-  assert.equal(fitting('phone',393,720,.4).long,false);
-  assert.equal(fitting('phone',393,720,1).long,false);
+test('James correction, 6 Nov 2026: phone images always open contained within screen height', () => {
+  for (const shell of ['phone', 'desktop', undefined])
+    for (const [W,H] of [[393,720],[393,300],[852,300]])
+      for (const r of [2340/1080,8000/1080,20,1,.4]) {
+        const v = fitting(shell,W,H,r);
+        assert.equal(v.long,false,`${shell}/${W}x${H}/${r}: never width-fit on open`);
+        assert.equal(v.s,1); assert.equal(v.x,0); assert.equal(v.y,0);
+      }
+});
+test('initial fit cannot re-enable the width-fit-on-open escape hatch', () => {
+  const fit = bounded('  function fit() {', '  function stopFling()');
+  assert.match(fit, /V\.long = false;/);
+  assert.doesNotMatch(fit, /dataset\.shell|d\.r\s*>/);
 });
 test('gallery arrows consume browser/default/shell propagation but leave Escape and modifiers to existing owners', () => {
   let key, calls=[]; const V={el:{classList:{contains:()=>false}},long:false};

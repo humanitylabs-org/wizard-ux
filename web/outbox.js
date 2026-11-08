@@ -49,6 +49,16 @@
   const lostAudio = it => !!it?.audioUnreadable && !it.audioFile?.id;
   function queueRetry(it, states, ownerSend = false) {
     if (!eligible(it, states) || lostAudio(it) || (it.state === 'held' && !it.lateHeld)) return false;
+    // A model-only saved reply can show a complete chip yet Retry used to bypass
+    // the shared route owner forever. Only this explicit gesture may complete the
+    // ORIGINAL model's verifiable provider, before a request is frozen. Never use
+    // today's selected model, touch frozen bytes, or infer a routed agent's model.
+    if (it.model && !it.provider && !it.agent && !it.body && !it.steerBody) {
+      try {
+        const route = window.WosModels?.snapshot(it.sessionId, { model: it.model, provider: '' });
+        if (route?.model === it.model && route.provider && !route.agent) it.provider = route.provider;
+      } catch (_) { /* Pending/ambiguous/unavailable selection stays visibly unsent. */ }
+    }
     if (ownerSend && (it.lateHeld || lateMessage(it))) it.lateSendApproved = true;
     // Claim synchronously before the first persistence await: a double tap cannot
     // reset an in-flight attempt back to waiting and cause a second dispatch.

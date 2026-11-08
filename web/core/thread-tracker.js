@@ -20,6 +20,10 @@
   const BASE = '/wizard/v1/thread-items';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const on = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(ID); } catch (_) { return false; } };
+  const listWorking = (sid, agent = '') => {
+    const session = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
+    return !!window.WizChatsListModel?.isListWorking(session);
+  };
   const key = (sid, agent) => `${agent || 'hermes'}/${sid}`;
   const threads = new Map(); // key → { items, at, loading }
   let counts = {}, countsAt = 0, countsLoading = false;
@@ -128,6 +132,7 @@
   const dot = (kind) => `<i class="tt-dot ${kind}" aria-hidden="true"></i>`;
   const kindOf = i => i.kind || memberKind(i);
   const subOf = i => {
+    if (kindOf(i) === 'stopped') return 'Stopped · nothing running';
     const when = ago(i.updated_at || i.at || Date.now());
     if (kindOf(i) === 'ack') return `Seen · ${when}`;
     if (i.state === 'done') return `Finished · ${when}`;
@@ -137,12 +142,13 @@
   };
   function rowHtml(i) {
     const kind = kindOf(i);
-    const act = kind === 'ack' || kind === 'run' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
+    const act = kind === 'ack' || kind === 'run' || kind === 'stopped' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
       : i.try ? '<button type="button" class="tt-btn" data-tt-seen aria-label="Looks good">Looks good</button>' : '<button type="button" class="tt-btn go" data-tt-open>Open</button>';
     return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i))}</span></span>${act}</div>`;
   }
   function innerHtml(sid, agent) {
-    const k = key(sid, agent), raw = threads.get(k)?.items || [], items = groupsOf(raw);
+    const k = key(sid, agent), raw = threads.get(k)?.items || [], working = listWorking(sid, agent);
+    const items = groupsOf(raw).map(i => i.kind === 'run' && !working ? { ...i, kind: 'stopped' } : i);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
     // Keep work in progress visible; only acknowledged history has no strip.
@@ -154,9 +160,9 @@
     const run = live.filter(i => i.state === 'running');
     const fin = live.filter(i => i.state === 'done');
     const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(rowHtml).join('')}</div>` : '';
-    const tl = (n, kind) => n ? `<span class="tt-tally">${dot(kind)}${n}</span>` : '';
-    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, 'run')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
-    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Finished · not seen', fin)}`
+    const tl = (n, kind) => n ? `<span class="tt-tally" title="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}" aria-label="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}">${dot(kind)}${n}</span>` : '';
+    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, working ? 'run' : 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group(working ? 'Running' : 'Stopped', run)}${group('Finished · not seen', fin)}`
       + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
     return head + body;
@@ -174,7 +180,7 @@
     const c = loaded?.items.length ? tally(loaded.items) : counts[k];
     if (!c) return '';
     const n = (v, kind, label) => v ? `<span class="tt-d" title="${v} ${label}" aria-label="${v} ${label}">${dot(kind)}${v > 1 ? `<b>${v}</b>` : ''}</span>` : '';
-    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, 'run', 'running') + n(c.done_unseen, 'done', 'finished, not seen');
+    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, listWorking(sid, agent) ? 'run' : 'stopped', listWorking(sid, agent) ? 'running' : 'stopped') + n(c.done_unseen, 'done', 'finished, not seen');
     return html ? `<span class="tt-dots" data-tt-dots="${esc(key(sid, agent))}">${html}</span>` : '';
   }
   // The same dots as a node, for a list that builds its rows with the DOM (the AI apps sidebar).
@@ -367,6 +373,8 @@
   }
   window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
   // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
+  // Reuse the session list's lifecycle notifications; never add a liveness poll.
+  window.WizLive?.onChange?.(repaint);
   let wasOn = on();
   function syncEnabled() {
     const enabled = on(); if (enabled === wasOn) return;

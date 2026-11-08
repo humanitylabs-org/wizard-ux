@@ -25,6 +25,12 @@
     "/favicon.ico": "204 empty"
   },
   "paths": {
+    "/wizard-os-home/api/diagnostics/scroll-capture": {
+      "status": "not-exercised",
+      "source": "web/core/app-capture.js",
+      "kind": "write-or-stream",
+      "note": "Android-native storage diagnostics only; these three browser flows have no native bridge. Privacy projection and collector transport are covered by capture-storage-diagnostics.test.mjs and an explicit synthetic private-collector probe. Refuse and collect any unexpected attempt here."
+    },
     "/wizard/v1/agents": {
       "status": "catalogued",
       "source": "web/agents/agents.js",

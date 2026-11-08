@@ -122,6 +122,7 @@
   }
   const reloadAllowed = p => !p.host && (p.ok || audioFreeReload(p));
   let armed = null, going = false, checking = false, armTimer = 0, notice = '', rescuing = false, discardId = '';
+  let noticeWhileBlocked = false, reasonTimer = 0, reasonSnapshot = '';
   let appCatalog = null;
   function appName(id) {
     // Cache before constructing registries: construction emits wizard:apps. Never recurse from a render.
@@ -134,6 +135,11 @@
   function reloadStatus() {
     const p = plan(), takes = window.WizAppCapture?.staleTakes?.() || [];
     const take = !p.ok ? takes.find(t => p.blocking?.some(b => b.kind === 'capture' && (!b.appId || b.appId === t.appId))) : null;
+    // A past blocked tap must not outlive its blocker. Keep genuine navigation errors
+    // and active rescue/check feedback, but retire stale recording/save explanations.
+    if (noticeWhileBlocked && reloadAllowed(p) && !rescuing && !checking) {
+      notice = ''; noticeWhileBlocked = false; discardId = '';
+    }
     let reason = notice;
 
     if (!reason && take) {
@@ -149,8 +155,22 @@
         b?.kind === 'work' && !/voice|audio/i.test(b.reason || '') ? appName(b.appId) + ' has unsaved work.' :
         appName(b?.appId || p.capture?.appId) + ' has a voice note that isn’t sent yet.';
     }
-    return { reason, take, rescuing, discardId, checking, going, armed: !!armed };
+    return { reason, take, hostWaiting: p.host && !take && !notice, rescuing, discardId, checking, going, armed: !!armed };
   }
+  // Host uploads, finishing voice work and hand-off flags do not all emit events.
+  // Watch only a displayed reason, repaint only changes, and stop as soon as it clears.
+  const reasonKey = s => JSON.stringify([s.reason, s.take?.id, s.hostWaiting, s.rescuing, s.discardId, s.checking, s.going, s.armed]);
+  function watchReason(s) {
+    reasonSnapshot = reasonKey(s);
+    if (!pending || !s.reason || going) {
+      clearInterval(reasonTimer); reasonTimer = 0; return;
+    }
+    if (!reasonTimer) reasonTimer = setInterval(() => {
+      if (armed) maybeFire();
+      if (reasonKey(reloadStatus()) !== reasonSnapshot) repaint();
+    }, 1000);
+  }
+  function refreshReason() { if (pending) repaint(); }
   function rescueHtml(namespace = 'web') {
     const s = reloadStatus(); if (!s.take) return '';
     const attr = namespace === 'osu' ? 'data-osu' : 'data-web-rescue';
@@ -158,7 +178,11 @@
     return `<div class="wos-reload-rescue"><button type="button" ${attr}="${prefix}save" ${s.rescuing ? 'disabled' : ''}>Save to Files and clear</button><button type="button" ${attr}="${prefix}discard" ${s.rescuing ? 'disabled' : ''}>${s.discardId === s.take.id ? 'Confirm discard' : 'Discard'}</button></div>`;
   }
   function repaint() { render(); try { window.WosUpdates?.popup?.(); window.WosSettings?.refresh?.(); } catch (_) {} }
-  function blocked(message) { notice = message || ''; repaint(); }
+  function blocked(message) {
+    notice = message || '';
+    const p = plan(); noticeWhileBlocked = !!notice && (p.host || !p.ok);
+    repaint();
+  }
   async function rescue(action) {
     if (rescuing || going || checking) return;
     const take = reloadStatus().take; if (!take) return;
@@ -295,6 +319,7 @@
    * short list; Back/Esc closes the list. Nothing known (no change list): "Interface updated". */
   function render() {
     if (!pending || !H) return;
+    const status = reloadStatus(); watchReason(status);
     // The Home update pop-up (core/os-updates.js) carries this reload while it shows, and after its ×: one, not two.
     if (window.WosUpdates?.ownsReload?.()) { document.getElementById('dvWeb')?.remove(); listOpen = false; return; }
     let el = document.getElementById('dvWeb');
@@ -312,7 +337,7 @@
     const linked = changes.filter(c => c.thread), names = changes.map(rowName);
     // Desktop has no toast near the card: say it in place. Armed = Reload was tapped and waits for the end.
     const wait = armed ? (armed.recording ? 'Interface update · reloads after the recording' : 'Interface update · reloads once saved')
-      : H.shell === 'desktop' && busy() ? 'Interface update · finish recording first' : '';
+      : '';
     const held = !!wait && (H.shell === 'desktop' || !!armed);
     const head = held ? wait : 'Interface update';
     // Two lines so the thread name gets the width: "Interface update" small, the thread it came from bold.
@@ -326,7 +351,7 @@
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
     const mark = changes.length ? '' : `<span class="dv-ui">${window.WizBrand?.html || '✦'}</span>`;
-    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Getting ready…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${reloadStatus().reason ? `<div class="wos-reload-detail"><p class="wos-reload-reason">${esc(reloadStatus().reason)}</p>${rescueHtml()}</div>` : ''}${list}`;
+    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Getting ready…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${status.reason ? `<div class="wos-reload-detail"><p class="wos-reload-reason">${status.hostWaiting ? '<span class="wos-reload-dot" aria-hidden="true"></span>' : ''}${esc(status.reason)}</p>${rescueHtml()}</div>` : ''}${list}`;
   }
   // Back (phone) / Esc (desktop): fold an open thread list first. Returns true when it took the press.
   function back() { if (listOpen && pending) { listOpen = false; render(); return true; } return false; }
@@ -339,8 +364,10 @@
     polling = true;
     setTimeout(() => check(true), 1500);
     setInterval(() => { if (!document.hidden) check(false); }, 60e3); // one tiny text file a minute
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(false); });
-    addEventListener('wos-native-resume', () => check(false));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { check(false); refreshReason(); } });
+    addEventListener('wos-native-resume', () => { check(false); refreshReason(); });
+    addEventListener('wizard-voice-state', refreshReason);
+    window.WosOutbox?.onChange?.(() => { Promise.resolve().then(refreshReason); });
     addEventListener('wizard:app-holds', () => { if (armed) maybeFire(); if (pending) render(); });
     addEventListener('wizard-app-capture-state', () => { if (armed) maybeFire(); if (pending) repaint(); });
   }
