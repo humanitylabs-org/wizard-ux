@@ -1,0 +1,37 @@
+name: Bug
+description: Something is wrong or worse than it should be
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Update to the latest build first and check the bug is still there.
+  - type: textarea
+    id: happens
+    attributes:
+      label: What happens
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to see it
+    validations:
+      required: true
+  - type: textarea
+    id: shot
+    attributes:
+      label: Screenshot
+      description: Paste or drag an image here, if you have one.
+  - type: input
+    id: version
+    attributes:
+      label: Version and device
+      description: For example "0.3.114 on a Mac mini" or "Android app 1.2 on a Pixel 8".
+    validations:
+      required: true
