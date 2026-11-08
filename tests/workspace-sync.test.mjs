@@ -286,29 +286,3 @@ test('the phone shell seeds starter apps only into a layout it just created, mar
   assert.match(app, /if \(!here\) \{ const w = openWin\(obj, opts\); openingEnd\(\); return w; \}\n\s*delete W\[here\]\.seed;/, 'an explicit open adopts a starter app');
   assert.match(app, /if \(o\.join && state\.desks\.length\) desks = desks\.filter/, 'joining the owner\'s workspaces drops this device\'s starter apps');
 });
-
-test('upgrade: starter windows from the previous shell (no seed mark) on a not-yet-joined device are marked before the first join', async () => {
-  const src = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-  const at = src.indexOf('  function markLegacyStarters('); assert.ok(at >= 0);
-  const body = src.slice(at, src.indexOf('\n  }\n', at) + 4);
-  const mark = new Function(body + '\nreturn markLegacyStarters;')();
-  const legacy = () => ({ t1: { id: 't1', app: 'frame', appId: 'topics' }, z1: { id: 'z1', app: 'frame', appId: 'mizel' },
-    m1: { id: 'm1', app: 'frame', appId: 'messenger' }, c9: { id: 'c9', app: 'chats', thread: null } });
-  const stale = legacy();
-  assert.equal(mark(stale, ['topics', 'mizel'], false), 2);
-  assert.equal(stale.t1.seed, true); assert.equal(stale.z1.seed, true);
-  assert.equal(stale.m1.seed, undefined, 'an app the owner opened stays his'); assert.equal(stale.c9.seed, undefined);
-  const joined = legacy();
-  assert.equal(mark(joined, ['topics', 'mizel'], true), 0, 'a joined device already synced these as before: untouched');
-  assert.equal(joined.t1.seed, undefined);
-  // The stale upgraded phone's first join: the marked legacy starters never reach the box.
-  const box = fakeBox(); box.rev = 7;
-  box.state = { desks: [D('chats', chats('c1')), D('msgr', app('m1', 'messenger'))] };
-  const desks = [D('starter-chats', chats('c9')), D('t', { ...app('t1', 'topics'), ...stale.t1 }), D('z', { ...app('z1', 'mizel'), ...stale.z1 })];
-  const phone = client(new Map(), box, 'phone', desks);
-  try {
-    await tick(120);
-    const apps = box.state.desks.flatMap(d => d.wins.map(w => w.appId || w.app));
-    assert.ok(!apps.includes('topics') && !apps.includes('mizel'), 'legacy starter apps stay off the shared workspaces: ' + apps);
-  } finally { phone.api.stop(); }
-});

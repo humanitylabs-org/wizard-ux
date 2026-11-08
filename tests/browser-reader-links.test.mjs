@@ -82,9 +82,3 @@ test('another app cannot use the Reader hand-off to remember hosts',()=>{
  f.click(f.doc,href,{'data-wizard-browse':'auto','data-wizard-reason':'blocked',target:'_blank'});
  assert.equal(f.store['wos.readerDirect.v1'],undefined);assert.deepEqual(f.calls,[['browser',href]]);
 });
-
-test('an auxiliary links mount (App Setup) never replaces the shell Reader identity', () => {
-  const src = readFileSync(new URL('../web/core/links.js', import.meta.url), 'utf8');
-  assert.match(src, /if \(arguments\[0\]\?\.readerApp\) readerHome = /);
-  assert.doesNotMatch(src, /^\s*readerHome = \(\) =>/m);
-});

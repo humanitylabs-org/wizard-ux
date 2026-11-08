@@ -7,9 +7,7 @@ const { execFileSync } = require('node:child_process');
 const repo = path.resolve(__dirname, '..'), prefix = '/wizard-os-home/', origin = 'https://panes.test';
 const baselineRef = 'ed0401b78';
 const out = process.env.QA_OUT || 'pane-layout-evidence'; fs.mkdirSync(out, { recursive: true });
-// parts.js rides with the baseline desktop.js: the renderer boundary moved noteThread/noteRouteIntoActions out of it,
-// so a pinned old desktop.js needs its own parts.js to link.
-const changed = new Set(['desktop.html', 'desktop/desktop.js', 'layouts/ai-apps/desktop.js', 'layouts/ai-apps/desktop.css', 'layouts/ai-apps/parts.js']);
+const changed = new Set(['desktop.html', 'desktop/desktop.js', 'layouts/ai-apps/desktop.js', 'layouts/ai-apps/desktop.css']);
 const baseline = {};
 for (const f of changed) baseline[f] = execFileSync('git', ['show', baselineRef + ':web/' + f], { cwd: repo });
 const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : 'text/html';

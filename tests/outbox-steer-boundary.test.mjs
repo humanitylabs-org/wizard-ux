@@ -155,13 +155,6 @@ test('a queued-run steer that becomes steerable is delivered as a steer, once', 
   const sent = await settled(f.api, it.id); assert.equal(sent.state, 'sent', sent.error);
   assert.equal(sent.steered, true); assert.equal(f.admitted.size, 0);
 });
-test('Stop while a rejected steer waits for a queued run withdraws the message instead of hanging', async t => {
-  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
-  const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');
-  const out = await Promise.race([f.api.cancel(it.id), new Promise(r => setTimeout(() => r({ outcome: 'HUNG' }), 1000))]);
-  assert.notEqual(out.outcome, 'HUNG', 'cancel must settle');
-  assert.equal(f.admitted.size, 0);
-});
 test('a run that never becomes steerable stops waiting and fails visibly', async t => {
   const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
   const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');

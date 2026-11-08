@@ -41,7 +41,7 @@ function harness() {
   Object.assign(c, { LIVE: L, C: c.WizCore, APP: { wizard: { id: 'wizard' } }, CHATS_APP: { id: 'wizard' }, CHATS: 'wizard',
     ...M, sessions: null, badgeMap: {}, root: { dataset: { aadSide: 'open' } }, scroll, rList, menuCount, menuBtn,
     q: '', secOpen: { ready: true }, KINDS: ['working', 'snoozed', 'ready', 'archive'], SECTIONS: [['working', 'Working'], ['ready', 'Ready']], EMPTY: {},
-    drawn: '', railDrawn: '', gm: 'none', workingOrder: () => 'alphabetical', archiveTop: () => false, sectionsFor: () => c.SECTIONS, readyOrder: () => 'newest', groupBy: () => c.gm, desks: () => [], here: () => ({}),
+    drawn: '', railDrawn: '', gm: 'none', workingOrder: () => 'alphabetical', readyOrder: () => 'newest', groupBy: () => c.gm, desks: () => [], here: () => ({}),
     badgeText: id => N.label(id), readSessions: () => c.sessions, markCurrent() {}, closeMenu() {}, railNow: () => null, fly: null,
     RAIL_WORDS: {}, railGo() {}, flyWant() {}, flyLeave() {}, el: (...args) => new Node(...args), icon: () => new Node(),
     chatRow: r => new Node('div', 'chat-row', { text: r.id }), api: { apps: { list: () => [], badgeText: id => N.label(id) }, listen() {}, storage: { set() {} } },

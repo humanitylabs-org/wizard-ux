@@ -12,10 +12,7 @@ function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
   const nb = { isConnected: true, closest: () => ({ querySelector: () => strip }), querySelectorAll: () => present ? [node] : [], getBoundingClientRect: () => ({ top: 100, bottom: 800, left: 0, width: 400 }) };
   const doc = { documentElement: { dataset: { tweaks: 'wizard/thread-tracker' } }, visibilityState: 'visible', hasFocus: () => focus,
     querySelectorAll: () => [], addEventListener: (t, f) => { events[t] = f; }, elementFromPoint: () => hit ? node : null };
-  const win = { addEventListener: (t, f) => { events[t] = f; }, dispatchEvent() {},
-    // Running tracker items animate only while the session census also says working.
-    WizLive: { sessionFor: () => ({ status: 'running' }) },
-    WizChatsListModel: { isListWorking: s => s?.status === 'running' } };
+  const win = { addEventListener: (t, f) => { events[t] = f; }, dispatchEvent() {} };
   const ctx = vm.createContext({ window: win, document: doc, innerHeight: 860, clearTimeout, setTimeout,
     setInterval(f, ms) { if (ms === 200) check = f; }, CustomEvent: class {}, Date: class extends Date { static now() { return now; } },
     MutationObserver: class { observe() {} }, IntersectionObserver: class {
@@ -24,9 +21,6 @@ function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
       if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(() => {}); }
       reads.push(p); return { ok: true, json: async () => ({ items }) };
     } });
-  win.WizLive = { session: () => ({ status: 'running' }) };
-  vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx);
-  win.WizChatsListModel = ctx.WizChatsListModel;
   vm.runInContext(source, ctx);
   const T = win.WosThreadTracker;
   return { T, win, doc, nb, node, writes, reads,

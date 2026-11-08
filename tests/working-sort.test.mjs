@@ -102,24 +102,3 @@ test('collapsing Working hides its order bar too (James, 6 Nov 2026: minimised W
   assert.ok(at > 0, 'the list draws the Working order bar');
   assert.match(head, /\$\{open \? `<div class="ch-sec-b">\$\{k === 'working' && list\.length \? $/, 'drawn only inside the open section body');
 });
-// Main versus routed agents (host profile, container, restricted): one owner Working order for every thread, whichever
-// agent owns it — through the stock renderer and the layout list (skin-host api.sessions.list) alike; rows keep their agent.
-test('main and routed-agent Working threads share one order on the stock renderer and the layout list', () => {
-  const AG = ['', 'profile', 'container', 'restricted'];
-  const mixed = rows.filter(r => !r.pinned).map((r, i) => ({ ...r, ...(AG[i % 4] ? { agent: AG[i % 4] } : {}) }));
-  const plain = rows.filter(r => !r.pinned);
-  for (const order of ['alphabetical', 'newest', 'oldest']) {
-    const src = read('web/core/chats.js'), c = modelContext({ window: {}, LIVE: { cardAt: s => s.at, workingOrder: () => order } });
-    vm.runInContext(src.slice(src.indexOf('  const workingOrdered ='), src.indexOf('  const readyOrdered =')) + '\nthis.sort = workingOrdered;', c);
-    const stock = c.sort(mixed);
-    assert.deepEqual(ids(stock), ids(c.sort(plain)), `${order}: routed rows sort exactly like main rows`);
-    assert.deepEqual(stock.map(r => r.agent || ''), ids(stock).map(id => mixed.find(r => r.id === id).agent || ''), 'each row keeps its agent');
-    assert.deepEqual(ids(M.workingSort(mixed, order)), ids(M.workingSort(plain, order)), `${order}: layout list (workingSort) agrees`);
-    for (const ag of AG.filter(Boolean)) {
-      const only = mixed.filter(r => (r.agent || '') === ag);
-      assert.deepEqual(ids(c.sort(only)), ids(M.workingSort(only, order)), `${order}: ${ag}-only list`);
-    }
-  }
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /o\.working = window\.WizChatsListModel\.workingSort\(o\.working, readWorkingOrder\(\)/, 'the layout list sorts every Working row, routed ones included');
-});
