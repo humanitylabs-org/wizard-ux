@@ -1,0 +1,51 @@
+{
+  "license": "GPL-3.0-only",
+  "upstream": "https://github.com/humanitylabs-org/wizard-app-manager",
+  "source": "wizard-views/wizard-apps.js",
+  "nativeCommit": "a61228525cba562ea2efba7d3c69e2a782572e2c",
+  "adapterCommit": "23db0d10281f4b570ec845d0cb882b3bfda1fdcf",
+  "frozenPreviewCommit": "7afcc94d8c9a56c404ec6292bc914e40b983fa3a",
+  "indexAdapterCommit": "2d22e8770a5fb5e0879a2cecf02dffa1524a547a",
+  "authors": [
+    "Oscar",
+    "Miguel"
+  ],
+  "changes": [
+    "Store/card-only extraction",
+    "Browse-only lifecycle controls",
+    "Normal URL-backed app frame"
+  ],
+  "licenseSource": {
+    "commit": "8aa07a44d146dd6d7f9dff7e85cbdf08cb38257d",
+    "path": "LICENSE",
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  },
+  "copiedSources": [
+    {
+      "commit": "7afcc94d8c9a56c404ec6292bc914e40b983fa3a",
+      "path": "web/core/wizard-apps.js",
+      "sha256": "d56099f4439407a6586ab531ac619769546fd3360c9a2b8fcf64323ae8a829cf",
+      "destination": "web/store/wizard-store.js",
+      "retrieval": "git show <commit>:<path>"
+    },
+    {
+      "commit": "7afcc94d8c9a56c404ec6292bc914e40b983fa3a",
+      "path": "web/core/wizard-apps.css",
+      "sha256": "4364732c4ba165457b054192651d38bae1c290febb1db900cea6bdea9bfdb253",
+      "destination": "web/store/wizard-store.css",
+      "retrieval": "git show <commit>:<path>"
+    },
+    {
+      "commit": "2d22e8770a5fb5e0879a2cecf02dffa1524a547a",
+      "path": "server/wizard-apps-views.mjs",
+      "sha256": "5de78c883f4fd65f811bc5d8ba685e6c95ca76c12bfe0f5cdb2e5f9ffe68c72d",
+      "destination": "tools/store-index-views.mjs",
+      "retrieval": "git show <commit>:<path>"
+    }
+  ],
+  "redesign": {
+    "date": "2026-10-12",
+    "by": "Archimedes (Opus) for James",
+    "note": "James asked for a beautiful app-discovery store; the Store UI was rewritten (store.js/store.css). The App Manager data contract (index search/tags, installed list, uses/provides) and the idea of showing what an app connects to come from Miguel & Oscar's wizard-views; the vendored wizard-store.js/css port is no longer used."
+  }
+}

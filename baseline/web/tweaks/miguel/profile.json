@@ -1,0 +1,28 @@
+{
+  "id": "miguel",
+  "name": "Miguel",
+  "version": 1,
+  "skin": "obsidian",
+  "tweaks": [
+    "miguel/send-and-go",
+    "miguel/snooze-someday",
+    "miguel/machines-home",
+    "miguel/no-desk-close",
+    "miguel/archive-top",
+    "miguel/reply-summary",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
+  ],
+  "flags": {},
+  "off": [
+    "miguel/archive-top",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
+  ]
+}

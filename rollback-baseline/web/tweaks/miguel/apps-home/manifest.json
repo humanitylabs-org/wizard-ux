@@ -1,0 +1,17 @@
+{
+  "id": "miguel/apps-home",
+  "name": "Different shell view - Apps",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Home becomes a grid of app icons, one per desk (tap opens that desk), Chats first with its Ready count, and a + for an app not open yet. Phone: a home screen, the bottom desk switcher gone (only the orb stays; swipe it up for Home). Desktop: a launchpad over the wallpaper, the orb at the bottom. One view per device type (desktop, phone); all off = Desks",
+  "layout": "apps",
+  "view": "Apps",
+  "shells": [
+    "desktop",
+    "phone"
+  ]
+}

@@ -1,0 +1,1127 @@
+TAP version 13
+# Subtest: default desktop boot wears AI apps and claims the chat list before attach, catalog or any import
+ok 1 - default desktop boot wears AI apps and claims the chat list before attach, catalog or any import
+  ---
+  duration_ms: 13.505499
+  ...
+# Subtest: a saved AI apps view is honoured at boot the same way
+ok 2 - a saved AI apps view is honoured at boot the same way
+  ---
+  duration_ms: 2.510866
+  ...
+# Subtest: Classic Desks, when chosen, boots normally: no layout, no claim, nothing hidden
+ok 3 - Classic Desks, when chosen, boots normally: no layout, no claim, nothing hidden
+  ---
+  duration_ms: 2.929954
+  ...
+# Subtest: saved classic beats stale legacy orb before any layout paint
+ok 4 - saved classic beats stale legacy orb before any layout paint
+  ---
+  duration_ms: 2.333246
+  ...
+# Subtest: saved ai-apps beats stale legacy orb before any layout paint
+ok 5 - saved ai-apps beats stale legacy orb before any layout paint
+  ---
+  duration_ms: 2.938129
+  ...
+# Subtest: saved classic beats stale legacy apps before any layout paint
+ok 6 - saved classic beats stale legacy apps before any layout paint
+  ---
+  duration_ms: 2.337473
+  ...
+# Subtest: saved ai-apps beats stale legacy apps before any layout paint
+ok 7 - saved ai-apps beats stale legacy apps before any layout paint
+  ---
+  duration_ms: 2.546041
+  ...
+# Subtest: saved classic beats stale legacy ai-apps before any layout paint
+ok 8 - saved classic beats stale legacy ai-apps before any layout paint
+  ---
+  duration_ms: 1.804092
+  ...
+# Subtest: saved ai-apps beats stale legacy ai-apps before any layout paint
+ok 9 - saved ai-apps beats stale legacy ai-apps before any layout paint
+  ---
+  duration_ms: 2.410129
+  ...
+# Subtest: explicit classic URL beats saved desktop choice at boot
+ok 10 - explicit classic URL beats saved desktop choice at boot
+  ---
+  duration_ms: 4.115158
+  ...
+# Subtest: explicit ai-apps URL beats saved desktop choice at boot
+ok 11 - explicit ai-apps URL beats saved desktop choice at boot
+  ---
+  duration_ms: 2.289945
+  ...
+# Subtest: the phone never adopts the desktop default
+ok 12 - the phone never adopts the desktop default
+  ---
+  duration_ms: 1.880374
+  ...
+# Subtest: a layout that cannot load mounts shared Chats without changing the selected AI apps view
+ok 13 - a layout that cannot load mounts shared Chats without changing the selected AI apps view
+  ---
+  duration_ms: 4.652675
+  ...
+# Subtest: partial layout setup failure uses shared Chats immediately, without a disabled layout or saved Classic
+ok 14 - partial layout setup failure uses shared Chats immediately, without a disabled layout or saved Classic
+  ---
+  duration_ms: 3.668547
+  ...
+# Subtest: layout CSS keeps Classic hidden through boot and the layout clears the veil when its sheet applies
+ok 15 - layout CSS keeps Classic hidden through boot and the layout clears the veil when its sheet applies
+  ---
+  duration_ms: 1.026909
+  ...
+# Subtest: Classic shell reads the early claim, and releasing a reloading layout never re-opens the list
+ok 16 - Classic shell reads the early claim, and releasing a reloading layout never re-opens the list
+  ---
+  duration_ms: 1.529703
+  ...
+# Subtest: layout callback threshold preserves the stack AND the owner navigation (never disables layouts)
+ok 17 - layout callback threshold preserves the stack AND the owner navigation (never disables layouts)
+  ---
+  duration_ms: 13.930755
+  ...
+# Subtest: rejected async layout hooks are contained without losing later hooks or navigation
+ok 18 - rejected async layout hooks are contained without losing later hooks or navigation
+  ---
+  duration_ms: 5.870779
+  ...
+# Subtest: import failure is diagnosable and a normal switch cannot erase the last failure
+ok 19 - import failure is diagnosable and a normal switch cannot erase the last failure
+  ---
+  duration_ms: 3.722158
+  ...
+# Subtest: blocked diagnostic storage never prevents layout cleanup
+ok 20 - blocked diagnostic storage never prevents layout cleanup
+  ---
+  duration_ms: 4.600909
+  ...
+# Subtest: tweak disposal never writes the layout diagnostic
+ok 21 - tweak disposal never writes the layout diagnostic
+  ---
+  duration_ms: 3.969486
+  ...
+# Subtest: iframe focus refusal retries the browser only, not host focus (61 attempts)
+ok 22 - iframe focus refusal retries the browser only, not host focus (61 attempts)
+  ---
+  duration_ms: 1.769017
+  ...
+# Subtest: panel-mode focus updates only the panel front, never Classic desk/save/route
+ok 23 - panel-mode focus updates only the panel front, never Classic desk/save/route
+  ---
+  duration_ms: 2.180602
+  ...
+# Subtest: adapter focus in an active layout never navigates/saves Classic; panel and Classic retain their own focus
+ok 24 - adapter focus in an active layout never navigates/saves Classic; panel and Classic retain their own focus
+  ---
+  duration_ms: 2.569526
+  ...
+# Subtest: Classic (the default): no attribute, no layout files, the orb tap stays the shell's
+ok 25 - Classic (the default): no attribute, no layout files, the orb tap stays the shell's
+  ---
+  duration_ms: 21.004884
+  ...
+# Subtest: Two orbs: its own css and script only, and Classic removes everything it added
+ok 26 - Two orbs: its own css and script only, and Classic removes everything it added
+  ---
+  duration_ms: 34.770843
+  ...
+# Subtest: a stored layout paints before the shell attaches (no flash), then its script loads on attach
+ok 27 - a stored layout paints before the shell attaches (no flash), then its script loads on attach
+  ---
+  duration_ms: 16.556437
+  ...
+# Subtest: unknown layout ids fall back to Classic
+ok 28 - unknown layout ids fall back to Classic
+  ---
+  duration_ms: 17.415382
+  ...
+# Subtest: a broken layout callback is contained and can retry without unloading navigation
+ok 29 - a broken layout callback is contained and can retry without unloading navigation
+  ---
+  duration_ms: 17.701705
+  ...
+# Subtest: the agent API reaches the shell adapter (talk, tap, list, here)
+ok 30 - the agent API reaches the shell adapter (talk, tap, list, here)
+  ---
+  duration_ms: 16.487979
+  ...
+# Subtest: layout files exist and every rule is scoped to its layout
+ok 31 - layout files exist and every rule is scoped to its layout
+  ---
+  duration_ms: 1.166668
+  ...
+# Subtest: the shell wires layouts: orb tap hook, Settings row, agent kept on recovered takes
+ok 32 - the shell wires layouts: orb tap hook, Settings row, agent kept on recovered takes
+  ---
+  duration_ms: 1.281251
+  ...
+# Subtest: a ?layout= link turns a layout on or off and remembers it
+ok 33 - a ?layout= link turns a layout on or off and remembers it
+  ---
+  duration_ms: 2.729022
+  ...
+# Subtest: the agent orb is the Wizard Everywhere floating orb
+ok 34 - the agent orb is the Wizard Everywhere floating orb
+  ---
+  duration_ms: 0.761235
+  ...
+# Subtest: desktop custom backdrop syncs across devices independently of skin and phone view
+ok 35 - desktop custom backdrop syncs across devices independently of skin and phone view
+  ---
+  duration_ms: 14.642057
+  ...
+# Subtest: stale built-in selection retains uploaded custom references across a two-device CAS race
+ok 36 - stale built-in selection retains uploaded custom references across a two-device CAS race
+  ---
+  duration_ms: 3.002299
+  ...
+# Subtest: malformed custom references cannot inject arbitrary URL schemes or paths
+ok 37 - malformed custom references cannot inject arbitrary URL schemes or paths
+  ---
+  duration_ms: 0.315366
+  ...
+# Subtest: an existing skin without tweaks seeds the box; a fresh install still does not
+ok 38 - an existing skin without tweaks seeds the box; a fresh install still does not
+  ---
+  duration_ms: 1.36729
+  ...
+# Subtest: logical revisions preserve a later edit despite skewed device clocks and a future legacy stamp
+ok 39 - logical revisions preserve a later edit despite skewed device clocks and a future legacy stamp
+  ---
+  duration_ms: 2.189069
+  ...
+# Subtest: server wins on load: a device wears the box set and skin, without writing
+ok 40 - server wins on load: a device wears the box set and skin, without writing
+  ---
+  duration_ms: 1.573153
+  ...
+# Subtest: a fresh device with nothing on never overwrites the box, and never seeds an empty one
+ok 41 - a fresh device with nothing on never overwrites the box, and never seeds an empty one
+  ---
+  duration_ms: 1.037999
+  ...
+# Subtest: migration: the first device with tweaks on seeds the box; the next device takes that set
+ok 42 - migration: the first device with tweaks on seeds the box; the next device takes that set
+  ---
+  duration_ms: 0.707876
+  ...
+# Subtest: Mac/PWA race: a device syncing first with a few tweaks does not beat the bigger set; real changes stay
+ok 43 - Mac/PWA race: a device syncing first with a few tweaks does not beat the bigger set; real changes stay
+  ---
+  duration_ms: 4.662944
+  ...
+# Subtest: retired tweak ids an old device still stores are never seeded and never make a set look bigger
+ok 44 - retired tweak ids an old device still stores are never seeded and never make a set look bigger
+  ---
+  duration_ms: 1.234554
+  ...
+# Subtest: retired ids on the box never cause a re-apply loop: settle() after each apply is quiet once worn
+ok 45 - retired ids on the box never cause a re-apply loop: settle() after each apply is quiet once worn
+  ---
+  duration_ms: 0.791921
+  ...
+# Subtest: a change writes the box once (debounced) and other devices pick it up on their next load
+ok 46 - a change writes the box once (debounced) and other devices pick it up on their next load
+  ---
+  duration_ms: 2.257414
+  ...
+# Subtest: simultaneous edits on two devices keep both; a stale device never undoes a newer change
+ok 47 - simultaneous edits on two devices keep both; a stale device never undoes a newer change
+  ---
+  duration_ms: 2.271281
+  ...
+# Subtest: views stay exclusive after sync: the newest Orb/Apps choice wins, on the box and on every device
+ok 48 - views stay exclusive after sync: the newest Orb/Apps choice wins, on the box and on every device
+  ---
+  duration_ms: 1.583463
+  ...
+# Subtest: a box copy with two views on is fixed on the box (newest stays), so switching the view off means Desks everywhere
+ok 49 - a box copy with two views on is fixed on the box (newest stays), so switching the view off means Desks everywhere
+  ---
+  duration_ms: 1.495279
+  ...
+# Subtest: offline or failing box: the device keeps its own set, retries, and sends its change when the box is back
+ok 50 - offline or failing box: the device keeps its own set, retries, and sends its change when the box is back
+  ---
+  duration_ms: 1.17842
+  ...
+# Subtest: a malformed box file never breaks the shell: unknown fields and bad ids are dropped
+ok 51 - a malformed box file never breaks the shell: unknown fields and bad ids are dropped
+  ---
+  duration_ms: 0.366802
+  ...
+# Subtest: experience.js: switches raise wos:tweak-choice, adopt() wears the shared set and caches it
+ok 52 - experience.js: switches raise wos:tweak-choice, adopt() wears the shared set and caches it
+  ---
+  duration_ms: 10.025058
+  ...
+# Subtest: experience.js: a fresh device adopting the shared set never adds its own one-time migrations to it
+ok 53 - experience.js: a fresh device adopting the shared set never adds its own one-time migrations to it
+  ---
+  duration_ms: 3.687613
+  ...
+# Subtest: both shells load look sync after experience.js; it lives in the owner's Files via the Pages file API
+ok 54 - both shells load look sync after experience.js; it lives in the owner's Files via the Pages file API
+  ---
+  duration_ms: 1.068907
+  ...
+# Subtest: old look.json: parsed as before (no views key), worn without a write; its single view keeps the old meaning
+ok 55 - old look.json: parsed as before (no views key), worn without a write; its single view keeps the old meaning
+  ---
+  duration_ms: 0.641934
+  ...
+# Subtest: new look.json: an older shell parses it without breaking (unknown views dropped), a newer one keeps both types
+ok 56 - new look.json: an older shell parses it without breaking (unknown views dropped), a newer one keeps both types
+  ---
+  duration_ms: 0.292824
+  ...
+# Subtest: sync merges views per type: two desktops follow each other, two phones follow each other, simultaneous picks keep both
+ok 57 - sync merges views per type: two desktops follow each other, two phones follow each other, simultaneous picks keep both
+  ---
+  duration_ms: 5.271315
+  ...
+# Subtest: per-type choices observe future revisions, survive stale first sync and never use device time
+ok 58 - per-type choices observe future revisions, survive stale first sync and never use device time
+  ---
+  duration_ms: 1.695971
+  ...
+# Subtest: cached per-device choices seed an absent file even with no skin or legacy mix
+ok 59 - cached per-device choices seed an absent file even with no skin or legacy mix
+  ---
+  duration_ms: 0.37683
+  ...
+# Subtest: browser gate look adapter uses the real Pages path, persists both devices and rejects stale versions
+ok 60 - browser gate look adapter uses the real Pages path, persists both devices and rejects stale versions
+  ---
+  duration_ms: 1.480872
+  ...
+# Subtest: already-synced owner choice during first GET is causally based on the observed file
+ok 61 - already-synced owner choice during first GET is causally based on the observed file
+  ---
+  duration_ms: 0.507723
+  ...
+# Subtest: already-synced pending storage is based once, and last view switch during GET wins
+ok 62 - already-synced pending storage is based once, and last view switch during GET wins
+  ---
+  duration_ms: 0.424218
+  ...
+# Subtest: already-synced persisted view intent survives reload without a new event
+ok 63 - already-synced persisted view intent survives reload without a new event
+  ---
+  duration_ms: 0.302162
+  ...
+# Subtest: view switch during successful PUT is not reverted by adopting the older acknowledgement
+ok 64 - view switch during successful PUT is not reverted by adopting the older acknowledgement
+  ---
+  duration_ms: 1.113298
+  ...
+# Subtest: new view choice during conflicted PUT survives retry while other-shell concurrent edit is preserved
+ok 65 - new view choice during conflicted PUT survives retry while other-shell concurrent edit is preserved
+  ---
+  duration_ms: 0.518043
+  ...
+# Subtest: a conflicting newer server choice beats an already-sent intent, not an endless local restamp
+ok 66 - a conflicting newer server choice beats an already-sent intent, not an endless local restamp
+  ---
+  duration_ms: 0.48409
+  ...
+# Subtest: sibling skin: choice during first GET stays selected (synced=false)
+ok 67 - sibling skin: choice during first GET stays selected (synced=false)
+  ---
+  duration_ms: 0.716702
+  ...
+# Subtest: sibling skin: choice during first GET stays selected (synced=true)
+ok 68 - sibling skin: choice during first GET stays selected (synced=true)
+  ---
+  duration_ms: 0.35505
+  ...
+# Subtest: sibling skin: successful PUT ACK cannot undo a newer unsent choice
+ok 69 - sibling skin: successful PUT ACK cannot undo a newer unsent choice
+  ---
+  duration_ms: 2.120771
+  ...
+# Subtest: sibling skin: 409 bases only a new intent during PUT (new=false)
+ok 70 - sibling skin: 409 bases only a new intent during PUT (new=false)
+  ---
+  duration_ms: 0.739604
+  ...
+# Subtest: sibling skin: 409 bases only a new intent during PUT (new=true)
+ok 71 - sibling skin: 409 bases only a new intent during PUT (new=true)
+  ---
+  duration_ms: 0.706532
+  ...
+# Subtest: sibling skin: first-sync sent intent yields to a newer 409 writer
+ok 72 - sibling skin: first-sync sent intent yields to a newer 409 writer
+  ---
+  duration_ms: 0.430049
+  ...
+# Subtest: sibling skin: restored pending choice is based once after reload
+ok 73 - sibling skin: restored pending choice is based once after reload
+  ---
+  duration_ms: 0.386287
+  ...
+# Subtest: sibling skin: an idle observed choice does not erase a newer remote edit
+ok 74 - sibling skin: an idle observed choice does not erase a newer remote edit
+  ---
+  duration_ms: 0.490321
+  ...
+# Subtest: sibling tweak: choice during first GET stays selected (synced=false)
+ok 75 - sibling tweak: choice during first GET stays selected (synced=false)
+  ---
+  duration_ms: 0.374776
+  ...
+# Subtest: sibling tweak: choice during first GET stays selected (synced=true)
+ok 76 - sibling tweak: choice during first GET stays selected (synced=true)
+  ---
+  duration_ms: 0.36066
+  ...
+# Subtest: sibling tweak: successful PUT ACK cannot undo a newer unsent choice
+ok 77 - sibling tweak: successful PUT ACK cannot undo a newer unsent choice
+  ---
+  duration_ms: 3.03511
+  ...
+# Subtest: sibling tweak: 409 bases only a new intent during PUT (new=false)
+ok 78 - sibling tweak: 409 bases only a new intent during PUT (new=false)
+  ---
+  duration_ms: 0.461518
+  ...
+# Subtest: sibling tweak: 409 bases only a new intent during PUT (new=true)
+ok 79 - sibling tweak: 409 bases only a new intent during PUT (new=true)
+  ---
+  duration_ms: 0.525657
+  ...
+# Subtest: sibling tweak: first-sync sent intent yields to a newer 409 writer
+ok 80 - sibling tweak: first-sync sent intent yields to a newer 409 writer
+  ---
+  duration_ms: 0.222533
+  ...
+# Subtest: sibling tweak: restored pending choice is based once after reload
+ok 81 - sibling tweak: restored pending choice is based once after reload
+  ---
+  duration_ms: 0.188391
+  ...
+# Subtest: sibling tweak: an idle observed choice does not erase a newer remote edit
+ok 82 - sibling tweak: an idle observed choice does not erase a newer remote edit
+  ---
+  duration_ms: 0.20453
+  ...
+# Subtest: legacy view group: newer 409 writer keeps a complete selection (synced=false, restored=false)
+ok 83 - legacy view group: newer 409 writer keeps a complete selection (synced=false, restored=false)
+  ---
+  duration_ms: 0.624811
+  ...
+# Subtest: legacy view group: newer 409 writer keeps a complete selection (synced=false, restored=true)
+ok 84 - legacy view group: newer 409 writer keeps a complete selection (synced=false, restored=true)
+  ---
+  duration_ms: 0.600576
+  ...
+# Subtest: legacy view group: restored equality and independent intent order survive rebasing (synced=false)
+ok 85 - legacy view group: restored equality and independent intent order survive rebasing (synced=false)
+  ---
+  duration_ms: 0.859197
+  ...
+# Subtest: legacy view group: an idle based choice yields to a newer complete selection (synced=false)
+ok 86 - legacy view group: an idle based choice yields to a newer complete selection (synced=false)
+  ---
+  duration_ms: 0.377622
+  ...
+# Subtest: legacy view group: a new selection during 409 is based once as a group (synced=false)
+ok 87 - legacy view group: a new selection during 409 is based once as a group (synced=false)
+  ---
+  duration_ms: 0.566533
+  ...
+# Subtest: legacy view group: newer 409 writer keeps a complete selection (synced=true, restored=false)
+ok 88 - legacy view group: newer 409 writer keeps a complete selection (synced=true, restored=false)
+  ---
+  duration_ms: 0.734405
+  ...
+# Subtest: legacy view group: newer 409 writer keeps a complete selection (synced=true, restored=true)
+ok 89 - legacy view group: newer 409 writer keeps a complete selection (synced=true, restored=true)
+  ---
+  duration_ms: 0.454565
+  ...
+# Subtest: legacy view group: restored equality and independent intent order survive rebasing (synced=true)
+ok 90 - legacy view group: restored equality and independent intent order survive rebasing (synced=true)
+  ---
+  duration_ms: 0.447281
+  ...
+# Subtest: legacy view group: an idle based choice yields to a newer complete selection (synced=true)
+ok 91 - legacy view group: an idle based choice yields to a newer complete selection (synced=true)
+  ---
+  duration_ms: 0.28003
+  ...
+# Subtest: legacy view group: a new selection during 409 is based once as a group (synced=true)
+ok 92 - legacy view group: a new selection during 409 is based once as a group (synced=true)
+  ---
+  duration_ms: 0.385767
+  ...
+# Subtest: unapproved personal module is never imported and synthetic/agent consent is refused
+ok 93 - unapproved personal module is never imported and synthetic/agent consent is refused
+  ---
+  duration_ms: 14.562089
+  ...
+# Subtest: approved hash imports the exact fetched UTF-8/CRLF bytes, once across refreshes, without a second URL import
+ok 94 - approved hash imports the exact fetched UTF-8/CRLF bytes, once across refreshes, without a second URL import
+  ---
+  duration_ms: 4.451041
+  ...
+# Subtest: new file version revokes the previous device approval
+ok 95 - new file version revokes the previous device approval
+  ---
+  duration_ms: 3.448269
+  ...
+# Subtest: mismatched metadata/header, non-JS, missing script and excessive bytes all fail closed
+ok 96 - mismatched metadata/header, non-JS, missing script and excessive bytes all fail closed
+  ---
+  duration_ms: 8.72341
+  ...
+# Subtest: ?myskin=off fetches and imports nothing even with a saved script approval
+ok 97 - ?myskin=off fetches and imports nothing even with a saved script approval
+  ---
+  duration_ms: 1.848274
+  ...
+# Subtest: personal layer reuses package hooks, waits for the package, revokes Blob URLs, and never starts in preview
+ok 98 - personal layer reuses package hooks, waits for the package, revokes Blob URLs, and never starts in preview
+  ---
+  duration_ms: 28.566727
+  ...
+# Subtest: stale/revoked personal loads cannot execute after waiting for package setup
+ok 99 - stale/revoked personal loads cannot execute after waiting for package setup
+  ---
+  duration_ms: 12.353775
+  ...
+# Subtest: three guarded errors unload only personal hooks with one toast naming the file and no automatic retry
+ok 100 - three guarded errors unload only personal hooks with one toast naming the file and no automatic retry
+  ---
+  duration_ms: 13.425969
+  ...
+# Subtest: personal module lint enforces package banned APIs and disallows unapproved module dependencies
+ok 101 - personal module lint enforces package banned APIs and disallows unapproved module dependencies
+  ---
+  duration_ms: 1.596557
+  ...
+# Subtest: production and QA CSP support byte-verified Blob modules without inline/eval permission
+ok 102 - production and QA CSP support byte-verified Blob modules without inline/eval permission
+  ---
+  duration_ms: 1.409819
+  ...
+# Subtest: fault injection uses the actual shipped desktop default entry exactly once
+ok 103 - fault injection uses the actual shipped desktop default entry exactly once
+  ---
+  duration_ms: 3.227698
+  ...
+# Subtest: injected real API callback remains inert until armed and throws repeatedly when armed
+ok 104 - injected real API callback remains inert until armed and throws repeatedly when armed
+  ---
+  duration_ms: 1.88386
+  ...
+# Subtest: injection rejects invented setupDesktop entry before browser routes start
+ok 105 - injection rejects invented setupDesktop entry before browser routes start
+  ---
+  duration_ms: 0.34997
+  ...
+# Subtest: injection rejects missing entry before browser routes start
+ok 106 - injection rejects missing entry before browser routes start
+  ---
+  duration_ms: 0.196695
+  ...
+# Subtest: injection rejects ambiguous entry before browser routes start
+ok 107 - injection rejects ambiguous entry before browser routes start
+  ---
+  duration_ms: 0.168493
+  ...
+# Subtest: tweaks use declared namespaces and stable slot/part selectors; inherited banned APIs remain banned
+ok 108 - tweaks use declared namespaces and stable slot/part selectors; inherited banned APIs remain banned
+  ---
+  duration_ms: 3.886442
+  ...
+# Subtest: James's skins declare no package, so they load no extra CSS or script
+ok 109 - James's skins declare no package, so they load no extra CSS or script
+  ---
+  duration_ms: 6.325465
+  ...
+# Subtest: every declared package exists, and every package folder is declared
+ok 110 - every declared package exists, and every package folder is declared
+  ---
+  duration_ms: 3.804259
+  ...
+# Subtest: skin.css rules apply only under their own skin
+ok 111 - skin.css rules apply only under their own skin
+  ---
+  duration_ms: 1396.380768
+  ...
+# Subtest: skin.js uses only the skin API
+ok 112 - skin.js uses only the skin API
+  ---
+  duration_ms: 1.991782
+  ...
+# Subtest: Nebula (stored) loads no skin files at all
+ok 113 - Nebula (stored) loads no skin files at all
+  ---
+  duration_ms: 26.587787
+  ...
+# Subtest: a stored package skin injects only its own stylesheet, before first paint, in the skins.css slot
+ok 114 - a stored package skin injects only its own stylesheet, before first paint, in the skins.css slot
+  ---
+  duration_ms: 22.831516
+  ...
+# Subtest: previewing skins in the picker never runs a skin script
+ok 115 - previewing skins in the picker never runs a skin script
+  ---
+  duration_ms: 24.751746
+  ...
+# (node:3891963) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///srv/work/layout-never-classic-20261106/tests/fixtures/skins/fixture/skin.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /srv/work/layout-never-classic-20261106/package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: committing a skin runs its script; switching away twice leaves zero listeners, frames and handlers
+ok 116 - committing a skin runs its script; switching away twice leaves zero listeners, frames and handlers
+  ---
+  duration_ms: 87.120213
+  ...
+# Subtest: a touch-only skin script never loads on desktop
+ok 117 - a touch-only skin script never loads on desktop
+  ---
+  duration_ms: 24.744202
+  ...
+# Subtest: a skin swipe-back runs the shell Back step: thread -> list, the app never exits
+ok 118 - a skin swipe-back runs the shell Back step: thread -> list, the app never exits
+  ---
+  duration_ms: 24.880584
+  ...
+# Subtest: render and route events reach the skin, and frames are tracked
+ok 119 - render and route events reach the skin, and frames are tracked
+  ---
+  duration_ms: 25.08231
+  ...
+# Subtest: a broken skin script turns itself off after three errors: one toast, stylesheet kept, no retry
+ok 120 - a broken skin script turns itself off after three errors: one toast, stylesheet kept, no retry
+  ---
+  duration_ms: 45.296374
+  ...
+# Subtest: the API hands a skin no shell internals
+ok 121 - the API hands a skin no shell internals
+  ---
+  duration_ms: 24.319762
+  ...
+# Subtest: the shell wires the host: head order, adapter, dock claim, render hooks
+ok 122 - the shell wires the host: head order, adapter, dock claim, render hooks
+  ---
+  duration_ms: 2.00155
+  ...
+# Subtest: phone stored remains classic through catalog-failed, before any successful catalog
+ok 123 - phone stored remains classic through catalog-failed, before any successful catalog
+  ---
+  duration_ms: 9.168839
+  ...
+# Subtest: phone stored remains classic through catalog-deferred, before any successful catalog
+ok 124 - phone stored remains classic through catalog-deferred, before any successful catalog
+  ---
+  duration_ms: 6.392478
+  ...
+# Subtest: phone stored remains classic through host-timeout-slow-path, before any successful catalog
+ok 125 - phone stored remains classic through host-timeout-slow-path, before any successful catalog
+  ---
+  duration_ms: 2.409077
+  ...
+# Subtest: phone query remains classic through catalog-failed, before any successful catalog
+ok 126 - phone query remains classic through catalog-failed, before any successful catalog
+  ---
+  duration_ms: 1.611093
+  ...
+# Subtest: phone query remains classic through catalog-deferred, before any successful catalog
+ok 127 - phone query remains classic through catalog-deferred, before any successful catalog
+  ---
+  duration_ms: 1.329931
+  ...
+# Subtest: phone query remains classic through host-timeout-slow-path, before any successful catalog
+ok 128 - phone query remains classic through host-timeout-slow-path, before any successful catalog
+  ---
+  duration_ms: 1.341133
+  ...
+# Subtest: phone negative-control remains classic through catalog-failed, before any successful catalog
+ok 129 - phone negative-control remains classic through catalog-failed, before any successful catalog
+  ---
+  duration_ms: 2.750843
+  ...
+# Subtest: phone negative-control remains classic through catalog-deferred, before any successful catalog
+ok 130 - phone negative-control remains classic through catalog-deferred, before any successful catalog
+  ---
+  duration_ms: 1.693357
+  ...
+# Subtest: phone negative-control remains classic through host-timeout-slow-path, before any successful catalog
+ok 131 - phone negative-control remains classic through host-timeout-slow-path, before any successful catalog
+  ---
+  duration_ms: 1.213334
+  ...
+# Subtest: unsupported cache cleanup is narrow and repeated phone loads stay classic
+ok 132 - unsupported cache cleanup is narrow and repeated phone loads stay classic
+  ---
+  duration_ms: 4.926073
+  ...
+# Subtest: phone supported orb stored still paints and requests its layout at boot
+ok 133 - phone supported orb stored still paints and requests its layout at boot
+  ---
+  duration_ms: 2.081698
+  ...
+# Subtest: phone supported orb query still paints and requests its layout at boot
+ok 134 - phone supported orb query still paints and requests its layout at boot
+  ---
+  duration_ms: 1.79234
+  ...
+# Subtest: phone supported apps stored still paints and requests its layout at boot
+ok 135 - phone supported apps stored still paints and requests its layout at boot
+  ---
+  duration_ms: 1.804443
+  ...
+# Subtest: phone supported apps query still paints and requests its layout at boot
+ok 136 - phone supported apps query still paints and requests its layout at boot
+  ---
+  duration_ms: 1.288545
+  ...
+# Subtest: desktop supported orb stored still paints and requests its layout at boot
+ok 137 - desktop supported orb stored still paints and requests its layout at boot
+  ---
+  duration_ms: 1.123728
+  ...
+# Subtest: desktop supported orb query still paints and requests its layout at boot
+ok 138 - desktop supported orb query still paints and requests its layout at boot
+  ---
+  duration_ms: 1.254982
+  ...
+# Subtest: desktop supported apps stored still paints and requests its layout at boot
+ok 139 - desktop supported apps stored still paints and requests its layout at boot
+  ---
+  duration_ms: 1.121083
+  ...
+# Subtest: desktop supported apps query still paints and requests its layout at boot
+ok 140 - desktop supported apps query still paints and requests its layout at boot
+  ---
+  duration_ms: 1.326545
+  ...
+# Subtest: desktop supported ai-apps stored still paints and requests its layout at boot
+ok 141 - desktop supported ai-apps stored still paints and requests its layout at boot
+  ---
+  duration_ms: 2.25484
+  ...
+# Subtest: desktop supported ai-apps query still paints and requests its layout at boot
+ok 142 - desktop supported ai-apps query still paints and requests its layout at boot
+  ---
+  duration_ms: 3.63256
+  ...
+# Subtest: unsupported query preserves supported phone cache and unknown cached values are not swept
+ok 143 - unsupported query preserves supported phone cache and unknown cached values are not swept
+  ---
+  duration_ms: 3.742014
+  ...
+# Subtest: host shell inventory agrees with the AI apps manifest; Settings uses manifest descriptions
+ok 144 - host shell inventory agrees with the AI apps manifest; Settings uses manifest descriptions
+  ---
+  duration_ms: 1.793012
+  ...
+# Subtest: miguel/send-and-go: shipped contract mounts / tears down against the shell fixture
+ok 145 - miguel/send-and-go: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 13.918054
+  ...
+# Subtest: wizard/pin-buttons: shipped contract mounts / tears down against the shell fixture
+ok 146 - wizard/pin-buttons: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 4.054165
+  ...
+# Subtest: miguel/snooze-someday: shipped contract mounts / tears down against the shell fixture
+ok 147 - miguel/snooze-someday: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 5.100708
+  ...
+# [layout] switch: {
+#   layout: 'two-orb',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.564Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.release [as teardown] (evalmachine.<anonymous>:1362:161)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:312:53)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1619:43)\\n' +
+#     '    at Object.loadTweaks (evalmachine.<anonymous>:1611:24)'
+# }
+# Subtest: wizard/two-orbs: shipped contract mounts / tears down against the shell fixture
+ok 148 - wizard/two-orbs: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 5.295259
+  ...
+# Subtest: miguel/machines-home: shipped contract mounts / tears down against the shell fixture
+ok 149 - miguel/machines-home: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 9.047192
+  ...
+# Subtest: wizard/app-borders: shipped contract mounts / tears down against the shell fixture
+ok 150 - wizard/app-borders: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 2.585675
+  ...
+# Subtest: wizard/unified-inbox: shipped contract mounts / tears down against the shell fixture
+ok 151 - wizard/unified-inbox: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 4.467501
+  ...
+# Subtest: wizard/new-send-list: shipped contract mounts / tears down against the shell fixture
+ok 152 - wizard/new-send-list: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 2.949462
+  ...
+# Subtest: miguel/no-desk-close: shipped contract mounts / tears down against the shell fixture
+ok 153 - miguel/no-desk-close: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 1.760211
+  ...
+# Subtest: miguel/archive-top: shipped contract mounts / tears down against the shell fixture
+ok 154 - miguel/archive-top: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 1.65737
+  ...
+# Subtest: miguel/group-by-day: shipped contract mounts / tears down against the shell fixture
+ok 155 - miguel/group-by-day: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 1.792861
+  ...
+# Subtest: miguel/reply-summary: shipped contract mounts / tears down against the shell fixture
+ok 156 - miguel/reply-summary: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 3.254538
+  ...
+# Subtest: miguel/now-playing: shipped contract mounts / tears down against the shell fixture
+ok 157 - miguel/now-playing: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 3.019692
+  ...
+# Subtest: miguel/calm-offline: shipped contract mounts / tears down against the shell fixture
+ok 158 - miguel/calm-offline: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 2.054097
+  ...
+# [layout] switch: {
+#   layout: 'orb',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.619Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.release [as teardown] (evalmachine.<anonymous>:1362:161)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:312:53)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1619:43)\\n' +
+#     '    at Object.loadTweaks (evalmachine.<anonymous>:1611:24)'
+# }
+# [layout] switch: {
+#   layout: 'orb',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.621Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.release [as teardown] (evalmachine.<anonymous>:1362:161)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:312:53)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1619:43)\\n' +
+#     '    at Object.loadTweaks (evalmachine.<anonymous>:1611:24)'
+# }
+# Subtest: miguel/orb-shell: shipped contract mounts / tears down against the shell fixture
+ok 159 - miguel/orb-shell: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 2.537576
+  ...
+# Subtest: miguel/orb-shell: shipped contract on the phone shell too
+ok 160 - miguel/orb-shell: shipped contract on the phone shell too
+  ---
+  duration_ms: 1.821144
+  ...
+# [layout] switch: {
+#   layout: 'apps',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.624Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.release [as teardown] (evalmachine.<anonymous>:1362:161)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:312:53)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1619:43)\\n' +
+#     '    at Object.loadTweaks (evalmachine.<anonymous>:1611:24)'
+# }
+# Subtest: miguel/apps-home: shipped contract mounts / tears down against the shell fixture
+ok 161 - miguel/apps-home: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 2.241175
+  ...
+# [layout] switch: {
+#   layout: 'ai-apps',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.629Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.release [as teardown] (evalmachine.<anonymous>:1362:161)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:312:53)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1619:43)\\n' +
+#     '    at Object.loadTweaks (evalmachine.<anonymous>:1611:24)'
+# }
+# Subtest: miguel/ai-apps: shipped contract mounts / tears down against the shell fixture
+ok 162 - miguel/ai-apps: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 4.04081
+  ...
+# [layout] switch: {
+#   layout: 'two-orb',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.647Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.use (evalmachine.<anonymous>:1359:60)\\n' +
+#     '    at Object.setup [as default] (evalmachine.<anonymous>:5:21)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1649:35)\\n' +
+#     '    at async Object.loadTweaks (evalmachine.<anonymous>:1611:18)'
+# }
+# [layout] switch: {
+#   layout: 'apps',
+#   reason: 'switch',
+#   where: 'dispose',
+#   at: '2026-11-06T13:21:27.648Z',
+#   release: '',
+#   message: 'switch',
+#   stack: 'Error: Layout switch: dispose\\n' +
+#     '    at layoutDiagnostic (evalmachine.<anonymous>:128:33)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:306:5)\\n' +
+#     '    at loadLayoutNow (evalmachine.<anonymous>:413:5)\\n' +
+#     '    at loadLayoutHeld (evalmachine.<anonymous>:409:24)\\n' +
+#     '    at loadLayout (evalmachine.<anonymous>:406:52)\\n' +
+#     '    at setLayout (evalmachine.<anonymous>:1197:16)\\n' +
+#     '    at Object.release [as teardown] (evalmachine.<anonymous>:1362:161)\\n' +
+#     '    at dispose (evalmachine.<anonymous>:312:53)\\n' +
+#     '    at loadTweaksNow (evalmachine.<anonymous>:1619:43)\\n' +
+#     '    at Object.loadTweaks (evalmachine.<anonymous>:1611:24)'
+# }
+# Subtest: wizard/thread-tracker: shipped contract mounts / tears down against the shell fixture
+ok 163 - wizard/thread-tracker: shipped contract mounts / tears down against the shell fixture
+  ---
+  duration_ms: 4.258874
+  ...
+# Subtest: the six v1 slot names remain in core markup; removing / renaming requires an API bump
+ok 164 - the six v1 slot names remain in core markup; removing / renaming requires an API bump
+  ---
+  duration_ms: 1.660165
+  ...
+# Subtest: incompatible API disables only that tweak, toasts, and finishes loading the rest
+ok 165 - incompatible API disables only that tweak, toasts, and finishes loading the rest
+  ---
+  duration_ms: 2.024301
+  ...
+# Subtest: capabilities are namespace gated; author metadata alone cannot grant model/data access
+ok 166 - capabilities are namespace gated; author metadata alone cannot grant model/data access
+  ---
+  duration_ms: 2.094352
+  ...
+# Subtest: multiple ordered packages clean listeners, CSS, mounts and action interception on replacement
+ok 167 - multiple ordered packages clean listeners, CSS, mounts and action interception on replacement
+  ---
+  duration_ms: 7.186594
+  ...
+# Subtest: colors and tweaks are separate: a color pick never changes tweaks; a preset starts over; any tweak can be tried
+ok 168 - colors and tweaks are separate: a color pick never changes tweaks; a preset starts over; any tweak can be tried
+  ---
+  duration_ms: 8.807227
+  ...
+# Subtest: event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert
+ok 169 - event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert
+  ---
+  duration_ms: 2.167307
+  ...
+# Subtest: a core repaint removes the origin marker: teardown never resurrects stale duplicate actions
+ok 170 - a core repaint removes the origin marker: teardown never resurrects stale duplicate actions
+  ---
+  duration_ms: 1.481703
+  ...
+# Subtest: profile default-off applies until the owner stores a deliberate choice, including an empty off list
+ok 171 - profile default-off applies until the owner stores a deliberate choice, including an empty off list
+  ---
+  duration_ms: 4.302345
+  ...
+# Subtest: legacy two-orb migration opts in exactly once, preserving a later owner off choice
+ok 172 - legacy two-orb migration opts in exactly once, preserving a later owner off choice
+  ---
+  duration_ms: 5.857866
+  ...
+# Subtest: overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it
+ok 173 - overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it
+  ---
+  duration_ms: 2.101144
+  ...
+# Subtest: window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it
+ok 174 - window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it
+  ---
+  duration_ms: 1.846841
+  ...
+# Subtest: stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh
+ok 175 - stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh
+  ---
+  duration_ms: 1.43712
+  ...
+# Subtest: layout handles become inert on disposal and their cleanup is idempotent
+ok 176 - layout handles become inert on disposal and their cleanup is idempotent
+  ---
+  duration_ms: 1.847573
+  ...
+# Subtest: App borders migrates stored framed exactly once, leaves everyone else borderless and respects later off
+ok 177 - App borders migrates stored framed exactly once, leaves everyone else borderless and respects later off
+  ---
+  duration_ms: 6.029364
+  ...
+# Subtest: own recipes expose all installed tweaks, use published defaults and isolate builtin choices
+ok 178 - own recipes expose all installed tweaks, use published defaults and isolate builtin choices
+  ---
+  duration_ms: 3.305533
+  ...
+# Subtest: installed list warms base profiles so picking Mizel does not wait for another network request
+ok 179 - installed list warms base profiles so picking Mizel does not wait for another network request
+  ---
+  duration_ms: 2.225145
+  ...
+# Subtest: disposed foundation capability cannot change windows
+ok 180 - disposed foundation capability cannot change windows
+  ---
+  duration_ms: 1.905872
+  ...
+# Subtest: slot lookup prefers a visible instance over hidden Chats copies (desktop)
+ok 181 - slot lookup prefers a visible instance over hidden Chats copies (desktop)
+  ---
+  duration_ms: 5.970013
+  ...
+# Subtest: beside hook: layout-gated event on change only, never a route event, and route().beside for late packages
+ok 182 - beside hook: layout-gated event on change only, never a route event, and route().beside for late packages
+  ---
+  duration_ms: 2.625759
+  ...
+# Subtest: app.js tells the host when the bound view beside a thread changes, and reports it in route()
+ok 183 - app.js tells the host when the bound view beside a thread changes, and reports it in route()
+  ---
+  duration_ms: 0.989098
+  ...
+# Subtest: inbox capability is trusted-only, and its handles die with the package
+ok 184 - inbox capability is trusted-only, and its handles die with the package
+  ---
+  duration_ms: 2.069385
+  ...
+# Subtest: notification threads: the flag lives only while a trusted package holds it, and acts route to it
+ok 185 - notification threads: the flag lives only while a trusted package holds it, and acts route to it
+  ---
+  duration_ms: 1.701071
+  ...
+# Subtest: notification rows in the list: only a holder that asks for list mode turns it on
+ok 186 - notification rows in the list: only a holder that asks for list mode turns it on
+  ---
+  duration_ms: 1.806527
+  ...
+# Subtest: chats.js lists notifications among Ready chats only in list mode, in every Ready order
+ok 187 - chats.js lists notifications among Ready chats only in list mode, in every Ready order
+  ---
+  duration_ms: 0.763729
+  ...
+# Subtest: chats.js shows a notification draft as its thread only while notification threads are on
+ok 188 - chats.js shows a notification draft as its thread only while notification threads are on
+  ---
+  duration_ms: 0.987645
+  ...
+# Subtest: desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification
+ok 189 - desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification
+  ---
+  duration_ms: 0.524755
+  ...
+# Subtest: Notifications in Chats is on by default for everyone, whatever tweak set
+ok 190 - Notifications in Chats is on by default for everyone, whatever tweak set
+  ---
+  duration_ms: 2.117375
+  ...
+# Subtest: Notifications sits with the agent apps while its inbox lives in Chats
+ok 191 - Notifications sits with the agent apps while its inbox lives in Chats
+  ---
+  duration_ms: 0.980342
+  ...
+# Subtest: James: notifications are on for every skin, with one persistent owner off-switch
+ok 192 - James: notifications are on for every skin, with one persistent owner off-switch
+  ---
+  duration_ms: 6.330514
+  ...
+# Subtest: notifications preserve existing Miguel off choices and old custom-skin ids after promotion
+ok 193 - notifications preserve existing Miguel off choices and old custom-skin ids after promotion
+  ---
+  duration_ms: 3.228919
+  ...
+# Subtest: Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no "All of" buttons, in every skin (Miguel, 1 Nov 2026)
+ok 194 - Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no "All of" buttons, in every skin (Miguel, 1 Nov 2026)
+  ---
+  duration_ms: 0.433876
+  ...
+# Subtest: flat Tweaks list keeps a device mix exactly: whatever is on stays on, rendered as one switch each (Miguel, 1 Nov 2026)
+ok 195 - flat Tweaks list keeps a device mix exactly: whatever is on stays on, rendered as one switch each (Miguel, 1 Nov 2026)
+  ---
+  duration_ms: 1.897186
+  ...
+# Subtest: retired Orb radial saved mixes and inherited recipes never request a removed package
+ok 196 - retired Orb radial saved mixes and inherited recipes never request a removed package
+  ---
+  duration_ms: 16.102603
+  ...
+1..196
+# tests 196
+# suites 0
+# pass 196
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5174.518346

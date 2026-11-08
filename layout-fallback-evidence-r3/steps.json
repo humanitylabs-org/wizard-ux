@@ -1,0 +1,33 @@
+[
+  {
+    "name": "units",
+    "code": 0,
+    "seconds": 5.325387477874756,
+    "log": "/srv/work/layout-never-classic-20261106/layout-fallback-evidence-r3/units.log"
+  },
+  {
+    "name": "backdrop-old",
+    "code": 0,
+    "seconds": 6.126455307006836,
+    "log": "/srv/work/layout-never-classic-20261106/layout-fallback-evidence-r3/backdrop-old.log"
+  },
+  {
+    "name": "backdrop-green",
+    "code": 0,
+    "seconds": 6.127584934234619,
+    "log": "/srv/work/layout-never-classic-20261106/layout-fallback-evidence-r3/backdrop-green.log"
+  },
+  {
+    "name": "red",
+    "code": 1,
+    "seconds": 5.774786472320557,
+    "log": "/srv/work/layout-never-classic-20261106/layout-fallback-evidence-r3/red.log",
+    "outcome": "red-as-expected"
+  },
+  {
+    "name": "green",
+    "code": 1,
+    "seconds": 132.93610882759094,
+    "log": "/srv/work/layout-never-classic-20261106/layout-fallback-evidence-r3/green.log"
+  }
+]

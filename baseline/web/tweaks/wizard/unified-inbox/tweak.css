@@ -1,0 +1,64 @@
+/* Notifications in Chats: yellow one-message threads. The Chats bell goes while Notifications is set to Chats
+ * (core/notif-bell.js hides it; set to Badge, the bell and its count come back). */
+html[data-tweaks~="wizard/unified-inbox"] { --ui-y: #f2c230; --ui-y-ink: #1d1600; }
+html[data-tweaks~="wizard/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"], [data-skin="landscapes-light"]) { --ui-y: #b98a00; --ui-y-ink: #fff; }
+.ui-inbox { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
+.ui-inbox[hidden], .ui-done[hidden] { display: none; }
+.ui-item { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); }
+.ui-item .ui-row { background: none; }
+.ui-item.new .ui-row .tp b { color: var(--ink) !important; font-weight: 700 !important; }
+.ui-item.new .ui-row .tp time { color: var(--ui-y) !important; font-weight: 700; }
+.ui-item.new .ui-row .pv { color: var(--ink-2) !important; }
+.ui-item .ui-ic { background: color-mix(in srgb, var(--ui-y) 22%, transparent) !important; color: var(--ui-y); }
+.ui-item .ui-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Snoozed and completed: quiet, like a snoozed thread; still yellow-edged so they read as notifications. */
+.ui-item.snoozed, .ui-item.done { background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 28%, transparent); opacity: .78; }
+.ui-snz { color: var(--ui-y); font-style: normal; }
+/* Ready says "None" only when there is truly nothing in it. */
+[data-slot="ready-top"]:has(> .ui-inbox) ~ .ch-none, [data-slot="ready-top"]:has(> .ui-inbox) ~ * .ch-none { display: none; }
+.ui-done { margin: 2px 0 8px; }
+.ui-done-btn { min-height: 34px; padding: 0 14px; border-radius: 99px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2) !important; background: color-mix(in srgb, var(--ui-y) 10%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 35%, transparent) !important; cursor: pointer; }
+.ui-done .ui-inbox { margin-top: 6px; }
+/* Phone (his skins list Ready bottom-up, newest nearest the thumb): newest notification lowest too. */
+html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot] > .ui-inbox { flex-direction: column-reverse; }
+
+/* The notification open in the chat window: one yellow message, its actions where a thread keeps them. */
+.ch-notif-thread .msg.ch-notif .bub { background: color-mix(in srgb, var(--ui-y) 13%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 50%, transparent) !important; border-radius: 16px; padding: 12px 14px; }
+.ch-notif-thread .ch-head .ti b { color: var(--ui-y); }
+.ch-notif-src { margin-left: 8px; color: var(--ui-y); font-size: 12px; }
+.ch-notif-thread [data-chact="resolve"] { color: var(--ui-y-ink) !important; background: var(--ui-y) !important; border-color: var(--ui-y) !important; }
+.ch-notif-thread [data-chact="resolve"] svg { stroke: currentColor; }
+/* The message above is the notification itself: no second copy as a reply bubble over the composer. */
+.ch-notif-thread .ch-reply { display: none !important; }
+
+/* Rows Chats lists among the chats (host list mode): same row, yellow-edged. */
+.ch-notif-wrap { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); margin: 2px 0; }
+.ch-notif-wrap .ch-notif-row { background: none; }
+.ch-notif-wrap:not(.later) .ch-notif-row .tp b { color: var(--ink) !important; font-weight: 700 !important; }
+.ch-notif-wrap:not(.later) .ch-notif-row .tp time { color: var(--ui-y) !important; font-weight: 700; }
+.ch-notif-wrap .ch-notif-row .pv { color: var(--ink-2) !important; }
+.ch-notif-wrap .ch-notif-ic { display: grid; place-items: center; background: color-mix(in srgb, var(--ui-y) 22%, transparent) !important; color: var(--ui-y); }
+.ch-notif-wrap .ch-notif-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-notif-wrap.later { background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 28%, transparent); opacity: .78; }
+.ch-notif-snz { color: var(--ui-y) !important; font-style: normal; }
+/* An app's item (that app set to Chats): the app's own mark, painted in the inbox yellow. */
+.ch-notif-wrap .ch-notif-ic { --c: var(--ui-y); }
+.ch-notif-wrap .ch-notif-ic .sgi { width: 62%; height: 62%; filter: none; }
+.ch-notif-thread .ch-tacts { flex-wrap: wrap; }
+/* One look for every notification in Chats (Miguel, 3 Nov 2026): the app's name as a small yellow label before what
+ * happened, a count when several from one app are folded into one row, and the rest listed under the open one. */
+.ch-notif-wrap .ch-notif-row .tp { align-items: center; }
+.ch-notif-from { flex: 0 1 auto; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.0625rem 0.4375rem; border-radius: var(--r-pill, 99rem); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.02em; color: color-mix(in srgb, var(--ui-y) 62%, var(--ink)); background: color-mix(in srgb, var(--ui-y) 16%, transparent); }
+.ch-notif-n { flex: 0 0 auto; min-width: 1.25rem; padding: 0 0.375rem; border-radius: var(--r-pill, 99rem); font-size: 0.6875rem; font-weight: 750; line-height: 1.25rem; text-align: center; font-variant-numeric: tabular-nums; color: var(--ui-y-ink); background: var(--ui-y); }
+.ch-notif-wrap.later .ch-notif-n { color: var(--ink-2); background: color-mix(in srgb, var(--ui-y) 22%, transparent); }
+.ch-notif-more { margin: 0.875rem 0.125rem 0.25rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.ch-notif-more-h { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; color: var(--ink-2); font-size: 0.8125rem; font-weight: 700; }
+.ch-notif-more-h > span { flex: 1; min-width: 0; }
+.ch-notif-more-h button { display: inline-flex; align-items: center; gap: 0.3125rem; min-height: 2rem; padding: 0 0.75rem; border-radius: var(--r-pill, 99rem); font: inherit; font-size: 0.8125rem; font-weight: 650; color: var(--ink) !important; background: color-mix(in srgb, var(--ui-y) 14%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 45%, transparent) !important; cursor: pointer; }
+.ch-notif-more-h button svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-notif-more-i { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.625rem; align-items: baseline; width: 100%; padding: 0.5rem 0.75rem; text-align: left; font: inherit; border-radius: 0.75rem; color: var(--ink) !important; background: color-mix(in srgb, var(--ui-y) 7%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 24%, transparent) !important; cursor: pointer; }
+.ch-notif-more-i b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.875rem; font-weight: 650; }
+.ch-notif-more-i time { grid-row: 1 / span 2; grid-column: 2; font-size: 0.75rem; color: var(--ui-y); font-variant-numeric: tabular-nums; }
+.ch-notif-more-i span { grid-column: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8125rem; color: var(--ink-2); }
+.ch-notif-more-i.later { opacity: .72; }
+.ch-notif-more-x { margin: 0.25rem 0.25rem 0; font-size: 0.75rem; color: var(--ink-3); }
