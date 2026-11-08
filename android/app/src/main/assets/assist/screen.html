@@ -965,12 +965,15 @@
       const same = (a, c) => covered(a, [c]) >= .5 || covered(c, [a]) >= .5;
       // the same words are one reading only when both have a valid place and the places overlap; a missing box
       // proves nothing, so every other occurrence stays its own row in Copy/Ask (#1101)
-      if (box && rows.some(q => q.k === k && q.box && same(q.box, box))) return;
+      // compare against each row's original place (at), not its paintable one: a repeat of a reading whose box was
+      // cleared below by a different line's claim is still the same reading in the same spot
+      if (box && rows.some(q => q.k === k && q.at && same(q.at, box))) return;
+      const at = box;
       // a different line only loses its place when the two boxes are effectively the same single spot (one of them
       // almost entirely inside the other): that is one place claimed twice, not two real neighbouring lines.
       const samePlace = (a, c) => covered(a, [c]) >= .9 || covered(c, [a]) >= .9;
       if (box && rows.some(q => q.box && samePlace(q.box, box))) box = null;
-      rows.push({ t, k, box });
+      rows.push({ t, k, box, at });
     });
     if (!rows.length) { st.pictureState = 'done'; st.picRows = []; st.tr = st.tr || {}; pillDone(); syncSheet(); return; }
     const items = [...new Set(rows.map(q => q.t))];

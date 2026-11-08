@@ -198,6 +198,11 @@ test('#1101: repeated picture text keeps every occurrence unless two valid boxes
   r = await run([THAI[0], THAI[0]], [BOX[0], BOX[2]]);
   assert.equal(JSON.stringify(r.rows), JSON.stringify([[EN[0], true], [EN[0], true]]));
   assert.equal(r.h.painted().length, 2);
+  // a different reading claims the spot first, then the same words twice in that spot: the repeat is still one
+  // reading (its original place overlaps), so Copy/Ask hold it once, not twice
+  r = await run([THAI[1], THAI[0], THAI[0]], [BOX[0], BOX[0], [0.11, 0.301, 0.69, 0.339]]);
+  assert.equal(JSON.stringify(r.rows), JSON.stringify([[EN[1], true], [EN[0], false]]));
+  assert.equal(r.copy, [EN[1], EN[0]].join('\n'));
 });
 
 test('James: three distinct captions close together all get placed, not just the first (synthetic text, not a real screenshot)', async () => {
