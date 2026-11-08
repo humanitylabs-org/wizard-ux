@@ -992,7 +992,12 @@ export default function desktop(api) {
     const rows = list.map(w => {
       const r = el('div', 'aad-wr' + (w.current ? ' is-on' : ' is-off'), { role: 'menuitemradio', 'aria-checked': String(!!w.current), tabindex: '-1' });
       const words = el('span', 'aad-ww'); words.append(el('b', '', { text: w.name }), el('small', '', { text: w.current ? 'This Wizard · on this screen' : `${w.org ? w.org + ' · ' : ''}${w.url ? 'Another Wizard · tap to switch' : 'Not connected yet'}` }));
-      if (!w.current && w.url) api.listen(r, 'click', () => { closeWs(); void globalThis.WizWorkspaces?.switch(w.id).catch(() => {}); });
+      if (!w.current && w.url) {
+        const go = () => { closeWs(); void globalThis.WizWorkspaces?.switch(w.id).catch(() => {}); };
+        r.tabIndex = 0; r.setAttribute('tabindex', '0'); r.setAttribute('role', 'menuitemradio' === r.getAttribute('role') ? 'menuitemradio' : 'button');
+        api.listen(r, 'click', go);
+        api.listen(r, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      }
       r.append(el('span', 'aad-wsd is-big', { 'aria-hidden': 'true', text: initial(w.name) }), words);
       if (w.current) r.append(icon('check', 'aad-ico aad-wcheck'));
       return r;

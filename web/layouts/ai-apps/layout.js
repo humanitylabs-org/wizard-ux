@@ -519,7 +519,12 @@ export default function setup(api) {
       const r = el('div', 'aa-sh-row' + (w.current ? ' is-on' : ' is-off'), { role: 'listitem' });
       const disc = el('span', 'aa-ws-i is-big', { 'aria-hidden': 'true', text: initial(w.name) });
       const words = el('span', 'aa-sh-w'); words.append(el('b', '', { text: w.name }), el('small', '', { text: w.current ? 'This Wizard · on this screen' : `${w.org ? w.org + ' · ' : ''}${w.url ? 'Another Wizard · tap to switch' : 'Not connected yet'}` }));
-      if (!w.current && w.url) api.listen(r, 'click', () => { closeSheet(); void globalThis.WizWorkspaces?.switch(w.id).catch(() => {}); });
+      if (!w.current && w.url) {
+        const go = () => { closeSheet(); void globalThis.WizWorkspaces?.switch(w.id).catch(() => {}); };
+        r.tabIndex = 0; r.setAttribute('tabindex', '0'); r.setAttribute('role', 'menuitemradio' === r.getAttribute('role') ? 'menuitemradio' : 'button');
+        api.listen(r, 'click', go);
+        api.listen(r, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      }
       r.append(disc, words); if (w.current) r.append(icon('check', 'aa-ico aa-sh-check'));
       out.push(r);
     }
