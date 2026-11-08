@@ -259,7 +259,8 @@ public final class AppsInstaller {
             if (confirm == null) { set(owner, pkg, "error", "message", "Android’s installer didn’t open"); return; }
             confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             set(owner, pkg, "confirm");
-            if (AppState.front() && !bg) {
+            // Only over the Wizard that asked for it: after a switch, A's confirm waits behind the notification (#371).
+            if (AppState.front() && !bg && owner.equals(AppState.origin(app))) {
                 try { app.startActivity(confirm); return; } catch (RuntimeException e) { Log.w(TAG, "confirm: " + e); }
             }
             // Not on screen (or a background update Android still wants to confirm): wait behind a quiet notification.
