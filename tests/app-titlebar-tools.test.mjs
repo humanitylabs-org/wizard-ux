@@ -6,7 +6,7 @@ const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url)
 // Minimal DOM: a window with a bar, enough for the shell to render tools from data.
 class El { constructor(tag){this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.attrs={};this.listeners={};this.classList={s:new Set(),add:(...c)=>c.forEach(x=>this.classList.s.add(x)),remove:(...c)=>c.forEach(x=>this.classList.s.delete(x)),contains:c=>this.classList.s.has(c)};this.className='';this.textContent='';}
  append(...k){for(const c of k){c.parentNode=this;this.children.push(c);}} insertBefore(c,ref){c.parentNode=this;const i=ref?this.children.indexOf(ref):-1;if(i<0)this.children.push(c);else this.children.splice(i,0,c);}
- replaceChildren(){this.children=[];} remove(){const p=this.parentNode;if(p)p.children.splice(p.children.indexOf(this),1);}
+ replaceChildren(...nodes){this.children=[];this.append(...nodes);} remove(){const p=this.parentNode;if(p)p.children.splice(p.children.indexOf(this),1);}
  setAttribute(k,v){this.attrs[k]=v;} addEventListener(e,f){(this.listeners[e]||=[]).push(f);}
  querySelector(sel){ if(sel===':scope > .wtools') return this.children.find(c=>c.className==='wtools')||null; if(sel===':scope > .wbar') return this.children.find(c=>c.className==='wbar')||null; return null; }
  matches(){return false;} closest(sel){ return sel==='.win'?this.win:null; } getClientRects(){return [1];} get offsetHeight(){return 30;} set innerHTML(v){this._html=v;} }
@@ -68,6 +68,21 @@ test('layout-owned slots share validated tools, preserve controls on no-op paint
  f.child.document={}; click('older'); assert.equal(f.posted.length,n,'stale document cannot receive tool actions');
  assert.equal(f.titlebar.render(f.frame,slot),false); assert.equal(slot.children.length,0,'clear tools after reload');
 });
+test('live SDK label/dot/value changes preserve layout control identity and dispatch to current tools',()=>{
+ const f=fixture(),slot=new El('span'); f.service.titlebar.set(tools); f.titlebar.render(f.frame,slot);
+ const original=[...slot.children];
+ for(let i=0;i<20;i++) {
+  f.service.titlebar.set(tools.map(t=>({...t,label:t.label+' '+i,dot:i%2===0,disabled:false,...(t.kind==='select'?{value:'2026-10-20'}:{})})));
+  f.titlebar.render(f.frame,slot);
+  assert.deepEqual(slot.children,original);
+  assert.equal(slot.children[0].title,'Older report '+i);
+  assert.equal(slot.children[1].value,'2026-10-20');
+  assert.equal(slot.children[2].disabled,false);
+ }
+ for(const fn of slot.listeners.click) fn({stopPropagation(){},target:{closest:()=>({dataset:{tool:'newer'},disabled:false})}});
+ assert.equal(f.posted.at(-1).id,'newer');
+});
+
 test('layout tools clear when a frame closes or the slot switches to no app',()=>{
  const f=fixture(),slot=new El('span'); f.service.titlebar.set(tools); f.titlebar.render(f.frame,slot);
  f.detach(); assert.equal(f.titlebar.render(f.frame,slot),false); assert.equal(slot.children.length,0);

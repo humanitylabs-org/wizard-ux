@@ -23,7 +23,7 @@ test('layout callback threshold preserves the stack AND the owner navigation (ne
   assert.equal(f.host.layoutState.active, true); assert.equal(f.host.layoutState.disabled, false);
   assert.equal(f.host.layoutState.mounts, 1); assert.equal(f.host.chatsClaimed(), true);
   assert.equal(tornDown, 0); assert.equal(healthy, 20, 'healthy hooks still run');
-  failing = false; f.host.rendered('thread', f.thread);
+  failing = false; f.ctx.Date = class extends Date { static now() { return Date.now() + 60000; } }; f.host.rendered('thread', f.thread);
   assert.equal(healthy, 22, 'the failing hook can recover on a later render');
   assert.equal(f.toasts.filter(t => t.includes('turned off')).length, 0);
   assert.ok(errors.some(args => args[0] === '[layout] callback-error:'));
@@ -33,6 +33,30 @@ test('layout callback threshold preserves the stack AND the owner navigation (ne
   assert.equal(reload.boot.layout, 'ai-apps'); assert.equal(reload.host.layoutState.active, true);
   assert.equal(reload.host.layoutState.disabled, false); assert.equal(reload.host.chatsClaimed(), true);
 });
+test('failed render parts back off without scheduling retries or blocking siblings', async () => {
+  const f = fixture({ shell: 'desktop', desktopView: null }); await f.host.whenLayoutReady();
+  let now = 100000, attempts = 0, healthy = 0, broken = true;
+  f.ctx.Date = class extends Date { static now() { return now; } };
+  f.ctx.console = { warn() {}, error() {} };
+  f.host._test.setImporter(async () => ({ default(api) {
+    api.on('render', () => { attempts++; f.host.rendered('nested', f.thread); if (broken) throw Error('broken part'); });
+    api.on('render', () => { healthy++; });
+    return () => {};
+  } }));
+  await f.host._test.loadLayout('ai-apps');
+  const timers = f.ctx.setTimeout; let scheduled = 0;
+  f.ctx.setTimeout = (...args) => { scheduled++; return timers(...args); };
+  f.host.rendered('thread', f.thread);
+  for (let i = 0; i < 100; i++) f.host.rendered('thread', f.thread);
+  assert.equal(attempts, 1); assert.equal(scheduled, 0); assert.equal(healthy, 102);
+  now += 249; f.host.rendered('thread', f.thread); assert.equal(attempts, 1);
+  now++; f.host.rendered('thread', f.thread); assert.equal(attempts, 2);
+  now += 499; f.host.rendered('thread', f.thread); assert.equal(attempts, 2);
+  now++; broken = false; f.host.rendered('thread', f.thread); assert.equal(attempts, 3);
+  f.host.rendered('thread', f.thread); assert.equal(attempts, 4, 'success resets backoff');
+  assert.equal(scheduled, 0);
+});
+
 test('rejected async layout hooks are contained without losing later hooks or navigation', async () => {
   const f = fixture({ shell: 'desktop', desktopView: null }); await f.host.whenLayoutReady();
   f.ctx.console = { warn() {}, error() {} };
