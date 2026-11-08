@@ -1,0 +1,11 @@
+{
+  "id": "wizard/wizardos-name",
+  "name": "WizardOS name",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Spell the product name WizardOS, one word, in Settings \u203a About & updates and the Home update pop-up."
+}

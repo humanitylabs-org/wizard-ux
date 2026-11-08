@@ -57,6 +57,9 @@
   const FRESH = 60e3;
   let st = null, at = 0, inflight = null, busy = '', off = false, issue = '';
 
+  // Product name (wizard-os#436): one word, "WizardOS", behind the off-by-default tweak wizard/wizardos-name.
+  const NAME_TWEAK = 'wizard/wizardos-name';
+  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(NAME_TWEAK) ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
@@ -103,12 +106,12 @@
     if (!st || issue) return null;
     const auto = isAuto();
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
-    if (st.installing) return { state: 'building', title: 'Updating Wizard OS…', line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
+    if (st.installing) return { state: 'building', title: `Updating ${OS()}…`, line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
     // Wizard OS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
-    if (st.interrupted) return { state: 'failed', title: 'Wizard OS update didn’t finish', line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
-    return { state: 'behind', title: 'Wizard OS update', line: auto ? 'Installs tonight when it’s quiet' : takes, action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
+    if (st.interrupted) return { state: 'failed', title: `${OS()} update didn’t finish`, line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
+    return { state: 'behind', title: `${OS()} update`, line: auto ? 'Installs tonight when it’s quiet' : takes, action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
@@ -118,14 +121,14 @@
   // Always retain the installed server version, including when an update card is present.
   function quietHead() {
     if (!st) return '';
-    const have = st.installed ? `Wizard OS (server) ${st.installed}` : 'Wizard OS (server) · version unavailable';
+    const have = st.installed ? `${OS()} (server) ${st.installed}` : `${OS()} (server) · version unavailable`;
     const sub = issue ? 'Last checked · previously verified' : st.unpinned ? 'Updated by hand · not on a release' : card() ? 'Installed on your Wizard' : !st.checked ? 'Couldn’t check for updates' : 'Up to date';
     return `<div class="st-row static osu-head" data-settings-version="server"><span class="st-tx"><b data-osu-title>${esc(have)}</b></span><span class="st-val">${esc(sub)}</span></div>`;
   }
   function html() {
     if (!st || issue) {
       if (!off && !inflight) load();
-      return `<div class="st-group" data-osu-group><h4>Wizard OS (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? `${quietHead()}${st?.installing ? '<p class="st-note" role="status" data-osu-last-progress>Last checked: Updating Wizard OS… Connection lost; latest progress unverified.</p>' : ''}<p class="st-hint">The current server version and update preference could not be verified.${st ? ' The information above was previously verified, not a live update.' : ' No update preference was changed by this check.'}</p><button type="button" class="st-wide wz-button secondary" data-osu="retry" ${inflight ? 'disabled aria-busy="true"' : ''}>${inflight ? 'Checking…' : 'Try again'}</button>` : ''}</div>`;
+      return `<div class="st-group" data-osu-group><h4>${OS()} (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? `${quietHead()}${st?.installing ? `<p class="st-note" role="status" data-osu-last-progress>Last checked: Updating ${esc(OS())}… Connection lost; latest progress unverified.</p>` : ''}<p class="st-hint">The current server version and update preference could not be verified.${st ? ' The information above was previously verified, not a live update.' : ' No update preference was changed by this check.'}</p><button type="button" class="st-wide wz-button secondary" data-osu="retry" ${inflight ? 'disabled aria-busy="true"' : ''}>${inflight ? 'Checking…' : 'Try again'}</button>` : ''}</div>`;
     }
     if (Date.now() - at > FRESH) load();
     const auto = isAuto();
@@ -169,7 +172,7 @@
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };
     post(body).then(d => {
       if (what === 'apply') {
-        if (d.started) { const quick = d.quick === true || (d.quick !== false && st.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating Wizard OS · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); }
+        if (d.started) { const quick = d.quick === true || (d.quick !== false && st.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating ${OS()} · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); }
         else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
       } else {
         st = valid(d) ? d : { ...st, mode: what, chosen: true };
@@ -245,5 +248,6 @@
   const tick = () => { if (!st || document.hidden) return; if (st.installing || Date.now() - at >= IDLE) load(true); };
   const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
+  window.addEventListener?.('wos:tweak-choice', e => { if (e?.detail?.id === NAME_TWEAK) changed(); });
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });
 })();
