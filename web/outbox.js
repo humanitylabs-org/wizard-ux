@@ -27,7 +27,12 @@
     await api.transition(it.id, 'held', lateLabel(it) + ' · Send when ready.');
     return true;
   }
-  const STEER_RETRY_MS = 3000, STEER_WAIT_MS = 15 * 60e3;
+  // 8 Nov 2026: a reply Hermes never started refused this phone's guidance 166 times (one try every 3 s). Back off
+  // (3 s, doubling, at most a minute apart) and say plainly that the agent has not started on the current reply.
+  const STEER_RETRY_MS = 3000, STEER_RETRY_MAX_MS = 60e3, STEER_WAIT_MS = 15 * 60e3;
+  const STEER_WAIT_LABEL = 'Queued · sends when the current reply can take it';
+  const STEER_STALLED_LABEL = 'Waiting · your agent hasn’t started the current reply yet. This sends when it does.';
+  const steerRetryDelay = waits => Math.min(STEER_RETRY_MAX_MS, STEER_RETRY_MS * 2 ** Math.max(0, Math.min(10, waits - 1)));
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
@@ -545,14 +550,15 @@
           // this byte-identical, idempotent new turn, never the rejected steer.
           it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
             ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
-          it.rejectedSteerRunId = it.steerTarget; delete it.steerWaitSince;
+          it.rejectedSteerRunId = it.steerTarget; delete it.steerWaitSince; delete it.steerWaits;
           it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
           await put(it);
         } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
           // Not sent yet, not lost: the next attempt re-steers (rejection proved nothing was accepted).
           // The rejection proved the steer was not accepted: release ownership so Stop can withdraw it while it waits.
           admitting.delete(it.id); delete it.steerDispatch;
-          it.state = 'waiting'; it.error = 'Queued · sends when the current reply can take it'; it.nextAt = now() + STEER_RETRY_MS;
+          it.steerWaits = (it.steerWaits || 0) + 1;
+          it.state = 'waiting'; it.error = it.steerWaits >= 3 ? STEER_STALLED_LABEL : STEER_WAIT_LABEL; it.nextAt = now() + steerRetryDelay(it.steerWaits);
           admitting.delete(it.id); // parked with nothing in flight: a Stop now withdraws it instead of waiting on a request that is gone
           await put(it); return;
         } else {

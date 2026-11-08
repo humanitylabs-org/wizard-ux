@@ -308,3 +308,19 @@ test('a failed old-client item recovers on Retry after the run finishes', async 
   await restored.api.load(); assert.equal(restored.api.retry(item.id), true);
   assert.equal((await settled(restored.api, item.id)).state, 'sent');
 });
+// 8 Nov 2026: Hermes accepted a reply and never started it; the phone re-steered every 3 s and was refused (409)
+// 166 times. Refusals back off (3 s, doubling, at most a minute) and say the agent has not started yet.
+test('repeated refusals while a run never starts back off and say the agent has not started', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const delays = [], labels = [];
+  for (let i = 0; i < 6; i++) {
+    const waiting = await settled(f.api, it.id, 0); assert.equal(waiting.state, 'waiting', waiting.error);
+    delays.push(Math.round((waiting.nextAt - Date.now()) / 1000)); labels.push(waiting.error);
+    waiting.nextAt = 0; await f.api.pump(); await settled(f.api, it.id);
+  }
+  assert.deepEqual(delays, [3, 6, 12, 24, 48, 60]);
+  assert.match(labels[0], /^Queued · /);
+  assert.match(labels[5], /hasn’t started the current reply yet/);
+  assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 7);
+  assert.equal(f.admitted.size, 0);
+});
