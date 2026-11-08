@@ -3,7 +3,7 @@
  * Long-press words in a chat and Wizard OS shows its own small menu above them instead of Android's
  * Copy / Share / Select all toolbar. The items are chosen in Settings → Text selection menu:
  *   Copy · Share (Android's share sheet, "From the configured wizard:" over the words when they are his) · Quote (into this
- *   thread's reply box) · Search (Wizard Search) · Select all (the whole message).
+ *   thread's reply box) · Look up (core/lookup-pop.js: a fast AI explains the words in their message) · Search (Wizard Search) · Select all (the whole message).
  *
  * Shared in-page browser selection actions; native Android suppression is an optional adapter.
  * The browser may still provide its own system selection toolbar. Editable fields and hosted apps
@@ -24,10 +24,12 @@
     { id: 'copy', label: 'Copy', icon: '<path d="M9 9h10v11H9zM5 15V4h10"/>', note: 'Puts the words on the clipboard' },
     { id: 'share', label: 'Share', icon: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>', note: 'Device share sheet when supported; otherwise Copy' },
     { id: 'quote', label: 'Quote', icon: '<path d="M5 18h14M5 6h4M5 12h8M15 6l4 6-4 6"/>', note: 'Into this thread’s reply box, as a quote' },
+    { id: 'lookup', label: 'Look up', icon: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>', note: 'A fast AI explains the words in their message' },
     { id: 'search', label: 'Search', icon: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>', note: 'Wizard Search, with an AI overview' },
     { id: 'all', label: 'Select all', icon: '<path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M8 9h8M8 12h8M8 15h5"/>', note: 'The whole message' },
   ];
-  const DEFAULT = ['copy', 'share', 'quote', 'search', 'all'];
+  const DEFAULT = ['copy', 'share', 'quote', 'lookup', 'search', 'all'];
+  const KNOWN0 = ['copy', 'share', 'quote', 'search', 'all']; // the items a list saved before Look up existed was choosing from
   const N = () => window.WizardOSNative || null;
   const own = () => { const n = N(); return typeof window.getSelection === 'function'; };
   const tell = s => { try { const n = N(); if (n && typeof n.selection === 'function') n.selection(s); } catch (e) {} };
@@ -39,11 +41,15 @@
   const svg = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
   const EDIT = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 
+  // A saved choice only decides the items it was choosing from: an item added later (Look up) starts on.
   function enabled() {
-    try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); if (Array.isArray(v)) return ITEMS.map(i => i.id).filter(id => v.includes(id)); } catch (e) {}
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (Array.isArray(v)) { let known = KNOWN0; try { const k = JSON.parse(localStorage.getItem(KEY + '.known') || 'null'); if (Array.isArray(k)) known = k; } catch (e) {} return ITEMS.map(i => i.id).filter(id => v.includes(id) || !known.includes(id)); }
+    } catch (e) {}
     return DEFAULT.slice();
   }
-  function setEnabled(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) {} }
+  function setEnabled(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); localStorage.setItem(KEY + '.known', JSON.stringify(ITEMS.map(i => i.id))); } catch (e) {} }
 
   let el = null, cur = null, settleT = 0, down = false, scrolling = 0;
   let pos = null, drag = null, dragged = false; // pos: where the user dropped the menu for this selection
@@ -111,20 +117,29 @@
     const thread = a.closest('.ch-thread') && a.closest('[data-chats]');
     const mine = !!a.closest('.msg.u') && !!f.closest('.msg.u'); // James's own words carry no "From Archimedes"
     const block = a.closest('.msg .bub, .note-line, .appr pre, .cx-text, .wk-steps li, .wk-plan li, p, li') || a;
-    return { text, range, wid: thread ? thread.dataset.chats : '', mine, block };
+    return { text, range, wid: thread ? thread.dataset.chats : '', mine, block, lk: !!window.WosLookup?.holds?.(range.commonAncestorContainer) };
   }
 
   function show() {
     if (!own()) return hide();
     const c = current(); if (!c) return hide(true);
     tell(3); cur = c;
-    const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || (host()?.openSearch && host()?.canSearch?.()));
+    if (window.WosLookup?.isOpen && !c.lk) return hide(); // the Look up popover owns the words; its Back brings this menu back
+    const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || (host()?.openSearch && host()?.canSearch?.())).filter(id => id !== 'lookup' || lookupOk(c));
     if (!ids.length) return hide();
     const m = mount();
     m.innerHTML = `<span class="sm-grip" data-smgrip aria-label="Drag to move" title="Drag to move">${svg('<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>')}</span>`
       + ids.map(id => { const it = ITEMS.find(i => i.id === id); return `<button type="button" role="menuitem" data-sm="${id}">${svg(it.icon)}<span>${esc(it.label)}</span></button>`; }).join('');
-    m.hidden = false; m.classList.remove('on');
+    m.hidden = false; m.classList.remove('on'); m.classList.toggle('tight', ids.length > 5); // six or seven items need the narrower buttons on a phone
     place(); requestAnimationFrame(() => m.classList.add('on'));
+  }
+  // Look up: words in a chat message (not in the popover itself), never in a private or Incognito thread.
+  function lookupOk(c) {
+    if (c.lk || !window.WosLookup?.open) return false;
+    if (!c.wid && !c.block?.closest?.('.msg')) return false;
+    // Fail closed: a chat selection whose thread scope cannot be resolved (or is private) never offers Look up.
+    try { if (c.wid) { const s = host()?.chats?.lookupScope?.(c.wid); if (!s || s.private) return false; } } catch (e) { return false; }
+    return true;
   }
   function place() {
     if (!el || el.hidden || !cur) return;
@@ -161,6 +176,13 @@
       clear(); if (!host()?.chats?.insertText(c.wid, q)) toast('!', 'Open the thread to quote', 1600);
       return;
     }
+    if (id === 'lookup') {
+      // Paint first: the popover opens on this tap's frame; the words stay selected under it, only the menu steps aside.
+      const L = window.WosLookup, cx = L.contextOf(c.range); let sc = {};
+      if (c.wid) { try { sc = host()?.chats?.lookupScope?.(c.wid); } catch (e) { sc = null; } if (!sc || sc.private) return hide(); } // re-checked at the tap, never sent unscoped
+      hide(); L.open({ text: c.text, before: cx.before, after: cx.after, frame: sc.frame || '', agent: sc.agent || '', session: sc.session || '', range: c.range });
+      return;
+    }
     if (id === 'search') { const q = c.text.replace(/\s+/g, ' ').slice(0, 200); clear(); host().openSearch(q, 'all'); return; }
     if (id === 'all') {
       const b = c.block.closest('.bub') || c.block; const r = document.createRange(); r.selectNodeContents(b);
@@ -174,7 +196,7 @@
     if (bind.done) return; bind.done = true;
     let selectionPress = null;
     document.addEventListener('pointerdown', e => {
-      if (e.target.closest?.('.selmenu')) return;
+      if (e.target.closest?.('.selmenu, .wos-lookup')) return; // the Look up popover keeps the words selected under it
       down = true;
       if (!own()) return;
       tell(e.target.closest?.(EDIT) ? 2 : 1);

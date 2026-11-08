@@ -4,6 +4,13 @@
       "loadedBy": ["desktop"],
       "note": "Desktop-only lifecycle adapter boundary; no second window state or rendering. Phone adapter unchanged."
     },
+    "core/lookup-pop.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/pane-layout.js": {
       "loadedBy": ["desktop"],
       "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Desktop only: the phone has no pane consumer, so it no longer downloads it."
@@ -966,6 +973,8 @@
     "core/links.css",
     "core/links.js",
     "core/look-sync.js",
+    "core/lookup-pop.css",
+    "core/lookup-pop.js",
     "core/media-watch.js",
     "core/mic.js",
     "core/my-skin.js",
