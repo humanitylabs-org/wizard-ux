@@ -33,7 +33,7 @@ test('Priority ranks needs you, your call, FYI, Done, then no status (newest fir
 });
 test('Priority renders one header per group with its count; Newest/Oldest stay ungrouped', () => {
   const L = liveCtx();
-  const c = modelContext({ LIVE: { readyRank: L.readyRank }, esc: String, attOf: s => s.attention, deferredOf: () => false, window: {}, snoozeLast: () => false, stiKind: () => 'none', readyOrder: 'priority' });
+  const c = modelContext({ LIVE: { readyRank: L.readyRank, isNew: () => true }, esc: String, attOf: s => s.attention, deferredOf: () => false, window: {}, snoozeLast: () => false, stiKind: () => 'none', readyOrder: 'priority' });
   vm.runInContext(block(chats, '  const sesRank =', '  const notePlain =') + block(chats, '  function withNotes(', '  /* Android Back') + '\nthis.priorityGroups = priorityGroups;', c);
   c.LIVE.cardAt = s => s.updatedAt;
   const html = c.priorityGroups(L.byPriority(rows), [], s => `<row ${s.id}>`, 'ready');

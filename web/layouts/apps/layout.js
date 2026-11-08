@@ -74,7 +74,7 @@ export default function setup(api) {
     for (const { b, count, item } of icons) {
       const n = badgeMap[item.id] || 0;
       count.textContent = n ? (api.apps.badgeText?.(item.id) || (n > 99 ? '99+' : n ? String(n) : '')) : ''; count.hidden = !n;
-      b.setAttribute('aria-label', item.id === CHATS ? (n ? `Chats, ${n} ready` : 'Chats') : `${item.name}${n ? `, ${n} new` : ''}`);
+      b.setAttribute('aria-label', item.id === CHATS ? (n ? `Chats, ${n} unread` : 'Chats') : `${item.name}${n ? `, ${n} new` : ''}`);
     }
   }
   function paint() {

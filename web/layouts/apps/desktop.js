@@ -82,7 +82,7 @@ export default function desktop(api) {
     for (const { b, count, item } of icons) {
       const n = badgeMap[item.id] || 0;
       count.textContent = n ? (api.apps.badgeText?.(item.id) || (n > 99 ? '99+' : String(n))) : ''; count.hidden = !n;
-      b.setAttribute('aria-label', item.id === CHATS ? (n ? `Chats, ${n} ready` : 'Chats') : `${item.name}${n ? `, ${n} new` : ''}`);
+      b.setAttribute('aria-label', item.id === CHATS ? (n ? `Chats, ${n} unread` : 'Chats') : `${item.name}${n ? `, ${n} new` : ''}`);
       b.title = item.name;
     }
   }

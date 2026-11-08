@@ -339,6 +339,12 @@
       "kind": "navigation",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/lookup/stream": {
+      "status": "not-exercised",
+      "source": "web/core/lookup-pop.js",
+      "kind": "stream",
+      "note": "AI Look up: needs a text selection and the Look up tap, which the shell flows never make; tests/lookup-pop.browser.cjs covers it with a scripted local backend. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/ui-preferences": {
       "status": "catalogued",
       "source": "web/core/chat-pins.js",

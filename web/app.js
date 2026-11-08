@@ -4233,7 +4233,7 @@
     openThread: id => openWizardThread(id),
     goDesk: i => goDesk(i),
     // Ready / Working counts as Home shows them, and the same lists their cards open (data.read.sessions).
-    sessions: () => { const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
+    sessions: () => { const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: window.WizCore.workspaceNav.chatsCount(LIVE) } : null; },   // ready = unread, as Home's Ready card
     openSessions: kind => (kind === 'working' ? openChatsFiltered('working', { card: true }) : openChatsList()),  // Ready = the whole list, any old filter cleared
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
     openSettings: page => openSettings(page),
