@@ -114,7 +114,7 @@
     VERSION, EVENTS, call: (method, params) => method.startsWith('vault.') ? vaultCall(method, params) : call(method, params), native,
     handle(h) {
       Object.assign(H, h);
-      window.wizardUX = { shell: window.WIZ_SHELL || '', version: VERSION, events: EVENTS };
+      window.wizardUX = { ...window.wizardUX, shell: window.WIZ_SHELL || '', version: VERSION, events: EVENTS };
       window.dispatchEvent(new CustomEvent('wizard:ready', { detail: window.wizardUX }));
     },
   };

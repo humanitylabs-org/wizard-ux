@@ -77,7 +77,7 @@ export default function setup(api) {
   // Only Wizard machines (group agent) sit in the helper row; a registered phone or laptop belongs with its person.
   const isAgent = d => d.id === MAIN || !d.group || d.group === 'agent';
   const helpers = () => devices().filter(d => d.id !== MAIN && isAgent(d));
-  const managedList = () => Array.isArray(reg().managed) ? reg().managed : [];
+  const managedList = () => (api.workspaces?.snapshot().items || []).filter(m => m.kind === 'managed' || m.kind === 'company').map(m => ({ ...(reg().managed || []).find(v => v.id === m.id), ...m }));
   const managedOf = id => managedList().find(m => m.id === id) || null;
   const diskGB = d => (d?.disks || []).reduce((n, x) => n + (+x.sizeGB || 0), 0) || null;
   const freeGB = d => (d?.disks || []).reduce((n, x) => n + (+x.freeGB || 0), 0) || null;
@@ -238,54 +238,18 @@ export default function setup(api) {
   // The strip: which Wizard, AI fuel, chats, last backup, network. Each part opens its page in Settings.
   // Desktop: the glance lives in the top bar (menu-bar style); phone: a widget on Home. Same parts, two designs.
   const desk = !!document.getElementById('bar');
-  const homeWs = h('div', { cls: 'mh-ws is-home-ws', role: 'tablist', 'aria-label': 'Which Wizard' });
   const glance = h('div', { cls: 'mh-glance ' + (desk ? 'is-bar' : 'is-widget'), role: 'group', 'aria-label': 'Your Wizard at a glance', 'data-look': api.storage.get('look') || 'b' });
-  // Desktop: which Wizard is a dropdown at the top-left (above desks in the hierarchy); the status icons sit with the
-  // bar's own icons at the top-right, same size and hover, no extra pill.
-  const wizBtn = h('button', { type: 'button', cls: 'mh-wiz', data: { toggle: 'wsm' }, 'aria-haspopup': 'menu' });
-  const wizMenu = h('div', { cls: 'mh-wiz-menu', role: 'menu', hidden: true });
-  const wizBox = h('div', { cls: 'mh-root is-topbar is-wiz' }, wizBtn, wizMenu);
   const barBox = h('div', { cls: 'mh-root is-topbar' }, glance);
-  // Phone: the same workspace dropdown, at the top-left of Home; the widget below it.
-  root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [h('div', { cls: 'mh-phone-top' }, wizBox), glance])));
+  root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [glance])));
   // Settings sections: each its own .mh-root so the same styles and size rules apply there.
   const sec = (cls, ...kids) => h('div', { cls: 'mh-root is-settings ' + cls }, ...kids);
   const netBox = h('div', { cls: 'mh-net' }), storeBox = h('div', { cls: 'mh-store' });
   const secMap = sec('is-overview', wsBar, map), secAI = sec('is-ai', aiRow, aiList), secNet = sec('is-net', netBox), secStore = sec('is-store', storeBox);
 
   /* ---------- top ---------- */
-  function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); renderWiz(); }
-  // The top-left shows the workspace this screen is connected to. Others he manages aren't connected yet: greyed,
-  // and a tap explains what switching will mean instead of pretending to switch.
-  // While the workspace menu is open it is the top layer for Back (phone Back, browser Back, desktop Esc).
-  let wsmBack = null;
-  const WS_ICON = ['M12 3 3 7.5l9 4.5 9-4.5L12 3Z', 'm3 12 9 4.5 9-4.5', 'm3 16.5 9 4.5 9-4.5'];  // stacked layers = workspaces
-  const syncWsmBack = () => { const open = S.open.has('wsm');
-    if (open && !wsmBack) wsmBack = api.back?.push?.(() => { wsmBack = null; S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); wizBtn.focus?.(); }) || null;
-    else if (!open && wsmBack) { const off = wsmBack; wsmBack = null; off(); } };
-  function renderWiz() {
-    syncWsmBack();
-    // James, 31 Oct 2026: with one workspace there is nothing to switch, so no control at all; with two or more it is a
-    // small icon (the name lives in its label and the menu), never the long workspace name in the bar.
-    // A second workspace is added from Settings › Your network (its + tab).
-    const multi = managedList().length > 0;
-    if (!multi) { S.open.delete('wsm'); S.open.delete('wsm-why'); }
-    wizBox.hidden = !multi;
-    const own = thisName(), open = S.open.has('wsm'), why = S.open.has('wsm-why') ? S.whyWs : '';
-    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`); wizBtn.title = `Workspace: ${own}`;
-    wizBtn.replaceChildren((() => { const v = sv('svg', { class: 'mh-wiz-ic', viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const d of WS_ICON) sv('path', { d }, v); return v; })(), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
-    wizMenu.hidden = !open;
-    const g = why ? managedOf(why) : null;
-    wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Workspaces' }),
-      h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': 'true', data: { toggle: 'wsm' } }, h('b', { text: own }), h('small', { text: 'Connected · this screen' })),
-      ...managedList().map(m => h('button', { type: 'button', role: 'menuitem', cls: 'is-off' + (why === m.id ? ' is-why' : ''), data: { wsWhy: m.id } }, h('b', { text: m.name }), h('small', { text: `${m.org ? m.org + ' · ' : ''}Not connected` }))),
-      g ? h('div', { cls: 'mh-wiz-why' },
-        h('span', { text: `${g.name} isn’t running Wizard yet, so there’s nothing to switch to.` }),
-        h('span', { text: 'Once it is, switching swaps everything (apps, chats, agents) for that workspace’s own. The apps will switch in place; a browser opens its address.' }),
-        h('button', { type: 'button', cls: 'is-add', data: { ws: g.id, go: 'overview' } }, `See what’s known about ${g.name} in Settings ›`)) : null,
-      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a workspace')].filter(Boolean) : []));
-  }
-
+  // The core owns the only switcher. These tabs browse known network details
+  // in Settings; a connected Wizard is opened through the shared module.
+  function renderTabs() { fillTabs(wsBar); }
   function fillTabs(bar) {
     const tab = (id, name) => h('button', { type: 'button', role: 'tab', data: { ws: id }, 'aria-selected': String(S.ws === id) }, name);
     const add = h('button', { type: 'button', cls: 'mh-ws-add', 'aria-label': 'Add a Wizard you manage', data: { act: 'add-managed' } });
@@ -596,15 +560,13 @@ export default function setup(api) {
     if (d.meterAll) { const live = subs().filter(s => !s.out && !s.na); S.meter = d.meterAll === 'default' ? null : live.filter(s => s.unit === d.meterAll).map(s => s.id);
       api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; paint(); api.settings?.refresh?.(); return; }
     if (d.toggle === 'mp') { flip('mp'); drawn.ai = ''; paint(); return; }
-    if (d.wsWhy) { S.whyWs = S.whyWs === d.wsWhy && S.open.has('wsm-why') ? '' : d.wsWhy; if (S.whyWs) S.open.add('wsm-why'); else S.open.delete('wsm-why'); renderWiz(); return; }
-    if (d.ws && d.go) { S.open.delete('wsm'); S.open.delete('wsm-why'); S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); renderWiz(); api.settings?.open?.(d.go); return; }
     if (d.go) { if (d.go === 'chats') return api.data.read.sessions?.open('ready'); return api.settings?.open?.(d.go); }
-    if (d.toggle === 'wsm') { flip('wsm'); renderWiz(); return; }
     if (d.open) return api.data.read.sessions?.open(d.open);
-    if (d.ws) { S.open.delete('wsm'); drawn.glance = ''; renderWiz(); if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
+    if (d.ws) { const target = managedOf(d.ws); if (target?.url) { void api.workspaces.switch(d.ws).catch(() => {}); return; } drawn.glance = ''; if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
+    if (d.act === 'add-managed') { void api.workspaces.add().catch(e => api.toast(e.message)); return; }
     if (d.act) {
       const g = managedOf(S.ws), where = g ? `${g.name}'s Wizard` : 'my network';
-      const ask = { 'add-managed': ['Add a Wizard I manage', 'Add a Wizard I manage to my map: '], 'add-device': ['Add a device', `Add a device to ${where} as a helper: `],
+      const ask = { 'add-device': ['Add a device', `Add a device to ${where} as a helper: `],
         'add-person': ['Give someone access', `Give someone access to ${where}: `] }[d.act];
       if (ask && !api.nav?.ask?.(d.act + (g ? '-' + g.id : ''), { title: ask[0], message: where }, ask[1])) api.toast('Open Chats, then try again');
       return;
@@ -637,7 +599,7 @@ export default function setup(api) {
       b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
   };
-  for (const el of [root, barBox, ...(desk ? [wizBox] : []), secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  for (const el of [root, barBox, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
   api.listen(secAI, 'change', e => {
     const id = e.target?.dataset?.meterId; if (!id) return;
     const all = subs(), me = all.find(s => s.id === id); if (!me) return;
@@ -740,7 +702,7 @@ export default function setup(api) {
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
   // The desktop bar stays up over open windows: it counts as a viewer, so its readings keep refreshing there too
   // (registered each time it is put back, not on every route change).
-  const mount = () => { if (desk) { const back = !barBox.isConnected; if (api.slot.mount('dock-end', barBox, -1) && back) api.data.read.resources.live?.(barBox); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
+  const mount = () => { if (desk) { const back = !barBox.isConnected; if (api.slot.mount('dock-end', barBox, -1) && back) api.data.read.resources.live?.(barBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
@@ -753,9 +715,9 @@ export default function setup(api) {
   api.settings?.section('ai', 'ai', secAI, { subtitle: mine(fuelText) });
   api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
   api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago${S.backupRead === 'ok' ? '' : ' (last reading)'}` : ''; }) });
-  api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   // Esc reaches the menu through the shell's Back order (api.back above), before anything underneath.
   S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = devNew(now); S.aiLive = !!now?.ai && !now.aiError; merge(now); }
   paint(true); mount(); readBackup(true);
-  return () => { ro?.disconnect(); };
+  const offWorkspaces = api.workspaces?.subscribe(() => paint());
+  return () => { offWorkspaces?.(); ro?.disconnect(); };
 }
