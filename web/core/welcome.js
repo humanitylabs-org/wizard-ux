@@ -27,8 +27,10 @@
     { app: 'wizard-chatgpt', name: 'ChatGPT', note: '', mark: 'chatgpt', slug: 'openai-codex' },
     { app: 'wizard-tinfoil', name: 'Tinfoil', note: 'Private', mark: 'tinfoil', slug: 'wizard-tinfoil' },
   ];
-  const BRAND = `<div class="wl-brand"><img src="brand/wizard-mark-white.png" alt=""><span>Wizard OS</span></div>`;
+  const brand = () => `<div class="wl-brand"><img src="brand/wizard-mark-white.png" alt=""><span>${OS()}</span></div>`;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
+  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
   const log = s => { window.__welcomeLog = (window.__welcomeLog || []).concat(s).slice(-40); };
   // AbortSignal.timeout is missing on older iOS WebViews (see core/status.js): fall back to a controller and a timer.
   const tsig = ms => { try { if (AbortSignal.timeout) return AbortSignal.timeout(ms); } catch (e) {}
@@ -139,7 +141,7 @@
   }
 
   function paintName() {
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Name your Wizard</h2><p>What do you want to call your agent?</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Name your Wizard</h2><p>What do you want to call your agent?</p></header>
       <form class="wl-naming" data-wl-name><input type="text" maxlength="${NAME_MAX}" value="${esc(prefill)}" aria-label="Your agent's name" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"${saving ? ' disabled' : ''}>
       ${nameError ? `<p class="wl-status err" role="alert">${esc(nameError)}</p>` : ''}<button type="submit" class="wl-primary"${saving ? ' disabled' : ''}>${saving ? 'Saving\u2026' : 'Continue'}</button></form>
       <button type="button" class="wl-skip" data-wl="skip-name"${saving ? ' disabled' : ''}>Skip this step</button>`;
@@ -169,11 +171,11 @@
   function paintAI() {
     if (provider) {
       const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
-      return `${BRAND}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
+      return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
         <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}" title="${esc(p.name)} sign-in"></iframe></div>
         <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : 'This continues by itself once you are signed in.'}</p>`;
     }
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
       <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
@@ -186,7 +188,7 @@
     const S = window.WosSkin;
     if (!S?.list?.length) return paintHello();
     const cur = S.current, list = S.list;
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a skin</h2><p>You can change it any time in Settings.</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a skin</h2><p>You can change it any time in Settings.</p></header>
       <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Skins">${list.map(k => card(k, cur)).join('')}</div></div>
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
@@ -194,17 +196,17 @@
   function paintBring() {
     if (bringOpen) {
       const a = H.app(IMPORTER);
-      return `${BRAND}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Bring your AI</h2></header>
+      return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Bring your AI</h2></header>
         <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}" title="Importer"></iframe></div>
         <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
     }
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Bring your AI</h2><p>Optional. Used ChatGPT, Claude or another agent? Bring your memories, chats and skills so ${esc(agent())} knows you from day one.</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Bring your AI</h2><p>Optional. Used ChatGPT, Claude or another agent? Bring your memories, chats and skills so ${esc(agent())} knows you from day one.</p></header>
       <button type="button" class="wl-primary" data-wl="bring">Bring my AI</button>
       <button type="button" class="wl-skip" data-wl="next">Not now</button>`;
   }
 
   function paintHello() {
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
       <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="Hi! What can you help me with?" aria-label="First message"></textarea>
       ${sendError ? `<p class="wl-status err" role="alert">${esc(sendError)}</p>` : ''}<button type="submit" class="wl-primary"${sending ? ' disabled' : ''}>${sending ? 'Sending…' : 'Send'}</button></form>`;
   }

@@ -74,3 +74,71 @@ test('toggling the tweak repaints Settings without a reload', async () => {
   assert.equal(U.card().title, 'WizardOS update');
   listeners['wos:tweak-choice']({ detail: { id: 'wizard/other', on: true } });
 });
+
+// Slice 2: the app update banner (device.js), Welcome's brand, the tour label, the side-button toast and the
+// Android-only Settings subtitles. Same tweak, same per-module OS() helper.
+import vm from 'node:vm';
+const dev = read('web/device.js');
+const devBlock = dev.slice(dev.indexOf('  let upd = null, updHidden = 0;'), dev.indexOf('  /* ================= #22 web hot-reload'));
+const devOS = dev.match(/\n(  const OS = .*\n)/)[1];
+function banner(tweaks) {
+  const els = new Map(), listeners = {};
+  const el = () => ({ dataset: {}, hidden: false, innerHTML: '', setAttribute() {}, addEventListener() {} });
+  const document = { documentElement: { dataset: { tweaks } }, createElement: el, body: { appendChild: e => els.set(e.id, e) } };
+  const window = { WizAppCapture: { getState: () => ({}) }, addEventListener: (n, fn) => { listeners[n] = fn; } };
+  const ctx = { window, document, DEV: () => ({ recActive: () => 'null', updateState: () => 'null', updateInstall() {} }), W$: () => ({ voice: 'idle' }),
+    J: x => (x ? JSON.parse(x) : null), $: q => els.get(q.slice(1)), esc: x => x, log() {}, setTimeout: () => 0, clearTimeout() {} };
+  vm.runInNewContext(devOS + devBlock + '\n globalThis.api = { onUpdate };', ctx);
+  return { show: u => ctx.api.onUpdate(u), html: () => els.get('dvUpdate')?.innerHTML || '', document, listeners };
+}
+
+test('app update banner: "Wizard OS" with the tweak off, "WizardOS" with it on', () => {
+  for (const [tweaks, name] of [['', 'Wizard OS'], [ID, 'WizardOS']]) {
+    const b = banner(tweaks);
+    b.show({ state: 'available', version: '0.10.27', versionCode: 91 });
+    assert.match(b.html(), new RegExp(`${name} 0\\.10\\.27 is available`));
+    b.show({ state: 'ready', version: '0.10.28', versionCode: 92 });
+    assert.match(b.html(), new RegExp(`${name} 0\\.10\\.28 is ready`));
+    b.show({ state: 'permission', version: '0.10.28', versionCode: 92 });
+    assert.match(b.html(), new RegExp(`Allow ${name} to install updates`));
+  }
+});
+
+test('app update banner repaints when the tweak is toggled', () => {
+  const b = banner('');
+  b.show({ state: 'available', version: '0.10.27', versionCode: 91 });
+  assert.match(b.html(), /Wizard OS 0\.10\.27/);
+  // wos:experience is what WosExperience dispatches once data-tweaks holds the new set.
+  assert.equal(b.listeners['wos:tweak-choice'], undefined, 'no repaint before the tweaks are applied');
+  b.document.documentElement.dataset.tweaks = ID;
+  b.listeners['wos:experience']();
+  assert.match(b.html(), /WizardOS 0\.10\.27/);
+  b.document.documentElement.dataset.tweaks = '';
+  b.listeners['wos:experience']();
+  assert.match(b.html(), /Wizard OS 0\.10\.27/);
+});
+
+test('Text selection menu subtitle follows the tweak', () => {
+  const src = read('web/core/sel-menu.js');
+  const os = src.match(/\n(  const OS = .*\n)/)[1];
+  const fn = src.slice(src.indexOf('  function html() {'), src.indexOf('  function act(target) {'));
+  for (const [tweaks, name] of [['', 'Wizard OS'], [ID, 'WizardOS']]) {
+    const ctx = { document: { documentElement: { dataset: { tweaks } } }, enabled: () => [], N: () => null, own: () => false, ITEMS: [], esc: x => x };
+    vm.runInNewContext(os + fn + '\n globalThis.h = html();', ctx);
+    assert.match(ctx.h, new RegExp(`Works in the ${name} Android app`));
+  }
+});
+
+test('every slice-2 module reads the same switch and has no fixed "Wizard OS" left in what it shows', () => {
+  for (const [file, gone] of [
+    ['web/core/welcome.js', '<span>Wizard OS</span>'],
+    ['web/core/tour.js', "'Learn Wizard OS'"],
+    ['web/app.js', "'The side button works in the Wizard OS app'"],
+    ['web/core/settings.js', "'Works in the Wizard OS Android app'"],
+    ['web/device.js', 'Wizard OS closed while you were recording'],
+  ]) {
+    const src = read(file);
+    assert.match(src, /const OS = \(\) => \{ try \{ return \(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('wizard\/wizardos-name'\) \? 'WizardOS' : 'Wizard OS'; \} catch \(_\) \{ return 'Wizard OS'; \} \};/, file);
+    assert.equal(src.includes(gone), false, `${file} still has ${gone}`);
+  }
+});

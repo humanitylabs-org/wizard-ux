@@ -7,6 +7,8 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
+  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
   const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
@@ -1343,7 +1345,7 @@
     return `<button class="now-card side-card ${on ? 'on' : ''}" style="--c:${on ? 'var(--green)' : 'var(--violet-2)'}" data-act="side-button" data-step="${SIDE.step}"><span class="pip ${on ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span>${btn}${on ? '<span class="side-x" data-act="side-button-hide" aria-label="Hide">✕</span>' : ''}</button>`;
   }
   function sideButtonTap(fromLauncher) {
-    if (!NATIVE()) { toast('◉', 'The side button works in the Wizard OS app'); return; }
+    if (!NATIVE()) { toast('◉', `The side button works in the ${OS()} app`); return; }
     if (SIDE && SIDE.step !== 'mic' && SIDE.step !== 'assistant') {
       if (fromLauncher) { store.set('sideHidden', false); refreshHome(true); }
       toast('◉', SIDE.step === 'ready' ? 'Side button is on. Hold it to talk.' : 'Side button is on. Hold it and talk.', 2600);
