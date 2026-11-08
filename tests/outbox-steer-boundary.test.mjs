@@ -310,8 +310,9 @@ test('a failed old-client item recovers on Retry after the run finishes', async 
 });
 // 8 Nov 2026: Hermes accepted a reply and never started it; the phone re-steered every 3 s and was refused (409)
 // 166 times. Refusals back off (3 s, doubling, at most a minute) and say the agent has not started yet.
-test('repeated refusals while a run never starts back off and say the agent has not started', async t => {
-  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+// Main and routed threads (host-profile, container and restricted agents ride ?agent=) behave the same.
+for (const agent of [undefined, 'ops', 'box-agent', 'sandboxed']) test(`repeated refusals while a run never starts back off and say the agent has not started (${agent ? `routed ${agent}` : 'main'})`, async t => {
+  const f = await fixture(t, { runStatus: 'queued', ...(agent ? { agent } : {}) }); const it = await f.enqueue();
   const delays = [], labels = [];
   for (let i = 0; i < 6; i++) {
     const waiting = await settled(f.api, it.id, 0); assert.equal(waiting.state, 'waiting', waiting.error);
@@ -322,5 +323,16 @@ test('repeated refusals while a run never starts back off and say the agent has 
   assert.match(labels[0], /^Queued · /);
   assert.match(labels[5], /hasn’t started the current reply yet/);
   assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 7);
+  if (agent) for (const c of f.calls) assert.match(c.path, new RegExp(`[?&]agent=${agent}(&|$)`), `unscoped call: ${c.method} ${c.path}`);
   assert.equal(f.admitted.size, 0);
+});
+
+test('the back-off never pushes the 15-minute wait limit later', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  let waiting = await settled(f.api, it.id, 0);
+  for (let i = 0; i < 5; i++) { waiting.nextAt = 0; await f.api.pump(); waiting = await settled(f.api, it.id, 0); }
+  waiting.steerWaitSince = Date.now() - (15 * 60e3 - 10e3); // 10 s left in the window
+  waiting.nextAt = 0; await f.api.pump(); waiting = await settled(f.api, it.id, 0);
+  assert.equal(waiting.state, 'waiting');
+  assert.ok(waiting.nextAt - Date.now() <= 10e3 + 50, `next try ${Math.round((waiting.nextAt - Date.now()) / 1000)} s away`);
 });

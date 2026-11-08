@@ -558,7 +558,8 @@
           // The rejection proved the steer was not accepted: release ownership so Stop can withdraw it while it waits.
           admitting.delete(it.id); delete it.steerDispatch;
           it.steerWaits = (it.steerWaits || 0) + 1;
-          it.state = 'waiting'; it.error = it.steerWaits >= 3 ? STEER_STALLED_LABEL : STEER_WAIT_LABEL; it.nextAt = now() + steerRetryDelay(it.steerWaits);
+          // Never past the wait deadline: the 15-minute limit stays 15 minutes whatever the back-off reached.
+          it.state = 'waiting'; it.error = it.steerWaits >= 3 ? STEER_STALLED_LABEL : STEER_WAIT_LABEL; it.nextAt = Math.min(now() + steerRetryDelay(it.steerWaits), it.steerWaitSince + STEER_WAIT_MS);
           admitting.delete(it.id); // parked with nothing in flight: a Stop now withdraws it instead of waiting on a request that is gone
           await put(it); return;
         } else {
