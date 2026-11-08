@@ -75,7 +75,7 @@ test('Apps on the phone: one icon per desk in desk order, Chats first with its R
   assert.deepEqual(icons(), [['wizard', null], ['mail', '1'], ['music', '3'], ['files', '5']], 'Chats first, then one icon per desk (the Chats desk is the Chats icon)');
   assert.ok(grid.children.at(-1).classList.contains('ap-plus'), 'the grid ends with a + tile');
   const [chats, mail] = grid.children;
-  assert.equal(chats.attrs['aria-label'], 'Chats, 7 ready'); assert.equal(chats.children[1].textContent, '7'); assert.equal(chats.children[1].hidden, false);
+  assert.equal(chats.attrs['aria-label'], 'Chats, 7 unread'); assert.equal(chats.children[1].textContent, '7'); assert.equal(chats.children[1].hidden, false);
   assert.equal(mail.attrs['aria-label'], 'Mail, 2 new'); assert.equal(grid.children[2].children[1].hidden, true, 'no count, no badge');
   assert.equal(mail.children[2].textContent, 'Mail', 'the label under the icon');
   assert.equal(mail.style['--c'], '#7c5cff', 'the app\'s own colour from the dock\'s mark');
@@ -84,7 +84,7 @@ test('Apps on the phone: one icon per desk in desk order, Chats first with its R
   // a new desk (an app opened) or a closed one: the grid follows; counts follow live
   P.state.desks.push({ desk: 6, id: 'notes', name: 'Notes' }); P.fire('route');
   assert.deepEqual(icons().map(i => i[0]), ['wizard', 'mail', 'music', 'files', 'notes']);
-  P.state.watch({ wizard: 2 }); assert.equal(grid.children[0].attrs['aria-label'], 'Chats, 2 ready'); assert.equal(grid.children[1].children[1].hidden, true);
+  P.state.watch({ wizard: 2 }); assert.equal(grid.children[0].attrs['aria-label'], 'Chats, 2 unread'); assert.equal(grid.children[1].children[1].hidden, true);
   off();
   assert.ok(!P.homeSec.children.some(c => c.className === 'ap-grid'), 'Desks: no grid left'); assert.equal(P.html.dataset.appsHome, undefined);
   assert.equal(P.html.dataset.viewChrome, undefined, 'the dock switcher is back (chrome.css only matches while worn)'); assert.equal(P.find('vc-back').length, 0, 'no Back left');
@@ -99,7 +99,7 @@ test('Apps on the desktop: a launchpad, one icon per desk (Chats first, + last),
   const ids = () => grid.children.map(b => b.attrs['data-app'] ?? '+');
   assert.deepEqual(ids(), ['wizard', 'mail', 'music', '+add'], 'Chats first, one icon per desk, + last');
   assert.equal(grid.children[0].attrs['data-desk'], '1', 'Chats is the Chats desk');
-  assert.equal(grid.children[0].attrs['aria-label'], 'Chats, 7 ready'); assert.equal(grid.children[1].attrs['aria-label'], 'Mail, 2 new');
+  assert.equal(grid.children[0].attrs['aria-label'], 'Chats, 7 unread'); assert.equal(grid.children[1].attrs['aria-label'], 'Mail, 2 new');
   assert.equal(P.html.dataset.appsDesk, 'home'); assert.equal(P.html.dataset.viewChrome, 'desktop');
   assert.equal(P.find('vc-back').length, 0, 'no Back button');
   assert.ok(P.find('apd-orbbtn')[0], 'the orb is there on Home');
