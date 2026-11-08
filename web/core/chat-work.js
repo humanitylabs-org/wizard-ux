@@ -109,9 +109,9 @@
     return `<details class="steps wk${live ? ' live' : ''}${waiting ? ' asks' : ''}" data-wk="${esc(o.key)}"${open ? ' open' : ''}><summary>${icon} <span class="wk-l">${esc(label)}</span>${waiting ? '<em class="wk-dot" aria-hidden="true"></em>' : ''}</summary>${body}</details>`;
   }
   function helperLabel(h, now = Date.now()) {
-    if (!h || !['running','integrating','waiting','stalled','held','uncertain'].includes(h.phase)) return '';
+    if (!h || !['running','integrating','waiting','stalled','held','uncertain','background'].includes(h.phase)) return '';
     const age = dur(Math.max(0, now - Number(h.since) * 1000));
-    const labels = { running: `Waiting on ${Math.max(1, Number(h.pending) || 1)} helper${Number(h.pending) === 1 ? '' : 's'}`, integrating: 'Helpers returned · finishing your answer', waiting: 'Helpers returned · waiting to resume', stalled: 'Stuck · helpers returned, no agent running', held: 'Waiting on your decision · helpers tracked', uncertain: 'Helper status needs checking' };
+    const labels = { running: `Waiting on ${Math.max(1, Number(h.pending) || 1)} helper${Number(h.pending) === 1 ? '' : 's'}`, integrating: 'Helpers returned · finishing your answer', waiting: 'Helpers returned · waiting to resume', stalled: 'Stuck · helpers returned, no agent running', held: 'Waiting on your decision · helpers tracked', background: 'Waiting on a background job', uncertain: 'Helper status needs checking' };
     return labels[h.phase] + (age ? ` · ${age}` : '');
   }
   function helperDetail(h) {
@@ -119,6 +119,7 @@
     if (h.phase === 'integrating') return 'The main agent is active: checking the results and completing your request.';
     if (h.phase === 'waiting') return 'Results are saved. Automatic continuation has not started yet.';
     if (h.phase === 'stalled') return h.resumeEligible ? 'Results are saved. Continue resumes the same request.' : 'Results are saved; recovery eligibility needs checking.';
+    if (h.phase === 'background') return 'A deploy or heavy job this chat started is still running. Its result will be posted here; nothing is needed from you.';
     if (h.phase === 'held') return 'Your existing decision stays in control. Helpers do not bypass it.';
     return 'The last receipt is too old to claim this work is still running.';
   }
