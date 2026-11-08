@@ -186,7 +186,11 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
  * its place, and Show less folds it back. */
 /* A tweak a reply carries (WIZARD_TWEAK_V1, core/settings.js tweakCard): Settings › Look's own switch row on an opaque card. */
 .msg.a .ch-tweak { max-width: 520px; margin: 10px 0 4px; padding: 0 12px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px);
+<<<<<<< HEAD
   background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--wz-text); }
+=======
+  background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text); }
+>>>>>>> origin/main
 .msg.a .ch-tweak > .st-row:last-child { border-bottom: 0; }
 .msg.a .ch-tweak .st-row { min-height: 56px; padding: 10px 0; }
 .msg.a .ch-tweak .st-row:not(:disabled):not(.static) { cursor: pointer; }
@@ -778,11 +782,20 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-sync > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Not up to date: one quiet row no taller than a section header, dot + line on the left, a text action on the right.
    The action is not a pill: no fill or border, the quiet violet text of "Show all" (.ch-more); its 44px touch target
+<<<<<<< HEAD
    comes from padding, pulled back by a negative block margin so the row itself stays 32px. */
 .ch-sync:has(.ch-sync-act) { justify-content: flex-start; gap: 7px; min-height: 32px; padding: 0 6px 0 16px; }
 .ch-sync-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--wz-warning, var(--amber, #ffbe55)); }
 .ch-sync.stale .ch-sync-dot { background: var(--wz-text-muted, var(--ink-3)); }
 .ch-sync .ch-sync-act { flex: none; margin: -6px 0 -6px auto; height: 44px; padding: 0 10px; border: 0; border-radius: 0; background: none; box-shadow: none;
+=======
+   comes from padding, pulled back by a negative block margin so the row itself stays 32px; it paints above the list
+   below (position + z-index) so a tap on its lower edge still reaches it. */
+.ch-sync:has(.ch-sync-act) { justify-content: flex-start; gap: 7px; min-height: 32px; padding: 0 6px 0 16px; }
+.ch-sync-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--wz-warning, var(--amber)); }
+.ch-sync.stale .ch-sync-dot { background: var(--wz-text-muted, var(--ink-3)); }
+.ch-sync .ch-sync-act { position: relative; z-index: 1; flex: none; margin: -6px 0 -6px auto; height: 44px; padding: 0 10px; border: 0; border-radius: 0; background: none; box-shadow: none;
+>>>>>>> origin/main
   font: inherit; font-weight: 650; white-space: nowrap; color: var(--violet-2, var(--wz-accent, var(--ink))); cursor: pointer; }
 .ch-sync .ch-sync-act:hover, .ch-sync .ch-sync-act:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }

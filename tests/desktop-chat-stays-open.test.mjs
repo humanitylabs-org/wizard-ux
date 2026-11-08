@@ -18,7 +18,7 @@ function fixture(desktopHost = true, afterAction = 'stay') {
     PHONE: () => !desktopHost, hosted: new Map(), ch: () => state, owner: id => id, rowOf: () => row,
     ACT: { done: {}, file: {}, restore: {}, unread: {} }, vib() {}, closeRowSheet() {}, followUpActive: () => false,
     toast() {}, snoozeLast: () => false, renderChats() {}, save() {}, applyLayout() {}, deskOf: () => 0,
-    threadBack: x => { backs.push(x.thread); x.thread = null; },
+    threadBack: x => { backs.push(x.thread); x.thread = null; }, chatsBack: x => { backs.push('list:' + x.thread); x.thread = null; },
     paintBar() {}, syncChatsPane() {}, winEl: () => ({ querySelector: () => null }),
     ws: [{ wins: ['chat'] }], cur: 0, homeOpen: false, hudPaint() {}, document: { activeElement: null },
   };
@@ -89,4 +89,11 @@ for (const desktopHost of [true, false]) for (const agent of ['', 'philosopher']
   c.markVisibleThreadsSeen(); assert.equal(L.isNew(row),true,'poll/repaint preserves marker');
   c.ch('chat').readNav++; c.markVisibleThreadsSeen();
   assert.equal(L.isNew(row),false,'navigating/reopening permits normal automatic read again');
+});
+for (const after of ['stay', 'list']) test(`phone Archive of a thread opened from another one goes straight to the list, preference ${after}`, async () => {
+  const f = fixture(false, after); f.context.CH.chat.trail = ['parent'];
+  await f.context.threadAct('chat', 'same', 'done');
+  assert.equal(f.w.thread, null);
+  assert.equal(f.context.CH.chat.trail.length, 0, 'the link trail is dropped, never stepped up');
+  assert.deepEqual(f.backs, ['list:same'], 'closed straight to the list, not threadBack');
 });

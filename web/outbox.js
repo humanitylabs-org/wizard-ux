@@ -27,6 +27,7 @@
     await api.transition(it.id, 'held', lateLabel(it) + ' · Send when ready.');
     return true;
   }
+  const STEER_RETRY_MS = 3000, STEER_WAIT_MS = 15 * 60e3;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
@@ -516,32 +517,48 @@
         const rejected = e.status >= 400 && e.status < 500 && e.status !== 408;
         it.steerDispatch = rejected ? 'rejected' : 'started';
         await put(it); // crash before reconciliation must never replay ambiguity
-        let terminal = false;
+        let terminal = false, live = false, working = false;
         // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
         // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
         if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
           try {
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
-            terminal = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId &&
-              ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+            const same = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId;
+            terminal = same && ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+            const typed409 = e.status === 409 && e.code === 'run_not_accepting_steer';
+            // A run still queued/starting may yet become steerable: keep the message queued and re-steer until then.
+            live = same && !terminal && typed409 && ['queued', 'starting'].includes(run.status);
+            // Hermes answers 409 run_not_accepting_steer for a started run whose agent can't take steering even while it
+            // still works (claude-sonnet-5-5, 7 Nov 2026). The typed 409 proves the steer was NOT accepted, and the
+            // Agent Service holds a new turn for a session whose run is still working and launches it when that run
+            // ends: send the frozen, idempotent same-thread turn now. A 404 run_not_found for a run that still reads
+            // as working stays a failure.
+            working = same && !terminal && typed409 && ['running', 'launching', 'stopping', 'waiting_for_approval'].includes(run.status);
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
         // Stop pressed while this steer was in flight: a rejected steer never becomes a new turn.
         if (it.cancelRequested) { await finishCancel(it); return; }
-        if (terminal) {
+        if (terminal || working) {
           // Freeze from the dispatched envelope, not the current composer/route.
           // Persist the handoff BEFORE admission; a lost receipt now replays only
           // this byte-identical, idempotent new turn, never the rejected steer.
           it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
             ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
-          it.rejectedSteerRunId = it.steerTarget;
+          it.rejectedSteerRunId = it.steerTarget; delete it.steerWaitSince;
           it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
           await put(it);
+        } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
+          // Not sent yet, not lost: the next attempt re-steers (rejection proved nothing was accepted).
+          // The rejection proved the steer was not accepted: release ownership so Stop can withdraw it while it waits.
+          admitting.delete(it.id); delete it.steerDispatch;
+          it.state = 'waiting'; it.error = 'Queued · sends when the current reply can take it'; it.nextAt = now() + STEER_RETRY_MS;
+          admitting.delete(it.id); // parked with nothing in flight: a Stop now withdraws it instead of waiting on a request that is gone
+          await put(it); return;
         } else {
           it.state = rejected ? 'failed' : 'unconfirmed'; it.error = rejected ? reason(e) : unconfirmed;
           it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
-          it.nextAt = 0; await put(it); return;
+          it.nextAt = 0; admitting.delete(it.id); await put(it); return;
         }
       }
       if (receipt) return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });

@@ -81,7 +81,7 @@ public final class MizelStore {
         }
     }
 
-    private void save(MizelJournal j) {
+    private boolean save(MizelJournal j) {
         try {
             File d = meetingDir(j.meetingId);
             //noinspection ResultOfMethodCallIgnored
@@ -92,8 +92,10 @@ public final class MizelStore {
                 o.getFD().sync();
             }
             if (!tmp.renameTo(new File(d, "journal.json"))) throw new IOException("rename failed");
+            return true;
         } catch (Exception e) {
             log.log("journal save failed for " + j.meetingId + ": " + e);
+            return false;
         }
     }
 
@@ -122,6 +124,7 @@ public final class MizelStore {
         //noinspection ResultOfMethodCallIgnored
         meDir(id).mkdirs();
         j.recording = true;
+        j.resumeAfterUpdate = false;
         j.paused = false;
         j.pausedAt = 0;
         j.lastBeatAt = now;
@@ -145,6 +148,60 @@ public final class MizelStore {
             return;
         }
         save(j);
+    }
+
+    /** Pin the existing upload configuration and binary version, never credentials. */
+    public synchronized boolean noteCapture(String id, int version, String origin) {
+        MizelJournal j = journals.get(id);
+        if (j == null) return false;
+        j.captureVersion = version;
+        j.uploadOrigin = origin;
+        return save(j);
+    }
+
+    /** Called only after capture has stopped, or after package replacement killed the old process. */
+    public synchronized boolean pauseForUpdate(String id, int version, String origin, long now) {
+        MizelJournal j = journals.get(id);
+        if (MizelUpdatePolicy.pending(j)) return true;
+        if (j == null || !j.recording || j.paused || j.stopReason != null || j.stopSent) return false;
+        recover(id, now, false); // adopt the final partial WAV without sending /stop
+        j.resumeAfterUpdate = true;
+        j.paused = true;
+        j.pausedAt = now;
+        j.captureVersion = version;
+        j.uploadOrigin = origin;
+        // A failed save must never grant permission to commit a package update.
+        if (save(j)) return true;
+        j.resumeAfterUpdate = false;
+        j.paused = false; j.pausedAt = 0;
+        return false;
+    }
+
+    /** Reconcile files before microphone admission so no previous seq is overwritten. */
+    public synchronized MizelJournal updateResumeSnapshot(String id, String origin, long now) {
+        MizelJournal j = journals.get(id);
+        if (!MizelUpdatePolicy.canResume(j, origin)) return null;
+        recover(id, now, false);
+        File[] files = meDir(id).listFiles();
+        if (files == null) return null;
+        for (File f : files) {
+            Matcher m = CHUNK.matcher(f.getName());
+            if (m.matches() && Integer.parseInt(m.group(1)) >= j.nextSeq && f.length() > Wav.HEADER) return null;
+        }
+        return save(j) ? snapshot(id) : null;
+    }
+
+    public synchronized boolean finishUpdateResume(String id, int version) {
+        MizelJournal j = journals.get(id);
+        if (!MizelUpdatePolicy.pending(j)) return false;
+        j.resumeAfterUpdate = false;
+        j.paused = false;
+        j.pausedAt = 0;
+        j.captureVersion = version;
+        if (save(j)) return true;
+        j.resumeAfterUpdate = true;
+        j.paused = true;
+        return false;
     }
 
     /** The seq the chunk now being written uses (= nextSeq; it becomes permanent when the chunk is done). */
@@ -192,6 +249,7 @@ public final class MizelStore {
         MizelJournal j = journals.get(id);
         if (j == null) return null;
         j.recording = false;
+        j.resumeAfterUpdate = false;
         j.paused = false;
         j.pausedAt = 0;
         j.stopReason = reason;
@@ -208,7 +266,9 @@ public final class MizelStore {
      * The process died with this session open. Adopt every chunk file already on disk (including the torn one being
      * written), close the session and queue a stop with reason process_death. Returns when the audio ended.
      */
-    public synchronized long recover(String id, long now) {
+    public synchronized long recover(String id, long now) { return recover(id, now, true); }
+
+    private long recover(String id, long now, boolean close) {
         MizelJournal j = journals.get(id);
         if (j == null) return now;
         long endedAt = Math.max(j.lastBeatAt, j.paused ? j.pausedAt : 0);
@@ -256,7 +316,9 @@ public final class MizelStore {
                 log.log("recover " + id + ": could not adopt seq " + seq + ": " + e);
             }
         }
+        if (!close) { save(j); return endedAt; }
         j.recording = false;
+        j.resumeAfterUpdate = false;
         j.paused = false;
         j.pausedAt = 0;
         j.stopReason = MizelPolicy.REASON_PROCESS_DEATH;

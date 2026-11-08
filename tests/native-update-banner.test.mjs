@@ -27,10 +27,17 @@ for(const state of ['ready','deferred']) for(const reason of ['take','music','mi
     f.tap();assert.deepEqual(f.calls,['install']);assert.match(f.paintAtInstall,/Opening installer/);
   });
 }
+<<<<<<< HEAD
 for(const kind of ['voice','paused','capture','active','native']) test(`${kind}: protects a genuine take without stop/cancel confirmation`,()=>{
   const f=fixture();if(kind==='voice')f.voice='listen';if(kind==='paused')f.voice='paused';if(kind==='capture')f.capture=true;if(kind==='active')f.active={id:'synthetic'};if(kind==='native')f.native=true;
   f.show();assert.match(f.html(),/Finish your recording first/);f.tap();f.tap();assert.deepEqual(f.calls,[]);assert.doesNotMatch(f.html(),/stop the recording|Tap again/);
   f.voice='idle';f.capture=false;f.active=null;f.native=false;f.show();f.tap();assert.deepEqual(f.calls,['install']);
+=======
+for(const kind of ['voice','paused','capture','active']) test(`${kind}: protects a genuine take without stop/cancel confirmation`,()=>{
+  const f=fixture();if(kind==='voice')f.voice='listen';if(kind==='paused')f.voice='paused';if(kind==='capture')f.capture=true;if(kind==='active')f.active={id:'synthetic'};
+  f.show();assert.match(f.html(),/Finish your recording first/);f.tap();f.tap();assert.deepEqual(f.calls,[]);assert.doesNotMatch(f.html(),/stop the recording|Tap again/);
+  f.voice='idle';f.capture=false;f.active=null;f.show();f.tap();assert.deepEqual(f.calls,['install']);
+>>>>>>> origin/main
 });
 test('processing is not recording and a legacy APK refusal gives an honest recovery path',()=>{
   const f=fixture();f.voice='think';f.tap();assert.deepEqual(f.calls,['install']);
@@ -45,3 +52,12 @@ test('banner body is not consent; only Install now initiates installation',()=>{
 test('no updater APK-download/navigation escape hatch',()=>{
   assert.doesNotMatch(block,/fetch\(|location\.|window\.open|\.cancel\(|\.stop\(|command\(/);
 });
+<<<<<<< HEAD
+=======
+test('an old APK stale mic claim (updateRecording true, no live take) still reaches native and its recovery path',()=>{
+  const f=fixture();f.native=true;f.show();
+  assert.doesNotMatch(f.html(),/Finish your recording first/);
+  f.tap();assert.deepEqual(f.calls,['install']);
+  f.timers.find(t=>t.ms===2500).fn();assert.match(f.html(),/If no recording is active, force stop Wizard OS/);
+});
+>>>>>>> origin/main

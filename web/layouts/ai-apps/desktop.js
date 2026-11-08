@@ -1522,7 +1522,16 @@ export default function desktop(api) {
   api.listen(doc, 'focusin', rememberSurface, true);
   api.back.surface?.(() => {
     // Shared registry has already offered recording and transient overlays.
+<<<<<<< HEAD
     if (panes.get().mode === 'full') { windowMode('tiled'); return true; }
+=======
+    if (panes.get().mode === 'full') {
+      // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
+      const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
+      if (frame && globalThis.WizAppServices?.back?.(frame) === 'handled') return true;
+      windowMode('tiled'); return true;
+    }
+>>>>>>> origin/main
     const a = doc.activeElement;
     // A mixed Chats/app desk can have a focused iframe without an AI-apps pane.
     // Do not consume its Back: the shell's focused-window fallback owns that app.

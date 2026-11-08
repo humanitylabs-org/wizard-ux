@@ -21,9 +21,15 @@ function slice(src, start) {
   return src.slice(at, i + 1);
 }
 
+<<<<<<< HEAD
 function leave({ phone = false, keepNew }) {
   const w = { id: 'w1', thread: '__new__' }, c = { readNav: 0, trail: [] };
   const ctx = { W: { w1: w }, hosted: new Map(), H: keepNew === undefined ? {} : { keepNewOpen: id => keepNew(id) },
+=======
+function leave({ phone = false, keepNew, agent }) {
+  const w = { id: 'w1', thread: '__new__', ...(agent ? { agent } : {}) }, c = { readNav: 0, trail: [] };
+  const ctx = { W: { w1: w }, hosted: new Map(), H: keepNew === undefined ? { keepThreadOpen: true } : { keepThreadOpen: true, keepNewOpen: id => keepNew(id) },
+>>>>>>> origin/main
     keepThreadOpen: () => true, PHONE: () => phone, ch: () => c, threadBack() {}, save() {}, openChat() {} };
   vm.createContext(ctx);
   vm.runInContext(slice(chats, 'function leaveAfterSend(') + '\nthis.leaveAfterSend = leaveAfterSend;', ctx);
@@ -40,6 +46,20 @@ test('a New chat docked beside an app stays open after its send; elsewhere it st
   assert.ok(stock.left); assert.equal(stock.thread, null);
 });
 
+<<<<<<< HEAD
+=======
+test('main and routed-agent New chats docked beside an app follow the same post-send navigation', () => {
+  // keepNewOpen is keyed by window/desk only: a host-profile, container or restricted route must not navigate differently.
+  for (const agent of [undefined, 'main', 'host:alice', 'container:research', 'restricted:guest']) {
+    const kept = leave({ agent, keepNew: () => true });
+    assert.equal(kept.left, false, `kept open for ${agent || 'default'}`); assert.equal(kept.thread, '__new__');
+    const home = leave({ agent, keepNew: () => false });
+    assert.ok(home.left, `leaves to the list for ${agent || 'default'}`); assert.equal(home.thread, null);
+  }
+  assert.doesNotMatch(slice(chats, 'function leaveAfterSend('), /agent/i, 'post-send navigation never branches on the agent route');
+});
+
+>>>>>>> origin/main
 test('desktop host keeps the New chat open only where a layout shows its desk beside an app', () => {
   assert.match(desk, /keepNewOpen: id => !homeOpen && !!globalThis\.WosSkinHost\?\.routeShows\?\.\(wsOf\(id\)\),/);
   // routeShows is the AI apps layout's "this desk is on screen beside the app panel" (docked chat + app panel)

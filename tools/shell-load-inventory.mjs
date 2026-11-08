@@ -18,8 +18,13 @@ const RUNTIME = new Set(['data.js', 'summaries.js']);
 
 function entryAssets(html) {
   const out = [];
+<<<<<<< HEAD
   for (const m of read(html).matchAll(/<(script|link)\b([^>]*)>/g)) {
     const tag = m[1], attrs = m[2];
+=======
+  for (const m of read(html).matchAll(/<(script|link)\b([^>]*)>/gi)) {
+    const tag = m[1].toLowerCase(), attrs = m[2];
+>>>>>>> origin/main
     if (tag === 'script') {
       const src = /\bsrc="([^"]+)"/.exec(attrs)?.[1]; if (!src) continue;
       out.push({ file: src.replace(/^\/wizard-os-home\//, ''), kind: /type="module"/.test(attrs) ? 'module' : 'script' });
@@ -41,6 +46,18 @@ function moduleDeps(rel, shell) {
   if (runs) for (const m of code.matchAll(/api\.asset\('([^']+)'\)/g)) deps.push({ file: path.posix.join(dir, m[1]), kind: m[1].endsWith('.css') ? 'css' : 'asset' });
   return deps;
 }
+<<<<<<< HEAD
+=======
+// A stylesheet's local @import url("…") / @import "…" is another request the shell makes.
+function cssDeps(rel) {
+  const dir = path.posix.dirname(rel), code = read(rel).replace(/\/\*[\s\S]*?\*\//g, ''), deps = [];
+  for (const m of code.matchAll(/@import\s+(?:url\(\s*)?['"]?([^'")\s;]+)['"]?\s*\)?/gi)) {
+    if (/^(?:[a-z]+:)?\/\//i.test(m[1])) continue;
+    deps.push({ file: path.posix.normalize(path.posix.join(dir, m[1])), kind: 'css' });
+  }
+  return deps;
+}
+>>>>>>> origin/main
 // The host's per-shell entry for a layout: files: { <shell>: { css, js } }, else layout.css / layout.js.
 function layoutEntry(id, shell) {
   const host = read('core/skin-host.js');
@@ -58,6 +75,10 @@ function closure(seeds, shell) {
     const a = queue.shift(); if (seen.has(a.file + '|' + a.kind)) continue;
     seen.set(a.file + '|' + a.kind, a);
     if (a.kind === 'module' && exists(a.file)) queue.push(...moduleDeps(a.file, shell));
+<<<<<<< HEAD
+=======
+    if (a.kind === 'css' && exists(a.file)) queue.push(...cssDeps(a.file));
+>>>>>>> origin/main
   }
   return [...seen.values()];
 }

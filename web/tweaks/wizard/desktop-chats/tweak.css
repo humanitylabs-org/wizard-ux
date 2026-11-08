@@ -56,6 +56,11 @@ html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-working-sort s
 html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row {
   align-items: center; gap: 10px; height: 48px; min-height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; position: relative;
 }
+<<<<<<< HEAD
+=======
+/* A saved New-chat draft keeps the core 40 px reservation for its absolutely placed discard button. */
+html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-draft .ch-row { padding-right: 40px; }
+>>>>>>> origin/main
 html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:active { background: var(--dc-held); }
 html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .bd { gap: 1px; }
 html[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .tp { align-items: center; gap: 8px; }
