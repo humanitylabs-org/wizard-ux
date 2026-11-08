@@ -12,7 +12,10 @@ public class BadgeGeometryTest {
                 assertTrue(size + " " + label + " ring top", g.top - g.ring >= 0);
                 assertTrue(size + " " + label + " ring right", g.right + g.ring <= size);
                 assertTrue(size + " " + label + " ring bottom", g.bottom + g.ring <= size);
-                assertTrue("top-right quadrant", g.left > size / 2f && g.bottom < size / 2f);
+                // A wide "9+" pill grows leftwards from the right edge, so its left edge may cross the
+                // midline; what makes it top-right is the anchored right edge and the bubble centre.
+                assertTrue(size + " " + label + " right half", g.right > size / 2f && (g.left + g.right) / 2f > size / 2f);
+                assertTrue(size + " " + label + " top half", g.bottom < size / 2f);
             }
         }
     }
