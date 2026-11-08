@@ -207,7 +207,7 @@ window.WosChatPower = function chatPower(A) {
     return true;
   }
   // Opening settles onto its place while images/history arrive, but a reply streaming in during those first seconds
-  // is still growth below: it keeps the view where it is and shows ↓ Latest (PR #1172 review).
+  // is still growth below: it keeps the view where it is and shows ↓ Latest (review of this fix).
   function settleTo(c, nb, sid) {
     const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
     if (!grew || !A.isWorking?.(LIVE.session?.(sid))) restore(nb, RP.read(sid));
