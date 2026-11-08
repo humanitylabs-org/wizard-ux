@@ -100,3 +100,13 @@ test('no tracked text spells the product name as two words', () => {
   }
   assert.deepEqual(hits, [], 'The product name is WizardOS, one word');
 });
+
+test('update notices saved before the one-word name still route as Wizard updates; clients still pair with older shells', () => {
+  const bell = read('web/core/notif-bell.js');
+  const title = new Function(`return ${bell.match(/kind: 'wizard-updates', name: 'Wizard updates', title: (\/.*?\/i) \}/)[1]}`)();
+  assert.ok(title.test('WizardOS updated'));
+  assert.ok(title.test(`Wizard${' '}OS updated`));
+  assert.ok(!title.test('Wizardly updated'));
+  assert.match(read('android/app/src/main/java/ai/wizards/os/WizardProbe.java'), /html\.contains\("WizardOS"\) \|\| html\.contains\(LEGACY_TITLE\)/);
+  assert.match(read('ios/native/App/App/WizardOrigin.swift'), /html\.contains\("WizardOS"\) \|\| html\.contains\("Wizard" \+ " OS"\)/);
+});

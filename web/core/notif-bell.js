@@ -47,7 +47,7 @@
   const SYSTEM = [
     { kind: 'app-updates', name: 'App updates', title: /^(\d+ apps? updated|App updates need a look)$/i },
     { kind: 'connections', name: 'App connections', title: /^(App connection added|Connection needs your OK)$/i },
-    { kind: 'wizard-updates', name: 'Wizard updates', title: /^(App Manager updated|WizardOS updated|Your release needs you to finish an update)$/i },
+    { kind: 'wizard-updates', name: 'Wizard updates', title: /^(App Manager updated|Wizard ?OS updated|Your release needs you to finish an update)$/i }, // ' ?': notices saved before the one-word name (8 Nov 2026)
   ];
   const SYSID = /^system:([a-z-]{1,40})$/;
   const sysOf = id => { const m = SYSID.exec(String(id || '')); return m ? SYSTEM.find(k => k.kind === m[1]) || null : null; };

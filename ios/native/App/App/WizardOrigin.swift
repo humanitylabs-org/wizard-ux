@@ -47,7 +47,8 @@ enum WizardOrigin {
 
     /// The current Wizard shell: the WizardOS title plus its core scripts. A login page or any other site doesn't pass.
     static func looksLikeWizard(_ html: String) -> Bool {
-        html.contains("WizardOS") && (html.contains("core/") || html.contains("__wosNativeBack"))
+        // A shell from before the one-word name (8 Nov 2026) carries the old two-word title; it still counts.
+        (html.contains("WizardOS") || html.contains("Wizard" + " OS")) && (html.contains("core/") || html.contains("__wosNativeBack"))
     }
 
     private static func https(_ input: String) -> String? {
