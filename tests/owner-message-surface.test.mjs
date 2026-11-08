@@ -39,18 +39,21 @@ test('the owner bubble is painted by the opaque --wz-owner-message token on ever
 });
 
 test('every built-in skin and the dark fallback: distinct surface, AA text', () => {
-  const tokens = skinTokens(), light = new Set(['obsidian-light', 'landscapes-light', 'sepia']);
+  const tokens = skinTokens(), light = new Set(['obsidian-light', 'sepia']);
   for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal', 'obsidian', 'obsidian-light', 'landscapes', 'landscapes-light', 'novairecito', 'sepia']) assert.ok(tokens[id], id);
   const darkP = pct(base, ':root {\n  /* Opaque'), lightP = pct(base, 'html:is([data-skin="obsidian-light"]');
   const obsP = pct(read('web/skins/obsidian/skin.css'), 'html[data-skin="obsidian"] {');
+  const land = read('web/skins/landscapes/skin.css');
+  const inkP = sel => Number(land.slice(land.indexOf(sel)).match(/--wz-owner-message: color-mix\(in srgb, var\(--ink\) (\d+)%/)[1]) / 100;
+  const landP = { landscapes: inkP('html[data-skin^="landscapes"]:root'), 'landscapes-light': inkP('html[data-skin="landscapes-light"]:root') };
   assert.ok(darkP && lightP && obsP);
   for (const s of light) assert.match(base, new RegExp(`\\[data-skin="${s}"\\]`));
   const cases = Object.entries(tokens).map(([id, t]) => [id, t]);
   cases.push(['standalone dark fallback', { bg: '#05030c', ink: '#f3efff', violet: '#8f63ff', 'sk-win': 'rgba(12,8,26,.82)' }]);
   for (const [id, t] of cases) {
     const bg = parse(t.bg).slice(0, 3), ink = parse(t.ink), v = parse(t.violet).slice(0, 3);
-    const p = id === 'obsidian' ? obsP : light.has(id) ? lightP : darkP;
-    const owner = mix(v, bg, p);                         // color-mix of two opaque colours: fully opaque
+    const p = landP[id] ?? (id === 'obsidian' ? obsP : light.has(id) ? lightP : darkP);
+    const owner = mix(landP[id] ? ink.slice(0, 3) : v, bg, p);                         // color-mix of two opaque colours: fully opaque
     const reply = over(parse(t['sk-win']), bg);          // agent replies sit on the window material
     const text = ink[3] < 1 ? over(ink, owner) : ink.slice(0, 3);
     assert.ok(ratio(text, owner) >= 4.5, `${id}: text contrast ${ratio(text, owner).toFixed(2)}`);

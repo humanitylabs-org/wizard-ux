@@ -166,7 +166,7 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .msg { display: flex; }
 .msg.u { justify-content: flex-end; }
 .msg .bub { max-width: 88%; padding: 10px 13px; border-radius: 18px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
-.msg.u .bub { border-bottom-right-radius: 6px; background: var(--wz-owner-message, #3b2a6d); color: var(--wz-on-owner-message, var(--ink)); border: 1px solid var(--wz-owner-message-edge, #6545b0); }
+.msg.u .bub { border-bottom-right-radius: 6px; background: var(--wz-owner-message); color: var(--wz-on-owner-message); border: 1px solid var(--wz-owner-message-edge); }
 .msg.u.pending .bub { opacity: .6; }
 .msg.a .bub { max-width: 100%; padding: 2px 2px; background: none; color: var(--ink); }
 .bub p { margin: 0 0 8px; } .bub p:last-child { margin-bottom: 0; }
@@ -457,7 +457,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 
 /* Steers: a message sent while the agent works. Once the agent has read it, it sits inside the turn it
  * steered with a quiet "Read by …" receipt; until then the pending bubble says Delivered / Added. */
-.msg.u.steer .bub { border-style: dashed; border-color: var(--wz-owner-message-edge, rgba(185, 155, 255, .45)); }
+.msg.u.steer .bub { border-style: dashed; border-color: var(--wz-owner-message-edge); }
 .msg.u.steer .mmeta .srcpt, .msg.u.pending .pst.ok { display: inline-flex; align-items: center; gap: 4px; color: #8fe3b5; font-weight: 600; }
 .msg.u.steer .mmeta .srcpt svg, .msg.u.pending .pst.ok svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .msg.u.pending.steer.sent .bub { opacity: .85; }

@@ -861,6 +861,9 @@ html[data-skin^="landscapes"][data-shell="desktop"] .ch-compose textarea { backg
 html[data-skin^="landscapes"][data-shell="desktop"] .ch-compose textarea:focus { border-color: rgba(255, 255, 255, .5); }
 html[data-skin^="landscapes"][data-shell="desktop"] .ch-rdy-bar button.on { color: #fff; background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .42); }
 html[data-skin^="landscapes"][data-shell="desktop"] .dchats .ch-row.cur { background: rgba(255, 255, 255, .14); }
+/* Owner bubbles (James, 8 Nov 2026): Landscapes keeps frosted white glass, made opaque — ink over the skin base. */
+html[data-skin^="landscapes"]:root { --wz-owner-message: color-mix(in srgb, var(--ink) 22%, var(--bg)); --wz-owner-message-edge: color-mix(in srgb, var(--ink) 34%, var(--bg)); }
+html[data-skin="landscapes-light"]:root { --wz-owner-message: color-mix(in srgb, var(--ink) 16%, var(--bg)); --wz-owner-message-edge: color-mix(in srgb, var(--ink) 26%, var(--bg)); }
 html[data-skin^="landscapes"][data-shell="desktop"] .msg.u .bub { background: var(--wz-owner-message); border-color: var(--wz-owner-message-edge); }
 html[data-skin^="landscapes"][data-shell="desktop"] .ws.cur { background: rgba(255, 255, 255, .2); }
 html[data-skin^="landscapes"][data-shell="desktop"] .win.focus { border-color: rgba(255, 255, 255, .3); box-shadow: 0 14px 50px rgba(0, 0, 0, .35); }
