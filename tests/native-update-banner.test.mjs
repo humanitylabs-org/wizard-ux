@@ -6,6 +6,8 @@ import {readFileSync} from 'node:fs';
 // Exercise the actual device.js updater, isolated from owner data/native recording commands.
 const source = readFileSync(new URL('../web/device.js', import.meta.url), 'utf8');
 const block = source.slice(source.indexOf('  let upd = null, updHidden = 0;'), source.indexOf('  /* ================= #22 web hot-reload'));
+// The product-name helper (wizard-os#436) lives at the top of device.js; the banner block calls it.
+const osLine = source.match(/\n(  const OS = .*\n)/)[1];
 function fixture(state = 'deferred', reason = 'take') {
   const f = {voice:'idle', capture:false, native:false, active:null, calls:[], timers:[], elements:new Map()};
   const el = () => ({dataset:{}, hidden:false, innerHTML:'', setAttribute(){}, addEventListener(n, fn) { this.click = fn; }});
@@ -14,7 +16,7 @@ function fixture(state = 'deferred', reason = 'take') {
   const window = {WizAppCapture:{getState:()=>({recording:f.capture})}};
   const context = {window, document, DEV:()=>device, W$:()=>f, J:s=>s?JSON.parse(s):null, $:s=>f.elements.get(s.slice(1)), esc:s=>s, log(){},
     setTimeout(fn,ms){f.timers.push({fn,ms});return f.timers.length;}, clearTimeout(){}};
-  vm.runInNewContext(block + '\n globalThis.api={onUpdate,installUpdate,renderUpdate};', context);
+  vm.runInNewContext(osLine + block + '\n globalThis.api={onUpdate,installUpdate,renderUpdate};', context);
   f.upd={state,reason,version:'0.10.27',versionCode:91};
   f.show=()=>context.api.onUpdate(f.upd); f.tap=()=>context.api.installUpdate(); f.html=()=>f.elements.get('dvUpdate')?.innerHTML||'';
   f.show(); return f;

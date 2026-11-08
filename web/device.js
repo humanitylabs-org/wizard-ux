@@ -22,6 +22,8 @@
   const OUTBOX = window.WosOutbox || null;
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
+  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
   const toast = (i, t, ms) => W$()?.toast?.(i, t, ms);
   const J = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   const log = (...a) => { window.__devLog = (window.__devLog || []).concat(a.join(' ')).slice(-60); };
@@ -147,7 +149,7 @@
     if (!ask.length) return;
     log('rec:offer', ask.map(t => t.id + ':' + t.state).join(','), why);
     const el = openSheet('recording', `
-      <div class="dv-head"><span class="dv-ic">◉</span><div><b>${ask.length > 1 ? `${ask.length} recordings saved` : 'Recording saved'}</b><small>${ask[0].state === 'interrupted' ? 'Wizard OS closed while you were recording. Nothing was lost.' : 'You stopped it from the notification.'}</small></div></div>
+      <div class="dv-head"><span class="dv-ic">◉</span><div><b>${ask.length > 1 ? `${ask.length} recordings saved` : 'Recording saved'}</b><small>${ask[0].state === 'interrupted' ? `${OS()} closed while you were recording. Nothing was lost.` : 'You stopped it from the notification.'}</small></div></div>
       ${ask.map(t => `<div class="dv-take" data-take="${esc(t.id)}"><span class="dv-tk">${fmtMs(t.ms)} · ${esc(fsize(t.bytes || 0))}</span>
         <button class="dv-btn" data-takeact="delete">Delete</button><button class="dv-btn primary" data-takeact="send">${isDictation(t) ? 'Transcribe &amp; copy' : 'Send'}</button></div>`).join('')}
       <p class="dv-note">Dictation is transcribed for copying only; it is never sent. Send on other recordings sends a new chat to ${window.WizConfig.agent()}.</p>`);
@@ -290,7 +292,7 @@
   let upd = null, updHidden = 0;
   // Installation stays with the native updater, including older APKs without hold reasons.
   let updateAction = '', updateActionTimer = 0;
-  const readyText = u => `Wizard OS ${u.version || 'update'} is ready`;
+  const readyText = u => `${OS()} ${u.version || 'update'} is ready`;
   function knownTakeLive() {
     try {
       const w = W$(), c = window.WizAppCapture?.getState?.();
@@ -316,13 +318,13 @@
       const latest = J(d.updateState?.());
       if (latest) upd = latest;
       updateAction = upd?.state === 'deferred' && !knownTakeLive()
-        ? 'If no recording is active, force stop Wizard OS in Android’s App info, reopen it, then tap Install now'
+        ? `If no recording is active, force stop ${OS()} in Android’s App info, reopen it, then tap Install now`
         : '';
       refreshUpdate();
     }, 2500);
   }
   const UPD_TEXT = {
-    available: u => [`Wizard OS ${u.version} is available`, 'Update'],
+    available: u => [`${OS()} ${u.version} is available`, 'Update'],
     // Ready/deferred share one owner action. Never promise an automatic restart.
     ready: u => [readyMessage(u), 'Install now'],
     downloading: u => [`Downloading ${u.version}… ${u.progress || 0}%`, ''],
@@ -331,9 +333,11 @@
     confirm: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
     installer: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
     deferred: u => [readyMessage(u), 'Install now'],
-    permission: () => ['Allow Wizard OS to install updates, then come back', 'Allow'],
+    permission: () => [`Allow ${OS()} to install updates, then come back`, 'Allow'],
     error: u => [u.message || 'Update failed', 'Retry'],
   };
+  // The banner repaints when the WizardOS name tweak is toggled, without a reload.
+  window.addEventListener?.('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/wizardos-name') { try { renderUpdate(); } catch (_) {} } });
   function renderUpdate() {
     let el = $('#dvUpdate');
     const u = upd, t = u && UPD_TEXT[u.state];

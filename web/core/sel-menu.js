@@ -34,6 +34,8 @@
   const host = () => window.__wos || window.__wux;
   const toast = (i, t, ms) => host()?.toast?.(i, t, ms);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Product name (wizard-os#436): "WizardOS", one word, behind the off-by-default tweak wizard/wizardos-name.
+  const OS = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/wizardos-name') ? 'WizardOS' : 'Wizard OS'; } catch (_) { return 'Wizard OS'; } };
   const svg = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
   const EDIT = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 
@@ -210,7 +212,7 @@
   /* ---- Settings ---- */
   function html() {
     const on = enabled(), n = N();
-    const sub = own() ? 'Select words in a chat · choose what the menu offers' : n ? 'Update the Wizard OS app (0.9.7) to use it' : 'Works in the Wizard OS Android app';
+    const sub = own() ? 'Select words in a chat · choose what the menu offers' : n ? `Update the ${OS()} app (0.9.7) to use it` : `Works in the ${OS()} Android app`;
     return `<div class="st-group" data-selmenu><h4>Text selection menu</h4><p class="st-note">${esc(sub)}</p>
       ${ITEMS.map(it => `<button class="st-row" data-smset="${it.id}"><span class="st-tx"><b>${esc(it.label)}</b><small>${esc(it.note)}</small></span><span class="sw ${on.includes(it.id) ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;
   }
