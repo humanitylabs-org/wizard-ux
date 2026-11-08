@@ -949,7 +949,7 @@
           const d = window.WosResources?.state?.devices || {}, txt = (v, n) => String(v || '').slice(0, n);
           const own = txt(d.this?.wizard, 60) || (window.WizConfig?.agent?.() || 'Wizard');
           return [Object.freeze({ id: 'this', name: own, org: '', current: true, owner: txt(window.WizConfig?.owner?.(), 60) }),
-            ...(Array.isArray(d.managed) ? d.managed : []).filter(m => m && m.id).map(m => Object.freeze({ id: txt(m.id, 64), name: txt(m.name, 60) || txt(m.id, 60), org: txt(m.org, 60), current: false }))];
+            ...(Array.isArray(d.managed) ? d.managed : []).filter(m => m && m.id).map(m => Object.freeze({ id: txt(m.id, 64), name: txt(m.name, 60) || txt(m.id, 60), org: txt(m.org, 60), ...(/^https?:\/\//i.test(m.url || '') ? { url: txt(m.url, 2048) } : {}), current: false }))];
         },
         refresh: () => { if (live()) try { window.WosResources?.sync?.(); } catch (_) {} },
       }),
