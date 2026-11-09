@@ -102,6 +102,20 @@
   // Reversible without a code change: WizardOS settings.json `links.reader: true` routes outside links into
   // the installed Reader again. The Browser app, its Reading list and Save are untouched either way.
   const readerLinks = () => window.WizConfig?.raw?.settings?.links?.reader === true;
+  // Browser panel trial (James, 9 Nov 2026: "Can we try panel as a test to see if I like it?"). Off by default for
+  // everyone; WizardOS settings.json `links.panel: true` turns it on for that Wizard only. When on, a tapped outside
+  // link inside the WizardOS Android app opens in a browser panel over Wizard (an Android Custom Tab, Brave when it
+  // is installed), whose X or Back returns straight to the chat. Desktop, Wizard's own and private hosts, files and
+  // the explicit "Open in your browser" choices are unchanged. An APK without `openInPanel` keeps the browser route.
+  // Turn off: remove `links.panel` (or set it to false) in settings.json; the next shell load opens links as before.
+  const panelLinks = () => window.WizConfig?.raw?.settings?.links?.panel === true;
+  function outside(u) {
+    const b = bridge();
+    if (NATIVE && panelLinks() && !inApp(u) && !wizardHost(u) && typeof b?.openInPanel === 'function') {
+      try { b.openInPanel(u.href); return; } catch (_) {}
+    }
+    browse(u);
+  }
   // Hosts Reader could not read because they block it or need a sign-in open straight in the owner's browser on
   // the next tap (one tap, never "Reader could not read this page" first). Owner-local, hostname and time only.
   const DIRECT_KEY = 'wos.readerDirect.v1', DIRECT_TTL = 14 * 864e5, DIRECT_MAX = 200, DIRECT_REASONS = new Set(['blocked', 'signin', 'private']);
@@ -180,7 +194,7 @@
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (isFile(u)) return download(u, doc);
       if (!inApp(u)) {
-        if (!readerLinks() || wizardHost(u) || direct(u)) { browse(u); return true; }
+        if (!readerLinks() || wizardHost(u) || direct(u)) { outside(u); return true; }
         const app = readerApp(), target = app?.url ? abs(app.url) : null;
         if (target && inApp(target)) {
           target.searchParams.set('url', u.href);
@@ -188,7 +202,7 @@
           if (readerOpen?.(path)) return true;
           return go(path);
         }
-        browse(u); return true;
+        outside(u); return true;
       }
       // Desktop: a page preview is a normal window (wizard-os#265 rule 7), not a side pane. Images and files stay above.
       if (asWindow && asWindow(u.pathname + u.search + u.hash, nice(u))) return true;

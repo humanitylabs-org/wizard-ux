@@ -561,6 +561,32 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
     }
 
+    /**
+     * Browser panel trial (settings.json links.panel; the shell only calls this when it is on): an outside link opens in a
+     * Custom Tab over Wizard, launched into this task so its X or Back lands on the chat it was tapped from. Brave when
+     * installed, else the default browser's Custom Tab (PanelLinks.pick), else the existing default-browser open.
+     */
+    private void openPanel(Uri u) {
+        android.content.pm.PackageManager pm = getPackageManager();
+        java.util.List<String> providers = new java.util.ArrayList<>();
+        try {
+            for (android.content.pm.ResolveInfo ri : pm.queryIntentServices(new Intent(androidx.browser.customtabs.CustomTabsService.ACTION_CUSTOM_TABS_CONNECTION), 0))
+                if (ri.serviceInfo != null) providers.add(ri.serviceInfo.packageName);
+        } catch (RuntimeException ignored) { }
+        android.content.pm.ResolveInfo def = pm.resolveActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        String pkg = PanelLinks.pick(providers, def == null || def.activityInfo == null ? null : def.activityInfo.packageName, getPackageName());
+        if (pkg == null) { openInOwnBrowser(u); return; }
+        androidx.browser.customtabs.CustomTabColorSchemeParams dark = new androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+                .setToolbarColor(PanelLinks.TOOLBAR).setNavigationBarColor(PanelLinks.TOOLBAR).build();
+        androidx.browser.customtabs.CustomTabsIntent tab = new androidx.browser.customtabs.CustomTabsIntent.Builder()
+                .setColorScheme(androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_DARK)
+                .setDefaultColorSchemeParams(dark).setColorSchemeParams(androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_DARK, dark)
+                .setShowTitle(true).setShareState(androidx.browser.customtabs.CustomTabsIntent.SHARE_STATE_DEFAULT).build();
+        tab.intent.setPackage(pkg);
+        try { tab.launchUrl(this, u); }
+        catch (ActivityNotFoundException | SecurityException e) { openInOwnBrowser(u); }
+    }
+
     /* ---------------- Can't reach your Wizard (James, 12 Oct: Tailscale off gave a pure black screen) ----------------
      * Every main-frame load arms two marks. A page that paints (onPageCommitVisible) disarms them and hides the screen.
      * CONNECTING_MS: no network or Tailscale off → say why now; else "Connecting to your Wizard…".
@@ -1074,6 +1100,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             final Uri u = Uri.parse(String.valueOf(url));
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> openInOwnBrowser(u));
+        }
+        /** Browser panel trial: a tapped outside link in a Custom Tab over Wizard (Brave when installed). Shell: links.panel. */
+        @JavascriptInterface public void openInPanel(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!PanelLinks.web(u.getScheme())) return;
+            runOnUiThread(() -> openPanel(u));
         }
         /** A file link (APK, PDF…) on this Wizard: Android's download manager, so it lands in Downloads with a notification. */
         @JavascriptInterface public void download(String url) {
