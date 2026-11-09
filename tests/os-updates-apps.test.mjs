@@ -22,11 +22,12 @@ const INSTALLED = { installed: [
   { info: { id: 'Bad/Id', name: '<x>' }, app: { version: 1 }, metadata: { latestVersion: 2 } },
 ] };
 
-async function load({ on, apps = () => [200, INSTALLED], updates = () => [200, STATUS], mgr = () => [404, { error: 'not found' }] } = {}) {
+async function load({ on, apps = () => [200, INSTALLED], updates = () => [200, STATUS], mgr = () => [404, { error: 'not found' }], hang = false } = {}) {
   const calls = [], listeners = {};
   let refreshes = 0;
   const fetch = async (url) => {
     calls.push(url);
+    if (hang && url.endsWith('/_app-updates')) return new Promise(() => {});
     const [status, body] = url.endsWith('/store-data/api/apps/installed') ? apps() : url.endsWith('/_app-updates') ? mgr() : updates();
     return { ok: status >= 200 && status < 300, status, json: async () => body };
   };
@@ -48,7 +49,7 @@ test('switch on: one read of the Store installed list, then every Wizard Store a
   const { U, calls } = await load({ on: true });
   assert.match(U.html(), /<div class="osu-sec" data-osu-apps><span class="osu-lbl">Apps<\/span><p class="st-note" role="status">Checking apps…<\/p><\/div>/);
   await tick(); await tick();
-  assert.deepEqual(calls, ['https://box.ts.net/wizard-os-home/store-install/_updates', 'https://box.ts.net/wizard-os-home/store-data/api/apps/installed', 'https://box.ts.net/wizard-os-home/store-install/_app-updates']);
+  assert.deepEqual(calls, ['https://box.ts.net/wizard-os-home/store-install/_updates', 'https://box.ts.net/wizard-os-home/store-install/_app-updates', 'https://box.ts.net/wizard-os-home/store-data/api/apps/installed']);
   const h = U.html();
   assert.match(h, /<div class="st-row static" data-osu-app="wizard-messenger" data-osu-app-state="ready"><span class="st-tx"><b>Messenger<\/b><span>Version 93 · latest 97<\/span><\/span><span class="st-val">Update ready<\/span><\/div>/);
   assert.match(h, /data-osu-app="wizard-notes" data-osu-app-state="current"><span class="st-tx"><b>Notes<\/b><span>Version 12<\/span><\/span><span class="st-val">Up to date</);
@@ -120,11 +121,13 @@ const MGR = { app_mode: 'ask', holds: ['wizard-notes', 'wizard-music', 'wizard-p
 
 test('switch on with the App Manager state: failed with its reason, rolled back, held, mode and last run', async () => {
   const INST = { installed: [...INSTALLED.installed, row('wizard-maps', 2, 3, { name: 'Maps' })] };
-  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps'] }] });
+  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-notes', 'wizard-messenger'] }] });
   await U.loadApps();
   const h = U.html();
   assert.match(h, /data-osu-app="wizard-messenger" data-osu-app-state="failed"><span class="st-tx"><b>Messenger<\/b><span>Version 93 · latest 97<\/span><span data-osu-app-why>Version 97: a container keeps restarting &lt;b&gt;<\/span><\/span><span class="st-val">Rolled back<\/span>/);
   assert.match(h, /data-osu-app="wizard-maps" data-osu-app-state="held">.*<span class="st-val">Held</);
+  assert.match(h, /data-osu-app="wizard-notes" data-osu-app-state="held">/, 'a hold shows while up to date too (Codex P2)');
+  assert.match(h, /data-osu-app="wizard-messenger" data-osu-app-state="failed">/, 'a failure wins over a hold');
   assert.match(h, /data-osu-app="wizard-music" data-osu-app-state="skipped">/, 'an old failure for another version is not this one');
   assert.match(h, /<p class="st-hint" data-osu-app-mode>App updates: Ask me · last run 2026-11-09 04:31 UTC<\/p>/);
   assert.deepEqual([...h.matchAll(/data-osu-app="([^"]+)"/g)].map(m => m[1]).slice(0, 3), ['wizard-messenger', 'wizard-photos', 'wizard-maps']);
@@ -152,4 +155,13 @@ test('switch off: the App Manager state is never read either', async () => {
   const { U, calls } = await load({ on: false, mgr: () => [200, MGR] });
   U.html(); await tick(); await tick();
   assert.ok(!calls.some(u => u.endsWith('/_app-updates')));
+});
+
+test('a hung App Manager answer never holds up the list (Codex P2)', async () => {
+  const { U } = await load({ on: true, hang: true });
+  const t = Date.now(); await U.loadApps();
+  assert.ok(Date.now() - t < 6000);
+  const h = U.html();
+  assert.match(h, /data-osu-app="wizard-messenger" data-osu-app-state="ready">/);
+  assert.doesNotMatch(h, /data-osu-app-mode/);
 });

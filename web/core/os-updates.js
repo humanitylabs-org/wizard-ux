@@ -79,6 +79,7 @@
   // wizard-app-manager app_updates.SYSTEM_APPS: these move with the WizardOS release, never one by one.
   const WITH_OS = new Set(['hermes-agent', 'wizard-ux', 'wizard-agent-service', 'wizard-shell']);
   const AU_API = new URL('../store-install/_app-updates', document.currentScript?.src || location.href).href;
+  const AU_WAIT = 4000;   // ms the optional App Manager state may take before the list paints without it
   let apps = null, appsAt = 0, appsBusy = null, appsIssue = '', au = null;
   function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
@@ -99,9 +100,10 @@
         else if (WITH_OS.has(id)) { state = 'with-os'; label = `Updates with ${OS()}`; }
         else if (num(x.app?.ignoredVersion) === latest) { state = 'skipped'; label = 'This version skipped'; }
         else if (failed[id] && num(failed[id].to) === latest) { state = 'failed'; label = rolled.has(id) ? 'Rolled back' : 'Update failed'; }
-        else if (held.has(id)) { state = 'held'; label = 'Held'; }
         else { state = 'ready'; label = 'Update ready'; }
       }
+      // A hold is standing policy: show it even while the app is up to date (Codex P2), never over a failure.
+      if (held.has(id) && ['ready', 'current', 'unknown'].includes(state)) { state = 'held'; label = 'Held'; }
       if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
       const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
@@ -116,10 +118,12 @@
     if (appsBusy) return appsBusy;
     appsBusy = (async () => {
       try {
-        const [r, m] = await Promise.all([fetch(APPS_API, { credentials: 'same-origin', cache: 'no-store' }),
-          fetch(AU_API, { credentials: 'same-origin', cache: 'no-store' }).catch(() => null)]);
+        // The App Manager state is optional: bounded, so a slow or hung answer never holds up the list (Codex P2).
+        const mgr = fetch(AU_API, { credentials: 'same-origin', cache: 'no-store' })
+          .then(m => m.ok ? m.json() : null).catch(() => null);
+        const r = await fetch(APPS_API, { credentials: 'same-origin', cache: 'no-store' });
         const d = r.ok ? await r.json().catch(() => null) : null;
-        const md = m?.ok ? await m.json().catch(() => null) : null;
+        const md = await Promise.race([mgr, new Promise(ok => setTimeout(() => ok(null), AU_WAIT))]);
         au = md && typeof md === 'object' && ['auto', 'ask'].includes(md.app_mode) ? md : null;
         if (d && Array.isArray(d.installed)) { apps = appRows(d, au); appsIssue = ''; }
         else appsIssue = 'Couldn’t read the installed apps.';
