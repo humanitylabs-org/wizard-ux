@@ -129,7 +129,7 @@
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
-    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.action ? `<button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>` : ''}${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
+    return `<div class="osu-card" data-osu-card="${c.state}"${mac() ? ' data-osu-stack' : ''} role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.action ? `<button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>` : ''}${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
   }
   const seg = (name, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(name)}">${items.map(([key, text, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(text)}</button>`).join('')}</div>`;
   // Always retain the installed server version, including when an update card is present.
