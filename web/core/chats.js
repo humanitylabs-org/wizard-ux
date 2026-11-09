@@ -21,7 +21,7 @@
  *   threadShown(id, el)   → (optional) a window painted a loaded thread (el) or its list (null); the phone binds
  *                           the view the latest reply links to that thread (bound views, app.js)
  *
- * Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in core/chat-kit.js
+ * Parsing, Markdown, local time, drafts, copy/share and the media viewer live in core/chat-kit.js
  * (window.WosChat), loaded before this file by both shells.
  *
  * The body below the shims is kept line-for-line identical to the original mobile code it came from
@@ -253,7 +253,7 @@ window.WizCore.chats = function createChats(H) {
     window.visualViewport?.addEventListener('resize', resizeDocument);
     window.addEventListener('resize', resizeDocument);
   }
-  // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
+  // Parsing, Markdown, local time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
   const INC = window.WizCore.incognitoChats?.({ win: id => W[id], elOf: id => elOf(id), paint: id => { const w = W[id]; if (w) renderChats(w); }, grow: growTa, toast, kit: KIT });
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
