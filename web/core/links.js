@@ -102,13 +102,13 @@
   // Reversible without a code change: WizardOS settings.json `links.reader: true` routes outside links into
   // the installed Reader again. The Browser app, its Reading list and Save are untouched either way.
   const readerLinks = () => window.WizConfig?.raw?.settings?.links?.reader === true;
-  // Browser panel trial (James, 9 Nov 2026: "Can we try panel as a test to see if I like it?"). Off by default for
-  // everyone; WizardOS settings.json `links.panel: true` turns it on for that Wizard only. When on, a tapped outside
-  // link inside the WizardOS Android app opens in a browser panel over Wizard (an Android Custom Tab, Brave when it
-  // is installed), whose X or Back returns straight to the chat. Desktop, Wizard's own and private hosts, files and
-  // the explicit "Open in your browser" choices are unchanged. An APK without `openInPanel` keeps the browser route.
-  // Turn off: remove `links.panel` (or set it to false) in settings.json; the next shell load opens links as before.
-  const panelLinks = () => window.WizConfig?.raw?.settings?.links?.panel === true;
+  // Browser panel, core default (James, 9 Nov 2026, after the trial: "make this part of core"). On for every Wizard
+  // unless WizardOS settings.json says `links.panel: false`. A tapped outside link inside the WizardOS Android app
+  // opens in a browser panel over Wizard (an Android Custom Tab drawn by the phone's default browser), whose X or
+  // Back returns straight to the chat. Desktop, PWA, Mac, Wizard's own and private hosts, files and the explicit
+  // "Open in your browser" choices are unchanged. An APK without `openInPanel` keeps the browser route.
+  // Opt out: set `"links": {"panel": false}` in settings.json; the next shell load opens links as before.
+  const panelLinks = () => window.WizConfig?.raw?.settings?.links?.panel !== false;
   function outside(u) {
     const b = bridge();
     if (NATIVE && panelLinks() && !inApp(u) && !wizardHost(u) && typeof b?.openInPanel === 'function') {
