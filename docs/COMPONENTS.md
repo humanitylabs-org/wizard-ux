@@ -27,7 +27,6 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct) |
 | Switch Wizard (Android) | `WizardSwitch` via `WizardOSNative.switchWizard`, from `WizWorkspaces.switch` |
 | Refuse an Android Wizard switch while work is unfinished | `ServerSwitchGuard` (`android/app/src/main/java/ai/wizards/os/ServerSwitchGuard.java`) |
-| WizardOS updates itself (Android APK) | `UpdatePolicy` (`android/app/src/main/java/ai/wizards/os/update/UpdatePolicy.java`: `next`, `autoNet`), `Updater`, `UpdateJob`: downloads by itself on any network except roaming (wizard-ux#1219), installs never mid-recording |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) |
@@ -89,7 +88,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Local commands | `WosCommands` (`commands.js`) |
 | Screen capture | `WosScreenCapture`(`screen-capture.js`),`WosCaptureTools`; `ScreenMode`/`screen.html` |
 | Screen | `ScreenMode`: picture caption placement (`screen.html`); independent picture-read executor (`ScreenMode.java`) |
-| Reload notices/keep | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`, `wos:channel`); `WizAppCapture.rescueTake` / `pageAudioFree` |
+| Reload notices/keep | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`, `wos:channel`; APK `UpdatePolicy`); `WizAppCapture.rescueTake` / `pageAudioFree` |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic/meeting | `NoteRecorder` (`audio/NoteRecorder.java`), `MicRoute` (`audio/MicRoute.java`): `NOTE_SOURCES` notes / `SOURCES` STT; `MeetingRecorderService`: update pause/resume/rollback |
