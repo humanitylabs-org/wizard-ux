@@ -22,12 +22,12 @@ const INSTALLED = { installed: [
   { info: { id: 'Bad/Id', name: '<x>' }, app: { version: 1 }, metadata: { latestVersion: 2 } },
 ] };
 
-async function load({ on, apps = () => [200, INSTALLED] } = {}) {
+async function load({ on, apps = () => [200, INSTALLED], updates = () => [200, STATUS] } = {}) {
   const calls = [], listeners = {};
   let refreshes = 0;
   const fetch = async (url) => {
     calls.push(url);
-    const [status, body] = url.endsWith('/store-data/api/apps/installed') ? apps() : [200, STATUS];
+    const [status, body] = url.endsWith('/store-data/api/apps/installed') ? apps() : updates();
     return { ok: status >= 200 && status < 300, status, json: async () => body };
   };
   const window = { WosSettings: { register() {}, refresh: () => refreshes++ }, addEventListener: (t, f) => { listeners[t] = f; } };
@@ -59,6 +59,15 @@ test('switch on: one read of the Store installed list, then every Wizard Store a
   // Most urgent first: update ready, then busy, then the rest.
   assert.deepEqual([...h.matchAll(/data-osu-app="([^"]+)"/g)].map(m => m[1]), ['wizard-messenger', 'wizard-photos', 'wizard-music', 'wizard-ux', 'wizard-notes']);
   assert.match(h, /Installed version and the App Store’s latest, from the App Manager\./);
+});
+
+test('older App Manager without server update controls (404): the apps still show (Codex P2)', async () => {
+  const { U, calls } = await load({ on: true, updates: () => [404, { error: 'not found' }] });
+  assert.match(U.html(), /Update controls are not available on this Wizard\./);
+  await U.loadApps();
+  const h = U.html();
+  assert.match(h, /Update controls are not available on this Wizard\.[\s\S]*data-osu-apps[\s\S]*data-osu-app="wizard-messenger" data-osu-app-state="ready"/);
+  assert.equal(calls.filter(u => u.endsWith('/apps/installed')).length, 1);
 });
 
 test('appRows mirrors the App Manager comparison (latest > installed) and escapes names', async () => {

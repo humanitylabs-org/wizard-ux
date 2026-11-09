@@ -188,9 +188,10 @@
     return `<div class="st-row static osu-head" data-settings-version="server"><span class="st-tx"><b data-osu-title>${esc(have)}</b></span><span class="st-val">${esc(sub)}</span></div>`;
   }
   function html() {
+    // The Apps list reads its own source, so it shows even when the server update controls can't be reached.
     if (!st || issue) {
       if (!off && !inflight) load();
-      return `<div class="st-group" data-osu-group><h4>${OS()} (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? `${quietHead()}${st?.installing ? `<p class="st-note" role="status" data-osu-last-progress>Last checked: Updating ${esc(OS())}… Connection lost; latest progress unverified.</p>` : ''}<p class="st-hint">The current server version and update preference could not be verified.${st ? ' The information above was previously verified, not a live update.' : ' No update preference was changed by this check.'}</p><button type="button" class="st-wide wz-button secondary" data-osu="retry" ${inflight ? 'disabled aria-busy="true"' : ''}>${inflight ? 'Checking…' : 'Try again'}</button>` : ''}</div>`;
+      return `<div class="st-group" data-osu-group><h4>${OS()} (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? `${quietHead()}${st?.installing ? `<p class="st-note" role="status" data-osu-last-progress>Last checked: Updating ${esc(OS())}… Connection lost; latest progress unverified.</p>` : ''}<p class="st-hint">The current server version and update preference could not be verified.${st ? ' The information above was previously verified, not a live update.' : ' No update preference was changed by this check.'}</p><button type="button" class="st-wide wz-button secondary" data-osu="retry" ${inflight ? 'disabled aria-busy="true"' : ''}>${inflight ? 'Checking…' : 'Try again'}</button>` : ''}${appsHtml()}</div>`;
     }
     if (Date.now() - at > FRESH) load();
     const auto = isAuto();
