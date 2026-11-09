@@ -1,0 +1,11 @@
+{
+  "id": "wizard/update-bug-reports",
+  "name": "Tell the team about failed updates",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told."
+}

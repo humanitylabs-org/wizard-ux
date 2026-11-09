@@ -31,7 +31,8 @@
     "wizard/wizardos-name",
     "wizard/failure-reason",
     "wizard/skins-look-only",
-    "wizard/app-updates-list"
+    "wizard/app-updates-list",
+    "wizard/update-bug-reports"
   ],
   "defaults": [
     "wizard/unified-inbox"
