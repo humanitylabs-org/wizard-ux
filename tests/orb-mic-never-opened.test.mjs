@@ -25,7 +25,9 @@ function shell(V) {
     quickTake: () => false, // Orb switcher > "Short takes run as commands" is off by default: a tap is always a message
   });
   // finishVoice as shipped, plus the helper it calls (absent on the old code, where the latch path never reaches it).
+  // The Send tap reads the model live through sendTapRoute (wizard-ux#1218); load the real helper when it exists.
   vm.runInContext(fn('  function finishVoice() {', '  async function cancelVoice(') + '\n' + fn('  async function returnMeeting(', '  async function parkReply(') + '\n' +
+    (APP.includes('  function sendTapRoute(') ? fn('  function sendTapRoute(', '  // A take that sends nothing') : '') + '\n' +
     (APP.includes('function micNeverOpened(') ? fn(APP.includes('  async function micNeverOpened(') ? '  async function micNeverOpened(' : '  function micNeverOpened(', "  $('#txChips').addEventListener") : 'function micNeverOpened() {}'), ctx);
   return { ctx, calls };
 }

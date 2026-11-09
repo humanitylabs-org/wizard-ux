@@ -1952,7 +1952,7 @@
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   const glow = document.createElement('div'); glow.id = 'voiceGlow'; glow.setAttribute('aria-hidden', 'true'); document.body.appendChild(glow); // edge light; never resizes the stage
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
   let vHandedOff = null; // a sent take the outbox can finish after a reload
   const VOICE = C.voice({
     onState: st => {
@@ -2067,7 +2067,7 @@
       dictationFinishing = true; // model options may not have loaded while an app is foreground
       try {
         const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '');
-        vRoute = vConversation ? null : resolveRoute();
+        vRoute = vConversation ? null : resolveRoute(); vRouteAt = vConversation ? null : resolveRoute; // re-read at Send (wizard-ux#1218)
         if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
         if (!vConversation && !vRoute?.model) throw Error('Model route unavailable · recording has not started');
       } catch(e) { toast('!',String(e.message || e),2600);return 'busy'; }
@@ -2113,7 +2113,10 @@
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
     const sealAt = vFeedback || vNewChat ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     let modelRoute;
-    try { modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
+    // The destination stays pinned to where the take started; the model is read at the Send key, so a model picked
+    // while recording is the one that answers (wizard-ux#1218). The recording-start route stays only when the
+    // selector can't be read right now (catalogue still loading).
+    try { const live = vConversation ? null : vRouteAt?.(); if (live?.model && live?.provider) vRoute = live; modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
     const sealed = t && (t.text || t.files.length || t.reply) ? t : false;
@@ -2156,7 +2159,7 @@
     if (!sid) return 'busy';
     strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
     dictationFinishing = true;
-    try { vRoute = CHATS.modelRoute(wid,sid); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
+    try { vRouteAt = () => CHATS.modelRoute(wid,sid); vRoute = vRouteAt(); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();

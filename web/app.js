@@ -2256,12 +2256,20 @@
     const hadSnap = !!V.snap;
     const saved = window.__wosVoiceRecovery().find(t => t.id === id);
     const recoveredLoan=window.WosOrbHandoff?.takeSnap(id);
-    const snap = recoveredLoan ? {...V.snap,...recoveredLoan} : (saved?.general ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
+    // A live general take keeps its own start snapshot (window, new chat); only a recovered one is rebuilt (wizard-ux#1218).
+    const liveGeneral = hadSnap && V.snap.general && !V.snap.resumed;
+    const snap = recoveredLoan ? {...V.snap,...recoveredLoan} : (saved?.general && !liveGeneral ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
     if (saved?.general) { V.kind = 'general'; V.target = null; V.replyTo = null; }
     try {
       const nativePin = saved?.conversation;
       if (!snap.meetingEventId && nativePin && V.target == null && !V.replyTo && V.kind !== 'command') snap.conversation = nativePin; // old token fails closed after shell reload
       else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
+      // A live take sent from the recording notification reads the model at that Send too, for its pinned destination
+      // (wizard-ux#1218). A take recovered after reload keeps its saved route.
+      if (!snap.conversation && hadSnap && !V.snap.resumed) {
+        const live = sendTapRoute(snap, V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null));
+        if (live?.model && live?.provider) snap.route = live;
+      }
       if (!snap.conversation && !(snap.route?.model&&snap.route?.provider)) {
         const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
         snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
@@ -2321,10 +2329,12 @@
     const knownReply = kind === 'dictation' || savedGeneral ? null : replyTake(a.id);
     const prior = knownReply?.custodyId ? OUTBOX.get(knownReply.custodyId) : null, draft = prior?.parkedDraft;
     if (knownReply?.custodyId && (!draft || prior.state !== 'held' || !prior.durable)) return false;
-    Object.assign(V, { native: a.id, kind, target: null, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    Object.assign(V, { native: a.id, kind, target: null, resumed: true, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     V.parts=[];V.custodyCapture=null;V.nativeSegmentBase=0;V.meetingLoan=window.WosOrbHandoff?.forTake(a.id)||null;
     if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],reply:draft.sealReply||null,done:()=>{},putBack:()=>{}}});
     if (savedGeneral && !V.snap?.meetingEventId) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
+    // A take resumed after a reload keeps the route it had; only a take started on this page reads the model at Send (wizard-ux#1218).
+    if (V.snap) V.snap = { ...V.snap, resumed: true };
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to resume' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
@@ -2597,7 +2607,7 @@
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: opt.replyTo || null, snap: null, seal: null, chunks: [], parts: [], acc: 0, nativeSegmentBase:0,resumeNative:false,t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: opt.replyTo || null, resumed: false, snap: null, seal: null, chunks: [], parts: [], acc: 0, nativeSegmentBase:0,resumeNative:false,t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2789,6 +2799,17 @@
     const v = V.snap?.view;
     return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread } : null;
   }
+  // The model route for a take, read from the selector at the Send tap (wizard-ux#1218), for the same destination the
+  // take was pinned to when it started. An explicit agent pick keeps its own agent. Not used for a take resumed after
+  // a reload (snap.resumed): that keeps its saved route.
+  function sendTapRoute(snap, pin) {
+    if (snap.general) {
+      const r = snap.newChatWid ? CHATS.modelRoute(snap.newChatWid, '__new__') : CHATS.modelRoute();
+      const agent = snap.route?.agent || '';
+      return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
+    }
+    return pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+  }
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
   function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
@@ -2897,6 +2918,8 @@
     if (V.kind === 'dictation') return finishDictation();
     if (V.kind === 'command') { V.stopAsked = true; pauseCommandCapture(); }
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
+    // A take resumed after a reload with no saved snapshot keeps the model route saved for it (wizard-ux#1218).
+    if (V.resumed && V.native && !V.snap.resumed && !V.snap.route) { V.snap.resumed = true; try { V.snap.route = window.WosModels.voiceRoute(V.native); } catch (_) {} }
     if (V.target != null || V.replyTo || V.kind === 'command') V.snap.conversation = null; // only explicit gestures override
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     // Files still uploading (or failed with their bytes here) never hold the send: they ride as placeholders and the
@@ -2908,9 +2931,11 @@
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
       if (!V.snap.conversation) {
-        // A route missing its provider (catalogue still loading) was never sent; each Send tap re-resolves it,
-        // so a model the owner picks afterwards takes effect instead of the stale half-route.
-        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? (V.snap.route?.agent ? window.WosModels.snapshot('', null, V.snap.route.agent) : CHATS.modelRoute()) : CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        // The destination stays pinned to where the take started, but the model is read at the Send tap: a model
+        // picked while recording is the one that answers (wizard-ux#1218). The route from the start of the take is
+        // kept only when the selector can't be read right now (catalogue still loading).
+        const live = V.snap.resumed && V.snap.route?.model && V.snap.route?.provider ? null : sendTapRoute(V.snap, pin);
+        if (live?.model && live?.provider) V.snap.route = live;
         if (!(V.snap.route?.model&&V.snap.route?.provider)) { V.snap.route = null; window.WosModels.load?.(); toast('!', 'Choose a model before sending', 2200); return; }
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
