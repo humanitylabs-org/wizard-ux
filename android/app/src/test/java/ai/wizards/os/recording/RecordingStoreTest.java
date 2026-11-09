@@ -73,7 +73,7 @@ public class RecordingStoreTest {
         assertEquals("still recoverable by the page", 1, fresh.pending(null, A).size());
         assertTrue("handed to the page: not unsent", fresh.unsent(A).isEmpty());
 
-        fresh.stayWith(A); // the app moves to Wizard B
+        assertTrue(fresh.stayWith(A)); // the app moves to Wizard B
         assertTrue("never re-homed to another Wizard", fresh.pending(null, B).isEmpty());
         assertTrue(fresh.unsent(B).isEmpty());
         assertEquals("offered again back on its own Wizard", 1, fresh.pending(null, A).size());
@@ -135,5 +135,32 @@ public class RecordingStoreTest {
         fill(st.audio(id), 9000); // other audio now sits at the original path
         assertEquals("still counted, nothing removed", 1, new RecordingStore(dir).unsent(A).size());
         assertTrue(st.audio(id).isFile());
+    }
+
+    @Test
+    public void anAppCaptureTakeStaysWithItsPageAndDoesNotBlock() throws Exception {
+        File dir = tmp.newFolder("rec");
+        RecordingStore st = new RecordingStore(dir);
+        String id = st.create("app"); // started by an app's capture row, cut short by a kill
+        fill(st.audio(id), 20_000);
+        assertTrue("its page row recovers it; the voice sheet can't show it", st.unsent(A).isEmpty());
+        assertTrue(st.stayWith(A));
+        assertTrue(st.pending(null, B).isEmpty());
+        assertEquals(1, st.pending(null, A).size());
+    }
+
+    @Test
+    public void aSwitchIsRefusedWhenATakeCannotBeKeptForItsWizard() throws Exception {
+        File dir = tmp.newFolder("rec");
+        RecordingStore st = new RecordingStore(dir);
+        String id = st.create("auto");
+        fill(st.audio(id), 5000);
+        st.set(id, "state", "stopped");
+        st.claim(id);
+        assertTrue(new File(dir, id + ".json.tmp").mkdir()); // the metadata write will fail
+        assertFalse(new RecordingStore(dir).stayWith(A));
+        assertTrue(new File(dir, id + ".json.tmp").delete());
+        assertTrue(new RecordingStore(dir).stayWith(A));
+        assertTrue(new RecordingStore(dir).pending(null, B).isEmpty());
     }
 }

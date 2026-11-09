@@ -143,31 +143,40 @@ public final class RecordingStore {
     }
 
     /**
-     * Takes that block switching Wizards (wizard-ux#1220): pending for {@code origin} and never handed to the page.
-     * A take the page already claimed into its outbox (custody handed to web-outbox), even by an earlier process,
-     * belongs to that page; {@link #stayWith} keeps it for this Wizard, so a switch neither loses nor re-homes it.
+     * Takes that block switching Wizards (wizard-ux#1220): orb voice takes pending for {@code origin} and never handed
+     * to the page, the ones the page's "Recording saved" sheet offers with Send / Delete. A take the page already
+     * claimed into its outbox (custody handed to web-outbox), even by an earlier process, and an app capture (its
+     * page row owns it and recovers it) belong to this Wizard's page; {@link #stayWith} keeps them for this Wizard,
+     * so a switch neither loses nor re-homes them.
      */
     public synchronized List<JSONObject> unsent(String origin) {
         List<JSONObject> out = new ArrayList<>();
-        for (JSONObject o : pending(null, origin)) if (!handedToPage(o.optString("id"))) out.add(o);
+        for (JSONObject o : pending(null, origin))
+            if (VOICE_KINDS.contains(o.optString("kind")) && !handedToPage(o.optString("id"))) out.add(o);
         return out;
     }
 
+    /** Kinds the orb records (device.js voiceKind); every other kind is an app capture started by a page. */
+    private static final Set<String> VOICE_KINDS = new HashSet<>(java.util.Arrays.asList("auto", "command", "dictation"));
+
     /**
      * Before the app moves to another Wizard: every take still here that has no Wizard yet stays with {@code origin}
-     * (the one it was recorded for). It is offered again when the app is back on that Wizard.
+     * (the one it was recorded for). It is offered again when the app is back on that Wizard. False when any take
+     * could not be stamped: the switch must not go ahead, or that take would be offered to the new Wizard.
      */
-    public synchronized void stayWith(String origin) {
-        if (origin == null || origin.isEmpty()) return;
+    public synchronized boolean stayWith(String origin) {
+        if (origin == null || origin.isEmpty()) return false;
         File[] fs = dir.listFiles((d, n) -> n.endsWith(".json"));
-        if (fs == null) return;
+        if (fs == null) return !dir.exists();
+        boolean all = true;
         for (File f : fs) {
             String id = f.getName().substring(0, f.getName().length() - 5);
             JSONObject o = read(id);
-            if (o == null || !o.optString("home").isEmpty()) continue;
-            try { o.put("home", origin); } catch (JSONException ignored) { }
-            write(id, o);
+            if (o == null || !o.optString("home").isEmpty()) continue; // unreadable metadata is never offered anyway
+            try { o.put("home", origin); } catch (JSONException e) { all = false; continue; }
+            all &= write(id, o);
         }
+        return all;
     }
 
     /** The take's bytes already moved to Cancelled recordings or left the phone: drop the stale metadata. */
@@ -192,14 +201,13 @@ public final class RecordingStore {
         return a.toString();
     }
 
-    private void write(String id, JSONObject o) {
+    private boolean write(String id, JSONObject o) {
         File tmp = new File(dir, safe(id) + ".json.tmp");
         try (FileOutputStream out = new FileOutputStream(tmp)) {
             out.write(o.toString().getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
-        } catch (IOException e) { return; }
-        //noinspection ResultOfMethodCallIgnored
-        tmp.renameTo(meta(id));
+        } catch (IOException e) { return false; }
+        return tmp.renameTo(meta(id));
     }
 
     static String safe(String id) { return String.valueOf(id).replaceAll("[^A-Za-z0-9._-]", "_"); }
