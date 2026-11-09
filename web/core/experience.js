@@ -92,6 +92,10 @@
   const LOOK_ONLY = 'wizard/skins-look-only';
   const lookOnly = () => !locked() && mixOf(LOOK_ONLY) === true;
   const recipe = () => lookOnly() ? null : window.WosMySkin?.active;
+  /* Slice 3 (#1190), same switch: tweaks on the drop list (posted on #1190, waiting for Miguel/James) are off while it
+   * is on: not loaded and not offered. Nothing is deleted; saved choices are kept and back when it is off. */
+  const RETIRING = ['wizard/two-orbs', 'wizard/app-borders', 'miguel/no-desk-close', 'wizard/pin-buttons', 'wizard/wizardos-name'];
+  const retiring = id => lookOnly() && RETIRING.includes(id);
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
   const canonical = id => catalog?.aliases?.[id] || id;
   const globalIds = () => catalog?.defaults || [];
@@ -108,7 +112,7 @@
     for (const [old, current] of Object.entries(catalog?.aliases || {})) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
     return undefined;
   };
-  const enabled = (id, own = recipe()) => id === LOOK_ONLY ? lookOnly() : globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
+  const enabled = (id, own = recipe()) => id === LOOK_ONLY ? lookOnly() : retiring(id) ? false : globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
     : own ? (recipeChoice(own, id) ?? presetOn(id)) : (mixOf(id) ?? presetOn(id));
   // Packages that fill the same place (two Home maps): the first one listed in a catalog `oneOf` group wins.
   // An explicit off for any member (My skin recipe, a saved off, a release-wide off) turns the whole group off.
@@ -133,6 +137,21 @@
     state.mix = mix; Store.write(state);
     // An owner's own switch (not a migration): core/look-sync.js shares it with his other devices.
     try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on } })); } catch (_) {}
+  }
+  /* The one-time quiet migration (#1190): when the owner turns wizard/skins-look-only on here, what the own skin worn on
+   * this device chose becomes the owner's shared feature switches (look sync carries them to look.json, so every
+   * device and the Tracker show them), instead of silently stopping. Once per device: turning it off and on again, or
+   * another device adopting the switch, never re-applies an old recipe over newer shared choices. The recipe itself is
+   * left as it was. Views, drop-list tweaks and the switch itself are not carried. */
+  async function carryRecipe() {
+    const own = window.WosMySkin?.active;
+    if (state.recipeCarried || locked() || !own?.tweaks || typeof own.tweaks !== 'object') return;
+    state.recipeCarried = true; Store.write(state);
+    for (const id of [...manifests.keys()]) {
+      if (id === LOOK_ONLY || RETIRING.includes(id) || viewOf(id)) continue;
+      const choice = recipeChoice(own, id); if (typeof choice !== 'boolean') continue;
+      if (choice !== enabled(id, null)) await setOne(id, choice); // recipe() is null now: this writes the shared set
+    }
   }
   const profileReads = new Map();
   function profile(who) {
@@ -263,7 +282,7 @@
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
         shell: shellHere(),
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t).map(t => locked() && !t.builtin && !t.view ? { ...t, on: false, locked: true } : t), locked: locked(), channel });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id) && !retiring(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t).map(t => locked() && !t.builtin && !t.view ? { ...t, on: false, locked: true } : t), locked: locked(), channel });
     },
     installed, defaults, authors,
     // Initial shell routes must see the selected view, including overlapping refreshes.
@@ -324,6 +343,7 @@
         return apply();
       }
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
+      if (id === LOOK_ONLY && !item.on) { await setOne(id, true); await carryRecipe(); return apply(); }
       if (item.on) await setOne(id, false);
       else for (const m of groupOf(id) || [id]) if (m === id || explicitOff(m)) await setOne(m, true);
       return apply();

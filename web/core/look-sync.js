@@ -178,7 +178,10 @@
           if (!same(bg, skin.desktopBackdrop)) skin.adoptDesktopBackdrop(bg);
         }
         const want = wear(doc), views = shellViews(doc);
-        if (!same(want, mixOn(exp.mix).filter(live)) || (perShell() && !same(views, exp.views)) || !defaultsMatch(doc)) exp.adopt(Object.fromEntries(want.map(id => [id, true])), perShell() ? views : undefined, wornDefaults(doc));
+        // Every shared default goes along: exp.adopt takes the built-ins it knows, and sets them aside while an own skin
+        // decides; a look-only switch arriving in this same set (#1190) then takes them now, not on the next pass.
+        const defaults = Object.fromEntries(Object.entries(doc.defaults || {}).map(([id, t]) => [id, t.on]));
+        if (!same(want, mixOn(exp.mix).filter(live)) || (perShell() && !same(views, exp.views)) || !defaultsMatch(doc)) exp.adopt(Object.fromEntries(want.map(id => [id, true])), perShell() ? views : undefined, defaults);
       } finally { applying = false; }
     }
     // Drop only what this pass delivered; a change made meanwhile stays queued.
