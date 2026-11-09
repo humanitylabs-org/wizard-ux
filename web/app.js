@@ -2256,7 +2256,9 @@
     const hadSnap = !!V.snap;
     const saved = window.__wosVoiceRecovery().find(t => t.id === id);
     const recoveredLoan=window.WosOrbHandoff?.takeSnap(id);
-    const snap = recoveredLoan ? {...V.snap,...recoveredLoan} : (saved?.general ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
+    // A live general take keeps its own start snapshot (window, new chat); only a recovered one is rebuilt (wizard-ux#1218).
+    const liveGeneral = hadSnap && V.snap.general && !V.snap.resumed;
+    const snap = recoveredLoan ? {...V.snap,...recoveredLoan} : (saved?.general && !liveGeneral ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
     if (saved?.general) { V.kind = 'general'; V.target = null; V.replyTo = null; }
     try {
       const nativePin = saved?.conversation;

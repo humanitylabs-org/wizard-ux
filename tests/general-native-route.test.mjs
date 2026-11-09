@@ -44,3 +44,11 @@ test('resumed general take sent from the notification keeps its saved route',()=
  vm.runInContext(finish+'\nnativeFinish("native-qa",true)',s.c);
  assert.equal(s.get().seen.snap.route.provider,'main-provider');assert.equal(s.get().seen.snap.route.model,'main-model');
 });
+test('live general take sent from the notification keeps its start window and reads that window\'s model',()=>{
+ const s=setup();s.V.kind='general';s.V.state='listen';
+ s.V.snap={general:true,view:null,screen:'',others:[],conversation:null,newChatWid:'chatsA',route:{model:'main-model',provider:'main-provider'}};
+ Object.assign(s.c,{WosOrbHandoff:null,generalVoiceSnap:()=>({general:true,view:null,screen:'',others:[],conversation:null,newChatWid:'chatsB',route:null}),
+  CHATS:{modelRoute:(wid)=>({model:'picked-'+(wid||'none'),provider:'main-provider'})},saveVoiceRoute(){}});
+ vm.runInContext(tapRoute+'\n'+finish+'\nnativeFinish("native-qa",false)',s.c);
+ assert.equal(s.get().seen.snap.newChatWid,'chatsA');assert.equal(s.get().seen.snap.route.model,'picked-chatsA');
+});
