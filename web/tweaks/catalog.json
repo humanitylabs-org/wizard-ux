@@ -29,7 +29,8 @@
     "wizard/desktop-chats",
     "wizard/background-continue",
     "wizard/wizardos-name",
-    "wizard/failure-reason"
+    "wizard/failure-reason",
+    "wizard/skins-look-only"
   ],
   "defaults": [
     "wizard/unified-inbox"
