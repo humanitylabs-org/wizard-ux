@@ -69,19 +69,25 @@
    * Every installed app: installed version, latest Store version and a plain status, read from the same Runtipi
    * list the App Manager's app updater reads (`wam app-updates` candidates): the Store's
    * `../store-data/api/apps/installed` (id, name, status, version, ignoredVersion, latestVersion). Read only; never
-   * a copy of its own. Holds, failures, rollbacks and the app Automatic / Ask switch need the App Manager's
-   * app-update state on the owner listener, which is a later slice. Fetched only while the switch is on. */
+   * a copy of its own. Holds, failed versions (with the plain reason), rollbacks, the last run and the app
+   * Automatic / Ask mode come from the App Manager's own app-update state, `../store-install/_app-updates`
+   * (owner only, same switch; an older App Manager answers 404 and the list stays as above). Fetched only while
+   * the switch is on. */
   const APPS_ID = 'wizard/app-updates-list';
   const APPS_API = new URL('../store-data/api/apps/installed', document.currentScript?.src || location.href).href;
   const STORE_SLUG = 'wizardapps';   // wizard-app-manager cli.STORE: app updates only move this store's apps
   // wizard-app-manager app_updates.SYSTEM_APPS: these move with the WizardOS release, never one by one.
   const WITH_OS = new Set(['hermes-agent', 'wizard-ux', 'wizard-agent-service', 'wizard-shell']);
-  let apps = null, appsAt = 0, appsBusy = null, appsIssue = '';
+  const AU_API = new URL('../store-install/_app-updates', document.currentScript?.src || location.href).href;
+  let apps = null, appsAt = 0, appsBusy = null, appsIssue = '', au = null;
   function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
-  function appRows(doc) {
-    const out = [];
+  function appRows(doc, mgr) {
+    const out = [], m = mgr && typeof mgr === 'object' ? mgr : {};
+    const held = new Set(Array.isArray(m.holds) ? m.holds : []);
+    const failed = m.failed && typeof m.failed === 'object' ? m.failed : {};
+    const rolled = new Set(Array.isArray(m.last?.rolled_back) ? m.last.rolled_back : []);
     for (const x of Array.isArray(doc?.installed) ? doc.installed : []) {
       const id = x?.info?.id; if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) continue;
       const urn = typeof x.info.urn === 'string' ? x.info.urn : '';
@@ -92,13 +98,16 @@
         if (latest <= have) { state = 'current'; label = 'Up to date'; }
         else if (WITH_OS.has(id)) { state = 'with-os'; label = `Updates with ${OS()}`; }
         else if (num(x.app?.ignoredVersion) === latest) { state = 'skipped'; label = 'This version skipped'; }
+        else if (failed[id] && num(failed[id].to) === latest) { state = 'failed'; label = rolled.has(id) ? 'Rolled back' : 'Update failed'; }
+        else if (held.has(id)) { state = 'held'; label = 'Held'; }
         else { state = 'ready'; label = 'Update ready'; }
       }
       if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
-      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver });
+      const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
+      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why });
     }
-    const rank = { ready: 0, busy: 1, unknown: 2, skipped: 3, 'with-os': 4, current: 5 };
+    const rank = { failed: 0, ready: 1, busy: 2, held: 3, unknown: 4, skipped: 5, 'with-os': 6, current: 7 };
     return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
   }
   function loadApps(force) {
@@ -107,9 +116,12 @@
     if (appsBusy) return appsBusy;
     appsBusy = (async () => {
       try {
-        const r = await fetch(APPS_API, { credentials: 'same-origin', cache: 'no-store' });
+        const [r, m] = await Promise.all([fetch(APPS_API, { credentials: 'same-origin', cache: 'no-store' }),
+          fetch(AU_API, { credentials: 'same-origin', cache: 'no-store' }).catch(() => null)]);
         const d = r.ok ? await r.json().catch(() => null) : null;
-        if (d && Array.isArray(d.installed)) { apps = appRows(d); appsIssue = ''; }
+        const md = m?.ok ? await m.json().catch(() => null) : null;
+        au = md && typeof md === 'object' && ['auto', 'ask'].includes(md.app_mode) ? md : null;
+        if (d && Array.isArray(d.installed)) { apps = appRows(d, au); appsIssue = ''; }
         else appsIssue = 'Couldn’t read the installed apps.';
       } catch (_) { appsIssue = 'Couldn’t reach the installed apps.'; }
       appsAt = Date.now(); appsBusy = null; changed(); return apps;
@@ -122,9 +134,11 @@
     if (!appsAt || Date.now() - appsAt > FRESH) void loadApps();
     const head = '<span class="osu-lbl">Apps</span>';
     if (!apps) return `<div class="osu-sec" data-osu-apps>${head}<p class="st-note" role="status">${esc(appsIssue || 'Checking apps…')}</p></div>`;
-    const rows = apps.map(a => `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span></span><span class="st-val">${esc(a.label)}</span></div>`).join('');
+    const rows = apps.map(a => `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}</span><span class="st-val">${esc(a.label)}</span></div>`).join('');
     const note = appsIssue ? `<p class="st-note" role="status">${esc(appsIssue)} Showing the last check.</p>` : '';
-    return `<div class="osu-sec" data-osu-apps>${head}${note}${rows || '<p class="st-hint">No apps installed from the App Store yet.</p>'}<p class="st-hint">Installed version and the App Store’s latest, from the App Manager.</p></div>`;
+    const at = typeof au?.last?.at === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(au.last.at) ? au.last.at.slice(0, 16).replace('T', ' ') + ' UTC' : '';
+    const mgr = au ? `<p class="st-hint" data-osu-app-mode>App updates: ${au.app_mode === 'auto' ? 'Automatic, overnight' : 'Ask me'}${at ? ` · last run ${esc(at)}` : ' · not run yet'}</p>` : '';
+    return `<div class="osu-sec" data-osu-apps>${head}${note}${rows || '<p class="st-hint">No apps installed from the App Store yet.</p>'}${mgr}<p class="st-hint">Installed version and the App Store’s latest, from the App Manager.</p></div>`;
   }
 
   function load(force) {

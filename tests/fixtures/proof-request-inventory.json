@@ -523,6 +523,12 @@
       "kind": "read",
       "note": "Only read while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard-os-home/store-install/_app-updates": {
+      "status": "not-exercised",
+      "source": "web/core/os-updates.js",
+      "kind": "read",
+      "note": "Only read while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard-os-home/store-install/_updates": {
       "status": "catalogued",
       "source": "web/core/os-updates.js",
