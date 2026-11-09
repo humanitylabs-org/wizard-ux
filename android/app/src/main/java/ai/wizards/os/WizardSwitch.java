@@ -55,8 +55,12 @@ final class WizardSwitch {
             a.runOnUiThread(() -> {
                 if (a.isFinishing() || a.isDestroyed()) return;
                 if (problem == null && !ServerSettings.save(a, origin)) {
-                    Toast.makeText(a, ServerSwitchGuard.say(ServerSwitchGuard.blocker(a)), Toast.LENGTH_LONG).show();
-                    failed.run(); return;
+                    ServerSwitchGuard.Reason why = ServerSwitchGuard.blocker(a);
+                    Toast.makeText(a, ServerSwitchGuard.say(why), Toast.LENGTH_LONG).show();
+                    failed.run();
+                    // Not a dead end: the page opens the unsent recording with Send / Delete (#1220).
+                    if (why == ServerSwitchGuard.Reason.SAVED_RECORDING && a instanceof MainActivity) ((MainActivity) a).showUnsentRecordings();
+                    return;
                 }
                 if (problem != null) { Toast.makeText(a, problem, Toast.LENGTH_LONG).show(); failed.run(); return; }
                 relaunch(a);

@@ -439,6 +439,8 @@
     },
     readRecording,
     recoverRecorder: () => syncRecorder('control'),
+    // The Android app refused a Wizard switch for a recording not sent yet: show it with Send / Delete (wizard-ux issue 1220).
+    showUnsent: () => { offerPending('switch'); return sheet?.kind === 'recording'; },
     saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => { const w = WEB()?._state() || {}; return { sheet: sheet?.kind || null, upd, webPending: !!w.pending, print0: !!w.print0, changes: w.changes || [], listOpen: !!w.listOpen }; },
   };
   document.addEventListener('click', e => {

@@ -166,7 +166,7 @@ public class ServerSwitchGuardTest {
         List<String> seen = new ArrayList<>();
         for (Reason r : Reason.values()) {
             String s = ServerSwitchGuard.say(r);
-            assertTrue(s, s.endsWith("Let it finish, then try again."));
+            assertTrue(s, s.endsWith(r == Reason.SAVED_RECORDING ? "Send or delete it, then try again." : "Let it finish, then try again."));
             assertFalse(s, s.contains("Couldn't switch yet. Let any recording or upload finish"));
             assertFalse("distinct", seen.contains(s)); seen.add(s);
         }
@@ -174,6 +174,8 @@ public class ServerSwitchGuardTest {
         assertEquals("A shared file hasn't been sent yet. Let it finish, then try again.", ServerSwitchGuard.say(Reason.SHARE));
         assertEquals("A meeting is still uploading. Let it finish, then try again.", ServerSwitchGuard.say(Reason.MEETING_UPLOAD));
         assertEquals("A meeting is still syncing. Let it finish, then try again.", ServerSwitchGuard.say(Reason.MEETING_SYNC));
+        assertEquals("A recording hasn't been sent yet. Send or delete it, then try again.", ServerSwitchGuard.say(Reason.SAVED_RECORDING));
+        assertFalse("#1220: never says uploading for a take that is only waiting", ServerSwitchGuard.say(Reason.SAVED_RECORDING).contains("uploading"));
         assertEquals("Couldn't switch just now. Try again.", ServerSwitchGuard.say(null));
     }
 }

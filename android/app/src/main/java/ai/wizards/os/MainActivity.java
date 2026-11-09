@@ -688,6 +688,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web != null) web.evaluateJavascript("window.WizWorkspaces&&window.WizWorkspaces.switchFailed&&window.WizWorkspaces.switchFailed()", null);
     }
 
+    /** A switch was refused for a recording not sent yet: the page shows it with Send / Delete (wizard-ux#1220). */
+    void showUnsentRecordings() {
+        if (web != null) web.evaluateJavascript("window.WosDevice&&window.WosDevice.showUnsent&&window.WosDevice.showUnsent()", null);
+    }
+
     void changeServer() {
         Intent target = new Intent(this, ConnectActivity.class);
         if (web == null) { startActivity(target); return; }

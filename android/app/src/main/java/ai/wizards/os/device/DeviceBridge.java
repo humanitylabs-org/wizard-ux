@@ -283,7 +283,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     /** Takes waiting for a home: stopped from the notification, or cut short by an app kill. */
     @JavascriptInterface
     public String recPending() {
-        List<JSONObject> l = RecordingStore.get(activity).pending(RecorderService.active());
+        List<JSONObject> l = RecordingStore.get(activity).pending(RecorderService.active(), ai.wizards.os.ServerSettings.origin(activity));
         return RecordingStore.json(l);
     }
 

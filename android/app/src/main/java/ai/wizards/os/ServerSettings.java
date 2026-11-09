@@ -19,6 +19,9 @@ public final class ServerSettings {
         if (clean == null) return false;
         String old = origin(context);
         if (!old.isEmpty() && !old.equals(clean) && ServerSwitchGuard.hasLocalWork(context)) return false;
+        // Recordings the old Wizard's page already took stay with that Wizard: never offered to the new one (#1220).
+        // If any of them can't be marked, the switch doesn't happen.
+        if (!old.isEmpty() && !old.equals(clean) && !ai.wizards.os.recording.RecordingStore.get(context).stayWith(old)) return false;
         boolean saved;
         synchronized (ServerSettings.class) {
             if (!old.equals(origin(context))) return false; // another Connect finished during the probe/check
