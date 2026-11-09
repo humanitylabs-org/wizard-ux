@@ -242,7 +242,7 @@
     const title = back ? `Putting ${OS} back how it was` : `Updating ${OS} to ${u.target}`;
     const line = back ? 'The update didn’t finish. Your Mac is putting back the copy it saved; your chats and files are safe.'
       : `${TAKES} · Your chats and files are safe`;
-    const leave = desktop() ? 'You can close this window; Wizard keeps updating.' : 'You can leave this screen; your Mac keeps updating Wizard.';
+    const leave = desktop() ? 'Nothing to do here. Keep reading your chats, or close the Wizard window (⌘W); the update carries on.' : 'Nothing to do here. You can leave this screen; your Mac carries on updating.';
     const steps = back ? '' : `<ol class="osu-steps">${STEPS.map((s, i) => `<li class="${i < n ? 'done' : i === n ? 'now' : 'next'}"><i aria-hidden="true"></i><span>${esc(s)}${i === n ? '…' : ''}</span></li>`).join('')}</ol>`;
     const html = `<b class="osu-busy-t">${esc(title)}</b>${steps}<p class="osu-busy-l">${esc(line)}</p><p class="osu-busy-n">${esc([ran, leave].filter(Boolean).join(' · '))}</p>`;
     if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
