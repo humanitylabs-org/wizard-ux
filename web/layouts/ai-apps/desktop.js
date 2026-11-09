@@ -1018,7 +1018,9 @@ export default function desktop(api) {
     api.after(0, () => wsPop?.querySelector('button')?.focus?.({ preventScroll: true }));
   }
   function closeWs() { if (!wsPop) return; wsPop.remove(); wsPop = null; offWsBack?.(); offWsBack = null; wsBtn.setAttribute('aria-expanded', 'false'); }
-  api.listen(wsBtn, 'click', () => (wsPop ? closeWs() : openWs()));
+  // With two or more saved Wizards the header name opens the shared switcher menu (core/workspaces.js: this Wizard, the registry and the
+  // Wizards saved on this device, so a Wizard on a box without the devices registry still lists its way back); alone it keeps this list.
+  api.listen(wsBtn, 'click', () => { const W = globalThis.WizWorkspaces; if (W?.visible && W.openMenu) { closeWs(); W.openMenu(wsBtn); return; } wsPop ? closeWs() : openWs(); });
   // the rail's switcher: the shared menu (opaque, outside tap and Back close it), anchored under the icon
   const paintRws = () => { const W = globalThis.WizWorkspaces; rWs.hidden = !W?.visible; rWs.setAttribute('aria-label', 'Switch Wizard'); };
   api.listen(rWs, 'click', () => { closeWs(); globalThis.WizWorkspaces?.openMenu?.(rWs); });

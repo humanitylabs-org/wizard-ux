@@ -549,7 +549,8 @@ export default function setup(api) {
     api.after(0, () => x.focus?.({ preventScroll: true }));
   }
   function closeSheet() { if (!sheet) return; sheet.remove(); sheet = null; offSheetBack?.(); offSheetBack = null; wsBtn.setAttribute('aria-expanded', 'false'); }
-  api.listen(wsBtn, 'click', () => (sheet ? closeSheet() : openSheet()));
+  // Two or more saved Wizards: the shared switcher menu (core/workspaces.js), which also lists the Wizards saved on this device.
+  api.listen(wsBtn, 'click', () => { const W = globalThis.WizWorkspaces; if (W?.visible && W.openMenu) { closeSheet(); W.openMenu(wsBtn); return; } sheet ? closeSheet() : openSheet(); });
   api.listen(globalThis, 'wos:resources', () => { paintWs(); paintFuel(); });
   let fuelSig = '';
   // (4 Nov 2026) the gauge stays without the network Home: read the AI usage feed directly and keep it polling while the foot shows
