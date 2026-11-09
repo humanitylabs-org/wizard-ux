@@ -1,6 +1,6 @@
 /* WizardOS updates on a Mac: ask first, show one "Updating" panel, say how it ended.
  *
- * Only on a Wizard whose App Manager says `by_host` (Wizard for Mac: the Mac saves a copy of WizardOS before every
+ * Only on a Wizard whose App Manager says `by_host` (Wizard for Mac: the Mac backs up WizardOS before every
  * update, starts it, and puts the copy back if it fails; try-wizard next/mac/Host/OSUpdates.swift). Jan, 9 Nov 2026:
  * nothing updates WizardOS without the owner unless Settings says Automatic; Automatic only at night, after a 5-minute
  * heads-up. Built from the shell's existing pieces (APP-DESIGN-RULES rule 4: one pop-up, the sheet):
@@ -11,7 +11,7 @@
  *             Closing it any of the five ways is Cancel.
  *   heads-up  Automatic: a sheet "WizardOS updates in 5 minutes" · Not tonight / Update now, and the banner counts down
  *             with Not tonight while it is closed.
- *   updating  one opaque panel, no buttons: the steps (Saving a copy · Restarting · Installing · Checking), how long it
+ *   updating  one opaque panel, no buttons: the steps (Backing up · Restarting · Installing · Verifying), how long it
  *             has run, that chats and files are safe. Sending pauses (the draft stays), and the expected outage
  *             notices (Can't reach Wizard, Saved copy, Interface updated) stay hidden until it ends.
  *   result    the banner: "WizardOS updated to 0.3.x" (×), or "The update didn't finish · Wizard went back to how it
@@ -79,7 +79,7 @@
     if (u && stepFor !== u.target) { stepFor = u.target; maxStep = 0; }
     return u;
   }
-  // 0 Saving a copy · 1 Restarting · 2 Installing · 3 Checking
+  // 0 Backing up · 1 Restarting · 2 Installing · 3 Verifying
   function step(u) {
     const away = !!U()?.issue;
     let n = u.phase === 'verifying' ? 3 : u.phase === 'updating' || st()?.installing ? 2 : away ? 1 : 0;
@@ -132,7 +132,7 @@
     if (!s.update_available || s.unpinned || !s.latest) { toast('✓', `${OS} is up to date`); return; }
     const t = s.latest;
     ask({ title: `Update ${OS} to ${t}?`,
-      body: p(`Wizard restarts and is away for a while (${TAKES.toLowerCase()}). Your chats and files stay as they are, and your Mac keeps a copy to go back to if anything goes wrong.`,
+      body: p(`Wizard restarts and is away for a while (${TAKES.toLowerCase()}). Your chats and files stay as they are, and your Mac backs up WizardOS first, to go back to if anything goes wrong.`,
               'Sending messages pauses until it’s done. You can also update any time in Settings.'),
       yes: 'Update now', no: 'Cancel', onYes: () => start(t) });
   }
@@ -219,7 +219,7 @@
   }
 
   // ---- the panel while updating ----
-  const STEPS = ['Saving a copy', 'Restarting', 'Installing', 'Checking'];
+  const STEPS = ['Backing up', 'Restarting', 'Installing', 'Verifying'];
   function renderPanel(u) {
     let el = document.getElementById('wosUpdating');
     const root = document.documentElement;
@@ -240,7 +240,7 @@
     const mins = u.since && isFinite(u.since) ? Math.max(0, Math.round((Date.now() - u.since) / 60e3)) : null;
     const ran = mins == null ? '' : mins < 1 ? 'Started just now' : `Started ${mins} min ago`;
     const title = back ? `Putting ${OS} back how it was` : `Updating ${OS} to ${u.target}`;
-    const line = back ? 'The update didn’t finish. Your Mac is putting back the copy it saved; your chats and files are safe.'
+    const line = back ? 'The update didn’t finish. Your Mac is restoring the backup it made first; your chats and files are safe.'
       : `${TAKES} · Your chats and files are safe`;
     const leave = desktop() ? 'Nothing to do here. Keep reading your chats, or close the Wizard window (⌘W); the update carries on.' : 'Nothing to do here. You can leave this screen; your Mac carries on updating.';
     const steps = back ? '' : `<ol class="osu-steps">${STEPS.map((s, i) => `<li class="${i < n ? 'done' : i === n ? 'now' : 'next'}"><i aria-hidden="true"></i><span>${esc(s)}${i === n ? '…' : ''}</span></li>`).join('')}</ol>`;
