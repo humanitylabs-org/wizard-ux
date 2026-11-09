@@ -78,9 +78,12 @@ test('active native recovery uses immutable meeting pin, not unrelated foregroun
 test('native stop preserves sealed typed draft while reapplying immutable meeting routing',()=>{
  const h=handoff();h.update('event-a',{status:'paused'});h.bind({id:'event-a'},'native-a',{route,view:producer('thread-a')});
  const seal={text:'typed draft stays',files:[]},V={kind:'auto',snap:{seal},acc:10};let seen;
- const c={V,window:null,WosOrbHandoff:h,__wosDictationTake:()=>false,__wosVoiceRecovery:()=>[],nativeTakeAppOwned:()=>false,saveVoiceRoute(){},DEV:()=>({recStop:()=>JSON.stringify({id:'native-a',kind:'auto',ms:10,bytes:700})}),voiceRecovery(){},nativeBlob:()=>new Blob(['audio']),onRecStop(){seen=V.snap;}};c.window=c;
- vm.createContext(c);vm.runInContext(section(phone,'  function nativeFinish(','  const releasedTakes'),c);c.nativeFinish('native-a',false);
+ const c={V,window:null,WosOrbHandoff:h,__wosDictationTake:()=>false,__wosVoiceRecovery:()=>[],nativeTakeAppOwned:()=>false,saveVoiceRoute(){},DEV:()=>({recStop:()=>JSON.stringify({id:'native-a',kind:'auto',ms:10,bytes:700})}),voiceRecovery(){},nativeBlob:()=>new Blob(['audio']),onRecStop(){seen=V.snap;},
+  // wizard-ux#1218: a live take reads the model at Send for the pinned meeting thread; destination stays immutable.
+  CHATS:{modelRoute:(wid,sid)=>sid==='thread-a'?{model:'picked-while-recording',provider:'private-provider',agent:'private-agent'}:null}};c.window=c;
+ vm.createContext(c);vm.runInContext(section(phone,'  function nativeFinish(','  const releasedTakes')+(phone.includes('  function sendTapRoute(')?section(phone,'  function sendTapRoute(','  // A take that sends nothing'):''),c);c.nativeFinish('native-a',false);
  assert.equal(seen.seal,seal);assert.equal(seen.meetingEventId,'event-a');assert.equal(seen.view.thread,'thread-a');
+ if(phone.includes('  function sendTapRoute('))assert.equal(seen.route.model,'picked-while-recording');
 });
 test('active appended segment rehydrates original parts and typed draft',()=>{
  const audio=new Blob(['original']),prior={id:'owner',state:'held',durable:true,audio,parkedDraft:{parts:[audio],typed:'original typed',acc:20,snap:{route,view:producer('thread-a')}}};

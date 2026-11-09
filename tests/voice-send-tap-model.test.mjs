@@ -67,7 +67,7 @@ test('no route at start and none at Send: nothing is sent, the owner is asked to
 // Codex P2: a live native take sent from the Android recording notification (device.js onRec 'send' -> nativeFinish)
 // reads the model at that Send too. A take recovered after reload keeps its saved route.
 const native = section('  function nativeFinish(id, stopped) {', '  const releasedTakes =') + section('  function sendTapRoute(', '  // A take that sends nothing');
-function notify({live}) {
+function notify({live, loan = false}) {
   let seen = null; const saved = [];
   const V = {kind: 'auto', snap: live ? {view: {id: 'chats', kind: 'chat thread', thread: 'sid-1'}, route: SONNET} : null, replyTo: null, target: null, acc: 2000, state: 'listen'};
   const c = {V, console, performance: {now: () => 0}, JSON, Number, idx: 0, nativeTakeAppOwned: () => false, __wosDictationTake: () => false,
@@ -79,6 +79,8 @@ function notify({live}) {
     voiceRecovery: () => {}, nativeBlob: () => ({audio: true}), onRecStop: () => { seen = structuredClone(V.snap.route); },
     dropHold() {}, unseal() {}, setVoice(s) { V.state = s; }, txHide() {}, toast() {}, voiceTake: () => ({kind: 'auto'}), replyTake: () => null,
     renderVoiceFiles() {}, txPill() {}, requestAnimationFrame: () => 0, tick() {}};
+  if (loan) c.WosOrbHandoff = {takeSnap: () => ({meetingEventId: 'event-a', route: SONNET, view: {kind: 'chat thread', id: 'chats', thread: 'sid-1'}, conversation: null, others: [], screen: ''})};
+  if (loan && live) V.snap.meetingEventId = 'event-a';
   c.window = c; vm.createContext(c); vm.runInContext(native + '\nnativeFinish("n1", true)', c);
   return {seen, saved};
 }
@@ -94,4 +96,8 @@ test('a take recovered after reload keeps its saved route', () => {
 test('orb Send of a take resumed after reload keeps its saved route', () => {
   const r = run({snap: {view: {id: 'chats', kind: 'chat thread', thread: 'sid-1'}, route: SONNET, resumed: true}, selected: OPUS});
   assert.deepEqual(r.sent, SONNET);
+});
+
+test('notification Send of a live take borrowing a meeting microphone also reads the model at Send', () => {
+  assert.deepEqual(notify({live: true, loan: true}).seen, OPUS);
 });

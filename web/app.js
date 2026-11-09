@@ -2264,7 +2264,7 @@
       else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
       // A live take sent from the recording notification reads the model at that Send too, for its pinned destination
       // (wizard-ux#1218). A take recovered after reload keeps its saved route.
-      if (!snap.conversation && hadSnap && !recoveredLoan && !V.snap.resumed) {
+      if (!snap.conversation && hadSnap && !V.snap.resumed) {
         const live = sendTapRoute(snap, V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null));
         if (live?.model && live?.provider) snap.route = live;
       }
