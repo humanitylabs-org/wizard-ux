@@ -282,9 +282,10 @@
     card() {
       const s = st(); if (!s) return null;
       // Nothing to tap while it runs: no button, so the words get the card's width.
-      if (updating()) { const u = updating(); return { state: 'building', title: `Updating ${OS} to ${u.target}`, line: `${TAKES} · Wizard restarts once`, action: '' }; }
+      // Settings is narrow: a short title, the version on its own line, no duration (the confirm sheet says it).
+      if (updating()) { const u = updating(); return { state: 'building', title: `Updating ${OS}`, line: u.target, action: '' }; }
       if (!s.update_available || s.unpinned || !s.latest) return null;
-      return { state: 'behind', title: `${OS} ${s.latest} is ready`, line: s.mode === 'auto' ? 'Installs tonight (1–5 am) after a 5-minute heads-up' : `${TAKES} · Wizard restarts once`, action: 'apply', label: 'Update now', disabled: false };
+      return { state: 'behind', title: `${OS} update ready`, line: s.mode === 'auto' ? `${s.latest} · installs tonight` : s.latest, action: 'apply', label: 'Update now', disabled: false };
     },
   };
   setInterval(render, 1000);
