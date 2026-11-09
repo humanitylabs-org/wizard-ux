@@ -28,7 +28,7 @@
 // Usage: node tools/orphan-worktrees.mjs --checkout <live checkout> [--root <worktrees folder>]
 //          [--remote origin] [--main main] [--json] [--files]
 // e.g.   node tools/orphan-worktrees.mjs --checkout "$HOME/apps/wizard-os-home" --root "$HOME/worktrees"
-// Exit 0 when the checkout is on main, clean, and no orphan is unmatched or
+// Exit 0 when the checkout is on branch main at the remote's main, clean, and no orphan is unmatched or
 // unreadable; 1 when something needs a person; 2 on a git error or bad usage
 // (including a remote or main tracking ref that does not exist).
 import { execFileSync } from 'node:child_process';
@@ -72,6 +72,7 @@ export function liveStatus(checkout, remote = 'origin', main = 'main') {
     checkout,
     head,
     branch: branch || null,
+    expected_branch: main,
     behind: count(`HEAD..${ref(remote, main)}`),
     ahead: count(`${ref(remote, main)}..HEAD`),
     dirty: lines(git(['status', '--porcelain', '--untracked-files=normal'], checkout)).length,
@@ -197,7 +198,7 @@ export function report({ checkout, root, remote = 'origin', main = 'main', files
 
 export function needsPerson(r) {
   const l = r.live;
-  return l.behind > 0 || l.ahead > 0 || l.dirty > 0 || r.orphans.some((o) => o.status === 'unmatched' || o.status === 'error');
+  return l.branch !== l.expected_branch || l.behind > 0 || l.ahead > 0 || l.dirty > 0 || r.orphans.some((o) => o.status === 'unmatched' || o.status === 'error');
 }
 
 export function render(r, { remote = 'origin', main = 'main' } = {}) {
@@ -206,6 +207,7 @@ export function render(r, { remote = 'origin', main = 'main' } = {}) {
   const out = [
     `Live checkout: ${l.checkout}`,
     `  HEAD ${l.head.slice(0, 9)} on ${l.branch || '(detached)'}: ${on ? `on ${remote}/${main}` : `${l.behind} behind, ${l.ahead} ahead of ${remote}/${main}`}`,
+    ...(l.branch === l.expected_branch ? [] : [`  Not on branch ${l.expected_branch}: switch the live checkout back to it`]),
     `  Working tree: ${l.dirty ? `${l.dirty} changed or untracked entries` : 'clean'}`,
   ];
   if (!r.orphans.length && !r.linked) return out.join('\n');

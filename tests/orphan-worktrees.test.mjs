@@ -78,6 +78,20 @@ test('orphan worktrees: live checkout behind main and dirty is reported', () => 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('orphan worktrees: a detached HEAD or another branch at main still needs a person', () => {
+  const { root, live } = fixture();
+  try {
+    git(live, 'merge', '-q', '--ff-only', 'refs/remotes/origin/main');
+    assert.equal(ow.main(['--checkout', live], silent), 0);
+    git(live, 'checkout', '-q', '--detach', 'HEAD');
+    let text = '';
+    assert.equal(ow.main(['--checkout', live], { out: (t) => { text = t; }, err: () => {} }), 1);
+    assert.match(text, /on \(detached\): on origin\/main\n {2}Not on branch main/);
+    git(live, 'checkout', '-q', '-b', 'other');
+    assert.equal(ow.main(['--checkout', live], silent), 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('orphan worktrees: classifies on-main, pushed and unmatched folders, skips linked and foreign ones', () => {
   const { root, live, wts } = fixture();
   try {
