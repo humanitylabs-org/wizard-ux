@@ -1,4 +1,4 @@
-/* WizardOS — Chats kit: message parsing, Markdown, Bangkok time, per-thread drafts,
+/* WizardOS — Chats kit: message parsing, Markdown, local time, per-thread drafts,
  * copy/share, and the in-app media viewer. Loaded before app.js, which wires it into the
  * Chats window. Behaviour follows wizard-mobile ff86db8c (normalizers.ts, MarkdownMessage.tsx,
  * MediaViewers.tsx, CopyableTextBlock.tsx, sharing.ts, threadTimestamp.ts). */
@@ -395,7 +395,7 @@
   }
   const md = (src, renderMedia) => blocks(String(src || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n'), 0, renderMedia);
 
-  /* ================= Bangkok time ================= */
+  /* ================= Local time (the owner's zone, WizConfig.timeZone) ================= */
   const TZ = () => (window.WizConfig && window.WizConfig.timeZone && window.WizConfig.timeZone()) || 'UTC';
   // Formatters are built per zone on first use, never at load: the settings zone (bootstrap) can land
   // after this file runs, and a first launch must not keep showing the device's zone.
@@ -404,6 +404,7 @@
   const O_DATE = [{ weekday: 'short', month: 'short', day: 'numeric' }, 'en-US'], O_DATEY = [{ weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }, 'en-US'];
   const O_FULL = [{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }];
   // Each formatter is rebuilt only when the zone changes.
+  const zoneName = z => String(z).split('/').pop().replace(/_/g, ' ');
   const F = o => { const z = TZ(); if (o.z !== z) { o.f = new Intl.DateTimeFormat(o[1] || 'en-GB', { timeZone: z, ...o[0] }); o.z = z; } return o.f; };
   const time = {
     ms: tsMs,
@@ -416,7 +417,8 @@
       if (k === D.format(now - 864e5)) return 'Yesterday';
       return F(k.slice(0, 4) === D.format(now).slice(0, 4) ? O_DATE : O_DATEY).format(ms);
     },
-    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} Bangkok` : '',
+    // Full stamp names the zone it is shown in (the owner's, not a fixed city): "… 18:36 Ljubljana", "… New York", "… UTC".
+    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} ${zoneName(TZ())}` : '',
     // Message stamp (James, 11 Oct): today's messages show only the time; any other day shows its date
     // too ("Thu, Oct 8, 18:16"; year added outside the current year), so a scrolled-to message is never
     // ambiguous when its day divider is off screen.
