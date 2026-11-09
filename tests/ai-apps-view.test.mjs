@@ -292,7 +292,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.q('.aad-wsn').textContent, 'Miguel'); assert.match(w.q('.aad-ws').getAttribute('aria-label'), /Workspace: Miguel/);
   w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-wr b').map(b => b.textContent), ['Miguel', 'Carlos']); assert.ok(w.q('.aad-wm'));
-  w.q('.aad-wm').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings.at(-1), 'network');
+  w.q('.aad-wm').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings.at(-1), 'connections', 'wizard-ux#1209: Manage lands where the saved Wizards are added, not Network & security');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aad-vtab.is-on').dataset.app, 'money', 'its tab on the right in front');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
