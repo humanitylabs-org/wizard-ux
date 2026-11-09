@@ -42,8 +42,12 @@
     const sidebar = box(m.side === 'start' ? area.x : area.x + area.width - sw, area.y, sw, area.height);
     const content = box(area.x + (m.side === 'start' ? sw : 0), area.y, area.width - sw, area.height);
     const chatOn = !!env.chatOn, appOn = !!env.appOn;
-    const chatWidth = chatOn ? (appOn ? clamp(W * .30, 360, 480) : clamp(W * .33333, 400, 560)) : 0;
-    const appWidth = appOn ? (env.wide && !chatOn ? content.width : Math.min(env.appWidth ?? 560, Math.max(0, content.width - chatWidth))) : 0;
+    // The chat keeps at least its old column (a third, 30% beside an app) and takes all the room the app leaves, so
+    // its messages fill the main area up to the 768px reading column, never a narrow strip with empty canvas beside
+    // it (issue 1233).
+    const chatMin = chatOn ? (appOn ? clamp(W * .30, 360, 480) : clamp(W * .33333, 400, 560)) : 0;
+    const appWidth = appOn ? (env.wide && !chatOn ? content.width : Math.min(env.appWidth ?? 560, Math.max(0, content.width - chatMin))) : 0;
+    const chatWidth = chatOn ? Math.max(0, content.width - appWidth) : 0;
     const chat = box(m.side === 'start' ? content.x : content.x + content.width - chatWidth, content.y, chatWidth, content.height);
     const app = box(m.side === 'start' ? content.x + content.width - appWidth : content.x, content.y, appWidth, content.height);
     const panes = { chats: chat, app };
