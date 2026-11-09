@@ -2789,6 +2789,16 @@
     const v = V.snap?.view;
     return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread } : null;
   }
+  // The model route for a take, read from the selector at the Send tap (wizard-ux#1218), for the same destination the
+  // take was pinned to when it started. An explicit agent pick keeps its own agent.
+  function sendTapRoute(snap, pin) {
+    if (snap.general) {
+      const r = snap.newChatWid ? CHATS.modelRoute(snap.newChatWid, '__new__') : CHATS.modelRoute();
+      const agent = snap.route?.agent || '';
+      return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
+    }
+    return pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+  }
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
   function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
@@ -2908,9 +2918,11 @@
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
       if (!V.snap.conversation) {
-        // A route missing its provider (catalogue still loading) was never sent; each Send tap re-resolves it,
-        // so a model the owner picks afterwards takes effect instead of the stale half-route.
-        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? (V.snap.route?.agent ? window.WosModels.snapshot('', null, V.snap.route.agent) : CHATS.modelRoute()) : CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        // The destination stays pinned to where the take started, but the model is read at the Send tap: a model
+        // picked while recording is the one that answers (wizard-ux#1218). The route from the start of the take is
+        // kept only when the selector can't be read right now (catalogue still loading).
+        const live = sendTapRoute(V.snap, pin);
+        if (live?.model && live?.provider) V.snap.route = live;
         if (!(V.snap.route?.model&&V.snap.route?.provider)) { V.snap.route = null; window.WosModels.load?.(); toast('!', 'Choose a model before sending', 2200); return; }
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
