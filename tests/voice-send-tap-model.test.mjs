@@ -101,3 +101,18 @@ test('orb Send of a take resumed after reload keeps its saved route', () => {
 test('notification Send of a live take borrowing a meeting microphone also reads the model at Send', () => {
   assert.deepEqual(notify({live: true, loan: true}).seen, OPUS);
 });
+
+test('orb Send of a take resumed after reload with no saved snapshot keeps its saved model route', () => {
+  for (const savedRoute of [SONNET, null]) {
+    let sent = null;
+    const V = {state: 'listen', kind: 'auto', snap: null, resumed: true, replyTo: null, target: null, sim: false, rec: null, native: 'n1', parts: [], acc: 0, t0: 0, seal: null};
+    const c = {V, parking: false, W: {chats: {app: 'chats'}}, performance: {now: () => 0}, console,
+      sendSnap: () => ({view: {id: 'chats', kind: 'chat thread', thread: 'sid-1'}, conversation: null}),
+      CHATS: {modelRoute: () => OPUS, takeComposer: () => ({text: '', files: []})},
+      window: {WosModels: {voiceRoute: () => savedRoute, load() {}}},
+      micNeverOpened() {}, finishDictation() {}, pauseCommandCapture() {}, quickTake: () => true, leaveOnSend() {},
+      saveVoiceRoute() {}, setVoice() {}, txPill() {}, toast() {}, onRecStop() {}, nativeFinish: () => { sent = structuredClone(V.snap.route); }};
+    vm.createContext(c); vm.runInContext(code + '\nfinishVoice();', c);
+    assert.deepEqual(sent, savedRoute || OPUS, savedRoute ? 'saved route kept' : 'no saved route: read the selector, as before');
+  }
+});
