@@ -1,0 +1,11 @@
+{
+  "id": "wizard/cli-install-links",
+  "name": "Command-line installs publish app links",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "After `wam install <app>` succeeds on this box, the App Manager publishes app links the same way a Store install does, so the new app opens in Wizard without running `wam links`. Needs Tailscale connected; without it there are still no links to publish."
+}
