@@ -81,8 +81,10 @@ export function lastCommitDate(remote, branch, cwd) {
 export function openPrBranches(cwd) {
   const out = execFileSync('gh', ['pr', 'list', '--state', 'open', '--limit', '1000', '--json', 'number,headRefName'],
     { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const prs = JSON.parse(out);
+  if (prs.length >= 1000) throw new Error('PR inventory may be incomplete: reached the 1000 PR limit; refusing the report');
   const map = new Map();
-  for (const pr of JSON.parse(out)) map.set(pr.headRefName, [...(map.get(pr.headRefName) || []), pr.number]);
+  for (const pr of prs) map.set(pr.headRefName, [...(map.get(pr.headRefName) || []), pr.number]);
   return map;
 }
 
@@ -100,12 +102,13 @@ export function report({ remote = 'origin', main = 'main', cwd, openPrs } = {}) 
 
 export function render(rows) {
   const pr = (r) => (r.open_prs && r.open_prs.length ? `  open PR ${r.open_prs.map((n) => `#${n}`).join(', ')}: leave until it closes` : '');
-  const safe = rows.filter((r) => r.unique_commits === 0);
+  const landed = rows.filter((r) => r.unique_commits === 0);
   const keep = rows.filter((r) => r.unique_commits).sort((a, b) => b.unique_commits - a.unique_commits);
   return [
     `Side branches left: ${rows.length}`,
-    `No unique commits (safe to delete): ${safe.length}`,
-    ...safe.map((r) => `  ${r.branch}  (last ${r.last})${pr(r)}`),
+    'No automatic deletion approval; check PRs and branch ownership before any manual deletion.',
+    `No unique commits (landed content): ${landed.length}`,
+    ...landed.map((r) => `  ${r.branch}  (last ${r.last})${pr(r)}`),
     `Unique commits, need a decision: ${keep.length}`,
     ...keep.map((r) => `  ${r.branch}  ${r.unique_commits} unique  (last ${r.last})${pr(r)}`),
   ].join('\n');
@@ -124,7 +127,7 @@ export function main(argv = process.argv.slice(2), { cwd, out = console.log, err
   try {
     rows = report({ remote: opt.remote, main: opt.main, cwd, openPrs: opt.prs ? openPrBranches(cwd) : undefined });
   } catch (e) {
-    const detail = String(e.stderr || '').trim() || 'ref not found';
+    const detail = String(e.stderr || '').trim() || e.message || 'ref not found';
     err(`${e.path || 'git'} failed: ${(e.spawnargs || []).join(' ')}: ${detail}`);
     return 2;
   }

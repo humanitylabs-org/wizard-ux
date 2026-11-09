@@ -63,6 +63,41 @@ function fixture() {
 
 const silent = (cwd) => ({ cwd, out: () => {}, err: () => {} });
 
+for (const [inventory, open_prs] of [['unknown', undefined], ['known empty', []], ['known open', [930]]]) {
+  test(`side branches: ${inventory} PR inventory never grants deletion approval`, () => {
+    const text = sb.render([{ branch: 'integration/landed', last: '2026-11-09', unique_commits: 0, open_prs }]);
+    assert.doesNotMatch(text, /safe to delete/i);
+    assert.match(text, /No unique commits \(landed content\): 1/);
+    assert.match(text, /No automatic deletion approval/);
+    if (open_prs?.length) assert.match(text, /open PR #930: leave until it closes/);
+  });
+}
+
+test('side branches: capped PR inventory fails closed without additional network calls', () => {
+  const root = mkdtempSync(join(tmpdir(), 'side-branches-gh-'));
+  const oldPath = process.env.PATH;
+  try {
+    writeFileSync(join(root, 'gh'), `#!/usr/bin/env node\nimport fs from 'node:fs';\nfs.appendFileSync('calls', JSON.stringify(process.argv.slice(2)) + '\\n');\nconsole.log(fs.readFileSync('prs.json', 'utf8'));\n`, { mode: 0o700 });
+    process.env.PATH = `${root}:${oldPath}`;
+    const prs = Array.from({ length: 1001 }, (_, i) => ({ number: i + 1, headRefName: `integration/${i}` }));
+    writeFileSync(join(root, 'prs.json'), JSON.stringify(prs.slice(0, 999)));
+    assert.equal(sb.openPrBranches(root).size, 999);
+    for (const count of [1000, 1001]) {
+      writeFileSync(join(root, 'prs.json'), JSON.stringify(prs.slice(0, count)));
+      assert.throws(() => sb.openPrBranches(root), /PR inventory.*incomplete.*1000/i);
+    }
+    let error = '';
+    assert.equal(sb.main(['--prs'], { cwd: root, out: () => assert.fail('must not print an incomplete report'), err: (s) => { error = s; } }), 2);
+    assert.match(error, /PR inventory.*incomplete.*1000/i);
+    const calls = readFileSync(join(root, 'calls'), 'utf8').trim().split('\n').map((s) => JSON.parse(s));
+    assert.equal(calls.length, 4);
+    for (const args of calls) assert.deepEqual(args, ['pr', 'list', '--state', 'open', '--limit', '1000', '--json', 'number,headRefName']);
+  } finally {
+    if (oldPath === undefined) delete process.env.PATH; else process.env.PATH = oldPath;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('side branches: matches only integration/, live/, live- and livefix/', () => {
   const { root, clone } = fixture();
   try {
@@ -85,12 +120,12 @@ test('side branches: counts unique commits by patch id and merges with own conte
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('side branches: render splits safe from needs-a-decision and flags open PRs', () => {
+test('side branches: render splits landed content from needs-a-decision and flags open PRs', () => {
   const { root, clone } = fixture();
   try {
     const text = sb.render(sb.report({ cwd: clone, openPrs: new Map([['live/picked', [930]]]) }));
     assert.match(text, /Side branches left: 6/);
-    assert.match(text, /No unique commits \(safe to delete\): 3/);
+    assert.match(text, /No unique commits \(landed content\): 3/);
     assert.match(text, /Unique commits, need a decision: 3/);
     assert.match(text, /live\/picked .*open PR #930: leave until it closes/);
     assert.doesNotMatch(text, /owner-snapshot|feature\/other|lively/);
