@@ -34,7 +34,7 @@ public final class ServerSettings {
     }
     /** The Wizard this app was on before the last switch, so Change Wizard can offer the way back in one tap. */
     public static synchronized String previous(Context context) {
-        String prev = ServerOrigin.parse(context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).getString("previous", null));
+        String prev = ServerOrigin.parse(context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).getString("previous", null), BuildConfig.DEBUG);
         return prev == null || prev.equals(origin(context)) ? null : prev;
     }
 }

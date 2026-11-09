@@ -67,8 +67,10 @@ def main():
             views = [l for l in log.splitlines() if 'android.intent.action.VIEW' in l and ('localhost' in l or '10.0.2.2' in l)]
             (out / 'view-intents.txt').write_text('\n'.join(views))
             check('no ACTION_VIEW to a Wizard address left the app', not views, '\n'.join(views[:5]))
-            try: run([adb, '-s', serial, 'pull', '/sdcard/Android/data/ai.wizards.os.qa/files', out / 'shots'], check=True, capture_output=True)
-            except subprocess.CalledProcessError: (out / 'shots.missing').write_text('none\n')
+            (out / 'shots').mkdir(exist_ok=True)
+            names = [n for n in shell('ls', '/data/local/tmp').split() if n.endswith('.png') and n.startswith(('switch-', 'fail-'))]
+            for n in names: run([adb, '-s', serial, 'pull', '/data/local/tmp/' + n, out / 'shots' / n], capture_output=True)
+            if not names: (out / 'shots.missing').write_text('none\n')
         finally:
             if em is not None:
                 try: run([adb, '-s', serial, 'emu', 'kill'], timeout=20, capture_output=True)

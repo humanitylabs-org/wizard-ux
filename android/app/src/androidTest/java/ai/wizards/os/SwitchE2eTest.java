@@ -26,10 +26,13 @@ public class SwitchE2eTest {
     private void visible(String text) {
         if (device.wait(Until.findObject(By.text(text)), 15000) != null) return;
         shot("fail-" + text.replaceAll("[^A-Za-z0-9]+", "-"));
+        try { java.io.ByteArrayOutputStream dump = new java.io.ByteArrayOutputStream(); device.dumpWindowHierarchy(dump); android.util.Log.e("SwitchE2e", dump.toString("UTF-8")); } catch (IOException ignored) { }
         fail(text + " not visible; origin=" + ServerSettings.origin(c) + " top=" + device.getCurrentPackageName());
     }
     private void foreground() { assertEquals(c.getPackageName(), device.getCurrentPackageName()); }
-    private void shot(String name) { device.takeScreenshot(new File(c.getExternalFilesDir(null), name + ".png")); }
+    private void shot(String name) {
+        try { device.executeShellCommand("screencap -p /data/local/tmp/" + name + ".png"); } catch (IOException ignored) { }
+    }
 
     @Test public void switchingStaysInTheAppAndTheWayBackWorks() throws Exception {
         assertTrue(BuildConfig.DEBUG);
