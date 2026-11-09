@@ -109,8 +109,11 @@
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
   const primaryFamilies = () => connectorOn() ? CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })))
     : ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
-  const shown = (list, model, provider) => connectorOn()
-    ? list.filter(o => { const c = connectorOf(o); return !c || M.connected(c) || (o.value === model && (!provider || o.provider === provider)); })
+  // Connector models on: a disconnected connector's models leave the menu. Only an existing thread keeps its current
+  // one (keep); a new chat never inherits a disconnected default.
+  const reachable = (list, model, provider, keep = true) => connectorOn()
+    ? list.filter(o => { const c = connectorOf(o); return !c || M.connected(c) || (keep && o.value === model && (!provider || o.provider === provider)); }) : list;
+  const shown = (list, model, provider, keep) => connectorOn() ? reachable(list, model, provider, keep)
     : ours() ? list : list.filter(o => !isTinfoil(o.provider));
   /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the
    * private agent. The main agent's own Tinfoil route is hidden there so a locked GLM never lands in the shared
@@ -296,7 +299,7 @@
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
-    visible(model, provider) { return visibleChoices(shown(M.options, model, provider), model, provider); },
+    visible(model, provider, keep = true) { return visibleChoices(shown(M.options, model, provider, keep), model, provider); },
     runError,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
     short(model, provider) {
@@ -437,7 +440,8 @@
       const own = agent && !agent.missing ? window.WosAgents.modelOptions(agent) : null;
       const privList = !own && Array.isArray(priv) ? priv : [];
       const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (cur.agent || '') === (o.agent || '');
-      const main = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || '')).filter(o => keepMainOption(o, privList, isCur));
+      const keep = mode !== 'new', catalogue = reachable(M.options, cur?.model || '', cur?.provider || '', keep);
+      const main = own || (all ? catalogue : M.visible(cur?.model || '', cur?.provider || '', keep)).filter(o => keepMainOption(o, privList, isCur));
       const list = main.concat(privList);
       const head = mode === 'retry' ? 'Retry with another model' : mode === 'new' ? 'Model for this new chat' : 'Model for this thread';
       const note = own ? `${agent.label} can only use ${own.length === 1 ? 'this model' : 'these models'}.${agent.privacy === 'private' ? ' Private: no other provider, no fallback.' : ''}`
@@ -451,7 +455,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && catalogue.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${catalogue.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -463,7 +467,7 @@
       const lock = window.WosAgents?.lock?.() || '';
       const famOf = o => family(o.value, o.provider), up = primaryFamilies().map(p => p.family);
       const privList = !own && Array.isArray(priv) ? priv : [];
-      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '').filter(o => keepMainOption(o, privList, isCur));
+      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '', mode !== 'new').filter(o => keepMainOption(o, privList, isCur));
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
       const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Haiku, Terra, Luna)
       const curPriv = privList.some(isCur);

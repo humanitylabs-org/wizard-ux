@@ -109,3 +109,77 @@ test('the tweak package is listed, never on by default', () => {
   assert.equal(man.id, TWEAK);
   assert.match(read('web/tweaks/wizard/connector-models/tweak.css'), /html\[data-tweaks~="wizard\/connector-models"\]/);
 });
+
+// Codex P2: a real new-chat picker passes the Hermes default as cur (chat-power openModels). A disconnected
+// default must not come back as a row next to "No AI connected yet"; an existing thread keeps its model.
+test('a new chat never inherits a disconnected default into the menu', () => {
+  const cur = { model: 'claude-opus-5-5', provider: 'anthropic', isDefault: true };
+  const none = models({});
+  const pop = none.popHtml({ mode: 'new', cur }).html;
+  assert.match(pop, /No AI connected yet/);
+  assert.doesNotMatch(pop, /Opus/);
+  assert.doesNotMatch(none.sheetHtml({ mode: 'new', cur }).html, /Claude Opus/);
+  assert.deepEqual(names(models({ tinfoil: true }).popHtml({ mode: 'new', cur }).html), ['GLM', 'Kimi', 'Flash']);
+  assert.deepEqual(names(models({ tinfoil: true }).popHtml({ mode: 'thread', cur }).html), ['GLM', 'Kimi', 'Flash', 'Opus']);
+});
+
+// Codex P2: "More models" in the full sheet lists the reachable catalogue only.
+test('the expanded sheet leaves out disconnected connectors too', () => {
+  const M = models({ tinfoil: true, current: 'custom:wizard-tinfoil', model: 'glm-5-3' });
+  const short = M.sheetHtml({ mode: 'new', cur: null }).html;
+  const count = Number(/More models · (\d+)/.exec(short)?.[1]);
+  assert.equal(count, TINFOIL_MODELS.length);
+  const all = M.sheetHtml({ mode: 'new', cur: null, all: true });
+  assert.equal(all.list.some(o => /^claude-|^gpt-\d/.test(o.value)), false);
+  assert.equal(all.list.length, TINFOIL_MODELS.length);
+  // Switch off: the full catalogue as before.
+  assert.equal(models({ on: false, tinfoil: true }).sheetHtml({ mode: 'new', cur: null, all: true }).list.some(o => /^claude-/.test(o.value)), true);
+});
+
+// Codex P1 / AGENTS.md agent parity: open the real picker through chat-power (the label in the message box), tap the
+// first row and check where the new chat routes, on the main agent and on host-profile, container and restricted agents.
+function powered(kind) {
+  const document = { documentElement: { dataset: { skin: 'nebula', tweaks: TWEAK } }, addEventListener() {} };
+  const agent = kind === 'main' ? null : { id: `ag-${kind}`, label: `Agent ${kind}`, kind, model: { provider: 'custom', default: 'claude-sonnet-5' } };
+  const AG = { ready: true, lock: () => '', isOther: id => !!agent && id === agent.id, get: id => (agent && id === agent.id ? agent : null),
+    others: () => (agent ? [agent] : []), isPrivate: () => false, modelName: (_a, m) => m,
+    modelOptions: a => [{ value: 'claude-sonnet-5', provider: 'custom', name: 'Sonnet', agent: a.id, isGlobalDefault: true }],
+    route: (a, want) => ({ model: want || 'claude-sonnet-5', provider: a.model.provider, agent: a.id }), allows: () => true };
+  const state = {}, w = { id: 'win', thread: '__new__', ...(agent ? { agent: agent.id } : {}) };
+  let html = '';
+  const el = { querySelectorAll: () => [], querySelector: () => null, insertAdjacentHTML: (_p, h) => { html = h; }, classList: { add() {}, remove() {} }, style: { setProperty() {}, removeProperty() {} } };
+  const ctx = { setTimeout, clearTimeout, console, AbortSignal, AbortController, document, addEventListener() {}, localStorage: { getItem: () => null, setItem() {} },
+    fetch: async () => ({ ok: false, json: async () => ({}) }), WizCore: { esc: String, clip: String }, WizConfig: { agent: () => 'Wizard' },
+    WizLive: { session: () => null, agentOf: () => '' }, WosAgents: AG, Event: class {},
+    ResizeObserver: class { observe() {} disconnect() {} }, requestAnimationFrame: () => 0, cancelAnimationFrame() {} };
+  ctx.window = ctx; vm.createContext(ctx);
+  vm.runInContext(read('web/core/chat-models.js'), ctx);
+  const M = ctx.WosModels;
+  const payload = { provider: 'anthropic', model: 'claude-opus-5-5', providers: [
+    { slug: 'anthropic', authenticated: false, models: ['claude-opus-5-5', 'claude-sonnet-5'] },
+    { slug: 'wizard-tinfoil', is_user_defined: true, authenticated: true, models: TINFOIL_MODELS }] };
+  M.providers = payload.providers; M.tinfoil = { provider: 'tinfoil', credentialStored: true }; M.claudeAccounts = { accounts: [] };
+  M.options = M.normalize(payload); M.ready = true; M.at = Date.now(); M.load = async () => M.options;
+  vm.runInContext(read('web/core/chat-power.js'), ctx);
+  const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w, root: () => el, overlay() {} },
+    owner: id => id, winAgent: win => win.agent || '', elOf: () => el, closeRowSheet() {}, vib() {}, toast() {}, renderThreadNow() {} });
+  const tap = sel => api.click({ target: { closest: s => (s === sel ? { dataset: { mpick: '0' } } : s === '.ch-mlabel' ? {} : null) } }, 'win');
+  return { M, state, agent, html: () => html, open: () => tap('[data-chmodel]'), pick: () => tap('[data-mpick]') };
+}
+for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
+  test(`connector models, ${kind}: the opened picker and the picked route stay with that agent`, () => {
+    const h = powered(kind);
+    h.open();
+    const shown = names(h.html());
+    if (kind === 'main') assert.deepEqual(shown, ['GLM', 'Kimi', 'Flash']);
+    else assert.deepEqual(shown, ['Sonnet']);
+    h.pick();
+    if (kind === 'main') {
+      assert.deepEqual({ ...h.state.newModel }, { model: 'glm-5-3', provider: 'custom:wizard-tinfoil' });
+      assert.deepEqual({ ...h.M.snapshot('__new__', h.state.newModel) }, { model: 'glm-5-3', provider: 'custom:wizard-tinfoil' });
+    } else {
+      assert.deepEqual({ ...h.state.newModel }, { model: 'claude-sonnet-5', provider: 'custom', agent: h.agent.id });
+      assert.deepEqual({ ...h.M.snapshot('__new__', h.state.newModel) }, { model: 'claude-sonnet-5', provider: 'custom', agent: h.agent.id });
+    }
+  });
+}
