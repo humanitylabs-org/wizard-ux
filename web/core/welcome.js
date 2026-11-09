@@ -236,6 +236,8 @@
       if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
+        // Chats reads models from a list cached for minutes: fetch it again so the first message gets the new sign-in.
+        try { window.WosModels?.load?.(true); } catch (e) {}
 
         setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = 'look'; provider = null; paint(); } }, 1200); // Back cancels it
         return;
@@ -303,6 +305,8 @@
     if (!text) { el.querySelector('textarea')?.focus(); return; }
     sending = true; sendError = ''; paint(false);
     let item = null;
+    // The first message must ride on the provider just signed in to, not a model list from before the sign-in.
+    try { const MM = window.WosModels; if (MM?.stale?.()) await MM.load(true); } catch (e) {}
     try { item = await H.send(text); } catch (err) { console.error(err); }
     sending = false;
     // Finish only once the message is safely queued: a failed save keeps the words here and the Welcome on screen.
