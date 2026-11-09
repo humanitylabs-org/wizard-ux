@@ -23,7 +23,7 @@ const unsent = (status = 'failed', run = RUN) => ({ id: `queue-${run}`, session_
   wizard_queue: { status, reason: status === 'failed' ? 'not_sent' : '', public_run_id: run } });
 const paint = (rows, pending = [], c = {}) => {
   const visible = ctx.reconcileSent(parseRows(rows), pending);
-  const remaining = pending.filter(p => !ctx.localSent(visible, p) && !ctx.echoed(visible, p));
+  const remaining = pending.filter(p => !ctx.localSent(visible, p) && !ctx.echoed(visible, p) && !ctx.retryShown(visible, p));
   const card = { texts: [], media: [], ...c };
   return { visible, html: visible.map((t, i) => ctx.turnHtml(card, t, i === visible.length - 1, false)).join('') + remaining.map(p => `<pending ${p.id}>`).join('') };
 };
@@ -56,7 +56,8 @@ test('after Retry, the message shows once: never this phone’s retry copy besid
   assert.equal(r.visible.filter(t => t.u?.text?.startsWith(words)).length, 1, r.html);
   assert.doesNotMatch(r.html, /<pending/);
   // Hermes writes the owner's row: still once.
-  r = paint([...earlier, { id: 3, role: 'user', content: words, timestamp: sentAt + 9000 }, { id: 4, role: 'assistant', content: 'Here is what happened.', timestamp: sentAt + 9010, finish_reason: 'stop' }], [retry]);
+  const later = { ...retry, text: words, createdAt: sentAt * 1000 + 8000, sentAt: sentAt * 1000 + 8500 }; // the retry's own words and time, as the phone wrote them
+  r = paint([...earlier, { id: 3, role: 'user', content: words, timestamp: sentAt + 9 }, { id: 4, role: 'assistant', content: 'Here is what happened.', timestamp: sentAt + 19, finish_reason: 'stop' }], [later]);
   assert.equal(r.visible.filter(t => t.u?.text?.startsWith(words)).length, 1, r.html);
 });
 
@@ -70,4 +71,14 @@ test('this phone’s just-sent copy is matched to Wizard’s copy of the same ru
 test('Not sent styling uses the skin’s warning token and keeps the bubble fully opaque', () => {
   assert.match(css, /\.msg\.u\.unsent \.pst\.fail \{[^}]*var\(--wz-warning/);
   assert.doesNotMatch(css.match(/\.msg\.u\.unsent \.bub \{[^}]*\}/)[0], /opacity/);
+});
+
+test('a sent Retry is not retired from the outbox until a transcript row really carries it', () => {
+  const retry = { id: 'wos-retry', state: 'sent', how: 'retry', retryRunId: RUN, runId: 'wizardq_retry', text: words, files: [], createdAt: 1, sentAt: 2 };
+  // Wizard's failed copy of the saved request is on screen, but nothing carries the retry's own run yet: the outbox keeps it.
+  const shown = ctx.reconcileSent(parseRows([...earlier, unsent('failed')]), [retry]);
+  assert.equal(ctx.echoed(shown, retry), false);
+  assert.equal(ctx.retryShown(shown, retry), true); // still never drawn twice
+  // Once the retry's own run is a row, it has landed.
+  assert.equal(ctx.echoed(ctx.reconcileSent(parseRows([...earlier, unsent('running', 'wizardq_retry')]), [retry]), retry), true);
 });

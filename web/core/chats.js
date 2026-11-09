@@ -2322,7 +2322,7 @@ window.WizCore.chats = function createChats(H) {
     // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
     // painted the cached transcript (your message, then the reply) and the outbox copy still "Sending…" under both
     // until the server read retired it (James, 23 Oct 2026).
-    const pend = pendingFor(w).filter(p => !(turns && (localSent(turns, p) || echoed(turns, p))));
+    const pend = pendingFor(w).filter(p => !(turns && (localSent(turns, p) || echoed(turns, p) || retryShown(turns, p))));
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     const NV = isNew && !pend.length ? notifOf(w) : null;
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
@@ -2687,13 +2687,16 @@ window.WizCore.chats = function createChats(H) {
     // their own run and keep matching by words.
     if (p.state === 'sent' && p.steered && !p.steerQueued && isFinite(p.sentAt)
         && turns.some(t => t.a && t.a.final && !t.a.failed && isFinite(t.a.at) && t.a.at > p.sentAt + 10e3)) return true;
-    // A sent Retry of a saved request is that request again: Wizard's copy of it (Not sent, then Sending, then
-    // Hermes' own row) is already on screen at the time it was first sent, so this device's copy never draws twice.
-    if (p.state === 'sent' && p.retryRunId) return true;
     if (p.state === 'sent') return us.some(u => sentMatch(u, p));
     if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
     const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
     return us.some(u => after(u) && (files.length ? sameFiles(u) && (!t || String(u.text || '').trim().includes(t)) : !!t && String(u.text || '').trim() === t));
+  }
+  // A sent Retry of a saved request is that request again: Wizard's copy of it (Not sent, then Sending, then
+  // Hermes' own row) is already on screen, so this device's copy never draws twice. Drawing only: a retry is retired
+  // from the outbox (retireLanded) only once a transcript row really carries it (echoed), never on a guess.
+  function retryShown(turns, p) {
+    return p.state === 'sent' && !!p.retryRunId && turns.some(t => t.u?.queue && [p.retryRunId, p.runId].includes(t.u.queue.runId));
   }
   // Match stable receipt identity first; legacy history gets bounded, exact content
   // matching. A shared attachment or forty-character prefix is not message identity.
@@ -2714,7 +2717,7 @@ window.WizCore.chats = function createChats(H) {
   function reconcileSent(turns, pending, session) {
     const out = turns.slice(), start = t => t.at ?? t.later?.at ?? t.work?.[0]?.at ?? t.a?.at;
     for (const p of pending) {
-      if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false })) continue;
+      if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false }) || retryShown(turns, p)) continue;
       const at = p.sentAt || p.createdAt;
       if (!isFinite(at) || (!p.text && !p.files?.length)) continue;
       // A Thread tracker quote rides with the local copy so its header shows at once (canonical history carries it as the marker).
