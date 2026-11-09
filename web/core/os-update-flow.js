@@ -160,8 +160,9 @@
   // ---- the banner (same component as "Interface updated") ----
   function banner() {
     if (updating()) return null;
-    const r = result();
-    if (r) {
+    const r = result(), s0 = st();
+    // A newer release is ready: the last update's news is old; say the new one instead.
+    if (r && !(s0?.update_available && s0.latest && s0.latest !== r.target)) {
       if (r.result === 'ok') return { key: 'ok' + r.id, text: `${OS} updated to ${r.target}`, x: true };
       if (r.result === 'skipped') return { key: 'sk' + r.id, text: `${OS} wasn’t updated · ${WHY[r.reason] || WHY.other}`, x: true };
       return { key: 'bad' + r.id, text: `${OS} update didn’t finish · Wizard went back to how it was`, go: 'Details', act: 'details', x: true };
