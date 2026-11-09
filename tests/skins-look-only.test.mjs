@@ -86,3 +86,15 @@ test('without an own skin nothing changes', async () => {
     assert.deepEqual(b.running(), on ? ['miguel/send-and-go', ID].sort() : ['miguel/send-and-go']);
   }
 });
+
+test('look sync turning it on from another device adopts the shared built-in defaults in the same step', async () => {
+  const b = box(); await b.E.refresh();
+  const id = builtins[0]; assert.ok(id, 'catalog has a built-in default');
+  await b.E.adopt({ 'miguel/send-and-go': true, [ID]: true }, undefined, { [id]: false });
+  assert.ok(b.saved().defaultsOff.includes(id), 'the shared built-in off is taken now, not on the next poll');
+  assert.ok(!b.running().includes(id) && !b.E.state.tweaks.find(t => t.id === id).on);
+  // Still worn without the switch: the skin decides, so the shared defaults wait (unchanged behaviour).
+  const c = box(); await c.E.refresh();
+  await c.E.adopt({ 'miguel/send-and-go': true }, undefined, { [id]: false });
+  assert.ok(!(c.saved().defaultsOff || []).includes(id));
+});

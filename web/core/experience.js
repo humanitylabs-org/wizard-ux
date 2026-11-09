@@ -299,7 +299,9 @@
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
       // Old files omit defaults: retain local offs until the upgrade seeds them.
       const off = new Set(state.defaultsOff || []);
-      const shared = recipe() ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
+      // Decided on the state being adopted: a shared look-only switch arriving with these defaults sets the skin aside now.
+      const skinDecides = !!window.WosMySkin?.active && !(!locked() && next[LOOK_ONLY] === true);
+      const shared = skinDecides ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
       for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
       state.mix = next; state.preset = 'none'; delete state.carry;
