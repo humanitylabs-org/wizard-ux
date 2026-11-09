@@ -41,5 +41,12 @@
     "miguel/unified-inbox": "wizard/unified-inbox",
     "wizard/machines-home": "miguel/machines-home",
     "miguel/switch-row-actions": "miguel/model-pills"
-  }
+  },
+  "lookOnlyOff": [
+    "wizard/two-orbs",
+    "wizard/app-borders",
+    "miguel/no-desk-close",
+    "wizard/pin-buttons",
+    "wizard/wizardos-name"
+  ]
 }

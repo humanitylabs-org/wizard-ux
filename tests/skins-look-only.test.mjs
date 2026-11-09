@@ -10,9 +10,9 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const ID = 'wizard/skins-look-only';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const builtins = catalog.defaults || [];
-// The shared switches: only Send and go is on. The own skin brings Pin buttons and turns Send and go off.
+// The shared switches: only Send and go is on. The own skin brings Archive first and turns Send and go off.
 const MIX = { 'miguel/send-and-go': true };
-const RECIPE = { 'wizard/pin-buttons': true, 'miguel/send-and-go': false };
+const RECIPE = { 'miguel/archive-top': true, 'miguel/send-and-go': false };
 
 function box({ mix = MIX, channel = 'latest', recipe = RECIPE } = {}) {
   const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, machinesHomeMoved: true })]]);
@@ -44,7 +44,7 @@ test('the switch is a normal catalog tweak, off by default and never in a publis
 
 test('switch off (today): an own skin still decides which tweaks run', async () => {
   const b = box(); await b.E.refresh();
-  assert.deepEqual(b.running(), ['wizard/pin-buttons']);
+  assert.deepEqual(b.running(), ['miguel/archive-top']);
   assert.equal(b.E.state.tweaks.find(t => t.id === ID).on, false);
 });
 
@@ -53,11 +53,11 @@ test('switch on: the own skin is look only, the shared feature switches decide, 
   assert.deepEqual(b.running(), ['miguel/send-and-go', ID].sort());
   assert.deepEqual({ ...b.own.tweaks }, RECIPE, 'the skin recipe is untouched');
   // A flip now goes to the shared switches (and to look sync / the Tracker), never into the skin.
-  await b.E.toggle('wizard/pin-buttons');
+  await b.E.toggle('miguel/archive-top');
   assert.equal(b.updates.length, 0, 'no write into the skin recipe');
-  assert.equal(b.saved().mix['wizard/pin-buttons'], true);
-  assert.deepEqual(b.events.at(-1), { id: 'wizard/pin-buttons', on: true });
-  assert.deepEqual(b.running(), ['miguel/send-and-go', 'wizard/pin-buttons', ID].sort());
+  assert.equal(b.saved().mix['miguel/archive-top'], true);
+  assert.deepEqual(b.events.at(-1), { id: 'miguel/archive-top', on: true });
+  assert.deepEqual(b.running(), ['miguel/archive-top', 'miguel/send-and-go', ID].sort());
 });
 
 test('turning the switch on and off with an own skin worn goes through the shared mix both ways', async () => {
@@ -65,12 +65,13 @@ test('turning the switch on and off with an own skin worn goes through the share
   await b.E.toggle(ID);
   assert.equal(b.updates.length, 0, 'the switch is never stored in a skin');
   assert.equal(b.saved().mix[ID], true);
-  assert.deepEqual(b.events.at(-1), { id: ID, on: true });
-  assert.deepEqual(b.running(), ['miguel/send-and-go', ID].sort());
+  assert.deepEqual(b.events[0], { id: ID, on: true });
+  // Slice 3: turning it on here carries the worn skin's choices into the shared switches once (skins-look-only-migration).
+  assert.deepEqual(b.running(), ['miguel/archive-top', ID].sort());
   await b.E.toggle(ID);
   assert.equal(b.saved().mix[ID], undefined);
   assert.deepEqual(b.events.at(-1), { id: ID, on: false });
-  assert.deepEqual(b.running(), ['wizard/pin-buttons'], 'the skin\'s own choices come back');
+  assert.deepEqual(b.running(), ['miguel/archive-top'], 'the skin\'s own choices come back');
 });
 
 test('For everyone keeps it off like every feature switch', async () => {
