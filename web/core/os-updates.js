@@ -154,7 +154,7 @@
     const note = appsIssue ? `<p class="st-note" role="status">${esc(appsIssue)} Showing the last check.</p>` : '';
     const at = typeof au?.last?.at === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(au.last.at) ? au.last.at.slice(0, 16).replace('T', ' ') + ' UTC' : '';
     // The app Automatic / Ask me switch (`wam app-updates --auto/--ask`): only with the App Manager's state.
-    const mode = au ? `<div class="st-seg" role="radiogroup" aria-label="App updates" data-osu-app-modes>${[['auto', 'Automatic'], ['ask', 'Ask me']].map(([k, t]) => `<button type="button" data-osu="app-mode:${k}" role="radio" aria-checked="${au.app_mode === k}"${appAct ? ' disabled' : ''}>${esc(t)}</button>`).join('')}</div>` : '';
+    const mode = au ? `<span class="osu-lbl" data-osu-app-modes-lbl>App updates</span><div class="st-seg" role="radiogroup" aria-label="App updates" data-osu-app-modes>${[['auto', 'Automatic'], ['ask', 'Ask me']].map(([k, t]) => `<button type="button" data-osu="app-mode:${k}" role="radio" aria-checked="${au.app_mode === k}"${appAct ? ' disabled' : ''}>${esc(t)}</button>`).join('')}</div>` : '';
     const mgr = au ? `${mode}<p class="st-hint" data-osu-app-mode>App updates: ${au.app_mode === 'auto' ? 'Automatic, overnight' : 'Ask me'}${at ? ` · last run ${esc(at)}` : ' · not run yet'}</p>` : '';
     return `<div class="osu-sec" data-osu-apps>${head}${note}${rows || '<p class="st-hint">No apps installed from the App Store yet.</p>'}${mgr}<p class="st-hint">Installed version and the App Store’s latest, from the App Manager.</p></div>`;
   }
