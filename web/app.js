@@ -2577,6 +2577,8 @@
     return 'recording';
   }
   async function startVoice(kind, opt = {}) {
+    // The Mac app sets this while it restarts for an approved update: a take started now would be cut off.
+    if (window.__wizardUpdateFrozen) { toast('…', 'Wizard is preparing an update; recording is paused', 2200); return 'busy'; }
     if (CHATS.incognitoActive(opt.replyTo?.wid || focusedWin()?.id) || document.activeElement?.closest?.('[data-incog-thread]')) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
