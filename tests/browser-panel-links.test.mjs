@@ -1,14 +1,15 @@
-// Browser panel trial (James, 9 Nov 2026: "Can we try panel as a test to see if I like it?").
-// WizardOS settings.json `links.panel: true` + the WizardOS Android app's `openInPanel` bridge: a tapped outside link
-// opens in a Custom Tab over Wizard (Brave when installed). Off by default; desktop, Wizard's own pages, private
-// hosts, files and the explicit "Open in your browser" choices are unchanged; an APK without the bridge keeps the
-// browser route. Never routed into Browser Reader.
+// Browser panel, core default (James, 9 Nov 2026: "make this part of core"; trial before that).
+// The WizardOS Android app's `openInPanel` bridge: a tapped outside link opens in a Custom Tab over Wizard (the
+// phone's default browser). On unless WizardOS settings.json says `links.panel: false`; desktop, Wizard's own pages,
+// private hosts, files and the explicit "Open in your browser" choices are unchanged; an APK without the bridge
+// keeps the browser route. Never routed into Browser Reader.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../web/core/links.js',import.meta.url),'utf8');
-function fixture({native=false,panelBridge=true,links={panel:true},throws=false}={}) {
+function fixture(opts={}) {
+ const {native=false,panelBridge=true,throws=false}=opts, links='links' in opts?opts.links:{panel:true};
  const calls=[], origin='https://wizard.example', location=new URL(origin+'/wizard-os-home/');
  class El {
   constructor(){this.handlers={};this.nodes={};this.style={};this.classList={add(){},remove(){},contains(){return false;},toggle(){return false;}};this.contentWindow={location:{replace(){}}};}
@@ -22,7 +23,7 @@ function fixture({native=false,panelBridge=true,links={panel:true},throws=false}
   if(panelBridge)w.WizardOSNative.openInPanel=url=>{if(throws)throw new Error('gone');calls.push(['panel',url]);};
  }
  const localStorage={getItem:()=>null,setItem(){}};
- w.WizConfig={raw:{settings:links===null?{}:{links}},localURL:(h,b)=>new URL(h,b)};
+ w.WizConfig={raw:links===undefined?{}:{settings:links===null?{}:{links}},localURL:(h,b)=>new URL(h,b)};
  vm.runInNewContext(source,{window:w,location,navigator:{userAgent:'fixture',userActivation:{isActive:true}},localStorage,document,URL,console,setTimeout,clearTimeout,performance:{now:()=>0},Date,JSON,Object,Set});
  const L=w.WizLinks.mount({readerApp:()=>({id:'browser',url:'/browser/'}),asWindow:path=>{calls.push(['window',path]);return true;}});
  const chat=new El();w.WizLinks.intercept(chat,L);
@@ -49,11 +50,29 @@ test('panel on with Reader on too: Reader keeps its outside links; a Wizard host
  const f=fixture({native:true,links:{panel:true,reader:true}});f.click(f.chat,'https://example.com/story');f.click(f.chat,'https://wizard.aiwizards.com/clips/');
  assert.deepEqual(f.calls,[['window','/browser/?url=https%3A%2F%2Fexample.com%2Fstory'],['native-browser','https://wizard.aiwizards.com/clips/']]);
 });
-test('panel off (unset, the default): the phone keeps the existing openInBrowser route',()=>{
- for(const links of [null,{},{panel:false},{panel:'true'}]){
+test('panel is the default: with the setting absent, a phone with the bridge opens outside links in the panel',()=>{
+ for(const links of [null,{},{reader:false},{panel:'false'},{panel:0}]){
   const f=fixture({native:true,links});f.click(f.chat,'https://example.com/a');
-  assert.deepEqual(f.calls,[['native-browser','https://example.com/a']],JSON.stringify(links));
+  assert.deepEqual(f.calls,[['panel','https://example.com/a']],JSON.stringify(links));neverReader(f);
  }
+});
+test('panel default also covers a shell with no bootstrap settings at all',()=>{
+ const f=fixture({native:true,links:undefined});f.click(f.chat,'https://example.com/a');
+ assert.deepEqual(f.calls,[['panel','https://example.com/a']]);
+});
+test('explicit opt-out links.panel false: the phone keeps the existing openInBrowser route',()=>{
+ const f=fixture({native:true,links:{panel:false}});f.click(f.chat,'https://example.com/a');f.click(f.doc,'https://example.com/b');
+ assert.deepEqual(f.calls,[['native-browser','https://example.com/a'],['native-browser','https://example.com/b']]);
+});
+test('desktop is unchanged with the setting absent: a normal new tab, never a panel',()=>{
+ for(const links of [null,{},undefined]){
+  const f=fixture({native:false,links});f.click(f.chat,'https://example.com/a');
+  assert.deepEqual(f.calls,[['browser','https://example.com/a']],JSON.stringify(links));
+ }
+});
+test('setting absent, older APK without openInPanel: the existing openInBrowser route',()=>{
+ const f=fixture({native:true,panelBridge:false,links:{}});f.click(f.chat,'https://example.com/a');
+ assert.deepEqual(f.calls,[['native-browser','https://example.com/a']]);
 });
 test('panel on, older APK without openInPanel: the existing openInBrowser route',()=>{
  const f=fixture({native:true,panelBridge:false});f.click(f.chat,'https://example.com/a');
