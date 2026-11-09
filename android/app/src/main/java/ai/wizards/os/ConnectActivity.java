@@ -267,7 +267,7 @@ public final class ConnectActivity extends Activity {
                 checking = false; busy(false);
                 if (failure != null && TailscaleGuide.applies(origin)) { say("", false); showGuide(origin); return; }
                 if (failure != null) { say(failure, true); return; }
-                if (!ServerSettings.save(this, origin)) { say("Couldn't switch yet. Let any recording or upload finish, then try again.", true); return; }
+                if (!ServerSettings.save(this, origin)) { say(ServerSwitchGuard.say(ServerSwitchGuard.blocker(this)), true); return; }
                 returnToWizard();
             });
         }, "WizardConnect").start();

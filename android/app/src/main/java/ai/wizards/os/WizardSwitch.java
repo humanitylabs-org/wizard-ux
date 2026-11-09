@@ -55,7 +55,7 @@ final class WizardSwitch {
             a.runOnUiThread(() -> {
                 if (a.isFinishing() || a.isDestroyed()) return;
                 if (problem == null && !ServerSettings.save(a, origin)) {
-                    Toast.makeText(a, "Couldn't switch yet. Let any recording or upload finish, then try again.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(a, ServerSwitchGuard.say(ServerSwitchGuard.blocker(a)), Toast.LENGTH_LONG).show();
                     failed.run(); return;
                 }
                 if (problem != null) { Toast.makeText(a, problem, Toast.LENGTH_LONG).show(); failed.run(); return; }
