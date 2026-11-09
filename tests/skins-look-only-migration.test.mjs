@@ -76,9 +76,8 @@ const mixOn = mix => Object.keys(mix).filter(id => mix[id] === true).sort();
 const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/pin-buttons': true, 'wizard/two-orbs': true };
 const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/orb-shell': true, 'miguel/no-desk-close': true };
 
-test('the drop list names real catalog tweaks and none of them is a built-in default or the switch itself', () => {
-  const src = read('web/core/experience.js');
-  assert.deepEqual(JSON.parse(src.match(/const RETIRING = (\[[^\]]*\])/)[1].replace(/'/g, '"')), DROP);
+test('the drop list (catalog lookOnlyOff) names real catalog tweaks, none a built-in default or the switch itself', () => {
+  assert.deepEqual(catalog.lookOnlyOff, DROP);
   for (const id of DROP) { assert.ok(catalog.tweaks.includes(id), id); assert.ok(!catalog.defaults.includes(id), id); }
   assert.ok(!DROP.includes(ID));
 });
