@@ -27,6 +27,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct) |
 | Switch Wizard (Android) | `WizardSwitch` via `WizardOSNative.switchWizard`, from `WizWorkspaces.switch` |
 | Refuse an Android Wizard switch while work is unfinished | `ServerSwitchGuard` (`android/app/src/main/java/ai/wizards/os/ServerSwitchGuard.java`) |
+| WizardOS updates itself (Android APK) | `UpdatePolicy` (`android/app/src/main/java/ai/wizards/os/update/UpdatePolicy.java`: `next`, `autoNet`), `Updater`, `UpdateJob`: downloads by itself on any network except roaming (wizard-ux#1219), installs never mid-recording |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) |
