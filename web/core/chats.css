@@ -263,8 +263,12 @@ a.fchip { color: inherit; text-decoration: none; }
 .msg.u.pending .pst { color: var(--ink-3); }
 .msg.u.pending .pst.fail { color: var(--amber); font-weight: 650; }
 .msg.u.pending .pst.wait { color: var(--ink-2); }
+/* A message Hermes never took in (Agent Service wizard_queue failed): still the owner's, marked Not sent. */
+.msg.u.unsent .bub { border-style: dashed; }
+.msg.u.unsent .mmeta { flex-wrap: wrap; gap: 6px 10px; }
+.msg.u.unsent .pst.fail { color: var(--wz-warning, var(--amber)); font-weight: 650; }
 .msg.u.pending.failed .bub { opacity: .8; border: 1px dashed rgba(255, 190, 85, .55); }
-.msg.u.pending .pbtn { padding: 5px 12px; border-radius: 99px; background: rgba(143, 99, 255, .3); color: var(--ink); font-size: 12px; font-weight: 700; }
+.msg.u.pending .pbtn, .msg.u.unsent .pbtn { padding: 5px 12px; border-radius: 99px; background: rgba(143, 99, 255, .3); color: var(--ink); font-size: 12px; font-weight: 700; }
 .msg.u.pending .pbtn.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
 .msg.u.pending { flex-direction: column; align-items: flex-end; }
 /* Messages still sending, in the Chats list: one small floating pill at the foot of the list. It overlays the

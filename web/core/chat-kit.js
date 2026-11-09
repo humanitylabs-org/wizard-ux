@@ -185,7 +185,10 @@
         if ((files.length || images.length) && /^Please use the attached (file|files)\.$/.test(t)) t = '';
         if (hasImage) t = t.replace(/^\s*\[screenshot\]\s*$/gmi, '').replace(/\n{3,}/g, '\n\n').trim();
         if (!t && !files.length && !images.length && !rq) continue;
-        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}) });
+        // The Agent Service's copy of a message Hermes has not taken in (yet): queued, running, or failed (never sent).
+        const q = m.wizard_queue && typeof m.wizard_queue === 'object' && typeof m.wizard_queue.status === 'string'
+          ? { status: m.wizard_queue.status, runId: String(m.wizard_queue.public_run_id || '') } : null;
+        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}), ...(q ? { queue: q } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
         const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw);
