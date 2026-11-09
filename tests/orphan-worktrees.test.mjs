@@ -146,6 +146,98 @@ test('orphan worktrees: a local branch named origin/main cannot shadow the remot
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('orphan worktrees: admits only existing ignored files tracked in remote history', () => {
+  const { root, live, wts } = fixture();
+  try {
+    git(join(root, 'origin'), 'checkout', '-q', '--detach');
+    git(live, 'merge', '-q', '--ff-only', 'refs/remotes/origin/main');
+    writeFileSync(join(live, '.gitignore'), 'node_modules/\ncache/\n*.ignored\n');
+    writeFileSync(join(live, 'kept.ignored'), 'tracked and ignored\n');
+    writeFileSync(join(live, 'removed.ignored'), 'historical bytes\n');
+    git(live, 'add', '.gitignore');
+    git(live, 'add', '-f', '--', 'kept.ignored', 'removed.ignored');
+    git(live, 'commit', '-q', '-m', 'track ignored files');
+    git(live, 'push', '-q', 'origin', 'main');
+    const old = git(live, 'rev-parse', 'HEAD').trim();
+    const names = ['history-unchanged', 'history-edited', 'history-missing', 'tracked-edited', 'tracked-missing'];
+    for (const name of names) git(live, 'worktree', 'add', '-q', '--detach', join(wts, name), old);
+    git(live, 'rm', '-q', '--', 'removed.ignored');
+    git(live, 'commit', '-q', '-m', 'remove ignored file');
+    git(live, 'push', '-q', 'origin', 'main');
+    for (const name of names) {
+      const folder = join(wts, name);
+      if (!name.startsWith('history-') || name === 'history-missing') rmSync(join(folder, 'removed.ignored'));
+      if (name === 'history-edited') writeFileSync(join(folder, 'removed.ignored'), 'UNIQUE NEVER COMMITTED CONTENT\n');
+      if (name === 'tracked-edited') writeFileSync(join(folder, 'kept.ignored'), 'unique tracked edit\n');
+      if (name === 'tracked-missing') rmSync(join(folder, 'kept.ignored'));
+      mkdirSync(join(folder, 'node_modules'));
+      writeFileSync(join(folder, 'node_modules', 'dependency'), 'never tracked dependency\n');
+      mkdirSync(join(folder, 'cache'));
+      writeFileSync(join(folder, 'cache', 'fresh'), 'never tracked cache\n');
+      rmSync(join(live, '.git', 'worktrees', name), { recursive: true, force: true });
+    }
+    const before = walk(join(live, '.git')).map((p) => [p, readFileSync(p, 'latin1')]);
+    const folders = walk(wts).map((p) => [p, readFileSync(p, 'latin1')]);
+    const r = ow.report({ checkout: live, root: wts, files: true });
+    const by = Object.fromEntries(r.orphans.map((o) => [o.name, o]));
+    assert.equal(by['history-edited'].status, 'unmatched');
+    assert.deepEqual(by['history-edited'].files, ['removed.ignored']);
+    assert.deepEqual(by['history-edited'].only_here_files, ['removed.ignored']);
+    assert.equal(by['history-unchanged'].status, 'on-main');
+    assert.equal(by['history-unchanged'].commit, old);
+    assert.equal(by['history-missing'].status, 'on-main');
+    assert.equal(by['history-missing'].commit, git(live, 'rev-parse', 'HEAD').trim());
+    assert.equal(by['tracked-edited'].status, 'unmatched');
+    assert.deepEqual(by['tracked-edited'].only_here_files, ['kept.ignored']);
+    assert.equal(by['tracked-missing'].status, 'unmatched');
+    assert.deepEqual(by['tracked-missing'].files, ['kept.ignored']);
+    assert.deepEqual(by['tracked-missing'].only_here_files, []);
+    assert.equal(ow.needsPerson(r), true);
+    assert.deepEqual(walk(join(live, '.git')).map((p) => [p, readFileSync(p, 'latin1')]), before);
+    assert.deepEqual(walk(wts).map((p) => [p, readFileSync(p, 'latin1')]), folders);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('orphan worktrees: raw NUL diff filenames survive report and human/JSON output', (t) => {
+  const { root, live, wts } = fixture();
+  try {
+    git(live, 'merge', '-q', '--ff-only', 'refs/remotes/origin/main');
+    const folder = join(wts, 'filenames');
+    git(live, 'worktree', 'add', '-q', '--detach', folder, 'HEAD');
+    const unique = [':leading-colon', 'odd\nname', 'ordinary', 'tab\tname'];
+    for (const name of unique) writeFileSync(join(folder, name), `unique bytes for ${name}\n`);
+    // Existing contents and deletions must not be mistaken for new blobs.
+    writeFileSync(join(folder, 'base'), 'm1\n');
+    rmSync(join(folder, 'm2'));
+    rmSync(join(live, '.git', 'worktrees', 'filenames'), { recursive: true, force: true });
+    const r = ow.report({ checkout: live, root: wts, files: true });
+    const row = r.orphans.find((o) => o.name === 'filenames');
+    let json = '';
+    let human = '';
+    const args = ['--checkout', live, '--root', wts, '--files'];
+    const jsonExit = ow.main([...args, '--json'], { out: (s) => { json = s; }, err: assert.fail });
+    const humanExit = ow.main(args, { out: (s) => { human = s; }, err: assert.fail });
+    const jsonRow = JSON.parse(json).orphans.find((o) => o.name === 'filenames');
+    t.diagnostic(JSON.stringify({ row, jsonRow, human, jsonExit, humanExit }));
+    const expectedFiles = [':leading-colon', 'base', 'm2', 'odd\nname', 'ordinary', 'tab\tname'];
+    assert.deepEqual(row.files, expectedFiles);
+    assert.deepEqual(row.only_here_files, unique);
+    assert.equal(row.changed_vs_main, expectedFiles.length);
+    assert.equal(row.only_here, unique.length);
+    assert.equal(row.status, 'unmatched');
+    assert.deepEqual(jsonRow, row);
+    assert.equal(jsonExit, 1);
+    assert.equal(humanExit, 1);
+    assert.ok(human.includes('filenames  6 paths differ from main, 4 with content found nowhere else'));
+    for (const name of unique) {
+      const shown = /[\x00-\x1f\x7f]/.test(name) ? JSON.stringify(name) : name;
+      assert.ok(human.includes(`      only here: ${shown}\n`), shown);
+    }
+    assert.ok(human.includes('      differs:   base\n'));
+    assert.ok(human.includes('      differs:   m2\n'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('orphan worktrees: the tool has no command that changes a repo', () => {
   const src = readFileSync(new URL('../tools/orphan-worktrees.mjs', import.meta.url), 'utf8');
   for (const word of ["'push'", "'fetch'", "'checkout'", "'reset'", "'merge'", "'worktree'", 'update-ref', "'commit'", "'gc'", "'prune'"]) {
