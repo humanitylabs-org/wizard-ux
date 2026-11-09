@@ -107,9 +107,9 @@ public final class UpdatePolicy {
     public enum Step {
         /** Nothing newer (or nothing to act on). */
         NONE,
-        /** Newer, not on the phone yet, but only on a metered network and nobody asked: show the banner only. */
+        /** Newer, not on the phone yet, but the phone is roaming (or offline) and nobody asked: show the banner only. */
         OFFER,
-        /** Fetch it now (unmetered, or James tapped). */
+        /** Fetch it now (any network except roaming: Wi-Fi or home mobile data; or James tapped). */
         DOWNLOAD,
         /** Downloaded + verified while WizardOS is in front: one "Update ready · tap to restart" banner. */
         BANNER,
@@ -122,23 +122,32 @@ public final class UpdatePolicy {
     }
 
     /**
+     * May a newer release download by itself on this network? Any connected network that is not roaming: Wi-Fi or
+     * home mobile data (wizard-ux#1219). Roaming is the one case where the data cost is real, so it only offers.
+     */
+    public static boolean autoNet(boolean internet, boolean notRoaming) {
+        return internet && notRoaming;
+    }
+
+    /**
      * @param newer      the feed names a higher versionCode than this app
      * @param verified   that APK is on the phone and passed every check
-     * @param unmetered  the active network is unmetered (Wi-Fi)
+     * @param autoNet    the active network may fetch an update by itself: connected and not roaming (Wi-Fi or home
+     *                   mobile data; wizard-ux#1219, James 9 Nov 2026: "cellular")
      * @param front      WizardOS is on screen
      * @param recording  any WizardOS recording is running (native recorder, orb, floating orb, side button)
      * @param silentOk   Android should install without asking (API 31+ and "Install unknown apps" allowed)
      * @param tapped     James tapped Update / the ready banner
      */
-    public static Step next(boolean newer, boolean verified, boolean unmetered, boolean front, boolean recording,
+    public static Step next(boolean newer, boolean verified, boolean autoNet, boolean front, boolean recording,
                             boolean silentOk, boolean tapped) {
-        return next(newer, verified, unmetered, front, recording ? Hold.TAKE : Hold.NONE, silentOk, tapped);
+        return next(newer, verified, autoNet, front, recording ? Hold.TAKE : Hold.NONE, silentOk, tapped);
     }
 
-    public static Step next(boolean newer, boolean verified, boolean unmetered, boolean front,
+    public static Step next(boolean newer, boolean verified, boolean autoNet, boolean front,
                             Hold hold, boolean silentOk, boolean tapped) {
         if (!newer) return Step.NONE;
-        if (!verified) return (unmetered || tapped) ? Step.DOWNLOAD : Step.OFFER;
+        if (!verified) return (autoNet || tapped) ? Step.DOWNLOAD : Step.OFFER;
         if (hold == Hold.TAKE) return Step.DEFER; // a tap never kills a genuine take
         if (tapped) return Step.INSTALL;               // permission is asked for in place, with James looking
         if (hold != Hold.NONE) return Step.DEFER; // unattended installs wait for music / mic too

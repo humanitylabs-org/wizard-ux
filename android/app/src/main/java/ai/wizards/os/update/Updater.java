@@ -51,7 +51,7 @@ import ai.wizards.os.device.Http;
 
 /**
  * Hands-free in-app update (#22). Reads the release feed (reports/wizard-os/latest.json on the private origin).
- * When it names a newer versionCode: download (by itself on unmetered networks: the on-resume check and a periodic
+ * When it names a newer versionCode: download (by itself on any network except roaming: the on-resume check and a periodic
  * UpdateJob) → check size + SHA-256 from the feed → check the APK is this app, newer, and signed by exactly the
  * pinned WizardOS key (BuildConfig.UPDATE_SIGNER; QA builds: the installed debug key) → install through a
  * PackageInstaller session with USER_ACTION_NOT_REQUIRED (API 31+). Once WizardOS has installed itself once, Android
@@ -210,7 +210,7 @@ public final class Updater {
         boolean committed = false;
         try {
             UpdatePolicy.Hold hold = hold(app);
-            UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), hold, silent, tapped);
+            UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, autoNet(app), AppState.front(), hold, silent, tapped);
             Log.i(TAG, "step " + step + " (verified=" + ok + " front=" + AppState.front() + " silent=" + silent + " tapped=" + tapped + ")");
             switch (step) {
                 case NONE: return;
@@ -325,9 +325,19 @@ public final class Updater {
         return false;
     }
 
-    static boolean unmetered(Context c) {
+    /**
+     * May an update download by itself on the active network? Any connected network except a roaming one: Wi-Fi and
+     * home mobile data both count (wizard-ux#1219). Roaming keeps the old behaviour: offer it, download on tap.
+     */
+    static boolean autoNet(Context c) {
         ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
-        return cm != null && cm.getActiveNetwork() != null && !cm.isActiveNetworkMetered();
+        if (cm == null) return false;
+        android.net.Network n = cm.getActiveNetwork();
+        if (n == null) return false;
+        android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+        return nc != null && UpdatePolicy.autoNet(
+                nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET),
+                nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING));
     }
 
     /**

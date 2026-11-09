@@ -148,18 +148,32 @@ public class UpdatePolicyTest {
         assertFalse("empty update", UpdatePolicy.signerOk(set(WOS), set(), WOS, ""));
     }
 
-    // next(newer, verified, unmetered, front, recording, silentOk, tapped)
+    // next(newer, verified, autoNet, front, recording, silentOk, tapped)
     @Test
     public void nothingNewerDoesNothing() {
         assertEquals(UpdatePolicy.Step.NONE, UpdatePolicy.next(false, true, true, false, false, true, true));
     }
 
     @Test
-    public void downloadsByItselfOnlyOnUnmeteredNetworks() {
+    public void downloadsByItselfOnAnyNetworkExceptRoaming() {
+        // wizard-ux#1219: Wi-Fi and home mobile data both download by themselves; roaming only offers.
+        assertTrue("Wi-Fi or home 5G/LTE: metered or not, it downloads", UpdatePolicy.autoNet(true, true));
+        assertFalse("roaming", UpdatePolicy.autoNet(true, false));
+        assertFalse("no internet", UpdatePolicy.autoNet(false, true));
+        assertEquals("roaming offers, download on tap", UpdatePolicy.Step.OFFER,
+                UpdatePolicy.next(true, false, UpdatePolicy.autoNet(true, false), true, false, true, false));
+        assertEquals("roaming + tap downloads", UpdatePolicy.Step.DOWNLOAD,
+                UpdatePolicy.next(true, false, UpdatePolicy.autoNet(true, false), true, false, true, true));
+        assertEquals("mobile data downloads by itself", UpdatePolicy.Step.DOWNLOAD,
+                UpdatePolicy.next(true, false, UpdatePolicy.autoNet(true, true), false, false, true, false));
+    }
+
+    @Test
+    public void downloadsByItselfOnlyWhenTheNetworkAllowsIt() {
         assertEquals(UpdatePolicy.Step.DOWNLOAD, UpdatePolicy.next(true, false, true, false, false, true, false));
         assertEquals(UpdatePolicy.Step.DOWNLOAD, UpdatePolicy.next(true, false, true, true, true, false, false));
         assertEquals(UpdatePolicy.Step.OFFER, UpdatePolicy.next(true, false, false, true, false, true, false));
-        assertEquals("a tap downloads on mobile data", UpdatePolicy.Step.DOWNLOAD, UpdatePolicy.next(true, false, false, true, false, true, true));
+        assertEquals("a tap downloads while roaming", UpdatePolicy.Step.DOWNLOAD, UpdatePolicy.next(true, false, false, true, false, true, true));
     }
 
     @Test

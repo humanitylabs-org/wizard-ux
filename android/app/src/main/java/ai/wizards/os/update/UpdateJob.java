@@ -9,21 +9,25 @@ import android.content.Context;
 import android.util.Log;
 
 /**
- * Background update check: every few hours on an unmetered network, even with WizardOS closed. Reads the feed,
+ * Background update check: every few hours on any network except roaming (wizard-ux#1219), even with WizardOS closed. Reads the feed,
  * downloads + verifies a newer build, and installs it (silently once WizardOS installed the running version).
  * Plain JobScheduler: no WorkManager dependency for one periodic job.
  */
 public class UpdateJob extends JobService {
     static final int JOB_ID = 7611;
     static final long PERIOD_MS = 6 * 3600_000L, FLEX_MS = 2 * 3600_000L;
+    /** Wi-Fi or home mobile data; never while roaming (wizard-ux#1219). */
+    static final int NETWORK = JobInfo.NETWORK_TYPE_NOT_ROAMING;
 
+    @SuppressWarnings("deprecation") // getNetworkType(): fine for comparing our own simple job
     static void schedule(Context c) {
         JobScheduler js = c.getSystemService(JobScheduler.class);
         if (js == null) return;
         JobInfo cur = js.getPendingJob(JOB_ID);
-        if (cur != null && cur.getIntervalMillis() == PERIOD_MS) return;
+        // Re-schedule a job persisted by an older build with the old UNMETERED constraint, or it never fires on mobile data.
+        if (cur != null && cur.getIntervalMillis() == PERIOD_MS && cur.getNetworkType() == NETWORK) return;
         JobInfo j = new JobInfo.Builder(JOB_ID, new ComponentName(c, UpdateJob.class))
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                .setRequiredNetworkType(NETWORK)
                 .setPeriodic(PERIOD_MS, FLEX_MS)
                 .setPersisted(true)
                 .build();
