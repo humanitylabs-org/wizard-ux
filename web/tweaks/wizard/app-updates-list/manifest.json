@@ -7,5 +7,5 @@
   "capabilities": [
     "layout"
   ],
-  "description": "Settings > About & updates also lists every installed app: its version, the App Store's latest, and whether it is up to date, has an update ready, or comes with WizardOS updates."
+  "description": "Settings > About & updates also lists every installed app: its version, the App Store's latest, and whether it is up to date, has an update ready, is held, failed or was rolled back, with Update now, Retry and Hold buttons and the app Automatic / Ask me choice."
 }

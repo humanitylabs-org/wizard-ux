@@ -72,7 +72,12 @@
    * a copy of its own. Holds, failed versions (with the plain reason), rollbacks, the last run and the app
    * Automatic / Ask mode come from the App Manager's own app-update state, `../store-install/_app-updates`
    * (owner only, same switch; an older App Manager answers 404 and the list stays as above). Fetched only while
-   * the switch is on. */
+   * the switch is on. Only once that state has answered, each row also gets its buttons, all POSTs to the same
+   * route: Update now (ready, or held with a newer version) and Retry (failed) send {action:"apply", app}, which
+   * the App Manager runs in the background and which overrides a hold or a past failure, never a system app;
+   * Hold / Unhold send {hold}/{unhold}; the Automatic / Ask me choice sends {mode}. A button reads Starting… /
+   * Holding… while it waits, then the row says what happened (or the App Manager's own words when it refused),
+   * and the list is read again from GET. Switch off: no buttons and no POST. */
   const APPS_ID = 'wizard/app-updates-list';
   const APPS_API = new URL('../store-data/api/apps/installed', document.currentScript?.src || location.href).href;
   const STORE_SLUG = 'wizardapps';   // wizard-app-manager cli.STORE: app updates only move this store's apps
@@ -81,6 +86,8 @@
   const AU_API = new URL('../store-install/_app-updates', document.currentScript?.src || location.href).href;
   const AU_WAIT = 4000;   // ms the optional App Manager state may take before the list paints without it
   let apps = null, appsAt = 0, appsBusy = null, appsIssue = '', au = null;
+  let appAct = '', appMsg = {};   // the app button waiting for the App Manager; {id: {ok, text, at}} after it answered
+  const APP_MSG_FOR = 120e3;      // how long a row keeps saying what its button did
   function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
@@ -107,7 +114,7 @@
       if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
       const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
-      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why });
+      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why, held: held.has(id) });
     }
     const rank = { failed: 0, ready: 1, busy: 2, held: 3, unknown: 4, skipped: 5, 'with-os': 6, current: 7 };
     return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
@@ -138,11 +145,71 @@
     if (!appsAt || Date.now() - appsAt > FRESH) void loadApps();
     const head = '<span class="osu-lbl">Apps</span>';
     if (!apps) return `<div class="osu-sec" data-osu-apps>${head}<p class="st-note" role="status">${esc(appsIssue || 'Checking apps…')}</p></div>`;
-    const rows = apps.map(a => `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}</span><span class="st-val">${esc(a.label)}</span></div>`).join('');
+    const rows = apps.map(a => {
+      const m = appMsg[a.id] && Date.now() - appMsg[a.id].at < APP_MSG_FOR ? appMsg[a.id] : null;
+      const said = m ? `<span data-osu-app-msg="${m.ok ? 'done' : 'failed'}" role="status">${esc(m.text)}</span>` : '';
+      const acts = appButtons(a).map(([key, text]) => `<button type="button" data-osu="${key}:${esc(a.id)}"${appAct ? ' disabled' : ''}${appAct === `${key}:${a.id}` ? ' aria-busy="true"' : ''}>${esc(appAct === `${key}:${a.id}` ? PENDING[key] : text)}</button>`).join('');
+      return `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}${said}</span><span class="st-val">${esc(a.label)}</span>${acts ? `<span class="osu-app-acts">${acts}</span>` : ''}</div>`;
+    }).join('');
     const note = appsIssue ? `<p class="st-note" role="status">${esc(appsIssue)} Showing the last check.</p>` : '';
     const at = typeof au?.last?.at === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(au.last.at) ? au.last.at.slice(0, 16).replace('T', ' ') + ' UTC' : '';
-    const mgr = au ? `<p class="st-hint" data-osu-app-mode>App updates: ${au.app_mode === 'auto' ? 'Automatic, overnight' : 'Ask me'}${at ? ` · last run ${esc(at)}` : ' · not run yet'}</p>` : '';
+    // The app Automatic / Ask me switch (`wam app-updates --auto/--ask`): only with the App Manager's state.
+    const mode = au ? `<div class="st-seg" role="radiogroup" aria-label="App updates" data-osu-app-modes>${[['auto', 'Automatic'], ['ask', 'Ask me']].map(([k, t]) => `<button type="button" data-osu="app-mode:${k}" role="radio" aria-checked="${au.app_mode === k}"${appAct ? ' disabled' : ''}>${esc(t)}</button>`).join('')}</div>` : '';
+    const mgr = au ? `${mode}<p class="st-hint" data-osu-app-mode>App updates: ${au.app_mode === 'auto' ? 'Automatic, overnight' : 'Ask me'}${at ? ` · last run ${esc(at)}` : ' · not run yet'}</p>` : '';
     return `<div class="osu-sec" data-osu-apps>${head}${note}${rows || '<p class="st-hint">No apps installed from the App Store yet.</p>'}${mgr}<p class="st-hint">Installed version and the App Store’s latest, from the App Manager.</p></div>`;
+  }
+  // The buttons a row gets. None without the App Manager's state (an older App Manager has no route to send them to),
+  // none for system apps (they move with the WizardOS release) or while Runtipi is already busy with the app.
+  const PENDING = { 'app-apply': 'Starting…', 'app-retry': 'Starting…', 'app-hold': 'Holding…', 'app-unhold': 'Unholding…' };
+  function appButtons(a) {
+    if (!au || a.state === 'with-os' || a.state === 'busy') return [];
+    const out = [];
+    if (a.state === 'failed') out.push(['app-retry', 'Retry']);
+    else if (a.state === 'ready' || (a.state === 'held' && a.have != null && a.latest != null && a.latest > a.have)) out.push(['app-apply', 'Update now']);
+    out.push(a.held ? ['app-unhold', 'Unhold'] : ['app-hold', 'Hold']);
+    return out;
+  }
+  async function postApps(body) {
+    const r = await fetch(AU_API, { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    return { ok: r.ok && (body.action !== 'apply' || d?.started === true), status: r.status, d: d && typeof d === 'object' ? d : {} };
+  }
+  // Read the rows again from GET after a POST: wait out a read already on its way (it may predate the POST).
+  const reloadApps = () => (appsBusy || Promise.resolve()).then(() => loadApps(true));
+  // A tap on an app button. True when it was one (handled even while the server update controls are unavailable).
+  function appTap(what, ctx) {
+    const [key, arg] = what.split(':');
+    if (!appsOn() || !au || appAct) return true;
+    let body, done;
+    if (key === 'app-mode') {
+      if (!['auto', 'ask'].includes(arg) || arg === au.app_mode) return true;
+      body = { mode: arg }; done = arg === 'auto' ? 'App updates: Automatic' : 'App updates: Ask me';
+    } else {
+      const a = (apps || []).find(x => x.id === arg);
+      if (!a || !appButtons(a).some(([k]) => k === key)) return true;
+      if (key === 'app-apply' || key === 'app-retry') { body = { action: 'apply', app: a.id }; done = `Update started · ${a.name}`; }
+      else if (key === 'app-hold') { body = { hold: a.id }; done = 'Held: updates skip this app until you unhold it'; }
+      else if (key === 'app-unhold') { body = { unhold: a.id }; done = 'Hold removed'; }
+      else return true;
+    }
+    appAct = what; ctx?.render?.(); ctx?.haptic?.(8);
+    const id = key === 'app-mode' ? '' : arg;
+    postApps(body).then(({ ok, status, d }) => {
+      if (!ok) throw new Error(String(d.note || d.error || `The App Manager said ${status}`).slice(0, 200));
+      if (key === 'app-mode') au = { ...au, app_mode: arg };
+      if (id) appMsg[id] = { ok: true, text: done, at: Date.now() };
+      ctx?.toast?.('✓', done, 2200);
+    }).catch(e => {
+      const text = e?.message || 'Couldn’t reach the App Manager';
+      if (id) appMsg[id] = { ok: false, text, at: Date.now() };
+      ctx?.toast?.('!', text, 2600);
+    }).finally(() => {
+      appAct = ''; changed();
+      // Read the rows again from GET; an update starts in the background, so look once more a moment later.
+      void reloadApps().then(() => { if (body.action === 'apply') setTimeout(() => void loadApps(true), 1500); });
+    });
+    return true;
   }
 
   function load(force) {
@@ -244,6 +311,7 @@
     if (what === 'rescue-save' || what === 'rescue-discard') { void window.WizWebUpdate?.rescue?.(what.slice(7)); return true; }
     if (what === 'reload') { ctx?.haptic?.(8); reload(); return true; }
     if (what === 'retry') { if (!inflight) { off = false; void load(true); ctx?.render?.(); } return true; }
+    if (what.startsWith('app-')) return appTap(what, ctx);   // the Apps list works even without the server controls
     if (busy || !st || issue) return true;
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
     if (what === 'ask' && st.always_auto === true) return true;   // that App Manager would answer Automatic anyway
