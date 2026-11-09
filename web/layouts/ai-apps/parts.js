@@ -19,6 +19,8 @@ export const ICON = {
   plus: ['M12 5v14', 'M5 12h14'],
   chev: ['m10 7 5 5-5 5'],
   down: ['m7 10 5 5 5-5'],
+  // stacked layers: the Wizard switcher's icon (core/workspaces.js draws the same one)
+  layers: ['M12 3 3 7.5l9 4.5 9-4.5L12 3Z', 'm3 12 9 4.5 9-4.5', 'm3 16.5 9 4.5 9-4.5'],
   more: ['M5.5 12h.01', 'M12 12h.01', 'M18.5 12h.01'],
   // the sidebar toggle (ChatGPT's ◫): a panel with its left column
   side: ['M4.5 5.5h15v13h-15z', 'M9.5 5.5v13'],
