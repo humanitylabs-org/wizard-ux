@@ -90,3 +90,8 @@ test('notification Send of a live take uses the model picked while recording', (
 test('a take recovered after reload keeps its saved route', () => {
   assert.deepEqual(notify({live: false}).seen, SONNET);
 });
+
+test('orb Send of a take resumed after reload keeps its saved route', () => {
+  const r = run({snap: {view: {id: 'chats', kind: 'chat thread', thread: 'sid-1'}, route: SONNET, resumed: true}, selected: OPUS});
+  assert.deepEqual(r.sent, SONNET);
+});
