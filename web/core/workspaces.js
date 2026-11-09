@@ -22,7 +22,7 @@
         subtitle: text(v.subtitle), role: text(v.role), org: text(v.org), source: text(v.source) }];
     });
   }
-  let state = { active: 'this', items: [] }, registry = {}, pending = '', loading = null, api = null, overlay = null;
+  let state = { active: 'this', items: [] }, registry = {}, pending = '', handoff = '', loading = null, api = null, overlay = null;
   const subscribers = new Set();
   const snapshot = () => ({ active: state.active, items: state.items.map(v => ({ ...v })), pending });
   function accept(value) {
@@ -119,6 +119,8 @@
   }
   adoptReturn();
   const toast = message => api?.toast(message);
+  // The Android app could not switch (it says why itself): show the Wizard that is still open as the active one.
+  function switchFailed() { if (!handoff) return; state.active = handoff; handoff = ''; notify(); }
   function close() {
     if (!overlay) return false;
     const old = overlay; overlay = null; old.release?.(); old.abort.abort(); old.root.remove();
@@ -140,7 +142,13 @@
       if (native()) {
         const result = await window.WizCore.bridge.call('workspaces.switch', { id });
         if (result?.ok !== true) throw new Error('Couldn’t open that Wizard.');
-      } else location.assign(withReturn(destination(item.url)));
+      } else {
+        const dest = destination(item.url), droid = window.WizardOSNative;
+        // The Android app owns one Wizard at a time: ask it to switch inside the app. Navigating its WebView to
+        // another origin would be handed to the phone's browser. It answers "refused" for anything it won't switch to.
+        if (typeof droid?.switchWizard === 'function' && droid.switchWizard(new URL(dest).origin) === 'started') handoff = previous;
+        else location.assign(withReturn(dest));
+      }
       return { ok: true };
     } catch (error) { state.active = previous; toast('Couldn’t open that Wizard. Please try again.'); throw error; }
     finally { pending = ''; notify(); }
@@ -254,7 +262,7 @@
     addSheet(); return Promise.resolve({ ok: true });
   }
   const W = window.WizWorkspaces = { list, snapshot, subscribe, switch: switchTo, add: addWizard,
-    rename: (id, name) => mutate('rename', { id, name }), remove, groups, subtitle, address, destination, openMenu, close, ingest,
+    rename: (id, name) => mutate('rename', { id, name }), remove, switchFailed, groups, subtitle, address, destination, openMenu, close, ingest,
     get visible() { return state.items.length >= 2; } };
   merge();
   window.addEventListener('wizard:workspaces', e => { if (native()) { try { accept(e.detail); notify(); } catch (_) {} } });

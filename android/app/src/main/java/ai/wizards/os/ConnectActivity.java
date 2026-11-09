@@ -110,6 +110,13 @@ public final class ConnectActivity extends Activity {
         scan.setOnClickListener(v -> new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
                 .setPrompt("Scan the Wizard QR in Setup").setBeepEnabled(false).setOrientationLocked(false).initiateScan());
         body.addView(scan, margins(0, 0, dp(16)));
+        // The way back after a switch: the Wizard this phone was on before, one tap (an older Wizard's shell has no switcher).
+        final String previous = switching ? ServerSettings.previous(this) : null;
+        if (previous != null) {
+            View back = row("‹", "Back to your previous Wizard", previous.replace("https://", ""));
+            back.setOnClickListener(v -> { address.setText(previous); connect(); });
+            body.addView(back, margins(0, 0, dp(16)));
+        }
 
         // Or type it.
         body.addView(groupLabel("Or enter its address"));

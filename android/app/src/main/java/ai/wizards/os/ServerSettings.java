@@ -25,10 +25,16 @@ public final class ServerSettings {
             saved = context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("origin", clean).commit();
         }
         if (saved && !old.equals(clean)) {
+            if (!old.isEmpty()) context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("previous", old).commit();
             context.getSharedPreferences("reply-watch", Context.MODE_PRIVATE).edit().clear().commit();
             android.app.NotificationManager nm = context.getSystemService(android.app.NotificationManager.class);
             if (nm != null) nm.cancelAll();
         }
         return saved;
+    }
+    /** The Wizard this app was on before the last switch, so Change Wizard can offer the way back in one tap. */
+    public static synchronized String previous(Context context) {
+        String prev = ServerOrigin.parse(context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).getString("previous", null));
+        return prev == null || prev.equals(origin(context)) ? null : prev;
     }
 }
