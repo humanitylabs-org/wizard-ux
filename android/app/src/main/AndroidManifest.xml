@@ -52,7 +52,7 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
         </intent>
-        <!-- Browser panel trial (links.panel): which browsers offer Custom Tabs, so Brave can draw the panel. -->
+        <!-- Browser panel (links.panel, on by default): which browsers offer Custom Tabs, so the default browser can draw it. -->
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>

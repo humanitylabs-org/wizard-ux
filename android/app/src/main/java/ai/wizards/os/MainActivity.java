@@ -562,9 +562,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
 
     /**
-     * Browser panel trial (settings.json links.panel; the shell only calls this when it is on): an outside link opens in a
-     * Custom Tab over Wizard, launched into this task so its X or Back lands on the chat it was tapped from. Brave when
-     * installed, else the default browser's Custom Tab (PanelLinks.pick), else the existing default-browser open.
+     * Browser panel (settings.json links.panel, on by default; the shell calls this unless it is false): an outside link
+     * opens in a Custom Tab over Wizard, launched into this task so its X or Back lands on the chat it was tapped from.
+     * The default browser's Custom Tab, else any installed Custom Tabs browser, Brave first (PanelLinks.pick), else the
+     * existing default-browser open.
      */
     private void openPanel(Uri u) {
         android.content.pm.PackageManager pm = getPackageManager();
@@ -1101,7 +1102,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> openInOwnBrowser(u));
         }
-        /** Browser panel trial: a tapped outside link in a Custom Tab over Wizard (Brave when installed). Shell: links.panel. */
+        /** Browser panel: a tapped outside link in a Custom Tab over Wizard (the default browser's). Shell: links.panel. */
         @JavascriptInterface public void openInPanel(String url) {
             final Uri u = Uri.parse(String.valueOf(url));
             if (!PanelLinks.web(u.getScheme())) return;

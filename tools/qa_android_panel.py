@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Forum emulator proof for the browser panel trial (settings.json links.panel): an outside link opens in a Custom Tab
-over WizardOS (Brave when installed) and one Back returns to the Wizard page it was tapped from.
+"""Forum emulator proof for the browser panel (settings.json links.panel, on by default): an outside link opens in a
+Custom Tab over WizardOS (the default browser's) and one Back returns to the Wizard page it was tapped from.
 Usage: qa_android_panel.py DEBUG_RECEIPT OUT   (DEBUG_RECEIPT: android-build-forum receipt with the QA apk + test apk)
 Fresh API35 x86_64 emulator; installs the current Brave release APK (BraveMonox64.apk, sha256-checked against Brave's
-published .sha256) from github.com/brave/brave-browser when reachable, so the panel is drawn by com.brave.browser as on
-James's phone. Runs ai.wizards.os.PanelE2eTest (one synthetic Wizard, no owner traffic). Exit 1 on any failure."""
+published .sha256) from github.com/brave/brave-browser when reachable and makes it the default browser (the image's
+Chrome stays installed), so the panel is drawn by com.brave.browser as on James's phone. Brave's first-run screens are
+skipped (Chromium debug command line --disable-fre via set-debug-app) so the Back check measures the panel, not
+onboarding; PanelE2eTest also taps through any that still show. Runs ai.wizards.os.PanelE2eTest (one synthetic Wizard,
+no owner traffic). Exit 1 on any failure."""
 import fcntl, hashlib, json, os, signal, subprocess, sys, time, urllib.request
 from pathlib import Path
 
@@ -87,6 +90,16 @@ def main():
                 if 'package:com.brave.browser' in [l.strip() for l in shell('pm', 'list', 'packages', 'com.brave.browser').splitlines()]: expect = 'com.brave.browser'
                 (out / 'brave-install.txt').write_text((r.stdout or '') + (r.stderr or ''))
             check('Brave installed on the emulator (panel drawn by com.brave.browser)', bool(expect), (out / 'brave.json').read_text())
+            if expect:
+                # The panel follows the default browser: make Brave the default, as on James's phone.
+                shell('cmd', 'role', 'add-role-holder', 'android.app.role.BROWSER', expect, '0')
+                holders = shell('cmd', 'role', 'get-role-holders', 'android.app.role.BROWSER').strip()
+                check('Brave is the default browser (role holder)', expect in holders.split(';') or holders == expect, holders)
+                # Skip Brave's first-run screens: Chromium reads /data/local/tmp/chrome-command-line for the debug app.
+                shell("echo '_ --disable-fre --no-default-browser-check --no-first-run' > /data/local/tmp/chrome-command-line && chmod 644 /data/local/tmp/chrome-command-line")
+                shell('am', 'set-debug-app', '--persistent', expect)
+                shell('am', 'force-stop', expect)
+                (out / 'brave-fre.txt').write_text(shell('cat', '/data/local/tmp/chrome-command-line') + shell('settings', 'get', 'global', 'debug_app'))
             run([adb, '-s', serial, 'logcat', '-c'])
             extra = ['-e', 'requirePanel', 'true'] + (['-e', 'expectPackage', expect] if expect else [])
             text = shell('am', 'instrument', '-w', *extra, '-e', 'class', 'ai.wizards.os.PanelE2eTest', 'ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner')
@@ -96,6 +109,8 @@ def main():
             check('PanelE2eTest passes (Custom Tab over WizardOS, one Back returns to the chat)', 'OK (1 test)' in text and 'FAILURES' not in text, text)
             notes = [l for l in log.splitlines() if 'PanelE2e' in l]
             (out / 'panel-notes.txt').write_text('\n'.join(notes))
+            # Reported: whether the browser's onboarding still showed (the test tapped through it) or the seed skipped it.
+            print('ONBOARDING taps: ' + ' | '.join(l.split('PanelE2e: ', 1)[-1] for l in notes if 'ONBOARDING' in l or 'PANEL_FRONT' in l), flush=True)
             (out / 'shots').mkdir(exist_ok=True)
             names = [n for n in shell('ls', '/data/local/tmp').split() if n.endswith('.png') and n.startswith(('panel-', 'fail-'))]
             for n in names: run([adb, '-s', serial, 'pull', '/data/local/tmp/' + n, out / 'shots' / n], capture_output=True)

@@ -25,11 +25,13 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 /**
- * Browser panel trial (settings.json links.panel; the shell's links.js calls WizardOSNative.openInPanel only when it is on).
- * One synthetic Wizard, no owner traffic. Part 1 intercepts the launch: a Custom Tab intent for the chosen browser (Brave
- * when installed), dark toolbar, title shown, started from this app's task. Part 2 lets it open for real, then one Back
- * must land on the Wizard page it was tapped from. Instrumentation arg expectPackage pins the browser (com.brave.browser
- * when the QA script installed Brave); requirePanel=true fails when no browser on the device offers Custom Tabs.
+ * Browser panel (settings.json links.panel, on by default; the shell's links.js calls WizardOSNative.openInPanel unless it
+ * is false). One synthetic Wizard, no owner traffic. Part 1 intercepts the launch: a Custom Tab intent for the chosen
+ * browser (the default browser's), dark toolbar, title shown, started from this app's task. Part 2 lets it open for real,
+ * skips the browser's own first-run screens if any still show (so Back measures the panel, not onboarding), requires a
+ * Custom Tab in front, then one Back must land on the Wizard page it was tapped from. Instrumentation arg expectPackage
+ * pins the browser (com.brave.browser when the QA script made Brave the default); requirePanel=true fails when no
+ * browser on the device offers Custom Tabs.
  */
 @RunWith(AndroidJUnit4.class)
 public class PanelE2eTest {
@@ -54,6 +56,38 @@ public class PanelE2eTest {
         ResolveInfo def = pm.resolveActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), PackageManager.MATCH_DEFAULT_ONLY);
         android.util.Log.i("PanelE2e", "providers=" + providers + " default=" + (def == null || def.activityInfo == null ? null : def.activityInfo.packageName));
         return PanelLinks.pick(providers, def == null || def.activityInfo == null ? null : def.activityInfo.packageName, c.getPackageName());
+    }
+
+    /** The resumed activity, e.g. "com.brave.browser/org.chromium.chrome.browser.customtabs.CustomTabActivity". */
+    private String resumed() {
+        try {
+            for (String line : device.executeShellCommand("dumpsys activity activities").split("\n")) {
+                String l = line.trim();
+                if (!l.startsWith("topResumedActivity") && !l.startsWith("ResumedActivity") && !l.startsWith("mResumedActivity")) continue;
+                for (String part : l.split(" ")) if (part.contains("/")) return part.replace("}", "");
+            }
+        } catch (IOException ignored) { }
+        return "";
+    }
+    private static boolean onboarding(String activity) {
+        String a = activity.toLowerCase(java.util.Locale.ROOT);
+        return a.contains(".firstrun.") || a.contains("onboarding") || a.contains("welcome");
+    }
+    private static final java.util.regex.Pattern SKIP = java.util.regex.Pattern.compile(
+        "(?i)(skip|not now|no thanks|maybe later|accept (&|and) continue|continue|got it|next|done|start browsing)");
+    /** Taps through the browser's first-run screens (harness setup, not the panel). Returns how many taps it took. */
+    private int skipOnboarding(String provider) throws InterruptedException {
+        int taps = 0;
+        for (int i = 0; i < 8; i++) {
+            String act = resumed();
+            if (!onboarding(act)) break;
+            androidx.test.uiautomator.UiObject2 b = device.wait(Until.findObject(By.pkg(provider).text(SKIP).clickable(true)), 4000);
+            if (b == null) b = device.wait(Until.findObject(By.pkg(provider).text(SKIP)), 2000);
+            if (b == null) { shot("onboarding-stuck-" + i); android.util.Log.w("PanelE2e", "ONBOARDING no skip button on " + act); break; }
+            android.util.Log.i("PanelE2e", "ONBOARDING tap '" + b.getText() + "' on " + act);
+            b.click(); taps++; Thread.sleep(1500);
+        }
+        return taps;
     }
 
     /** Captures, and blocks, the next ACTION_VIEW this app starts. */
@@ -103,6 +137,12 @@ public class PanelE2eTest {
             device.findObject(By.text("Open the outside link")).click();
             for (int i = 0; i < 200 && !provider.equals(device.getCurrentPackageName()); i++) Thread.sleep(100);
             assertEquals("the panel came to the front over Wizard", provider, device.getCurrentPackageName());
+            int taps = skipOnboarding(provider);
+            for (int i = 0; i < 100 && !resumed().contains("CustomTab"); i++) Thread.sleep(100);
+            String front = resumed();
+            android.util.Log.i("PanelE2e", "PANEL_FRONT activity=" + front + " onboardingTaps=" + taps);
+            if (!front.contains("CustomTab")) shot("fail-not-custom-tab");
+            assertTrue("a Custom Tab is in front before Back (not the browser's onboarding), resumed=" + front, front.contains("CustomTab"));
             boolean page = device.wait(Until.hasObject(By.textContains("Outside page")), 15000);
             shot("panel-2-open");
             // Reported, not asserted: whether a browser loads a loopback http page is that browser's policy, not WizardOS's.
