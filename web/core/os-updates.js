@@ -96,6 +96,8 @@
     const held = new Set(Array.isArray(m.holds) ? m.holds : []);
     const failed = m.failed && typeof m.failed === 'object' ? m.failed : {};
     const rolled = new Set(Array.isArray(m.last?.rolled_back) ? m.last.rolled_back : []);
+    const fresh = new Set(Array.isArray(m.last?.updated) ? m.last.updated : []);
+    const notes = m.notes && typeof m.notes === 'object' && !Array.isArray(m.notes) ? m.notes : null;
     for (const x of Array.isArray(doc?.installed) ? doc.installed : []) {
       const id = x?.info?.id; if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) continue;
       const urn = typeof x.info.urn === 'string' ? x.info.urn : '';
@@ -114,7 +116,17 @@
       if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
       const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
-      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why, held: held.has(id) });
+      // One line of What's new for the version waiting (Update ready, or held with a newer one) or the version the
+      // last run just installed: the App Manager's `notes` (wizard.md whats_new in the Store's copy), only when it
+      // is about exactly that version. An App Manager without `notes` says nothing rather than "no notes".
+      let news = '';
+      const nv = notes ? (state === 'ready' || (state === 'held' && latest != null && have != null && latest > have) ? latest
+        : fresh.has(id) && (state === 'current' || (state === 'held' && have != null && latest != null && latest <= have)) ? have : null) : null;
+      if (nv != null) {
+        const n = notes[id], text = n && typeof n === 'object' && num(n.version) === nv && typeof n.text === 'string' ? n.text.trim().slice(0, 140) : '';
+        news = text ? `What’s new in ${nv}: ${text}` : 'What’s new: no notes';
+      }
+      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why, news, held: held.has(id) });
     }
     const rank = { failed: 0, ready: 1, busy: 2, held: 3, unknown: 4, skipped: 5, 'with-os': 6, current: 7 };
     return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
@@ -149,7 +161,7 @@
       const m = appMsg[a.id] && Date.now() - appMsg[a.id].at < APP_MSG_FOR ? appMsg[a.id] : null;
       const said = m ? `<span data-osu-app-msg="${m.ok ? 'done' : 'failed'}" role="status">${esc(m.text)}</span>` : '';
       const acts = appButtons(a).map(([key, text]) => `<button type="button" data-osu="${key}:${esc(a.id)}"${appAct ? ' disabled' : ''}${appAct === `${key}:${a.id}` ? ' aria-busy="true"' : ''}>${esc(appAct === `${key}:${a.id}` ? PENDING[key] : text)}</button>`).join('');
-      return `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}${said}</span><span class="st-val">${esc(a.label)}</span>${acts ? `<span class="osu-app-acts">${acts}</span>` : ''}</div>`;
+      return `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.news ? `<span data-osu-app-news>${esc(a.news)}</span>` : ''}${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}${said}</span><span class="st-val">${esc(a.label)}</span>${acts ? `<span class="osu-app-acts">${acts}</span>` : ''}</div>`;
     }).join('');
     const note = appsIssue ? `<p class="st-note" role="status">${esc(appsIssue)} Showing the last check.</p>` : '';
     const at = typeof au?.last?.at === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(au.last.at) ? au.last.at.slice(0, 16).replace('T', ' ') + ' UTC' : '';

@@ -276,3 +276,50 @@ test('a forged button for an app or action the row does not offer is never sent'
   await tick(); await tick();
   assert.deepEqual(posts, []);
 });
+
+// Slice 4: one line of What's new per version, from the App Manager's `notes` (wizard.md whats_new in the Store copy).
+test('What\u2019s new: one line for the version waiting and the version just installed, "no notes" when missing', async () => {
+  const INST = { installed: [row('wizard-messenger', 93, 97, { name: 'Messenger' }), row('wizard-maps', 2, 3, { name: 'Maps' }),
+    row('wizard-notes', 12, 12, { name: 'Notes' }), row('wizard-clock', 7, 7, { name: 'Clock' }), row('wizard-tasks', 4, 4, { name: 'Tasks' }),
+    row('wizard-books', 1, 2, { name: 'Books' }), row('wizard-ux', 40, 41, { name: 'Wizard UX' })] };
+  const notes = { 'wizard-messenger': { version: 97, text: 'Replies stay in their <b>thread</b>.' }, 'wizard-notes': { version: 12, text: 'Pinned notes come first.' },
+    'wizard-tasks': { version: 4, text: 'Not just installed, so not shown.' }, 'wizard-books': { version: 1, text: 'About an older version.' },
+    'wizard-ux': { version: 41, text: 'System app.' } };
+  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: [], failed: {}, notes,
+    last: { at: '2026-11-09T04:31:07Z', updated: ['wizard-notes', 'wizard-clock'], rolled_back: [], failed: [] } }] });
+  await U.loadApps();
+  const h = U.html();
+  assert.match(h, /<b>Messenger<\/b><span>Version 93 · latest 97<\/span><span data-osu-app-news>What’s new in 97: Replies stay in their &lt;b&gt;thread&lt;\/b&gt;\.<\/span>/);
+  assert.match(h, /<b>Maps<\/b><span>Version 2 · latest 3<\/span><span data-osu-app-news>What’s new: no notes<\/span>/);
+  assert.match(h, /<b>Notes<\/b><span>Version 12<\/span><span data-osu-app-news>What’s new in 12: Pinned notes come first\.<\/span>/, 'just installed by the last run');
+  assert.match(h, /<b>Clock<\/b><span>Version 7<\/span><span data-osu-app-news>What’s new: no notes<\/span>/);
+  assert.match(h, /<b>Books<\/b><span>Version 1 · latest 2<\/span><span data-osu-app-news>What’s new: no notes<\/span>/, 'a note for another version is not this one');
+  assert.match(h, /<b>Tasks<\/b><span>Version 4<\/span><\/span>/, 'up to date but not just installed: no line');
+  assert.doesNotMatch(h, /System app\./, 'system apps move with the release: no line');
+});
+
+test('What\u2019s new: held with a newer version shows it; an App Manager without notes shows no line at all', async () => {
+  const INST = { installed: [row('wizard-maps', 2, 3, { name: 'Maps' })] };
+  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps'], failed: {}, notes: { 'wizard-maps': { version: 3, text: 'Offline maps.' } } }] });
+  await U.loadApps();
+  assert.match(U.html(), /data-osu-app-state="held">.*<span data-osu-app-news>What’s new in 3: Offline maps\.<\/span>/);
+  for (const extra of [{}, { notes: ['bad'] }, { notes: 'bad' }]) {
+    const r = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: [], failed: {}, ...extra }] });
+    await r.U.loadApps();
+    assert.doesNotMatch(r.U.html(), /data-osu-app-news/);
+  }
+  const off = await load({ on: true, apps: () => [200, INST] });
+  await off.U.loadApps();
+  assert.doesNotMatch(off.U.html(), /data-osu-app-news/, 'older App Manager (404): nothing about notes');
+});
+
+test('What\u2019s new: an app updated through Update now while held keeps its hold and still shows the new version (Codex P2)', async () => {
+  const INST = { installed: [row('wizard-maps', 3, 3, { name: 'Maps' }), row('wizard-books', 2, 2, { name: 'Books' })] };
+  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-books'], failed: {},
+    notes: { 'wizard-maps': { version: 3, text: 'Offline maps.' }, 'wizard-books': { version: 2, text: 'Not just installed.' } },
+    last: { at: '2026-11-09T04:31:07Z', updated: ['wizard-maps'], rolled_back: [], failed: [] } }] });
+  await U.loadApps();
+  const h = U.html();
+  assert.match(h, /data-osu-app="wizard-maps" data-osu-app-state="held">.*<span data-osu-app-news>What’s new in 3: Offline maps\.<\/span>/);
+  assert.match(h, /<b>Books<\/b><span>Version 2<\/span><\/span>/, 'held and up to date but not just updated: no line');
+});
