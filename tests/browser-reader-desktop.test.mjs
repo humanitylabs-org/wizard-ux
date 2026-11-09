@@ -7,7 +7,7 @@ const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.ur
 const layout = readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
 const links = readFileSync(new URL('../web/core/links.js', import.meta.url), 'utf8');
 const fn = (source, name) => { const start = source.indexOf(`  function ${name}(`); assert.ok(start >= 0); return source.slice(start, source.indexOf('\n  }', start) + 4); };
-function desktopReader({existing = false, checkedLink = false} = {}) {
+function desktopReader({existing = false, checkedLink = false, reader = true} = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/desktop.html');
   const app = {id:'browser', name:'Browser', kind:'wizard', url:'/browser/'};
   const W = {search:{id:'search',app:'frame',appId:'wizard-search'}}, ws = [{wins:['search'], focus:'search'}], gates = [], navigations = [];
@@ -24,6 +24,9 @@ function desktopReader({existing = false, checkedLink = false} = {}) {
     unpeek(){}, closeAll(){}, loading(){}, want:'', focusWant:'', wantAppFocus: id => { context.focusWant = id; }, panes:{get:()=>({mode:'tiled',focus:'chats',slots:['chats']}),set(){}}, CHATS_ID:'wizard', chatsFresh:true, chatThread:null, mainChats:()=>null,
   };
   context.window = context;
+  const opened = []; context.open = url => { opened.push(url); return null; };
+  // WizardOS settings `links.reader` (off by default since 9 Nov 2026) is the Reader route switch.
+  if (reader) context.WizConfig = {raw:{settings:{links:{reader:true}}}, localURL:(h,b)=>new URL(h,b)};
   context.WosSkinHost = {routeOpen(kind, detail, go) { if (routing) return null; routing=true; try { return holder.open(kind,detail,go) ? {value:true} : null; } finally {routing=false;} }};
   vm.createContext(context);
   vm.runInContext(['framePage','openApp','openAppLink'].map(name=>fn(desktop,name)).join('\n'),context);
@@ -58,7 +61,7 @@ function desktopReader({existing = false, checkedLink = false} = {}) {
   const e={button:0,target:{closest:()=>a},preventDefault(){this.defaultPrevented=true;},stopPropagation(){}};
   if (checkedLink) context.openAppLink('/browser/?url='+encodeURIComponent(url),'Browser');
   else for(const handler of doc.handlers.click || [])handler(e);
-  return {W,ws,gates,navigations,url,event:e};
+  return {W,ws,gates,navigations,url,event:e,opened};
 }
 for(const existing of [false,true])test(`desktop Search result preserves Reader URL (${existing?'already open':'cold open with deferred setup'})`,()=>{
   const f=desktopReader({existing});
@@ -79,4 +82,11 @@ test('desktop checked Reader opener retains destination and placement across def
   const windows=Object.values(f.W).filter(w=>w.appId==='browser');
   assert.equal(windows.length,1);assert.equal(windows[0].url,'/browser/?url='+encodeURIComponent(f.url));
   assert.deepEqual(f.ws[0].wins,['search']);
+});
+
+test('desktop default: a Search result opens in a new browser tab on the first tap, never a Reader window',()=>{
+  const f=desktopReader({reader:false});
+  assert.deepEqual(f.opened,[f.url]);
+  assert.equal(Object.values(f.W).some(w=>String(w.url||'').includes('/browser/?url=')),false);
+  assert.deepEqual(f.ws.map(d=>d.wins),[['search']]);assert.equal(f.gates.length,0);
 });

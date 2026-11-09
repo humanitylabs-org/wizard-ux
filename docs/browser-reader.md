@@ -1,5 +1,7 @@
 # Browser Reader link routing
 
+**Off by default since 9 Nov 2026 (James: "our browser takes like many seconds to load, whereas if I open something in Brave, it loads very quickly").** Live reads took 2.4-6.3 s against about 1 s in his own browser, so outside links in chats, Search results and hosted apps open the way they did before Reader: in the owner's own browser on the first tap (Android `openInBrowser`, a new tab on desktop), never `/browser/?url=`. Wizard's own pages keep their in-Wizard routes. The one switch is WizardOS settings.json `links.reader: true` (`readerLinks()` in `core/links.js`), which restores everything below unchanged. The Browser app, its Reading list, Save, Reader's own hand-off and agent browsing are untouched; with the switch off the remembered-direct-hosts list is simply never consulted.
+
 Reuse:
 - Link capture, browser escape, downloads, media and link menus: **EXTEND** `WizLinks` (`core/links.js`). There is no chat-only or Search-only implementation.
 - Phone and desktop windows, instant loading frame, source-aware Back: **REUSE** existing shell window paths (`openLinkDesk` / `asWindow`). No new iframe sheet or native code.

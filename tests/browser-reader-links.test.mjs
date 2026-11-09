@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../web/core/links.js',import.meta.url),'utf8');
-function fixture({installed=true,native=false,appURL='/browser/',activation=true,store={},config={}}={}) {
+// reader:true turns on WizardOS settings `links.reader` (the Reader route); off is the default since 9 Nov 2026.
+function fixture({installed=true,native=false,appURL='/browser/',activation=true,store={},config={},reader=true}={}) {
+ if(reader)config={...config,settings:{...config.settings,links:{reader:true}}};
  const calls=[], downloads=[], origin='https://wizard.example', location=new URL(origin+'/wizard-os-home/');
  class El {
   constructor(){this.handlers={};this.nodes={};this.style={};this.classList={add(){},remove(){},contains(){return false;},toggle(){return false;}};this.contentWindow={location:{replace(){}}};}
@@ -88,3 +90,14 @@ test('an auxiliary links mount (App Setup) never replaces the shell Reader ident
   assert.match(src, /if \(arguments\[0\]\?\.readerApp\) readerHome = /);
   assert.doesNotMatch(src, /^\s*readerHome = \(\) =>/m);
 });
+
+// James, 9 Nov 2026: Reader took seconds where his browser takes one. With no `links.reader` setting (the default),
+// outside links open the way they did before Reader, in the owner's own browser on the first tap. Never /browser/?url=.
+const DEFAULT={reader:false};
+const neverReader=f=>assert.equal(f.calls.some(c=>c[0]==='window'&&/\/browser\/\?url=/.test(c[1])),false,'never routed into Browser Reader');
+test('default: a chat link opens in a new browser tab on the first tap, not Reader',()=>{const f=fixture(DEFAULT);f.click(f.chat,'https://en.wikipedia.org/wiki/Reading');assert.deepEqual(f.calls,[['browser','https://en.wikipedia.org/wiki/Reading']]);neverReader(f);});
+test('default: a Search result opens in a new browser tab on the first tap, not Reader',()=>{const f=fixture(DEFAULT);f.click(f.doc,'https://news.ycombinator.com/item?id=1',{target:'_blank'});assert.deepEqual(f.calls,[['browser','https://news.ycombinator.com/item?id=1']]);neverReader(f);});
+test('default phone: chat link and Search result use the Android openInBrowser bridge, not Reader',()=>{const f=fixture({...DEFAULT,native:true});f.click(f.chat,'https://www.ribbonfarm.com/a/');f.click(f.doc,'https://example.com/story');assert.deepEqual(f.calls,[['native-browser','https://www.ribbonfarm.com/a/'],['native-browser','https://example.com/story']]);neverReader(f);});
+test('default: a programmatic open of an outside link (window.open from an app) goes to the browser, not Reader',()=>{const f=fixture(DEFAULT);assert.equal(f.L.open('https://example.com/x'),true);assert.deepEqual(f.calls,[['browser','https://example.com/x']]);});
+test('default: Wizard own pages keep their in-Wizard route',()=>{const f=fixture(DEFAULT);f.click(f.chat,'/notes/');f.click(f.doc,'/browser/');assert.deepEqual(f.calls,[['window','/notes/'],['window','/browser/']]);});
+test('default: outside files still download, and an explicit links.reader:false is the same as unset',()=>{const f=fixture({...DEFAULT,config:{settings:{links:{reader:false}}}});f.click(f.chat,'https://example.com/file.pdf');f.click(f.chat,'https://example.com/a');assert.deepEqual(f.calls,[['download','https://example.com/file.pdf'],['browser','https://example.com/a']]);});
