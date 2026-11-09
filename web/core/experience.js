@@ -92,6 +92,9 @@
   const LOOK_ONLY = 'wizard/skins-look-only';
   const lookOnly = () => !locked() && mixOf(LOOK_ONLY) === true;
   const recipe = () => lookOnly() ? null : window.WosMySkin?.active;
+  // A device that already wears the switch (from look sync, or from before the migration) has no carry left: only the
+  // owner turning it on here, the first time, carries a recipe (carryRecipe below; adopt() marks it the same way).
+  if (mixOf(LOOK_ONLY) === true && !state.recipeCarried) { state.recipeCarried = true; Store.write(state); }
   /* Slice 3 (#1190), same switch: tweaks on the drop list (catalog `lookOnlyOff`, posted on #1190, waiting for
    * Miguel/James) are off while it is on: not loaded and not offered. Nothing is deleted; saved choices come back off. */
   const dropped = id => (catalog?.lookOnlyOff || []).includes(id);
@@ -324,6 +327,7 @@
       for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
       state.mix = next; state.preset = 'none'; delete state.carry;
+      if (next[LOOK_ONLY] === true) state.recipeCarried = true; // the switch came from elsewhere: nothing to carry here, ever
       if (views && typeof views === 'object') state.views = cleanViews(views);
       Store.write(state);
       return apply();

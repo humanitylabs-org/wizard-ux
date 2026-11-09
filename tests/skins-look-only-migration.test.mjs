@@ -137,6 +137,14 @@ test('another device adopting the switch from look sync carries nothing of its o
   await d.E.adopt({ 'miguel/send-and-go': true, [ID]: true });
   assert.deepEqual(d.events, []);
   assert.deepEqual(d.running(), ['miguel/send-and-go', ID].sort());
+  // Codex P1: turning it off and on again later on this device still carries nothing (the migration was the other device's).
+  await d.E.toggle(ID); await d.E.toggle(ID);
+  assert.deepEqual(d.events.map(e => e.id), [ID, ID]);
+  assert.deepEqual(d.running(), ['miguel/send-and-go', ID].sort());
+  // A device that saved the switch before this release has nothing to carry either.
+  const old = device(null, { mix: { ...OLD_MIX, [ID]: true }, recipe: OLD_RECIPE }); await old.E.refresh();
+  await old.E.toggle(ID); await old.E.toggle(ID);
+  assert.deepEqual(old.events.map(e => e.id), [ID, ID]);
 });
 
 test('two devices: the device that turns it on carries its skin; a stale second device ends up on the same switches', async () => {
