@@ -206,3 +206,10 @@ test('AI apps view: no stock bar icon over the chat title; the rail carries the 
   assert.match(js, /WizWorkspaces\?\.openMenu\?\.\(rWs\)/, 'the one shared menu, not a second implementation');
   assert.match(read('web/layouts/ai-apps/parts.js'), /layers: \[/);
 });
+
+test('AI apps header name opens the shared switcher menu with two or more Wizards, so a box without the devices registry still lists its way back', () => {
+  for (const f of ['desktop.js', 'layout.js']) {
+    const js = read('web/layouts/ai-apps/' + f);
+    assert.match(js, /W\?\.visible && W\.openMenu\) \{[^}]*W\.openMenu\(wsBtn\)/, f);
+  }
+});
