@@ -24,7 +24,7 @@ One read of `/api/system/devices` obtains this box's `devices.json` registry. Ex
 
 Registry entries may supply `url`, `kind:'company'|'managed'|'remote'` (`remote` = another Wizard of the same owner, listed under My Wizards; no kind means managed), `role`, and `org`. Entries without an address retain “isn’t running Wizard yet” and are not switchable. `tools/system-devices.mjs` preserves these optional fields on the read path. The installed Agent Service must likewise preserve them; an old service that strips them will honestly show those entries as not connected.
 
-Switching uses same-window navigation. A target origin inherits the current shell pathname, never the current query/hash or thread id. An explicit target path remains its own root. `add({url,name})` validates/persists; `add()` opens the URL + name sheet. `rename(id,name)` and `remove(id)` change only locally saved entries. Registry entries remain owned by their registry, not silently overridden on this device.
+In the Android app, switching asks the app first (`WizardOSNative.switchWizard` → `WizardSwitch`: same-tailnet https only; it probes, saves the new address and reopens inside the app, with Back to your previous Wizard in Connect); if the app refuses or is absent, the browser fallback below applies. Switching uses same-window navigation. A target origin inherits the current shell pathname, never the current query/hash or thread id. An explicit target path remains its own root. `add({url,name})` validates/persists; `add()` opens the URL + name sheet. `rename(id,name)` and `remove(id)` change only locally saved entries. Registry entries remain owned by their registry, not silently overridden on this device.
 
 ## UX and lifecycle
 
