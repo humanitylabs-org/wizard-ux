@@ -52,6 +52,10 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
         </intent>
+        <!-- Browser panel trial (links.panel): which browsers offer Custom Tabs, so Brave can draw the panel. -->
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
         <package android:name="com.android.vending" />
         <!-- The Tailscale guide: is it installed, and open it. -->
         <package android:name="com.tailscale.ipn" />
