@@ -1,3 +1,12 @@
 /* Apps in Updates (wizard-ux#1191): core/os-updates.js lists installed apps under About & updates while this
  * switch is on (html[data-tweaks~="wizard/app-updates-list"]). */
 html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-state="ready"] .st-val { color: var(--ink); font-weight: 600; }
+/* The row buttons (Update now / Retry / Hold / Unhold) and what they said, from core/os-updates.js. */
+/* The buttons get their own line under the name and status, so a narrow phone pane or large text never squeezes the
+ * app's name and version (Codex P2). */
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app]:has(.osu-app-acts) { flex-wrap: wrap; row-gap: 8px; }
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] .osu-app-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: 1 0 100%; }
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] .osu-app-acts button { min-height: 44px; padding: 6px 14px; border: 1px solid var(--wz-border); border-radius: 99px; background: transparent; color: var(--wz-text); font-weight: 650; touch-action: manipulation; }
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] .osu-app-acts button:disabled { opacity: .6; }
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-msg="failed"] { color: var(--wz-danger); }
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-modes-lbl] { margin-top: 18px; }
