@@ -32,7 +32,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Hands-free updates: once WizardOS installed itself, Android installs its later versions without asking
-         (API 31+); the background check only downloads on unmetered networks. -->
+         (API 31+); the background check downloads on any network except roaming. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Android Apps (optional Wizard app): WizardOS installs open-source apps James asks for and becomes their
@@ -288,7 +288,7 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
-        <!-- Background update check (unmetered network, every few hours). -->
+        <!-- Background update check (any network except roaming, every few hours). -->
         <service
             android:name=".update.UpdateJob"
             android:exported="false"
