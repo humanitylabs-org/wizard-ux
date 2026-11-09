@@ -198,6 +198,46 @@ test('orphan worktrees: admits only existing ignored files tracked in remote his
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('orphan worktrees: raw NUL diff filenames survive report and human/JSON output', (t) => {
+  const { root, live, wts } = fixture();
+  try {
+    git(live, 'merge', '-q', '--ff-only', 'refs/remotes/origin/main');
+    const folder = join(wts, 'filenames');
+    git(live, 'worktree', 'add', '-q', '--detach', folder, 'HEAD');
+    const unique = [':leading-colon', 'odd\nname', 'ordinary', 'tab\tname'];
+    for (const name of unique) writeFileSync(join(folder, name), `unique bytes for ${name}\n`);
+    // Existing contents and deletions must not be mistaken for new blobs.
+    writeFileSync(join(folder, 'base'), 'm1\n');
+    rmSync(join(folder, 'm2'));
+    rmSync(join(live, '.git', 'worktrees', 'filenames'), { recursive: true, force: true });
+    const r = ow.report({ checkout: live, root: wts, files: true });
+    const row = r.orphans.find((o) => o.name === 'filenames');
+    let json = '';
+    let human = '';
+    const args = ['--checkout', live, '--root', wts, '--files'];
+    const jsonExit = ow.main([...args, '--json'], { out: (s) => { json = s; }, err: assert.fail });
+    const humanExit = ow.main(args, { out: (s) => { human = s; }, err: assert.fail });
+    const jsonRow = JSON.parse(json).orphans.find((o) => o.name === 'filenames');
+    t.diagnostic(JSON.stringify({ row, jsonRow, human, jsonExit, humanExit }));
+    const expectedFiles = [':leading-colon', 'base', 'm2', 'odd\nname', 'ordinary', 'tab\tname'];
+    assert.deepEqual(row.files, expectedFiles);
+    assert.deepEqual(row.only_here_files, unique);
+    assert.equal(row.changed_vs_main, expectedFiles.length);
+    assert.equal(row.only_here, unique.length);
+    assert.equal(row.status, 'unmatched');
+    assert.deepEqual(jsonRow, row);
+    assert.equal(jsonExit, 1);
+    assert.equal(humanExit, 1);
+    assert.ok(human.includes('filenames  6 paths differ from main, 4 with content found nowhere else'));
+    for (const name of unique) {
+      const shown = /[\x00-\x1f\x7f]/.test(name) ? JSON.stringify(name) : name;
+      assert.ok(human.includes(`      only here: ${shown}\n`), shown);
+    }
+    assert.ok(human.includes('      differs:   base\n'));
+    assert.ok(human.includes('      differs:   m2\n'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('orphan worktrees: the tool has no command that changes a repo', () => {
   const src = readFileSync(new URL('../tools/orphan-worktrees.mjs', import.meta.url), 'utf8');
   for (const word of ["'push'", "'fetch'", "'checkout'", "'reset'", "'merge'", "'worktree'", 'update-ref', "'commit'", "'gc'", "'prune'"]) {

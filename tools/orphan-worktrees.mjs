@@ -174,9 +174,15 @@ export function classify(folder, { checkout, store, remote, main, trees, scratch
       .filter((n) => n !== 'HEAD');
     return { status: 'pushed', tree, commit: sha, branches };
   }
-  // `:<old mode> <new mode> <old blob> <new blob> <status>\t<path>` per changed path.
-  const diff = lines(git(['diff-tree', '-r', '-z', `${ref(remote, main)}^{tree}`, tree], folder, env).replace(/\0:/g, '\n:').replace(/\0/g, '\t'))
-    .map((l) => { const [meta, path] = l.split('\t'); return { blob: meta.split(' ')[3], path }; });
+  // Raw -z output alternates metadata and an untouched NUL-terminated path.
+  // Disable rename detection explicitly: each record has exactly one pathname,
+  // including when inherited git configuration would otherwise enable renames.
+  const fields = git(['diff-tree', '--no-renames', '-r', '-z', `${ref(remote, main)}^{tree}`, tree], folder, env).split('\0');
+  const diff = [];
+  for (let i = 0; i < fields.length - 1; i += 2) {
+    const [oldMode, newMode, oldBlob, blob, status] = fields[i].slice(1).split(' ');
+    diff.push({ oldMode, newMode, oldBlob, blob, status, path: fields[i + 1] });
+  }
   const changed = diff.map((d) => d.path);
   // File contents that no object in the store has: they exist only in this folder.
   const blobs = diff.filter((d) => !/^0+$/.test(d.blob));
@@ -235,8 +241,10 @@ export function render(r, { remote = 'origin', main = 'main' } = {}) {
   out.push(`  On no remote branch, turn into a PR or discard with sign-off: ${un.length}`);
   for (const o of un) {
     out.push(`    ${o.name}  ${o.changed_vs_main} paths differ from ${main}, ${o.only_here} with content found nowhere else`);
-    for (const f of o.only_here_files || []) out.push(`      only here: ${f}`);
-    for (const f of (o.files || []).filter((x) => !(o.only_here_files || []).includes(x))) out.push(`      differs:   ${f}`);
+    // Quote control characters only for display; report/JSON retain exact names.
+    const displayPath = (f) => /[\x00-\x1f\x7f]/.test(f) ? JSON.stringify(f) : f;
+    for (const f of o.only_here_files || []) out.push(`      only here: ${displayPath(f)}`);
+    for (const f of (o.files || []).filter((x) => !(o.only_here_files || []).includes(x))) out.push(`      differs:   ${displayPath(f)}`);
   }
   out.push(`  Could not be read: ${by('error').length}`);
   for (const o of by('error')) out.push(`    ${o.name}  ${o.error}`);
