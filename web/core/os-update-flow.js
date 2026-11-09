@@ -281,7 +281,8 @@
     get updating() { return updating(); },
     card() {
       const s = st(); if (!s) return null;
-      if (updating()) return { state: 'building', title: `Updating ${OS}…`, line: `${TAKES} · Wizard restarts once`, action: 'apply', label: 'Update now', disabled: true };
+      // Nothing to tap while it runs: no button, so the words get the card's width.
+      if (updating()) { const u = updating(); return { state: 'building', title: `Updating ${OS} to ${u.target}`, line: `${TAKES} · Wizard restarts once`, action: '' }; }
       if (!s.update_available || s.unpinned || !s.latest) return null;
       return { state: 'behind', title: `${OS} ${s.latest} is ready`, line: s.mode === 'auto' ? 'Installs tonight (1–5 am) after a 5-minute heads-up' : `${TAKES} · Wizard restarts once`, action: 'apply', label: 'Update now', disabled: false };
     },
