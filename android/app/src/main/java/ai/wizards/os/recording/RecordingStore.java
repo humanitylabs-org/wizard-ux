@@ -90,15 +90,28 @@ public final class RecordingStore {
             JSONObject e = custody.entry(cid);
             CaptureJournal.Reason why = e != null && "handed".equals(e.optString("state")) && "web-outbox".equals(e.optString("owner"))
                     ? CaptureJournal.Reason.WEB_OUTBOX_CUSTODY : a.length() < CaptureJournal.NOTHING_BYTES ? CaptureJournal.Reason.NOTHING_RECORDED : null;
-            if (!custody.release(cid, why)) return;
+            // A release that copied the take into Cancelled recordings but could not remove the original still
+            // settled it; only a take whose bytes are nowhere else keeps its metadata (wizard-ux#1220).
+            if (!custody.release(cid, why) && !custody.settled(cid, a)) return;
         }
+        forget(id);
+    }
+
+    /** Drops this adapter's metadata only; CaptureJournal alone decides about the audio. */
+    private void forget(String id) {
         claimedHere.remove(id);
         //noinspection ResultOfMethodCallIgnored
         meta(id).delete();
     }
 
     /** Takes that need a home: stopped by the notification, interrupted by a kill, or claimed by a dead process. */
-    public synchronized List<JSONObject> pending(String activeId) {
+    public synchronized List<JSONObject> pending(String activeId) { return pending(activeId, null); }
+
+    /**
+     * {@link #pending(String)} for the page of {@code origin}: a take left behind for another Wizard by a switch
+     * ({@link #stayWith}) is offered only to that Wizard, never re-homed to this one. Null origin: every take.
+     */
+    public synchronized List<JSONObject> pending(String activeId, String origin) {
         List<JSONObject> out = new ArrayList<>();
         File[] fs = dir.listFiles((d, n) -> n.endsWith(".json"));
         if (fs == null) return out;
@@ -108,6 +121,9 @@ public final class RecordingStore {
             JSONObject o = read(id);
             File a = audio(id);
             if (o == null) continue;
+            if (settled(id)) continue;
+            String home = o.optString("home");
+            if (origin != null && !home.isEmpty() && !home.equals(origin)) continue;
             if (!a.isFile() || a.length() < 600) { // nothing usable was captured
                 if (System.currentTimeMillis() - o.optLong("startedAt") > 60_000) delete(id); // NOTHING_RECORDED
                 continue;
@@ -124,6 +140,50 @@ public final class RecordingStore {
             out.add(o);
         }
         return out;
+    }
+
+    /**
+     * Takes that block switching Wizards (wizard-ux#1220): pending for {@code origin} and never handed to the page.
+     * A take the page already claimed into its outbox (custody handed to web-outbox), even by an earlier process,
+     * belongs to that page; {@link #stayWith} keeps it for this Wizard, so a switch neither loses nor re-homes it.
+     */
+    public synchronized List<JSONObject> unsent(String origin) {
+        List<JSONObject> out = new ArrayList<>();
+        for (JSONObject o : pending(null, origin)) if (!handedToPage(o.optString("id"))) out.add(o);
+        return out;
+    }
+
+    /**
+     * Before the app moves to another Wizard: every take still here that has no Wizard yet stays with {@code origin}
+     * (the one it was recorded for). It is offered again when the app is back on that Wizard.
+     */
+    public synchronized void stayWith(String origin) {
+        if (origin == null || origin.isEmpty()) return;
+        File[] fs = dir.listFiles((d, n) -> n.endsWith(".json"));
+        if (fs == null) return;
+        for (File f : fs) {
+            String id = f.getName().substring(0, f.getName().length() - 5);
+            JSONObject o = read(id);
+            if (o == null || !o.optString("home").isEmpty()) continue;
+            try { o.put("home", origin); } catch (JSONException ignored) { }
+            write(id, o);
+        }
+    }
+
+    /** The take's bytes already moved to Cancelled recordings or left the phone: drop the stale metadata. */
+    private boolean settled(String id) {
+        File a = audio(id);
+        String cid = a.isFile() ? custody.idFor(a) : null;
+        if (!custody.settled(id, a) && (cid == null || cid.equals(id) || !custody.settled(cid, a))) return false;
+        forget(id);
+        return true;
+    }
+
+    private boolean handedToPage(String id) {
+        File a = audio(id);
+        String cid = a.isFile() ? custody.idFor(a) : null;
+        JSONObject e = custody.entry(cid == null ? id : cid);
+        return e != null && "handed".equals(e.optString("state")) && "web-outbox".equals(e.optString("owner"));
     }
 
     public static String json(List<JSONObject> list) {

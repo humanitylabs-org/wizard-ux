@@ -191,6 +191,25 @@ public final class CaptureJournal {
 
     public synchronized boolean release(String id, Reason reason) { return release(id, reason, null); }
 
+    /**
+     * True once this capture left the phone's custody or moved to Cancelled recordings, so an adapter's leftover
+     * metadata for {@code original} no longer stands for unsent audio (wizard-ux#1220). A leftover original whose
+     * kept copy holds the same bytes is removed; a discarded original is removed as release already decided.
+     * Anything else stays: a delivered take may still be kept on purpose, and different bytes are not a copy.
+     */
+    public synchronized boolean settled(String id, File original) {
+        JSONObject e = id == null ? null : entries.get(id);
+        if (e == null || !terminal(e.optString("state"))) return false;
+        if (original == null || !original.isFile()) return true;
+        File now = new File(e.optString("path"));
+        if (now.equals(original)) {
+            if ("discarded".equals(e.optString("state"))) //noinspection ResultOfMethodCallIgnored
+                original.delete();
+            return true;
+        }
+        return sameBytes(original, now) && original.delete();
+    }
+
     /** A copy is evidence only after byte-for-byte verification, never just because a destination exists. */
     public synchronized boolean release(String id, Reason reason, File replacement) {
         JSONObject old = entries.get(id);

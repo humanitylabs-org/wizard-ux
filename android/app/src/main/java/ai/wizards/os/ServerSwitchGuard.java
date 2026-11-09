@@ -34,7 +34,7 @@ final class ServerSwitchGuard {
         RECORDING("A recording is still in progress"),
         MESSAGE("A message hasn't been sent yet"),
         SHARE("A shared file hasn't been sent yet"),
-        SAVED_RECORDING("A recording is still uploading"),
+        SAVED_RECORDING("A recording hasn't been sent yet"),
         MEETING_RECORDING("A meeting is still being recorded"),
         MEETING_UPLOAD("A meeting is still uploading"),
         MEETING_SYNC("A meeting is still syncing");
@@ -60,6 +60,7 @@ final class ServerSwitchGuard {
 
     /** Plain words for the toast; falls back to a generic line when nothing is blocking (e.g. a double connect). */
     static String say(Reason r) {
+        if (r == Reason.SAVED_RECORDING) return r.say + ". Send or delete it, then try again."; // the page shows it (#1220)
         return r == null ? "Couldn't switch just now. Try again."
                 : r.say + ". Let it finish, then try again.";
     }
@@ -77,7 +78,8 @@ final class ServerSwitchGuard {
             @Override public boolean recording() { return ai.wizards.os.update.Updater.recording(c); }
             @Override public boolean messageUnsent() { return !ai.wizards.os.everywhere.EverywhereOutbox.get(c).unsent().isEmpty(); }
             @Override public boolean sharePending() { return ai.wizards.os.share.ShareQueue.get(c).pending(); }
-            @Override public boolean savedRecordingPending() { return !ai.wizards.os.recording.RecordingStore.get(c).pending(null).isEmpty(); }
+            // Only takes never handed to the page block; the rest stay with this Wizard on a switch (#1220).
+            @Override public boolean savedRecordingPending() { return !ai.wizards.os.recording.RecordingStore.get(c).unsent(ServerSettings.origin(c)).isEmpty(); }
             @Override public Reason meeting() {
                 return meetingWork(new File(c.getFilesDir(), "mizel"), ai.wizards.os.mizel.MeetingRecorderService.receipts(c));
             }
