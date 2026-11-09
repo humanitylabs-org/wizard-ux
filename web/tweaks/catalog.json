@@ -33,8 +33,7 @@
     "wizard/skins-look-only",
     "wizard/app-updates-list",
     "wizard/update-bug-reports",
-    "wizard/connector-models",
-    "wizard/link-token-repair"
+    "wizard/connector-models"
   ],
   "defaults": [
     "wizard/unified-inbox"
