@@ -67,6 +67,10 @@
         if (route?.model === it.model && route.provider && !route.agent) it.provider = route.provider;
       } catch (_) { /* Pending/ambiguous/unavailable selection stays visibly unsent. */ }
     }
+    // A message saved before any model was known (the Welcome's first message, sent while a just-finished AI sign-in
+    // had not reached the model list yet) never had a route to protect. This explicit Retry may give it the route a
+    // new message would get now (deliver). Agent-bound, frozen and steer requests keep their own rules.
+    if (!it.model && !it.provider && !it.agent && !it.body && !it.steerBody) it.routeOnRetry = true;
     if (ownerSend && (it.lateHeld || lateMessage(it))) it.lateSendApproved = true;
     // Claim synchronously before the first persistence await: a double tap cannot
     // reset an in-flight attempt back to waiting and cause a second dispatch.
@@ -463,6 +467,18 @@
     halt(it);
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
     if (fitAgentRoute(it)) await put(it);
+    if (it.routeOnRetry) {
+      delete it.routeOnRetry;
+      if (!it.model && !it.provider && !it.agent && !it.body) {
+        try {
+          const MM = window.WosModels;
+          if (MM?.stale?.()) await MM.load(true);
+          const r = MM?.snapshot(it.kind === 'reply' ? it.sessionId : '', null, '');
+          if (r?.model && r.provider && !r.agent) Object.assign(it, { model: r.model, provider: r.provider });
+        } catch (_) { /* no model yet: stays unsent with the message below */ }
+      }
+      await put(it);
+    }
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);

@@ -36,6 +36,14 @@
  *             (quick: "Takes about 2 minutes" in both; the new interface then offers its own Reload)
  *   failed    "WizardOS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
  *   reload    the interface changed under this page (core/web-update.js) → "Interface updated" · Reload
+ * Wizard for Mac (`by_host`: the Mac copies Wizard OS before every update; nothing updates without the owner):
+ *   behind    "WizardOS 0.3.126 is ready" · Ask me: "Takes 10–20 minutes · You can update any time in Settings"
+ *             Automatic: "Installs tonight (1–5 am) after a 5-minute heads-up" · Update now (pop-up: Later)
+ *             (a Mac's page looks every minute, so the heads-up and a new release show in time)
+ *   confirm   "Update WizardOS now?" · "Wizard restarts and is away 10–20 minutes…" · Cancel / Update now
+ *   pending   "Starting WizardOS update…" (the Mac picks the request up within a minute)
+ *   headsup   "WizardOS updates in 5 min" · Not tonight / Update now; shown off Home too
+ *   POST {"action":"postpone"}  Not tonight (Mac boxes only)
  *
  *   WosUpdates.card()       → {state, title, line, action, label, disabled} or null
  *   WosUpdates.cardHtml()   → the card's markup ('' when there is nothing to do); Settings puts it on top
@@ -62,6 +70,16 @@
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
+  // Wizard for Mac (App Manager `by_host`): the Mac starts every WizardOS update after saving a copy of Wizard OS.
+  // Nothing updates without the owner: Ask me shows "WizardOS x is ready" and Update now asks once more; Automatic
+  // updates only at night (1–5 am) after a 5-minute heads-up on every device (`host_headsup`: Update now / Not
+  // tonight). Other boxes keep the card exactly as before.
+  const mac = () => st?.by_host === true;
+  let confirming = false;
+  const headsUp = () => {
+    const h = st?.host_headsup;
+    return h && typeof h.at === 'number' && h.at * 1000 > Date.now() - 60e3 ? h : null;
+  };
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   function load(force) {
@@ -105,16 +123,26 @@
     if (!st || issue) return null;
     const auto = isAuto();
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
+    if (mac() && !st.installing) {
+      const h = headsUp();
+      if (h) {
+        const mins = Math.max(1, Math.ceil((h.at * 1000 - Date.now()) / 60e3));
+        return { state: 'headsup', title: `${OS()} updates in ${mins} min`, line: `${h.target || st.latest} · Wizard is away ${st.quick === true ? 'about 2' : '10–20'} min`, action: 'apply-yes', label: busy === 'apply-yes' ? 'Starting…' : 'Update now', cancel: 'postpone', cancelLabel: busy === 'postpone' ? 'Saving…' : 'Not tonight', disabled: !!busy };
+      }
+      if (st.host_pending) return { state: 'pending', title: `Starting ${OS()} update…`, line: 'Your Mac saves a copy of WizardOS first · Wizard restarts once', action: 'apply', label: 'Update now', disabled: true };
+      if (confirming && st.update_available && !st.unpinned) return { state: 'confirm', title: `Update ${OS()} now?`, line: `Wizard restarts and is away ${st.quick === true ? 'about 2 minutes' : '10–20 minutes'}. Your chats and files stay.`, action: 'apply-yes', label: busy === 'apply-yes' ? 'Starting…' : 'Update now', cancel: 'apply-no', cancelLabel: 'Cancel', disabled: !!busy };
+    }
     if (st.installing) return { state: 'building', title: `Updating ${OS()}…`, line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
     // WizardOS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
     if (st.interrupted) return { state: 'failed', title: `${OS()} update didn’t finish`, line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
+    if (mac()) return { state: 'behind', title: `${OS()} ${st.latest || 'update'} is ready`, line: auto ? 'Installs tonight (1–5 am) after a 5-minute heads-up' : `${takes} · You can update any time in Settings`, action: 'apply', label: 'Update now', later: true, disabled: !!busy };
     return { state: 'behind', title: `${OS()} update`, line: auto ? 'Installs tonight when it’s quiet' : takes, action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
-    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
+    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.cancel ? `<button type="button" class="osu-no" data-osu="${c.cancel}" ${c.disabled ? 'disabled' : ''}>${esc(c.cancelLabel)}</button>` : ''}<button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
   }
   const seg = (name, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(name)}">${items.map(([key, text, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(text)}</button>`).join('')}</div>`;
   // Always retain the installed server version, including when an update card is present.
@@ -135,7 +163,7 @@
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.`}</p></div>` : '';
     // Automatic / Ask me (wizard-app-manager#483). The 0.3.107 App Manager (always_auto) would not keep Ask me: no choice there.
     const choice = st.always_auto === true ? '' : seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]]);
-    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
+    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${mac() ? (auto ? 'Install by themselves at night (1–5 am), after a 5-minute heads-up you can stop. Never during a chat.' : 'Nothing installs until you tap Update now. You’ll see when an update is ready.') : auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
   function pick(chan, ctx) {
@@ -167,10 +195,22 @@
     if (what === 'ask' && st.always_auto === true) return true;   // that App Manager would answer Automatic anyway
     if ((what === 'auto' || what === 'ask') && what === (isAuto() ? 'auto' : 'ask') && (st.chosen || st.always_auto === true)) return true;
     if (what === 'apply' && card()?.disabled) return true;
+    // Wizard for Mac: Update now asks once more (Wizard restarts and is away a while); Cancel goes back.
+    if (what === 'apply' && mac()) { confirming = true; ctx?.haptic?.(8); changed(); ctx?.render?.(); return true; }
+    if (what === 'apply-no') { confirming = false; changed(); ctx?.render?.(); return true; }
+    if (what === 'postpone') {
+      busy = what; ctx?.render?.(); ctx?.haptic?.(8);
+      post({ action: 'postpone' }).then(d => { if (valid(d)) st = d; else st = { ...st, host_headsup: null }; ctx?.toast?.('✓', 'Not tonight · Update any time in Settings', 2600); at = Date.now(); })
+        .catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
+        .finally(() => { busy = ''; changed(); });
+      return true;
+    }
+    confirming = false;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
-    const body = what === 'apply' ? { action: 'apply' } : { mode: what };
+    const body = what === 'apply' || what === 'apply-yes' ? { action: 'apply' } : { mode: what };
     post(body).then(d => {
-      if (what === 'apply') {
+      if (what === 'apply' || what === 'apply-yes') {
+        if (d.host_pending) st = { ...st, host_pending: d.host_pending, host_headsup: null };
         if (d.started) { const quick = d.quick === true || (d.quick !== false && st.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating ${OS()} · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); }
         else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
       } else {
@@ -179,11 +219,11 @@
       }
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
-      .finally(() => { busy = ''; changed(); if (what === 'apply') setTimeout(() => load(true), 1500); });
+      .finally(() => { busy = ''; changed(); if (what === 'apply' || what === 'apply-yes') setTimeout(() => load(true), 1500); });
     return true;
   }
   /* ---- Home pop-up ---- */
-  const POP_STATES = ['behind', 'reload', 'failed'], DISMISS = 'wos.osu.dismissed';
+  const POP_STATES = ['behind', 'reload', 'failed', 'headsup', 'confirm', 'pending'], DISMISS = 'wos.osu.dismissed';
   const store = { get() { try { return window.localStorage.getItem(DISMISS) || ''; } catch (_) { return ''; } }, set(v) { try { window.localStorage.setItem(DISMISS, v); } catch (_) {} } };
   // One key per state worth telling: a new release or a new web build each count as new.
   function popKey(c) {
@@ -212,7 +252,9 @@
   }
   function popup() {
     if (typeof document === 'undefined' || !document.body) return;
-    const c = card(), k = popKey(c), show = !!k && k !== store.get() && homeInView();
+    // The 5-minute heads-up shows wherever the owner is, not only on Home: it is the one chance to say Not tonight.
+    // On a Mac's Wizard (Ask me: the owner's yes is the only way an update starts) "is ready" shows on every screen too.
+    const c = card(), k = popKey(c), show = !!k && k !== store.get() && (c.state === 'headsup' || (mac() && ['behind', 'confirm', 'pending'].includes(c.state)) || homeInView());
     const was = popShown; popShown = show ? k : '';
     if (!show) { if (popEl) { popEl.remove(); popEl = null; } }
     else {
@@ -228,8 +270,11 @@
         document.body.appendChild(popEl);
       }
       const armed = c.state === 'reload' && window.WizWebUpdate?.armed;
-      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}`;
-      if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; }
+      // Wizard for Mac: "Later" instead of ×, and a Cancel / Not tonight next to the button; no × on the heads-up.
+      const no = c.cancel ? `<button type="button" class="osu-pop-no" data-osu="${c.cancel}" ${c.disabled ? 'disabled' : ''}>${esc(c.cancelLabel)}</button>` : '';
+      const x = c.later ? '<button type="button" class="osu-pop-no" data-osu-dismiss>Later</button>' : c.cancel ? '' : '<button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>';
+      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.later ? x : no}<button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>${c.later ? '' : x}${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}`;
+      if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; popEl.dataset.two = c.cancel || c.later ? '1' : ''; }
       place();
     }
     // The old "Interface updated" banner steps aside while the pop-up has the reload (and after its ×).
@@ -244,7 +289,8 @@
   // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
   // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.
   const IDLE = 10 * FRESH;
-  const tick = () => { if (!st || document.hidden) return; if (st.installing || Date.now() - at >= IDLE) load(true); };
+  // Wizard for Mac: look every minute, so an open Wizard hears the 5-minute heads-up (and a new release) in time.
+  const tick = () => { if (!st || document.hidden) return; if (st.installing || mac() || Date.now() - at >= IDLE) load(true); };
   const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });
