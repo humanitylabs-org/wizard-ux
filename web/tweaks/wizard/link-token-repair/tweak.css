@@ -1,0 +1,2 @@
+/* Repair the agent's Wizard connection (wizard-ux#974): a box-side switch read by the App Manager's
+ * `wizard link` and `wizard doctor` (wizard-app-manager wizard-cli/wizard). The shell changes nothing while it is on. */
