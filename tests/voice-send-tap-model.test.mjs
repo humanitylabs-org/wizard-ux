@@ -63,3 +63,30 @@ test('no route at start and none at Send: nothing is sent, the owner is asked to
   assert.equal(r.sent, null);
   assert.match(r.toasts.at(-1)[1], /Choose a model/);
 });
+
+// Codex P2: a live native take sent from the Android recording notification (device.js onRec 'send' -> nativeFinish)
+// reads the model at that Send too. A take recovered after reload keeps its saved route.
+const native = section('  function nativeFinish(id, stopped) {', '  const releasedTakes =') + section('  function sendTapRoute(', '  // A take that sends nothing');
+function notify({live}) {
+  let seen = null; const saved = [];
+  const V = {kind: 'auto', snap: live ? {view: {id: 'chats', kind: 'chat thread', thread: 'sid-1'}, route: SONNET} : null, replyTo: null, target: null, acc: 2000, state: 'listen'};
+  const c = {V, console, performance: {now: () => 0}, JSON, Number, idx: 0, nativeTakeAppOwned: () => false, __wosDictationTake: () => false,
+    __wosVoiceRecovery: () => [{id: 'n1', kind: 'auto', conversation: null}],
+    WosModels: {voiceRoute: () => SONNET, load: async () => {}, snapshot: () => OPUS},
+    sendSnap: () => ({view: {id: 'chats', kind: 'chat thread', thread: 'sid-1'}, conversation: null}), generalVoiceSnap: () => ({general: true}),
+    CHATS: {modelRoute: () => OPUS}, saveVoiceRoute: (id, r) => saved.push(r),
+    DEV: () => ({recPending: () => JSON.stringify([{id: 'n1', kind: 'auto', bytes: 5, ms: 2000}])}), // stopped by the notification (device.js onRec 'send')
+    voiceRecovery: () => {}, nativeBlob: () => ({audio: true}), onRecStop: () => { seen = structuredClone(V.snap.route); },
+    dropHold() {}, unseal() {}, setVoice(s) { V.state = s; }, txHide() {}, toast() {}, voiceTake: () => ({kind: 'auto'}), replyTake: () => null,
+    renderVoiceFiles() {}, txPill() {}, requestAnimationFrame: () => 0, tick() {}};
+  c.window = c; vm.createContext(c); vm.runInContext(native + '\nnativeFinish("n1", true)', c);
+  return {seen, saved};
+}
+test('notification Send of a live take uses the model picked while recording', () => {
+  const r = notify({live: true});
+  assert.deepEqual(r.seen, OPUS);
+  assert.deepEqual(r.saved.at(-1), OPUS, 'saved route follows, so a reload keeps the Send-time model');
+});
+test('a take recovered after reload keeps its saved route', () => {
+  assert.deepEqual(notify({live: false}).seen, SONNET);
+});

@@ -2262,6 +2262,12 @@
       const nativePin = saved?.conversation;
       if (!snap.meetingEventId && nativePin && V.target == null && !V.replyTo && V.kind !== 'command') snap.conversation = nativePin; // old token fails closed after shell reload
       else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
+      // A live take sent from the recording notification reads the model at that Send too, for its pinned destination
+      // (wizard-ux#1218). A take recovered after reload keeps its saved route.
+      if (!snap.conversation && hadSnap && !recoveredLoan) {
+        const live = sendTapRoute(snap, V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null));
+        if (live?.model && live?.provider) snap.route = live;
+      }
       if (!snap.conversation && !(snap.route?.model&&snap.route?.provider)) {
         const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
         snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
