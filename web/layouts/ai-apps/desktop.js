@@ -1006,7 +1006,9 @@ export default function desktop(api) {
       return r;
     });
     const manage = el('button', 'aad-wm', { type: 'button', role: 'menuitem', text: 'Manage workspaces' });
-    api.listen(manage, 'click', () => { closeWs(); api.desk.settings('network'); });
+    // Manage = Settings › Connections, where the saved Wizards are added (core/workspaces.js 'saved-wizards'); Network & security
+    // holds nothing about workspaces (wizard-ux#1209).
+    api.listen(manage, 'click', () => { closeWs(); api.desk.settings('connections'); });
     wsPop.replaceChildren(el('h3', 'aad-wh', { text: 'Workspaces' }), ...rows, el('hr', 'aad-pdiv'), manage);
   }
   function openWs() {
@@ -1674,7 +1676,8 @@ export default function desktop(api) {
     if (code === 'KeyK' && !sh) return once(() => setSearch(true));
     if (code === 'KeyL' && !sh) return once(toggleSide);
     if (code === 'KeyR' && !sh) return once(toggleTabs);
-    if (code === 'KeyO' && !sh) return once(() => { if (wsPop) { closeWs(); return; } if (root.dataset.aadSide === 'rail' && !narrow()) toggleSide(); openWs(); });
+    // ⌥O opens what the header name opens: the shared switcher with two or more Wizards (saved ones too), else this list
+    if (code === 'KeyO' && !sh) return once(() => { if (wsPop) { closeWs(); return; } if (root.dataset.aadSide === 'rail' && !narrow()) toggleSide(); const W = globalThis.WizWorkspaces; if (W?.visible && W.openMenu) { W.openMenu(wsBtn); return; } openWs(); });
     if (code === 'KeyT' && !sh) return once(openTidy);
     if (code === 'KeyA' && !sh) return once(openAll);
     // ⌥P: pause (again: play) what played last, in any app (Now playing: the bars on its icon; nothing playing: nothing)

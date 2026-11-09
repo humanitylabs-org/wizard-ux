@@ -7,7 +7,7 @@
  *     the number the orb used to wear, in Chats' amber); a small home button in the middle goes Home from anywhere, an
  *     app included (round 5: it replaced the Wizard's name); on the right, on Home only (round 5; never over a chat or
  *     an app), the workspace switcher, in the slot where they put Temporary / Incognito (this Wizard, then the Wizards
- *     he manages; Manage = Settings › Your network).
+ *     he manages; Manage = Settings › Connections, where Add a Wizard lives).
  *   - Drawer from the left (☰, or a swipe from the left edge; a swipe right in a thread too, which keeps the chat
  *     under it and never also runs the thread swipe-back): the name and 🔍 (searches chats and apps), then where they list Projects / GPTs / Spaces
  *     a compact grid of EVERY open app (a small icon with its name under it, like ChatGPT's GPT grid; desk order, apps
@@ -530,7 +530,8 @@ export default function setup(api) {
     }
     const list0 = el('div', 'aa-sh-list', { role: 'list', 'aria-label': 'Workspaces' }); list0.append(...out);
     const manage = el('button', 'aa-sh-manage', { type: 'button', text: 'Manage workspaces' });
-    api.listen(manage, 'click', () => { closeSheet(); api.desk.settings('network'); });
+    // Manage = Settings › Connections, where the saved Wizards are added (wizard-ux#1209: Network & security has none of it)
+    api.listen(manage, 'click', () => { closeSheet(); api.desk.settings('connections'); });
     body.replaceChildren(list0, manage);
   }
   function openSheet() {

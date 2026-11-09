@@ -213,3 +213,13 @@ test('AI apps header name opens the shared switcher menu with two or more Wizard
     assert.match(js, /W\?\.visible && W\.openMenu\) \{[^}]*W\.openMenu\(wsBtn\)/, f);
   }
 });
+
+test('wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Manage workspaces opens Settings › Connections', () => {
+  const desk = read('web/layouts/ai-apps/desktop.js');
+  assert.match(desk, /code === 'KeyO'[^\n]*W\?\.visible && W\.openMenu\) \{ W\.openMenu\(wsBtn\); return; \} openWs\(\);/, 'the shortcut never opens the registry-only list over two or more Wizards');
+  for (const f of ['desktop.js', 'layout.js']) {
+    const js = read('web/layouts/ai-apps/' + f);
+    assert.match(js, /api\.desk\.settings\('connections'\)/, f);
+    assert.doesNotMatch(js, /api\.desk\.settings\('network'\)/, f + ': not Network & security');
+  }
+});

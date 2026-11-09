@@ -34,6 +34,6 @@ A switch updates active/busy and closes the overlay synchronously before any bri
 
 The module has no poll/interval/idle timeout or mutation observer. Three fixed window listeners consume native, storage and already-existing resource events. Per-overlay listeners are AbortController-owned and released on close. The built-in has one subscription and route/render/home handlers owned by `WosSkinHost`; Miguel unsubscribes on teardown.
 
-AI apps view (desktop default): the bar's start slot is the top row over the chat title, so the stock icon is hidden there. With the sidebar showing, its header name (Archimedes ⌄) is the switcher; on the collapsed rail a layers button (`.aad-rws`, two or more Wizards only) opens the same shared menu. Full-screen chat hides both on purpose.
+AI apps view (desktop default): the bar's start slot is the top row over the chat title, so the stock icon is hidden there. With the sidebar showing, its header name (Archimedes ⌄) is the switcher; on the collapsed rail a layers button (`.aad-rws`, two or more Wizards only) opens the same shared menu. Full-screen chat hides both on purpose. ⌥O opens the same menu as the header name, and its own list's Manage workspaces opens Settings › Connections.
 
 Regression checks: `tests/workspaces.test.mjs`, `tests/james-default-home.test.mjs`, `tests/miguel-machines-home.test.mjs`, `qa-workspaces.cjs`. Browser QA uses synthetic fixtures, intercepts all writes, and asserts no `/v1/runs` attempt.
