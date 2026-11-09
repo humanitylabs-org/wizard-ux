@@ -85,7 +85,13 @@
       localStorage.setItem('wos.app-borders.migrated.v1', 'true');
     }
   } catch (_) {}
-  const recipe = () => window.WosMySkin?.active;
+  /* Skins are look only (wizard-ux#1190, switch wizard/skins-look-only, off by default). One system for trying changes:
+   * while it is on, an own skin's saved tweak choices are set aside (kept, back when it is off) and only the shared
+   * feature switches (Settings and the WizardOS Tracker, look.json `tweaks`) decide what runs. The switch itself always
+   * lives in the shared mix, never in a skin, so a skin cannot hide it. For everyone keeps it off like every switch. */
+  const LOOK_ONLY = 'wizard/skins-look-only';
+  const lookOnly = () => !locked() && mixOf(LOOK_ONLY) === true;
+  const recipe = () => lookOnly() ? null : window.WosMySkin?.active;
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
   const canonical = id => catalog?.aliases?.[id] || id;
   const globalIds = () => catalog?.defaults || [];
@@ -102,7 +108,7 @@
     for (const [old, current] of Object.entries(catalog?.aliases || {})) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
     return undefined;
   };
-  const enabled = (id, own = recipe()) => globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
+  const enabled = (id, own = recipe()) => id === LOOK_ONLY ? lookOnly() : globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
     : own ? (recipeChoice(own, id) ?? presetOn(id)) : (mixOf(id) ?? presetOn(id));
   // Packages that fill the same place (two Home maps): the first one listed in a catalog `oneOf` group wins.
   // An explicit off for any member (My skin recipe, a saved off, a release-wide off) turns the whole group off.
@@ -121,7 +127,7 @@
       try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on, scope: 'default' } })); } catch (_) {}
       return;
     }
-    if (recipe()) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
+    if (recipe() && id !== LOOK_ONLY) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
     if (!catalog?.tweaks.includes(id)) return;
     const mix = { ...(state.mix || {}) }; if (on === presetOn(id)) delete mix[id]; else mix[id] = on;
     state.mix = mix; Store.write(state);
@@ -293,7 +299,9 @@
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
       // Old files omit defaults: retain local offs until the upgrade seeds them.
       const off = new Set(state.defaultsOff || []);
-      const shared = recipe() ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
+      // Decided on the state being adopted: a shared look-only switch arriving with these defaults sets the skin aside now.
+      const skinDecides = !!window.WosMySkin?.active && !(!locked() && next[LOOK_ONLY] === true);
+      const shared = skinDecides ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
       for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
       state.mix = next; state.preset = 'none'; delete state.carry;

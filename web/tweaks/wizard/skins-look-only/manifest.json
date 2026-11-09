@@ -1,0 +1,11 @@
+{
+  "id": "wizard/skins-look-only",
+  "name": "Skins are look only",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Its saved choices are kept and come back when you switch this off."
+}
