@@ -10,3 +10,5 @@ html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] .osu-app-acts butto
 html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] .osu-app-acts button:disabled { opacity: .6; }
 html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-msg="failed"] { color: var(--wz-danger); }
 html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-modes-lbl] { margin-top: 18px; }
+/* A failed row's link to the bug the App Manager filed or found for it (wizard-app-manager#524). */
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-bug] { align-self: flex-start; padding: 4px 0; color: inherit; text-decoration: underline; }

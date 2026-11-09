@@ -323,3 +323,31 @@ test('What\u2019s new: an app updated through Update now while held keeps its ho
   assert.match(h, /data-osu-app="wizard-maps" data-osu-app-state="held">.*<span data-osu-app-news>What’s new in 3: Offline maps\.<\/span>/);
   assert.match(h, /<b>Books<\/b><span>Version 2<\/span><\/span>/, 'held and up to date but not just updated: no line');
 });
+
+// Slice 5: a failed row links to the bug wizard-app-manager#524 filed or found (`failed[id].bug`, same switch).
+test('a failed row links to its bug report; no link without one, for a bad URL, or for rows that are not failed', async () => {
+  const url = 'https://github.com/humanitylabs-org/wizard-messenger/issues/12';
+  const withBug = { ...MGR, failed: { ...MGR.failed, 'wizard-messenger': { ...MGR.failed['wizard-messenger'], bug: url },
+    'wizard-music': { to: 5, at: 1, reason: 'old', bug: 'https://github.com/humanitylabs-org/wizard-music/issues/3' } } };
+  const { U } = await load({ on: true, mgr: () => [200, withBug] });
+  await U.loadApps();
+  const h = U.html();
+  assert.match(h, /<span data-osu-app-why>Version 97: a container keeps restarting &lt;b&gt;<\/span><a data-osu-app-bug href="https:\/\/github\.com\/humanitylabs-org\/wizard-messenger\/issues\/12" target="_blank" rel="noopener noreferrer">Bug report<\/a>/);
+  assert.equal([...h.matchAll(/data-osu-app-bug/g)].length, 1, 'an old failure for another version gets no link');
+  for (const bug of [undefined, 'javascript:alert(1)', 'https://github.com/a/b/pull/3', 'https://evil.test/a/b/issues/1', `${url}" onclick="x`]) {
+    const failed = { 'wizard-messenger': { to: 97, at: 1, reason: 'r', ...(bug === undefined ? {} : { bug }) } };
+    const r = await load({ on: true, mgr: () => [200, { ...MGR, failed }] });
+    await r.U.loadApps();
+    const hh = r.U.html();
+    assert.match(hh, /data-osu-app="wizard-messenger" data-osu-app-state="failed"/);
+    assert.doesNotMatch(hh, /data-osu-app-bug|Bug report/, String(bug));
+  }
+});
+
+test('switch off: no bug link and no App Manager read, even when it would have one', async () => {
+  const failed = { 'wizard-messenger': { to: 97, at: 1, reason: 'r', bug: 'https://github.com/humanitylabs-org/wizard-messenger/issues/12' } };
+  const { U, calls } = await load({ on: false, mgr: () => [200, { ...MGR, failed }] });
+  const h = U.html(); await tick(); await tick();
+  assert.doesNotMatch(h, /data-osu-app-bug|Bug report/);
+  assert.ok(!calls.some(u => u.endsWith('/_app-updates')));
+});
