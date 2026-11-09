@@ -78,7 +78,10 @@
     return [`${behind} behind main`, mineTxt].filter(Boolean).join(' · ');
   }
   const row = (title, sub) => `<div class="st-group" data-box-source><div class="st-row static"><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span></div></div>`;
-  function html() {
+  // Internal Mac update test (never released): the visible proof that the mac.2 test release landed.
+  const testMark = () => row('Test build mac.2', 'This line arrived with the WizardOS update (internal Mac update test)');
+  function html() { return testMark() + body(); }
+  function body() {
     load();
     if (!info) return '';
     if (info.kind === 'none') return row('Main commit unknown', 'This build carries no stamp of the main commit it came from');
