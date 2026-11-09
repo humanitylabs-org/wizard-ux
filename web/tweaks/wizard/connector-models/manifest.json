@@ -1,0 +1,11 @@
+{
+  "id": "wizard/connector-models",
+  "name": "Models from your connectors",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "The model menu in Chats lists only the main models of the AI connectors you have connected: Claude (Opus, Sonnet, Haiku, Fable), ChatGPT (Sol, Astra, Luna), Tinfoil (GLM, Kimi, DeepSeek, Flash). With none connected it says so and links to Connectors."
+}

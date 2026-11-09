@@ -66,6 +66,24 @@
    * why the last run failed (wizard_last_run_error), the Errors row and the thread say it plainly instead of
    * "Error: <your message>", and the ways out are ordered by what can work. A sign-out with a connection app keeps
    * its own Sign in panel (s.reconnect wins). */
+  /* Connector models (wizard-ux#1201, off by default behind the wizard/connector-models tweak): the compact menu's
+   * short list comes from the connected AI connectors, each giving only its few main models, never its whole catalogue.
+   * A connector's models show only while it is connected (the thread's current model always shows). With none
+   * connected the menu says so and links to Connectors in the App Store. */
+  const CONNECTOR_TWEAK = 'wizard/connector-models';
+  const connectorOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(CONNECTOR_TWEAK); } catch (_) { return false; } };
+  const CONNECTORS = [
+    { id: 'claude', models: [['claude:opus', 'Opus'], ['claude:sonnet', 'Sonnet'], ['claude:haiku', 'Haiku'], ['claude:fable', 'Fable']] },
+    { id: 'chatgpt', models: [['gpt:sol', 'Sol'], ['gpt:astra', 'Astra'], ['gpt:luna', 'Luna']] },
+    { id: 'tinfoil', models: [['tinfoil:glm', 'GLM'], ['tinfoil:kimi', 'Kimi'], ['tinfoil:deepseek', 'DeepSeek'], ['tinfoil:flash', 'Flash']] },
+  ];
+  // Tinfoil's main chat models by id; utility models (embeddings, speech, filters) get no family and stay in More models.
+  const tinfoilFamily = model => {
+    const m = String(model || '').toLowerCase();
+    if (/(?:^|-)flash(?:-|$)/.test(m)) return 'tinfoil:flash';
+    const f = /^(glm|kimi|deepseek)(?:-|$)/.exec(m)?.[1];
+    return f ? `tinfoil:${f}` : undefined;
+  };
   const REASON_TWEAK = 'wizard/failure-reason';
   const reasonOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(REASON_TWEAK); } catch (_) { return false; } };
   const PROVIDER_NAMES = [[/codex|chatgpt|openai/i, 'ChatGPT'], [/claude|anthropic/i, 'Claude'], [/tinfoil/i, 'Tinfoil'], [/gemini|google/i, 'Gemini'], [/openrouter/i, 'OpenRouter']];
@@ -88,8 +106,15 @@
     if (!make) return null;
     return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
   }
-  const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
-  const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
+  const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
+  const primaryFamilies = () => connectorOn() ? CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })))
+    : ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
+  // Connector models on: a disconnected connector's models leave the menu. Only an existing thread keeps its current
+  // one (keep); a new chat never inherits a disconnected default.
+  const reachable = (list, model, provider, keep = true) => connectorOn()
+    ? list.filter(o => { const c = connectorOf(o); return !c || M.connected(c) || (keep && o.value === model && (!provider || o.provider === provider)); }) : list;
+  const shown = (list, model, provider, keep) => connectorOn() ? reachable(list, model, provider, keep)
+    : ours() ? list : list.filter(o => !isTinfoil(o.provider));
   /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the
    * private agent. The main agent's own Tinfoil route is hidden there so a locked GLM never lands in the shared
    * history; a thread already on it still shows its current model. */
@@ -131,7 +156,7 @@
     if (/^gpt-[\d.]+$/.test(base)) return 'gpt:plain';
     return undefined;
   }
-  const family = (model, provider) => { if (isTinfoil(provider)) return 'tinfoil'; const c = provider && CLAUDE_PROVIDERS.has(provider) ? claudeFamily(model, provider) : undefined; return c ? `claude:${c}` : gptFamily(model, provider); };
+  const family = (model, provider) => { if (isTinfoil(provider)) return connectorOn() ? tinfoilFamily(model) : 'tinfoil'; const c = provider && CLAUDE_PROVIDERS.has(provider) ? claudeFamily(model, provider) : undefined; return c ? `claude:${c}` : gptFamily(model, provider); };
   const generation = m => Number(/^gpt-([\d.]+)/i.exec(m)?.[1] ?? 0);
   const versionKey = m => m.replace(/\[.*$/, '').replace(/-900k$/i, '').replace(/-\d{8}$/, '');
   const longTwin = m => /-900k$/i.test(m);
@@ -212,7 +237,7 @@
   }
 
   const M = {
-    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false, claudeLimit: '',
+    options: [], providers: [], tinfoil: null, claudeAccounts: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false, claudeLimit: '',
     // The picker refetches on open when its list is older than this, so a just-added sign-in shows up right away.
     FRESH_MS: 15e3,
     stale() { return !M.ready || Date.now() - M.at > M.FRESH_MS; },
@@ -230,7 +255,7 @@
         .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); M.recheckPlaceholder(); return M.options; })
+        .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeAccounts = accounts; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); M.recheckPlaceholder(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;
@@ -254,11 +279,27 @@
         M.load(true).then(() => { if (JSON.stringify(M.options.map(o => [o.provider, o.value])) !== before) window.dispatchEvent?.(new Event('wos:models')); });
       }, wait);
     },
-    normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
+    normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours, connectorOn,
+    /* Is this AI connector connected? Claude: its connection app reports a ready account; with no Claude app answering,
+     * Hermes' own sign-in decides (alongside boxes). ChatGPT: Hermes owns the login (AI_CONNECTIONS #79). Tinfoil: its
+     * app has a saved key. */
+    connected(id) {
+      const signedIn = slugs => M.providers.some(p => slugs.includes(str(obj(p).slug)) && obj(p).authenticated === true);
+      if (id === 'tinfoil') return M.tinfoilReady();
+      if (id === 'chatgpt') return signedIn(['openai-codex']);
+      if (id !== 'claude') return false;
+      const accounts = obj(M.claudeAccounts).accounts;
+      return Array.isArray(accounts) ? accounts.some(a => a && ['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) : signedIn([...CLAUDE_PROVIDERS]);
+    },
+    // Connector models with nothing connected: say so and point to Connectors in the App Store.
+    noConnectorHtml() {
+      return connectorOn() && M.ready && !CONNECTORS.some(c => M.connected(c.id))
+        ? '<p class="ch-sheet-n" role="status" data-mnone>No AI connected yet</p><a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>' : '';
+    },
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
-    visible(model, provider) { return visibleChoices(shown(M.options), model, provider); },
+    visible(model, provider, keep = true) { return visibleChoices(shown(M.options, model, provider, keep), model, provider); },
     runError,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
     short(model, provider) {
@@ -399,7 +440,8 @@
       const own = agent && !agent.missing ? window.WosAgents.modelOptions(agent) : null;
       const privList = !own && Array.isArray(priv) ? priv : [];
       const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (cur.agent || '') === (o.agent || '');
-      const main = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || '')).filter(o => keepMainOption(o, privList, isCur));
+      const keep = mode !== 'new', catalogue = reachable(M.options, cur?.model || '', cur?.provider || '', keep);
+      const main = own || (all ? catalogue : M.visible(cur?.model || '', cur?.provider || '', keep)).filter(o => keepMainOption(o, privList, isCur));
       const list = main.concat(privList);
       const head = mode === 'retry' ? 'Retry with another model' : mode === 'new' ? 'Model for this new chat' : 'Model for this thread';
       const note = own ? `${agent.label} can only use ${own.length === 1 ? 'this model' : 'these models'}.${agent.privacy === 'private' ? ' Private: no other provider, no fallback.' : ''}`
@@ -413,7 +455,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && catalogue.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${catalogue.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -425,19 +467,20 @@
       const lock = window.WosAgents?.lock?.() || '';
       const famOf = o => family(o.value, o.provider), up = primaryFamilies().map(p => p.family);
       const privList = !own && Array.isArray(priv) ? priv : [];
-      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '').filter(o => keepMainOption(o, privList, isCur));
+      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '', mode !== 'new').filter(o => keepMainOption(o, privList, isCur));
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
       const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Haiku, Terra, Luna)
       const curPriv = privList.some(isCur);
       // Primary rows read Opus · Sonnet · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
-      const label = (o, p) => own || p ? o.name : isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider);
+      const curated = o => connectorOn() ? up.includes(famOf(o)) && primaryFamilies().find(x => x.family === famOf(o))?.name : '';
+      const label = (o, p) => own || p ? o.name : curated(o) || (isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider));
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv'); if (isTinfoil(o.provider)) cls += ' secure';
         return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p || isTinfoil(o.provider) ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
       const sec = (label, rows, cls = '') => rows ? `<div class="mpop-sec${cls}" role="group" aria-label="${esc(label)}"><div class="msheet-gh">${cls.includes('priv') ? lock : ''}<span>${esc(label)}</span></div>${rows}</div>` : '';
       const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
       // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
       const mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
-        + (!own && !privList.length && ours() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '');
+        + (!own && !privList.length && ours() && !connectorOn() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '') + (own ? '' : M.noConnectorHtml());
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
