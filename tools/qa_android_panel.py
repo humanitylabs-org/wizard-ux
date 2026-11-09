@@ -6,7 +6,9 @@ Fresh API35 x86_64 emulator; installs the current Brave release APK (BraveMonox6
 published .sha256) from github.com/brave/brave-browser when reachable and makes it the default browser (the image's
 Chrome stays installed), so the panel is drawn by com.brave.browser as on James's phone. Brave's first-run screens are
 skipped (Chromium debug command line --disable-fre via set-debug-app) so the Back check measures the panel, not
-onboarding; PanelE2eTest also taps through any that still show. Runs ai.wizards.os.PanelE2eTest (one synthetic Wizard,
+onboarding; PanelE2eTest also taps through any that still show. A fresh Brave also floats a one-time tip bubble over the
+Custom Tab ("Minimize tab to return to it later") that eats the first Back: the command line asks Brave not to show it
+(--disable-features=IPH_CCTMinimized) and PanelE2eTest dismisses any tip and confirms it is gone before the one Back. Runs ai.wizards.os.PanelE2eTest (one synthetic Wizard,
 no owner traffic). Exit 1 on any failure."""
 import fcntl, hashlib, json, os, signal, subprocess, sys, time, urllib.request
 from pathlib import Path
@@ -95,8 +97,8 @@ def main():
                 shell('cmd', 'role', 'add-role-holder', 'android.app.role.BROWSER', expect, '0')
                 holders = shell('cmd', 'role', 'get-role-holders', 'android.app.role.BROWSER').strip()
                 check('Brave is the default browser (role holder)', expect in holders.split(';') or holders == expect, holders)
-                # Skip Brave's first-run screens: Chromium reads /data/local/tmp/chrome-command-line for the debug app.
-                shell("echo '_ --disable-fre --no-default-browser-check --no-first-run' > /data/local/tmp/chrome-command-line && chmod 644 /data/local/tmp/chrome-command-line")
+                # Skip Brave's first-run screens and its Custom Tab minimize tip (the test still clears any tip): Chromium reads /data/local/tmp/chrome-command-line for the debug app.
+                shell("echo '_ --disable-fre --no-default-browser-check --no-first-run --disable-features=IPH_CCTMinimized' > /data/local/tmp/chrome-command-line && chmod 644 /data/local/tmp/chrome-command-line")
                 shell('am', 'set-debug-app', '--persistent', expect)
                 shell('am', 'force-stop', expect)
                 (out / 'brave-fre.txt').write_text(shell('cat', '/data/local/tmp/chrome-command-line') + shell('settings', 'get', 'global', 'debug_app'))
@@ -111,6 +113,7 @@ def main():
             (out / 'panel-notes.txt').write_text('\n'.join(notes))
             # Reported: whether the browser's onboarding still showed (the test tapped through it) or the seed skipped it.
             print('ONBOARDING taps: ' + ' | '.join(l.split('PanelE2e: ', 1)[-1] for l in notes if 'ONBOARDING' in l or 'PANEL_FRONT' in l), flush=True)
+            print('TIPS: ' + ' | '.join(l.split('PanelE2e: ', 1)[-1] for l in notes if 'TIP' in l), flush=True)
             (out / 'shots').mkdir(exist_ok=True)
             names = [n for n in shell('ls', '/data/local/tmp').split() if n.endswith('.png') and n.startswith(('panel-', 'fail-'))]
             for n in names: run([adb, '-s', serial, 'pull', '/data/local/tmp/' + n, out / 'shots' / n], capture_output=True)
