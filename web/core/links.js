@@ -96,6 +96,12 @@
     if (!host || host === location.hostname.toLowerCase() || WIZARD_HOSTS.test(host) || PRIVATE_HOST.test(host)) return true;
     try { return host === new URL(window.WizConfig?.raw?.settings?.network?.base_url).hostname.toLowerCase(); } catch (_) { return false; }
   }
+  // The one routing switch for Browser Reader. Off (the default): every outside link opens the way it did before
+  // Reader, in the owner's own browser on the first tap (Android `openInBrowser`, a new tab on desktop). James,
+  // 9 Nov 2026: Reader took seconds where his browser takes one, so it is no longer the default link route.
+  // Reversible without a code change: WizardOS settings.json `links.reader: true` routes outside links into
+  // the installed Reader again. The Browser app, its Reading list and Save are untouched either way.
+  const readerLinks = () => window.WizConfig?.raw?.settings?.links?.reader === true;
   // Hosts Reader could not read because they block it or need a sign-in open straight in the owner's browser on
   // the next tap (one tap, never "Reader could not read this page" first). Owner-local, hostname and time only.
   const DIRECT_KEY = 'wos.readerDirect.v1', DIRECT_TTL = 14 * 864e5, DIRECT_MAX = 200, DIRECT_REASONS = new Set(['blocked', 'signin', 'private']);
@@ -174,7 +180,7 @@
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (isFile(u)) return download(u, doc);
       if (!inApp(u)) {
-        if (wizardHost(u) || direct(u)) { browse(u); return true; }
+        if (!readerLinks() || wizardHost(u) || direct(u)) { browse(u); return true; }
         const app = readerApp(), target = app?.url ? abs(app.url) : null;
         if (target && inApp(target)) {
           target.searchParams.set('url', u.href);

@@ -78,7 +78,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
-| Links: outside → Reader (own/failed direct), sheet/window, long-press; `data-wizard-browse`=original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
+| Links: outside → browser (Reader: `links.reader`), sheet/win, long-press; `data-wizard-browse`=original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
 | Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java`, `DownloadsCallerPolicy.java` (docs/android-downloads-port.md) |
 | Selection actions, AI Look up | `WosSelMenu` (`sel-menu.js`), `WosLookup` (`lookup-pop.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
