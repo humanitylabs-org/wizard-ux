@@ -1,0 +1,3 @@
+/* Models from your connectors (wizard-ux#1201): core/chat-models.js builds the model menu's short list from the
+ * connected AI connectors while this tweak is on (html[data-tweaks~="wizard/connector-models"]). */
+html[data-tweaks~="wizard/connector-models"] .msheet-list [data-mnone] { margin: 4px 0; }
