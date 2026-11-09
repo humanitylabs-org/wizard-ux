@@ -127,7 +127,6 @@ test('side branches: a local branch named origin/... cannot shadow the remote re
   try {
     // local refs/heads/origin/main at the unique branch tip would make it look landed
     git(clone, 'branch', 'origin/main', 'refs/remotes/origin/live-unique');
-    git(clone, 'branch', 'origin/live-unique', 'refs/remotes/origin/main');
     const rows = Object.fromEntries(sb.report({ cwd: clone }).map((r) => [r.branch, r.unique_commits]));
     assert.equal(rows['live-unique'], 2);
   } finally { rmSync(root, { recursive: true, force: true }); }
