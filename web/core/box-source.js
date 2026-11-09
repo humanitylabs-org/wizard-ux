@@ -79,7 +79,7 @@
   }
   const row = (title, sub) => `<div class="st-group" data-box-source><div class="st-row static"><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span></div></div>`;
   // Internal Mac update test (never released): the visible proof that the mac.5 test release landed.
-  const testMark = () => row('Test build mac.5', 'This line arrived with the WizardOS update (internal Mac update test)');
+  const testMark = () => row('Test build mac.7', 'This line arrived with the WizardOS update (internal Mac update test)');
   function html() { return testMark() + body(); }
   function body() {
     load();
