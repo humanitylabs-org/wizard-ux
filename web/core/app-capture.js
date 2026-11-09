@@ -1090,7 +1090,7 @@
   async function start(appId, opts = {}) {
     const meta = validate(appId, opts);
     // The Mac app sets this while it restarts for an approved update: a capture started now would be cut off.
-    if (W.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused');
+    if (globalThis.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused');
     const prepared = opts.preparedId ? preparations.get(opts.preparedId) : null;
     if (opts.preparedId && (!prepared || prepared.appId !== appId)) throw fail('invalid_preparation', 'Preparation belongs to another app.');
     if (active) throw fail('busy', 'Microphone held by ' + active.row.appId, { appId: active.row.appId });
