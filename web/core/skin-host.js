@@ -62,6 +62,11 @@
   const requested = [];             // asset URLs requested (diagnostics + tests)
   let importer = url => import(url);
   let committedId = null, loadSeq = 0;
+  /* Skins are look only (wizard-ux#1190, switch wizard/skins-look-only, off by default). While the switch is among the
+   * tweaks the experience asks for, no skin script runs: neither a skin package's skin.js nor an own skin's personal
+   * script. Their stylesheets still apply. Switching it off brings both back (the personal one only if still approved). */
+  const LOOK_ONLY = 'wizard/skins-look-only';
+  let lookOnly = false;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
   const builtinDefs = new Map(), builtins = new Map();
@@ -319,13 +324,13 @@
     const seq = ++loadSeq;
     unload('switch');
     const pkg = skinOf(id);
-    if (!pkg || !pkg.js || disabled.has(id) || !shell) return false;
+    if (!pkg || !pkg.js || lookOnly || disabled.has(id) || !shell) return false;
     const E = env();
     if ((pkg.when || 'touch') === 'touch' && !E.touch) return false;
     const href = url(dirOf(id, pkg), 'skin.js'); requested.push(href);
     let mod;
     try { mod = await importer(href); } catch (e) { try { console.warn(`[skin ${id}] import failed:`, e); } catch (_) {} return false; }
-    if (seq !== loadSeq || committedId !== id) return false; // switched again while loading
+    if (seq !== loadSeq || committedId !== id || lookOnly) return false; // switched again while loading
     const setup = mod && mod.default;
     if (typeof setup !== 'function') return false;
     const a = record(id, nameOf(id));
@@ -1238,17 +1243,26 @@
     if (notify) try { shell && shell.toast(`${file} turned off · ${message}`); } catch (_) {}
     try { window.dispatchEvent?.(new CustomEvent('wos:personal-error', { detail: { ...personalError } })); } catch (_) {}
   }
+  // The look-only switch turned on or off: stop both skin script layers now, or bring the skin package's back.
+  // My skin hears wos:look-only and restarts its approved personal script itself.
+  function setLookOnly(on) {
+    if (on === lookOnly) return;
+    lookOnly = on;
+    if (on) { loadSeq++; unload('look-only'); personalSeq++; dispose(personal, 'look-only'); }
+    else if (shell && committedId) packageReady = load(committedId);
+    try { window.dispatchEvent?.(new Event('wos:look-only')); } catch (_) {}
+  }
   async function loadPersonal(bytes, allowed, file = 'Skins/My skin/skin.js') {
     const seq = ++personalSeq;
     dispose(personal, 'replace'); personalError = null;
     let pending; do { pending = packageReady; await pending; } while (pending !== packageReady);
-    if (seq !== personalSeq || !shell || disabled.has('my-skin') || !allowed()) return false;
+    if (seq !== personalSeq || !shell || lookOnly || disabled.has('my-skin') || !allowed()) return false;
     const href = URL.createObjectURL(new Blob([bytes], { type: 'application/javascript' }));
     let mod;
     try { mod = await importer(href); }
     catch (e) { if (seq === personalSeq) personalFailed(file, e); return false; }
     finally { URL.revokeObjectURL(href); }
-    if (seq !== personalSeq || !allowed()) return false;
+    if (seq !== personalSeq || lookOnly || !allowed()) return false;
     if (typeof mod?.default !== 'function') { personalFailed(file, new Error('no export default function setup(api)')); return false; }
     const a = record('my-skin', file); personal = a;
     try { a.teardown = mod.default(makeApi(a)); } catch (e) { dispose(a, 'error'); personalFailed(file, e); return false; }
@@ -1640,6 +1654,7 @@
   async function loadTweaksNow(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
     const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
     const want = entries.filter(safeTweakId);
+    setLookOnly(want.includes(LOOK_ONLY));
     for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
     for (const id of want) tweakCss(id);
     expected.clear(); for (const id of want) expected.add(id);
@@ -1695,6 +1710,8 @@
 
   const host = {
     loadTweaks, emit,
+    /* my-skin.js / settings.js: true while wizard/skins-look-only keeps skin scripts from running. */
+    get lookOnly() { return lookOnly; },
     get tweakState() { return [...tweaks.keys()]; },
     /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
@@ -1821,7 +1838,7 @@
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); committedId = id; }
     // The tweaks this device wore last time: listed and styled from the first frame (loadTweaks settles the real list).
-    try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
+    try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); lookOnly = expected.has(LOOK_ONLY); } } catch (_) {}
     // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
     if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
     // ?layout=<id> only tries layouts supported by this shell. An unsupported link is ignored,

@@ -35,7 +35,7 @@
   }
   async function startScript() {
     const v = verified, host = window.WosSkinHost;
-    if (off || !own() || !v || approval() !== v.sha256 || !host?.personalState.ready || started === v.sha256) return;
+    if (off || !own() || !v || approval() !== v.sha256 || !host?.personalState.ready || host.lookOnly || started === v.sha256) return;
     started = v.sha256;
     await host.loadPersonal(v.bytes, () => !off && !!own() && verified === v && approval() === v.sha256, scriptFile());
     emit();
@@ -327,6 +327,8 @@
     if (isDoc && !off) {
       window.addEventListener?.('storage', e => { if (e.key === OK) { stopScript(); refresh(); } });
       window.addEventListener?.('wos:personal-error', e => failed(e.detail));
+      // Skins are look only (wizard-ux#1190) turned on or off: the host has stopped the script; start it again if allowed.
+      window.addEventListener?.('wos:look-only', () => { stopScript(); void startScript(); emit(); });
       refresh();
       // Stylesheets added to <head> later (skin packages) must not land above My skin.
       document.addEventListener('DOMContentLoaded', () => { if (!state.empty && el) styleEl(); });

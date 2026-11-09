@@ -1,11 +1,11 @@
 {
   "id": "wizard/skins-look-only",
   "name": "Skins are look only",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "wizard",
   "apiVersion": 1,
   "capabilities": [
     "layout"
   ],
-  "description": "Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Its saved choices are kept and come back when you switch this off."
+  "description": "Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Skin scripts (a skin's skin.js and your own skin's script) are paused. Your skin's saved choices and script approval are kept and come back when you switch this off."
 }
