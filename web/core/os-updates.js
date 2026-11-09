@@ -91,6 +91,7 @@
   function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
+  const BUG_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9][0-9]{0,9}$/;
   function appRows(doc, mgr) {
     const out = [], m = mgr && typeof mgr === 'object' ? mgr : {};
     const held = new Set(Array.isArray(m.holds) ? m.holds : []);
@@ -116,6 +117,9 @@
       if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
       const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
+      // The bug the App Manager filed or found for this failed version (wizard-app-manager#524), only a plain GitHub
+      // issue link. An App Manager without `bug`, or with bug reports switched off, gives no link.
+      const bug = state === 'failed' && typeof failed[id].bug === 'string' && BUG_URL.test(failed[id].bug) ? failed[id].bug : '';
       // One line of What's new for the version waiting (Update ready, or held with a newer one) or the version the
       // last run just installed: the App Manager's `notes` (wizard.md whats_new in the Store's copy), only when it
       // is about exactly that version. An App Manager without `notes` says nothing rather than "no notes".
@@ -126,7 +130,7 @@
         const n = notes[id], text = n && typeof n === 'object' && num(n.version) === nv && typeof n.text === 'string' ? n.text.trim().slice(0, 140) : '';
         news = text ? `What’s new in ${nv}: ${text}` : 'What’s new: no notes';
       }
-      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why, news, held: held.has(id) });
+      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver, why, bug, news, held: held.has(id) });
     }
     const rank = { failed: 0, ready: 1, busy: 2, held: 3, unknown: 4, skipped: 5, 'with-os': 6, current: 7 };
     return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
@@ -161,7 +165,7 @@
       const m = appMsg[a.id] && Date.now() - appMsg[a.id].at < APP_MSG_FOR ? appMsg[a.id] : null;
       const said = m ? `<span data-osu-app-msg="${m.ok ? 'done' : 'failed'}" role="status">${esc(m.text)}</span>` : '';
       const acts = appButtons(a).map(([key, text]) => `<button type="button" data-osu="${key}:${esc(a.id)}"${appAct ? ' disabled' : ''}${appAct === `${key}:${a.id}` ? ' aria-busy="true"' : ''}>${esc(appAct === `${key}:${a.id}` ? PENDING[key] : text)}</button>`).join('');
-      return `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.news ? `<span data-osu-app-news>${esc(a.news)}</span>` : ''}${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}${said}</span><span class="st-val">${esc(a.label)}</span>${acts ? `<span class="osu-app-acts">${acts}</span>` : ''}</div>`;
+      return `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span>${a.news ? `<span data-osu-app-news>${esc(a.news)}</span>` : ''}${a.why ? `<span data-osu-app-why>${esc(`Version ${a.latest}: ${a.why}`)}</span>` : ''}${a.bug ? `<a data-osu-app-bug href="${esc(a.bug)}" target="_blank" rel="noopener noreferrer">Bug report</a>` : ''}${said}</span><span class="st-val">${esc(a.label)}</span>${acts ? `<span class="osu-app-acts">${acts}</span>` : ''}</div>`;
     }).join('');
     const note = appsIssue ? `<p class="st-note" role="status">${esc(appsIssue)} Showing the last check.</p>` : '';
     const at = typeof au?.last?.at === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(au.last.at) ? au.last.at.slice(0, 16).replace('T', ' ') + ' UTC' : '';
