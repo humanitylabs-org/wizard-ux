@@ -178,3 +178,20 @@ test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with
     const src = read(f); assert.match(src, /globalThis\.WizWorkspaces\?\.switch\(w\.id\)/); assert.match(src, /Another Wizard · tap to switch/); assert.match(src, /e\.key === 'Enter' \|\| e\.key === ' '/); assert.match(src, /setAttribute\('tabindex', '0'\)/);
   }
 });
+test('Android app: the switcher asks the app to switch in place and never navigates the WebView to another origin', async () => {
+  const asked = [];
+  const b = boot({ devices: { this: { wizard: 'Archimedes' }, managed: [managed({ id: 'wizard-james', name: 'WizardOS 2', kind: 'remote', url: 'https://wizard-james.example.ts.net:8796/wizard-os-home/' })] } });
+  b.win.WizardOSNative = { switchWizard: origin => { asked.push(origin); return 'started'; } };
+  b.start(); await b.w.list(); await b.w.switch('wizard-james');
+  assert.deepEqual(asked, ['https://wizard-james.example.ts.net:8796']);
+  assert.equal(b.nav.length, 0, 'location.assign would leave the app for the phone browser');
+  assert.equal(b.w.snapshot().active, 'wizard-james');
+  b.w.switchFailed(); // the app could not switch (Tailscale off, recording in progress): the open Wizard stays active
+  assert.equal(b.w.snapshot().active, 'this'); b.w.switchFailed(); assert.equal(b.w.snapshot().active, 'this');
+});
+test('Android app refusing an address keeps the old navigation fallback', async () => {
+  const b = boot({ local: [remote()] });
+  b.win.WizardOSNative = { switchWizard: () => 'refused' };
+  await b.w.list(); await b.w.switch('other');
+  assert.equal(b.nav.length, 1); assert.match(b.nav[0], /^https:\/\/other\.test\/wizard-os-home\/#wzfrom=/);
+});

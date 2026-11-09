@@ -656,6 +656,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
     }
 
+    /** The switch did not happen: the page puts its switcher back on the Wizard that is still showing. */
+    void switchFailed() {
+        if (web != null) web.evaluateJavascript("window.WizWorkspaces&&window.WizWorkspaces.switchFailed&&window.WizWorkspaces.switchFailed()", null);
+    }
+
     void changeServer() {
         Intent target = new Intent(this, ConnectActivity.class);
         if (web == null) { startActivity(target); return; }
@@ -1077,6 +1082,24 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
         }
         @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
+        /**
+         * The shell's Wizard switcher: open another of this owner's Wizards in this app. Returns "started" (the app
+         * reopens on it, or the page is told via WizWorkspaces.switchFailed) or "refused" (not a same-tailnet Wizard
+         * address); the page then keeps its own browser fallback. Only the current Wizard's own shell may ask.
+         */
+        @JavascriptInterface
+        public String switchWizard(String origin) {
+            if (MainActivity.this instanceof AppSessionActivity) return "refused";
+            final String target = WizardSwitch.target(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this), String.valueOf(origin), BuildConfig.DEBUG);
+            if (target == null) return "refused";
+            runOnUiThread(() -> {
+                WebView w = web;
+                String url = w == null ? null : w.getUrl();
+                if (url == null || !Origin.isShell(MainActivity.this, Uri.parse(url))) { switchFailed(); return; }
+                WizardSwitch.start(MainActivity.this, target, MainActivity.this::switchFailed);
+            });
+            return "started";
+        }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
 
