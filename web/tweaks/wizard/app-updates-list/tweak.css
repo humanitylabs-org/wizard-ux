@@ -1,0 +1,3 @@
+/* Apps in Updates (wizard-ux#1191): core/os-updates.js lists installed apps under About & updates while this
+ * switch is on (html[data-tweaks~="wizard/app-updates-list"]). */
+html[data-tweaks~="wizard/app-updates-list"] [data-osu-apps] [data-osu-app-state="ready"] .st-val { color: var(--ink); font-weight: 600; }

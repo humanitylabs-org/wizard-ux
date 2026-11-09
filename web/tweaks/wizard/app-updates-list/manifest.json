@@ -1,0 +1,11 @@
+{
+  "id": "wizard/app-updates-list",
+  "name": "Apps in Updates",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Settings > About & updates also lists every installed app: its version, the App Store's latest, and whether it is up to date, has an update ready, or comes with WizardOS updates."
+}

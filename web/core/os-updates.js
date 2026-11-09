@@ -64,6 +64,69 @@
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
+
+  /* ---- Apps (wizard-ux#1191, behind the off-by-default switch wizard/app-updates-list) ----
+   * Every installed app: installed version, latest Store version and a plain status, read from the same Runtipi
+   * list the App Manager's app updater reads (`wam app-updates` candidates): the Store's
+   * `../store-data/api/apps/installed` (id, name, status, version, ignoredVersion, latestVersion). Read only; never
+   * a copy of its own. Holds, failures, rollbacks and the app Automatic / Ask switch need the App Manager's
+   * app-update state on the owner listener, which is a later slice. Fetched only while the switch is on. */
+  const APPS_ID = 'wizard/app-updates-list';
+  const APPS_API = new URL('../store-data/api/apps/installed', document.currentScript?.src || location.href).href;
+  const STORE_SLUG = 'wizardapps';   // wizard-app-manager cli.STORE: app updates only move this store's apps
+  // wizard-app-manager app_updates.SYSTEM_APPS: these move with the WizardOS release, never one by one.
+  const WITH_OS = new Set(['hermes-agent', 'wizard-ux', 'wizard-agent-service', 'wizard-shell']);
+  let apps = null, appsAt = 0, appsBusy = null, appsIssue = '';
+  function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
+  const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
+  // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
+  function appRows(doc) {
+    const out = [];
+    for (const x of Array.isArray(doc?.installed) ? doc.installed : []) {
+      const id = x?.info?.id; if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) continue;
+      const urn = typeof x.info.urn === 'string' ? x.info.urn : '';
+      if (urn && urn.split(':')[1] !== STORE_SLUG) continue;
+      const have = num(x.app?.version), latest = num(x.metadata?.latestVersion), run = String(x.app?.status || '');
+      let state = 'unknown', label = 'Couldn’t check';
+      if (have != null && latest != null) {
+        if (latest <= have) { state = 'current'; label = 'Up to date'; }
+        else if (WITH_OS.has(id)) { state = 'with-os'; label = `Updates with ${OS()}`; }
+        else if (num(x.app?.ignoredVersion) === latest) { state = 'skipped'; label = 'This version skipped'; }
+        else { state = 'ready'; label = 'Update ready'; }
+      }
+      if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
+      const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
+      out.push({ id, name: String(x.info.name || id).slice(0, 80), have, latest, state, label, ver });
+    }
+    const rank = { ready: 0, busy: 1, unknown: 2, skipped: 3, 'with-os': 4, current: 5 };
+    return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
+  }
+  function loadApps(force) {
+    if (!appsOn()) return Promise.resolve(apps);
+    if (!force && appsAt && Date.now() - appsAt < FRESH) return Promise.resolve(apps);
+    if (appsBusy) return appsBusy;
+    appsBusy = (async () => {
+      try {
+        const r = await fetch(APPS_API, { credentials: 'same-origin', cache: 'no-store' });
+        const d = r.ok ? await r.json().catch(() => null) : null;
+        if (d && Array.isArray(d.installed)) { apps = appRows(d); appsIssue = ''; }
+        else appsIssue = 'Couldn’t read the installed apps.';
+      } catch (_) { appsIssue = 'Couldn’t reach the installed apps.'; }
+      appsAt = Date.now(); appsBusy = null; changed(); return apps;
+    })();
+    return appsBusy;
+  }
+  function appsHtml() {
+    if (!appsOn()) return '';
+    // One read per minute at most, failed or not: a failed read must not refetch on every repaint.
+    if (!appsAt || Date.now() - appsAt > FRESH) void loadApps();
+    const head = '<span class="osu-lbl">Apps</span>';
+    if (!apps) return `<div class="osu-sec" data-osu-apps>${head}<p class="st-note" role="status">${esc(appsIssue || 'Checking apps…')}</p></div>`;
+    const rows = apps.map(a => `<div class="st-row static" data-osu-app="${esc(a.id)}" data-osu-app-state="${a.state}"><span class="st-tx"><b>${esc(a.name)}</b><span>${esc(a.ver)}</span></span><span class="st-val">${esc(a.label)}</span></div>`).join('');
+    const note = appsIssue ? `<p class="st-note" role="status">${esc(appsIssue)} Showing the last check.</p>` : '';
+    return `<div class="osu-sec" data-osu-apps>${head}${note}${rows || '<p class="st-hint">No apps installed from the App Store yet.</p>'}<p class="st-hint">Installed version and the App Store’s latest, from the App Manager.</p></div>`;
+  }
+
   function load(force) {
     if (off && !force) return Promise.resolve(st);
     if (!force && st && Date.now() - at < FRESH) return Promise.resolve(st);
@@ -136,7 +199,7 @@
     // Automatic / Ask me (wizard-app-manager#483). The 0.3.107 App Manager (always_auto) would not keep Ask me: no choice there.
     const choice = st.always_auto === true ? '' : seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]]);
     const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
-    return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
+    return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}${appsHtml()}</div>`;
   }
   function pick(chan, ctx) {
     if (!['stable', 'latest'].includes(chan) || chan === st.channel) return true;
@@ -238,7 +301,9 @@
     clearInterval(popTimer); popTimer = 0;
     if (k && k !== store.get() && typeof setInterval === 'function') { popTimer = setInterval(popup, 1000); popTimer?.unref?.(); }
   }
-  window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, get state() { return st; } };
+  window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, appRows, loadApps, get state() { return st; } };
+  // Turning wizard/app-updates-list on or off repaints Settings (and reads the apps the first time).
+  try { window.addEventListener?.('wos:tweak-choice', () => changed()); } catch (_) {}
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
   // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,

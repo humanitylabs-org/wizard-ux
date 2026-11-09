@@ -517,6 +517,12 @@
       "kind": "read",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard-os-home/store-data/api/apps/installed": {
+      "status": "not-exercised",
+      "source": "web/core/os-updates.js",
+      "kind": "read",
+      "note": "Only read while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard-os-home/store-install/_updates": {
       "status": "catalogued",
       "source": "web/core/os-updates.js",
