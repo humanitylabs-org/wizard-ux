@@ -12,15 +12,23 @@ test('presets and free fractions clamp to Classic range', () => {
   assert.equal(p.normalize({ ratio: 'bad' }).ratio, .5);
   assert.equal(p.splitOf({ split: .1 }, 2), .5); assert.equal(p.splitOf({}, 3), .56);
 });
-test('default exactly preserves old AI apps formulas at multiple sizes', () => {
-  for (const W of [800, 1280, 1440, 1920]) for (const side of [52, 288]) for (const tabs of [52, 200]) for (const chatOn of [false, true]) {
+test('default keeps the old AI apps app formula; the chat takes the room the app leaves (issue 1233)', () => {
+  for (const W of [800, 1280, 1440, 1920, 2560]) for (const side of [52, 288]) for (const tabs of [52, 200]) for (const chatOn of [false, true]) {
     const g = p.geometry({}, { width: W, height: 900 }, { ...env, sideWidth: side, dockWidth: tabs, chatOn });
     assert.equal(g.sidebar.x, 0); assert.equal(g.sidebar.width, side); assert.equal(g.dock.x, W-tabs);
-    const cw = chatOn ? Math.max(360, Math.min(480, W*.3)) : 0;
-    assert.equal(g.panes.chats.width, cw);
-    assert.equal(g.panes.app.width, Math.min(576, Math.max(0, W-side-tabs-cw)));
+    const content = W-side-tabs, cmin = chatOn ? Math.max(360, Math.min(480, W*.3)) : 0;
+    const aw = Math.min(576, Math.max(0, content-cmin));
+    assert.equal(g.panes.app.width, aw);
+    assert.equal(g.panes.chats.width, chatOn ? content-aw : 0);
+    // no empty canvas between the chat column and the app panel
+    if (chatOn) assert.equal(g.panes.chats.x + g.panes.chats.width, g.panes.app.x);
   }
-  assert.equal(p.geometry({}, viewport, { chatOn: true }).panes.chats.width, 1440*.33333);
+  // a chat with no app open fills the main area (its messages centre in a 768px column there)
+  const alone = p.geometry({}, viewport, { chatOn: true });
+  assert.equal(alone.panes.chats.x, alone.content.x); assert.equal(alone.panes.chats.width, alone.content.width);
+  // the chat never gets narrower than its old column beside a wide app
+  const wideApp = p.geometry({}, { width: 2560, height: 900 }, { appOn: true, chatOn: true, appWidth: 5000 });
+  assert.equal(wideApp.panes.chats.width, 480);
 });
 test('ratio, side swap, slot order and three weighted panes do not overlap', () => {
   for (const ratio of ['1/2','1/3','2/3']) for (const side of ['start','end']) {
