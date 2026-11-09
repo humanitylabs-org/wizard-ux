@@ -50,6 +50,12 @@ html[data-shell="desktop"][data-layout="ai-apps"] #desktopHome > * { display: no
 html[data-shell="desktop"][data-layout="ai-apps"] #desktopHome:focus { outline: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp > .home { display: none !important; }
 
+/* the shared Wizard switcher (core/workspaces.js) mounts in the stock bar's start slot, which here is the top row over the chat's own
+ * title. With the sidebar showing, its header name is the switcher (the workspace menu); on the collapsed rail it is the rail's own
+ * layers button (.aad-rws, shown with two or more Wizards). So the stock bar icon never draws here. */
+html[data-shell="desktop"][data-layout="ai-apps"] #bar .wz-workspaces-control { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rws[hidden] { display: none; }
+
 /* ---------- the main area: beside the sidebar, under the top row; a desk with one window fills it edge to edge ---------- */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp { left: var(--aad-side); right: var(--aad-rs); }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px calc(var(--aad-rs) - 8px) -8px calc(var(--aad-side) - 8px); }

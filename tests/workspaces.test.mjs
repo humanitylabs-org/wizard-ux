@@ -195,3 +195,14 @@ test('Android app refusing an address keeps the old navigation fallback', async 
   await b.w.list(); await b.w.switch('other');
   assert.equal(b.nav.length, 1); assert.match(b.nav[0], /^https:\/\/other\.test\/wizard-os-home\/#wzfrom=/);
 });
+
+// James, 9 Nov 2026: on the desktop AI apps view the stock bar icon sat over the chat's own title and hid in other arrangements, so
+// the switcher looked missing. The sidebar header name is the switcher while the sidebar shows; the collapsed rail has its own layers button.
+test('AI apps view: no stock bar icon over the chat title; the rail carries the shared switcher button', () => {
+  const css = read('web/layouts/ai-apps/desktop.css'), js = read('web/layouts/ai-apps/desktop.js');
+  assert.match(css, /\[data-layout="ai-apps"\] #bar \.wz-workspaces-control \{ display: none !important; \}/);
+  assert.match(js, /rail\.append\(rTog, rNew, rFind, rWs, rList, rSet\)/);
+  assert.match(js, /rWs\.hidden = !W\?\.visible/, 'icon only shows with two or more Wizards');
+  assert.match(js, /WizWorkspaces\?\.openMenu\?\.\(rWs\)/, 'the one shared menu, not a second implementation');
+  assert.match(read('web/layouts/ai-apps/parts.js'), /layers: \[/);
+});

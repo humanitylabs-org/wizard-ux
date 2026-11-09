@@ -227,9 +227,12 @@ export default function desktop(api) {
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
   const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); rFind.append(icon('search'));
+  // the shared Wizard switcher (core/workspaces.js), icon only, shown only with two or more Wizards: its stock bar icon would sit
+  // over the chat's own title here, so on the rail it is this button and with the sidebar open the header name below is the switcher
+  const rWs = el('button', 'aad-ib aad-rws', { type: 'button', 'aria-label': 'Switch Wizard', title: 'Switch Wizard', 'aria-haspopup': 'menu' }); rWs.append(icon('layers')); rWs.hidden = true;
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); rSet.append(icon('cog'));
   const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
-  rail.append(rTog, rNew, rFind, rList, rSet);
+  rail.append(rTog, rNew, rFind, rWs, rList, rSet);
   const panel = el('div', 'aad-panel'); panel.append(head, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
@@ -1016,6 +1019,10 @@ export default function desktop(api) {
   }
   function closeWs() { if (!wsPop) return; wsPop.remove(); wsPop = null; offWsBack?.(); offWsBack = null; wsBtn.setAttribute('aria-expanded', 'false'); }
   api.listen(wsBtn, 'click', () => (wsPop ? closeWs() : openWs()));
+  // the rail's switcher: the shared menu (opaque, outside tap and Back close it), anchored under the icon
+  const paintRws = () => { const W = globalThis.WizWorkspaces; rWs.hidden = !W?.visible; rWs.setAttribute('aria-label', 'Switch Wizard'); };
+  api.listen(rWs, 'click', () => { closeWs(); globalThis.WizWorkspaces?.openMenu?.(rWs); });
+  const offRws = globalThis.WizWorkspaces?.subscribe?.(paintRws); paintRws();
   api.listen(globalThis, 'wos:resources', () => { paintWs(); paintFuel(); });
   // a click anywhere else closes the menus (their own popovers, like ChatGPT's)
   api.listen(doc, 'pointerdown', e => {
@@ -1909,7 +1916,7 @@ export default function desktop(api) {
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove();
-    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
+    closeMenu(); closeWs(); offRws?.(); globalThis.WizWorkspaces?.close?.(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
