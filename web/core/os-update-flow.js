@@ -42,7 +42,7 @@
   const ACTIVE = ['stopping', 'updating', 'verifying', 'restoring'];
   const WHY = {
     installer: 'The installer stopped with an error.', interrupted: 'The installer stopped before it finished.',
-    version: 'The new version didn’t install completely.', window: 'Wizard didn’t answer after the update.',
+    version: 'The new version didn’t install completely.', drift: 'Part of the update didn’t install, so Wizard kept the version you had.', window: 'Wizard didn’t answer after the update.',
     timeout: 'It took much longer than it should.', stopped: 'WizardOS stopped during the update.',
     noanswer: 'WizardOS stopped answering during the update.', shutdown: 'WizardOS didn’t shut down cleanly, so nothing was changed.',
     space: 'Your Mac doesn’t have enough free space to keep a copy during the update.',

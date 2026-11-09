@@ -70,6 +70,14 @@
   const mac = () => st?.by_host === true;
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
+  // A status check that brings nothing new must not redraw Settings: a redraw resets its scroll, and a Mac's Wizard
+  // checks every few seconds while it updates (core/os-update-flow.js).
+  let lastSig = '';
+  function changedIfNew() {
+    const sig = JSON.stringify([st, issue, off]);
+    if (sig === lastSig) { try { popup(); } catch (_) {} return; }
+    lastSig = sig; changed();
+  }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
     if (!force && st && Date.now() - at < FRESH) return Promise.resolve(st);
@@ -88,7 +96,7 @@
         }
         else { off = true; issue = r.status === 404 ? 'Update controls are not available on this Wizard.' : r.status === 401 || r.status === 403 ? 'Sign in as this Wizard’s owner to manage server updates.' : 'Could not check server updates.'; }
       } catch (_) { off = true; issue = 'Could not reach server updates.'; }
-      at = Date.now(); inflight = null; changed(); return st;
+      at = Date.now(); inflight = null; changedIfNew(); return st;
     })();
     return inflight;
   }
