@@ -67,3 +67,21 @@ test('phone Manager bypass precedes local commands, files and router',async()=>{
 test('phone start pins destination before asynchronous recording',()=>{const s=section(phone,'  async function startVoice(','  function tick(');assert(s.indexOf('V.snap =')<s.indexOf('await openRec'));assert(s.includes("kind === 'command') V.snap.conversation = null"));});
 test('phone Manager audio branches before generic staging/STT fallback',()=>{const s=section(phone,'  async function onRecStop(','  /* ---------------- view-aware');assert(s.indexOf('OUTBOX.sendConversation')<s.indexOf('OUTBOX.stage'));assert(s.includes("kind !== 'command' && !rt && aimAt == null"));});
 test('outbox excludes Manager from generic delivery and uses same receipt identity',()=>{assert(outbox.includes("if (it.kind === 'conversation') throw"));assert(outbox.includes('request_id: it.id'));assert(outbox.includes('receipt.request_id !== it.id'));assert(outbox.includes("it.state = 'held'"));});
+
+// wizard-ux#1218: the desktop orb, like the phone, sends to the model selected at the Send key; the thread stays pinned.
+test('desktop thread take uses the model picked while recording, still to the pinned thread',async()=>{
+ const f=desktopFixture({id:'ch',app:'chats',thread:'original'});let staged=null;
+ f.ctx.OUTBOX.stage=async x=>{staged=x;return {id:'staged',durable:true};};
+ let picked={model:'sonnet',provider:'anthropic'},asked=[];f.ctx.CHATS.modelRoute=(w,s)=>{asked.push([w,s]);return picked;};
+ await f.ctx.talk('start');assert.equal(f.ctx.vRoute.model,'sonnet');
+ picked={model:'opus',provider:'anthropic'};f.focus({id:'other',app:'chats',thread:'elsewhere'});
+ await f.ctx.talk('send');
+ assert.equal(staged.model,'opus');assert.equal(staged.sessionId,'original');assert.deepEqual(asked.at(-1),['ch','original']);
+});
+test('desktop keeps the recording-start model when the selector cannot be read at Send',async()=>{
+ const f=desktopFixture({id:'ch',app:'chats',thread:'original'});let staged=null;
+ f.ctx.OUTBOX.stage=async x=>{staged=x;return {id:'staged',durable:true};};
+ let picked={model:'sonnet',provider:'anthropic'};f.ctx.CHATS.modelRoute=()=>picked;
+ await f.ctx.talk('start');picked=null;await f.ctx.talk('send');
+ assert.equal(staged.model,'sonnet');
+});
