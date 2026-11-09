@@ -1,0 +1,11 @@
+{
+  "id": "wizard/link-token-repair",
+  "name": "Repair the agent's Wizard connection",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "When the agent can't reach its Wizard app tools (401 unauthorized), running `wizard link` again puts this box's own connection token back into the agent's settings, and `wizard doctor` shows whether the two still match. It never makes a new token."
+}
