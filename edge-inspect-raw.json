@@ -1,0 +1,290 @@
+[
+    {
+        "Id": "2ea3d0470978d4dfbc5ebcc7ea16d6cda556d5aa6a1fd00d847826ab6709ee66",
+        "Created": "2026-11-07T14:37:17.046667113Z",
+        "Path": "/bin/sh",
+        "Args": [
+            "/usr/local/bin/wizard-shell-entrypoint"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 3672172,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-11-07T14:37:17.117622243Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-11-07T14:40:23.965964294Z",
+                        "End": "2026-11-07T14:40:24.045050861Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-11-07T14:40:39.045448462Z",
+                        "End": "2026-11-07T14:40:40.194657325Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-11-07T14:40:55.195120135Z",
+                        "End": "2026-11-07T14:40:55.297013375Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-11-07T14:41:10.298323536Z",
+                        "End": "2026-11-07T14:41:10.348277299Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-11-07T14:41:25.348910591Z",
+                        "End": "2026-11-07T14:41:25.433865859Z",
+                        "ExitCode": 0,
+                        "Output": ""
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:4ccde78ecfb792e79c91dda28a325f4233377aad0d25a00788aaebbd40548a8c",
+        "ResolvConfPath": "/var/lib/docker/containers/2ea3d0470978d4dfbc5ebcc7ea16d6cda556d5aa6a1fd00d847826ab6709ee66/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/2ea3d0470978d4dfbc5ebcc7ea16d6cda556d5aa6a1fd00d847826ab6709ee66/hostname",
+        "HostsPath": "/var/lib/docker/containers/2ea3d0470978d4dfbc5ebcc7ea16d6cda556d5aa6a1fd00d847826ab6709ee66/hosts",
+        "LogPath": "/var/lib/docker/containers/2ea3d0470978d4dfbc5ebcc7ea16d6cda556d5aa6a1fd00d847826ab6709ee66/2ea3d0470978d4dfbc5ebcc7ea16d6cda556d5aa6a1fd00d847826ab6709ee66-json.log",
+        "Name": "/wizard-interface-candidate",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "docker-default",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "host",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 26214,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": null,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": "/home/telos/.hermes/state/troubleshooter-ship-20261104/primary-static.conf",
+                    "Target": "/etc/wizard-shell/static.conf",
+                    "ReadOnly": true
+                },
+                {
+                    "Type": "bind",
+                    "Source": "/home/telos/.local/share/wizard-ux/releases/3c374b1062864b9a72954e6accbdb898f00bf998/web",
+                    "Target": "/usr/share/nginx/wizard-ux",
+                    "ReadOnly": true
+                }
+            ],
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/telos/.hermes/state/troubleshooter-ship-20261104/primary-static.conf",
+                "Destination": "/etc/wizard-shell/static.conf",
+                "Mode": "",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "bind",
+                "Source": "/home/telos/.local/share/wizard-ux/releases/3c374b1062864b9a72954e6accbdb898f00bf998/web",
+                "Destination": "/usr/share/nginx/wizard-ux",
+                "Mode": "",
+                "RW": false,
+                "Propagation": "rprivate"
+            }
+        ],
+        "Config": {
+            "Hostname": "srv1716585",
+            "Domainname": "",
+            "User": "101:101",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {},
+                "8788/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "WIZARD_AGENT_SERVICE_ORIGIN=http://127.0.0.1:8923",
+                "WIZARD_SHELL_LISTEN=127.0.0.1:8928",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.28.3",
+                "PKG_RELEASE=1",
+                "DYNPKG_RELEASE=1",
+                "NJS_VERSION=0.9.6",
+                "NJS_RELEASE=1",
+                "ACME_VERSION=0.3.1"
+            ],
+            "Cmd": null,
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "/bin/sh",
+                    "/usr/local/bin/wizard-shell-health"
+                ],
+                "Interval": 15000000000,
+                "Timeout": 5000000000,
+                "StartPeriod": 5000000000
+            },
+            "Image": "sha256:4ccde78ecfb792e79c91dda28a325f4233377aad0d25a00788aaebbd40548a8c",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/bin/sh",
+                "/usr/local/bin/wizard-shell-entrypoint"
+            ],
+            "Labels": {
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+                "org.opencontainers.image.revision": "626c21102374a47b1a2fe7bcdc54c3b13b1dc4bd"
+            },
+            "StopSignal": "SIGQUIT"
+        },
+        "NetworkSettings": {
+            "SandboxID": "ea5d7216925949fae8a2ebeef736f2e955f7b52455ae65674f1d7cc602fc2377",
+            "SandboxKey": "/var/run/docker/netns/default",
+            "Ports": {},
+            "Networks": {
+                "host": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "498a3e4f869f6d42680cc4d5f757652f99a5296ee4cffa20940f4a1e7db60c7f",
+                    "EndpointID": "79afe21d4aab6c68a90e6f20e19c67464f5c13fcf7852c0873c27bfef1b6613b",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "MacAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:4ccde78ecfb792e79c91dda28a325f4233377aad0d25a00788aaebbd40548a8c",
+            "size": 2566,
+            "annotations": {
+                "io.containerd.image.name": "docker.io/library/wizard-ux:interface-626c21102374a47b1a2fe7bcdc54c3b13b1dc4bd-amd64",
+                "org.opencontainers.image.ref.name": "interface-626c21102374a47b1a2fe7bcdc54c3b13b1dc4bd-amd64"
+            },
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]
