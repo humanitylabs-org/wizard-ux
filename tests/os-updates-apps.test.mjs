@@ -312,3 +312,14 @@ test('What\u2019s new: held with a newer version shows it; an App Manager withou
   await off.U.loadApps();
   assert.doesNotMatch(off.U.html(), /data-osu-app-news/, 'older App Manager (404): nothing about notes');
 });
+
+test('What\u2019s new: an app updated through Update now while held keeps its hold and still shows the new version (Codex P2)', async () => {
+  const INST = { installed: [row('wizard-maps', 3, 3, { name: 'Maps' }), row('wizard-books', 2, 2, { name: 'Books' })] };
+  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-books'], failed: {},
+    notes: { 'wizard-maps': { version: 3, text: 'Offline maps.' }, 'wizard-books': { version: 2, text: 'Not just installed.' } },
+    last: { at: '2026-11-09T04:31:07Z', updated: ['wizard-maps'], rolled_back: [], failed: [] } }] });
+  await U.loadApps();
+  const h = U.html();
+  assert.match(h, /data-osu-app="wizard-maps" data-osu-app-state="held">.*<span data-osu-app-news>What’s new in 3: Offline maps\.<\/span>/);
+  assert.match(h, /<b>Books<\/b><span>Version 2<\/span><\/span>/, 'held and up to date but not just updated: no line');
+});

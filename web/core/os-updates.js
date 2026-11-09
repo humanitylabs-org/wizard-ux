@@ -121,7 +121,7 @@
       // is about exactly that version. An App Manager without `notes` says nothing rather than "no notes".
       let news = '';
       const nv = notes ? (state === 'ready' || (state === 'held' && latest != null && have != null && latest > have) ? latest
-        : state === 'current' && fresh.has(id) ? have : null) : null;
+        : fresh.has(id) && (state === 'current' || (state === 'held' && have != null && latest != null && latest <= have)) ? have : null) : null;
       if (nv != null) {
         const n = notes[id], text = n && typeof n === 'object' && num(n.version) === nv && typeof n.text === 'string' ? n.text.trim().slice(0, 140) : '';
         news = text ? `What’s new in ${nv}: ${text}` : 'What’s new: no notes';
