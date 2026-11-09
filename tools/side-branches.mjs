@@ -22,6 +22,10 @@ import { pathToFileURL } from 'node:url';
 
 export const PATTERNS = ['integration/', 'live/', 'live-', 'livefix/'];
 
+// Fully qualified, so a local branch named like `origin/main` cannot shadow the
+// remote-tracking ref being audited.
+const ref = (remote, name) => `refs/remotes/${remote}/${name}`;
+
 function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 });
 }
@@ -32,7 +36,7 @@ export function isSideBranch(name) {
 
 export function sideBranches(remote = 'origin', cwd, main = 'main') {
   // An empty list must mean "clean", never "wrong remote": fail when main is missing.
-  git(['rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${main}^{commit}`], cwd);
+  git(['rev-parse', '--verify', '--quiet', `${ref(remote, main)}^{commit}`], cwd);
   const prefix = `refs/remotes/${remote}/`;
   return git(['for-each-ref', '--format=%(refname)', prefix], cwd)
     .split('\n')
@@ -44,7 +48,7 @@ export function sideBranches(remote = 'origin', cwd, main = 'main') {
 
 export function uniqueCommits(remote, main, branch, cwd) {
   // Commits on the branch whose patch is not on main (`git cherry` '+' lines).
-  return git(['cherry', `${remote}/${main}`, `${remote}/${branch}`], cwd)
+  return git(['cherry', ref(remote, main), ref(remote, branch)], cwd)
     .split('\n').filter((l) => l.startsWith('+')).length;
 }
 
@@ -52,7 +56,7 @@ export function uniqueMerges(remote, main, branch, cwd) {
   // `git cherry` skips merges, so a conflict resolution or an extra staged change
   // would be invisible. A two-parent merge whose tree equals a clean re-merge of
   // its parents adds nothing; anything else (conflicts, edits, octopus) counts.
-  const shas = git(['rev-list', '--merges', `${remote}/${main}..${remote}/${branch}`], cwd).split(/\s+/).filter(Boolean);
+  const shas = git(['rev-list', '--merges', `${ref(remote, main)}..${ref(remote, branch)}`], cwd).split(/\s+/).filter(Boolean);
   let count = 0;
   for (const sha of shas) {
     const parents = git(['rev-list', '--parents', '-n', '1', sha], cwd).trim().split(/\s+/).slice(1);
@@ -70,7 +74,7 @@ export function uniqueMerges(remote, main, branch, cwd) {
 }
 
 export function lastCommitDate(remote, branch, cwd) {
-  return git(['log', '-1', '--format=%cs', `${remote}/${branch}`], cwd).trim();
+  return git(['log', '-1', '--format=%cs', ref(remote, branch)], cwd).trim();
 }
 
 // Head branch names of open PRs, read-only through `gh`.

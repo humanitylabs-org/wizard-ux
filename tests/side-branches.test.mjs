@@ -121,3 +121,14 @@ test('side branches: the tool never writes to the remote or deletes refs', () =>
   const src = readFileSync(new URL('../tools/side-branches.mjs', import.meta.url), 'utf8');
   for (const word of ["'push'", "'-D'", "'-d'", 'update-ref', "'--delete'", "'delete'"]) assert.ok(!src.includes(word), word);
 });
+
+test('side branches: a local branch named origin/... cannot shadow the remote refs', () => {
+  const { root, clone } = fixture();
+  try {
+    // local refs/heads/origin/main at the unique branch tip would make it look landed
+    git(clone, 'branch', 'origin/main', 'refs/remotes/origin/live-unique');
+    git(clone, 'branch', 'origin/live-unique', 'refs/remotes/origin/main');
+    const rows = Object.fromEntries(sb.report({ cwd: clone }).map((r) => [r.branch, r.unique_commits]));
+    assert.equal(rows['live-unique'], 2);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
