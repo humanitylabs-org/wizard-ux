@@ -180,7 +180,7 @@ public class MeetingRecorderService extends Service {
         }
     }
 
-    static java.util.List<org.json.JSONObject> receipts(Context c) {
+    public static java.util.List<org.json.JSONObject> receipts(Context c) {
         java.util.List<org.json.JSONObject> out = new java.util.ArrayList<>();
         synchronized (RECEIPT_LOCK) {
             android.content.SharedPreferences p = c.getSharedPreferences(RECEIPTS, MODE_PRIVATE);

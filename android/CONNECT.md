@@ -16,7 +16,7 @@ Settings → Connection → **Change Wizard** reopens Connect. The offline scree
 
 The shell, native origin checks, microphone permission, Mizel message allowlist/upload/notification, app APK relay, screenshots, photos settings bridge, native HTTP and updater derive from the stored origin. Restoring a WebView history from another server is refused. Successful connection closes old app-session document tasks so old pages cannot retain privileged bridges.
 
-Native outboxes/recordings are not transferred to another owner. Changing server is refused while native recordings, unsent messages/shares, recoverable takes or retained meeting journals exist. Finish their work on the original box and let meeting retention prune before switching. No recordings are deleted by Connect. Web data stays in the WebView's existing per-origin storage.
+Native outboxes/recordings are not transferred to another owner. Changing server is refused only while work is genuinely unfinished: a recording or meeting in progress, an unsent message/share, a saved recording or meeting chunk not yet uploaded, a meeting stop not yet sent, or a meeting marker the server has not confirmed. The toast names which one (`ServerSwitchGuard.Reason`). Finished meetings (every chunk acknowledged, stop sent) kept for the 24 h retention window, and bare store/index/empty folders, do not block; they are left in place (nothing uploads for them any more, so they are never re-homed to the new box) and retention prunes them on its normal schedule. Audio on disk with no readable journal still blocks. No recordings are deleted by Connect. Web data stays in the WebView's existing per-origin storage.
 
 ## Private owner-build defaults and upgrade migration
 
