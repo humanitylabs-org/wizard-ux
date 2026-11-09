@@ -1673,7 +1673,12 @@ window.WizCore.chats = function createChats(H) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
+    // 9 Nov 2026 (James: "the message I sent is disappearing"): a message Hermes never took in stays in the thread,
+    // marked Not sent. Retry here is the failed panel's own Retry (the same saved words and files, sent once).
+    const unsent = tn.u && ['failed', 'interrupted'].includes(tn.u.queue?.status);
+    const unsentRetry = unsent && c.retryRunId && tn.u.queue.runId === c.retryRunId
+      ? `<button type="button" class="pbtn" data-chretry${c.retrying ? ' disabled' : ''}>${c.retrying ? 'Retrying…' : 'Retry'}</button>` : '';
+    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
@@ -2317,7 +2322,7 @@ window.WizCore.chats = function createChats(H) {
     // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
     // painted the cached transcript (your message, then the reply) and the outbox copy still "Sending…" under both
     // until the server read retired it (James, 23 Oct 2026).
-    const pend = pendingFor(w).filter(p => !(turns && (localSent(turns, p) || echoed(turns, p))));
+    const pend = pendingFor(w).filter(p => !(turns && (localSent(turns, p) || echoed(turns, p) || retryShown(turns, p))));
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     const NV = isNew && !pend.length ? notifOf(w) : null;
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
@@ -2344,6 +2349,7 @@ window.WizCore.chats = function createChats(H) {
       // A named failure reason (wizard/failure-reason tweak) is a notice in the failed panel, not a Wizard reply:
       // it hides Hermes' generic failed_turn bubble and the duplicate "Reply not sent" line.
       const runErr = !working && !!window.WosModels?.runError?.(s);
+      c.retryRunId = !working && s?.retryRunId || ''; // the saved request a Not sent bubble's Retry sends (turnHtml)
       // Renames show where they happened ("Renamed from …"), so the old name still finds its place in the thread.
       const firstAt = shown.length ? turnAt(shown[0]) : Infinity;
       const rns = (s?.renames || []).map(r => ({ ...r, ms: r.at * 1000 })).filter(r => from === 0 || !(r.ms < firstAt)).sort((a, b) => a.ms - b.ms);
@@ -2686,10 +2692,17 @@ window.WizCore.chats = function createChats(H) {
     const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
     return us.some(u => after(u) && (files.length ? sameFiles(u) && (!t || String(u.text || '').trim().includes(t)) : !!t && String(u.text || '').trim() === t));
   }
+  // A sent Retry of a saved request is that request again: Wizard's copy of it (Not sent, then Sending, then
+  // Hermes' own row) is already on screen, so this device's copy never draws twice. Drawing only: a retry is retired
+  // from the outbox (retireLanded) only once a transcript row really carries it (echoed), never on a guess.
+  function retryShown(turns, p) {
+    return p.state === 'sent' && !!p.retryRunId && turns.some(t => t.u?.queue && [p.retryRunId, p.runId].includes(t.u.queue.runId));
+  }
   // Match stable receipt identity first; legacy history gets bounded, exact content
   // matching. A shared attachment or forty-character prefix is not message identity.
   function sentMatch(u, p) {
     if ((p.userMessageId && String(u.id || '') === String(p.userMessageId)) || (p.id && u.clientMessageId === p.id)) return true;
+    if (p.runId && String(u.id || '') === `queue-${p.runId}`) return true; // Wizard's own copy of this run (not yet in Hermes)
     const at = p.sentAt || p.createdAt, began = p.createdAt || at;
     if (!isFinite(u.at) || !isFinite(at) || u.at < began - 10e3 || u.at > at + 120e3) return false;
     const norm = s => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
@@ -2704,7 +2717,7 @@ window.WizCore.chats = function createChats(H) {
   function reconcileSent(turns, pending, session) {
     const out = turns.slice(), start = t => t.at ?? t.later?.at ?? t.work?.[0]?.at ?? t.a?.at;
     for (const p of pending) {
-      if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false })) continue;
+      if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false }) || retryShown(turns, p)) continue;
       const at = p.sentAt || p.createdAt;
       if (!isFinite(at) || (!p.text && !p.files?.length)) continue;
       // A Thread tracker quote rides with the local copy so its header shows at once (canonical history carries it as the marker).
