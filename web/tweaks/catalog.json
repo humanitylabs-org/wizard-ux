@@ -34,7 +34,8 @@
     "wizard/app-updates-list",
     "wizard/update-bug-reports",
     "wizard/connector-models",
-    "wizard/link-token-repair"
+    "wizard/link-token-repair",
+    "wizard/cli-install-links"
   ],
   "defaults": [
     "wizard/unified-inbox"
