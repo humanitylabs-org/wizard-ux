@@ -89,6 +89,45 @@ public class PanelE2eTest {
         }
         return taps;
     }
+    /** The browser's own one-time tip bubbles over a fresh Custom Tab (Brave: "Minimize tab to return to it later"). */
+    private static final java.util.regex.Pattern TIP = java.util.regex.Pattern.compile(
+        "(?i).*(minimi[sz]e (this )?tab|return to it later).*");
+    /** Taps blank page area below the toolbar: closes a tip bubble without touching the panel's own controls. */
+    private void tapBlankPage() {
+        device.click(device.getDisplayWidth() / 2, device.getDisplayHeight() * 3 / 5);
+    }
+    /**
+     * A fresh browser can float a one-time tip bubble over the Custom Tab, and Back closes that bubble first, so the Back
+     * check would measure the browser's tip instead of the panel. Harness setup, not the panel: waits for a tip, taps
+     * blank page area (then the bubble itself if it is still there) and fails unless it is gone, so the single Back that
+     * follows meets the panel itself. One blank tap is made even when no tip is found, in case a bubble is not exposed to
+     * accessibility. Returns how many tips were seen and dismissed.
+     */
+    private int dismissTips(String provider) throws InterruptedException {
+        int dismissed = 0;
+        for (int i = 0; i < 4; i++) {
+            androidx.test.uiautomator.UiObject2 tip = device.wait(Until.findObject(By.pkg(provider).text(TIP)), i == 0 ? 6000 : 2000);
+            if (tip == null) {
+                if (i == 0) { tapBlankPage(); Thread.sleep(800); android.util.Log.i("PanelE2e", "TIP none found; one blank tap made"); }
+                break;
+            }
+            String text = tip.getText();
+            android.util.Log.i("PanelE2e", "TIP dismiss '" + text + "'");
+            shot("panel-2b-tip-" + i);
+            tapBlankPage();
+            if (!device.wait(Until.gone(By.pkg(provider).text(TIP)), 3000)) {
+                tip = device.findObject(By.pkg(provider).text(TIP));
+                if (tip != null) tip.click();
+                if (!device.wait(Until.gone(By.pkg(provider).text(TIP)), 3000)) {
+                    shot("fail-tip-still-showing");
+                    fail("the browser's tip is still over the panel after two taps: " + text);
+                }
+            }
+            dismissed++;
+            Thread.sleep(500);
+        }
+        return dismissed;
+    }
 
     /** Captures, and blocks, the next ACTION_VIEW this app starts. */
     private static final class Capture extends Instrumentation.ActivityMonitor {
@@ -147,6 +186,12 @@ public class PanelE2eTest {
             shot("panel-2-open");
             // Reported, not asserted: whether a browser loads a loopback http page is that browser's policy, not WizardOS's.
             android.util.Log.i("PanelE2e", "PANEL_PAGE text=" + page + " served=" + wizard.outsideLoads);
+            int tips = dismissTips(provider);
+            String still = resumed();
+            android.util.Log.i("PanelE2e", "TIPS dismissed=" + tips + " resumed=" + still);
+            assertTrue("the Custom Tab is still in front after clearing the browser's tips, resumed=" + still, still.contains("CustomTab"));
+            assertFalse("no browser tip is showing before the one Back", device.hasObject(By.pkg(provider).text(TIP)));
+            shot("panel-2c-before-back");
             int loads = wizard.shellLoads;
             device.pressBack();
             for (int i = 0; i < 100 && !c.getPackageName().equals(device.getCurrentPackageName()); i++) Thread.sleep(100);
