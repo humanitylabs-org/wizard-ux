@@ -63,7 +63,16 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
     if (tree==='baseline') before=snapshots;
     else {
      report.cases.push({skin,tree,snapshots});
-     assert.deepEqual(snapshots,before,'default pane boxes exactly equal before on '+skin);
+     // Issue 1233: an open chat takes the room the app panel leaves (it was a fixed narrow column with empty canvas
+     // beside it). Everything else stays pixel-equal to the baseline; the chat and its header keep their left edge
+     // and now end where the app panel (or, with no app, the tabs column) starts.
+     const strip = s => Object.fromEntries(Object.entries(s).map(([state,b])=>[state,state==='home'?b:{...b,chat:b.chat&&{x:b.chat.x,y:b.chat.y,height:b.chat.height},ctop:b.ctop&&{x:b.ctop.x,y:b.ctop.y,height:b.ctop.height}}]));
+     assert.deepEqual(strip(snapshots),strip(before),'default pane boxes equal before (chat width aside) on '+skin);
+     for (const state of ['chat','both']) {
+      const b=snapshots[state], end=state==='both'?b.app.x:b.dock.x;
+      for (const k of ['chat','ctop']) assert.ok(Math.abs(b[k].x+b[k].width-end)<=1/64,state+' '+k+' fills to '+end+': '+JSON.stringify(b[k]));
+      assert.ok(b.chat.width>=before[state].chat.width,state+' chat never narrower than before');
+     }
      for (const patch of [{ratio:'1/3'}, {ratio:'2/3'}, {ratio:'1/2',side:'end'}, {side:'start',dock:{edge:'start'}}]) {
       await page.evaluate(p=>WizCore.panes.set(p),patch); await settle();
       const actual = await boxes();
