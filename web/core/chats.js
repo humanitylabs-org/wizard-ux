@@ -478,7 +478,7 @@ window.WizCore.chats = function createChats(H) {
     // (the Focus moved since) gives way to the Focus showing now.
     const prev = o.chan && chanOpen(w) ? o.chan.prev : (o.focus || null), sp = id !== CHAN_GENERAL && spaces().find(s => s.id === id);
     if (id !== CHAN_GENERAL && !sp) return false;
-    o.chan = { id, prev }; chanUserAt[w.id] = 0; // the tap that opened it is not a scroll
+    o.chan = { id, prev }; chanLoc[o.id] = null; chanUserAt[w.id] = 0; // the tap that opened it is not a scroll
     const f = focusOf(o), back = prev?.kind === 'space' ? { kind: 'agent', key: focusedAgent(prev) } : prev;
     // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).
     setFocus(w, sp ? { kind: 'space', key: sp.id } : f?.kind === 'space' ? back : f);
@@ -507,12 +507,16 @@ window.WizCore.chats = function createChats(H) {
   // channel's post can share its id with a main thread, and the id-only lookup would mark the main one), else the id.
   function chanSeenRow(wid, sid) {
     if (!channelsOn()) return sid;
-    const r = rowOf(wid, sid); return r && r !== LIVE.session(sid) ? r : sid;
+    const r = rowOf(wid, sid), s = r || LIVE.session(sid);
+    if (s) chanLocal(wid).seen.delete(chanKey(s)); // opened: read now, so Back lands on it already read
+    return r && r !== LIVE.session(sid) ? r : sid;
   }
   function chanSeenPaint() {
     if (!channelsOn()) return;
     for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
   }
+  // Unread is a green dot, needs-you the amber one (issue 1266: the violet dot blended into the shell).
+  const CHAN_NEW_DOT = '<i class="ch-chan-dot new" role="img" aria-label="Unread"></i>';
   function chanMark(rows) {
     if (rows.some(chanNeeds)) return '<i class="ch-chan-dot" role="img" aria-label="Needs you"></i>';
     return rows.some(isWorking) ? '<i class="ch-spin" role="img" aria-label="Working"></i>' : '';
@@ -522,7 +526,7 @@ window.WizCore.chats = function createChats(H) {
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     const un = chanUnreadN(mine), unN = un ? `<small class="ch-chan-n" aria-label="${un} unread">${un}</small>` : '';
     return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${unN}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
-      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s])}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
+      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s]) || (chanUnread(s) ? CHAN_NEW_DOT : '')}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   function channelsBody(w, rows) {
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
@@ -551,16 +555,42 @@ window.WizCore.chats = function createChats(H) {
   function firstPost(s) {
     if (typeof s.firstRequest === 'string') return { text: s.firstRequest, media: chanMedia(s.firstAttachments || []) };
     const k = firstKey(s); if (FIRST.has(k)) return FIRST.get(k);
-    if (!firstAsked.has(k) && !(Date.now() - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY)) firstWant.set(k, { id: s.id, agent: firstAgent(s) });
+    if (!firstAsked.has(k) && !(Date.now() - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY)) firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) });
     return null;
   }
+  /* Reply counts (wizard-ux issue 1266): the agent replies James sees when he opens the thread, one per answer bubble
+   * (a KIT.parseRows turn with an answer, or the files an agent sent), never Hermes' message_count, which also counts
+   * tool calls, tool results, steps and status turns. The first-message read gives them when its page holds the whole
+   * thread; a longer thread is read once in full (LIVE.threadRows). Kept per row (agent|id) with the list revision it
+   * was read at; a thread that moved is read again once it stops working, showing the last count meanwhile. */
+  const REPLIES = new Map(), replyWant = new Map(), replyAsked = new Set(), replyFailed = new Map(), CHAN_FIRST_PAGE = 50;
+  const replyRev = s => [s.messageCount ?? '', s.lastAssistantAt || '', s.previewAt || ''].join('|');
+  function replyAts(rows) {
+    let t; try { t = toTurns(rows); } catch (_) { return null; }
+    return t.filter(x => x.a ? !!(x.a.text || x.a.tweaks?.length || x.a.failed) : !!x.media?.length).map(x => Number(x.a?.at ?? x.mediaAt ?? x.at) || 0);
+  }
+  function chanReplies(s) {
+    const k = firstKey(s), r = REPLIES.get(k), rev = replyRev(s);
+    if (r && (r.rev === rev || isWorking(s))) return r;
+    const known = FIRST.has(k) || typeof s.firstRequest === 'string'; // else the first-message read counts them too
+    if (known && LIVE.threadRows && !replyAsked.has(k) && !(Date.now() - (replyFailed.get(k) || 0) < CHAN_FIRST_RETRY)) replyWant.set(k, { id: s.id, agent: firstAgent(s), rev });
+    return r || null;
+  }
+  // The new ones among them: replies after the row's own read record (LIVE.readAt; 0 = never read, all new).
+  const chanNewN = (s, r) => { if (!r) return 0; const t = LIVE.readAt ? LIVE.readAt(s) : 0; return r.ats.filter(a => a > t).length; };
   function pullFirst() {
-    while (firstBusy < 3 && firstWant.size) {
-      const [k, { id, agent }] = firstWant.entries().next().value; firstWant.delete(k);
-      if (FIRST.has(k) || firstAsked.has(k)) continue;
-      firstAsked.add(k); firstBusy++;
-      Promise.resolve().then(() => LIVE.firstMessages(id, agent)).then(rows => { FIRST.set(k, firstOf(rows || []) || { text: '', media: [], none: true }); firstFailed.delete(k); }, () => firstFailed.set(k, Date.now()))
-        .finally(() => { firstAsked.delete(k); firstBusy--; clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(), 60); pullFirst(); });
+    while (firstBusy < 3 && (firstWant.size || replyWant.size)) {
+      const first = firstWant.size > 0, q = first ? firstWant : replyWant, asked = first ? firstAsked : replyAsked, failed = first ? firstFailed : replyFailed;
+      const [k, { id, agent, rev }] = q.entries().next().value; q.delete(k);
+      if (asked.has(k) || (first ? FIRST.has(k) : REPLIES.get(k)?.rev === rev)) continue;
+      asked.add(k); firstBusy++;
+      Promise.resolve().then(() => first ? LIVE.firstMessages(id, agent, CHAN_FIRST_PAGE) : LIVE.threadRows(id, agent)).then(rows => {
+        rows = rows || [];
+        if (first) FIRST.set(k, firstOf(rows) || { text: '', media: [], none: true });
+        failed.delete(k);
+        if (!first || rows.length < CHAN_FIRST_PAGE) { const ats = replyAts(rows); if (ats) REPLIES.set(k, { rev, ats }); }
+      }, () => failed.set(k, Date.now()))
+        .finally(() => { asked.delete(k); firstBusy--; clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(), 60); pullFirst(); });
     }
   }
   // A list held under the finger or pointer repaints once it is let go (tried again shortly, a few times).
@@ -599,6 +629,37 @@ window.WizCore.chats = function createChats(H) {
     const to = at.end || !node ? max : Math.max(0, Math.min(max, sc.scrollTop + node.getBoundingClientRect().top - sc.getBoundingClientRect().top - (at.y || 0) - stuck));
     if (Math.abs(sc.scrollTop - to) >= 1) sc.scrollTop = to;
     chanSetTop[wid] = sc.scrollTop; // the scroll event this fires is the hold's own, never James's
+    chanSee(wid);
+  }
+  /* Seeing a post is reading it (wizard-ux issue 1266; James, 11 Nov 2026: "Scrolling through the bottom should count
+   * as reading the chat", like Slack). A post that has been on screen in the feed is read, and a feed at its end reads
+   * every post in it, through the per-chat seen record opening a post writes (LIVE.markSeen), so the channel count,
+   * Activity, a reload and his other devices agree. On this open a seen post keeps its marker (chan.seen, with the
+   * number of new replies it had) beside the New line; the next open clears both. Checked once the feed settles. */
+  const CHAN_SEE_MS = 250, CHAN_SEE_PX = 24, chanSeeT = {};
+  // This open's own memory, never saved with the window (o.chan is): the posts drawn and those seen on this open.
+  const chanLoc = {}, chanLocal = wid => { const k = (W[owner(wid)] || W[wid])?.id || wid; return chanLoc[k] || (chanLoc[k] = { seen: new Map(), rows: new Map() }); };
+  function chanSee(wid) { if (!channelsOn()) return; clearTimeout(chanSeeT[wid]); chanSeeT[wid] = setTimeout(() => chanSeeNow(wid), CHAN_SEE_MS); }
+  // Really in front of him: a desktop workspace in the background keeps its windows laid out (.wsp[hidden] is
+  // visibility: hidden, not display: none), so a size alone is not enough.
+  function chanShown(sc) {
+    if (sc.closest?.('[hidden]')) return false;
+    if (typeof sc.checkVisibility === 'function') return sc.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+    const st = globalThis.getComputedStyle?.(sc); return !st || st.visibility !== 'hidden';
+  }
+  function chanSeeNow(wid) {
+    const w = W[wid], c = w && (W[owner(wid)] || w)?.chan && chanLocal(wid), sc = chanScroller(wid), feed = sc?.querySelector('.ch-chan-feed');
+    if (!c || !feed || !sc.clientHeight || !channelsOn() || !chanOpen(w) || globalThis.document?.hidden || !chanShown(sc)) return;
+    const box = sc.getBoundingClientRect(), top = box.top + chanStuck(feed), bottom = box.top + sc.clientHeight;
+    const end = sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4, out = new Map();
+    if (end) for (const [k, s] of c.rows) { if (chanUnread(s)) out.set(k, s); }
+    else for (const n of feed.querySelectorAll('[data-chrow]')) {
+      const s = c.rows.get(n.dataset.chrow); if (!s || !chanUnread(s)) continue;
+      const b = n.getBoundingClientRect(); if (Math.min(b.bottom, bottom) - Math.max(b.top, top) >= Math.min(CHAN_SEE_PX, (b.bottom - b.top) / 2)) out.set(n.dataset.chrow, s);
+    }
+    if (!out.size) return;
+    for (const [k, s] of out) c.seen.set(k, chanNewN(s, REPLIES.get(firstKey(s))));
+    LIVE.markSeen?.([...out.values()]);
   }
   // The feed grows after a paint (first messages, pictures, "more"); each growth puts the place back.
   function chanWatch(wid, sc, feed) {
@@ -612,6 +673,7 @@ window.WizCore.chats = function createChats(H) {
   // James's own touch, wheel, key or pointer on the feed: his scrolls from now (and a fling after it) move the place.
   const chanUser = wid => { if (wid) chanUserAt[wid] = Date.now(); };
   function chanScrolled(wid, sc) {
+    chanSee(wid); // any scroll, James's or not, can bring posts on screen
     const w = W[wid], c = w && (W[owner(wid)] || w)?.chan; if (!c || !channelsOn() || !(Date.now() - (chanUserAt[wid] || 0) < CHAN_USER_MS)) return;
     const feed = sc.querySelector('.ch-chan-feed'); if (!feed || !sc.clientHeight || Math.abs(sc.scrollTop - (chanSetTop[wid] ?? -9)) < 1) return;
     chanUserAt[wid] = Date.now();
@@ -626,6 +688,7 @@ window.WizCore.chats = function createChats(H) {
   function channelFeed(w, open, rows) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
     const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort((a, b) => chanAt(a) - chanAt(b));
+    const cs = chanStart(w, shown), loc = chanLocal(w.id); loc.rows = new Map(shown.map(s => [chanKey(s), s])); // the posts chanSee can read
     // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
     const hat = `<span class="ch-post-av" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent || focusedAgent(focusOf(w)) || '')) || ''}</span>`;
     const me = String(window.WizConfig?.owner?.() || '').trim(), meAv = `<span class="ch-post-me" aria-hidden="true">${esc((me || 'You').slice(0, 1).toUpperCase())}</span>`;
@@ -637,9 +700,12 @@ window.WizCore.chats = function createChats(H) {
       const text = p ? (p.text || (p.media.length ? '' : stand || (p.none ? s.title : ''))) : stand || (failed ? s.title : ''), media = p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
       const at = p?.at && isFinite(p.at) ? new Date(p.at).toISOString() : s.createdAt || LIVE.cardAt(s);
-      const n = typeof s.messageCount === 'number' ? Math.max(0, s.messageCount - 1) : null, un = chanUnread(s);
-      // Unread replies: the reply line goes bold violet with the unread dot first, "3 new replies" (Slack's thread marker).
-      const dot = un ? '<i class="st unread" aria-hidden="true"></i>' : '', replies = un ? `<span>${n ? `${n} new ${n === 1 ? 'reply' : 'replies'}` : 'New reply'}</span>` : n != null ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
+      // Replies are the bubbles James sees in the thread (chanReplies), never a raw message count; none until read.
+      const r = chanReplies(s), n = r ? r.ats.length : 0, key = chanKey(s), live = chanUnread(s), kept = !live && loc.seen.has(key), un = live || kept;
+      // Unread: the green dot first, then "2 new replies" in ink (Slack's thread marker). A post seen in this open keeps
+      // its marker (and its count of new ones) until the next open.
+      const nn = live ? chanNewN(s, r) : kept ? loc.seen.get(key) : 0;
+      const dot = un ? '<i class="st unread" aria-hidden="true"></i>' : '', replies = un ? `<span>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : 'New reply'}</span>` : n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
       const state = isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '';
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
@@ -652,9 +718,9 @@ window.WizCore.chats = function createChats(H) {
       return `<div class="ch-post sending" data-morph-key="post:${esc(p.key)}">${meAv}<div class="ch-post-c"><div class="ch-post-b"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(new Date(p.at).toISOString()))}</time></span>${p.text ? `<span class="ch-post-t${long ? ' clamp' : ''}">${esc(p.text)}</span>` : ''}</div>${pics}<span class="ch-post-r">${hat}<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Sending…</span></span></div></div>`;
     };
     const sending = typeof chanSending === 'function' ? chanSending(w, open, mine) : [];
-    const cs = chanStart(w, shown), line = '<div class="ch-chan-new" role="separator" aria-label="New posts" data-morph-key="chan-new"><span>New</span></div>';
+    const line = '<div class="ch-chan-new" role="separator" aria-label="New posts" data-morph-key="chan-new"><span>New</span></div>';
     const html = shown.map(s => (cs?.newKey && cs.newKey === chanKey(s) ? line : '') + post(s)).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
-    if (firstWant.size) pullFirst();
+    if (firstWant.size || replyWant.size) pullFirst();
     const bar = orderBar('Show posts', 'data-chchanf', CHAN_FILTERS, f, o => CHAN_FILTER_LABEL[o]);
     return `<div class="ch-chan-feed">${bar}${shown.length || sending.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}${archNote}</div>`;
   }

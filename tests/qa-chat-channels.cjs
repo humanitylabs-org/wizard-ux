@@ -8,7 +8,7 @@
 // "Move to channel" on a chat's sheet, a new post from the feed's own message box (wizard-ux issue 1258: the thread
 // composer at the bottom, "Message # name", a photo attached; the post paints on the Send tap's frame, the chat is
 // filed into its Space and the window stays on the feed), unread marks (wizard-ux issue 1259: bold channel + count
-// matching Activity, "N new replies" in the feed, cleared by opening the thread with no flicker on Back), and switching
+// matching Activity, "N new replies" (the replies he sees) in the feed, cleared by opening the thread with no flicker on Back), and switching
 // off inside a feed.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -197,15 +197,15 @@ const report = { origin, web, cases: [] };
         entry.viewerBack = await page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep()); await nap(200);
         assert.equal(await page.locator('.mviewer:not([hidden])').count(), 0, 'Back closes the viewer');
         await vis('.ch-chan-h').waitFor();
-        assert.match(await vis('.ch-post-r[data-chopen="qa-l2"]').innerText(), /3 replies[\s\S]*Working/);
+        assert.match(await vis('.ch-post-r[data-chopen="qa-l2"]').innerText(), /1 reply[\s\S]*Working/); // the reply it shows, not message_count 4 (issue 1266)
         await page.screenshot({ path: path.join(out, stem + '-feed-expanded.png') });
         await vis('[data-chchanf="needs"]').click(); assert.deepEqual(await posts(), ['qa-l1']);
         await vis('[data-chchanf="all"]').click(); assert.deepEqual(await posts(), ['qa-l3', 'qa-l1', 'qa-l2']);
         await vis('[data-chchanf="open"]').click();
-        // The unread post's reply line: bold violet "3 new replies" with the unread dot first; the working one is unchanged.
+        // The unread post's reply line: "1 new reply" (the replies he sees, issue 1266) with the green unread dot first; the working one is unchanged.
         entry.unreadLine = (await vis('.ch-post-r.unread[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
-        assert.match(entry.unreadLine, /^3 new replies/);
-        assert.equal(await vis('.ch-post-r[data-chopen="qa-l1"]').locator(':scope > .st.unread:first-child').count(), 1, 'the violet dot starts the line');
+        assert.match(entry.unreadLine, /^1 new reply/);
+        assert.equal(await vis('.ch-post-r[data-chopen="qa-l1"]').locator(':scope > .st.unread:first-child').count(), 1, 'the unread dot starts the line');
         assert.equal(await page.locator('.ch-post-r.unread[data-chopen="qa-l2"]').count(), 0, 'working: not unread');
         await page.screenshot({ path: path.join(out, stem + '-feed-unread.png') });
         // From here on, any unread mark seen again for qa-l1 is a flicker.
@@ -221,7 +221,7 @@ const report = { origin, web, cases: [] };
         if (!phone && await page.locator('.ch-thread').filter({ visible: true }).count()) { entry.back.push(await back()); await nap(150); }
         await vis('.ch-chan-h').waitFor(); assert.deepEqual(await posts(), ['qa-l1', 'qa-l2'], 'Back from the thread lands on the channel');
         entry.readLine = (await vis('.ch-post-r[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
-        assert.match(entry.readLine, /^3 replies/, 'read: the marker is gone on the channel Back lands on');
+        assert.match(entry.readLine, /^1 reply/, 'read: the marker is gone on the channel Back lands on');
         assert.equal(await page.locator('.ch-post.unread[data-morph-key="post:qa-l1"]').count(), 0);
         entry.back.push(await back()); await nap(150);
         await vis('.ch-chan-open[data-chchan="launch"]').waitFor();

@@ -10,7 +10,7 @@ const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return s
 const block = cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
 
 const H = 3600e3, NOW = Date.UTC(2026, 10, 10, 12);
-function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, sessions = {}, owner = 'James de Fleur' } = {}) {
+function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, full = {}, sessions = {}, owner = 'James de Fleur' } = {}) {
   const spacesData = spacesList || [
     { id: 'launch', name: 'Launch', threads: ['a', 'b', 'c'] },
     { id: 'voice', name: 'Voice', threads: ['d'] },
@@ -19,7 +19,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     { id: 'locked', name: 'Locked', agent: 'restricted', threads: ['r1'] },
   ];
   const wins = { w: { id: 'w', thread: null, focus: null } };
-  const store = new Map(), renders = [], focusCalls = [], sheets = [], toasts = [], ops = [], reads = [], viewer = [], drafts = [];
+  const store = new Map(), renders = [], focusCalls = [], sheets = [], toasts = [], ops = [], reads = [], viewer = [], drafts = [], marks = [];
   const sheetEl = { insertAdjacentHTML: (_, html) => sheets.push(html), querySelector: () => null };
   const agentOf = id => agents[id] || '';
   const env = {
@@ -42,9 +42,12 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     rowOf: (wid, sid) => env._rowOf ? env._rowOf(wid, sid) : sessions[sid] || null,
     snoozeLast: () => !!env._snoozeLast, _snoozeLast: false, deferredOf: s => !!s.deferred && !s.archived,
     LIVE: { isNew: s => !!s.fresh && !s.archived, agentOf, ownerOf: s => s.owner ?? agents[s.id] ?? '', cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, sessionFor: (id, a) => sessions[a ? a + '|' + id : id] || null,
-      firstMessages: async (id, agent) => { reads.push(agent ? agent + '|' + id : id); const h = history[agent ? agent + '|' + id : id]; if (h instanceof Error) throw h; return h || []; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
+      firstMessages: async (id, agent) => { reads.push(agent ? agent + '|' + id : id); const h = history[agent ? agent + '|' + id : id]; if (h instanceof Error) throw h; return h || []; },
+      // Issue 1266: a long thread's full read for its reply count, the row's own read time, and the seen write.
+      threadRows: async (id, agent) => { const k = agent ? agent + '|' + id : id; reads.push('full:' + k); const h = full[k] ?? history[k]; if (h instanceof Error) throw h; return h || []; },
+      readAt: s => s.readAt || 0, markSeen: list => { marks.push(...list.map(s => (s.owner ? s.owner + '|' : '') + s.id)); for (const s of list) s.fresh = false; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
     // KIT.parseRows stand-in: a row {role:'user', text, files} is an owner turn.
-    toTurns: rows => rows.map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text } }),
+    toTurns: rows => rows.filter(r => r.role === 'user' || r.role === 'assistant').map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text, at: r.at } }),
     mediaOfFile: f => ({ id: f.id, name: f.name, mime: f.mime || '', kind: /^image\//.test(f.mime || '') ? 'image' : 'file', url: f.id ? `/wizard/files/${f.id}/content` : '' }),
     KIT: { viewer: { open: (g, i) => viewer.push([g, i]) }, drafts: { _d: {}, get(k) { return this._d[k] || { text: '', files: [] }; }, set(k, text, files = []) { this._d[k] = { text, files }; }, clear(k) { delete this._d[k]; } } }, H: { win: id => wins[id] }, CH: {}, holdList: () => false, setTimeout: fn => fn(), clearTimeout() {},
     window: { WizConfig: { owner: () => owner } }, PIN_SVG: '<svg pin></svg>', RENAME_SVG: '<svg rn></svg>', ACT: { done: { icon: '<svg ar></svg>' } },
@@ -61,9 +64,9 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanSeeNow,chanReplies,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
-  return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
+  return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
 const row = (id, at, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - at * H, ...extra });
 const click = attrs => ({ target: { closest: sel => { const k = sel.slice(1, -1); return k in attrs ? { dataset: { [k.replace(/^data-/, '').replace(/-./g, m => m[1].toUpperCase())]: attrs[k] } } : null; } } });
@@ -140,11 +143,12 @@ test('General keeps the agent Focus and holds only chats in no Space; a Focus ta
   assert.equal(f.chanOpen(f.w), null);
 });
 
-test('feed filters Open (default) / Needs you / All, posts truncate at about 240 characters with more', () => {
-  const long = 'x'.repeat(300);
+test('feed filters Open (default) / Needs you / All, posts truncate at about 240 characters with more', async () => {
+  const long = 'x'.repeat(300), say = (...t) => [{ role: 'user', text: long }, ...t.map(x => ({ role: 'assistant', text: x }))];
   const rows = [row('a', 5, { request: long, messageCount: 5 }), row('b', 3, { attention: { state: 'needs_you' }, messageCount: 2 }), row('c', 1, { archived: true })];
-  const f = fixture(); f.openChannel(f.w, 'launch');
+  const f = fixture({ history: { a: say('one', 'two', 'three', 'four'), b: say('ok') } }); f.openChannel(f.w, 'launch');
   const open = f.chanOpen(f.w), ids = h => [...h.matchAll(/class="ch-post-b" data-chopen="([^"]+)"/g)].map(m => m[1]);
+  f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r));
   let html = f.channelFeed(f.w, open, rows);
   assert.deepEqual(ids(html), ['a', 'b']); assert.match(html, /data-chchanf="open" aria-pressed="true"/);
   assert.match(html, /4 replies/); assert.match(html, /1 reply</); assert.match(html, /Needs you/);
@@ -186,7 +190,7 @@ test('main vs routed: host-profile, container and restricted rows belong only to
   assert.deepEqual(f.channelsFor(f.w).map(c => c.id), ['box', '__general__']);
   // The restricted agent's feed wears that agent's own sigil.
   f.openChannel(f.w, 'locked');
-  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [row('r1', 1, { status: 'running', messageCount: 3 })]), /data-agent="restricted"[^]*2 replies[^]*Working/);
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [row('r1', 1, { status: 'running', messageCount: 3 })]), /data-agent="restricted"[^]*Working/);
 });
 
 test('posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus', () => {
@@ -201,7 +205,7 @@ const sheetButtons = html => [...html.matchAll(/data-(rsch\w+)>(?:<svg[^]*?<\/sv
 
 test('a post is the owner\'s first message with photo thumbnails, never a title card; read once per thread', async () => {
   const history = { a: [{ role: 'user', text: 'Please fix the boot logo\non the phone', files: [{ id: 'f1', name: 'shot.png', mime: 'image/png' }, { id: 'f2', name: 'notes.pdf', mime: 'application/pdf' }], at: NOW - 5 * H }, { role: 'assistant', text: 'On it' }] };
-  const sessions = { a: row('a', 5, { messageCount: 3 }) };
+  const sessions = { a: row('a', 5, { messageCount: 7 }) }; // 7 stored messages, one visible reply
   const f = fixture({ history, sessions }); f.openChannel(f.w, 'launch');
   const open = f.chanOpen(f.w), rows = [sessions.a];
   let html = f.channelFeed(f.w, open, rows);
@@ -214,7 +218,7 @@ test('a post is the owner\'s first message with photo thumbnails, never a title 
   assert.match(html, /class="ch-post-t">Please fix the boot logo\non the phone</);
   assert.doesNotMatch(html, /<b>T a<\/b>/, 'no title card');
   assert.deepEqual([...html.matchAll(/data-chpostimg="a" data-chpostag="" data-i="(\d)"[^]*?<img src="([^"]+)"/g)].map(m => m[2]), ['/wizard/files/f1/content'], 'images only');
-  assert.match(html, /2 replies/);
+  assert.match(html, /<span>1 reply<\/span>/, 'the one reply James sees, not message_count - 1');
   f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r));
   assert.deepEqual(f.reads, ['a'], 'kept per thread');
   // Tapping a thumbnail opens the shared media viewer on that photo.
@@ -580,10 +584,12 @@ test('the expanded chevron lines are bold for unread posts', () => {
   assert.match(html, /class="ch-chan-post" data-chopen="b"/);
 });
 
-test('in the feed an unread post says "N new replies" in bold with the violet dot first; read posts are unchanged', () => {
-  const rows = [row('a', 3, { fresh: true, messageCount: 4 }), row('b', 2, { messageCount: 2 }), row('c', 1, { fresh: true, messageCount: 1 })];
-  const f = fixture();
+test('in the feed an unread post says "N new replies" with the unread dot first; read posts are unchanged', async () => {
+  const rows = [row('a', 3, { fresh: true, messageCount: 4, readAt: 150 }), row('b', 2, { messageCount: 2 }), row('c', 1, { fresh: true, messageCount: 1 })];
+  const a = [{ role: 'user', text: 'q' }, { role: 'assistant', text: '1', at: 100 }, { role: 'assistant', text: '2', at: 200 }, { role: 'assistant', text: '3', at: 300 }, { role: 'assistant', text: '4', at: 400 }];
+  const f = fixture({ history: { a, b: [{ role: 'user', text: 'q' }, { role: 'assistant', text: 'ok' }], c: [{ role: 'user', text: 'q' }] } });
   f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), rows); await new Promise(r => setImmediate(r));
   const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
   const post = id => html.split(/<div class="ch-post(?=[ "])/).find(p => p.includes(`data-morph-key="post:${id}"`));
   assert.match(post('a'), /^ unread"/);
@@ -774,4 +780,177 @@ test('issue 1263 review: two posts drawn with the same key (main and routed), th
   f.chanUser('w'); d.sc.scrollTop = 300; f.chanScrolled('w', d.sc);
   assert.deepEqual({ ...f.w.chan.at }, { key: 'post:c', y: 0 }, 'a key drawn once needs no row');
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [row('p0', 1)]), /data-morph-key="post:p0" data-chrow="hermes\|p0"/, 'each post carries its row');
+});
+
+// Issue 1266: reply counts are the replies James sees, seeing a post reads it, and unread is green (not violet).
+const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
+function realParseRows() {
+  const store = new Map(), ctx = { location: { origin: 'https://box.example', hostname: 'box.example', href: 'https://box.example/wizard-os-home/' },
+    localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
+    navigator: {}, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) },
+    addEventListener() {}, setTimeout, clearTimeout, console, URL, Intl, Date };
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(kitSrc, ctx); return ctx.WosChat.parseRows;
+}
+const ts = m => new Date(NOW - 60 * H + m * 60e3).toISOString();
+// One owner question and two answers he sees, with 68 tool calls, tool results and status steps in between.
+function busyThread() {
+  const out = [{ role: 'user', content: 'I just had a call with Jonathan. Pass the transcript to the philosopher.', timestamp: ts(0) }];
+  for (let i = 0; i < 33; i++) out.push({ role: 'assistant', content: '', tool_calls: [{ id: 'c' + i, function: { name: 'read_file' } }], timestamp: ts(1) }, { role: 'tool', tool_call_id: 'c' + i, content: 'x'.repeat(40), timestamp: ts(1) });
+  out.push({ role: 'assistant', content: 'Sent it to the philosopher.', timestamp: ts(2) });
+  out.push({ role: 'user', content: 'Thanks, and the summary?', timestamp: ts(3) });
+  out.push({ role: 'assistant', content: 'Working on it', display_kind: 'commentary', timestamp: ts(4) });
+  out.push({ role: 'assistant', content: 'Here is the summary.', timestamp: ts(5) });
+  return out;
+}
+
+test('issue 1266: a post counts the agent replies James sees, never tool calls, results or steps', async () => {
+  const h = busyThread(); assert.equal(h.length, 71, '71 stored messages: "70 replies" before');
+  const s = row('a', 5, { messageCount: h.length });
+  const f = fixture({ history: { a: h.slice(0, 50) }, full: { a: h }, sessions: { a: s } }); f.env.toTurns = realParseRows();
+  f.openChannel(f.w, 'launch');
+  let html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.doesNotMatch(html, /\d+ repl/, 'no count is shown until it is known');
+  await new Promise(r => setImmediate(r));
+  html = f.channelFeed(f.w, f.chanOpen(f.w), [s]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a', 'full:a'], 'the first page was full, so the whole thread is read once');
+  html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /<span>2 replies<\/span>/);
+  assert.doesNotMatch(html, /70 repl|71 repl/);
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a', 'full:a'], 'kept while the thread has not moved');
+});
+
+test('issue 1266: a short thread is counted from the first-message read alone; a new reply is counted again once it stops working', async () => {
+  const h = [{ role: 'user', text: 'q' }, { role: 'tool', text: 't' }, { role: 'assistant', text: 'a1' }];
+  const s = row('a', 5, { messageCount: 3 });
+  const f = fixture({ history: { a: h }, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await new Promise(r => setImmediate(r));
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /<span>1 reply<\/span>/);
+  assert.deepEqual(f.reads, ['a']);
+  Object.assign(s, { status: 'running', messageCount: 9 });
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a'], 'not re-read while it works');
+  h.push({ role: 'tool', text: 't2' }, { role: 'assistant', text: 'a2' }); Object.assign(s, { status: 'completed', messageCount: 11 });
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a', 'full:a']);
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /<span>2 replies<\/span>/);
+});
+
+test('issue 1266 main vs routed: host-profile, container and restricted posts are counted from their own agent\'s history', async () => {
+  for (const agent of ['host', 'container', 'restricted']) {
+    const sp = { host: 'host-ops', container: 'box', restricted: 'locked' }[agent], tid = { host: 'h1', container: 'k1', restricted: 'r1' }[agent];
+    const main = row(tid, 2, { owner: '' }), routed = row(tid, 1, { owner: agent, agent });
+    const f = fixture({ agents: { [tid]: agent }, history: { [tid]: [{ role: 'user', text: 'm' }, { role: 'assistant', text: '1' }, { role: 'assistant', text: '2' }, { role: 'assistant', text: '3' }], [agent + '|' + tid]: [{ role: 'user', text: 'r' }, { role: 'assistant', text: 'only' }] } });
+    f.w.focus = { kind: 'agent', key: agent }; f.openChannel(f.w, sp);
+    f.channelFeed(f.w, f.chanOpen(f.w), [main, routed]); await new Promise(r => setImmediate(r));
+    assert.deepEqual(f.chanReplies(routed).ats.length, 1, agent);
+    assert.ok(f.reads.includes(agent + '|' + tid), agent + ': read with its own agent');
+  }
+});
+
+// A feed laid out for chanSee: every post carries its row key (agent|id), as the painted feed does.
+function seenDom(f, html, client = 300) {
+  const d = feedDom(html, {}, client);
+  for (const n of d.nodes) if (n.dataset.morphKey.startsWith('post:')) n.dataset.chrow = 'hermes|' + n.dataset.morphKey.slice(5);
+  f.env.elOf = () => d.el; return d;
+}
+
+test('issue 1266: a post on screen in the feed is read (the shared seen record), and keeps its marker until the next open', () => {
+  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
+  for (const r of rows) r.owner = 'hermes';
+  f.openChannel(f.w, 'launch');
+  const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
+  f.chanHold('w'); // opens at the New line above p5: p5, p6 and the top of p7 are on screen (300px)
+  assert.deepEqual(f.marks, ['hermes|p5', 'hermes|p6', 'hermes|p7']);
+  assert.equal(rows[8].fresh, true, 'a post below the view is still unread');
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
+  assert.match(html, /data-morph-key="post:p5"[^]*?class="ch-post-r unread"/, 'seen this open: the marker stays beside the New line');
+  assert.match(html, /ch-chan-new/);
+  assert.match(f.channelsBody(f.w, rows), /aria-label="12 unread">12</, 'the channel counts only what is still unread');
+  f.channelBack(f.w); f.openChannel(f.w, 'launch');
+  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /data-morph-key="post:p5"[^]*?class="ch-post-r unread" data-chopen="p5"/, 'the next open: read');
+  d.sc.scrollTop = 0;
+});
+
+test('issue 1266: a feed at its end reads every post in it; the channel count and the New line are gone on the next open', () => {
+  const f = fixture({ spacesList: longSpaces(30) }), rows = manyRows(30, 2);
+  f.openChannel(f.w, 'launch');
+  const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
+  f.chanUser('w'); d.sc.scrollTop = d.sc.scrollHeight - d.sc.clientHeight; f.chanScrolled('w', d.sc); f.chanSeeNow('w');
+  assert.equal(f.marks.length, 28, 'every unread post, also the ones scrolled past');
+  assert.equal(rows.filter(r => r.fresh).length, 0);
+  f.channelBack(f.w);
+  assert.doesNotMatch(f.channelsBody(f.w, rows), /ch-chan-n/, 'channel count gone');
+  f.openChannel(f.w, 'launch');
+  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /ch-chan-new| unread"/, 'no New line, no markers');
+});
+
+test('issue 1266: opening a post seen in the feed clears its marker at once; a hidden page, switch off or no feed reads nothing', () => {
+  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
+  f.openChannel(f.w, 'launch');
+  seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
+  f.env.document.hidden = true; f.chanHold('w'); assert.deepEqual(f.marks, [], 'page hidden');
+  f.env.document.hidden = false; f.setOn(false); f.chanSeeNow('w'); assert.deepEqual(f.marks, [], 'switch off');
+  f.setOn(true); f.chanSeeNow('w'); assert.ok(f.marks.length);
+  f.env._rowOf = (_, sid) => rows.find(r => r.id === sid);
+  f.chanSeenRow('w', 'p5');
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), rows), /class="ch-post-r" data-chopen="p5"/, 'opened: read now');
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), rows), /class="ch-post-r unread" data-chopen="p6"/, 'seen only: marked until the next open');
+  const g = fixture(); g.chanSeeNow('w'); assert.deepEqual(g.marks, [], 'no feed open');
+});
+
+test('issue 1266 main vs routed: seeing a routed post marks that row (its own agent), never the main thread sharing its id', () => {
+  for (const agent of ['host', 'container', 'restricted']) {
+    const sp = { host: 'host-ops', container: 'box', restricted: 'locked' }[agent], tid = { host: 'h1', container: 'k1', restricted: 'r1' }[agent];
+    const main = row(tid, 2, { owner: 'hermes', fresh: true }), routed = row(tid, 1, { owner: agent, agent, fresh: true });
+    const f = fixture({ agents: { [tid]: agent } });
+    f.w.focus = { kind: 'agent', key: agent }; f.openChannel(f.w, sp);
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [main, routed]);
+    const d = feedDom(html, {}, 300, { keys: ['post:' + tid] }); d.nodes[0].dataset.chrow = agent + '|' + tid; f.env.elOf = () => d.el;
+    f.chanSeeNow('w');
+    assert.deepEqual(f.marks, [agent + '|' + tid], agent);
+    assert.equal(main.fresh, true, agent + ': the main thread stays unread');
+  }
+});
+
+test('issue 1266: unread is a green dot and needs-you an amber one in Channels, on every skin; Activity keeps its own dot', () => {
+  const f = fixture(); f.channelClick(click({ 'data-chchanx': 'launch' }), 'w', f.w);
+  const html = f.channelsBody(f.w, [row('a', 1, { fresh: true }), row('b', 2, { attention: { state: 'needs_you' }, fresh: true })]);
+  assert.match(html, /class="ch-chan-post unread" data-chopen="a"><span>T a<\/span><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i>/);
+  assert.match(html, /data-chopen="b"><span>T b<\/span><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i>/);
+  const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  const rules = css.split('\n').filter(l => /unread|ch-chan-n\b|ch-chan-new|ch-chan-dot\.new|ch-post-r span/.test(l));
+  assert.ok(rules.length >= 5);
+  for (const l of rules) assert.doesNotMatch(l, /--violet/, 'no violet unread marks: ' + l.slice(0, 90));
+  assert.match(css, /--ch-new: var\(--green\)/, 'the skin\'s own green');
+  assert.match(css, /oklch\(from var\(--green\) l c 150\)/, 'held on a green hue where a skin\'s green is gold (Ember)');
+  assert.match(css, /\.ch-post-r \.st\.unread \{[^}]*background: var\(--ch-new\)/, 'the reply line dot');
+  assert.match(css, /\.ch-chan-dot\.new \{[^}]*background: var\(--ch-new\)/, 'the chevron line dot');
+  assert.match(css, /\.ch-chan-n \{[^}]*var\(--ch-new\)/, 'the channel count');
+  assert.match(css, /\.ch-chan-dot \{[^}]*background: var\(--amber\)/, 'needs you stays amber');
+  assert.match(css, /\.ch-post-r\.unread span:not\(\.ch-post-st\) \{[^}]*color: var\(--ink\)/, '"N new replies" in ink');
+  assert.ok(css.split('\n').every(l => !/\.st\.unread/.test(l) || l.includes('.ch-post-r .st.unread')), 'Activity\'s .st.unread is untouched');
+  // Grove's unread dot was gold like its needs-you dot; its green token is not.
+  const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8'), grove = skins.slice(skins.indexOf("id: 'grove'"), skins.indexOf("id: 'tide'"));
+  assert.notEqual(grove.match(/ green: '([^']+)'/)[1], grove.match(/ amber: '([^']+)'/)[1]);
+});
+
+test('issue 1266: what a feed keeps for this open never goes into the saved window (a reload restores a plain o.chan)', () => {
+  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
+  f.openChannel(f.w, 'launch'); seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.chanHold('w');
+  assert.ok(f.marks.length);
+  const saved = JSON.parse(JSON.stringify(f.w.chan));
+  assert.deepEqual(Object.keys(saved).sort(), ['at', 'id', 'newKey', 'prev'], 'only plain fields');
+  f.w.chan = saved; // the window as a reload restores it
+  assert.doesNotThrow(() => f.channelFeed(f.w, f.chanOpen(f.w), rows));
+});
+
+test('issue 1266 review: a feed on a background desktop workspace (laid out, but hidden) reads nothing', () => {
+  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
+  f.openChannel(f.w, 'launch'); const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
+  d.sc.closest = sel => sel === '[hidden]' ? {} : null;            // inside .wsp[hidden]
+  f.chanHold('w'); assert.deepEqual(f.marks, [], 'hidden workspace');
+  d.sc.closest = () => null; d.sc.checkVisibility = () => false;   // visibility: hidden from another ancestor
+  f.chanSeeNow('w'); assert.deepEqual(f.marks, [], 'not visible');
+  d.sc.checkVisibility = () => true; f.chanSeeNow('w'); assert.ok(f.marks.length, 'in front: read');
 });
