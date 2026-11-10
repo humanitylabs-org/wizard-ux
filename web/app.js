@@ -2505,7 +2505,7 @@
       if (id === null) { localStorage.removeItem(REPLY_KEY); return null; }
       if (val) { localStorage.setItem(REPLY_KEY, JSON.stringify({ id, ...val })); return val; }
       const r = JSON.parse(localStorage.getItem(REPLY_KEY) || 'null');
-      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '', custodyId:r.custodyId||'' } : null;
+      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '', custodyId:r.custodyId||'', ...(typeof r.box === 'string' ? { box: r.box } : {}), ...(typeof r.space === 'string' ? { space: r.space } : {}) } : null;
     } catch (e) { return null; }
   }
   window.__wosReplyTake = id => replyTake(id);
@@ -2526,7 +2526,7 @@
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
-      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
+      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid,V.replyTo.box);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
       const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],sealReply:V.seal?.reply||null,parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
       const it=await OUTBOX.stage({captureId:V.custodyCapture,nativeId:parkedNativeId,audio:new Blob(V.parts,{type:V.parts[0]?.type}),kind:'reply',sessionId:V.replyTo.sid,...V.snap.route,parkedDraft:draft});
       await OUTBOX.transition(it.id,'held','Reply paused · return to resume or send');
@@ -2568,7 +2568,7 @@
     // One recorder pathway (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be triggering the same
     // pathway"): startVoice owns admission, so a Mizel meeting lends its microphone to the composer mic exactly as it
     // does to the orb, and the reply pin is set before the take opens (it survives the asynchronous loan).
-    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '' } });
+    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box: CHATS.chanBox?.(wid) || '', ...(typeof CHATS.chanSpaceOf?.(W[wid]) === 'string' ? { space: CHATS.chanSpaceOf(W[wid]) } : {}) } : {}) } });
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
@@ -2795,9 +2795,9 @@
   // The thread a take is sent into (and whose composer rides with it): a composer-mic take's pinned thread, or the
   // thread open when an orb take started. A held command, or a take aimed at another desk, has none.
   function sealTarget() {
-    if (V.replyTo) return { wid: V.replyTo.wid, sid: V.replyTo.sid };
+    if (V.replyTo) return { wid: V.replyTo.wid, sid: V.replyTo.sid, box: V.replyTo.box };
     const v = V.snap?.view;
-    return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread } : null;
+    return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread, box: v.box } : null;
   }
   // The model route for a take, read from the selector at the Send tap (wizard-ux#1218), for the same destination the
   // take was pinned to when it started. An explicit agent pick keeps its own agent. Not used for a take resumed after
@@ -2808,7 +2808,10 @@
       const agent = snap.route?.agent || '';
       return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
     }
-    return pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+    // A take pinned to a channel keeps that channel's agent: another agent's channel in front by Send never re-routes it.
+    if (typeof snap.view?.space === 'string' && snap.route && (live?.agent || '') !== (snap.route.agent || '')) return snap.route;
+    return live;
   }
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
   function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
@@ -2940,7 +2943,7 @@
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
-    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length || t.reply ? t : null; }
+    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid, sealAt.box); V.seal = t.text || t.files.length || t.reply ? t : null; }
     if (!quickTake(V.kind, V.snap, V.replyTo, V.target, V.acc + (V.state !== 'paused' ? performance.now() - V.t0 : 0))) leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
@@ -3088,7 +3091,7 @@
     if (rt) {
       const files = takeFiles(); V.replyTo = null;
       setVoice('idle'); txPill('✦', 'Voice reply · waiting to send', 'agent'); txHide(1800);
-      try { await CHATS.sendVoiceTo(rt.wid, rt.sid, audio, files, snap.seal || false, snap.route, snap.custodyId); }
+      try { await CHATS.sendVoiceTo(rt.wid, rt.sid, audio, files, snap.seal || false, snap.route, snap.custodyId, null, undefined, '', rt.space); }
       catch (e) { await OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)); }
       finally { releaseNative(); unhold(); }
       return;
@@ -3147,7 +3150,7 @@
       const queued = (snap.custodyId ? [snap.audio] : blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
         if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, ...pinSpace(sv), instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
         return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: withSealFiles(fl, sl), typed: sl?.text || '', snap })
           .then(item => sl?.done(item));
@@ -3217,12 +3220,17 @@
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
+    // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
+    // channel, exactly like its message box (whose words and pictures ride with it), pinned to that channel's Space,
+    // and the window stays on the feed. A routed agent's channel keeps that agent's own voice path (below).
+    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '' } : {};
     if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
       // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
       const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : w.agent ? 'agent chats' : 'thread list', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
-        name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
+        name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats`, ...pin };
     }
+    if (chan) return { id, mode: 'auto', ...pin, name: `# ${chan.name} channel` };
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
     if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
       return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
@@ -3288,11 +3296,13 @@
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
     return window.WosBoundView.feedback(OUTBOX, { thread: v.thread, url: v.url, route, custodyId, context: reviewContext(v) }, text, audio, files);
   }
+  // A take started in front of a channel (wizard/chat-channels) is filed into that channel, wherever James is by Send.
+  const pinSpace = v => typeof v?.space === 'string' && v.thread === '__new__' ? { space: v.space } : {};
   function deliverToView(v, text, snap) {
     if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if ((w.app === 'chats' || v.kind === 'chat thread') && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+    if ((w.app === 'chats' || v.kind === 'chat thread') && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, ...pinSpace(v), instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
     // No unacknowledged postMessage delivery to arbitrary/self-asserted frames.
     return false;
   }
@@ -3343,7 +3353,7 @@
       if (kind === 'command' && !typed) { const lc = await LOCAL_COMMANDS.confirm(localParse(text, snap, kind), text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
       const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
       setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
-      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
+      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, ...pinSpace(v), instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
     }
     // Attached files mean "look at this": skip command routing and send words + files together. So do words,
     // photos or files waiting in the thread's composer (snap.seal): one message, never a command.
@@ -3353,7 +3363,7 @@
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : '', seal?.reply ? 'the notification' : ''].filter(Boolean).join(' + ');
       if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, ...pinSpace(v), instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = withSealFiles(files, seal);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all, reply: seal?.reply || null }).then(item => { seal?.done(item); return item; });
     }
@@ -3565,7 +3575,7 @@
     voiceDestination.classList.toggle('quick', q === 'cmd');
     if (!q) { if (was) paintVoiceDestination(); return; }
     const agent = window.WizConfig.agent();
-    const want = q === 'cmd' ? '⚡ Quick command · keep talking for ' + agent : 'To ' + (V.snap?.view?.kind === 'chat thread' ? 'this thread' : agent) + ' · tap to send';
+    const want = q === 'cmd' ? '⚡ Quick command · keep talking for ' + agent : 'To ' + (V.snap?.view?.channel ? '# ' + V.snap.view.channel : V.snap?.view?.kind === 'chat thread' ? 'this thread' : agent) + ' · tap to send';
     if (voiceDestination.textContent !== want) voiceDestination.textContent = want;
   }
   let G = null;

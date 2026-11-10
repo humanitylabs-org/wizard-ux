@@ -465,7 +465,8 @@ window.WizCore.chats = function createChats(H) {
   const rowAgent = s => (LIVE.ownerOf ? LIVE.ownerOf(s) : LIVE.agentOf(s.id)) || AGS()?.defaultId() || 'hermes';
   const inChannel = (ch0, s) => ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
-  const chanAt = s => Date.parse(LIVE.cardAt(s)) || 0; // cardAt is an ISO time
+  // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
+  const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
   // Archive drops a channel once its newest chat (or the archiving itself) is older than CHAN_ARCHIVE_PRUNE_DAYS.
   function chanPruned(c, rows, now = Date.now()) {
     const t = rows.filter(s => inChannel(c, s)).reduce((m, s) => Math.max(m, chanAt(s)), Date.parse(chanPrefs().archived[c.id]) || 0);
@@ -569,10 +570,17 @@ window.WizCore.chats = function createChats(H) {
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
       return `<div class="ch-post" data-morph-key="post:${esc(s.id)}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r" data-chopen="${esc(s.id)}">${hat}${n != null ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
     };
-    const html = shown.map(post).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
+    // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
+    const sendingPost = p => {
+      const long = p.text.length > CHAN_CLAMP || (p.text.match(/\n/g) || []).length >= 4;
+      const pics = p.media.length ? `<div class="ch-post-media">${p.media.slice(0, 6).map(m => `<span class="ch-post-img"><img src="${esc(m.url)}" alt="" decoding="async"></span>`).join('')}${p.media.length > 6 ? `<span class="ch-post-n">+${p.media.length - 6}</span>` : ''}</div>` : '';
+      return `<div class="ch-post sending" data-morph-key="post:${esc(p.key)}">${meAv}<div class="ch-post-c"><div class="ch-post-b"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(new Date(p.at).toISOString()))}</time></span>${p.text ? `<span class="ch-post-t${long ? ' clamp' : ''}">${esc(p.text)}</span>` : ''}</div>${pics}<span class="ch-post-r">${hat}<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Sending…</span></span></div></div>`;
+    };
+    const sending = typeof chanSending === 'function' ? chanSending(w, open, mine) : [];
+    const html = shown.map(post).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
     if (firstWant.size) pullFirst();
     const bar = orderBar('Show posts', 'data-chchanf', CHAN_FILTERS, f, o => CHAN_FILTER_LABEL[o]);
-    return `<div class="ch-chan-feed">${bar}${shown.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}${archNote}</div>`;
+    return `<div class="ch-chan-feed">${bar}${shown.length || sending.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}${archNote}</div>`;
   }
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b><span class="ch-chan-hash" aria-hidden="true">#</span>${esc(open.name)}</b></div>`;
@@ -625,7 +633,7 @@ window.WizCore.chats = function createChats(H) {
       if (arch) { p.archived[cid] = new Date().toISOString(); p.pins = p.pins.filter(x => x !== cid); } else delete p.archived[cid];
       setChanPrefs(p); closeRowSheet(); chanRepaintAll(); toast('✓', `${arch ? 'Archived' : 'Restored'} # ${name}`, 1800); return true;
     }
-    if (e.target.closest('[data-rschnew]')) { closeRowSheet(); if (w && openChannel(w, cid)) openNewDraft(owner(w.id), ''); return true; }
+    if (e.target.closest('[data-rschnew]')) { closeRowSheet(); if (w && openChannel(w, cid)) chanToEnd(w.id, true); return true; }
     return false;
   }
   // Turning the switch on or off repaints the lists at once (an open feed falls back to the list it came from).
@@ -647,6 +655,90 @@ window.WizCore.chats = function createChats(H) {
     // A photo opens the shared media viewer (Back closes it: closeOverlay → KIT.viewer.close).
     const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), g = s ? firstPost(s)?.media || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
     return false;
+  }
+  /* The channel's message box (wizard-ux issue 1258; James, 10 Nov 2026: "I should be able to have a text box at the
+   * bottom … use the orb or type something and send a new message, and then that gets picked up by the agent as a new
+   * thread automatically"). It is the thread composer's own markup and handlers (attach, mic, model label) with the
+   * draft kept per channel ('chan:<agent>:<id>'). Send starts a new chat on today's path (sendChat '__new__', the
+   * window's default agent and model unless one was picked), filed into the channel's Space, and the window stays on
+   * the feed. The post is painted on the tap's own frame and gives way to the chat's own row once the outbox lists it.
+   * Room for an @-mention of an agent or model later: it would only set the route below. */
+  const CHAN_SENDING = [], CHAN_SENDING_MAX = 2 * 60e3;
+  // The Space a new chat from this window's channel feed is filed into ('' = General), or null when no feed is open.
+  // Voice takes pin it when they start, so a take sent after leaving the channel still lands where it began.
+  function chanSpaceOf(w) { const open = w && !w.thread ? chanOpen(w) : null; return open ? (open.general ? '' : open.id) : null; }
+  function chanDraftKey(w) {
+    const open = w && !w.thread ? chanOpen(w) : null;
+    return open && !chanArchived(open.id) ? `chan:${open.agent || winAgent(w) || ''}:${open.id}` : '';
+  }
+  function chanComposer(w, open) {
+    const key = chanDraftKey(w); if (!key) return '';
+    const c = ch(w.id), agent = open.agent || winAgent(w) || '';
+    // A model picked for another agent (a private one in New chat, another channel's) never rides into this channel:
+    // its chat would belong to that agent and could not be filed here. The box, its mic and the orb read c.newModel.
+    if (c.newModel?.agent && c.newModel.agent !== agent) c.newModel = null;
+    if (c.draftFor !== key) {
+      // A photo still uploading stays with the channel it was attached in: its live tray waits here (the upload
+      // finishes into it) and comes back, saved, when that channel is open again.
+      const trays = c.chanTrays || (c.chanTrays = new Map()), was = String(c.draftFor || '');
+      if (was.startsWith('chan:') && (c.files || []).some(f => f && f.uploading)) trays.set(was, c.files);
+      const d = KIT.drafts.get(key), live = trays.get(key); trays.delete(key);
+      c.draftFor = key; c.draft = d.text || '';
+      c.files = live || (d.files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
+      if (live) KIT.drafts.set(key, c.draft, c.files);
+    }
+    PW?.ensureModels?.();
+    // The label a new chat from this list shows (same default, same pick): the label reads the window as a new chat.
+    const mlabel = PW?.modelLabel ? PW.modelLabel({ ...w, thread: '__new__' }, null) : '';
+    const say = `Message # ${open.name}`;
+    return `<form data-part="composer" class="ch-compose ch-chan-compose${hasContent(c.draft, c.files || []) ? ' has-text' : ''}" data-morph-key="chanbox:${esc(key)}" data-chform data-chchanform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach pictures or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${esc(say)}" aria-label="${esc(say)}" enterkeyhint="enter">${esc(c.draft || '')}</textarea>${mlabel}</div>${PW?.micBtn ? PW.micBtn(w.id) : ''}<button type="submit" class="ch-send" aria-label="${esc(`Post in # ${open.name}`)}"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>`;
+  }
+  // The feed's newest post sits at the bottom: keep it in view after a send or when the feed opens.
+  function chanToEnd(wid, focus = false) {
+    requestAnimationFrame(() => {
+      const el = elOf(wid), sc = el?.querySelector('.ch-list > .ch-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
+      const ta = focus && el?.querySelector('[data-chchanform] textarea'); if (ta) { ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
+    });
+  }
+  // Posts still on their way for this feed: until the chat's row is in the channel (or two minutes pass).
+  function chanSending(w, open, mine) {
+    const key = chanDraftKey(w), now = Date.now();
+    for (let i = CHAN_SENDING.length - 1; i >= 0; i--) if (now - CHAN_SENDING[i].at > CHAN_SENDING_MAX) CHAN_SENDING.splice(i, 1);
+    return key ? CHAN_SENDING.filter(p => p.feed === key && !(p.sid && mine.some(s => s.id === p.sid && firstAgent(s) === p.owner))) : [];
+  }
+  async function channelSend(wid, form) {
+    const w = W[wid], key = chanDraftKey(w), open = key ? chanOpen(w) : null; if (!open) return null;
+    const c = ch(wid), ta = form.querySelector('textarea'), text = String(ta?.value || '').trim();
+    // A voice take into this channel is recording: Send finishes it, and the words and files here go with it.
+    const into = H.voiceInto?.(); if (into === '__new__' && H.finishVoice) { H.finishVoice(); return null; }
+    const tray = (c.files || []).filter(f => f && (f.id || f.uploading));
+    if (!text && !tray.length) return null;
+    const files = tray.map(pendRef).filter(f => f && f.id);
+    const media = tray.filter(f => /^image\//.test(f.mime || '') && f.preview).map((f, i) => ({ id: f.id || 'up' + i, name: f.name || 'Photo', mime: f.mime, kind: 'image', url: f.preview }));
+    const agent = open.agent || winAgent(w) || '', owner0 = agent && AGS()?.isOther?.(agent) ? agent : '';
+    // Only a model of this channel's own agent: the chat must belong to the agent whose Space it is filed into.
+    const nm = PW?.newModel?.(c) || null, route = nm && (!nm.agent || nm.agent === agent) ? nm : null;
+    const p = { key: 'chanpost:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), feed: key, owner: owner0, text, media, at: Date.now(), sid: '' };
+    CHAN_SENDING.push(p);
+    if (ta) { ta.value = ''; growTa(ta); }
+    c.draft = ''; c.files = []; KIT.drafts.clear(key); syncSend(form, c);
+    const o = ch(owner(wid)); if (o.chanFilter === 'needs') o.chanFilter = 'open';
+    renderChatList(w, elOf(wid)); chanToEnd(wid); // the post is on screen on this frame
+    const how = `typing in the # ${open.name} channel in Chats`;
+    const it = await sendChat(wid, text, how, null, { sid: '__new__', away: true, space: open.general ? '' : open.id, files, route, instructions: viewContext(wid, how) });
+    if (!it?.sessionId) {
+      // Not saved: the post goes and the words and files return to this channel's box.
+      CHAN_SENDING.splice(CHAN_SENDING.indexOf(p), 1);
+      const d = KIT.drafts.get(key), back = [text, String(d.text || '').trim()].filter(Boolean).join('\n');
+      KIT.drafts.set(key, back, [...files, ...(d.files || []).filter(f => !files.some(x => x.id === f.id))]);
+      if (W[wid] === w && chanDraftKey(w) === key) { c.draftFor = ''; const t = elOf(wid)?.querySelector('[data-chchanform] textarea'); if (t) t.value = back; }
+      chanRepaint(); return null;
+    }
+    p.sid = it.sessionId;
+    // The post keeps the words and pictures it was sent with (the chat's own first message, without a read).
+    FIRST.set(owner0 + '|' + p.sid, { text: text.slice(0, CHAN_TEXT_MAX), media, at: p.at });
+    chanRepaint(); chanToEnd(wid);
+    return it;
   }
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
@@ -1684,8 +1776,9 @@ window.WizCore.chats = function createChats(H) {
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
-    // An archived channel's feed takes no new posts (Restore first), as its sheet offers no New post.
-    const fab = feed && typeof chanArchived === 'function' && chanArchived(feed.id) ? '' : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
+    // A channel's feed has its message box instead (wizard-ux issue 1258); an archived one takes no new posts (Restore
+    // first), as its sheet offers no New post.
+    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
     // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
@@ -1716,6 +1809,7 @@ window.WizCore.chats = function createChats(H) {
       clearReading(w.id); c.listHTML = html;
       // The morph keeps a typed field's live value; a cleared search (×, Back, a chip) must empty the box too.
       const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
+      const cta = feed && root.querySelector('[data-chchanform] textarea'); if (cta && typeof growTa === 'function') growTa(cta); // the morph drops its measured height
       // The auto-archive picker is a saved setting, not a draft: show the saved value after every repaint, or a
       // window painted before the choice changed (another desk, another device, first paint) keeps saying "1 week".
       const arch = root.querySelector('[data-archafter]'); if (arch && arch.value !== String(LIVE.archiveAfterDays)) arch.value = String(LIVE.archiveAfterDays);
@@ -1785,6 +1879,7 @@ window.WizCore.chats = function createChats(H) {
     const locals = picked.map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, sent: 0, total: file.size, upState: 'uploading', preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
     if (!locals.length) return;
     c.files.push(...locals); refreshCompose(wid);
+    const tray = c.files; // a channel's tray can be parked while this uploads (chanComposer); it settles there
     await Promise.all(locals.map(async local => {
       const { file } = local; delete local.file;
       const abort = new AbortController(); UPLOAD_ABORT.set(local.key, abort);
@@ -1798,10 +1893,12 @@ window.WizCore.chats = function createChats(H) {
       // collects the receipt from here, or re-uploads the kept bytes if this upload dies.
       const settle = PEND ? PEND.track(local, file) : null;
       try { const f = await uploadFile(file, { signal: abort.signal, onProgress }); Object.assign(local, f, { uploading: false }); settle?.ok(f); if (local.preview) PREVIEW[local.id] = local.preview; }
-      catch (e) { settle?.fail(e); c.files = c.files.filter(x => x !== local); if (!abort.signal.aborted && !local.handedOff) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      catch (e) { settle?.fail(e); c.files = c.files.filter(x => x !== local); if (tray !== c.files && tray.includes(local)) tray.splice(tray.indexOf(local), 1); if (!abort.signal.aborted && !local.handedOff) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
       finally { UPLOAD_ABORT.delete(local.key); }
       refreshCompose(wid);
     }));
+    // Parked with its channel (another channel opened meanwhile): save it there, never into the box in front.
+    for (const [k, t] of c.chanTrays || []) if (t === tray && tray !== c.files) KIT.drafts.set(k, KIT.drafts.get(k).text, t);
     saveDraft(wid);
   }
   const UPLOAD_ABORT = new Map();
@@ -2725,14 +2822,14 @@ window.WizCore.chats = function createChats(H) {
   }
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   // An agent's new chat keeps its own slot ('agentnew:<id>'), so it never shows in (or takes) the main Drafts.
-  const draftKey = w => w.thread === '__new__' ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : 'direct:' + w.thread;
+  const draftKey = w => w.thread === '__new__' ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : (!w.thread && typeof chanDraftKey === 'function' && chanDraftKey(w)) || 'direct:' + w.thread;
   function loadDraft(w) {
     const c = ch(w.id), key = draftKey(w), d = KIT.drafts.get(key);
     c.draftFor = key; c.draft = d.text;
     c.files = d.files.map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
     return d.text;
   }
-  function saveDraft(wid) { if (INC?.active(wid)) return; const w = W[wid], c = ch(wid); if (!w || !w.thread) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
+  function saveDraft(wid) { if (INC?.active(wid)) return; const w = W[wid], c = ch(wid); if (!w || (!w.thread && !(typeof chanDraftKey === 'function' && chanDraftKey(w)))) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
   function openMedia(wid, k) {
     const c = ch(wid), list = c.media || [], m = list[k]; if (!m) return;
     // Photos swipe as one gallery (this thread, oldest first); a file or video opens on its own.
@@ -3302,39 +3399,45 @@ window.WizCore.chats = function createChats(H) {
    * taken words wait under a hidden 'sealed:<thread>' draft key, so a reload or crash puts them back in the composer
    * (restoreSealed, at start). done(): the outbox has it. putBack(): the take was dropped or could not be saved. */
   const composerKey = sid => sid === '__new__' ? 'new' : 'direct:' + sid;
+  // A new chat started from a channel's feed (its mic, the orb in front of it) takes that channel's box.
+  const chanBoxOf = (wid, sid) => sid === '__new__' && W[wid] && !W[wid].thread && typeof chanDraftKey === 'function' ? chanDraftKey(W[wid]) : '';
+  // box: the channel box a voice take was pinned to when it started ('' = none; undefined = whatever is in front now).
+  // A take started in channel A takes A's box even if the window shows channel B by Send.
+  const boxKey = (wid, sid, box) => (typeof box === 'string' ? box : chanBoxOf(wid, sid)) || composerKey(sid);
   const SEALED = 'sealed:';
   const fileRef = f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes });
   // What a thread's composer holds right now (the window's textarea while it shows that thread, else the draft).
-  function peekComposer(wid, sid) {
+  function peekComposer(wid, sid, box) {
     if (INC?.active(wid)) return { text: '', files: [] };
-    const w = W[wid], here = !!w && !!sid && w.thread === sid, c = w ? ch(wid) : null;
+    const cur = chanBoxOf(wid, sid), pinned = typeof box === 'string';
+    const w = W[wid], here = !!w && !!sid && (pinned ? (box ? box === cur : !cur && w.thread === sid) : (w.thread === sid || !!cur)), c = w ? ch(wid) : null;
     const ta = here ? elOf(wid)?.querySelector('.ch-compose textarea') : null;
-    const saved = sid ? KIT.drafts.get(composerKey(sid)) : { text: '', files: [] };
+    const saved = sid ? KIT.drafts.get(boxKey(wid, sid, box)) : { text: '', files: [] };
     return { here, ta, c, text: String(here ? (ta ? ta.value : c.draft || '') : saved.text), all: here ? (c.files || []) : saved.files, reply: saved.reply };
   }
   // A photo or file in that composer is still uploading: the voice send waits for it, like a typed send.
   const composerBusy = (wid, sid) => peekComposer(wid, sid).all.some(f => f && f.uploading);
-  function restoreInto(wid, sid, text, files, reply) {
+  function restoreInto(wid, sid, text, files, reply, box) {
     // A placeholder for a file that was still uploading goes back as its receipt once that upload settles
     // (dropped if it failed or this page no longer holds it).
     const waits = (files || []).filter(f => PEND?.isPending(f?.id));
     if (waits.length) {
       Promise.all(waits.map(f => PEND.rowOf(f.id)?.upDone?.then(r => r, () => null) || null)).then(got => {
         const done = files.map(f => { const i = waits.indexOf(f); return i < 0 ? f : got[i]?.id ? fileRef(got[i]) : null; }).filter(Boolean);
-        restoreInto(wid, sid, text, done, reply);
+        restoreInto(wid, sid, text, done, reply, box);
       });
       return;
     }
-    const now = peekComposer(wid, sid);
+    const now = peekComposer(wid, sid, box);
     const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))] };
-    if (reply && !now.reply) KIT.drafts.setReply(composerKey(sid), reply);
-    if (now.here) { setDraft(wid, back.text, back.files); renderChats(W[wid]); } else KIT.drafts.set(composerKey(sid), back.text, back.files);
+    if (reply && !now.reply) KIT.drafts.setReply(boxKey(wid, sid, box), reply);
+    if (now.here) { setDraft(wid, back.text, back.files); if (now.ta && chanBoxOf(wid, sid)) now.ta.value = back.text; renderChats(W[wid]); } else KIT.drafts.set(boxKey(wid, sid, box), back.text, back.files);
   }
   const NO_SEAL = { text: '', files: [], done() {}, putBack() {} };
-  function takeComposer(wid, sid) {
+  function takeComposer(wid, sid, box) {
     if (INC?.active(wid)) return NO_SEAL;
     if (!sid) return NO_SEAL;
-    const P = peekComposer(wid, sid), dkey = composerKey(sid);
+    const P = peekComposer(wid, sid, box), dkey = boxKey(wid, sid, box);
     // A file still uploading is taken too (a pending placeholder): the message never waits for it.
     const taken = P.all.map(f => [f, pendRef(f)]).filter(([, r]) => r && r.id);
     const text = P.text.trim(), files = taken.map(([, r]) => r), reply = P.reply || null;
@@ -3347,13 +3450,14 @@ window.WizCore.chats = function createChats(H) {
     }
     KIT.drafts.set(dkey, '', rest);
     if (reply) { KIT.drafts.setReply(dkey, null); if (P.here) refreshReply(wid); }
-    const skey = SEALED + sid + ':' + crypto.randomUUID().replaceAll('-', '');
+    // A channel box's seal names the box itself ('sealed:chan:<agent>:<id>:…'), so a reload puts the words back there.
+    const skey = SEALED + (dkey.startsWith('chan:') ? dkey : sid) + ':' + crypto.randomUUID().replaceAll('-', '');
     KIT.drafts.set(skey, text, files);
     if (reply) KIT.drafts.setReply(skey, reply);
     let open = true;
     return { text, files, reply, key: skey,
       done(it) { if (it && !it.durable) return; if (open) { open = false; KIT.drafts.clear(skey); } },
-      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files, reply); } };
+      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files, reply, dkey.startsWith('chan:') ? dkey : box); } };
   }
   // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
   const startupSeals = new Set(Object.keys(KIT.drafts.all()).filter(k => k.startsWith(SEALED)));
@@ -3363,7 +3467,7 @@ window.WizCore.chats = function createChats(H) {
       if (!startupSeals.has(k)) continue;
       startupSeals.delete(k);
       const d = KIT.drafts.get(k), sid = k.slice(SEALED.length).replace(/:[a-z0-9]+$/, '');
-      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) restoreInto('', sid, d.text, d.files, d.reply);
+      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) { if (sid.startsWith('chan:')) restoreInto('', '__new__', d.text, d.files, d.reply, sid); else restoreInto('', sid, d.text, d.files, d.reply); }
     }
   }
   // Typed words first, then what was said (legacy order: the pasted link is the context the voice talks about).
@@ -3396,7 +3500,8 @@ window.WizCore.chats = function createChats(H) {
     if (carryText) { if (later) typed = joinWords(typed, carryText); else if (text || files.length) text = `${text}\n\n${carryText}`.trim(); }
     if (!text && !files.length && !audio) { sealed?.putBack(); return; }
     const isNew = sid === '__new__';
-    const spaceKey = isNew && !opts.away && focusOf(w)?.kind === 'space' ? focusOf(w).key : '';
+    // opts.space: the Space a send from elsewhere files into (a channel's box, wizard-ux issue 1258).
+    const spaceKey = isNew && typeof opts.space === 'string' ? opts.space : isNew && !opts.away && focusOf(w)?.kind === 'space' ? focusOf(w).key : '';
     // A Notifications Reply: the item rides with the message (framed at delivery), never in his words.
     const rdkey = isNew ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : 'direct:' + sid;
     const reply = voice ? (sealed?.reply || null) : here ? KIT.drafts.get(rdkey).reply : null;
@@ -3724,6 +3829,7 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('[data-incog-form]')) { e.preventDefault(); const id = idOf(e.target), field = e.target.querySelector('textarea'), text = field.value; field.value = ''; void INC?.send(id, text); return; }
       const rn = e.target.closest('[data-rnform]'); if (rn) { e.preventDefault(); submitRename(rn); return; }
       const crn = e.target.closest('[data-chrnform]'); if (crn) { e.preventDefault(); submitChannelRename(crn); return; }
+      const cf = e.target.closest('[data-chchanform]'); if (cf) { e.preventDefault(); void channelSend(idOf(cf), cf); return; }
       const f = e.target.closest('[data-chform]'); if (!f) return;
       e.preventDefault(); const id = idOf(f); const ta = f.querySelector('textarea');
       const text = ta.value; const c = ch(id);
@@ -3811,7 +3917,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
@@ -3826,7 +3932,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, chanSpaceOf, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

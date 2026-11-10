@@ -7,7 +7,7 @@
  function create({ CHATS, APP, appByName, findApp, quickSearch, sendSnap }) {
  const norm = window.WizCore.norm;
   function chatsVoice(t, snap, kind) {
-    const v = snap?.view; if (!v || v.kind !== 'thread list') return null;
+    const v = snap?.view; if (!v || (v.kind !== 'thread list' && !v.channel)) return null;
     const s = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '').trim();
     if (/^(clear focus|all chats|show all chats)$/.test(s)) return { action: 'chats_focus', f: null };
     const focus = s.match(/^focus (.+)$/);

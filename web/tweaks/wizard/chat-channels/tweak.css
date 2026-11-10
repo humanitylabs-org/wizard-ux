@@ -60,3 +60,9 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-st.needs { color: var(--amber
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-pin { flex: none; display: inline-flex; width: 14px; height: 14px; color: var(--ink-3); }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-pin svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-arch { margin-top: 8px; }
+
+/* a channel's message box (wizard-ux issue 1258): the thread composer at the foot of the feed, in place of + */
+html[data-tweaks~="wizard/chat-channels"] .ch-list:has(> .ch-chan-compose) .ch-chan-feed { padding-bottom: 8px; }
+html[data-tweaks~="wizard/chat-channels"] :is(#device, body) .ch-list:has(> .ch-chan-compose) > .ch-scroll { padding-bottom: 4px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post.sending .ch-post-img { display: inline-block; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post.sending .ch-post-r { cursor: default; }
