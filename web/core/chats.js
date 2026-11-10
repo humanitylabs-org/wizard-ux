@@ -539,8 +539,11 @@ window.WizCore.chats = function createChats(H) {
    * firstRequest / firstAttachments (wizard-agent-service issue 446); until then the shell reads the first page of
    * the thread's history once, a few threads at a time, and keeps it per thread. Everything is keyed by the row's own
    * agent plus its id, and the read names that agent: a main and a routed thread may share an id. A failed read
-   * (offline, timeout) is not kept; the thread is read again on a repaint after CHAN_FIRST_RETRY. */
-  const FIRST = new Map(), firstWant = new Map(), firstAsked = new Set(), firstFailed = new Map(), CHAN_FIRST_RETRY = 30e3;
+   * (offline, timeout) is not kept; the thread is read again on a repaint after CHAN_FIRST_RETRY. Nor is an empty
+   * history (a chat just started) or a voice note still being transcribed: read again soon (firstPend, backing off).
+   * The post never shows the generated chat title for an owner's message (James, 11 Nov 2026: "We don't want to
+   * temporarily display a title. We don't want to oscillate back and forth"): the words once shown stay (SHOWN). */
+  const FIRST = new Map(), firstWant = new Map(), firstAsked = new Set(), firstFailed = new Map(), firstPend = new Map(), SHOWN = new Map(), CHAN_FIRST_RETRY = 30e3, CHAN_FIRST_WAIT = 2e3;
   let firstBusy = 0, firstT = 0;
   const firstAgent = s => LIVE.ownerOf ? LIVE.ownerOf(s) || '' : '';
   const firstKey = s => firstAgent(s) + '|' + s.id;
@@ -548,15 +551,44 @@ window.WizCore.chats = function createChats(H) {
     const list = (Array.isArray(files) ? files : []).map(f => typeof f === 'string' ? { id: f, name: 'Photo', mime: 'image/*', kind: 'image', url: f } : f && typeof f === 'object' ? mediaOfFile(f) : null);
     return list.concat((Array.isArray(images) ? images : []).map((u, i) => ({ id: 'img' + i, name: 'Photo', mime: 'image/*', kind: 'image', url: u }))).filter(m => m && m.kind === 'image' && (m.url || m.thumb));
   }
+  // null: nothing to keep yet (no history, unreadable). none: a thread the agent started, with no owner message.
+  // voice: the owner's voice note whose transcript is not there yet.
   function firstOf(rows) {
+    if (!Array.isArray(rows) || !rows.length) return null;
     let t = null; try { t = toTurns(rows).find(x => x.u && (x.u.text || x.u.files?.length || x.u.images?.length)); } catch (_) { return null; }
-    return t ? { text: String(t.u.text || '').slice(0, CHAN_TEXT_MAX), media: chanMedia(t.u.files || [], t.u.images || []), at: t.u.at } : { text: '', media: [], none: true };
+    if (!t) {
+      // An owner message with nothing to show yet (a voice note before its words) is not an agent-started thread.
+      const own = rows.find(r => r && r.role === 'user'); if (!own) return { text: '', media: [], none: true };
+      let raw = ''; try { raw = JSON.stringify(own); } catch (_) {}
+      return { text: '', media: [], wait: true, ...(/audio\//.test(raw) ? { voice: true } : {}) };
+    }
+    const files = t.u.files || [], typed = String(t.u.text || '').trim() ? String(t.u.text) : '';
+    const heard = typed || String(files.find(f => f && typeof f.transcript === 'string' && f.transcript.trim())?.transcript || '');
+    const voice = !heard && files.some(f => f && (f.kind === 'audio' || /^audio\//.test(f.mime || '')));
+    return { text: heard.slice(0, CHAN_TEXT_MAX), media: chanMedia(files, t.u.images || []), at: t.u.at, ...(voice ? { voice: true } : {}) };
   }
   function firstPost(s) {
-    if (typeof s.firstRequest === 'string') return { text: s.firstRequest, media: chanMedia(s.firstAttachments || []) };
+    if (typeof s.firstRequest === 'string' && (s.firstRequest.trim() || chanMedia(s.firstAttachments || []).length)) return { text: s.firstRequest, media: chanMedia(s.firstAttachments || []) };
     const k = firstKey(s); if (FIRST.has(k)) return FIRST.get(k);
-    if (!firstAsked.has(k) && !(Date.now() - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY)) firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) });
+    const pend = firstPend.get(k), now = Date.now();
+    if (!firstAsked.has(k) && !(now - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY) && !(pend && now - pend.at < pend.wait)) firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) });
     return null;
+  }
+  // Placeholders the list and outbox put where a message's words will be (live.js pendText, synthetic rows).
+  const CHAN_STAND_IN = /^(?:🎙\s*Voice (?:note|reply)|📎\s*Attachment)$/u, CHAN_VOICE_IN = /^🎙/u;
+  const chanSaid = v => { v = String(v || '').trim(); return v && !CHAN_STAND_IN.test(v) ? v : ''; };
+  /* What a post says: the owner's own words (Agent Service firstRequest, the first-message read, the message sent from
+   * the box), else the list's owner text meanwhile; once shown, those words stay through stale list refreshes. A voice
+   * note with no words yet says "Voice note". The chat's title only for a thread the agent started itself. */
+  function chanPostText(s, p) {
+    const k = firstKey(s);
+    if (p && p.text) SHOWN.set(k, p.text);
+    else if (!SHOWN.has(k)) { const stand = chanSaid(s.request) || (s.previewRole === 'user' ? chanSaid(s.preview) : '') || chanSaid(s.pendText); if (stand) SHOWN.set(k, stand); }
+    const text = SHOWN.get(k) || '';
+    if (text) return { text };
+    const voice = !!p?.voice || !!firstPend.get(k)?.voice || [s.request, s.previewRole === 'user' ? s.preview : '', s.pendText].some(v => CHAN_VOICE_IN.test(String(v || '').trim()));
+    if (voice && !p?.media?.length) return { text: '', voice: true };
+    return { text: p && !p.media.length && p.none ? String(s.title || '') : '' };
   }
   /* Reply counts (wizard-ux issue 1266): the agent replies James sees when he opens the thread, one per answer bubble
    * (a KIT.parseRows turn with an answer, or the files an agent sent), never Hermes' message_count, which also counts
@@ -585,10 +617,16 @@ window.WizCore.chats = function createChats(H) {
       if (asked.has(k) || (first ? FIRST.has(k) : REPLIES.get(k)?.rev === rev)) continue;
       asked.add(k); firstBusy++;
       Promise.resolve().then(() => first ? LIVE.firstMessages(id, agent, CHAN_FIRST_PAGE) : LIVE.threadRows(id, agent)).then(rows => {
-        rows = rows || [];
-        if (first) FIRST.set(k, firstOf(rows) || { text: '', media: [], none: true });
+        const partial = !!rows?.truncated; rows = rows || [];
+        if (first) {
+          // Kept once it holds the owner's words (or proves the agent started the thread); else read again soon.
+          const p = firstOf(rows), was = firstPend.get(k);
+          if (p && !p.voice && !p.wait) { FIRST.set(k, p); firstPend.delete(k); }
+          else { const wait = Math.min(CHAN_FIRST_RETRY, was ? was.wait * 2 : CHAN_FIRST_WAIT); firstPend.set(k, { at: Date.now(), wait, voice: !!p?.voice || !!was?.voice }); setTimeout(() => chanRepaint(), wait + 50); }
+        }
         failed.delete(k);
-        if (!first || rows.length < CHAN_FIRST_PAGE) { const ats = replyAts(rows); if (ats) REPLIES.set(k, { rev, ats }); }
+        // A history cut short (LIVE.threadRows' page limit) gives no count rather than a wrong one.
+        if (!first || rows.length < CHAN_FIRST_PAGE) { const ats = partial ? null : replyAts(rows); REPLIES.set(k, ats ? { rev, ats } : { rev, ats: [], partial: true }); }
       }, () => failed.set(k, Date.now()))
         .finally(() => { asked.delete(k); firstBusy--; clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(), 60); pullFirst(); });
     }
@@ -694,21 +732,20 @@ window.WizCore.chats = function createChats(H) {
     const me = String(window.WizConfig?.owner?.() || '').trim(), meAv = `<span class="ch-post-me" aria-hidden="true">${esc((me || 'You').slice(0, 1).toUpperCase())}</span>`;
     const post = s => {
       // Slack-style: avatar, name and time, then the message as plain text (4 lines, then "more") and its pictures.
-      // A thread whose first message hasn't been read yet shows its owner preview meanwhile; the title only when the
-      // thread has no owner message at all (the agent started it).
-      const p = firstPost(s), stand = String(s.request || (s.previewRole === 'user' ? s.preview : '') || ''), failed = !p && firstFailed.has(firstKey(s));
-      const text = p ? (p.text || (p.media.length ? '' : stand || (p.none ? s.title : ''))) : stand || (failed ? s.title : ''), media = p?.media || [];
+      // A thread whose first message hasn't been read yet shows its owner preview meanwhile (chanPostText); the title
+      // only when the thread has no owner message at all (the agent started it).
+      const p = firstPost(s), said = chanPostText(s, p), text = said.text, media = p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
       const at = p?.at && isFinite(p.at) ? new Date(p.at).toISOString() : s.createdAt || LIVE.cardAt(s);
       // Replies are the bubbles James sees in the thread (chanReplies), never a raw message count; none until read.
-      const r = chanReplies(s), n = r ? r.ats.length : 0, key = chanKey(s), live = chanUnread(s), kept = !live && loc.seen.has(key), un = live || kept;
+      const r = chanReplies(s), n = r && !r.partial ? r.ats.length : 0, key = chanKey(s), live = chanUnread(s), kept = !live && loc.seen.has(key), un = live || kept;
       // Unread: the green dot first, then "2 new replies" in ink (Slack's thread marker). A post seen in this open keeps
       // its marker (and its count of new ones) until the next open.
       const nn = live ? chanNewN(s, r) : kept ? loc.seen.get(key) : 0;
       const dot = un ? '<i class="st unread" aria-hidden="true"></i>' : '', replies = un ? `<span>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : 'New reply'}</span>` : n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
       const state = isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '';
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
-      const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
+      const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
       return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${dot}${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
