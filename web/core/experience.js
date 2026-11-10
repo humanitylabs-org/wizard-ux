@@ -109,6 +109,19 @@
     for (const ids of Object.values(state.off)) for (const id of ids) if (globalIds().includes(canonical(id))) off.add(canonical(id));
     state.defaultsOff = [...off]; state.defaultsMigrated = true; Store.write(state);
   }
+  /* Switches promoted to defaults (catalog `promotedDefaults`, wizard-ux issue 1236): an off this device chose but has
+   * not shared yet (look sync's queue, wos.look-sync.v1 `pending.tweaks`: offline, or a box without Pages) stays off.
+   * Once per id. A choice already shared comes back through look sync, which carries it into `defaults`. `mix` false is
+   * never read: setOne() drops an off rather than storing it, and adopt() writes false for every switch not on in the
+   * shared set, so there it means "never chosen", and treating it as an off would turn the new default off for everyone. */
+  function migratePromoted() {
+    const ids = (catalog?.promotedDefaults || []).filter(id => globalIds().includes(id)), done = new Set(state.promotedMigrated || []);
+    if (ids.every(id => done.has(id))) return;
+    let queued = null; try { queued = JSON.parse(localStorage.getItem('wos.look-sync.v1') || 'null')?.pending?.tweaks; } catch (_) {}
+    const off = new Set(state.defaultsOff || []);
+    for (const id of ids) { if (queued?.[id]?.on === false) off.add(id); done.add(id); }
+    state.defaultsOff = [...off]; state.promotedMigrated = [...done]; Store.write(state);
+  }
   const recipeChoice = (own, id) => {
     if (!own) return undefined;
     if (Object.hasOwn(own.tweaks, id)) return own.tweaks[id];
@@ -201,7 +214,7 @@
       const who = wornOwner();
       // A legacy layout can boot before this deferred module; the worn family now owns it.
       if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
-      catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults();
+      catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults(); migratePromoted();
       // A preset pick uses the profile the installed list already warmed; other refreshes re-read it for news.
       const next = who ? await (warm === true && profileReads.has(who) ? profileReads.get(who) : read(`tweaks/${who}/profile.json`)) : null;
       if (seq !== generation) return;

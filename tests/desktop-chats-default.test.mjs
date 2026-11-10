@@ -28,8 +28,8 @@ test('desktop is unchanged: every rule is phone-only and the script returns at o
   assert.deepEqual(JSON.parse(read('web/tweaks/wizard/desktop-chats/manifest.json')).shells, ['phone']);
 });
 
-function box(channel, saved) {
-  const storage = new Map([['wos.skin', 'obsidian']]);
+function box(channel, saved, extra = {}) {
+  const storage = new Map([['wos.skin', 'obsidian'], ...Object.entries(extra)]);
   if (saved) storage.set('wos.skin-tweaks.v1', JSON.stringify(saved));
   if (channel) storage.set('wos.channel.v1', channel);
   let active = [];
@@ -62,6 +62,27 @@ test('an install updating from before keeps getting it unless the owner chose; h
   const again = box('latest', JSON.parse(b.storage.get('wos.skin-tweaks.v1'))); await again.E.refresh();
   assert.ok(!again.active().includes(ID), 'explicit off survives a reload');
   assert.equal(again.E.state.tweaks.find(x => x.id === ID).on, false);
+});
+
+test('a pre-upgrade device whose off is still in the look-sync queue (offline, or no Pages) keeps it off, once', async () => {
+  const before = { version: 1, off: {}, preset: 'none', mix: { 'miguel/send-and-go': true }, machinesHomeMoved: true, miguelLayoutMoved: true };
+  const queue = { version: null, synced: false, pending: { skin: null, tweaks: { [ID]: { on: false, at: 4 }, 'miguel/send-and-go': { on: true, at: 3 } } } };
+  const b = box('latest', before, { 'wos.look-sync.v1': JSON.stringify(queue) }); await b.E.refresh();
+  assert.ok(!b.active().includes(ID), 'queued off kept');
+  const saved = JSON.parse(b.storage.get('wos.skin-tweaks.v1'));
+  assert.deepEqual(saved.promotedMigrated, [ID]); assert.ok(saved.defaultsOff.includes(ID));
+  // Once: turning it on later is not undone by the same old queue entry.
+  await b.E.toggle(ID); assert.ok(b.active().includes(ID));
+  const again = box('latest', JSON.parse(b.storage.get('wos.skin-tweaks.v1')), { 'wos.look-sync.v1': JSON.stringify(queue) }); await again.E.refresh();
+  assert.ok(again.active().includes(ID), 'migration runs once per id');
+  // A queued on, or no queue, leaves the new default on.
+  for (const tweaks of [{ [ID]: { on: true, at: 2 } }, {}]) {
+    const q = box('latest', before, { 'wos.look-sync.v1': JSON.stringify({ pending: { tweaks } }) }); await q.E.refresh();
+    assert.ok(q.active().includes(ID), JSON.stringify(tweaks));
+  }
+  // A synced device's mix false (adopt writes false for every switch not on) is not an off.
+  const synced = box('latest', { ...before, mix: { [ID]: false, 'miguel/send-and-go': true } }); await synced.E.refresh();
+  assert.ok(synced.active().includes(ID));
 });
 
 // Look sync (web/core/look-sync.js) with a fake box, as in look-default-sync.test.mjs.
