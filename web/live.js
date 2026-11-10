@@ -1192,6 +1192,24 @@
       const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=${Math.max(1, Math.min(50, limit | 0))}&offset=0&include_compacted=true&view=wizard${a ? `&agent=${encodeURIComponent(a)}` : ''}`, { signal: globalThis.AbortSignal?.timeout?.(12000) })).json();
       return p.data || p.messages || p.items || [];
     },
+    /* One thread's whole history (oldest first) for the row's own agent: the Channels feed counts the replies James
+     * sees from it (wizard-ux issue 1266), because message_count also counts tool calls, results and status rows. */
+    async threadRows(id, agent = '') {
+      const a = otherAgent(agent) ? agent : '', rows = [], signal = globalThis.AbortSignal?.timeout?.(12000);
+      for (let offset = 0; offset < 5000; offset += 500) {
+        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${a ? `&agent=${encodeURIComponent(a)}` : ''}`, { signal })).json();
+        const page = p.data || p.messages || p.items || [];
+        rows.push(...page);
+        const n = Number(p.pagination?.returned ?? page.length);
+        if (!isFinite(n) || n < 500 || !page.length) break;
+      }
+      return rows;
+    },
+    // When this row was last read (ms): replies after it are new. 0 = never read.
+    readAt(s) {
+      const r = s && this.seen?.threads?.[seenKeyOf(s)]; if (!r) return 0;
+      const a = Date.parse(r.assistantActivityAt ?? ''); return isFinite(a) ? a : Number(r.seenAt) || 0;
+    },
     async searchSessions(q, agent = '', signal, onBatch) {
       const read = ++titleRead;
       const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];

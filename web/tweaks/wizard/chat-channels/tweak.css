@@ -52,7 +52,7 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-n { font-size: .75rem; color:
 html[data-tweaks~="wizard/chat-channels"] .ch-post-r { display: flex; align-items: center; gap: 8px; min-height: 32px; margin-top: 2px; padding: 0; border: 0; background: transparent; color: var(--ink-3); font: inherit; font-size: .75rem; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-av { display: inline-flex; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-av .ag-sig { width: 18px; height: 18px; border-radius: 6px; font-size: .625rem; }
-html[data-tweaks~="wizard/chat-channels"] .ch-post-r span:not(.ch-post-st) { color: var(--violet-2); font-weight: 600; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-r span:not(.ch-post-st) { color: var(--ink-2); font-weight: 500; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-st { display: inline-flex; align-items: center; gap: 5px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-st.needs { color: var(--amber); }
 
@@ -66,13 +66,19 @@ html[data-tweaks~="wizard/chat-channels"] .ch-list:has(> .ch-chan-compose) .ch-c
 html[data-tweaks~="wizard/chat-channels"] :is(#device, body) .ch-list:has(> .ch-chan-compose) > .ch-scroll { padding-bottom: 4px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post.sending .ch-post-img { display: inline-block; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post.sending .ch-post-r { cursor: default; }
-/* Unread (wizard-ux issue 1259): the Activity row's bold ink and violet dot, read from the same per-chat state. */
+/* Unread (wizard-ux issue 1259), read from Activity's per-chat state. Issue 1266: a green dot for unread (something new,
+   nothing to do) and the amber one for needs you; violet blended into the shell. --ch-new is the skin's green, held on
+   a green hue where a skin's green is gold (Ember), so the two dots stay apart on every skin. Activity's dot is unchanged. */
+html[data-tweaks~="wizard/chat-channels"] .ch-list { --ch-new: var(--green); }
+@supports (color: oklch(from red l c h)) { html[data-tweaks~="wizard/chat-channels"] .ch-list { --ch-new: oklch(from var(--green) l c 150); } }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-r .st.unread { background: var(--ch-new); box-shadow: 0 0 6px color-mix(in srgb, var(--ch-new) 55%, transparent); }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-dot.new { background: var(--ch-new); }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan.unread .ch-chan-open b { color: var(--ink); font-weight: 750; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan.unread .ch-chan-hash { color: var(--ink-2); }
-html[data-tweaks~="wizard/chat-channels"] .ch-chan-n { flex: none; margin-left: auto; min-width: 1.125rem; height: 1.125rem; padding: 0 .375rem; display: inline-grid; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--violet) 24%, transparent); color: var(--ink); font-size: .6875rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-n { flex: none; margin-left: auto; min-width: 1.125rem; height: 1.125rem; padding: 0 .375rem; display: inline-grid; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--ch-new) 26%, transparent); color: var(--ink); font-size: .6875rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-post.unread span { color: var(--ink); font-weight: 750; }
-html[data-tweaks~="wizard/chat-channels"] .ch-post-r.unread span:not(.ch-post-st) { font-weight: 750; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-r.unread span:not(.ch-post-st) { color: var(--ink); font-weight: 600; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-r .st { margin-right: 0; }
 /* Where a channel opens (wizard-ux issue 1263): a slim "New" line above the first unread post, like a chat's unread line. */
-html[data-tweaks~="wizard/chat-channels"] .ch-chan-new { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--violet-2); font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-html[data-tweaks~="wizard/chat-channels"] .ch-chan-new::before { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--violet) 55%, transparent); }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-new { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--ch-new); font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-new::before { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--ch-new) 55%, transparent); }
