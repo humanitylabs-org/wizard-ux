@@ -729,3 +729,16 @@ test('issue 1263: every list paint and every rerender put the feed back in its p
   const d = feedDom(''); f.env.elOf = () => d.el; f.chanUser('w'); d.sc.scrollTop = 5; f.chanScrolled('w', d.sc);
   assert.deepEqual({ ...f.w.chan.at }, { end: true }, 'switch off: scrolls are not read');
 });
+
+test('issue 1263: the tap that opens an unread channel and the hold\'s own scroll never replace the New line as the place', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120, 104);
+  f.chanUser('w'); // the row's pointerdown, before openChannel runs
+  f.openChannel(f.w, 'launch');
+  const d = feedDom(f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.env.elOf = () => d.el;
+  f.chanHold('w'); f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8 }, 'the opening tap is not a scroll');
+  f.chanUser('w'); f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8 }, 'the scroll event the hold itself fired is not James\'s');
+  f.chanUser('w'); d.sc.scrollTop -= 250; f.chanScrolled('w', d.sc);
+  assert.equal(f.w.chan.at.key, 'post:p101', 'a real scroll after it does move the place');
+});

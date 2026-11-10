@@ -478,7 +478,7 @@ window.WizCore.chats = function createChats(H) {
     // (the Focus moved since) gives way to the Focus showing now.
     const prev = o.chan && chanOpen(w) ? o.chan.prev : (o.focus || null), sp = id !== CHAN_GENERAL && spaces().find(s => s.id === id);
     if (id !== CHAN_GENERAL && !sp) return false;
-    o.chan = { id, prev };
+    o.chan = { id, prev }; chanUserAt[w.id] = 0; // the tap that opened it is not a scroll
     const f = focusOf(o), back = prev?.kind === 'space' ? { kind: 'agent', key: focusedAgent(prev) } : prev;
     // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).
     setFocus(w, sp ? { kind: 'space', key: sp.id } : f?.kind === 'space' ? back : f);
@@ -575,7 +575,7 @@ window.WizCore.chats = function createChats(H) {
    * not set once: every paint and every growth of the feed (first messages, thumbnails, "more") puts it back, because
    * posts fill in late. Once James scrolls, the post at the top of his view is the place (the bottom when he is at the
    * end), so a repaint, a refresh or Back from a thread lands where he was. */
-  const CHAN_NEW_Y = 8, CHAN_USER_MS = 1200, chanUserAt = {}, chanRO = {};
+  const CHAN_NEW_Y = 8, CHAN_USER_MS = 1200, chanUserAt = {}, chanSetTop = {}, chanRO = {};
   const chanKey = s => rowAgent(s) + '|' + s.id;
   function chanStart(w, shown) {
     const c = (W[owner(w.id)] || w)?.chan; if (!c) return null;
@@ -592,9 +592,10 @@ window.WizCore.chats = function createChats(H) {
     const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
     const node = at.key && [...feed.querySelectorAll('[data-morph-key]')].find(n => n.dataset.morphKey === at.key);
     // The New line clears the feed's sticky filter bar (Open · Needs you · All); a scrolled place keeps its own offset.
-    const bar = at.key === 'chan-new' && feed.firstElementChild, stuck = bar && bar !== node && globalThis.getComputedStyle?.(bar).position === 'sticky' ? bar.offsetHeight : 0;
+    const stuck = at.key === 'chan-new' && node ? chanStuck(feed) : 0;
     const to = at.end || !node ? max : Math.max(0, Math.min(max, sc.scrollTop + node.getBoundingClientRect().top - sc.getBoundingClientRect().top - (at.y || 0) - stuck));
     if (Math.abs(sc.scrollTop - to) >= 1) sc.scrollTop = to;
+    chanSetTop[wid] = sc.scrollTop; // the scroll event this fires is the hold's own, never James's
   }
   // The feed grows after a paint (first messages, pictures, "more"); each growth puts the place back.
   function chanWatch(wid, sc, feed) {
@@ -604,15 +605,17 @@ window.WizCore.chats = function createChats(H) {
     const ro = new ResizeObserver(() => chanHold(wid)); ro.observe(feed); ro.observe(sc);
     chanRO[wid] = { ro, feed, sc };
   }
+  const chanStuck = feed => { const bar = feed.firstElementChild; return bar && !bar.dataset?.morphKey && globalThis.getComputedStyle?.(bar).position === 'sticky' ? bar.offsetHeight : 0; };
   // James's own touch, wheel, key or pointer on the feed: his scrolls from now (and a fling after it) move the place.
   const chanUser = wid => { if (wid) chanUserAt[wid] = Date.now(); };
   function chanScrolled(wid, sc) {
     const w = W[wid], c = w && (W[owner(wid)] || w)?.chan; if (!c || !channelsOn() || !(Date.now() - (chanUserAt[wid] || 0) < CHAN_USER_MS)) return;
-    const feed = sc.querySelector('.ch-chan-feed'); if (!feed || !sc.clientHeight) return;
+    const feed = sc.querySelector('.ch-chan-feed'); if (!feed || !sc.clientHeight || Math.abs(sc.scrollTop - (chanSetTop[wid] ?? -9)) < 1) return;
     chanUserAt[wid] = Date.now();
     if (sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4) { c.at = { end: true }; return; }
-    const edge = sc.getBoundingClientRect().top, n = [...feed.querySelectorAll('[data-morph-key]')].find(x => x.getBoundingClientRect().bottom > edge + 1);
-    if (n) c.at = { key: n.dataset.morphKey, y: n.getBoundingClientRect().top - edge };
+    // The top of his view is below the sticky filter bar.
+    const edge = sc.getBoundingClientRect().top + chanStuck(feed), n = [...feed.querySelectorAll('[data-morph-key]')].find(x => x.getBoundingClientRect().bottom > edge + 1);
+    if (n) c.at = { key: n.dataset.morphKey, y: n.getBoundingClientRect().top - sc.getBoundingClientRect().top };
   }
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
