@@ -1,0 +1,430 @@
+{
+  "origin": "https://chat-channels.test",
+  "web": "/home/builder/work/ux-1254b/web",
+  "cases": [
+    {
+      "stem": "phone-nebula-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 48,
+      "pass": true
+    },
+    {
+      "stem": "phone-nebula-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 48,
+      "channelLine": "Launch checklist\n5h\n# Launch",
+      "moveLabel": "Move to channel…",
+      "channels": [
+        "ideas",
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "sheet": [
+        "Pin",
+        "Rename",
+        "Archive channel",
+        "New post"
+      ],
+      "ordered": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "orderedZa": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "postText": "Can you get the launch checklist ready for Friday? I want th",
+      "clampLines": 4,
+      "postBg": "rgba(0, 0, 0, 0)",
+      "focusStripVisible": 0,
+      "expandedLines": 9,
+      "viewerBack": "viewer",
+      "back": [
+        "thread",
+        "channel",
+        "home"
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794306944580_2b2474d23937"
+      ],
+      "afterOff": [
+        "qa-l2",
+        "qa-g1",
+        "qa-v1",
+        "qa-l1"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "phone-grove-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 48,
+      "pass": true
+    },
+    {
+      "stem": "phone-grove-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 48,
+      "channelLine": "Launch checklist\n5h\n# Launch",
+      "moveLabel": "Move to channel…",
+      "channels": [
+        "ideas",
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "sheet": [
+        "Pin",
+        "Rename",
+        "Archive channel",
+        "New post"
+      ],
+      "ordered": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "orderedZa": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "postText": "Can you get the launch checklist ready for Friday? I want th",
+      "clampLines": 4,
+      "postBg": "rgba(0, 0, 0, 0)",
+      "focusStripVisible": 0,
+      "expandedLines": 9,
+      "viewerBack": "viewer",
+      "back": [
+        "thread",
+        "channel",
+        "home"
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794306957453_8f227307a762"
+      ],
+      "afterOff": [
+        "qa-l2",
+        "qa-g1",
+        "qa-v1",
+        "qa-l1"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "desktop-nebula-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 62,
+      "pass": true
+    },
+    {
+      "stem": "desktop-nebula-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 62,
+      "channelLine": "Launch checklist\n5h\n# Launch · Needs you: Pick a date",
+      "moveLabel": "Move to channel…",
+      "channels": [
+        "ideas",
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "sheet": [
+        "Pin",
+        "Rename",
+        "Archive channel",
+        "New post"
+      ],
+      "ordered": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "orderedZa": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "postText": "Can you get the launch checklist ready for Friday? I want th",
+      "clampLines": 4,
+      "postBg": "color(srgb 0.952941 0.937255 1 / 0.04)",
+      "focusStripVisible": 0,
+      "expandedLines": 11,
+      "viewerBack": "viewer",
+      "back": [
+        "thread",
+        "filter",
+        ""
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794306968265_aff9d054083f"
+      ],
+      "afterOff": [
+        "qa-l2",
+        "qa-g1",
+        "qa-v1",
+        "qa-l1"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "desktop-grove-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 62,
+      "pass": true
+    },
+    {
+      "stem": "desktop-grove-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 62,
+      "channelLine": "Launch checklist\n5h\n# Launch · Needs you: Pick a date",
+      "moveLabel": "Move to channel…",
+      "channels": [
+        "ideas",
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "sheet": [
+        "Pin",
+        "Rename",
+        "Archive channel",
+        "New post"
+      ],
+      "ordered": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "orderedZa": [
+        "voice",
+        "launch",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "postText": "Can you get the launch checklist ready for Friday? I want th",
+      "clampLines": 4,
+      "postBg": "color(srgb 0.933333 0.960784 0.913725 / 0.04)",
+      "focusStripVisible": 0,
+      "expandedLines": 11,
+      "viewerBack": "viewer",
+      "back": [
+        "thread",
+        "filter",
+        ""
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794306979403_0798e0e58b11"
+      ],
+      "afterOff": [
+        "qa-l2",
+        "qa-g1",
+        "qa-v1",
+        "qa-l1"
+      ],
+      "pass": true
+    }
+  ]
+}
