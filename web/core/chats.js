@@ -579,7 +579,7 @@ window.WizCore.chats = function createChats(H) {
   const chanKey = s => rowAgent(s) + '|' + s.id;
   function chanStart(w, shown) {
     const c = (W[owner(w.id)] || w)?.chan; if (!c) return null;
-    if (c.at === undefined && shown.length) { const u = shown.find(chanUnread); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y } : { end: true }; }
+    if (c.at === undefined && shown.length) { const u = shown.find(chanUnread); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y, bar: true } : { end: true }; }
     return c;
   }
   const chanScroller = wid => elOf(wid)?.querySelector?.('.ch-list > .ch-scroll') || null;
@@ -590,9 +590,12 @@ window.WizCore.chats = function createChats(H) {
     if (!at || !sc.clientHeight) return;
     ch(wid).listPending = null; // the feed's own place outranks the list's return bookmark
     const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
-    const node = at.key && [...feed.querySelectorAll('[data-morph-key]')].find(n => n.dataset.morphKey === at.key);
-    // The New line clears the feed's sticky filter bar (Open · Needs you · All); a scrolled place keeps its own offset.
-    const stuck = at.key === 'chan-new' && node ? chanStuck(feed) : 0;
+    // The same key can be drawn twice (a main and a routed thread sharing an id): the place is the copy of its own row
+    // (agent|id), wherever a re-sort moved it.
+    const same = at.key ? [...feed.querySelectorAll('[data-morph-key]')].filter(n => n.dataset.morphKey === at.key) : [], node = (at.row && same.find(n => n.dataset.chrow === at.row)) || same[0];
+    // The opening place (bar: true) sits below the feed's sticky filter bar (Open · Needs you · All); a place James
+    // scrolled to was measured from the scroller's own top, bar included, so it keeps that offset as is.
+    const stuck = at.bar && node ? chanStuck(feed) : 0;
     const to = at.end || !node ? max : Math.max(0, Math.min(max, sc.scrollTop + node.getBoundingClientRect().top - sc.getBoundingClientRect().top - (at.y || 0) - stuck));
     if (Math.abs(sc.scrollTop - to) >= 1) sc.scrollTop = to;
     chanSetTop[wid] = sc.scrollTop; // the scroll event this fires is the hold's own, never James's
@@ -614,8 +617,10 @@ window.WizCore.chats = function createChats(H) {
     chanUserAt[wid] = Date.now();
     if (sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4) { c.at = { end: true }; return; }
     // The top of his view is below the sticky filter bar.
-    const edge = sc.getBoundingClientRect().top + chanStuck(feed), n = [...feed.querySelectorAll('[data-morph-key]')].find(x => x.getBoundingClientRect().bottom > edge + 1);
-    if (n) c.at = { key: n.dataset.morphKey, y: n.getBoundingClientRect().top - sc.getBoundingClientRect().top };
+    const edge = sc.getBoundingClientRect().top + chanStuck(feed), all = [...feed.querySelectorAll('[data-morph-key]')], i = all.findIndex(x => x.getBoundingClientRect().bottom > edge + 1);
+    if (i < 0) return;
+    const n = all[i], key = n.dataset.morphKey, twin = all.some(x => x !== n && x.dataset.morphKey === key);
+    c.at = { key, y: n.getBoundingClientRect().top - sc.getBoundingClientRect().top, ...(twin && n.dataset.chrow ? { row: n.dataset.chrow } : {}) };
   }
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
@@ -638,7 +643,7 @@ window.WizCore.chats = function createChats(H) {
       const state = isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '';
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
-      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${dot}${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
+      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${dot}${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
     const sendingPost = p => {

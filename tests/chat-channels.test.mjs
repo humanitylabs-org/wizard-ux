@@ -648,14 +648,15 @@ test('opening a routed post that shares its id with a main thread marks the rout
 });
 
 // Where a feed opens and stays (wizard-ux issue 1263): a fake scroller laid out from the painted feed's own keys.
-function feedDom(html, heights = {}, client = 400) {
-  const keys = [...html.matchAll(/data-morph-key="((?:post:|chan-new)[^"]*)"/g)].map(m => m[1]);
+function feedDom(html, heights = {}, client = 400, { bar = 0, keys: forced } = {}) {
+  const keys = forced || [...html.matchAll(/data-morph-key="((?:post:|chan-new)[^"]*)"/g)].map(m => m[1]);
   const sc = { scrollTop: 0, clientHeight: client, getBoundingClientRect: () => ({ top: 0 }) };
   const nodes = keys.map(k => ({ dataset: { morphKey: k }, h: heights[k] ?? (k === 'chan-new' ? 20 : 100) }));
-  const topOf = n => nodes.slice(0, nodes.indexOf(n)).reduce((a, x) => a + x.h, 0);
+  const topOf = n => bar + nodes.slice(0, nodes.indexOf(n)).reduce((a, x) => a + x.h, 0);
   for (const n of nodes) n.getBoundingClientRect = () => ({ top: topOf(n) - sc.scrollTop, bottom: topOf(n) + n.h - sc.scrollTop });
-  Object.defineProperty(sc, 'scrollHeight', { get: () => nodes.reduce((a, x) => a + x.h, 0) });
-  const feed = { querySelectorAll: () => nodes, firstElementChild: null };
+  Object.defineProperty(sc, 'scrollHeight', { get: () => bar + nodes.reduce((a, x) => a + x.h, 0) });
+  // bar: the sticky Open · Needs you · All bar at the top of the feed (it stays at the top of the view).
+  const feed = { querySelectorAll: () => nodes, firstElementChild: bar ? { dataset: {}, offsetHeight: bar, sticky: true } : null };
   sc.querySelector = q => q === '.ch-chan-feed' ? feed : null;
   return { sc, nodes, el: { querySelector: q => q === '.ch-list > .ch-scroll' ? sc : null }, grow: (k, h) => { nodes.find(n => n.dataset.morphKey === k).h = h; } };
 }
@@ -736,9 +737,41 @@ test('issue 1263: the tap that opens an unread channel and the hold\'s own scrol
   f.openChannel(f.w, 'launch');
   const d = feedDom(f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.env.elOf = () => d.el;
   f.chanHold('w'); f.chanScrolled('w', d.sc);
-  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8 }, 'the opening tap is not a scroll');
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8, bar: true }, 'the opening tap is not a scroll');
   f.chanUser('w'); f.chanScrolled('w', d.sc);
-  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8 }, 'the scroll event the hold itself fired is not James\'s');
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8, bar: true }, 'the scroll event the hold itself fired is not James\'s');
   f.chanUser('w'); d.sc.scrollTop -= 250; f.chanScrolled('w', d.sc);
   assert.equal(f.w.chan.at.key, 'post:p101', 'a real scroll after it does move the place');
+});
+
+test('issue 1263 review: with a sticky filter bar, a New-line place James scrolled to keeps his offset (the bar is not added twice)', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120, 104);
+  f.env.getComputedStyle = el => ({ position: el?.sticky ? 'sticky' : 'static' });
+  f.openChannel(f.w, 'launch');
+  const d = feedDom(f.channelFeed(f.w, f.chanOpen(f.w), rows), {}, 400, { bar: 40 }); f.env.elOf = () => d.el;
+  const y = k => d.nodes.find(n => n.dataset.morphKey === k).getBoundingClientRect().top;
+  f.chanHold('w'); assert.equal(y('chan-new'), 48, 'opening: the New line just below the 40px bar');
+  f.chanUser('w'); d.sc.scrollTop += 10; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 38 }, 'James nudged it: the line is the place at 38px');
+  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(y('chan-new'), 38, 'a repaint keeps 38px, not 78px');
+  f.chanHold('w'); assert.equal(y('chan-new'), 38, 'and again');
+  f.chanUser('w'); d.sc.scrollTop -= 300; f.chanScrolled('w', d.sc); const at = { ...f.w.chan.at };
+  assert.equal(at.key, 'post:p101'); d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(y('post:p101'), at.y, 'an ordinary post keeps its offset');
+});
+
+test('issue 1263 review: two posts drawn with the same key (main and routed), the place is the row James was at, even after a re-sort', () => {
+  const f = fixture({ spacesList: longSpaces(4) });
+  f.openChannel(f.w, 'launch'); f.w.chan.at = { end: true };
+  const keys = ['post:a', 'post:same', 'post:b', 'post:c', 'post:d', 'post:same', 'post:e', 'post:f', 'post:g', 'post:h'];
+  const d = feedDom('', {}, 300, { keys }); f.env.elOf = () => d.el;
+  const twins = d.nodes.filter(n => n.dataset.morphKey === 'post:same'); twins[0].dataset.chrow = 'hermes|same'; twins[1].dataset.chrow = 'host|same';
+  f.chanUser('w'); d.sc.scrollTop = 500; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:same', y: 0, row: 'host|same' }, 'the routed copy');
+  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(d.sc.scrollTop, 500, 'back at the routed copy, not the first one');
+  // A newer reply re-sorts the two copies: the routed one is now drawn first, and the place follows it.
+  twins[0].dataset.chrow = 'host|same'; twins[1].dataset.chrow = 'hermes|same';
+  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(d.sc.scrollTop, 100, 'it follows the routed row');
+  f.chanUser('w'); d.sc.scrollTop = 300; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:c', y: 0 }, 'a key drawn once needs no row');
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [row('p0', 1)]), /data-morph-key="post:p0" data-chrow="hermes\|p0"/, 'each post carries its row');
 });
