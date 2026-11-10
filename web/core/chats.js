@@ -494,6 +494,19 @@ window.WizCore.chats = function createChats(H) {
     setFocus(w, prev);
     return true;
   }
+  // Unread (wizard-ux issue 1259): the per-chat read state Activity already keeps (LIVE.isNew, synced by thread-seen),
+  // never a tracker of its own, so reading a chat in either view clears it in both. A post is unread on the rule an
+  // Activity row is bold by (not working; a snoozed-last row waits), and a channel counts unread posts with Activity's
+  // own tally (WizChatsListModel.unreadThreads), so the two numbers can never disagree.
+  const chanUnread = s => !isWorking(s) && !s.archived && !!LIVE.isNew?.(s) && !(snoozeLast() && deferredOf(s));
+  const chanUnreadN = rows => window.WizChatsListModel?.unreadThreads ? window.WizChatsListModel.unreadThreads(rows, chanUnread) : rows.filter(chanUnread).length;
+  // Opening a post marks it read (LIVE.markSeen). The desktop keeps the feed on screen beside the thread, and its
+  // list pane skips Live repaints while focus is inside it (the tapped post), so the feed is painted here at once:
+  // the line and the channel are already read when Back lands on them, never a frame late.
+  function chanSeenPaint() {
+    if (!channelsOn()) return;
+    for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
+  }
   function chanMark(rows) {
     if (rows.some(chanNeeds)) return '<i class="ch-chan-dot" role="img" aria-label="Needs you"></i>';
     return rows.some(isWorking) ? '<i class="ch-spin" role="img" aria-label="Working"></i>' : '';
@@ -501,8 +514,9 @@ window.WizCore.chats = function createChats(H) {
   function channelLine(ch0, rows, now) {
     const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id);
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
-      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s])}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
+    const un = chanUnreadN(mine), unN = un ? `<small class="ch-chan-n" aria-label="${un} unread">${un}</small>` : '';
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${unN}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
+      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s])}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   function channelsBody(w, rows) {
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
@@ -564,11 +578,13 @@ window.WizCore.chats = function createChats(H) {
       const text = p ? (p.text || (p.media.length ? '' : stand || (p.none ? s.title : ''))) : stand || (failed ? s.title : ''), media = p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
       const at = p?.at && isFinite(p.at) ? new Date(p.at).toISOString() : s.createdAt || LIVE.cardAt(s);
-      const n = typeof s.messageCount === 'number' ? Math.max(0, s.messageCount - 1) : null;
+      const n = typeof s.messageCount === 'number' ? Math.max(0, s.messageCount - 1) : null, un = chanUnread(s);
+      // Unread replies: the reply line goes bold violet with the unread dot first, "3 new replies" (Slack's thread marker).
+      const dot = un ? '<i class="st unread" aria-hidden="true"></i>' : '', replies = un ? `<span>${n ? `${n} new ${n === 1 ? 'reply' : 'replies'}` : 'New reply'}</span>` : n != null ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
       const state = isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '';
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
-      return `<div class="ch-post" data-morph-key="post:${esc(s.id)}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r" data-chopen="${esc(s.id)}">${hat}${n != null ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
+      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${dot}${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
     const sendingPost = p => {
@@ -3306,7 +3322,7 @@ window.WizCore.chats = function createChats(H) {
     PW?.opened(wid, sid);
     if (sid === '__new__' && w.thread !== '__new__') c.newAt = Date.now(); // a fresh new chat: nothing older shows in it
     w.thread = sid; save(); loadDraft(w);
-    if (sid !== '__new__') LIVE.markSeen(sid);
+    if (sid !== '__new__') { LIVE.markSeen(sid); if (typeof chanSeenPaint === 'function') chanSeenPaint(); }
     renderChats(w); applyLayout(deskOf(wid));
   }
   /* Unified Chats: a Private model picked inside a standard thread. A new chat on that private agent opens in this
