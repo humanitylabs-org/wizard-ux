@@ -3052,7 +3052,7 @@
     // Picking one goes through openAgentChats (Chats' Focus on the main window); All clears that Focus.
     agentFocus: () => {
       const AG = window.WosAgents, w = findWin(mainChats);
-      return { id: w ? CHATS.focusAgentId(w) : '', agents: (AG?.visible?.() || []).map(a => ({ id: a.id, label: a.is_default ? (window.WizConfig.agent() || a.label || a.id) : (a.label || a.id), colour: AG.colour(a), private: a.privacy === 'private', main: !!a.is_default, status: a.status || '' })) };
+      return { id: w ? CHATS.focusAgentId(w) : '', space: !!w && CHATS.focusOf(w)?.kind === 'space', agents: (AG?.visible?.() || []).map(a => ({ id: a.id, label: a.is_default ? (window.WizConfig.agent() || a.label || a.id) : (a.label || a.id), colour: AG.colour(a), private: a.privacy === 'private', main: !!a.is_default, status: a.status || '' })) };
     },
     agentFocusSet: id => { if (id) { void openAgentChats(id); return true; } const w = findWin(mainChats); return !!w && CHATS.setFocus(w, null); },
     // The same rows the AI apps sidebar draws, narrowed to what the main Chats' Focus shows (one agent's chats): Chats' own rule.

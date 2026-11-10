@@ -230,7 +230,7 @@
         open: id => { if (typeof id === 'string' && id) need().openAgent?.(id); },
         /* The agent choices of a layout that draws its own chat list: { id (the agent the main Chats is focused on, '' = All),
          * agents [{ id, label, colour, private, main }] } and focus(id) = Chats' own Focus on that agent ('' = All). */
-        focus: () => { const f = shell ? shell.agentFocus?.() : null; return Object.freeze({ id: typeof f?.id === 'string' ? f.id : '', agents: Object.freeze((Array.isArray(f?.agents) ? f.agents : []).map(x => Object.freeze({ ...x }))) }); },
+        focus: () => { const f = shell ? shell.agentFocus?.() : null; return Object.freeze({ id: typeof f?.id === 'string' ? f.id : '', space: f?.space === true, agents: Object.freeze((Array.isArray(f?.agents) ? f.agents : []).map(x => Object.freeze({ ...x }))) }); },
         setFocus: id => shell?.agentFocusSet ? !!shell.agentFocusSet(typeof id === 'string' ? id : '') : false,
       }),
       /* Voice: the orb's own recorder. talk(agent) records a message for that agent (none = the screen's own);
@@ -925,7 +925,8 @@
         // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
-        list: opts => { const l = live() ? (opts?.focused === true && shell.sessionListFocused ? shell.sessionListFocused() : shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
+        // (a focused agent's list carries no inbox notifications: they belong to All, as in Chats)
+        list: opts => { const l = live() ? (opts?.focused === true && shell.sessionListFocused ? shell.sessionListFocused() : shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = opts?.focused === true && shell.agentFocus?.().id ? (o.ready || []) : withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
         open: id => { if (!live() || typeof id !== 'string' || !id) return; if (id.startsWith(NOTE_ID)) inboxAct(NOTE_ID_OPEN, id.slice(NOTE_ID.length)); else shell.openThread(id); },
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
         // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.

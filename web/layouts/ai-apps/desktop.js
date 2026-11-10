@@ -255,7 +255,7 @@ export default function desktop(api) {
     agentsRow.replaceChildren(chip('', 'All'), ...list.map(a => chip(a.id, a.label, a.colour, a.private)));
   }
   function pickAgent(id) {
-    if ((api.agents.focus().id || '') === id) return;
+    const f = api.agents.focus(); if (!f.space && (f.id || '') === id) return;   // a Space focus is replaced by the agent-wide one
     api.agents.setFocus(id);
     agentsDrawn = ''; paintAgents(); readSessions(); paintList(true); paintRail(true);
   }
