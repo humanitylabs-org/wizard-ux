@@ -1,0 +1,63 @@
+[
+ {
+  "n": "nebula: fresh install wears wizard/desktop-chats on phone",
+  "pass": false,
+  "d": [
+   "wizard/unified-inbox"
+  ]
+ },
+ {
+  "n": "nebula: desktop-style section headers (sentence case)",
+  "pass": false,
+  "d": "uppercase"
+ },
+ {
+  "n": "nebula: no page errors",
+  "pass": true,
+  "d": []
+ },
+ {
+  "n": "grove: fresh install wears wizard/desktop-chats on phone",
+  "pass": false,
+  "d": [
+   "wizard/unified-inbox"
+  ]
+ },
+ {
+  "n": "grove: desktop-style section headers (sentence case)",
+  "pass": false,
+  "d": "uppercase"
+ },
+ {
+  "n": "grove: no page errors",
+  "pass": true,
+  "d": []
+ },
+ {
+  "n": "explicit off: old phone list",
+  "pass": true,
+  "d": [
+   "wizard/unified-inbox"
+  ]
+ },
+ {
+  "n": "explicit off: stock section headers",
+  "pass": true,
+  "d": "uppercase"
+ },
+ {
+  "n": "desktop: no phone header",
+  "pass": true,
+  "d": {}
+ },
+ {
+  "n": "desktop: shell is desktop",
+  "pass": true,
+  "d": {}
+ },
+ {
+  "n": "desktop: no page errors",
+  "pass": true,
+  "d": []
+ }
+]
