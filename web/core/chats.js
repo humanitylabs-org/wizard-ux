@@ -1421,7 +1421,7 @@ window.WizCore.chats = function createChats(H) {
       // Counts are unread only (James, 8 Nov 2026): a finished thread already read adds nothing, so Ready is never an inventory.
       // Working, Snoozed and Archive keep their place counts; they are not messages waiting.
       const unreadSec = k === 'errors' || k === 'ready' || k === 'yesterday' || k === 'pastWeek';
-      const secN = unreadSec ? window.WizChatsListModel.unreadThreads(list, s => LIVE.isNew(s), nt?.awake) : list.length + extra.n + notesN;
+      const secN = unreadSec ? window.WizChatsListModel.unreadThreads(list, s => LIVE.isNew(s) && !(snoozeLast() && deferredOf(s) && !isWorking(s)), nt?.awake) : list.length + extra.n + notesN;
       const waitN = !byStatus() && (k === 'ready' || k === 'yesterday' || k === 'pastWeek') ? list.filter(s => !window.WizChatsListModel.isListWorking(s) && !(snoozeLast() && deferredOf(s) && !isWorking(s)) && (['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you'))).length : 0;
       const windowMeta = AGID ? LIVE.windows?.[AGID] : Object.values(LIVE.windows || {}).length ? {archiveTotal:Object.values(LIVE.windows).reduce((n,x)=>n+(x.archiveTotal||0),0)} : null;
       const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
