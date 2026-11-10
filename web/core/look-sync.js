@@ -147,6 +147,15 @@
     }
     const defaultChoices = () => exp.defaultChoices || {};
     const defaultSeeds = () => Object.fromEntries(Object.entries(defaultChoices()).filter(([id, on]) => ID.test(id) && typeof on === 'boolean').map(([id, on]) => [id, { on, at: 0 }]));
+    // A switch promoted to a default (exp.promotedDefaults) keeps the owner's explicit choice from before: an on/off he
+    // made in `tweaks` (at > 0, never a seed) becomes his `defaults` choice with the same revision, so newest still wins
+    // and a seed never overrides it. Without this, an owner who had switched it off would get it back on.
+    const promoted = doc => {
+      let ids = []; try { ids = Array.isArray(exp.promotedDefaults) ? exp.promotedDefaults : []; } catch (_) {}
+      const out = {};
+      for (const id of ids) { const t = doc?.tweaks?.[id]; if (Object.hasOwn(defaultChoices(), id) && t && t.at > 0) out[id] = { on: t.on, at: t.at }; }
+      return Object.keys(out).length ? out : undefined;
+    };
     const wornDefaults = doc => Object.fromEntries(Object.entries(doc.defaults || {}).filter(([id]) => Object.hasOwn(defaultChoices(), id)).map(([id, t]) => [id, t.on]));
     const defaultsMatch = doc => Object.entries(wornDefaults(doc)).every(([id, on]) => defaultChoices()[id] === on);
     const absent = () => Object.assign(new Error('absent'), { absent: true });
@@ -211,7 +220,7 @@
           // First sync of a device whose old local set is bigger than the box's seeds: its seeds replace them; real changes stay.
           else if (!meta.synced && onIds(local()).length > onIds(seeds(doc)).filter(live).length) want = merge(changes(doc), local());
           // Upgrade old files without replacing an existing default or per-shell choice.
-          const defaults = merge({ defaults: doc?.defaults }, { defaults: defaultSeeds() });
+          const defaults = merge(merge({ defaults: doc?.defaults }, { defaults: promoted(merge(doc, pending)) }), { defaults: defaultSeeds() });
           const sharedDefaults = merge(defaults, { defaults: pending.defaults }).defaults;
           if (sharedDefaults) want = { ...(want || doc || empty()), defaults: sharedDefaults };
           if (want) want = exclusive(want, views());

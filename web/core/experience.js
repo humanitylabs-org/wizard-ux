@@ -308,6 +308,9 @@
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
     get defaultChoices() { return recipe() ? {} : Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
+    // Switches that became release-wide defaults after owners could already choose them (catalog `promotedDefaults`,
+    // e.g. wizard-ux issue 1236): look sync carries an owner's earlier explicit on/off for them into `defaults` once.
+    get promotedDefaults() { return (catalog?.promotedDefaults || []).filter(id => globalIds().includes(id)); },
     // The view chosen per shell type ({ desktop, phone }: a view id, '' = Desks; a missing type = no choice yet).
     get views() { return cleanViews(state.views); },
     // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
