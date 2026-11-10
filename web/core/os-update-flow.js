@@ -34,7 +34,7 @@
   const mac = () => st()?.by_host === true;
   const OS = 'WizardOS';
   const TAKES = 'Usually 5–15 minutes';
-  const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1';
+  const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1', WAITING = 'wos.osu.waiting.v1';
   const ls = {
     get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (_) { return null; } },
     set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
@@ -62,9 +62,27 @@
   const hu = () => st()?.host_update || null;
   const headsUp = () => { const h = st()?.host_headsup; return h && typeof h.at === 'number' && h.at * 1000 > Date.now() - 90e3 ? h : null; };
   let maxStep = 0, stepFor = '';
+  // An update waiting for Wizard to finish (when_idle) starts later, from the Mac, on no device's tap. Every device
+  // remembers it, so when it starts (the Mac reports a phase, or Wizard goes away for the Mac's copy) the device
+  // shows the same Updating panel as an update it started itself, never "Can't reach Wizard".
+  function waitingTurnsIntoFlow(s, h) {
+    const away = !!U()?.issue, live = h && ACTIVE.includes(h.phase);
+    const w = s.when_idle || (s.host_pending?.when_idle ? s.host_pending : null);
+    const kept = ls.get(WAITING);
+    if (w && !away && !live) { if (kept?.target !== w.target) ls.set(WAITING, { target: w.target, since: Date.now() }); return; }
+    if (!kept) return;
+    if (away || live) { ls.set(WAITING, null); if (!flow()) ls.set(FLOW, { target: kept.target, since: kept.since, waited: true }); return; }
+    ls.set(WAITING, null);                                     // reachable, no longer waiting, not started: cancelled
+  }
   function updating() {
     const s = st(); if (!s || !mac()) return null;
-    const h = hu(), f = flow();
+    const h = hu();
+    waitingTurnsIntoFlow(s, h);
+    let f = flow();
+    // Wizard went away while an update was still waiting, then came back still waiting: a blip, not the update.
+    if (f?.waited && !U()?.issue && s.when_idle && !(h && ACTIVE.includes(h.phase))) {
+      ls.set(FLOW, null); ls.set(WAITING, { target: f.target, since: f.since }); f = null;
+    }
     let u = null;
     if (h && ACTIVE.includes(h.phase)) u = { target: h.target, phase: h.phase, since: h.at * 1000 };
     // A request that waits for Wizard to finish (when_idle) isn't an update yet: Wizard stays usable meanwhile.
