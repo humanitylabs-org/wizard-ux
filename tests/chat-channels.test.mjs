@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { modelContext } from './fixtures/chats-list-model.mjs';
 const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
@@ -38,7 +39,9 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     setFocus: (w, f) => { focusCalls.push(f); w.focus = f; renders.push('focus'); return true; },
     rerenderList: () => renders.push('list'), renderChatList: () => renders.push('list'),
     isWorking: s => s.status === 'running', attOf: s => s.attention || null,
-    LIVE: { agentOf, ownerOf: s => s.owner ?? agents[s.id] ?? '', cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, sessionFor: (id, a) => sessions[a ? a + '|' + id : id] || null,
+    rowOf: (wid, sid) => env._rowOf ? env._rowOf(wid, sid) : sessions[sid] || null,
+    snoozeLast: () => !!env._snoozeLast, _snoozeLast: false, deferredOf: s => !!s.deferred && !s.archived,
+    LIVE: { isNew: s => !!s.fresh && !s.archived, agentOf, ownerOf: s => s.owner ?? agents[s.id] ?? '', cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, sessionFor: (id, a) => sessions[a ? a + '|' + id : id] || null,
       firstMessages: async (id, agent) => { reads.push(agent ? agent + '|' + id : id); const h = history[agent ? agent + '|' + id : id]; if (h instanceof Error) throw h; return h || []; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
     // KIT.parseRows stand-in: a row {role:'user', text, files} is an owner turn.
     toTurns: rows => rows.map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text } }),
@@ -57,8 +60,8 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     sendChat: (...a) => { env._sends.push(a); return env._sendResult; }, _sends: [], _sendResult: null,
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
-  vm.createContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.createContext(env); modelContext(env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
 }
@@ -541,4 +544,105 @@ test('a photo still uploading stays with the channel it was attached in when ano
   f.openChannel(f.w, 'launch'); const html = f.chanComposer(f.w, f.chanOpen(f.w));
   assert.equal(f.env.ch('w').files[0], local, 'the same live attachment is back in # Launch');
   assert.match(html, /data-f="up1"/); assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').files[0]?.id, 'up1', 'and saved with that channel');
+});
+
+// Unread (wizard-ux issue 1259): the per-chat read state Activity keeps (LIVE.isNew), drawn on lines and posts.
+test('an unread post makes its channel bold with a count of unread posts; needs-you keeps its dot beside the count', () => {
+  const rows = [row('a', 1, { fresh: true, messageCount: 4 }), row('b', 2, { fresh: true, attention: { state: 'needs_you' } }), row('c', 3), row('d', 2), row('g', 1, { fresh: true })];
+  const f = fixture();
+  const chans = f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1);
+  const by = Object.fromEntries(chans.map(c => [c.match(/data-chchan="([^"]+)"/)[1], c]));
+  assert.match(by.launch, /^ unread"/, 'Launch is bold');
+  assert.match(by.launch, /<small class="ch-chan-n" aria-label="2 unread">2<\/small><i class="ch-chan-dot"/, 'count of posts, not messages, then the amber dot');
+  assert.doesNotMatch(by.voice, /unread|ch-chan-n/, 'a read channel stays as it is');
+  assert.match(by.__general__, /^ unread"[^]*aria-label="1 unread">1</);
+  // The same tally as Activity's section counts.
+  const L = rows.filter(s => f.inChannel({ id: 'launch', agent: 'hermes' }, s));
+  assert.equal(f.env.window.WizChatsListModel.unreadThreads(L, s => !!s.fresh), 2);
+});
+
+test('working, archived and snoozed-last rows are not unread posts (Activity rule)', () => {
+  const rows = [row('a', 1, { fresh: true, status: 'running' }), row('b', 1, { fresh: true, archived: true }), row('c', 1, { fresh: true, deferred: true })];
+  const f = fixture();
+  let launch = f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes('data-chchan="launch"'));
+  assert.match(launch, /aria-label="1 unread">1</, 'snooze-last off: the snoozed post still counts');
+  f.env._snoozeLast = true;
+  launch = f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes('data-chchan="launch"'));
+  assert.doesNotMatch(launch, /ch-chan-n|^ unread/);
+});
+
+test('the expanded chevron lines are bold for unread posts', () => {
+  const rows = [row('a', 1, { fresh: true }), row('b', 2)];
+  const f = fixture();
+  f.channelClick(click({ 'data-chchanx': 'launch' }), 'w', f.w);
+  const html = f.channelsBody(f.w, rows);
+  assert.match(html, /class="ch-chan-post unread" data-chopen="a"/);
+  assert.match(html, /class="ch-chan-post" data-chopen="b"/);
+});
+
+test('in the feed an unread post says "N new replies" in bold with the violet dot first; read posts are unchanged', () => {
+  const rows = [row('a', 3, { fresh: true, messageCount: 4 }), row('b', 2, { messageCount: 2 }), row('c', 1, { fresh: true, messageCount: 1 })];
+  const f = fixture();
+  f.openChannel(f.w, 'launch');
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
+  const post = id => html.split(/<div class="ch-post(?=[ "])/).find(p => p.includes(`data-morph-key="post:${id}"`));
+  assert.match(post('a'), /^ unread"/);
+  assert.match(post('a'), /class="ch-post-r unread" data-chopen="a"><i class="st unread" aria-hidden="true"><\/i><span class="ch-post-av"[^]*<span>3 new replies<\/span>/);
+  assert.match(post('b'), /class="ch-post-r" data-chopen="b"><span class="ch-post-av"[^]*<span>1 reply<\/span>/);
+  assert.doesNotMatch(post('b'), /st unread|new repl/);
+  assert.match(post('c'), /<span>New reply<\/span>/, 'no count yet: still marked');
+});
+
+test('reading a post (markSeen clears isNew) clears both the feed marker and the channel line on the next paint', () => {
+  const a = row('a', 1, { fresh: true, messageCount: 2 }), rows = [a];
+  const f = fixture();
+  assert.match(f.channelsBody(f.w, rows), /ch-chan-n/);
+  a.fresh = false;                                    // what LIVE.markSeen does to isNew when the thread opens
+  assert.doesNotMatch(f.channelsBody(f.w, rows), /ch-chan-n| unread"/);
+  f.openChannel(f.w, 'launch');
+  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /unread|new repl/);
+});
+
+test('unread marks follow each row\'s own agent: main and routed (host-profile, container, restricted) alike', () => {
+  const rows = [row('h1', 1, { fresh: true, owner: 'host' }), row('k1', 1, { fresh: true, owner: 'container' }), row('r1', 1, { owner: 'restricted' }), row('a', 1, { fresh: true })];
+  const f = fixture({ agents: { h1: 'host', k1: 'container', r1: 'restricted' } });
+  const chans = Object.fromEntries(f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).map(c => [c.match(/data-chchan="([^"]+)"/)[1], c]));
+  for (const k of ['host-ops', 'box', 'launch']) assert.match(chans[k], /^ unread"[^]*aria-label="1 unread"/, k);
+  assert.doesNotMatch(chans.locked, /ch-chan-n/, 'read restricted chat');
+  // A main chat that shares the routed id is not counted in the routed channel.
+  const twin = [row('h1', 1, { fresh: true, owner: 'hermes' })];
+  const ho = f.channelsBody(f.w, twin).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes('data-chchan="host-ops"'));
+  assert.doesNotMatch(ho, /ch-chan-n/);
+});
+
+test('switch off: none of the unread markup is drawn (channels are not drawn at all)', () => {
+  const f = fixture({ on: false });
+  assert.equal(f.channelsOn(), false);
+  assert.equal(f.chanOpen(f.w), null);
+});
+
+test('opening a post repaints every open feed at once (the desktop list pane beside the thread); switch off: nothing', () => {
+  const f = fixture();
+  f.env.CH.w = {}; f.env.elOf = () => ({});
+  f.chanSeenPaint(); assert.deepEqual(f.renders, [], 'no feed open: no paint');
+  f.openChannel(f.w, 'launch'); f.renders.length = 0;
+  f.chanSeenPaint(); assert.deepEqual(f.renders, ['list']);
+  f.env.holdList = () => true; f.renders.length = 0;
+  f.chanSeenPaint(); assert.deepEqual(f.renders, [], 'a held list keeps the hold (it repaints when let go)');
+  f.env.holdList = () => false; f.setOn(false); f.renders.length = 0;
+  f.chanSeenPaint(); assert.deepEqual(f.renders, []);
+  assert.match(src, /LIVE\.markSeen\(typeof chanSeenRow === 'function' \? chanSeenRow\(wid, sid\) : sid\); if \(typeof chanSeenPaint === 'function'\) chanSeenPaint\(\);/, 'openChat marks the window\'s own row, then paints');
+});
+
+test('opening a routed post that shares its id with a main thread marks the routed row, not the main one', () => {
+  const main = row('h1', 1, { fresh: true, owner: 'hermes' }), routed = row('h1', 1, { fresh: true, owner: 'host', agent: 'host' });
+  for (const [agent, shown] of [['host', routed], ['container', { ...routed, owner: 'container', agent: 'container' }], ['restricted', { ...routed, owner: 'restricted', agent: 'restricted' }]]) {
+    const f = fixture({ sessions: { h1: main } });
+    f.env._rowOf = () => shown;
+    assert.equal(f.chanSeenRow('w', 'h1'), shown, agent + ': the window\'s own row');
+  }
+  const f = fixture({ sessions: { h1: main } });
+  assert.equal(f.chanSeenRow('w', 'h1'), 'h1', 'main window: the id, as today');
+  f.env._rowOf = () => routed; f.setOn(false);
+  assert.equal(f.chanSeenRow('w', 'h1'), 'h1', 'switch off: the id, as today');
 });

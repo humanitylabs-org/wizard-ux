@@ -7,7 +7,9 @@
 // message with picture thumbnails that open the viewer, filters, post opens the thread), Back thread → channel → list,
 // "Move to channel" on a chat's sheet, a new post from the feed's own message box (wizard-ux issue 1258: the thread
 // composer at the bottom, "Message # name", a photo attached; the post paints on the Send tap's frame, the chat is
-// filed into its Space and the window stays on the feed), and switching off inside a feed.
+// filed into its Space and the window stays on the feed), unread marks (wizard-ux issue 1259: bold channel + count
+// matching Activity, "N new replies" in the feed, cleared by opening the thread with no flicker on Back), and switching
+// off inside a feed.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -113,6 +115,8 @@ const report = { origin, web, cases: [] };
         entry.channelLine = await vis('.ch-list [data-chopen="qa-l1"]').innerText();
         assert.match(entry.channelLine, /# Launch/); assert.match(await vis('.ch-list [data-chopen="qa-g1"]').innerText(), /# General/);
         await page.screenshot({ path: path.join(out, stem + '-activity.png') });
+        // Unread (wizard-ux issue 1259): the bold Activity rows per channel, to match the Channels counts below.
+        entry.activityUnread = await page.locator('.ch-list .ch-row.unread').filter({ visible: true }).evaluateAll(b => [...new Set(b.map(x => x.dataset.chopen))].sort());
         // A chat's sheet says "Move to channel…" (James: Channels everywhere).
         await menu(vis('.ch-list [data-chopen="qa-g1"]'));
         await vis('.ch-sheet [data-rsspacepicker]').waitFor();
@@ -155,6 +159,14 @@ const report = { origin, web, cases: [] };
         const recent = await page.locator('.ch-chan-recent [data-chopen]').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.chopen));
         entry.recent = recent; assert.deepEqual(recent, ['qa-l2', 'qa-l1'], 'chevron: working and needs-you posts, newest first');
         await page.screenshot({ path: path.join(out, stem + '-channels.png') });
+        // Unread: a channel with unread posts is bold with their count; the counts add up to Activity's bold rows.
+        entry.chanUnread = await page.locator('.ch-chan.unread').filter({ visible: true }).evaluateAll(b => Object.fromEntries(b.map(x => [x.querySelector('[data-chchan]').dataset.chchan, +x.querySelector('.ch-chan-n').textContent])));
+        assert.deepEqual(entry.chanUnread, { launch: 1, voice: 1, __general__: 1 }, 'unread posts per channel');
+        assert.equal(Object.values(entry.chanUnread).reduce((a, b) => a + b, 0), entry.activityUnread.length, 'Channels counts match Activity: ' + entry.activityUnread);
+        entry.chanBold = await vis('.ch-chan.unread .ch-chan-open b').evaluate(e => getComputedStyle(e).fontWeight);
+        assert.ok(+entry.chanBold >= 700, 'bold: ' + entry.chanBold);
+        assert.equal(await launch.locator('.ch-chan-n + .ch-chan-dot').count(), 1, 'needs-you keeps its amber dot beside the count');
+        assert.equal(await vis('.ch-chan-recent [data-chopen="qa-l1"]').getAttribute('class'), 'ch-chan-post unread', 'the chevron line of the unread post is bold');
         // Feed.
         await launch.click();
         await vis('.ch-chan-h').waitFor();
@@ -190,18 +202,34 @@ const report = { origin, web, cases: [] };
         await vis('[data-chchanf="needs"]').click(); assert.deepEqual(await posts(), ['qa-l1']);
         await vis('[data-chchanf="all"]').click(); assert.deepEqual(await posts(), ['qa-l3', 'qa-l1', 'qa-l2']);
         await vis('[data-chchanf="open"]').click();
+        // The unread post's reply line: bold violet "3 new replies" with the unread dot first; the working one is unchanged.
+        entry.unreadLine = (await vis('.ch-post-r.unread[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
+        assert.match(entry.unreadLine, /^3 new replies/);
+        assert.equal(await vis('.ch-post-r[data-chopen="qa-l1"]').locator(':scope > .st.unread:first-child').count(), 1, 'the violet dot starts the line');
+        assert.equal(await page.locator('.ch-post-r.unread[data-chopen="qa-l2"]').count(), 0, 'working: not unread');
+        await page.screenshot({ path: path.join(out, stem + '-feed-unread.png') });
+        // From here on, any unread mark seen again for qa-l1 is a flicker.
+        await page.evaluate(() => { window.unreadFlicker = 0; window.unreadWatch = false; new MutationObserver(() => { if (window.unreadWatch && document.querySelector('.ch-post.unread[data-morph-key="post:qa-l1"], .ch-chan.unread [data-chchan="launch"]')) window.unreadFlicker++; }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] }); });
         // A post opens today's thread; Back: thread → channel → list, never out of Chats.
         await vis('.ch-post-b[data-chopen="qa-l1"]').click();
         await vis('.ch-thread').waitFor();
         assert.match(await vis('.ch-thread').innerText(), /Can you get the launch checklist ready for Friday/);
         if (!phone) { assert.ok(await vis('.ch-chan-h').isVisible(), 'desktop: the feed stays in the list pane beside the thread'); await page.screenshot({ path: path.join(out, stem + '-thread.png') }); }
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
+        await page.evaluate(() => { window.unreadWatch = true; });
         entry.back = [await back()]; await nap(150);
         if (!phone && await page.locator('.ch-thread').filter({ visible: true }).count()) { entry.back.push(await back()); await nap(150); }
         await vis('.ch-chan-h').waitFor(); assert.deepEqual(await posts(), ['qa-l1', 'qa-l2'], 'Back from the thread lands on the channel');
+        entry.readLine = (await vis('.ch-post-r[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
+        assert.match(entry.readLine, /^3 replies/, 'read: the marker is gone on the channel Back lands on');
+        assert.equal(await page.locator('.ch-post.unread[data-morph-key="post:qa-l1"]').count(), 0);
         entry.back.push(await back()); await nap(150);
         await vis('.ch-chan-open[data-chchan="launch"]').waitFor();
         assert.equal(await page.locator('.ch-chan-h').filter({ visible: true }).count(), 0, 'Back from the channel lands on the Channels list');
+        assert.equal(await vis('.ch-chan-open[data-chchan="launch"]').locator('.ch-chan-n').count(), 0, 'read: Launch has no count');
+        entry.unreadFlicker = await page.evaluate(() => { window.unreadWatch = false; return window.unreadFlicker; });
+        assert.equal(entry.unreadFlicker, 0, 'no unread mark came back after the thread was read');
+        await page.screenshot({ path: path.join(out, stem + '-channels-read.png') });
         // One more Back is the list's own (unchanged): the desktop stays on the list, the phone sheet goes Home as today.
         entry.back.push(await back()); await nap(150);
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else assert.ok(await vis('.ch-list').isVisible(), 'desktop Back at the list stays in Chats');

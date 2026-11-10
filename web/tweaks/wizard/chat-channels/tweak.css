@@ -66,3 +66,10 @@ html[data-tweaks~="wizard/chat-channels"] .ch-list:has(> .ch-chan-compose) .ch-c
 html[data-tweaks~="wizard/chat-channels"] :is(#device, body) .ch-list:has(> .ch-chan-compose) > .ch-scroll { padding-bottom: 4px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post.sending .ch-post-img { display: inline-block; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post.sending .ch-post-r { cursor: default; }
+/* Unread (wizard-ux issue 1259): the Activity row's bold ink and violet dot, read from the same per-chat state. */
+html[data-tweaks~="wizard/chat-channels"] .ch-chan.unread .ch-chan-open b { color: var(--ink); font-weight: 750; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan.unread .ch-chan-hash { color: var(--ink-2); }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-n { flex: none; margin-left: auto; min-width: 1.125rem; height: 1.125rem; padding: 0 .375rem; display: inline-grid; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--violet) 24%, transparent); color: var(--ink); font-size: .6875rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-post.unread span { color: var(--ink); font-weight: 750; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-r.unread span:not(.ch-post-st) { font-weight: 750; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-r .st { margin-right: 0; }
