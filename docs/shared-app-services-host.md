@@ -86,6 +86,19 @@ The host uses `WosChat.sharePayload` / `shareFile`, calling immediately inside t
 
 **The current Android Java bridge methods return void and swallow chooser failures.** The shared JS still opens that chooser but returns unsupported when there is no explicit receipt; it cannot truthfully report shared or cancelled. The common file viewer also avoids a second text chooser and a false Shared toast after an unconfirmed native file invocation; cancellation shows no success toast. Explicit string/JSON/object/Promise receipts are supported and tested with mocks. Real Android outcome/cancellation readback requires a native bridge follow-up. The inspected existing Mac bridge supplies app/meeting methods but no native sharing method, so desktop retains Web Share/clipboard capability fallback rather than inventing a bridge method.
 
+## Fresh data (issue 1243)
+
+An open app window never keeps old data until it is closed and reopened. For every connected (`WizardApp.ready`) frame the shell (`WizAppServices`, `app-services.js`) posts `wizard:app:refresh` with a `reason`:
+
+- `visible`: the window comes back into view (desk switch, unhide, Chats no longer covering it);
+- `focus`: the window comes to the front;
+- `poll`: about every 60 s while it is in view; never while the window or the page is hidden;
+- `agent`: an agent tool whose name holds the app's short id (`wizard-calendar` → `calendar_update_event`, `mcp_wizard_calendar_…`) finished in a run stream this shell reads (`live.js` fires `wizard:agent-tool`).
+
+Asks are at most one per 3 s per frame; a later ask waits for the gap and is not dropped. The whole page returning is not asked again, because the frame already gets its own real `visibilitychange`.
+
+In the app, `WizardApp.view.onRefresh(fn)` receives `{reason}` (and also runs on a real return to the page); it returns an unsubscribe. An app with no handler gets a `visibilitychange` event while visible instead, so the usual `if (!document.hidden) load()` handler refreshes with no app change. Test: `tests/app-fresh-data.test.mjs`.
+
 ## Updates and capture seam
 
 Only explicit Reload is offered; background visibility never forces it. Reload rechecks app holds, automatic recording holds, shell voice and uploads. A frame disappearing cannot cancel the capture module. Its getState remains authoritative for active recording even after document holds are reconciled. Original shell voice and shared capture reject a second physical microphone owner.

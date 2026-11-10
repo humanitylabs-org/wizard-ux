@@ -1459,6 +1459,8 @@
           const id = d.tool_call_id || d.step_id || d.id;
           const i = r.steps.findLastIndex(s => !s.done && (typeof id === 'string' && id ? s.id === id : s.tool === String(d.tool)));
           if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
+          // An open app window named by this tool reads its data again (WizAppServices fresh data, issue 1243).
+          try { window.dispatchEvent(new CustomEvent('wizard:agent-tool', { detail: { tool: String(d.tool) } })); } catch (_) {}
         }
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
