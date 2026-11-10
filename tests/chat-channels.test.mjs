@@ -61,7 +61,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
 }
@@ -645,4 +645,100 @@ test('opening a routed post that shares its id with a main thread marks the rout
   assert.equal(f.chanSeenRow('w', 'h1'), 'h1', 'main window: the id, as today');
   f.env._rowOf = () => routed; f.setOn(false);
   assert.equal(f.chanSeenRow('w', 'h1'), 'h1', 'switch off: the id, as today');
+});
+
+// Where a feed opens and stays (wizard-ux issue 1263): a fake scroller laid out from the painted feed's own keys.
+function feedDom(html, heights = {}, client = 400) {
+  const keys = [...html.matchAll(/data-morph-key="((?:post:|chan-new)[^"]*)"/g)].map(m => m[1]);
+  const sc = { scrollTop: 0, clientHeight: client, getBoundingClientRect: () => ({ top: 0 }) };
+  const nodes = keys.map(k => ({ dataset: { morphKey: k }, h: heights[k] ?? (k === 'chan-new' ? 20 : 100) }));
+  const topOf = n => nodes.slice(0, nodes.indexOf(n)).reduce((a, x) => a + x.h, 0);
+  for (const n of nodes) n.getBoundingClientRect = () => ({ top: topOf(n) - sc.scrollTop, bottom: topOf(n) + n.h - sc.scrollTop });
+  Object.defineProperty(sc, 'scrollHeight', { get: () => nodes.reduce((a, x) => a + x.h, 0) });
+  const feed = { querySelectorAll: () => nodes, firstElementChild: null };
+  sc.querySelector = q => q === '.ch-chan-feed' ? feed : null;
+  return { sc, nodes, el: { querySelector: q => q === '.ch-list > .ch-scroll' ? sc : null }, grow: (k, h) => { nodes.find(n => n.dataset.morphKey === k).h = h; } };
+}
+const manyRows = (n, unreadFrom = n) => Array.from({ length: n }, (_, i) => row('p' + i, n - i, { fresh: i >= unreadFrom }));
+const longSpaces = n => [{ id: 'launch', name: 'Launch', threads: Array.from({ length: n }, (_, i) => 'p' + i) }];
+
+test('issue 1263: all read, a long channel opens at the very bottom and stays there while posts fill in', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120);
+  f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w), html = f.channelFeed(f.w, open, rows);
+  assert.doesNotMatch(html, /ch-chan-new/, 'all read: no New line');
+  assert.deepEqual({ ...f.w.chan.at }, { end: true });
+  const d = feedDom(html); f.env.elOf = () => d.el;
+  f.chanHold('w'); assert.equal(d.sc.scrollTop, d.sc.scrollHeight - d.sc.clientHeight, 'at the bottom');
+  // First messages and thumbnails arrive: the feed grows above and at the end; a repaint resets to 0 first (rerenderList).
+  d.grow('post:p3', 260); d.grow('post:p119', 300); d.sc.scrollTop = 0;
+  f.chanHold('w'); assert.equal(d.sc.scrollTop, d.sc.scrollHeight - d.sc.clientHeight, 'still at the bottom, never the top');
+});
+
+test('issue 1263: unread posts, it opens at the first unread under one "New" line that holds its place as posts fill in', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120, 104);
+  f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w), html = f.channelFeed(f.w, open, rows);
+  assert.equal(html.match(/class="ch-chan-new"/g)?.length, 1, 'one New line');
+  assert.match(html, /data-morph-key="chan-new"><span>New<\/span><\/div><div class="ch-post unread" data-morph-key="post:p104"/, 'directly above the first unread post');
+  const d = feedDom(html); f.env.elOf = () => d.el;
+  const lineY = () => d.nodes.find(n => n.dataset.morphKey === 'chan-new').getBoundingClientRect().top;
+  f.chanHold('w'); assert.equal(lineY(), 8, 'the New line near the top of the view');
+  d.grow('post:p10', 400); d.grow('post:p103', 180);
+  f.chanHold('w'); assert.equal(lineY(), 8, 'posts above filled in: the line did not move');
+  // Reading the posts does not take the line away while the channel is open; the next open does.
+  for (const r of rows) r.fresh = false;
+  assert.match(f.channelFeed(f.w, open, rows), /ch-chan-new/, 'still there while James is looking');
+  f.channelBack(f.w); f.openChannel(f.w, 'launch');
+  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /ch-chan-new/, 'cleared on the next open');
+  assert.deepEqual({ ...f.w.chan.at }, { end: true }, 'and it opens at the bottom');
+});
+
+test('issue 1263: James\'s own scroll moves the place (a repaint or Back from a thread returns to it); programmatic scrolls do not', () => {
+  const f = fixture({ spacesList: longSpaces(40) }), rows = manyRows(40);
+  f.openChannel(f.w, 'launch');
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows), d = feedDom(html); f.env.elOf = () => d.el;
+  f.chanHold('w');
+  d.sc.scrollTop = 1050; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { end: true }, 'a scroll James did not make never moves the place');
+  f.chanUser('w'); f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:p10', y: -50 }, 'the post at the top of his view');
+  d.sc.scrollTop = 0; d.grow('post:p2', 300); // Back repaints the list from the top, and a post above grew meanwhile
+  f.chanHold('w'); assert.equal(d.nodes.find(n => n.dataset.morphKey === 'post:p10').getBoundingClientRect().top, -50, 'back where he was');
+  f.chanUser('w'); d.sc.scrollTop = d.sc.scrollHeight - d.sc.clientHeight - 2; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { end: true }, 'scrolled to the end: the end is the place again');
+  f.chanToEnd('w'); assert.deepEqual({ ...f.w.chan.at }, { end: true }, 'a send keeps the newest post in view');
+});
+
+test('issue 1263: the first unread follows each row\'s own agent (main vs routed host-profile, container, restricted)', () => {
+  for (const agent of ['host', 'container', 'restricted']) {
+    const sp = { host: 'host-ops', container: 'box', restricted: 'locked' }[agent], tid = { host: 'h1', container: 'k1', restricted: 'r1' }[agent];
+    const f = fixture({ agents: { [tid]: agent } });
+    f.w.focus = { kind: 'agent', key: agent }; f.openChannel(f.w, sp);
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [row(tid, 2, { owner: 'hermes', fresh: true }), row(tid, 1, { owner: agent, agent, fresh: true })]);
+    assert.equal(f.w.chan.newKey, agent + '|' + tid, agent + ': the routed row, never the main one sharing its id');
+    assert.match(html, /ch-chan-new/);
+  }
+});
+
+test('issue 1263: every list paint and every rerender put the feed back in its place; switch off: nothing moves', () => {
+  assert.match(src, /if \(sc\) sc\.scrollTop = 0; if \(typeof chanHold === 'function'\) chanHold\(w\.id\); \} \}/, 'rerenderList');
+  assert.match(src, /if \(chanOn && typeof chanHold === 'function'\) chanHold\(w\.id\);/, 'renderChatList, only with the switch on');
+  assert.match(src, /if \(typeof chanScrolled === 'function'\) chanScrolled\(id, e\.target\)/, 'the list scroll listener');
+  const f = fixture({ on: false }); f.w.chan = { id: 'launch', prev: null, at: { end: true } };
+  const d = feedDom(''); f.env.elOf = () => d.el; f.chanUser('w'); d.sc.scrollTop = 5; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { end: true }, 'switch off: scrolls are not read');
+});
+
+test('issue 1263: the tap that opens an unread channel and the hold\'s own scroll never replace the New line as the place', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120, 104);
+  f.chanUser('w'); // the row's pointerdown, before openChannel runs
+  f.openChannel(f.w, 'launch');
+  const d = feedDom(f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.env.elOf = () => d.el;
+  f.chanHold('w'); f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8 }, 'the opening tap is not a scroll');
+  f.chanUser('w'); f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'chan-new', y: 8 }, 'the scroll event the hold itself fired is not James\'s');
+  f.chanUser('w'); d.sc.scrollTop -= 250; f.chanScrolled('w', d.sc);
+  assert.equal(f.w.chan.at.key, 'post:p101', 'a real scroll after it does move the place');
 });

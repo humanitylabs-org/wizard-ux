@@ -73,3 +73,6 @@ html[data-tweaks~="wizard/chat-channels"] .ch-chan-n { flex: none; margin-left: 
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-post.unread span { color: var(--ink); font-weight: 750; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-r.unread span:not(.ch-post-st) { font-weight: 750; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-r .st { margin-right: 0; }
+/* Where a channel opens (wizard-ux issue 1263): a slim "New" line above the first unread post, like a chat's unread line. */
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-new { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--violet-2); font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-new::before { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--violet) 55%, transparent); }
