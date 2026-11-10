@@ -1051,8 +1051,10 @@
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
+    // ids, or the row objects themselves: a caller holding the row a window shows (a routed thread that shares its
+    // id with a main one) marks that row, never the id-first main match.
     markSeen(ids) {
-      const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
+      const all = (Array.isArray(ids) ? ids : [ids]).map(id => id && typeof id === 'object' ? id : this.session(id)).filter(Boolean);
       const ts = Date.now();
       const list = all;
       if (!list.length) return;

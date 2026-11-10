@@ -503,6 +503,12 @@ window.WizCore.chats = function createChats(H) {
   // Opening a post marks it read (LIVE.markSeen). The desktop keeps the feed on screen beside the thread, and its
   // list pane skips Live repaints while focus is inside it (the tapped post), so the feed is painted here at once:
   // the line and the channel are already read when Back lands on them, never a frame late.
+  // The row to mark read when a thread opens from a window: with Channels on, the window's own row (rowOf: a routed
+  // channel's post can share its id with a main thread, and the id-only lookup would mark the main one), else the id.
+  function chanSeenRow(wid, sid) {
+    if (!channelsOn()) return sid;
+    const r = rowOf(wid, sid); return r && r !== LIVE.session(sid) ? r : sid;
+  }
   function chanSeenPaint() {
     if (!channelsOn()) return;
     for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
@@ -3322,7 +3328,7 @@ window.WizCore.chats = function createChats(H) {
     PW?.opened(wid, sid);
     if (sid === '__new__' && w.thread !== '__new__') c.newAt = Date.now(); // a fresh new chat: nothing older shows in it
     w.thread = sid; save(); loadDraft(w);
-    if (sid !== '__new__') { LIVE.markSeen(sid); if (typeof chanSeenPaint === 'function') chanSeenPaint(); }
+    if (sid !== '__new__') { LIVE.markSeen(typeof chanSeenRow === 'function' ? chanSeenRow(wid, sid) : sid); if (typeof chanSeenPaint === 'function') chanSeenPaint(); }
     renderChats(w); applyLayout(deskOf(wid));
   }
   /* Unified Chats: a Private model picked inside a standard thread. A new chat on that private agent opens in this
@@ -3641,7 +3647,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of desks[idx].wins) {
       const w = W[id]; if ((w?.app !== 'chats' && !isHosted(id)) || !w.thread || w.thread === '__new__') continue;
       const hold = ch(id).unreadHold; if (hold?.sid === w.thread && hold.nav === ch(id).readNav) continue;
-      const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
+      const r = typeof chanSeenRow === 'function' ? chanSeenRow(id, w.thread) : w.thread, s = typeof r === 'object' ? r : LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(r);
     }
   }
 

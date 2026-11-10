@@ -39,6 +39,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     setFocus: (w, f) => { focusCalls.push(f); w.focus = f; renders.push('focus'); return true; },
     rerenderList: () => renders.push('list'), renderChatList: () => renders.push('list'),
     isWorking: s => s.status === 'running', attOf: s => s.attention || null,
+    rowOf: (wid, sid) => env._rowOf ? env._rowOf(wid, sid) : sessions[sid] || null,
     snoozeLast: () => !!env._snoozeLast, _snoozeLast: false, deferredOf: s => !!s.deferred && !s.archived,
     LIVE: { isNew: s => !!s.fresh && !s.archived, agentOf, ownerOf: s => s.owner ?? agents[s.id] ?? '', cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, sessionFor: (id, a) => sessions[a ? a + '|' + id : id] || null,
       firstMessages: async (id, agent) => { reads.push(agent ? agent + '|' + id : id); const h = history[agent ? agent + '|' + id : id]; if (h instanceof Error) throw h; return h || []; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
@@ -60,7 +61,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
 }
@@ -630,5 +631,18 @@ test('opening a post repaints every open feed at once (the desktop list pane bes
   f.chanSeenPaint(); assert.deepEqual(f.renders, [], 'a held list keeps the hold (it repaints when let go)');
   f.env.holdList = () => false; f.setOn(false); f.renders.length = 0;
   f.chanSeenPaint(); assert.deepEqual(f.renders, []);
-  assert.match(src, /LIVE\.markSeen\(sid\); if \(typeof chanSeenPaint === 'function'\) chanSeenPaint\(\);/, 'openChat paints right after marking read');
+  assert.match(src, /LIVE\.markSeen\(typeof chanSeenRow === 'function' \? chanSeenRow\(wid, sid\) : sid\); if \(typeof chanSeenPaint === 'function'\) chanSeenPaint\(\);/, 'openChat marks the window\'s own row, then paints');
+});
+
+test('opening a routed post that shares its id with a main thread marks the routed row, not the main one', () => {
+  const main = row('h1', 1, { fresh: true, owner: 'hermes' }), routed = row('h1', 1, { fresh: true, owner: 'host', agent: 'host' });
+  for (const [agent, shown] of [['host', routed], ['container', { ...routed, owner: 'container', agent: 'container' }], ['restricted', { ...routed, owner: 'restricted', agent: 'restricted' }]]) {
+    const f = fixture({ sessions: { h1: main } });
+    f.env._rowOf = () => shown;
+    assert.equal(f.chanSeenRow('w', 'h1'), shown, agent + ': the window\'s own row');
+  }
+  const f = fixture({ sessions: { h1: main } });
+  assert.equal(f.chanSeenRow('w', 'h1'), 'h1', 'main window: the id, as today');
+  f.env._rowOf = () => routed; f.setOn(false);
+  assert.equal(f.chanSeenRow('w', 'h1'), 'h1', 'switch off: the id, as today');
 });
