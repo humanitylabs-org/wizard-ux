@@ -1,3 +1,0 @@
-/* Group by day on = By day (Ready, Yesterday, Past week); off = By status (Ready together). Same saved choice as the
-   Layout picker this replaces in the Filter sheet. */
-html[data-tweaks~="miguel/group-by-day"] { --wos-chats-group-switch: on; }

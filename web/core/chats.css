@@ -846,8 +846,8 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 
 /* Pinned chats (synced per owner; design: Novaire, wizard-ux PR 250) and Boomerang markers. */
 .ch-row-wrap { position: relative; }
-/* Row pin buttons are off by default (James, 31 Oct 2026): Pin lives in the row's menu (right-click, hold or swipe).
- * The "Show pin buttons" tweak (web/tweaks/wizard/pin-buttons) brings the button back on every row. */
+/* Row pin buttons are hidden (James, 31 Oct 2026): Pin lives in the row's menu (right-click, hold or swipe).
+ * The old "Show pin buttons" switch was removed in wizard-ux issue 1239. */
 .ch-row-wrap > .ch-row { padding-right: 12px; }
 .ch-fail.diagnosed .lb { text-transform: none; letter-spacing: 0; font-size: 17px; }
 .ch-row-wrap.diagnosed .ch-row { padding-right: 90px; }

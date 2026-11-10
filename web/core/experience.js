@@ -67,24 +67,6 @@
   const presetOn = id => !!set?.tweaks.includes(id) && !(set.off || []).includes(id);
   // Ids switched off for this preset: the owner's explicit offs plus the published default-offs he has not touched.
   const offFor = () => [...Object.keys(state.mix || {}).filter(id => state.mix[id] === false), ...(set?.off || []).filter(id => mixOf(id) === undefined)];
-  // Move the legacy Layout choice into the Wizard tweak once, even if another skin is worn now.
-  try {
-    if (localStorage.getItem('wos.layout') === 'two-orb' && !localStorage.getItem('wos.two-orbs.migrated.v1')) {
-      if (!Object.hasOwn(state.off, 'wizard')) { state.off.wizard = ['wizard/app-borders']; Store.write(state); }
-      localStorage.setItem('wos.two-orbs.migrated.v1', 'true');
-    }
-  } catch (_) {}
-  // Preserve a deliberate old framed choice once; explicit offs after this migration always win.
-  try {
-    if (!localStorage.getItem('wos.app-borders.migrated.v1')) {
-      const saved = JSON.parse(localStorage.getItem('wos.skin.composition.v1') || 'null');
-      const off = new Set(state.off.wizard || ['wizard/two-orbs']);
-      if (saved?.frame?.foundation !== 'framed') off.add('wizard/app-borders');
-      else off.delete('wizard/app-borders');
-      state.off.wizard = [...off]; Store.write(state);
-      localStorage.setItem('wos.app-borders.migrated.v1', 'true');
-    }
-  } catch (_) {}
   /* Skins are look only (wizard-ux#1190, switch wizard/skins-look-only, off by default). One system for trying changes:
    * while it is on, an own skin's saved tweak choices are set aside (kept, back when it is off) and only the shared
    * feature switches (Settings and the WizardOS Tracker, look.json `tweaks`) decide what runs. The switch itself always

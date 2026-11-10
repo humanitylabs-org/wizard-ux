@@ -330,15 +330,15 @@ test('experience.js: switches raise wos:tweak-choice, adopt() wears the shared s
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience; await E.refresh();
-  await E.toggle('miguel/no-desk-close');
-  assert.deepEqual(clone(events), [{ id: 'miguel/no-desk-close', on: true }]);
-  assert.ok(active.includes('miguel/no-desk-close'));
+  await E.toggle('miguel/calm-offline');
+  assert.deepEqual(clone(events), [{ id: 'miguel/calm-offline', on: true }]);
+  assert.ok(active.includes('miguel/calm-offline'));
   await E.adopt({ 'miguel/send-and-go': true });
   assert.equal(events.length, 1, 'adopting raises no choice');
   const onOf = m => Object.keys(m).filter(id => m[id] === true);
   assert.deepEqual(onOf(clone(E.mix)), ['miguel/send-and-go']);
   assert.deepEqual(onOf(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), ['miguel/send-and-go'], 'cached for the next first frame');
-  assert.ok(active.includes('miguel/send-and-go') && !active.includes('miguel/no-desk-close'));
+  assert.ok(active.includes('miguel/send-and-go') && !active.includes('miguel/calm-offline'));
 });
 
 // Live QA found it: a fresh device (Mac app) adopting Miguel's set ran its one-time machines-home migration and
@@ -353,8 +353,8 @@ test('experience.js: a fresh device adopting the shared set never adds its own o
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience;
-  await E.adopt({ 'miguel/no-desk-close': true, 'miguel/send-and-go': true });
-  assert.deepEqual([...active].sort(), ['miguel/no-desk-close', 'miguel/send-and-go', ...JSON.parse(read('web/tweaks/catalog.json')).defaults].sort());
+  await E.adopt({ 'miguel/calm-offline': true, 'miguel/send-and-go': true });
+  assert.deepEqual([...active].sort(), ['miguel/calm-offline', 'miguel/send-and-go', ...JSON.parse(read('web/tweaks/catalog.json')).defaults].sort());
   assert.ok(!active.includes('miguel/machines-home'), 'no migration adds to the shared set');
 });
 

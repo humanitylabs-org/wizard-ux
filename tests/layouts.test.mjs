@@ -129,7 +129,6 @@ test('the shell wires layouts: orb tap hook, Settings row, agent kept on recover
   assert.match(app, /talk: id => talkTo\(id\)/);
   assert.match(app, /opt\.agent && window\.WosAgents\?\.isOther\(opt\.agent\)/, 'an agent pick routes only to that agent');
   assert.doesNotMatch(read('web/core/settings.js'), /data-layoutpick|data-layout-row/);
-  assert.match(read('web/tweaks/wizard/two-orbs/tweak.js'), /api\.layout\.use\('two-orb'\)/);
   const models = read('web/core/chat-models.js');
   assert.match(models, /route\.agent \? \{ agent: route\.agent \}/);
   assert.match(models, /M\.currentRoute\('', saved, saved\.agent \|\| ''\)/);

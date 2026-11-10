@@ -1,5 +1,5 @@
 // The product name is WizardOS, one word, always (James, 8 Nov 2026; wizard-os#436). The old off-by-default
-// tweak wizard/wizardos-name is retired: with or without it, About & updates, the update pop-up, the app update
+// tweak wizard/wizardos-name was removed (wizard-ux issue 1239): with or without its id, About & updates, the update pop-up, the app update
 // banner, Welcome, the tour and the Android subtitles say WizardOS, and no tracked display text has the two words.
 // Run: node --test tests/wizardos-name.test.mjs
 import test from 'node:test';
@@ -28,11 +28,11 @@ async function load({ tweaks = '', reply = () => [200, STATUS] } = {}) {
 }
 const btn = osu => ({ closest: sel => (sel === '[data-osu]' ? { dataset: { osu } } : null) });
 
-test('the retired tweak still loads for saved profiles and is off by default', () => {
+test('the retired tweak is removed (wizard-ux issue 1239); a saved id is just a stale data-tweaks word', () => {
   const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(catalog.tweaks.includes(ID));
+  assert.equal(catalog.tweaks.includes(ID), false);
   assert.equal((catalog.defaults || []).includes(ID), false);
-  assert.match(JSON.parse(read(`web/tweaks/${ID}/manifest.json`)).description, /^Retired/);
+  assert.equal(JSON.parse(read('web/tweaks/wizard/profile.json')).tweaks.includes(ID), false);
 });
 
 for (const tweaks of ['wizard/unified-inbox', `wizard/unified-inbox ${ID}`]) {

@@ -1,25 +1,20 @@
-// James, 31 Oct 2026: row pins are opt-in; Pin always lives in the shared row menu, which has no redundant Open.
+// James, 31 Oct 2026: row pins are hidden; Pin always lives in the shared row menu, which has no redundant Open.
+// The old opt-in switch (wizard/pin-buttons) was removed in wizard-ux issue 1239; a saved opt-in loads nothing.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const json = p => JSON.parse(read(p));
 const PIN = 'wizard/pin-buttons';
 
-test('row pins are hidden by default; Show pin buttons restores buttons and their layout', () => {
-  const core = read('web/core/chats.css'), css = read('web/tweaks/wizard/pin-buttons/tweak.css');
+test('row pins are hidden by default and the Show pin buttons package is gone', () => {
+  const core = read('web/core/chats.css');
   assert.match(core, /\.ch-pin-toggle \{[^}]*display: none;/);
   assert.match(core, /\.ch-row-wrap > \.ch-row \{ padding-right: 12px;/);
   assert.match(core, /\.ch-row-wrap\.diagnosed \.ch-row \{ padding-right: 90px;/);
   assert.match(core, /\.ch-row-signin \{[^}]*right: 10px;/);
-  assert.match(css, /html\[data-tweaks~="wizard\/pin-buttons"\] \.ch-pin-toggle \{ display: grid; \}/);
-  assert.match(css, /\.ch-row-wrap > \.ch-row \{ padding-right: 42px;/);
-  assert.match(css, /\.ch-row-wrap\.diagnosed \.ch-row \{ padding-right: 122px;/);
-  assert.match(css, /\.ch-row-signin \{ right: 44px;/);
-  const m = json('web/tweaks/wizard/pin-buttons/manifest.json');
-  assert.equal(m.id, PIN); assert.equal(m.name, 'Show pin buttons'); assert.equal(m.author, 'wizard');
-  assert.deepEqual(m.capabilities, ['layout']);
+  assert.equal(existsSync(new URL('../web/tweaks/wizard/pin-buttons', import.meta.url)), false);
 });
 
 test('right-click, long-press and swipe share the row menu: Pin/Unpin, never Open', () => {
@@ -36,7 +31,7 @@ test('Pins off gives rows back the pin room (the retired hidden-pin tweak, now a
   const css = read('web/core/chats.css');
   assert.match(css, /html\[data-pins="off"\] \.ch-row-wrap > \.ch-row\.ch-row \{ padding-right: 12px; \}/);
   assert.match(css, /html\[data-pins="off"\] \.ch-row-wrap\.diagnosed > \.ch-row\.ch-row \{ padding-right: 90px; \}/);
-  const cat = json('web/tweaks/catalog.json'); assert.ok(cat.tweaks.includes(PIN)); assert.ok(!(cat.defaults || []).includes(PIN));
+  const cat = json('web/tweaks/catalog.json'); assert.ok(!cat.tweaks.includes(PIN)); assert.ok(!(cat.defaults || []).includes(PIN));
 });
 
 test('Novairecito and Sepia retain pins as skin styling, not as a device tweak/preset change', () => {
@@ -61,15 +56,13 @@ function experience(skin, saved) {
   return {E:window.WosExperience,storage,active:()=>Array.from(active)};
 }
 
-test('Show pin buttons starts off for fresh, saved mix and unflattened legacy devices; an explicit opt-in persists', async () => {
+test('a saved Show pin buttons opt-in (removed switch) loads without error and never requests the package', async () => {
   for (const skin of ['nebula','obsidian','novairecito','sepia']) {
-    for (const saved of [undefined, {version:1,off:{},preset:'none',mix:{'miguel/send-and-go':true}}, {version:1,off:{wizard:[],miguel:[]}}, {version:1,off:{},preset:'miguel'}]) {
-      let f = experience(skin,saved); await f.E.refresh();
+    for (const saved of [undefined, {version:1,off:{},preset:'none',mix:{'miguel/send-and-go':true,[PIN]:true}}, {version:1,off:{wizard:[PIN],miguel:[]}}, {version:1,off:{},preset:'miguel'}]) {
+      const f = experience(skin,saved); await f.E.refresh();
       assert.equal(f.E.state.error,''); assert.ok(!f.active().includes(PIN),skin);
-      assert.equal(f.E.state.tweaks.find(t=>t.id===PIN)?.on,false);
-      await f.E.toggle(PIN); assert.ok(f.active().includes(PIN));
-      f = experience(skin,JSON.parse(f.storage.get('wos.skin-tweaks.v1'))); await f.E.refresh(); assert.ok(f.active().includes(PIN),'saved opt-in');
-      await f.E.toggle(PIN); assert.ok(!f.active().includes(PIN));
+      assert.equal(f.E.state.tweaks.find(t=>t.id===PIN),undefined,'not offered');
+      await f.E.toggle(PIN); assert.ok(!f.active().includes(PIN),'a stale toggle is ignored');
     }
   }
 });
