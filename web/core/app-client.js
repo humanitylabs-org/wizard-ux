@@ -357,7 +357,24 @@
     if (d.type === 'wizard:app:tool' && d.version === VERSION && toolHandler && typeof d.id === 'string') { try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
     if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
+    if (d.type === 'wizard:app:refresh' && d.version === VERSION) refreshNow(d.reason);
   });
+  /* Fresh data (issue 1243): the shell asks a hosted app to read its data again when its window comes back into view or
+   * to the front, about once a minute while in view, and after an agent tool for this app finishes. An app that
+   * registered view.onRefresh gets {reason}; any other app gets the usual web signal it already reads on return, a
+   * visibilitychange while visible, so existing `if (!document.hidden) load()` handlers refresh with no app change. */
+  const refreshers = new Set();
+  function refreshNow(reason) {
+    if (document.hidden) return;
+    const r = Object.freeze({ reason: ['visible', 'focus', 'poll', 'agent'].includes(reason) ? reason : 'poll' });
+    if (refreshers.size) notify(refreshers, r);
+    else { try { document.dispatchEvent(new Event('visibilitychange', { bubbles: true })); } catch (e) { console.warn('WizardApp refresh', e); } }
+  }
+  globalThis.document?.addEventListener?.('visibilitychange', e => { if (e.isTrusted && !document.hidden && refreshers.size) notify(refreshers, Object.freeze({ reason: 'visible' })); });
+  function onRefresh(fn) {
+    if (typeof fn !== 'function') throw new TypeError('onRefresh needs a function');
+    refreshers.add(fn); return () => { refreshers.delete(fn); };
+  }
   function hold(reason, options = {}) {
     if (service) return service.update.hold(reason, options);
     if (transportReady) {
@@ -481,7 +498,7 @@
     }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
-    view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
+    view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true), onRefresh }),
     nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, get threadDrafts() { return service?.nav?.threadDrafts === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
       // Call after a finishing action (dismiss, archive, delete, save-and-close): returns the owner to the screen before the app.
       back: () => { try { return service?.nav?.back?.() === true; } catch (_) { return false; } }, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),

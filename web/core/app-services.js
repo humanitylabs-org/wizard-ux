@@ -517,6 +517,54 @@
     }
     window.dispatchEvent(new CustomEvent('wizard:app-update', { detail }));
   }
+  /* Fresh data (issue 1243): an open app window must not keep old data until it is closed and reopened. The shell asks
+   * a connected app to read again (`wizard:app:refresh`, see WizardApp.view.onRefresh) when its window comes back into
+   * view or to the front, about once a minute while it is in view (never while hidden), and soon after an agent tool
+   * named for that app finishes. At most one ask per FRESH_GAP per frame; a later ask waits for the gap, never dropped. */
+  const FRESH_GAP = 3000, FRESH_POLL = 60000, FRESH_REASONS = ['visible', 'focus', 'poll', 'agent'];
+  const freshSeen = st => { if (document.hidden) return false; try { return st.isVisible?.() === true; } catch (_) { return false; } };
+  const freshFront = st => { try { return st.isFront?.() === true; } catch (_) { return false; } };
+  function freshAsk(st, reason, now = Date.now()) {
+    if (!FRESH_REASONS.includes(reason)) return false;
+    if (now - (st.freshAt || 0) < FRESH_GAP) { st.freshWant = st.freshWant || reason; return false; }
+    if (!valid(st, st.doc)) return false;
+    st.freshAt = now; st.freshWant = null;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:refresh', version: VERSION, reason }, ORIGIN); return true; } catch (_) { return false; }
+  }
+  function freshTick(now = Date.now()) {
+    if (document.hidden) return;
+    for (const st of frames.values()) {
+      if (!st.doc) { st.freshDoc = null; continue; }
+      const seen = freshSeen(st), front = seen && freshFront(st);
+      // A new document has just read its data: start counting from its load, not from the last one.
+      if (st.freshDoc !== st.doc) { st.freshDoc = st.doc; st.freshAt = now; st.freshWant = null; }
+      else if (seen && !st.freshWasSeen) freshAsk(st, 'visible', now);
+      else if (front && !st.freshWasFront) freshAsk(st, 'focus', now);
+      else if (seen && st.freshWant) freshAsk(st, st.freshWant, now);
+      else if (seen && now - (st.freshAt || 0) >= FRESH_POLL) freshAsk(st, 'poll', now);
+      st.freshWasSeen = seen; st.freshWasFront = front;
+    }
+  }
+  setInterval(() => freshTick(), 1000);
+  // The whole page coming back already gives every app frame its own real visibilitychange: count that as the read.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    const now = Date.now();
+    for (const st of frames.values()) { st.freshAt = now; st.freshWant = null; st.freshWasSeen = freshSeen(st); st.freshWasFront = st.freshWasSeen && freshFront(st); }
+  });
+  // An agent tool finished (live.js run stream): `mcp_wizard_calendar_update_event` and `calendar_update_event` both
+  // name the Calendar app (`wizard-calendar`). Apps out of view read again when they come back into view anyway.
+  function freshTool(tool, now = Date.now()) {
+    const name = String(tool || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    let asked = 0;
+    for (const st of frames.values()) {
+      const short = String(st.appId || '').toLowerCase().replace(/^wizard(?:os)?-/, '').replace(/[^a-z0-9]+/g, '_');
+      if (short.length < 3 || !st.doc || !freshSeen(st) || !new RegExp('(^|_)' + short + '(_|$)').test(name)) continue;
+      freshAsk(st, 'agent', now); asked++;
+    }
+    return asked;
+  }
+  addEventListener('wizard:agent-tool', e => { freshTool(e?.detail?.tool); });
   // The shell supplies reviewed exact migration entries; apps cannot ask to unregister workers or delete caches.
   async function cleanupLegacy(st) {
     const policy = window.WizCore.appMigrations?.[st.appId]; if (!policy || !valid(st) || st.url.origin !== ORIGIN) return [];
@@ -852,7 +900,7 @@
       return true;
     } catch (_) { done?.(false); return false; }
   }
-  window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  window.WizAppServices = Object.freeze({ fresh: Object.freeze({ tick: freshTick, tool: freshTool }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     titlebar: Object.freeze({ render: renderTools }),
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
