@@ -69,14 +69,15 @@ test('the box model label opens the new-chat model menu without private-agent mo
 // The real composer seal helpers from core/chats.js: a take pinned to channel A's box takes A's box (never channel B's
 // in front by Send, never the New chat draft) and gives it back to A when the take is dropped.
 const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-function seals() {
-  const a = chats.indexOf('  const composerKey = sid =>'), b = chats.indexOf('  // At start: words taken by a voice send');
+function seals(d = {}) {
+  const a = chats.indexOf('  const composerKey = sid =>'), b = chats.indexOf('  // Typed words first, then what was said');
   assert.ok(a > 0 && b > a);
-  const d = {}, w = { id: 'win', thread: null }, c = {}, view = { box: 'chan:hermes:launch' };
+  const w = { id: 'win', thread: null }, c = {}, view = { box: 'chan:hermes:launch' };
   const ctx = { crypto: { randomUUID: () => 'aaaa-bbbb' }, INC: null, PEND: null, W: { win: w }, ch: () => c, elOf: () => ({ querySelector: () => null }), chanDraftKey: () => view.box,
-    KIT: { drafts: { get: k => d[k] || { text: '', files: [] }, set: (k, text, files = []) => { d[k] = { text, files }; }, clear: k => { delete d[k]; }, setReply() {} } },
+    KIT: { drafts: { all: () => ({ ...d }), get: k => d[k] || { text: '', files: [] }, set: (k, text, files = []) => { d[k] = { text, files }; }, clear: k => { delete d[k]; }, setReply() {} } },
+    OUTBOX: { recoveryComplete: true, ownsSeal: () => false },
     pendRef: f => f, growTa() {}, syncSend() {}, refreshCompose() {}, refreshReply() {}, setDraft: (wid, text, files) => { c.draft = text; c.files = files; }, renderChats() {}, Promise };
-  vm.createContext(ctx); vm.runInContext(chats.slice(a, b) + ';this.api={takeComposer,peekComposer};', ctx);
+  vm.createContext(ctx); vm.runInContext(chats.slice(a, b) + ';this.api={takeComposer,peekComposer,restoreSealed};', ctx);
   return { ...ctx.api, d, w, c, view };
 }
 test('a channel take seals the box of the channel it started in, and gives the words back there', () => {
@@ -90,6 +91,11 @@ test('a channel take seals the box of the channel it started in, and gives the w
   // Pinned to "no channel" (a New chat mic), a channel in front by Send is not taken either.
   const n = seals(); n.d['chan:hermes:launch'] = { text: 'launch words', files: [] }; n.d.new = { text: 'new words', files: [] };
   assert.equal(n.takeComposer('win', '__new__', '').text, 'new words');
+  // The page dies after the seal, before the outbox has the take: on the next start the words go back to # Launch.
+  const c1 = seals(); c1.view.box = 'chan:hermes:voice'; c1.d['chan:hermes:launch'] = { text: 'launch words', files: [] };
+  c1.takeComposer('win', '__new__', 'chan:hermes:launch'); assert.equal(c1.d['chan:hermes:launch'].text, '');
+  const after = seals({ ...c1.d }); after.restoreSealed();
+  assert.equal(after.d['chan:hermes:launch']?.text, 'launch words'); assert.equal(after.d.new, undefined, 'not into the New chat draft');
   // No pin (an older take): whatever box is in front, as before.
   const o = seals(); o.d['chan:hermes:launch'] = { text: 'launch words', files: [] };
   assert.equal(o.peekComposer('win', '__new__').here, true);

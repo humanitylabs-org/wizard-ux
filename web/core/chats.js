@@ -3438,13 +3438,14 @@ window.WizCore.chats = function createChats(H) {
     }
     KIT.drafts.set(dkey, '', rest);
     if (reply) { KIT.drafts.setReply(dkey, null); if (P.here) refreshReply(wid); }
-    const skey = SEALED + sid + ':' + crypto.randomUUID().replaceAll('-', '');
+    // A channel box's seal names the box itself ('sealed:chan:<agent>:<id>:…'), so a reload puts the words back there.
+    const skey = SEALED + (dkey.startsWith('chan:') ? dkey : sid) + ':' + crypto.randomUUID().replaceAll('-', '');
     KIT.drafts.set(skey, text, files);
     if (reply) KIT.drafts.setReply(skey, reply);
     let open = true;
     return { text, files, reply, key: skey,
       done(it) { if (it && !it.durable) return; if (open) { open = false; KIT.drafts.clear(skey); } },
-      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files, reply, box); } };
+      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files, reply, dkey.startsWith('chan:') ? dkey : box); } };
   }
   // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
   const startupSeals = new Set(Object.keys(KIT.drafts.all()).filter(k => k.startsWith(SEALED)));
@@ -3454,7 +3455,7 @@ window.WizCore.chats = function createChats(H) {
       if (!startupSeals.has(k)) continue;
       startupSeals.delete(k);
       const d = KIT.drafts.get(k), sid = k.slice(SEALED.length).replace(/:[a-z0-9]+$/, '');
-      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) restoreInto('', sid, d.text, d.files, d.reply);
+      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) { if (sid.startsWith('chan:')) restoreInto('', '__new__', d.text, d.files, d.reply, sid); else restoreInto('', sid, d.text, d.files, d.reply); }
     }
   }
   // Typed words first, then what was said (legacy order: the pasted link is the context the voice talks about).
