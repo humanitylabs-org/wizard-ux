@@ -43,15 +43,22 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     // KIT.parseRows stand-in: a row {role:'user', text, files} is an owner turn.
     toTurns: rows => rows.map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text } }),
     mediaOfFile: f => ({ id: f.id, name: f.name, mime: f.mime || '', kind: /^image\//.test(f.mime || '') ? 'image' : 'file', url: f.id ? `/wizard/files/${f.id}/content` : '' }),
-    KIT: { viewer: { open: (g, i) => viewer.push([g, i]) } }, H: { win: id => wins[id] }, CH: {}, holdList: () => false, setTimeout: fn => fn(), clearTimeout() {},
+    KIT: { viewer: { open: (g, i) => viewer.push([g, i]) }, drafts: { _d: {}, get(k) { return this._d[k] || { text: '', files: [] }; }, set(k, text, files = []) { this._d[k] = { text, files }; }, clear(k) { delete this._d[k]; } } }, H: { win: id => wins[id] }, CH: {}, holdList: () => false, setTimeout: fn => fn(), clearTimeout() {},
     window: { WizConfig: { owner: () => owner } }, PIN_SVG: '<svg pin></svg>', RENAME_SVG: '<svg rn></svg>', ACT: { done: { icon: '<svg ar></svg>' } },
     track: { querySelector: () => sheetEl }, closeRowSheet() { env.rowSheet = null; }, vib() {}, toast: (...a) => toasts.push(a[1]), rowSheet: null,
     norm: s => String(s).toLowerCase().trim(), openNewDraft: (id, r) => drafts.push([id, r]),
-    AGS: () => ({ defaultId: () => 'hermes', isPrivate: a => a.id === 'restricted', sigil: a => `<i class="ag-sig" data-agent="${a.id}"></i>` }), agentRec: id => ({ id }),
+    AGS: () => ({ defaultId: () => 'hermes', isOther: a => !!a && a !== 'hermes', isPrivate: a => a.id === 'restricted', sigil: a => `<i class="ag-sig" data-agent="${a.id}"></i>` }), agentRec: id => ({ id }),
+    // The channel's message box (wizard-ux issue 1258): the thread composer's helpers and the real send path's seam.
+    winAgent: w => w.focus?.kind === 'agent' && w.focus.key !== 'hermes' ? w.focus.key : '', PREVIEW: {}, fileUrl: id => `/wizard/files/${id}/content`, CLIP_SVG: '<svg clip></svg>',
+    hasContent: (t, files = []) => !!String(t || '').trim() || files.some(f => f && (f.id || f.uploading)),
+    attachTray: c => (c.files || []).length ? `<div class="ch-tray">${c.files.map(f => `<i data-f="${f.id}"></i>`).join('')}</div>` : '',
+    pendRef: f => f && f.id ? { id: f.id, name: f.name, mime: f.mime, bytes: f.bytes } : null, growTa() {}, syncSend() {}, viewContext: (id, how) => 'ctx:' + how,
+    PW: { modelLabel: (w, s) => `<button class="ch-mlabel ch-model" data-chmodel data-for="${w.thread}">Default model</button>`, micBtn: id => `<button class="ch-mic" data-chmic data-w="${id}"></button>`, newModel: c => c.newModel || null, ensureModels() {} },
+    sendChat: (...a) => { env._sends.push(a); return env._sendResult; }, _sends: [], _sendResult: null,
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,channelSend,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
 }
@@ -180,7 +187,7 @@ test('main vs routed: host-profile, container and restricted rows belong only to
 });
 
 test('posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus', () => {
-  assert.match(src, /const spaceKey = isNew && !opts\.away && focusOf\(w\)\?\.kind === 'space' \? focusOf\(w\)\.key : '';/);
+  assert.match(src, /const spaceKey = isNew && typeof opts\.space === 'string' \? opts\.space : isNew && !opts\.away && focusOf\(w\)\?\.kind === 'space' \? focusOf\(w\)\.key : '';/);
   assert.match(src, /if \(spaceKey && it\?\.sessionId\) spaceMember\(spaceKey, it\.sessionId, true\);/);
   // Back on the desktop list goes through clearFilter, which closes a feed after search and chips.
   assert.match(src, /if \(!c\.filter\) return typeof channelBack === 'function' && channelBack\(w\) \? 'channel' : false;/);
@@ -244,9 +251,9 @@ test('long-press sheet on a channel: Pin, Rename, Archive channel, New post; Gen
   assert.doesNotMatch(f.sheets.at(-1), /Delete/i);
   f.openChannelSheet('w', '__general__');
   assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['New post']);
-  // New post opens the channel and a new draft in it (filed into its Space at send).
+  // New post opens the channel with its message box ready (wizard-ux issue 1258), never a separate New chat draft.
   f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rschnew': '' }), 'w', f.w);
-  assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'voice' }); assert.deepEqual(f.drafts, [['w', '']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'voice' }); assert.deepEqual(f.drafts, []);
   // Rename is one item edit on spaces/<id>/name.
   f.openChannelSheet('w', 'launch'); f.channelClick(click({ 'data-rschrename': '' }), 'w', f.w);
   assert.match(f.sheets.at(-1), /data-chrnform[^]*Rename channel[^]*value="Launch"/);
@@ -354,5 +361,123 @@ test('an archived channel\'s feed takes no new posts until it is restored', () =
   f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rscharch': '' }), 'w', f.w);
   f.openChannel(f.w, 'voice');
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), []), /archived\. Restore it to post here/);
-  assert.match(src, /const fab = feed && typeof chanArchived === 'function' && chanArchived\(feed\.id\) \? '' :/);
+  assert.match(src, /const fab = feed \? \(typeof chanComposer === 'function' \? chanComposer\(w, feed\) : ''\) :/);
+  assert.equal(f.chanComposer(f.w, f.chanOpen(f.w)), '', 'no message box on an archived channel');
+});
+
+// ---- wizard-ux issue 1258: a message box at the bottom of a channel posts straight into it ----
+const form = value => { const ta = { value }; return { ta, querySelector: () => ta }; };
+const settle = () => new Promise(r => setImmediate(r));
+
+test('an open channel has the thread composer at the bottom: attach, mic, model label, "Message # name"; none on the list', () => {
+  const f = fixture(); f.openChannel(f.w, 'launch');
+  const html = f.chanComposer(f.w, f.chanOpen(f.w));
+  assert.match(html, /<form [^>]*class="ch-compose ch-chan-compose"[^>]*data-chform data-chchanform>/);
+  assert.match(html, /placeholder="Message # Launch"/);
+  assert.match(html, /data-chattach/); assert.match(html, /data-chmic data-w="w"/);
+  assert.match(html, /class="ch-mlabel ch-model" data-chmodel data-for="__new__"/, 'the model label of a new chat from this list');
+  assert.match(html, /aria-label="Post in # Launch"/);
+  // The draft is kept per channel, and per agent (a main and a routed Space may share a name).
+  assert.equal(f.chanDraftKey(f.w), 'chan:hermes:launch');
+  f.env.KIT.drafts.set('chan:hermes:launch', 'half typed', []); f.env.ch('w').draftFor = '';
+  assert.match(f.chanComposer(f.w, f.chanOpen(f.w)), /has-text[^]*>half typed<\/textarea>/);
+  // The Channels list itself (no feed open) and the switch off: no box.
+  f.channelBack(f.w); assert.equal(f.chanDraftKey(f.w), '');
+  f.openChannel(f.w, 'launch'); f.setOn(false); assert.equal(f.chanDraftKey(f.w), '');
+});
+
+test('Send paints the post on the same frame, starts a new chat filed into the channel, and stays in the channel', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch');
+  f.env.ch('w').files = [{ id: 'p1', name: 'shot.png', mime: 'image/png', preview: 'blob:shot' }, { id: 'd1', name: 'notes.pdf', mime: 'application/pdf' }];
+  let resolve; f.env._sendResult = new Promise(r => { resolve = r; });
+  const fm = form('  Ship the boot logo  '), renders0 = f.renders.length;
+  const sent = f.channelSend('w', fm);
+  // Same frame: the box is empty, the list repainted, and the feed already holds the post with its photo.
+  assert.equal(fm.ta.value, ''); assert.equal(f.env.ch('w').draft, ''); assert.equal(f.env.ch('w').files.length, 0);
+  assert.ok(f.renders.length > renders0, 'the list repaints on the tap');
+  const open = f.chanOpen(f.w); let html = f.channelFeed(f.w, open, []);
+  assert.match(html, /class="ch-post sending"[^]*>Ship the boot logo<[^]*<img src="blob:shot"[^]*Sending…/);
+  assert.doesNotMatch(html, /Nothing open here/);
+  // Today's new-chat path: '__new__', sent from elsewhere (no navigation), the channel's Space, the box's files.
+  const [wid, text, how, audio, opts] = f.env._sends[0];
+  assert.equal(wid, 'w'); assert.equal(text, 'Ship the boot logo'); assert.match(how, /# Launch channel/); assert.equal(audio, null);
+  assert.equal(opts.sid, '__new__'); assert.equal(opts.away, true); assert.equal(opts.space, 'launch');
+  assert.deepEqual(opts.files.map(x => x.id), ['p1', 'd1']);
+  assert.equal(opts.route, null, 'no pick: the owner\'s default agent and model, as a new chat does');
+  // The outbox allocated the chat: the post stays until the chat's own row is in the channel, then gives way to it.
+  resolve({ sessionId: 'n1' }); await sent;
+  assert.equal(f.w.thread, null, 'still on the channel feed'); assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'launch' });
+  assert.match(f.channelFeed(f.w, open, []), /ch-post sending/);
+  f.spacesData[0].threads.push('n1');
+  // The outbox's own row for it (live.js addSynthetic) has no card time yet: it still sorts as the newest post.
+  const cardAt0 = f.env.LIVE.cardAt; f.env.LIVE.cardAt = s => s.synthetic ? '' : cardAt0(s);
+  f.spacesData[0].threads.push('a'); const old = row('a', 3);
+  const rowN = { id: 'n1', title: 'Ship the boot logo', status: 'submitting', synthetic: true, updatedAt: new Date(NOW).toISOString() };
+  assert.deepEqual([...f.channelFeed(f.w, open, [rowN, old]).matchAll(/class="ch-post-b" data-chopen="([^"]+)"/g)].map(m => m[1]), ['a', 'n1']);
+  html = f.channelFeed(f.w, open, [rowN]);
+  assert.doesNotMatch(html, /ch-post sending/);
+  assert.match(html, /data-chopen="n1"[^]*>Ship the boot logo<[^]*<img src="blob:shot"/, 'the chat\'s post keeps the words and photo it was sent with');
+  assert.equal(f.reads.length, 0, 'no history read for a post this device just sent');
+});
+
+test('a model picked in the channel box rides along; the needs-you filter opens so the post is seen', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch'); f.env.ch('w').chanFilter = 'needs';
+  f.env.ch('w').newModel = { model: 'opus', provider: 'anthropic' }; f.env._sendResult = Promise.resolve({ sessionId: 'n2' });
+  await f.channelSend('w', form('hi'));
+  assert.deepEqual(JSON.parse(JSON.stringify(f.env._sends[0][4].route)), { model: 'opus', provider: 'anthropic' });
+  assert.equal(f.env.ch('w').chanFilter, 'open');
+});
+
+test('an empty box sends nothing; an archived channel has no box and sends nothing; a running take finishes instead', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch');
+  assert.equal(await f.channelSend('w', form('   ')), null); assert.equal(f.env._sends.length, 0);
+  let finished = 0; f.env.H.voiceInto = () => '__new__'; f.env.H.finishVoice = () => finished++;
+  assert.equal(await f.channelSend('w', form('with my voice')), null); assert.equal(finished, 1); assert.equal(f.env._sends.length, 0);
+  delete f.env.H.voiceInto;
+  f.openChannelSheet('w', 'launch'); f.channelClick(click({ 'data-rscharch': '' }), 'w', f.w); f.openChannel(f.w, 'launch');
+  assert.equal(await f.channelSend('w', form('late')), null); assert.equal(f.env._sends.length, 0);
+});
+
+test('a send that could not be saved takes the post back and returns the words to the channel box', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch'); f.env._sendResult = Promise.resolve(null);
+  await f.channelSend('w', form('keep me'));
+  assert.equal(f.CHAN_SENDING.length, 0);
+  assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').text, 'keep me');
+  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), []), /ch-post sending/);
+});
+
+test('General posts unfiled (no Space); routed host-profile, container and restricted channels keep their own agent', async () => {
+  const f = fixture(); f.env._sendResult = Promise.resolve({ sessionId: 'g1' });
+  f.openChannel(f.w, '__general__'); await f.channelSend('w', form('general ask'));
+  assert.equal(f.env._sends[0][4].space, '', 'General = in no Space');
+  for (const [cid, agent, sid] of [['host-ops', 'host', 'x1'], ['box', 'container', 'x1'], ['locked', 'restricted', 'x1']]) {
+    const g = fixture({ agents: { x1: agent } }); g.env._sendResult = Promise.resolve({ sessionId: sid });
+    g.openChannel(g.w, cid); assert.equal(g.chanDraftKey(g.w), `chan:${agent}:${cid}`);
+    await g.channelSend('w', form(`ask ${agent}`));
+    assert.equal(g.env._sends[0][4].space, cid);
+    // The post is keyed by its own agent: a main thread with the same id never shows these words.
+    assert.equal(g.FIRST.get(`${agent}|${sid}`)?.text, `ask ${agent}`); assert.equal(g.FIRST.has(`|${sid}`), false);
+    g.spacesData.find(s => s.id === cid).threads.push(sid);
+    const open = g.chanOpen(g.w);
+    assert.match(g.channelFeed(g.w, open, [row(sid, 0, { owner: agent })]), new RegExp(`>ask ${agent}<`));
+    assert.doesNotMatch(g.channelFeed(g.w, open, [row(sid, 0, { owner: agent })]), /ch-post sending/);
+  }
+  // A main-agent post with the same id is not taken for a routed one (and vice versa).
+  const m = fixture(); m.env._sendResult = Promise.resolve({ sessionId: 'x1' }); m.openChannel(m.w, 'launch');
+  await m.channelSend('w', form('main ask')); assert.equal(m.FIRST.get('|x1')?.text, 'main ask'); assert.equal(m.FIRST.has('host|x1'), false);
+});
+
+test('voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along', () => {
+  // Phone orb: a channel feed is an auto view whose take goes to a new chat ('__new__'), never the cloud router.
+  assert.match(app, /const chan = w\.app === 'chats' && !w\.thread \? CHATS\.chanOpen\?\.\(w\) : null;\n\s*if \(chan\) return \{ id, mode: 'auto', kind: 'chat thread', thread: '__new__', channel: chan\.name/);
+  // The take's composer (words, photos) is this channel's box, not the New chat draft.
+  assert.match(src, /const chanBoxOf = \(wid, sid\) => sid === '__new__' && W\[wid\] && !W\[wid\]\.thread && typeof chanDraftKey === 'function' \? chanDraftKey\(W\[wid\]\) : '';/);
+  assert.match(src, /const P = peekComposer\(wid, sid\), dkey = boxKey\(wid, sid\);/);
+  // The box mic records a new chat from this channel; the model label opens the new-chat model menu.
+  const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+  assert.match(power, /const boxThread = w => w\?\.thread \|\| \(w && A\.chanOpen\?\.\(w\) \? '__new__' : ''\);/);
+  assert.match(power, /const sid = boxThread\(w\); if \(!sid \|\| !H\.recordReply\) return true;/);
+  assert.match(power, /openModels\(id, boxThread\(ww\) === '__new__' \? 'new' : 'thread'/);
+  // Those takes are filed into the channel the way every new chat from a Space in front is (outbox onNew).
+  assert.match(src, /const key = spaceInFront\(it\.agent \|\| ''\);\n\s*if \(key\) spaceMember\(key, it\.sessionId, true\);/);
 });

@@ -355,7 +355,7 @@ window.WosChatPower = function chatPower(A) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
     if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
-    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
+    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) (w.thread ? A.renderThreadNow(w) : A.renderChats(w)); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
     // this thread is left exactly as it is. Private → standard is never offered (a private thread lists only its own).
@@ -579,7 +579,9 @@ window.WosChatPower = function chatPower(A) {
   // On while a take pinned to THIS thread is recording (recordingFor() names the thread the take belongs to).
   // While its take records, the mic IS the send button (arrow, recording ring); otherwise it is the mic.
   const SEND_SVG = '<svg class="snd" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
-  const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
+  // The thread a window's composer belongs to: its open thread, or a new chat from a channel's box (wizard-ux issue 1258).
+  const boxThread = w => w?.thread || (w && A.chanOpen?.(w) ? '__new__' : '');
+  const micBtn = wid => { if (!H.recordReply) return ''; const sid = boxThread(H.win(wid)), on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
   async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined, transcript = '') {
@@ -622,7 +624,7 @@ window.WosChatPower = function chatPower(A) {
     return it;
   }
   function paintMic(on, sid) {
-    H.root().querySelectorAll('[data-chmic]').forEach(b => { const id = b.closest('[data-chats]')?.dataset.chats, x = !!on && !!sid && H.win(id)?.thread === sid; b.classList.toggle('on', x); b.setAttribute('aria-pressed', String(x)); b.setAttribute('aria-label', x ? 'Send this voice reply' : 'Record a voice reply to this thread'); });
+    H.root().querySelectorAll('[data-chmic]').forEach(b => { const id = b.closest('[data-chats]')?.dataset.chats, x = !!on && !!sid && boxThread(H.win(id)) === sid; b.classList.toggle('on', x); b.setAttribute('aria-pressed', String(x)); b.setAttribute('aria-label', x ? 'Send this voice reply' : 'Record a voice reply to this thread'); });
   }
 
   /* ================= sheets: model picker, Files ================= */
@@ -696,20 +698,20 @@ window.WosChatPower = function chatPower(A) {
   }
   function openModels(pane, mode, pop) {
     if (!M) return;
-    const wid = A.owner(pane), w = H.win(wid); if (!w || !w.thread) return;
-    const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
+    const wid = A.owner(pane), w = H.win(wid), sid = boxThread(w); if (!w || !sid || (!w.thread && mode !== 'new')) return;
+    const s = sid === '__new__' ? null : LIVE.session(sid);
     const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
+    openSheet({ type: 'model', pane, wid, sid, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if visible choices or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
     const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
     const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.()]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
-      if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
+      if (sheet !== opened || sheet?.type !== 'model' || boxThread(H.win(wid)) !== opened.sid) return;
       // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
       const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
       if (key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
@@ -750,11 +752,11 @@ window.WosChatPower = function chatPower(A) {
     }
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
-    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
+    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, boxThread(ww) === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
     if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id, false); } return true; }
     if (t.closest('[data-chmic]')) {
-      if (!w?.thread || !H.recordReply) return true;
-      const r = H.recordReply(id, w.thread);
+      const sid = boxThread(w); if (!sid || !H.recordReply) return true;
+      const r = H.recordReply(id, sid);
       Promise.resolve(r).then(st => { if (st === 'busy') toast('…', 'Finishing the last recording', 1400); });
       return true;
     }

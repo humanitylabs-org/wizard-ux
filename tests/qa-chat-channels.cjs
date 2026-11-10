@@ -5,7 +5,9 @@
 // Per case: switch off = no tabs, rows as today; switch on = Activity with "# channel", Channels (A–Z, pinned on top,
 // General last, aggregate marker, chevron, the channel sheet, Archive), a channel feed (posts are the first owner
 // message with picture thumbnails that open the viewer, filters, post opens the thread), Back thread → channel → list,
-// "Move to channel" on a chat's sheet, a new post from the feed filed into its Space, and switching off inside a feed.
+// "Move to channel" on a chat's sheet, a new post from the feed's own message box (wizard-ux issue 1258: the thread
+// composer at the bottom, "Message # name", a photo attached; the post paints on the Send tap's frame, the chat is
+// filed into its Space and the window stays on the feed), and switching off inside a feed.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -53,6 +55,10 @@ const report = { origin, web, cases: [] };
           if (!['GET', 'HEAD'].includes(method)) {
             entry.writes.push({ method, path: p });
             if (method === 'PUT' && p === '/wizard/thread-seen') return r.fulfill({ json: { ok: true, state: q.postDataJSON() } });
+            // The channel box's synthetic photo and send (accepted like a box would; nothing leaves the browser).
+            if (method === 'POST' && p === '/wizard/files/upload') { const id = 'qa-up-' + entry.writes.length; return r.fulfill({ json: { file: { id, filename: q.headers()['x-wizard-filename'], mime: q.headers()['x-wizard-mime'], bytes: PNG.length } } }); }
+            if (method === 'POST' && p === '/wizard/hermes/api/sessions') { const b = q.postDataJSON() || {}; entry.created = b; return r.fulfill({ json: { session: { id: b.id } } }); }
+            if (method === 'POST' && p === '/wizard/hermes/v1/runs') { entry.runs = (entry.runs || []).concat(q.postData() || ''); return r.fulfill({ json: { run_id: 'run-qa-' + entry.runs.length } }); }
             if (method === 'PATCH' && p === '/wizard/v1/ui-preferences') {
               for (const op of q.postDataJSON()?.ops || []) { const m = /^spaces\/([a-z0-9-]+)\/threads$/.exec(op.key); if (m && op.op === 'add') prefs.spaces = prefs.spaces.map(s => s.id === m[1] && !s.threads.includes(op.item) ? { ...s, threads: s.threads.concat(op.item) } : s); }
               return r.fulfill({ json: prefs });
@@ -68,7 +74,7 @@ const report = { origin, web, cases: [] };
           }
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
-          if (p === '/wizard/files/qa-img-1/content') return r.fulfill({ body: PNG, contentType: 'image/png' });
+          if (p === '/wizard/files/qa-img-1/content' || /^\/wizard\/files\/qa-up-\d+\/content$/.test(p)) return r.fulfill({ body: PNG, contentType: 'image/png' });
           if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: ROWS, has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
           if (m) { const s = ROWS.find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: { error: 'missing' } });
@@ -200,15 +206,45 @@ const report = { origin, web, cases: [] };
         entry.back.push(await back()); await nap(150);
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else assert.ok(await vis('.ch-list').isVisible(), 'desktop Back at the list stays in Chats');
         await vis('[data-chview="channels"][aria-pressed="true"]').waitFor();
-        // Posting: New chat from the Voice feed, filed into Voice at send.
+        // Posting (wizard-ux issue 1258): the Voice feed has the thread composer at the bottom instead of +.
         await vis('.ch-chan-open[data-chchan="voice"]').click(); await vis('.ch-chan-h').waitFor();
-        assert.match(await vis('.ch-fab').getAttribute('aria-label'), /New post in # Voice/);
-        await vis('.ch-fab').click();
-        const ta = vis('.ch-compose textarea'); await ta.waitFor();
-        await ta.fill('Synthetic new post for the Voice channel');
-        await vis('.ch-compose [type="submit"], .ch-compose .send, .ch-compose [data-chsend]').click().catch(async () => { await ta.press('Enter'); });
+        assert.equal(await page.locator('.ch-fab').filter({ visible: true }).count(), 0, 'no + in a channel');
+        const box = vis('.ch-chan-compose'), ta = box.locator('textarea');
+        assert.equal(await ta.getAttribute('placeholder'), 'Message # Voice');
+        assert.ok(await box.locator('.ch-attach').isVisible() && await box.locator('.ch-mlabel').isVisible() && await box.locator('[data-chmic]').count() >= 0, 'attach and model label in the box');
+        entry.boxModel = (await box.locator('.ch-mlabel').innerText()).trim();
+        entry.boxMic = await box.locator('[data-chmic]').count();
+        entry.boxAtBottom = await page.evaluate(() => { const b = [...document.querySelectorAll('.ch-chan-compose')].find(x => x.getClientRects().length), l = b.closest('.ch-list'); return Math.round(l.getBoundingClientRect().bottom - b.getBoundingClientRect().bottom); });
+        assert.ok(entry.boxAtBottom >= 0 && entry.boxAtBottom < 140, 'the box sits at the bottom of the list: ' + entry.boxAtBottom);
+        // A photo from the attach button, then words; Send.
+        const [chooser] = await Promise.all([page.waitForEvent('filechooser'), box.locator('.ch-attach').click()]);
+        await chooser.setFiles({ name: 'whiteboard.png', mimeType: 'image/png', buffer: PNG });
+        await page.waitForFunction(() => [...document.querySelectorAll('.ch-chan-compose .ch-tray')].some(t => t.getClientRects().length));
+        await ta.fill('Synthetic new post for the Voice channel'); await nap(1200);
+        await page.screenshot({ path: path.join(out, stem + '-channel-box.png') });
+        await page.evaluate(() => { window.postReceipt = null; addEventListener('click', e => { if (!e.target.closest('.ch-chan-compose [type="submit"]')) return; requestAnimationFrame(() => { const p = [...document.querySelectorAll('.ch-post.sending')].find(x => x.getClientRects().length); window.postReceipt = { text: p?.querySelector('.ch-post-t')?.textContent || '', img: !!p?.querySelector('.ch-post-media img'), box: [...document.querySelectorAll('.ch-chan-compose textarea')].find(x => x.getClientRects().length)?.value }; }); }, { capture: true, once: true }); });
+        await box.locator('[type="submit"]').click();
+        await page.waitForFunction(() => window.postReceipt);
+        entry.postFrame = await page.evaluate(() => postReceipt);
+        assert.deepEqual(entry.postFrame, { text: 'Synthetic new post for the Voice channel', img: true, box: '' }, 'the post (with its photo) is on screen on the Send frame and the box is empty');
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('wos.chats.spaces.v1') || '[]').find(s => s.id === 'voice')?.threads.length === 2, null, { timeout: 8000 });
         entry.filed = await page.evaluate(() => JSON.parse(localStorage.getItem('wos.chats.spaces.v1')).find(s => s.id === 'voice').threads);
+        const newId = entry.filed[1];
+        // Still in the channel: the chat's own post takes over, with the words and the photo, and its reply line runs.
+        await vis(`.ch-post-b[data-chopen="${newId}"]`).waitFor({ timeout: 8000 });
+        assert.ok(await vis('.ch-chan-h').isVisible(), 'stays in the channel');
+        entry.feedAfterPost = await posts(); assert.equal(entry.feedAfterPost.at(-1), newId, 'the new post is the newest, at the bottom');
+        assert.equal(await page.locator('.ch-thread').filter({ visible: true }).count(), 0, 'never jumps into the thread');
+        assert.match(await vis(`.ch-post-b[data-chopen="${newId}"]`).innerText(), /Synthetic new post for the Voice channel/);
+        assert.equal(await vis(`.ch-post-b[data-chopen="${newId}"]`).locator('xpath=..').locator('.ch-post-media img').count(), 1, 'the photo is the post\'s thumbnail');
+        await page.waitForFunction(() => !document.querySelector('.ch-post.sending'), null, { timeout: 8000 });
+        entry.replyLine = (await vis(`.ch-post-r[data-chopen="${newId}"]`).innerText()).replace(/\s+/g, ' ').trim();
+        await nap(1500);
+        assert.ok((entry.runs || []).length >= 1, 'the new chat was sent');
+        const run = JSON.parse(entry.runs[0]); entry.runBody = Object.keys(run);
+        assert.ok(JSON.stringify(run).includes('Synthetic new post for the Voice channel'), 'the run carries the words');
+        assert.ok(/qa-up-\d+/.test(JSON.stringify(run)), 'the run carries the photo');
+        await page.screenshot({ path: path.join(out, stem + '-channel-posted.png') });
         // Switching off inside a feed returns the list to All, unfiltered.
         for (let i = 0; i < 3 && !(await page.locator('.ch-chan-h').filter({ visible: true }).count()); i++) {
           await page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep()); await nap(200);
