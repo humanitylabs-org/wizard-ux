@@ -98,6 +98,16 @@ test('opening a channel is its Space Focus; Back returns to the list with the ol
   assert.equal(f.channelBack(f.w), false, 'at the list Back falls through (never leaves Chats here)');
 });
 
+test('a stale feed (Focus moved since) never hands its old Back target to the next channel', () => {
+  const f = fixture();
+  f.w.focus = null; f.openChannel(f.w, 'launch');               // from All
+  f.w.focus = { kind: 'agent', key: 'container' };              // the focus strip moved on: the Launch feed is gone
+  assert.equal(f.chanOpen(f.w), null);
+  f.openChannel(f.w, 'box');                                    // opened from the container list
+  assert.equal(f.channelBack(f.w), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'agent', key: 'container' }, 'Back lands on the list it was opened from, not All');
+});
+
 test('General keeps the agent Focus and holds only chats in no Space; a Focus tap elsewhere leaves the feed', () => {
   const f = fixture();
   f.w.focus = { kind: 'space', key: 'launch' };

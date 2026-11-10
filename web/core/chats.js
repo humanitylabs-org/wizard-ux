@@ -441,7 +441,9 @@ window.WizCore.chats = function createChats(H) {
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || 0; // cardAt is an ISO time
   function openChannel(w, id) {
     const o = W[owner(w.id)] || w; if (!o) return false;
-    const prev = o.chan ? o.chan.prev : (o.focus || null), sp = id !== CHAN_GENERAL && spaces().find(s => s.id === id);
+    // Back returns to the list this channel was opened from: a feed still open keeps its own way back; a stale one
+    // (the Focus moved since) gives way to the Focus showing now.
+    const prev = o.chan && chanOpen(w) ? o.chan.prev : (o.focus || null), sp = id !== CHAN_GENERAL && spaces().find(s => s.id === id);
     if (id !== CHAN_GENERAL && !sp) return false;
     o.chan = { id, prev };
     const f = focusOf(o), back = prev?.kind === 'space' ? { kind: 'agent', key: focusedAgent(prev) } : prev;
