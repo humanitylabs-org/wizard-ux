@@ -1183,6 +1183,13 @@
       }
       return rows;
     },
+    /* The first page of one thread's history (oldest first): the Channels feed's post is its first owner message. */
+    async firstMessages(id, limit = 20) {
+      const knownScope = this.agentOf(id) || (this.listTrusted?.() && this.sessions.some(s => s.id === id && !s.optimistic));
+      if (!knownScope && (!this.session(id) || this.session(id).detailNeeded)) await this.sessionInfo(id);
+      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=${Math.max(1, Math.min(50, limit | 0))}&offset=0&include_compacted=true&view=wizard${aq(id, '&')}`, { signal: globalThis.AbortSignal?.timeout?.(12000) })).json();
+      return p.data || p.messages || p.items || [];
+    },
     async searchSessions(q, agent = '', signal, onBatch) {
       const read = ++titleRead;
       const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];

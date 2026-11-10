@@ -9,7 +9,7 @@ const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return s
 const block = cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
 
 const H = 3600e3, NOW = Date.UTC(2026, 10, 10, 12);
-function fixture({ on = true, rows = [], spacesList, agents = {} } = {}) {
+function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, sessions = {}, owner = 'James de Fleur' } = {}) {
   const spacesData = spacesList || [
     { id: 'launch', name: 'Launch', threads: ['a', 'b', 'c'] },
     { id: 'voice', name: 'Voice', threads: ['d'] },
@@ -18,7 +18,8 @@ function fixture({ on = true, rows = [], spacesList, agents = {} } = {}) {
     { id: 'locked', name: 'Locked', agent: 'restricted', threads: ['r1'] },
   ];
   const wins = { w: { id: 'w', thread: null, focus: null } };
-  const store = new Map(), renders = [], focusCalls = [];
+  const store = new Map(), renders = [], focusCalls = [], sheets = [], toasts = [], ops = [], reads = [], viewer = [], drafts = [];
+  const sheetEl = { insertAdjacentHTML: (_, html) => sheets.push(html), querySelector: () => null };
   const agentOf = id => agents[id] || '';
   const env = {
     document: { documentElement: { dataset: { tweaks: on ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats' } } },
@@ -37,13 +38,22 @@ function fixture({ on = true, rows = [], spacesList, agents = {} } = {}) {
     setFocus: (w, f) => { focusCalls.push(f); w.focus = f; renders.push('focus'); return true; },
     rerenderList: () => renders.push('list'), renderChatList: () => renders.push('list'),
     isWorking: s => s.status === 'running', attOf: s => s.attention || null,
-    LIVE: { agentOf, cardAt: s => new Date(s.at).toISOString() },
+    LIVE: { agentOf, cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, savedMessages: () => null,
+      firstMessages: async id => { reads.push(id); return history[id] || []; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
+    // KIT.parseRows stand-in: a row {role:'user', text, files} is an owner turn.
+    toTurns: rows => rows.map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text } }),
+    mediaOfFile: f => ({ id: f.id, name: f.name, mime: f.mime || '', kind: /^image\//.test(f.mime || '') ? 'image' : 'file', url: f.id ? `/wizard/files/${f.id}/content` : '' }),
+    KIT: { viewer: { open: (g, i) => viewer.push([g, i]) } }, H: { win: id => wins[id] }, CH: {}, holdList: () => false, setTimeout: fn => fn(), clearTimeout() {},
+    window: { WizConfig: { owner: () => owner } }, PIN_SVG: '<svg pin></svg>', RENAME_SVG: '<svg rn></svg>', ACT: { done: { icon: '<svg ar></svg>' } },
+    track: { querySelector: () => sheetEl }, closeRowSheet() { env.rowSheet = null; }, vib() {}, toast: (...a) => toasts.push(a[1]), rowSheet: null,
+    norm: s => String(s).toLowerCase().trim(), openNewDraft: (id, r) => drafts.push([id, r]),
     AGS: () => ({ defaultId: () => 'hermes', isPrivate: a => a.id === 'restricted', sigil: a => `<i class="ag-sig" data-agent="${a.id}"></i>` }), agentRec: id => ({ id }),
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,get view(){return chanView}};', env);
-  return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env };
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
+  return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
 }
 const row = (id, at, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - at * H, ...extra });
 const click = attrs => ({ target: { closest: sel => { const k = sel.slice(1, -1); return k in attrs ? { dataset: { [k.replace(/^data-/, '').replace(/-./g, m => m[1].toUpperCase())]: attrs[k] } } : null; } } });
@@ -58,16 +68,16 @@ test('switch off: no tabs, no feed, no channel taps, and the phone Back hook is 
   assert.match(app, /CHATS\.channelBack\?\.\(f\)\) return 'channel'/);
 });
 
-test('Channels lists Spaces in stored order, General last, with one aggregate marker each', () => {
+test('Channels lists Spaces A–Z by default, General last, with one aggregate marker each', () => {
   const rows = [row('a', 1, { status: 'running' }), row('b', 2, { attention: { state: 'needs_you' } }), row('d', 3, { status: 'running' }), row('g', 4), row('old', 40, { archived: true })];
   const f = fixture();
-  assert.deepEqual(f.channelsFor(f.w).map(c => c.name), ['Launch', 'Voice', 'Host ops', 'Box', 'Locked', 'General']);
+  assert.deepEqual(f.channelsFor(f.w).map(c => c.name), ['Box', 'Host ops', 'Launch', 'Locked', 'Voice', 'General']);
   const html = f.channelsBody(f.w, rows);
   const chans = html.split('class="ch-chan"').slice(1);
-  assert.deepEqual(chans.map(c => c.match(/data-chchan="([^"]+)"/)[1]), ['launch', 'voice', 'host-ops', 'box', 'locked', '__general__']);
-  assert.match(chans[0], /ch-chan-dot[^>]*Needs you/, 'needs you beats working');
-  assert.doesNotMatch(chans[0], /aria-label="Working"/);
-  assert.match(chans[1], /aria-label="Working"/);
+  assert.deepEqual(chans.map(c => c.match(/data-chchan="([^"]+)"/)[1]), ['box', 'host-ops', 'launch', 'locked', 'voice', '__general__']);
+  assert.match(chans[2], /ch-chan-dot[^>]*Needs you/, 'needs you beats working');
+  assert.doesNotMatch(chans[2], /aria-label="Working"/);
+  assert.match(chans[4], /aria-label="Working"/);
   assert.doesNotMatch(chans[5], /ch-chan-dot|ch-spin/, 'General: g is done, so no marker');
   assert.doesNotMatch(html, /<time>/, 'no timestamps or previews on channel lines');
 });
@@ -77,7 +87,7 @@ test('the chevron expands working, needs-you and last-24h posts, newest first; t
   const f = fixture();
   assert.equal(f.channelClick(click({ 'data-chchanx': 'launch' }), 'w', f.w), true);
   const html = f.channelsBody(f.w, rows);
-  const launch = html.split('class="ch-chan"')[1];
+  const launch = html.split('class="ch-chan"')[3];
   assert.deepEqual([...launch.matchAll(/class="ch-chan-post" data-chopen="([^"]+)"/g)].map(m => m[1]), ['b', 'a'], 'c is 50h old and done');
   const general = html.split('class="ch-chan"')[6];
   assert.doesNotMatch(general, /ch-chan-recent/, 'only the expanded channel shows its posts');
@@ -129,9 +139,9 @@ test('feed filters Open (default) / Needs you / All, posts truncate at about 240
   assert.deepEqual(ids(html), ['a', 'b']); assert.match(html, /data-chchanf="open" aria-pressed="true"/);
   assert.match(html, /4 replies/); assert.match(html, /1 reply</); assert.match(html, /Needs you/);
   assert.match(html, /data-chpostmore="a" aria-expanded="false">more/);
-  assert.ok(!html.includes(long));
+  assert.match(html, /class="ch-post-t clamp">x{300}</, 'long text is clamped at 4 lines by CSS');
   f.channelClick(click({ 'data-chpostmore': 'a' }), 'w', f.w);
-  assert.ok(f.channelFeed(f.w, open, rows).includes(long));
+  assert.match(f.channelFeed(f.w, open, rows), /class="ch-post-t">x{300}</);
   f.channelClick(click({ 'data-chchanf': 'needs' }), 'w', f.w);
   assert.deepEqual(ids(f.channelFeed(f.w, open, rows)), ['b']);
   f.channelClick(click({ 'data-chchanf': 'all' }), 'w', f.w);
@@ -143,6 +153,7 @@ test('the Activity / Channels tab choice is remembered on the device; Activity i
   const f = fixture();
   assert.equal(f.view, 'activity');
   assert.match(f.chanHead(f.w, null), /data-chview="activity" aria-pressed="true">Activity/);
+  assert.doesNotMatch(f.chanHead(f.w, null), /data-chchansort/, 'the channel sort shows on Channels only');
   f.channelClick(click({ 'data-chview': 'channels' }), 'w', f.w);
   assert.equal(f.view, 'channels'); assert.equal(f.store.get('wos.chats.view.v1'), 'channels');
   assert.equal(fixture().view, 'activity', 'a fresh device starts on Activity');
@@ -173,4 +184,138 @@ test('posting reuses the Space-fixed-at-send path: a new chat sent from a channe
   assert.match(src, /if \(spaceKey && it\?\.sessionId\) spaceMember\(spaceKey, it\.sessionId, true\);/);
   // Back on the desktop list goes through clearFilter, which closes a feed after search and chips.
   assert.match(src, /if \(!c\.filter\) return typeof channelBack === 'function' && channelBack\(w\) \? 'channel' : false;/);
+});
+
+const ids = html => [...html.matchAll(/data-chchan="([^"]+)"/g)].map(m => m[1]);
+const sheetButtons = html => [...html.matchAll(/data-(rsch\w+)>(?:<svg[^]*?<\/svg>)?([^<]*)</g)].map(m => m[2]);
+
+test('a post is the owner\'s first message with photo thumbnails, never a title card; read once per thread', async () => {
+  const history = { a: [{ role: 'user', text: 'Please fix the boot logo\non the phone', files: [{ id: 'f1', name: 'shot.png', mime: 'image/png' }, { id: 'f2', name: 'notes.pdf', mime: 'application/pdf' }], at: NOW - 5 * H }, { role: 'assistant', text: 'On it' }] };
+  const sessions = { a: row('a', 5, { messageCount: 3 }) };
+  const f = fixture({ history, sessions }); f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w), rows = [sessions.a];
+  let html = f.channelFeed(f.w, open, rows);
+  assert.match(html, /ch-post-wait/, 'a skeleton while the first message is read, not the title');
+  assert.doesNotMatch(html, />T a</);
+  await new Promise(r => setImmediate(r));
+  html = f.channelFeed(f.w, open, rows);
+  assert.deepEqual(f.reads, ['a'], 'one history read for the thread');
+  assert.match(html, /class="ch-post-me"[^>]*>J</); assert.match(html, /<b>James de Fleur<\/b><time>5h<\/time>/);
+  assert.match(html, /class="ch-post-t">Please fix the boot logo\non the phone</);
+  assert.doesNotMatch(html, /<b>T a<\/b>/, 'no title card');
+  assert.deepEqual([...html.matchAll(/data-chpostimg="a" data-i="(\d)"[^]*?<img src="([^"]+)"/g)].map(m => m[2]), ['/wizard/files/f1/content'], 'images only');
+  assert.match(html, /2 replies/);
+  f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a'], 'kept per thread');
+  // Tapping a thumbnail opens the shared media viewer on that photo.
+  assert.equal(f.channelClick(click({ 'data-chpostimg': 'a', 'data-i': '0' }), 'w', f.w), true);
+  assert.equal(f.viewer.length, 1); assert.equal(f.viewer[0][0][0].url, '/wizard/files/f1/content'); assert.equal(f.viewer[0][1], 0);
+});
+
+test('Agent Service firstRequest / firstAttachments win over a history read once list rows carry them', () => {
+  const s = row('a', 2, { firstRequest: 'Ship the channels review', firstAttachments: [{ id: 'p1', name: 'p.jpg', mime: 'image/jpeg' }] });
+  const f = fixture({ sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, />Ship the channels review</); assert.match(html, /\/wizard\/files\/p1\/content/);
+  assert.deepEqual(f.reads, []);
+});
+
+test('A–Z / Z–A sort, pinned channels on top in pin order, General always last', () => {
+  const f = fixture();
+  assert.match(f.chanHead(f.w, null), /data-chview/);
+  f.channelClick(click({ 'data-chview': 'channels' }), 'w', f.w);
+  assert.match(f.chanHead(f.w, null), /data-chchansort="az" aria-pressed="true"[^]*A–Z[^]*data-chchansort="za" aria-pressed="false"/);
+  f.channelClick(click({ 'data-chchansort': 'za' }), 'w', f.w);
+  assert.deepEqual(f.channelsFor(f.w).map(c => c.id), ['voice', 'locked', 'launch', 'host-ops', 'box', '__general__']);
+  assert.equal(JSON.parse(f.store.get('wos.chats.channel-prefs.v1')).sort, 'za');
+  // Pin Voice then Box from the channel sheet: they sit on top in pin order, the rest stay sorted.
+  for (const id of ['voice', 'box']) { f.openChannelSheet('w', id); f.channelClick(click({ 'data-rschpin': '' }), 'w', f.w); }
+  f.channelClick(click({ 'data-chchansort': 'az' }), 'w', f.w);
+  assert.deepEqual(f.channelsFor(f.w).map(c => c.id), ['voice', 'box', 'host-ops', 'launch', 'locked', '__general__']);
+  assert.match(f.channelsBody(f.w, []).split('class="ch-chan pinned"')[1], /aria-label="Pinned"/);
+  assert.equal(f.toasts.at(-1), 'Pinned');
+});
+
+test('long-press sheet on a channel: Pin, Rename, Archive channel, New post; General gets New post only', () => {
+  const f = fixture();
+  f.openChannelSheet('w', 'launch');
+  assert.match(f.sheets.at(-1), /aria-label="Channel actions"[^]*# Launch/);
+  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Archive channel', 'New post']);
+  assert.doesNotMatch(f.sheets.at(-1), /Delete/i);
+  f.openChannelSheet('w', '__general__');
+  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['New post']);
+  // New post opens the channel and a new draft in it (filed into its Space at send).
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rschnew': '' }), 'w', f.w);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'voice' }); assert.deepEqual(f.drafts, [['w', '']]);
+  // Rename is one item edit on spaces/<id>/name.
+  f.openChannelSheet('w', 'launch'); f.channelClick(click({ 'data-rschrename': '' }), 'w', f.w);
+  assert.match(f.sheets.at(-1), /data-chrnform[^]*Rename channel[^]*value="Launch"/);
+  f.submitChannelRename({ querySelector: () => ({ value: '  Launch  week ', focus() {} }) });
+  assert.deepEqual(JSON.parse(JSON.stringify(f.ops)), [{ op: 'set', key: 'spaces/launch/name', item: 'Launch week' }]);
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rschrename': '' }), 'w', f.w);
+  f.submitChannelRename({ querySelector: () => ({ value: 'launch WEEK', focus() {} }) });
+  assert.equal(f.ops.length, 1, 'a name another channel of this agent has is refused'); assert.match(f.toasts.at(-1), /Already a channel/);
+  assert.equal(f.openChannelSheet('w', 'nope'), false);
+  f.setOn(false); assert.equal(f.openChannelSheet('w', 'launch'), false, 'switch off: no channel sheet');
+});
+
+test('Archive: an archived channel moves to a folded Archive section, Restore brings it back, 30 idle days prune it', () => {
+  const f = fixture(), rows = [row('a', 2), row('d', 24 * 40)];
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rschpin': '' }), 'w', f.w);
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rscharch': '' }), 'w', f.w);
+  assert.equal(f.toasts.at(-1), 'Archived # Voice');
+  assert.ok(!f.channelsFor(f.w).some(c => c.id === 'voice')); assert.deepEqual(f.channelsFor(f.w, { archived: true }).map(c => c.id), ['voice']);
+  assert.equal(JSON.parse(f.store.get('wos.chats.channel-prefs.v1')).pins.length, 0, 'archiving unpins');
+  let html = f.channelsBody(f.w, rows);
+  assert.match(html, /class="ch-sec ch-chan-arch" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="false"><span>Archive<\/span><small>1<\/small>/, 'folded by default');
+  assert.doesNotMatch(html.split('ch-chan-arch')[1], /data-chchan="voice"/);
+  f.channelClick(click({ 'data-chchanarch': '' }), 'w', f.w);
+  html = f.channelsBody(f.w, rows);
+  assert.match(html.split('ch-chan-arch')[1], /data-chchan="voice"/);
+  // The channel's chat stays where it is (Activity's # line still names it).
+  assert.equal(f.chanName(row('d', 1)), 'Voice');
+  // Archived sheet: Restore, no New post.
+  f.openChannelSheet('w', 'voice'); assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Restore']);
+  // Pruning: newest chat 40 days old and archived 31 days ago → gone from Archive (the Space itself is untouched).
+  assert.equal(f.CHAN_ARCHIVE_PRUNE_DAYS, 30);
+  const p = JSON.parse(f.store.get('wos.chats.channel-prefs.v1')); p.archived.voice = new Date(NOW - 31 * 24 * H).toISOString(); f.store.set('wos.chats.channel-prefs.v1', JSON.stringify(p));
+  assert.equal(f.chanPruned({ id: 'voice', name: 'Voice', agent: 'hermes' }, rows), true);
+  assert.doesNotMatch(f.channelsBody(f.w, rows), /ch-chan-arch/);
+  assert.equal(f.chanPruned({ id: 'voice', name: 'Voice', agent: 'hermes' }, [row('d', 24 * 10)]), false, 'a chat 10 days old keeps it');
+  assert.ok(f.spacesData.some(s => s.id === 'voice'));
+  f.channelClick(click({ 'data-chchanarch': '' }), 'w', f.w); // fold again
+  p.archived.voice = new Date(NOW - 1 * H).toISOString(); f.store.set('wos.chats.channel-prefs.v1', JSON.stringify(p));
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rscharch': '' }), 'w', f.w);
+  assert.equal(f.toasts.at(-1), 'Restored # Voice'); assert.ok(f.channelsFor(f.w).some(c => c.id === 'voice'));
+});
+
+test('switching off with a channel open returns the list to the Focus it had, unfiltered', () => {
+  const f = fixture();
+  f.w.focus = null; f.openChannel(f.w, 'launch');
+  assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'launch' });
+  assert.equal(f.chanSwitchedOff(f.w), false, 'switch on: nothing to undo');
+  f.setOn(false);
+  assert.equal(f.chanSwitchedOff(f.w), true);
+  assert.equal(f.w.focus, null, 'back to All, not the Launch Space'); assert.equal(f.w.chan, null);
+  assert.equal(f.chanSwitchedOff(f.w), false);
+  assert.match(src, /if \(!chanOn && typeof chanSwitchedOff === 'function' && chanSwitchedOff\(w\)\)/, 'the list renderer runs it');
+  assert.match(src, /window\.addEventListener\('wos:experience'/, 'and the switch repaints the lists at once');
+});
+
+test('the channel name shows once in an open feed: no focus strip, no title-bar label', () => {
+  assert.match(src, /\$\{feed \? '' : focusStrip\(w\)\}/);
+  assert.match(src, /function listTitle\(w\) \{ return focusAgents\(\)\.length === 1 && focusOf\(w\)\?\.kind === 'space' && !\(typeof chanOpen === 'function' && chanOpen\(w\)\)/);
+});
+
+test('Channels wording with the switch on: Move to channel, Remove from channel; today\'s words with it off', () => {
+  assert.match(src, /SPACE\.ch \? 'Move to channel…' : spacesOf\(sid\)\.length \? `Move to \$\{SPACE\.one\}…` : `Add to a \$\{SPACE\.one\}…`/);
+  assert.match(src, /Remove from \$\{SPACE\.ch \? 'channel' : SPACE\.one\}/);
+  assert.match(src, /get ch\(\) \{ return typeof channelsOn === 'function' && channelsOn\(\); \}/);
+  for (const w of ['New channel', 'Channel name', 'Already a channel', 'Maximum 50 channels', 'Couldn’t create channel']) assert.ok(src.includes(w), w);
+});
+
+test('long-press, right-click and Shift+F10 on a channel open the channel sheet through one rowMenu', () => {
+  assert.match(src, /const ROW_MENU = '[^']*\.ch-list \[data-chchan\]';/);
+  assert.equal((src.match(/rowMenu\((lp\.wid, lp\.row|q\.wid, q\.row|idOf\(row\), row)\)/g) || []).length, 4);
+  assert.match(src, /justPressed\(\) && e\.target\.closest\('\[data-chopen\], \[data-chnotif\], \[data-chchan\]'\)/);
 });
