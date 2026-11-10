@@ -64,7 +64,7 @@ export function githubSheet(model, {esc}) {
       <p class="d-note">${st.expires_in ? `The code works for about ${mins} minute${mins === 1 ? '' : 's'}.` : ''} You can leave this screen; Wizard keeps waiting.</p>`;
   } else if (st.state === 'signed_in') {
     body = `<p class="d-sum" data-gh-who>${st.login ? `Signed in as <b>${esc(st.login)}</b>` : 'Signed in to GitHub'}</p>
-      <p class="d-note">Apps shared with you privately on GitHub appear in Apps under Beta.</p>
+      <p class="d-note">Apps shared with you privately on GitHub appear in Apps under Beta. To use a different GitHub account, sign out and sign in again.</p>
       ${st.source === 'env' ? '<p class="d-note" role="status">This sign-in comes from this Wizard’s settings, so it can’t be removed here.</p>'
         : `<div class="gh-acts"><button type="button" class="gh-btn" data-gh-out${busy ? ' disabled aria-busy="true"' : ''}>${busy === 'signout' ? 'Signing out…' : 'Sign out'}</button></div>`}`;
   } else if (st.state === 'not_configured') {
