@@ -4,7 +4,7 @@
  * client id ever reaches the browser: a status carries the GitHub username and, while pending, the short user code.
  * Server contract: GET store-install/_github, POST _github/start, POST _github/signout. */
 import {ownerRequest} from './store-install.js';
-const STATES = ['signed_out', 'pending', 'signed_in', 'expired', 'denied', 'error', 'not_configured'];
+const STATES = ['signed_out', 'pending', 'signed_in', 'expired', 'denied', 'error', 'not_configured', 'switched_off'];
 const DEVICE_PAGE = 'https://github.com/login/device';
 const UPDATE = 'This Wizard’s App Manager needs updating before GitHub sign-in is available.';
 const fail = (message, status = 0) => Object.assign(new Error(message), {status});
@@ -25,7 +25,7 @@ export function normalizeStatus(j) {
 async function status(res) {
   const j = await json(res);
   if (res.status === 404 && !j.state) throw fail(UPDATE, 404);
-  if (res.status === 409 && j.state === 'not_configured') return normalizeStatus(j);
+  if (res.status === 409 && (j.state === 'not_configured' || j.state === 'switched_off')) return normalizeStatus(j);
   if (!res.ok) throw fail(typeof j.error === 'string' && j.error.length < 200 ? j.error : `GitHub sign-in isn’t available (${res.status}).`, res.status);
   return normalizeStatus(j);
 }
@@ -69,6 +69,8 @@ export function githubSheet(model, {esc}) {
         : `<div class="gh-acts"><button type="button" class="gh-btn" data-gh-out${busy ? ' disabled aria-busy="true"' : ''}>${busy === 'signout' ? 'Signing out…' : 'Sign out'}</button></div>`}`;
   } else if (st.state === 'not_configured') {
     body = '<p class="d-sum" role="status">GitHub sign-in isn’t set up on this WizardOS yet.</p><p class="d-note">Public apps still work. Ask whoever runs this Wizard to finish the setup.</p>';
+  } else if (st.state === 'switched_off') {
+    body = '<p class="d-sum" role="status">GitHub sign-in is switched off on this Wizard.</p><p class="d-note">It is a tester feature. Turn on <b>GitHub sign-in</b> in Settings › Try new features, then come back here. Public apps still work.</p>';
   } else if (['expired', 'denied', 'error'].includes(st.state) || model.unreachable) {
     body = `<p class="d-sum" role="status">${esc(model.unreachable ? 'Wizard couldn’t check GitHub sign-in.' : msg[st.state])}</p>${go('Try again', model.unreachable ? 'data-gh-retry' : 'data-gh-start')}`;
   } else body = `${explain}${go('Sign in to GitHub', 'data-gh-start')}`;

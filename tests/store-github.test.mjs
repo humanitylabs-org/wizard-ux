@@ -30,6 +30,8 @@ test('server answers: pending with code, not_configured 409, old App Manager 404
   const reply=(status,body)=>({base,fetchImpl:async()=>Response.json(body,{status})});
   assert.equal((await githubStart(reply(200,pending))).user_code,'ABCD-1234');
   assert.equal((await githubStart(reply(409,{state:'not_configured'}))).state,'not_configured');
+  assert.equal((await githubStart(reply(409,{state:'switched_off'}))).state,'switched_off');
+  assert.equal((await githubStatus(reply(200,{state:'switched_off'}))).state,'switched_off');
   await assert.rejects(githubStatus(reply(404,{})),/needs updating/);
   await assert.rejects(githubStart(reply(403,{error:'Only the owner can do this.'})),/Only the owner/);
   await assert.rejects(githubStatus(reply(500,{})),/isn’t available \(500\)/);
@@ -53,7 +55,7 @@ test('sheet: pending shows the code, GitHub link and copy; no polling when hidde
   assert.match(h,/Open github\.com\/login\/device/); assert.match(h,/data-gh-copy[^>]*>Copy code</); assert.match(h,/about 15 minutes/);
   assert.match(view({status:st,copied:true}),/>Copied</);
   assert.equal(shouldPoll(st,false),true); assert.equal(shouldPoll(st,true),false);
-  for(const s of ['signed_out','signed_in','expired','denied','error','not_configured','unknown']) assert.equal(shouldPoll({state:s},false),false,s);
+  for(const s of ['signed_out','signed_in','expired','denied','error','not_configured','switched_off','unknown']) assert.equal(shouldPoll({state:s},false),false,s);
 });
 test('sheet: signed in shows only the username and Sign out; env sign-in cannot be removed',()=>{
   const h=view({status:normalizeStatus({state:'signed_in',login:'friend'})});
@@ -64,6 +66,7 @@ test('sheet: signed in shows only the username and Sign out; env sign-in cannot 
 });
 test('sheet: not configured has no button; expired, denied, error and unreachable offer Try again',()=>{
   const nc=view({status:{state:'not_configured'}}); assert.match(nc,/isn’t set up on this WizardOS yet/); assert.doesNotMatch(nc,/<button type="button" class="get/);
+  const so=view({status:normalizeStatus({state:'switched_off'})}); assert.match(so,/switched off on this Wizard/); assert.match(so,/Try new features/); assert.doesNotMatch(so,/<button type="button" class="get/);
   for(const [s,re] of [['expired',/code expired/],['denied',/cancelled/],['error',/couldn’t reach GitHub/]]) { const h=view({status:{state:s}}); assert.match(h,re); assert.match(h,/data-gh-start[^>]*>Try again</); }
   const u=view({status:{state:'unknown'},unreachable:true,error:'Offline.'}); assert.match(u,/couldn’t check GitHub sign-in/); assert.match(u,/data-gh-retry/); assert.match(u,/role="alert">Offline\./);
   assert.match(view({status:{state:'unknown'},loading:true}),/Checking GitHub sign-in…/);
