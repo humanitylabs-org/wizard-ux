@@ -1,5 +1,6 @@
 // Exact semantic obligations, shared by browser script and sealed acceptance runner.
-const matrix=()=>[false,true].flatMap(radial=>[false,true].flatMap(two=>['nebula','grove'].map(skin=>({radial,two,skin,name:`${skin}-radial-${radial}-two-${two}`}))));
+// The two-orbs switch was removed (wizard-ux issue 1239), so only the one-orb case remains.
+const matrix=()=>[false,true].flatMap(radial=>[false].flatMap(two=>['nebula','grove'].map(skin=>({radial,two,skin,name:`${skin}-radial-${radial}-two-${two}`}))));
 function checks(broken=false,diagnostic=false){
   const names=[
     'captured deactivated owner CSS reproduces Apps before restoration',
@@ -8,7 +9,7 @@ function checks(broken=false,diagnostic=false){
     'saved-state scenario has zero page errors'
   ];
   if(broken)return names;
-  for(const enabled of [false,true])for(const two of [false,true]){
+  for(const enabled of [false,true])for(const two of [false]){
     names.push('fresh profile retains current palette, never guessed nebula base');
     if(two)names.push('real two-orbs control saves tweak-only recipe without binding overlay to a palette');
     for(const skin of ['nebula','grove']){

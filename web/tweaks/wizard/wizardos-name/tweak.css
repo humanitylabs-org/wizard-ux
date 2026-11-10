@@ -1,3 +1,0 @@
-/* WizardOS name (wizard-os#436): retired switch. The product name is WizardOS, one word, everywhere and always
- * (James, 8 Nov 2026); this tweak no longer changes anything and stays only so saved profiles that list it still load. */
-html[data-tweaks~="wizard/wizardos-name"] { --wos-wizardos-name: on; }

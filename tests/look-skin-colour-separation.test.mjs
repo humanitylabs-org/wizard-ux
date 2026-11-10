@@ -74,7 +74,7 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: separate Skin/Color ch
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},
     fetch:async url=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(new URL('../web/'+url.pathname.split('/wizard-os-home/')[1],import.meta.url),'utf8'))}),
   });
-  const E=h.s.WosExperience;await E.refresh();await E.toggle('wizard/two-orbs');
+  const E=h.s.WosExperience;await E.refresh();await E.toggle('wizard/thread-tracker');
   const before=JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), beforeActive=JSON.stringify(active);
   let pending=Promise.resolve(), picks=0;const choose=E.chooseSkin.bind(E);
   E.chooseSkin=(...args)=>{picks++;return pending=choose(...args);};

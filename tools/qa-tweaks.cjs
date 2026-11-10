@@ -54,7 +54,7 @@ fs.mkdirSync(out, { recursive:true });
               await page.locator('[data-skinfamily="wizard"]').click();
               await page.locator(`[data-skinpick="${skin}"]`).click();
               await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===0);
-              assert.equal(await page.locator('[data-tweak-toggle="wizard/two-orbs"]').getAttribute('aria-checked'),'false');
+              assert.equal(await page.locator('[data-tweak-toggle="wizard/thread-tracker"]').getAttribute('aria-checked'),'false');
               await page.locator('[data-skinfamily="mizel"]').click();
               await page.locator('[data-skinpick="obsidian"]').click();
               await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===7);
@@ -76,10 +76,11 @@ fs.mkdirSync(out, { recursive:true });
             await page.locator('[data-skinpick="nebula"]').click();
             await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===0);
             if (!await page.locator('[data-tweakset]').evaluate(n=>n.open)) await page.locator('[data-tweakset] > summary').click();
-            await page.locator('[data-tweak-toggle="wizard/two-orbs"]').click();
-            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosSkinHost.layoutState.active && window.WosSkinHost.layout==='two-orb');
-            await page.locator('[data-tweak-toggle="wizard/two-orbs"]').click();
-            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosSkinHost.layout==='classic');
+            // A kept switch (two-orbs was removed in wizard-ux issue 1239): on, then off again.
+            await page.locator('[data-tweak-toggle="wizard/thread-tracker"]').click();
+            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosSkinHost.tweakState.includes('wizard/thread-tracker'));
+            await page.locator('[data-tweak-toggle="wizard/thread-tracker"]').click();
+            await page.waitForFunction(()=>!window.WosExperience.state.busy && !window.WosSkinHost.tweakState.includes('wizard/thread-tracker'));
             await page.screenshot({path:path.join(out,id+'-own.png'),fullPage:true});
           } else { assert.equal(await page.locator('[data-tweakset]').count(),0); await page.screenshot({path:path.join(out,id+'-look.png'),fullPage:true}); }
           // Real in-app nested Back. Keep Settings itself mounted; do not count a stable URL as proof.

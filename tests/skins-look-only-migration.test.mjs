@@ -16,7 +16,10 @@ const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => se
 const ID = 'wizard/skins-look-only';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const builtin = catalog.defaults[0];
-const DROP = ['wizard/two-orbs', 'wizard/app-borders', 'miguel/no-desk-close', 'wizard/pin-buttons', 'wizard/wizardos-name'];
+// The real drop list emptied when its tweaks were removed (wizard-ux issue 1239). The mechanism stays, so these tests
+// serve a stand-in list of kept tweaks in place of catalog `lookOnlyOff`.
+const DROP = ['wizard/failure-reason', 'wizard/cli-install-links', 'miguel/now-playing'];
+const served = path => path === 'tweaks/catalog.json' ? { ...catalog, lookOnlyOff: DROP } : JSON.parse(read('web/' + path));
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 
 function lookSync() { const window = {}; vm.runInNewContext(read('web/core/look-sync.js'), { window, JSON, Object, Date, Math, Number, Error, setTimeout, clearTimeout }); return window.WosLookSync; }
@@ -58,7 +61,7 @@ function device(box, { mix = {}, recipe = null, channel = 'latest', defaultsOff 
   vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } },
     document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal,
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
-    fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
+    fetch: async url => ({ ok: true, json: async () => served(url.pathname.split('/wizard-os-home/')[1]) }) });
   const E = window.WosExperience;
   if (box) sync = L.create({ req: box.req, store: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) }, exp: E,
     skin: { chosen: null, current: 'obsidian', desktopBackdrop: { id: 'living' }, has: () => true, set() {} },
@@ -73,19 +76,19 @@ const mixOn = mix => Object.keys(mix).filter(id => mix[id] === true).sort();
 
 // The tester's old state: shared switches with Send and go plus two drop-list tweaks on; the own skin worn here turns
 // Archive first and Reply summary on, Send and go and the built-in default off, and picks a shell view and a drop item.
-const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/pin-buttons': true, 'wizard/two-orbs': true };
-const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/orb-shell': true, 'miguel/no-desk-close': true };
+const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/failure-reason': true, 'wizard/cli-install-links': true };
+const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/orb-shell': true, 'miguel/now-playing': true };
 
-test('the drop list (catalog lookOnlyOff) names real catalog tweaks, none a built-in default or the switch itself', () => {
-  assert.deepEqual(catalog.lookOnlyOff, DROP);
-  for (const id of DROP) { assert.ok(catalog.tweaks.includes(id), id); assert.ok(!catalog.defaults.includes(id), id); }
+test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; any entry must be a real catalog tweak', () => {
+  assert.deepEqual(catalog.lookOnlyOff, []);
+  for (const id of [...catalog.lookOnlyOff, ...DROP]) { assert.ok(catalog.tweaks.includes(id), id); assert.ok(!catalog.defaults.includes(id), id); }
   assert.ok(!DROP.includes(ID));
 });
 
 test('switch off (today): nothing changes, the skin still decides and drop-list tweaks still run', async () => {
   const d = device(null, { mix: OLD_MIX, recipe: OLD_RECIPE }); await d.E.refresh();
-  assert.deepEqual(d.running(), ['miguel/archive-top', 'miguel/no-desk-close', 'miguel/orb-shell', 'miguel/reply-summary']);
-  assert.ok(d.E.state.tweaks.some(t => t.id === 'wizard/pin-buttons'), 'drop items still offered');
+  assert.deepEqual(d.running(), ['miguel/archive-top', 'miguel/now-playing', 'miguel/orb-shell', 'miguel/reply-summary']);
+  assert.ok(d.E.state.tweaks.some(t => t.id === 'wizard/failure-reason'), 'drop items still offered');
   assert.equal(d.saved().recipeCarried, undefined);
 });
 
@@ -105,12 +108,12 @@ test('turning it on: an old tester device comes up matching the shared switches,
   // Views and drop-list items are not carried; drop-list tweaks are off and not offered, their saved choice kept.
   assert.ok(!d.events.some(e => e.id === 'miguel/orb-shell' || DROP.includes(e.id)));
   for (const id of DROP) { assert.ok(!d.running().includes(id), id); assert.ok(!d.E.state.tweaks.some(t => t.id === id), id); }
-  assert.equal(mix['wizard/pin-buttons'], true, 'nothing deleted');
+  assert.equal(mix['wizard/failure-reason'], true, 'nothing deleted');
   assert.equal(d.saved().recipeCarried, true);
   assert.ok(!d.running().includes('miguel/orb-shell'), 'the skin\'s view is not worn either');
   // Off again: the skin decides again, its drop-list pick and view included.
   await d.E.toggle(ID);
-  assert.ok(d.running().includes('miguel/no-desk-close') && d.running().includes('miguel/orb-shell'));
+  assert.ok(d.running().includes('miguel/now-playing') && d.running().includes('miguel/orb-shell'));
 });
 
 test('once per device: off and on again never re-applies the old recipe over a newer shared choice', async () => {
@@ -153,11 +156,11 @@ test('two devices: the device that turns it on carries its skin; a stale second 
   const phone = device(box, { mix: OLD_MIX, recipe: OLD_RECIPE }), mac = device(box, { mix: OLD_MIX });
   const stale = device(box, { mix: OLD_MIX, recipe: { 'miguel/calm-offline': true } });
   for (const d of [phone, mac, stale]) { await d.E.refresh(); await d.sync.sync(); await tick(); }
-  // Simultaneous: the phone turns the switch on while the Mac switches Group by day on; both read before either writes.
-  await phone.E.toggle(ID); await mac.E.toggle('miguel/group-by-day');
+  // Simultaneous: the phone turns the switch on while the Mac switches Snooze someday on; both read before either writes.
+  await phone.E.toggle(ID); await mac.E.toggle('miguel/snooze-someday');
   box.race(2); await Promise.all([phone.flush(), mac.flush()]);
   const shared = sharedOn(box.doc());
-  assert.deepEqual(shared, [ID, 'miguel/archive-top', 'miguel/reply-summary', 'wizard/pin-buttons', 'wizard/two-orbs', 'miguel/group-by-day'].sort(), 'both edits kept');
+  assert.deepEqual(shared, [ID, 'miguel/archive-top', 'miguel/reply-summary', 'wizard/failure-reason', 'wizard/cli-install-links', 'miguel/snooze-someday'].sort(), 'both edits kept');
   assert.equal(box.doc().defaults?.[builtin]?.on, false);
   // Every device catches up, the stale one too: same switches; its own skin (which chose Calm offline) is set aside, nothing carried.
   for (const d of [stale, mac, phone]) { await d.sync.sync(); await tick(); await d.E.whenReady(); }

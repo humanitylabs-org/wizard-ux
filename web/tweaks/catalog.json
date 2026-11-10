@@ -9,16 +9,10 @@
   ],
   "tweaks": [
     "miguel/send-and-go",
-    "wizard/pin-buttons",
     "miguel/snooze-someday",
-    "wizard/two-orbs",
     "miguel/machines-home",
-    "wizard/app-borders",
     "wizard/unified-inbox",
-    "wizard/new-send-list",
-    "miguel/no-desk-close",
     "miguel/archive-top",
-    "miguel/group-by-day",
     "miguel/reply-summary",
     "miguel/now-playing",
     "miguel/calm-offline",
@@ -28,7 +22,6 @@
     "wizard/thread-tracker",
     "wizard/desktop-chats",
     "wizard/background-continue",
-    "wizard/wizardos-name",
     "wizard/failure-reason",
     "wizard/skins-look-only",
     "wizard/app-updates-list",
@@ -46,14 +39,7 @@
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
-    "wizard/machines-home": "miguel/machines-home",
-    "miguel/switch-row-actions": "miguel/model-pills"
+    "wizard/machines-home": "miguel/machines-home"
   },
-  "lookOnlyOff": [
-    "wizard/two-orbs",
-    "wizard/app-borders",
-    "miguel/no-desk-close",
-    "wizard/pin-buttons",
-    "wizard/wizardos-name"
-  ]
+  "lookOnlyOff": []
 }

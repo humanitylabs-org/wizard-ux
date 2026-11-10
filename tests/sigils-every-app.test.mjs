@@ -78,11 +78,6 @@ test('two-orb active marks preserve the Hermes light badge and black portrait', 
     'all agent marks keep the approved optical box');
   assert.match(css, /:is\(\.to-face, \.to-chip-sig\) \.sgi:not\(\.sg-hermes\)\s*\{[^}]*filter:\s*brightness\(0\) invert\(1\)[^}]*\}/s,
     'agent-orb whitening also excludes the full-colour Hermes badge');
-  const tweak = read('web/tweaks/wizard/two-orbs/tweak.css');
-  assert.match(tweak, /#orbApp :is\(img, \.sgi:not\(\.sg-hermes\), svg\)\s*\{[^}]*filter:\s*brightness\(0\);[^}]*\}/s,
-    'the neutral two-orbs tweak also preserves the Hermes badge and portrait');
-  assert.doesNotMatch(tweak, /#orbApp :is\(img, \.sgi, svg\)/,
-    'no later two-orbs tweak can flatten Hermes into a blank dot');
 });
 
 test('Cloudflare wears the warm cloud', () => {

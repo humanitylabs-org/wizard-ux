@@ -98,8 +98,9 @@ async function shot(p, name) {
     }
     check(p.errs.length===0,'saved-state scenario has zero page errors',p.errs); await ctx.close();
     if (broken) { complete(); return; }
-    // Independent fresh profiles with restored box state, radial OFF/ON and optional two-orbs.
-    for (const enabled of [false,true]) for (const two of [false,true]) {
+    // Independent fresh profiles with restored box state, radial OFF/ON. The two-orbs pass went with that switch
+    // (wizard-ux issue 1239); its branches below are kept inert under two=false.
+    for (const enabled of [false,true]) for (const two of [false]) {
       const data=copy(fixture.skins);data.active='My skin';const writes=[],recipeWrites=[],refused=[];
       // Boot without ready()'s implicit radial write; label the explicit UI opt-in.
       const {ctx,p}=await boot(browser,undefined,{'wos.skin':'grove','wos.tour.v1':'true'},false,c=>{c.profile=`radial-${enabled}-two-${two}`;return setup(c,data,fixture.fixed_css,writes,recipeWrites,refused);});

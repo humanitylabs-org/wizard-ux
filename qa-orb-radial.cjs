@@ -168,16 +168,15 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
    await T(p,'touchMove',o.x,o.y);await release(p);await sleep(250);
   }
   await setPins(p,['wizard','wizard-calendar','notes','stories'],{voiceSlot:'near',holdMs:300});await p.evaluate(()=>WosSkin.set('nebula'));await sleep(500);o=await orbXY(p);
-  // Swipe-up classification outside the hold is unchanged with the tweak ON, including two-orbs.
-  for(const two of [false,true]){
-   if(two){await p.evaluate(()=>WosExperience.toggle('wizard/two-orbs'));await p.waitForFunction(()=>WosSkinHost.tweakState.includes('wizard/two-orbs'));await sleep(700);}
+  // Swipe-up classification outside the hold is unchanged with the tweak ON (the two-orbs pass went with that switch,
+  // wizard-ux issue 1239).
+  for(const two of [false]){
    for(const desks of [false,true]){
     await p.evaluate(d=>{document.documentElement.style.setProperty('--wos-orb-swipe-up',d?'desks':'');__wos.closeSheets();__wos.closeOverview();},desks);o=await orbXY(p);await T(p,'touchStart',o.x,o.y);await slide(p,o,{x:o.x,y:o.y-150},8,12);await release(p);await sleep(500);
     ok(await p.evaluate(d=>d?!!document.querySelector('#overview.open'):__wos.sheet==='launcher',desks),`ON swipe up: two-orbs ${two}, CSS desks ${desks} preserves shell route`);
    }
    await p.evaluate(()=>{__wos.closeSheets();__wos.closeOverview();});
   }
-  await p.evaluate(()=>WosExperience.toggle('wizard/two-orbs'));await sleep(500);
   await p.evaluate(()=>{document.documentElement.style.removeProperty('--wos-orb-swipe-up');__wos.goDesk(0);});await sleep(400);o=await orbXY(p);
   // Plain and jittered holds cannot start voice.
   await hold(p,o,1600);await release(p);await sleep(250);ok(await p.evaluate(()=>__wos.voice==='idle'),'1.6 s plain hold-release starts no recording');

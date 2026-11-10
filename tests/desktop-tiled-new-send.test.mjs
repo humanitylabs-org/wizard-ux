@@ -7,10 +7,13 @@ import vm from 'node:vm';
 // Execute the shipped capture handler and the actual composer-mic handoff branch.
 // Browser-free branch regression with James's return-to-list tweak explicitly ON, not proof of client geometry.
 const root = process.env.QA_POLICY_TREE || path.resolve(import.meta.dirname, '..');
-test('return-to-list is discoverable but excluded from defaults and legacy author recipes', () => {
+// The return-to-list switch (wizard/new-send-list) was removed in wizard-ux issue 1239: nothing read it after
+// 6 Nov 2026 and desktop keeps the sent chat open (wizard-ux issue 1060).
+test('the removed return-to-list switch is gone from the catalog, the profile and the packages', () => {
   const catalog=JSON.parse(fs.readFileSync(path.join(root,'web/tweaks/catalog.json'),'utf8'));
   const profile=JSON.parse(fs.readFileSync(path.join(root,'web/tweaks/wizard/profile.json'),'utf8'));
-  assert.ok(catalog.tweaks.includes('wizard/new-send-list')); assert.equal(catalog.defaults.includes('wizard/new-send-list'),false); assert.equal(profile.tweaks.includes('wizard/new-send-list'),false);
+  assert.equal(catalog.tweaks.includes('wizard/new-send-list'),false); assert.equal(profile.tweaks.includes('wizard/new-send-list'),false);
+  assert.equal(fs.existsSync(path.join(root,'web/tweaks/wizard/new-send-list')),false);
 });
 const source = fs.readFileSync(path.join(root, 'web/desktop/desktop.js'), 'utf8');
 function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', narrow = false, focus = null, optIn = true } = {}) {

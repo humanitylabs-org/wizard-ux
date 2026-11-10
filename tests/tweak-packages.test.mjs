@@ -52,15 +52,15 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   skin = 'grove'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/send-and-go'], 'a color pick keeps the tweaks');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size, 'every installed tweak is offered, whoever wrote it');
-  await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/send-and-go', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
-  await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
+  await E.toggle('wizard/thread-tracker'); assert.deepEqual(Array.from(active).sort(), ['miguel/send-and-go', 'wizard/thread-tracker'], 'another author\'s tweak can be tried');
+  await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active), ['wizard/thread-tracker']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/send-and-go'] }; await E.refresh();
-  assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
+  assert.deepEqual(Array.from(active), ['wizard/thread-tracker'], 'new features start off for everyone');
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
   assert.equal(E.chooseAuthor, undefined, 'no per-author quick button: one switch per tweak (Miguel, 1 Nov 2026)');
-  await E.toggle('miguel/send-and-go'); await E.toggle('wizard/app-borders');
-  assert.deepEqual(Array.from(active).sort(), ['miguel/send-and-go', 'wizard/app-borders', 'wizard/two-orbs'], 'each switch adds just itself, any author');
-  await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/two-orbs'], 'and takes just itself off');
+  await E.toggle('miguel/send-and-go'); await E.toggle('wizard/failure-reason');
+  assert.deepEqual(Array.from(active).sort(), ['miguel/send-and-go', 'wizard/failure-reason', 'wizard/thread-tracker'], 'each switch adds just itself, any author');
+  await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active).sort(), ['wizard/failure-reason', 'wizard/thread-tracker'], 'and takes just itself off');
   assert.ok(mig.length > 1, 'Miguel has several tweaks, none switched on by another');
   const authors = await E.authors(); assert.deepEqual(Array.from(authors, a => a.name), ['Miguel', 'James']);
   assert.ok(!authors.some(a => a.ids.some(id => cat.defaults.includes(id))), 'built-in features have no quick button');
@@ -99,24 +99,27 @@ function wizardExperience(storage = new Map()) {
   return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)), all:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
-  let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
-  await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).mix, { 'wizard/two-orbs': true });
-  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs'], 'another color keeps tweaks');
-  await f.E.toggle('wizard/two-orbs'); await f.E.refresh(); assert.deepEqual(f.active(), []);
+  let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/thread-tracker').on, false);
+  await f.E.toggle('wizard/thread-tracker'); assert.deepEqual(f.active(), ['wizard/thread-tracker']);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).mix, { 'wizard/thread-tracker': true });
+  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/thread-tracker']);
+  f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/thread-tracker'], 'another color keeps tweaks');
+  await f.E.toggle('wizard/thread-tracker'); await f.E.refresh(); assert.deepEqual(f.active(), []);
 });
-test('legacy two-orb migration opts in exactly once, preserving a later owner off choice', async () => {
-  let f = wizardExperience(new Map([['wos.layout','two-orb']])); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  await f.E.toggle('wizard/two-orbs');
-  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), []);
-  const saved = new Map([['wos.layout','two-orb'], ['wos.skin-tweaks.v1',JSON.stringify({version:1,off:{wizard:['wizard/two-orbs']}})]]);
-  f = wizardExperience(saved); await f.E.refresh(); assert.deepEqual(f.active(), []);
+// The two-orb and App borders migrations went with their switches (wizard-ux issue 1239): a device that still has the
+// old two-orb layout or a framed composition saved opts into nothing and falls back to the classic layout.
+test('a saved legacy two-orb layout or framed composition turns nothing on now its switches are removed', async () => {
+  for (const storage of [new Map([['wos.layout','two-orb']]), new Map([['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation:'framed'}})]])]) {
+    const f = wizardExperience(storage); await f.E.refresh();
+    assert.deepEqual(f.active(), []); assert.equal(f.E.state.error, '');
+    assert.equal(f.window.WosSkinHost.layout, 'classic');
+    assert.equal(storage.has('wos.two-orbs.migrated.v1') || storage.has('wos.app-borders.migrated.v1'), false, 'no migration ran');
+  }
 });
 test('overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture({manifests:{'miguel/asks-nav':asking('miguel/asks-nav',['layout','nav'])}}); let api;
   f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
-  await f.mount('wizard/pin-buttons'); assert.equal(api.overview,undefined);
+  await f.mount('wizard/thread-tracker'); assert.equal(api.overview,undefined);
   await f.mount('miguel/asks-nav');
   assert.throws(()=>api.overview.use({hold:'exit',appHold:false}),/Invalid overview mode/);
   const release=api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false});
@@ -126,7 +129,7 @@ test('overview mode is capability gated, revoked on teardown, and stale handles 
 test('window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture({manifests:{'miguel/asks-nav':asking('miguel/asks-nav',['layout','nav'])}}); let api;
   f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
-  await f.mount('wizard/pin-buttons'); assert.equal(api.windowRefresh,undefined);
+  await f.mount('wizard/thread-tracker'); assert.equal(api.windowRefresh,undefined);
   await f.mount('miguel/asks-nav'); assert.equal(f.windowRefresh,null);
   assert.throws(()=>api.windowRefresh.use({}),/Invalid window refresh mode/);
   const release=api.windowRefresh.use({pull:false,extra:1}); assert.deepEqual({...f.windowRefresh},{pull:false});
@@ -147,25 +150,17 @@ test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a pack
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
-  await f.mount('wizard/two-orbs'); await f.clear();
+  await f.mount('wizard/thread-tracker'); await f.clear();
   api.layout.use('two-orb')(); assert.equal(f.host.layout,'classic');
 });
 
 
-test('App borders migrates stored framed exactly once, leaves everyone else borderless and respects later off', async () => {
-  for (const foundation of ['framed', 'borderless', null]) {
-    const storage = new Map(foundation ? [['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation}})]] : []);
-    let f = wizardExperience(storage); await f.E.refresh();
-    assert.equal(f.active().includes('wizard/app-borders'), foundation === 'framed');
-    if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
-  }
-});
 test('own recipes expose all installed tweaks, use published defaults and isolate builtin choices', async () => {
   const f = wizardExperience();
   f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
   f.window.WosSkin.families.push({id:'mizel',name:'Mizel',tweaks:'miguel'});
   await f.E.refresh(); const defaults = await f.E.defaults();
-  assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
+  assert.equal(defaults['wizard/failure-reason'], false); assert.equal(defaults['wizard/thread-tracker'], false);
   assert.equal(defaults['miguel/snooze-someday'], false, 'a new skin starts from what runs now');
   await f.E.toggle('miguel/snooze-someday'); assert.equal((await f.E.defaults())['miguel/snooze-someday'], true);
   await f.E.toggle('miguel/snooze-someday');
@@ -173,7 +168,7 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
   await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
   assert.deepEqual(f.active(),['miguel/snooze-someday']);
-  await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
+  await f.E.toggle('wizard/failure-reason'); assert.ok(f.active().includes('wizard/failure-reason'));
   f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
 });
 
@@ -190,7 +185,7 @@ test('installed list warms base profiles so picking Mizel does not wait for anot
 test('disposed foundation capability cannot change windows', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
-  await f.mount('wizard/app-borders'); await f.clear(); api.layout.foundation('framed')();
+  await f.mount('wizard/thread-tracker'); await f.clear(); api.layout.foundation('framed')();
   assert.equal(f.ctx.window.WosSkin.frame.foundation, 'borderless');
 });
 
@@ -206,7 +201,7 @@ test('beside hook: layout-gated event on change only, never a route event, and r
   f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
   await f.host.loadTweaks(['miguel/snooze-someday'], f.slots, { teamAuthors: ['miguel'] });
   assert.throws(() => api.on('beside', () => {}), /requires layout/);
-  await f.host.loadTweaks(['miguel/no-desk-close'], f.slots, { teamAuthors: ['miguel'] });
+  await f.host.loadTweaks(['miguel/calm-offline'], f.slots, { teamAuthors: ['miguel'] });
   api.on('beside', b => seen.push(b.side)); api.on('route', r => routes.push(r));
   f.setRoute({ beside: 1 }); f.setRoute({ beside: 1 }); f.setRoute({ beside: -1 }); f.setRoute({ beside: 0 });
   assert.deepEqual(seen, [1, -1, 0]); assert.equal(routes.length, 0, 'route listeners see nothing new');
@@ -343,39 +338,38 @@ test('Settings › Look: one flat Tweaks list, a switch per tweak labelled by au
 });
 
 test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rendered as one switch each (Miguel, 1 Nov 2026)', async () => {
-  const mix = { 'miguel/send-and-go': true, 'wizard/app-borders': true, 'miguel/snooze-someday': false };
+  const mix = { 'miguel/send-and-go': true, 'wizard/thread-tracker': true, 'miguel/snooze-someday': false };
   const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, machinesHomeMoved: true, miguelLayoutMoved: true })]]); let active = [];
   const window = { WosSkin: { current: 'obsidian', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience; await E.refresh(); const defs = JSON.parse(read('web/tweaks/catalog.json')).defaults || [];
-  assert.deepEqual(Array.from(active).filter(id => !defs.includes(id)).sort(), ['miguel/send-and-go', 'wizard/app-borders'], 'the stored mix loads as it was');
+  assert.deepEqual(Array.from(active).filter(id => !defs.includes(id)).sort(), ['miguel/send-and-go', 'wizard/thread-tracker'], 'the stored mix loads as it was');
   const saved = JSON.parse(storage.get('wos.skin-tweaks.v1')).mix;
   for (const [id, on] of Object.entries(mix)) assert.equal(saved[id], on, id + ' kept');
   const on = Array.from(E.state.tweaks.filter(t => t.on && !t.builtin), t => t.id).sort();
-  assert.deepEqual(on, ['miguel/send-and-go', 'wizard/app-borders'], 'the switches agree');
+  assert.deepEqual(on, ['miguel/send-and-go', 'wizard/thread-tracker'], 'the switches agree');
   assert.equal(E.chooseAuthor, undefined);
 });
 
-test('retired Orb radial saved mixes and inherited recipes never request a removed package', async () => {
+const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions'];
+test('retired Orb radial and the switches removed in wizard-ux issue 1239: saved mixes and recipes never request a removed package', async () => {
   const mixes = [
     new Map(),
     new Map([['wos.skin-tweaks.v1', JSON.stringify({ version:1, off:{wizard:[]} })], ['wos.app-borders.migrated.v1','true']]),
-    new Map([['wos.skin-tweaks.v1', JSON.stringify({ version:1, off:{}, preset:'none', mix:{'wizard/two-orbs':true} })]]),
+    new Map([['wos.skin-tweaks.v1', JSON.stringify({ version:1, off:{}, preset:'none', mix:Object.fromEntries(REMOVED.map(id=>[id,true])) })]]),
   ];
   for (const storage of mixes) {
     let f=wizardExperience(storage); await f.E.refresh();
-    assert.equal(f.E.state.tweaks.find(t=>t.id==='wizard/orb-radial'),undefined);
-    assert.ok(!f.all().includes('wizard/orb-radial'));
-    assert.equal((await f.E.defaults('nebula'))['wizard/orb-radial'],undefined);
+    for (const id of REMOVED) { assert.equal(f.E.state.tweaks.find(t=>t.id===id),undefined,id); assert.ok(!f.all().includes(id),id); assert.equal((await f.E.defaults('nebula'))[id],undefined,id); }
     const skin={tweaks:{}}; f.window.WosMySkin={active:skin, update(v){Object.assign(skin.tweaks,v.tweaks);}};
     await f.E.refresh(); assert.ok(!f.all().includes('wizard/orb-radial'),'missing old recipe key inherits OFF');
-    skin.tweaks['wizard/orb-radial']=true; await f.E.refresh();
-    assert.ok(!f.all().includes('wizard/orb-radial'),'orphan recipe choice is ignored, other tweaks still load');
+    for (const id of REMOVED) skin.tweaks[id]=true; await f.E.refresh();
+    for (const id of REMOVED) assert.ok(!f.all().includes(id),'orphan recipe choice is ignored, other tweaks still load: '+id);
     f.window.WosMySkin.active=null; await f.E.refresh();
     for (const on of [true, false]) {
-      storage.set('wos.skin-tweaks.v1', JSON.stringify({version:1, off:{}, preset:'none', mix:{'wizard/orb-radial':on,'wizard/app-borders':true}}));
+      storage.set('wos.skin-tweaks.v1', JSON.stringify({version:1, off:{}, preset:'none', mix:{...Object.fromEntries(REMOVED.map(id=>[id,on])),'wizard/thread-tracker':true}}));
       f=wizardExperience(storage); await f.E.refresh();
-      assert.ok(!f.all().includes('wizard/orb-radial')); assert.ok(f.all().includes('wizard/app-borders'));
+      for (const id of REMOVED) assert.ok(!f.all().includes(id), id); assert.ok(f.all().includes('wizard/thread-tracker'));
       assert.equal(f.E.state.error, '');
     }
   }

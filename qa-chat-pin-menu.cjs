@@ -78,7 +78,7 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
     await page.screenshot({ path: path.join(OUT, `phone-${skin}-menu.png`) });
     await closeMenu(page);
     const t = await page.evaluate(() => WosExperience.state.tweaks.find(t => t.id === 'wizard/pin-buttons'));
-    ok(t && t.name === 'Show pin buttons' && t.on === false, `${skin}: Show pin buttons tweak is listed and off`, t);
+    ok(!t, `${skin}: the removed Show pin buttons switch is not listed (wizard-ux issue 1239)`, t);
   }
   await setSkin(page, 'nebula');
   await sleep(800); // settle the desk transition before driving real phone input
@@ -101,11 +101,9 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
   ok(await page.evaluate(() => { document.querySelector('.ch-sheet [data-rspin]').click(); return WosChatPins.has('qa_pin_b') && !document.querySelector('.ch-sheet'); }), 'menu Pin pins the chat and closes the menu');
   await sleep(400);
   ok(writes.slice(before).some(w => w.method === 'PUT' && w.path === '/wizard/v1/ui-preferences') && prefs.pinnedChats.includes('qa_pin_b'), 'pin write intercepted and read back (never reached a real Wizard)');
-  await page.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(page);
-  ok(await pinShown(page, root) === await rowCount(page, root) && await rowCount(page, root) >= sessions.length, 'Show pin buttons on: every row gets its pin button', [await pinShown(page, root), await rowCount(page, root)]);
-  await page.screenshot({ path: path.join(OUT, 'phone-nebula-tweak-on.png') });
-  await page.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(page);
-  ok(await pinShown(page, root) === 0, 'Show pin buttons off again: buttons gone');
+  // A stale saved Show pin buttons choice (switch removed in wizard-ux issue 1239) brings no row pins back.
+  await page.evaluate(() => WosExperience.toggle('wizard/pin-buttons').catch(() => {})); await settle(page);
+  ok(await pinShown(page, root) === 0, 'removed Show pin buttons switch: a stale toggle shows no row pins');
   for (const skin of ['novairecito', 'sepia']) {
     await setSkin(page, skin);
     ok(await pinShown(page, root) === await rowCount(page, root) && await rowCount(page, root) >= sessions.length, `${skin} keeps pin buttons as its look`, [await pinShown(page, root), await rowCount(page, root)]);
@@ -147,10 +145,9 @@ const ROUTED = 'qa-host', routed = [{ ...mk('qa_pin_r1', 'QA · Routed pin fixtu
     await dp.screenshot({ path: path.join(OUT, `desktop-${skin}-menu.png`) });
     await closeMenu(dp);
   }
-  // Miguel's own tweak keeps his chats pin-free: no Pin in the menu, no row pins, even with Show pin buttons on.
+  // Miguel's own tweak keeps his chats pin-free: no Pin in the menu, no row pins.
   await dp.evaluate(() => WosExperience.toggle('miguel/hidden-pin')); await settle(dp);
-  await dp.evaluate(() => WosExperience.toggle('wizard/pin-buttons')); await settle(dp);
-  ok(await pinShown(dp, droot) === 0, 'desktop landscapes + No chat pins: no row pins even with Show pin buttons on');
+  ok(await pinShown(dp, droot) === 0, 'desktop landscapes + No chat pins: no row pins');
   await dp.locator(`${droot} .ch-row[data-chopen="qa_pin_a"]`).click({ button: 'right' }); await sleep(300);
   const mlabels = await dp.evaluate(() => [...document.querySelectorAll('.ch-sheet button')].filter(x => getComputedStyle(x).display !== 'none').map(x => x.innerText.trim()));
   ok(!mlabels.some(l => /^(Pin|Unpin)$/.test(l)) && !mlabels.includes('Open') && mlabels.includes('Rename'), 'desktop landscapes + No chat pins: menu has no Pin', mlabels);
