@@ -581,6 +581,8 @@ window.WosChatPower = function chatPower(A) {
   const SEND_SVG = '<svg class="snd" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
   // The thread a window's composer belongs to: its open thread, or a new chat from a channel's box (wizard-ux issue 1258).
   const boxThread = w => w?.thread || (w && A.chanOpen?.(w) ? '__new__' : '');
+  // A box-mic take from a channel keeps the channel it started in (its Space; '' = General), per window.
+  const boxSpace = new Map();
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = boxThread(H.win(wid)), on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
@@ -591,6 +593,7 @@ window.WosChatPower = function chatPower(A) {
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = capturedRunId ?? (A.isWorking(s) && s.runId ? s.runId : '');
     const nm = route || (isNew ? (c.newModel || null) : null);
+    const pins = typeof boxSpace !== 'undefined' ? boxSpace : null, pinned = isNew ? pins?.get(wid) : undefined; pins?.delete(wid); // the channel this take started in
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
@@ -611,7 +614,7 @@ window.WosChatPower = function chatPower(A) {
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
         instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(typeof pinned === 'string' ? { space: false } : {}), ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
@@ -620,6 +623,7 @@ window.WosChatPower = function chatPower(A) {
       throw e;
     }
     sealed.done(it);
+    if (pinned && it?.sessionId) A.spaceMember?.(pinned, it.sessionId, true);
     if (isNew && !left && it?.sessionId && H.win(wid) === w && w.thread === sid && c.readNav === navAtSend) { A.openChat(wid, it.sessionId); A.renderChats(w); }
     return it;
   }
@@ -703,7 +707,7 @@ window.WosChatPower = function chatPower(A) {
     const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
-    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
+    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && w.thread && M.privateOptions ? M.privateOptions() : null; // a channel's box stays with its agent
     openSheet({ type: 'model', pane, wid, sid, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if visible choices or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
@@ -756,6 +760,7 @@ window.WosChatPower = function chatPower(A) {
     if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id, false); } return true; }
     if (t.closest('[data-chmic]')) {
       const sid = boxThread(w); if (!sid || !H.recordReply) return true;
+      if (!H.recordingFor?.()) { const sp = sid === '__new__' && !w.thread ? A.chanSpaceOf?.(w) : null; if (typeof sp === 'string') boxSpace.set(id, sp); else boxSpace.delete(id); }
       const r = H.recordReply(id, sid);
       Promise.resolve(r).then(st => { if (st === 'busy') toast('…', 'Finishing the last recording', 1400); });
       return true;

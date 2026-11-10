@@ -1952,7 +1952,7 @@
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   const glow = document.createElement('div'); glow.id = 'voiceGlow'; glow.setAttribute('aria-hidden', 'true'); document.body.appendChild(glow); // edge light; never resizes the stage
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null;
   let vHandedOff = null; // a sent take the outbox can finish after a reload
   const VOICE = C.voice({
     onState: st => {
@@ -2059,6 +2059,8 @@
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
       vTarget = (f?.app === 'chats' || (!forceNew && CHATS.isHosted(f?.id))) ? f.id : null;
       if (forceNew && vTarget) vSnapshot.thread = '__new__';
+      // A channel feed in front (wizard/chat-channels): the take is filed into that channel, wherever James is by Send.
+      vSpace = !forceNew && vTarget ? CHATS.chanSpaceOf?.(W[vTarget]) ?? null : null;
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
       vConversation = !forceNew && !CHATS.isHosted(f?.id) ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
         : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
@@ -2140,7 +2142,7 @@
     }
     const w = vTarget && W[vTarget];
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); syncChatsPane(rp.wid); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
+    if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles, ...(aimSid === '__new__' && !rp && typeof vSpace === 'string' ? { space: vSpace } : {}) });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done?.(item);

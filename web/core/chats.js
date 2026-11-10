@@ -664,6 +664,9 @@ window.WizCore.chats = function createChats(H) {
    * the feed. The post is painted on the tap's own frame and gives way to the chat's own row once the outbox lists it.
    * Room for an @-mention of an agent or model later: it would only set the route below. */
   const CHAN_SENDING = [], CHAN_SENDING_MAX = 2 * 60e3;
+  // The Space a new chat from this window's channel feed is filed into ('' = General), or null when no feed is open.
+  // Voice takes pin it when they start, so a take sent after leaving the channel still lands where it began.
+  function chanSpaceOf(w) { const open = w && !w.thread ? chanOpen(w) : null; return open ? (open.general ? '' : open.id) : null; }
   function chanDraftKey(w) {
     const open = w && !w.thread ? chanOpen(w) : null;
     return open && !chanArchived(open.id) ? `chan:${open.agent || winAgent(w) || ''}:${open.id}` : '';
@@ -701,6 +704,8 @@ window.WizCore.chats = function createChats(H) {
     const files = tray.map(pendRef).filter(f => f && f.id);
     const media = tray.filter(f => /^image\//.test(f.mime || '') && f.preview).map((f, i) => ({ id: f.id || 'up' + i, name: f.name || 'Photo', mime: f.mime, kind: 'image', url: f.preview }));
     const agent = open.agent || winAgent(w) || '', owner0 = agent && AGS()?.isOther?.(agent) ? agent : '';
+    // Only a model of this channel's own agent: the chat must belong to the agent whose Space it is filed into.
+    const nm = PW?.newModel?.(c) || null, route = nm && (!nm.agent || nm.agent === agent) ? nm : null;
     const p = { key: 'chanpost:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), feed: key, owner: owner0, text, media, at: Date.now(), sid: '' };
     CHAN_SENDING.push(p);
     if (ta) { ta.value = ''; growTa(ta); }
@@ -708,7 +713,7 @@ window.WizCore.chats = function createChats(H) {
     const o = ch(owner(wid)); if (o.chanFilter === 'needs') o.chanFilter = 'open';
     renderChatList(w, elOf(wid)); chanToEnd(wid); // the post is on screen on this frame
     const how = `typing in the # ${open.name} channel in Chats`;
-    const it = await sendChat(wid, text, how, null, { sid: '__new__', away: true, space: open.general ? '' : open.id, files, route: PW?.newModel?.(c) || null, instructions: viewContext(wid, how) });
+    const it = await sendChat(wid, text, how, null, { sid: '__new__', away: true, space: open.general ? '' : open.id, files, route, instructions: viewContext(wid, how) });
     if (!it?.sessionId) {
       // Not saved: the post goes and the words and files return to this channel's box.
       CHAN_SENDING.splice(CHAN_SENDING.indexOf(p), 1);
@@ -3893,7 +3898,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
@@ -3908,7 +3913,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, chanSpaceOf, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

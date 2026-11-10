@@ -3147,7 +3147,7 @@
       const queued = (snap.custodyId ? [snap.audio] : blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
         if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, ...pinSpace(sv), instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
         return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: withSealFiles(fl, sl), typed: sl?.text || '', snap })
           .then(item => sl?.done(item));
@@ -3226,7 +3226,7 @@
     // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
     // channel, exactly like its message box (whose words and pictures ride with it), and the window stays on the feed.
     const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null;
-    if (chan) return { id, mode: 'auto', kind: 'chat thread', thread: '__new__', channel: chan.name, name: `# ${chan.name} channel` };
+    if (chan) return { id, mode: 'auto', kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, name: `# ${chan.name} channel` };
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
     if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
       return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
@@ -3292,11 +3292,13 @@
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
     return window.WosBoundView.feedback(OUTBOX, { thread: v.thread, url: v.url, route, custodyId, context: reviewContext(v) }, text, audio, files);
   }
+  // A take started in front of a channel (wizard/chat-channels) is filed into that channel, wherever James is by Send.
+  const pinSpace = v => typeof v?.space === 'string' && v.thread === '__new__' ? { space: v.space } : {};
   function deliverToView(v, text, snap) {
     if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if ((w.app === 'chats' || v.kind === 'chat thread') && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+    if ((w.app === 'chats' || v.kind === 'chat thread') && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, ...pinSpace(v), instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
     // No unacknowledged postMessage delivery to arbitrary/self-asserted frames.
     return false;
   }
@@ -3357,7 +3359,7 @@
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : '', seal?.reply ? 'the notification' : ''].filter(Boolean).join(' + ');
       if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, ...pinSpace(v), instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = withSealFiles(files, seal);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all, reply: seal?.reply || null }).then(item => { seal?.done(item); return item; });
     }

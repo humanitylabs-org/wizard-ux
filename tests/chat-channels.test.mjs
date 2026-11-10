@@ -58,7 +58,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,channelSend,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, setOn, spacesData };
 }
@@ -478,6 +478,32 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   assert.match(power, /const boxThread = w => w\?\.thread \|\| \(w && A\.chanOpen\?\.\(w\) \? '__new__' : ''\);/);
   assert.match(power, /const sid = boxThread\(w\); if \(!sid \|\| !H\.recordReply\) return true;/);
   assert.match(power, /openModels\(id, boxThread\(ww\) === '__new__' \? 'new' : 'thread'/);
+  // An orb take is pinned to the channel it started in (Codex P1): phone viewOf carries its Space to every send path,
+  // the desktop orb keeps it from the start of the take.
+  assert.match(app, /const pinSpace = v => typeof v\?\.space === 'string' && v\.thread === '__new__' \? \{ space: v\.space \} : \{\};/);
+  assert.equal((app.match(/\.\.\.pinSpace\(s?v\)/g) || []).length, 3, 'deliverToView, the take with files, and an interrupted take');
+  const desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  assert.match(desk, /vSpace = !forceNew && vTarget \? CHATS\.chanSpaceOf\?\.\(W\[vTarget\]\) \?\? null : null;/);
+  assert.match(desk, /\.\.\.\(aimSid === '__new__' && !rp && typeof vSpace === 'string' \? \{ space: vSpace \} : \{\}\)/);
   // Those takes are filed into the channel the way every new chat from a Space in front is (outbox onNew).
   assert.match(src, /const key = spaceInFront\(it\.agent \|\| ''\);\n\s*if \(key\) spaceMember\(key, it\.sessionId, true\);/);
+});
+
+test('a channel feed names the Space its new chats go to (General = none); no feed, no Space', () => {
+  const f = fixture();
+  assert.equal(f.chanSpaceOf(f.w), null);
+  f.openChannel(f.w, 'launch'); assert.equal(f.chanSpaceOf(f.w), 'launch');
+  f.openChannel(f.w, '__general__'); assert.equal(f.chanSpaceOf(f.w), '');
+  f.w.thread = 'a'; assert.equal(f.chanSpaceOf(f.w), null, 'a thread open in the window: not the feed');
+});
+
+test('a private agent\'s model is never sent from a main channel box (its chat could not be filed there); the channel\'s own agent\'s is', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch'); f.env._sendResult = Promise.resolve({ sessionId: 'p1' });
+  f.env.ch('w').newModel = { model: 'tinfoil', provider: 'tinfoil', agent: 'restricted' };
+  await f.channelSend('w', form('private?'));
+  assert.equal(f.env._sends[0][4].route, null, 'default route instead of another agent');
+  const g = fixture(); g.openChannel(g.w, 'host-ops'); g.env._sendResult = Promise.resolve({ sessionId: 'p2' });
+  g.env.ch('w').newModel = { model: 'h-model', provider: 'h', agent: 'host' };
+  await g.channelSend('w', form('host ask'));
+  assert.equal(g.env._sends[0][4].route?.model, 'h-model');
 });
