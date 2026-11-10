@@ -60,7 +60,7 @@ test('the thread shows the clear card at once, with Dismiss and without Retry; t
   assert.match(card, /<b>Reply not sent<\/b><p>\$\{esc\(window\.WosModels\.refusal\(s\)\)\}<\/p>/);
   assert.match(card, /data-chdismiss>Dismiss/);
   assert.doesNotMatch(card.slice(0, card.indexOf(': (!runErr')), /data-chretry|Choose another model/);
-  assert.match(card, /: \(!runErr && s\?\.safeError && !s\?\.reconnect && !foreign && /, 'no second, generic Reply not sent card beside it');
+  assert.match(card, /^\+ \(refused \? `[^\n]*\n\s*: \(!runErr && s\?\.safeError/, 'refused wins: no second, generic Reply not sent card beside it');
   assert.match(chats, /placeholder="\$\{!isNew && window\.WosModels\?\.foreignApp\?\.\(s\) \? `This chat lives in \$\{esc\(window\.WosModels\.foreignApp\(s\)\)\} · reply there`/);
   assert.match(chats, /if \(p\.state === 'failed'\) return `[^`]*\$\{OUTBOX\.canRetry\(p\) && !window\.WosModels\?\.foreignApp\?\.\(s\) \?/);
 });
@@ -74,4 +74,19 @@ test('a Not sent bubble without a retry run shows no Retry button (what a foreig
   assert.match(ctx.turnHtml({ retryRunId: '' }, tn, true), /Not sent · message saved/);
   assert.doesNotMatch(ctx.turnHtml({ retryRunId: '' }, tn, true), /data-chretry/);
   assert.match(ctx.turnHtml({ retryRunId: 'wizardq_1' }, tn, true), /data-chretry/);
+});
+
+test('a routed agent thread from Telegram is refused the same way: the decision reads only the session source', () => {
+  const M = models();
+  assert.equal(M.foreignApp({ id: 'r1', agent: 'research', source: 'telegram' }), 'Telegram');
+  assert.equal(M.foreignApp({ id: 'r2', agent: 'research', source: 'api_server' }), '');
+  assert.equal(M.refusal({ agent: 'research', source: 'slack' }), M.refusal({ source: 'slack' }));
+});
+
+test('the chat-list send pill offers no Retry for a failed reply into such a chat', () => {
+  const chats = read('web/core/chats.js');
+  const pill = chats.slice(chats.indexOf('  function sendPill('), chats.indexOf('    } else if (waiting.length) {', chats.indexOf('  function sendPill(')));
+  assert.match(pill, /const foreign = it => it\.kind === 'reply' && !!it\.sessionId && !!window\.WosModels\?\.foreignApp\?\.\(LIVE\.session\(it\.sessionId\)\);/);
+  assert.match(pill, /btns = one \? `\$\{foreign\(one\) \? '' : `<button type="button" class="pbtn" data-obretry=/);
+  assert.match(pill, /: failed\.every\(foreign\) \? '' : `<button type="button" class="pbtn" data-obretryall>Retry all<\/button>`;/);
 });

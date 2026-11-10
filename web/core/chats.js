@@ -725,8 +725,10 @@ window.WizCore.chats = function createChats(H) {
     } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
-      btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button>${!one.audio && !one.audioFile && !one.body ? `<button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>` : ''}`
-        : `<button type="button" class="pbtn" data-obretryall>Retry all</button>`;
+      // Issue 1235: a reply into a chat another app owns (Telegram, Slack …) is refused for good: no Retry for it.
+      const foreign = it => it.kind === 'reply' && !!it.sessionId && !!window.WosModels?.foreignApp?.(LIVE.session(it.sessionId));
+      btns = one ? `${foreign(one) ? '' : `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button>`}${!one.audio && !one.audioFile && !one.body ? `<button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>` : ''}`
+        : failed.every(foreign) ? '' : `<button type="button" class="pbtn" data-obretryall>Retry all</button>`;
     } else if (waiting.length) {
       cls = ' wait';
       // A healthy probe says nothing about this saved message's failed step. Keep
@@ -2370,7 +2372,7 @@ window.WizCore.chats = function createChats(H) {
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
         + (refused ? `<div class="appr" role="status" data-chrefused><b>Reply not sent</b><p>${esc(window.WosModels.refusal(s))}</p>${['failed', 'interrupted'].includes(s?.status) ? '<div class="appr-b"><button type="button" class="no" data-chdismiss>Dismiss</button></div>' : ''}</div>`
-          : (!runErr && s?.safeError && !s?.reconnect && !foreign && s?.queueReason !== 'provider_access') ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
+          : (!runErr && s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : ''))
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c, s)).join('')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');

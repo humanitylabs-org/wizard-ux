@@ -59,7 +59,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New chat open after send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
-| Mic, retry, model, place | `WosChatPower` (`chat-power.js`); `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels` (`WosModels.foreignApp(s)` / `refusal(s)`: a chat another app owns, where no Retry can work); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
+| Mic, retry, model, place | `WosChatPower` (`chat-power.js`); `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `md`, `copyRich`, `viewer`; contained initial fit / zoom-pan / keys+native seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
