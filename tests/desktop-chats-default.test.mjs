@@ -87,10 +87,10 @@ test('a pre-upgrade device whose off is still in the look-sync queue (offline, o
 
 // Look sync (web/core/look-sync.js) with a fake box, as in look-default-sync.test.mjs.
 function look(initial) {
-  let doc = initial, version = 0;
-  return { get doc() { return clone(doc); },
+  let doc = initial, version = 0; const log = [];
+  return { log, get doc() { return clone(doc); },
     async req(url, init = {}) {
-      const method = init.method || 'GET', reply = (status, data) => ({ status, ok: status < 300, json: async () => clone(data) });
+      const method = init.method || 'GET', reply = (status, data) => { log.push(method + ' ' + status); return { status, ok: status < 300, json: async () => clone(data) }; };
       if (method === 'GET') return doc ? reply(200, { text: JSON.stringify(doc), version: String(version) }) : reply(404, { error: 'file_not_found' });
       const body = JSON.parse(init.body);
       if ((body.version ?? null) !== (doc ? String(version) : null)) return reply(409, { current: { text: JSON.stringify(doc), version: String(version), exists: !!doc } });
@@ -138,6 +138,38 @@ test('look sync: an on chosen before stays on; no earlier choice gets the defaul
   const legacy = look({ version: 1, skin: null, tweaks: { [ID]: { on: false, at: 7 } } });
   const l = device(legacy, { [ID]: true }, null); await l.c.sync(); await tick();
   assert.equal(l.state.defaults[ID], true);
+});
+
+test('look sync, two devices at once: the legacy off and a newer on race through a 409; the newer choice wins either way', async () => {
+  for (const order of ['carry-first', 'choice-first']) {
+    const b = look({ version: 1, skin: null, tweaks: { [ID]: { on: false, at: 7 } } });
+    const a = device(b, { [ID]: true }); await a.c.sync(); await tick();
+    assert.equal(a.state.defaults[ID], false, order + ': A wears the carried off');
+    // A's owner turns it back on (a newer revision); B, upgraded but never synced, carries the same legacy off.
+    a.state.defaults[ID] = true; a.c.defaultChoice(ID, true);
+    const fresh = device(b, { [ID]: true }); fresh.c.skinChoice('obsidian'); // a change of its own, so it saves too
+    const first = order === 'carry-first' ? fresh : a, second = order === 'carry-first' ? a : fresh;
+    const before = b.log.length;
+    await Promise.all([first.c.sync(), second.c.sync()]); await tick();
+    assert.ok(b.log.slice(before).includes('PUT 409'), order + ': the two saves really raced');
+    await a.c.sync(); await fresh.c.sync(); await tick();
+    assert.equal(b.doc.defaults[ID].on, true, order + ': the newer on survives the race'); assert.ok(b.doc.defaults[ID].at > 7);
+    assert.equal(a.state.defaults[ID], true, order); assert.equal(fresh.state.defaults[ID], true, order);
+    assert.deepEqual(b.doc.tweaks[ID], { on: false, at: 7 }, order + ': the legacy entry is left for older shells, never rewritten');
+  }
+});
+
+test('look sync, stale device: one synced long ago with the switch still on locally adopts the newer shared off, and never writes on back', async () => {
+  const b = look({ version: 1, skin: null, tweaks: { [ID]: { on: true, at: 2 } } });
+  const stale = device(b, { [ID]: true }); await stale.c.sync(); await tick();
+  assert.equal(b.doc.defaults[ID].on, true);
+  const other = device(b, { [ID]: true }); await other.c.sync(); await tick();
+  other.state.defaults[ID] = false; other.c.defaultChoice(ID, false); await other.c.sync(); await tick();
+  assert.equal(b.doc.defaults[ID].on, false);
+  const puts = b.log.filter(x => x.startsWith('PUT')).length;
+  await stale.c.sync(); await tick();
+  assert.equal(stale.state.defaults[ID], false, 'stale device adopts the newer off');
+  assert.equal(b.doc.defaults[ID].on, false); assert.equal(b.log.filter(x => x.startsWith('PUT')).length, puts, 'no write back');
 });
 
 test('Settings › Chats has the plain switch, since a default is not listed under Try new features', () => {
