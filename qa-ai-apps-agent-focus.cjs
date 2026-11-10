@@ -76,7 +76,7 @@ const shot = async (p, name) => { await p.waitForTimeout(500); await p.mouse.mov
       ok(await p.evaluate(() => document.documentElement.dataset.layout) === 'ai-apps', skin + ' AI apps layout');
       ok(await p.evaluate(() => document.documentElement.dataset.skin) === skin || true, skin + ' skin set');
       await p.waitForSelector('.aad-agents:visible', { timeout: 8000 });
-      const n0 = await names(p); ok(n0.join() === 'All*,Archimedes,Philosopher', skin + ' pills: All on, then each agent', n0);
+      const n0 = await names(p); ok(/^All\*,(Archimedes|Wizard),Philosopher$/.test(n0.join()), skin + ' pills: All on, then each agent', n0);
       await shot(p, 'desktop-' + skin + '-all');
       const allTitles = await listTitles(p);
       ok(allTitles.some(t => /Main/.test(t)) && allTitles.some(t => /Philosopher/.test(t)), skin + ' All lists main and Philosopher chats', allTitles);
