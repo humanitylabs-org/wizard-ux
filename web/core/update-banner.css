@@ -158,6 +158,17 @@ dialog.wz-sheet.osu-sheet::backdrop { background: color-mix(in srgb, var(--wz-ba
 .osu-sheet-p { margin: 0 0 8px; line-height: 1.45; }
 .osu-sheet-note { margin: 0; font-size: .875em; line-height: 1.4; color: var(--wz-text-secondary, var(--ink-3)); }
 .osu-sheet-act { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+.osu-sheet-act { flex-wrap: wrap; }
+/* The third answer (Update anyway / Stop reminding me) sits apart on the left and reads as the quieter choice. */
+.osu-sheet-act .wz-button.osu-alt { margin-right: auto; background: none; border-color: transparent; color: var(--wz-text-secondary, var(--ink-3)); }
+.osu-sheet-work { margin: 0 0 12px; padding: 10px 12px; list-style: none; border-radius: 12px; background: var(--wz-surface, rgba(255,255,255,.06)); }
+.osu-sheet-work li { line-height: 1.4; overflow-wrap: anywhere; }
+.osu-sheet-work li + li { margin-top: 4px; }
+@media (max-width: 480px) {
+  .osu-sheet-act { flex-direction: column-reverse; align-items: stretch; }
+  .osu-sheet-act .wz-button { width: 100%; min-height: 44px; }
+  .osu-sheet-act .wz-button.osu-alt { margin-right: 0; }
+}
 @media (max-width: 599px) {
   dialog.wz-sheet.osu-sheet { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; padding: 6px 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
   .osu-sheet .wz-sheet-grip { display: block; width: 40px; height: 5px; margin: 4px auto 10px; border-radius: 3px; background: var(--wz-border, var(--line-2)); touch-action: none; }

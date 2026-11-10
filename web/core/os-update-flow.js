@@ -34,7 +34,7 @@
   const mac = () => st()?.by_host === true;
   const OS = 'WizardOS';
   const TAKES = 'Usually 5–15 minutes';
-  const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1';
+  const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1';
   const ls = {
     get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (_) { return null; } },
     set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
@@ -67,7 +67,8 @@
     const h = hu(), f = flow();
     let u = null;
     if (h && ACTIVE.includes(h.phase)) u = { target: h.target, phase: h.phase, since: h.at * 1000 };
-    else if (s.host_pending) u = { target: s.host_pending.target || s.latest, phase: 'pending' };
+    // A request that waits for Wizard to finish (when_idle) isn't an update yet: Wizard stays usable meanwhile.
+    else if (s.host_pending && !s.host_pending.when_idle) u = { target: s.host_pending.target || s.latest, phase: 'pending' };
     else if (s.installing) u = { target: s.latest, phase: 'updating' };
     if (f) {
       const ended = h && h.phase === 'done' && h.target === f.target && h.at * 1000 >= f.since - 120e3;
@@ -103,23 +104,24 @@
 
   // ---- the sheets ----
   let sheet = null;
-  function ask({ title, body, yes, no, onYes, onNo }) {
+  function ask({ title, body, yes, no, alt, onYes, onNo, onAlt }) {
     if (sheet) { try { sheet.close(); } catch (_) {} }
     const d = document.createElement('dialog');
     d.className = 'wz-sheet osu-sheet';
     const id = 'osu-' + Math.random().toString(36).slice(2, 8);
     d.setAttribute('aria-labelledby', id);
-    d.innerHTML = `<h2 id="${id}">${esc(title)}</h2>${body}<div class="osu-sheet-act"><button type="button" class="wz-button secondary" data-osu-no>${esc(no)}</button><button type="button" class="wz-button" data-osu-yes>${esc(yes)}</button></div>`;
+    d.innerHTML = `<h2 id="${id}">${esc(title)}</h2>${body}<div class="osu-sheet-act">${alt ? `<button type="button" class="wz-button quiet osu-alt" data-osu-alt>${esc(alt)}</button>` : ''}<button type="button" class="wz-button secondary" data-osu-no>${esc(no)}</button><button type="button" class="wz-button" data-osu-yes>${esc(yes)}</button></div>`;
     document.body.appendChild(d);
     let chose = '';
     d.addEventListener('click', e => {
-      if (e.target.closest('[data-osu-yes]')) chose = 'yes'; else if (e.target.closest('[data-osu-no]')) chose = 'no'; else return;
+      if (e.target.closest('[data-osu-yes]')) chose = 'yes'; else if (e.target.closest('[data-osu-no]')) chose = 'no';
+      else if (e.target.closest('[data-osu-alt]')) chose = 'alt'; else return;
       d.close();
     });
     d.addEventListener('close', () => {
       if (sheet === d) sheet = null;
       d.remove();
-      if (chose === 'yes') onYes?.(); else onNo?.(chose === 'no' ? 'no' : 'dismissed');
+      if (chose === 'yes') onYes?.(); else if (chose === 'alt') onAlt?.(); else onNo?.(chose === 'no' ? 'no' : 'dismissed');
     });
     sheet = d;
     if (window.WzSheet?.open) window.WzSheet.open(d); else d.showModal();
@@ -127,21 +129,65 @@
   }
   const p = (t, small) => `<p class="osu-sheet-p">${esc(t)}</p>${small ? `<p class="osu-sheet-note">${esc(small)}</p>` : ''}`;
 
+  // What Wizard is working on that the update would stop (App Manager waiting_for), as words.
+  const work = s => (Array.isArray(s?.waiting_for) ? s.waiting_for : []).map(w => String(w?.name || 'Something')).filter(Boolean);
+  const workList = names => `<ul class="osu-sheet-work">${names.slice(0, 3).map(n => `<li>${esc(n)}</li>`).join('')}${
+    names.length > 3 ? `<li>and ${names.length - 3} more</li>` : ''}</ul>`;
+  const them = n => n === 1 ? 'it' : 'them';
+  function busySheet(t, names) {
+    ask({ title: names.length === 1 ? 'Wizard is still working on something' : `Wizard is still working on ${names.length} things`,
+      body: workList(names) + p(`Updating now would stop ${them(names.length)}.`,
+        `Update when they finish starts the update by itself as soon as Wizard is done. You can also update any time in Settings.`),
+      yes: names.length === 1 ? 'Update when it finishes' : 'Update when they finish', alt: 'Update anyway', no: 'Cancel',
+      onYes: () => whenIdle(t), onAlt: () => start(t, { anyway: true }) });
+  }
+  async function whenIdle(t) {
+    try {
+      const d = await U().post({ action: 'apply', when_idle: true });
+      if (d && typeof d === 'object' && 'update_available' in d) U().state = d;
+      if (d?.host_pending || d?.when_idle) toast('✓', `${OS} ${t} updates when Wizard has finished`);
+      else if (d?.host_pending === null && !d?.waiting) start(t);       // it finished meanwhile
+      else toast('!', d?.note || d?.error || 'Couldn’t ask for the update');
+    } catch (e) { toast('!', e?.message || 'Couldn’t reach the App Manager'); }
+    render();
+  }
+  function answerWait(action, text) {
+    U().post({ action }).then(d => { if (d && 'update_available' in d) U().state = d; toast('✓', text); })
+      .catch(e => toast('!', e?.message || 'Couldn’t reach the App Manager')).finally(render);
+  }
+  // Asked again after 6 hours of waiting (once per request): the owner's three answers.
+  function askAgainSheet(force = false) {
+    const s = st(), w = s?.when_idle;
+    if (!w || updating() || (!force && (!w.asked || ls.get(ASKED) === w.requested_at))) return;
+    ls.set(ASKED, w.requested_at);
+    const names = work(s);
+    ask({ title: `Wizard is still busy`,
+      body: (names.length ? workList(names) : '') + p(`${OS} ${w.target} has been waiting since ${new Date(w.requested_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} for Wizard to finish.`,
+        'Stop reminding me keeps waiting without asking again. Cancel keeps the update ready in Settings.'),
+      yes: 'Update now', alt: 'Stop reminding me', no: 'Cancel',
+      onYes: () => start(w.target, { anyway: true }),
+      onAlt: () => answerWait('when_idle_quiet', `${OS} updates when Wizard has finished`),
+      onNo: why => { if (why === 'no') answerWait('when_idle_cancel', 'Cancelled · You can update any time in Settings'); } });
+  }
+
   function confirm() {
     const s = st(); if (!s || !mac() || updating()) return;
     if (!s.update_available || s.unpinned || !s.latest) { toast('✓', `${OS} is up to date`); return; }
     const t = s.latest;
+    const names = work(s);
+    if (names.length) { busySheet(t, names); return; }
     ask({ title: `Update ${OS} to ${t}?`,
       body: p(`Wizard restarts and is away for a while (${TAKES.toLowerCase()}). Your chats and files stay as they are, and your Mac backs up WizardOS first, to go back to if anything goes wrong.`,
               'Sending messages pauses until it’s done. You can also update any time in Settings.'),
       yes: 'Update now', no: 'Cancel', onYes: () => start(t) });
   }
-  async function start(target) {
+  async function start(target, extra = {}) {
     ls.set(FLOW, { target, since: Date.now() }); ls.set(LATER, null);
     maxStep = 0; stepFor = target; render();
     try {
-      const d = await U().post({ action: 'apply' });
+      const d = await U().post({ action: 'apply', ...extra });
       if (d && typeof d === 'object' && 'update_available' in d) U().state = d;
+      if (d?.waiting) { ls.set(FLOW, null); render(); busySheet(target, work(d)); return; }   // work started meanwhile
       if (!d?.host_pending && !d?.started) { ls.set(FLOW, null); toast('!', d?.note || d?.error || `${OS} is up to date`); }
     } catch (e) { ls.set(FLOW, null); toast('!', e?.message || 'Couldn’t reach the App Manager'); }
     render(); fastPoll();
@@ -173,6 +219,9 @@
       return { key: 'hu' + h.at, text: `${OS} updates in ${mins} min`, later: 'Not tonight', laterAct: 'postpone', go: 'Update now', act: 'now' };
     }
     const s = st();
+    const w = s?.when_idle;
+    if (w && s?.update_available && !s.installing)
+      return { key: 'wi' + w.requested_at, text: `${OS} updates when Wizard finishes`, go: 'Options', act: 'waitopts' };
     if (!s?.update_available || s.unpinned || !s.latest || s.installing || ls.get(LATER) === s.latest) return null;
     return { key: 'rd' + s.latest, text: s.mode === 'auto' ? `${OS} ${s.latest} installs tonight` : `${OS} ${s.latest} is ready`,
       later: 'Later', laterAct: 'later', go: 'Update now', act: 'confirm' };
@@ -202,6 +251,7 @@
     else if (a === 'confirm') confirm();
     else if (a === 'now') { const h = headsUp(); if (h) start(h.target || s?.latest); }
     else if (a === 'postpone') postpone();
+    else if (a === 'waitopts') askAgainSheet(true);
     else if (a === 'details' && r) details(r);
     else if (a === 'x' && r) ls.set(SEEN, r.id);
     render();
@@ -272,7 +322,7 @@
     if (!U() || !st()) return;
     if (!mac()) { renderPanel(null); renderBanner(); return; }
     const u = updating();
-    renderPanel(u); renderBanner(); headsUpSheet();
+    renderPanel(u); renderBanner(); headsUpSheet(); askAgainSheet();
     if (u && !fastT) fastPoll();
     if (!u) fastT = 0;
   }
