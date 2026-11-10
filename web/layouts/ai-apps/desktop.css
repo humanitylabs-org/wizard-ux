@@ -121,6 +121,18 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-q { flex: 1; min-width: 0
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-q::placeholder { color: var(--aad-ink-2); opacity: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-q::-webkit-search-cancel-button { -webkit-appearance: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-cancel { flex: none; height: 36px; padding: 0 8px; border: 0; border-radius: 18px; background: none; cursor: pointer; color: var(--aad-ink); font: 600 0.8125rem / 1 var(--wz-font-ui); }
+/* agent choices under the header: All + each agent, small pills (Appearance v1 tokens, no literal colours) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-agents { flex: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 6px 16px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-agents[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ag {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 28px; padding: 0 10px; margin: 0; box-sizing: border-box; cursor: pointer;
+  border: 0; border-radius: 14px; background: none; color: var(--aad-ink-2); font: 500 0.8125rem / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ag:hover { background: var(--aad-hover); color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ag.is-on { background: var(--aad-hover); color: var(--aad-ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aad-ink) 22%, transparent); font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ag:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ag-d { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--aad-ag, var(--aad-ink-2)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ag-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 12px; scrollbar-width: thin; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-lab { margin: 12px 8px 4px; color: var(--aad-ink-2); font: 600 0.8125rem / 1.4 var(--wz-font-ui); }
 /* a section header (round 5): the Recents label's look, a button folding its section, a small chevron after the word */

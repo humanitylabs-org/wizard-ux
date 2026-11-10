@@ -2731,3 +2731,69 @@ test('desktop open chat stays on the same thread through Ready → Working → R
   assert.equal(w.st.newChats, news + 1, 'manual ✕ still closes');
   off();
 });
+
+/* Agent choices in the AI apps sidebar (James, 10 Nov 2026): with more than one agent the sidebar shows All + each agent
+ * under the header, riding Chats' own Focus (api.agents.setFocus -> setFocus / winAgent). One agent: no control. */
+const agentsWorld = async (agents, focus = { id: '' }) => {
+  const w = world({ shell: 'desktop' }), store = {}, keys = [], calls = [];
+  Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n, storage: { get: k => k in store ? store[k] : null, set: (k, v) => { store[k] = v; } },
+    keys: { on: h => { keys.push(h); return () => {}; }, guide: () => () => {} }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk() {}, command() {} },
+    desk: { settings() {}, home() {} } });
+  w.api.apps.inset = () => () => {};
+  const everyone = JSON.parse(JSON.stringify(w.st.sessions));
+  w.api.agents = { list: () => [{ id: 'hermes', label: 'Oscar', main: true }], focus: () => ({ id: focus.id, agents }),
+    setFocus: id => { calls.push(id); focus.id = id; w.st.sessions = id ? { working: [], ready: [{ id: 'p1', title: 'Philosopher chat', kind: 'ready', unread: false, pinned: false, actions: ['pin', 'rename'] }], archive: [] } : everyone; return true; } };
+  const sessionsSeen = [];
+  const all = w.api.sessions.list; w.api.sessions.list = o => { sessionsSeen.push(o); return all(); };
+  (await layout()).default(w.api);
+  return { ...w, calls, sessionsSeen, focus };
+};
+const TWO = [{ id: 'hermes', label: 'Oscar', colour: '#7aa2ff', private: false, main: true }, { id: 'philosopher', label: 'Philosopher', colour: '#c58bff', private: false, main: false }];
+
+test('agent choices: with a second agent the sidebar offers All + each agent under the header; All is on', async () => {
+  const w = await agentsWorld(TWO);
+  const row = w.q('.aad-agents');
+  assert.ok(row && !row.hidden, 'shown');
+  assert.deepEqual(row.children.map(b => b.textContent), ['All', 'Oscar', 'Philosopher']);
+  assert.deepEqual(row.children.map(b => b.getAttribute('aria-pressed')), ['true', 'false', 'false'], 'All is the one on');
+  const panel = w.q('.aad-panel').children.map(c => c.className.split(' ')[0]);
+  assert.ok(panel.indexOf('aad-sh') < panel.indexOf('aad-agents') && panel.indexOf('aad-agents') < panel.indexOf('aad-scroll'), 'between the header and the list');
+  assert.ok(w.sessionsSeen.some(o => o?.focused === true), 'the sidebar reads the list Focus decides (the stock Chats rule)');
+});
+
+test('agent choices: a tap sets Chats\' Focus on that agent, the list follows it, All returns; the same one again does nothing', async () => {
+  const w = await agentsWorld(TWO);
+  const tap = name => w.q('.aad-agents').children.find(b => b.textContent === name).dispatchEvent(new FakePointerEvent('click'));
+  tap('Philosopher');
+  assert.deepEqual(w.calls, ['philosopher'], 'one setFocus with that agent, through the shell API (no routing of its own)');
+  assert.deepEqual(w.q('.aad-agents').children.map(b => b.getAttribute('aria-pressed')), ['false', 'false', 'true'], 'painted on the same tap');
+  assert.match(w.q('.aad-scroll').textContent, /Philosopher chat/, 'its chats are listed');
+  assert.doesNotMatch(w.q('.aad-scroll').textContent, /Busy one|Ready one/, 'and not the other agents\'');
+  tap('Philosopher'); assert.equal(w.calls.length, 1, 'again = no-op');
+  tap('All'); assert.deepEqual(w.calls, ['philosopher', ''], 'All clears the Focus');
+  assert.deepEqual(w.q('.aad-agents').children.map(b => b.getAttribute('aria-pressed')), ['true', 'false', 'false']);
+  assert.match(w.q('.aad-scroll').textContent, /Ready one/, 'the normal list is back');
+});
+
+test('agent choices: one agent (or none known) = no control at all', async () => {
+  for (const agents of [[TWO[0]], []]) {
+    const w = await agentsWorld(agents);
+    assert.ok(!w.q('.aad-agents') || w.q('.aad-agents').hidden, 'hidden');
+    assert.equal(w.q('.aad-agents')?.children.length || 0, 0);
+  }
+  // a shell that has no agent Focus (the phone adapter) draws nothing and never throws
+  const w = world({ shell: 'desktop' }); Object.assign(w.api, { asset: n => n, storage: { get: () => null, set() {} }, keys: { on: () => () => {}, guide: () => () => {} }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk() {}, command() {} }, desk: { settings() {}, home() {} } });
+  w.api.apps.inset = () => () => {}; (await layout()).default(w.api);
+  assert.ok(!w.q('.aad-agents') || w.q('.aad-agents').hidden);
+});
+
+test('agent choices: the shell side reuses Chats\' Focus (no second router) and the layout API exposes it', () => {
+  const host = noComments(read('web/core/skin-host.js')), desk = noComments(read('web/desktop/desktop.js')), chats = read('web/core/chats.js');
+  assert.match(host, /setFocus: id => live\(\) && shell\.agentFocusSet/);
+  assert.match(desk, /agentFocusSet: id => \{ if \(id\) \{ void openAgentChats\(id\); return true; \} const w = findWin\(mainChats\); return !!w && CHATS\.setFocus\(w, null\); \}/, 'picking = openAgentChats (CHATS.setFocus), All = setFocus(null)');
+  assert.match(chats, /function focusRows\(w\) \{\s*if \(!focusOf\(w\)\) return null;[\s\S]*?focusMatches\(w, s\)/, 'the list is Chats\' own focusMatches');
+  const css = read('web/layouts/ai-apps/desktop.css');
+  const agentCss = css.split('\n').filter(l => /\.aad-ag/.test(l)).join('\n');
+  assert.ok(agentCss && !/#[0-9a-f]{3,8}\b|rgba?\(/i.test(agentCss.replace(/\/\*[\s\S]*?\*\//g, '')), 'tokens only, no literal colours');
+  assert.ok(!/background:[^;]*transparent[^;]*;[^}]*\.aad-agents/.test(css), 'not a floating panel');
+});
