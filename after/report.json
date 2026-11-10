@@ -1,0 +1,366 @@
+{
+ "origin": "https://chat-channel-position.test",
+ "web": "/home/builder/work/ux-1263/web",
+ "cases": [
+  {
+   "stem": "phone-nebula-read",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 11200,
+    "gap": 0,
+    "h": 11765,
+    "client": 565,
+    "postY": -998,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 42
+   },
+   "last": {
+    "top": 12198,
+    "gap": 0,
+    "h": 12737,
+    "client": 539,
+    "postY": -1024,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 109,
+    "bar": 42
+   },
+   "grewBy": 972,
+   "waitingAtStart": 120,
+   "maxGap": 0,
+   "picked": {
+    "key": "post:qa-p109",
+    "y": 63
+   },
+   "backY": 64,
+   "pass": true
+  },
+  {
+   "stem": "phone-nebula-unread",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 10244,
+    "gap": 1102,
+    "h": 11885,
+    "client": 539,
+    "postY": 77,
+    "lineY": 48,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 119,
+    "bar": 42
+   },
+   "last": {
+    "top": 11259,
+    "gap": 1102,
+    "h": 12900,
+    "client": 539,
+    "postY": 78,
+    "lineY": 48,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 108,
+    "bar": 42
+   },
+   "grewBy": 1015,
+   "waitingAtStart": 119,
+   "lineYs": [
+    48,
+    49
+   ],
+   "picked": {
+    "key": "post:qa-p099",
+    "y": 156
+   },
+   "backY": 157,
+   "pass": true
+  },
+  {
+   "stem": "phone-nebula-off",
+   "errors": [],
+   "refused": [],
+   "newLines": 0,
+   "pass": true
+  },
+  {
+   "stem": "phone-grove-read",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 11200,
+    "gap": 0,
+    "h": 11765,
+    "client": 565,
+    "postY": -998,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 42
+   },
+   "last": {
+    "top": 12155,
+    "gap": 0,
+    "h": 12694,
+    "client": 539,
+    "postY": -1024,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 110,
+    "bar": 42
+   },
+   "grewBy": 929,
+   "waitingAtStart": 120,
+   "maxGap": 0,
+   "picked": {
+    "key": "post:qa-p109",
+    "y": 64
+   },
+   "backY": 65,
+   "pass": true
+  },
+  {
+   "stem": "phone-grove-unread",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 10158,
+    "gap": 1076,
+    "h": 11799,
+    "client": 565,
+    "postY": 77,
+    "lineY": 48,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 42
+   },
+   "last": {
+    "top": 11087,
+    "gap": 1102,
+    "h": 12728,
+    "client": 539,
+    "postY": 77,
+    "lineY": 48,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 110,
+    "bar": 42
+   },
+   "grewBy": 929,
+   "waitingAtStart": 120,
+   "lineYs": [
+    48,
+    48
+   ],
+   "picked": {
+    "key": "post:qa-p099",
+    "y": 156
+   },
+   "backY": 156,
+   "pass": true
+  },
+  {
+   "stem": "phone-grove-off",
+   "errors": [],
+   "refused": [],
+   "newLines": 0,
+   "pass": true
+  },
+  {
+   "stem": "desktop-nebula-read",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 11096,
+    "gap": 0,
+    "h": 11763,
+    "client": 667,
+    "postY": -896,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 40
+   },
+   "last": {
+    "top": 11776,
+    "gap": 0,
+    "h": 12443,
+    "client": 667,
+    "postY": -896,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 112,
+    "bar": 40
+   },
+   "grewBy": 680,
+   "waitingAtStart": 120,
+   "maxGap": 0,
+   "picked": {
+    "key": "post:qa-p108",
+    "y": 94
+   },
+   "backY": 93,
+   "pass": true
+  },
+  {
+   "stem": "desktop-nebula-unread",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 10158,
+    "gap": 972,
+    "h": 11797,
+    "client": 667,
+    "postY": 75,
+    "lineY": 46,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 40
+   },
+   "last": {
+    "top": 10837,
+    "gap": 973,
+    "h": 12477,
+    "client": 667,
+    "postY": 76,
+    "lineY": 47,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 112,
+    "bar": 40
+   },
+   "grewBy": 680,
+   "waitingAtStart": 120,
+   "lineYs": [
+    46,
+    47
+   ],
+   "picked": {
+    "key": "post:qa-p099",
+    "y": 155
+   },
+   "backY": 155,
+   "pass": true
+  },
+  {
+   "stem": "desktop-nebula-off",
+   "errors": [],
+   "refused": [],
+   "newLines": 0,
+   "pass": true
+  },
+  {
+   "stem": "desktop-grove-read",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 11096,
+    "gap": 0,
+    "h": 11763,
+    "client": 667,
+    "postY": -896,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 40
+   },
+   "last": {
+    "top": 12155,
+    "gap": 0,
+    "h": 12822,
+    "client": 667,
+    "postY": -897,
+    "lineY": null,
+    "lineNext": null,
+    "lines": 0,
+    "posts": 120,
+    "waiting": 108,
+    "bar": 40
+   },
+   "grewBy": 1059,
+   "waitingAtStart": 120,
+   "maxGap": 0,
+   "picked": {
+    "key": "post:qa-p108",
+    "y": 94
+   },
+   "backY": 94,
+   "pass": true
+  },
+  {
+   "stem": "desktop-grove-unread",
+   "errors": [],
+   "refused": [],
+   "first": {
+    "top": 10158,
+    "gap": 972,
+    "h": 11797,
+    "client": 667,
+    "postY": 75,
+    "lineY": 46,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 120,
+    "bar": 40
+   },
+   "last": {
+    "top": 11172,
+    "gap": 973,
+    "h": 12812,
+    "client": 667,
+    "postY": 76,
+    "lineY": 47,
+    "lineNext": "post:qa-p104",
+    "lines": 1,
+    "posts": 120,
+    "waiting": 109,
+    "bar": 40
+   },
+   "grewBy": 1015,
+   "waitingAtStart": 120,
+   "lineYs": [
+    46,
+    47
+   ],
+   "picked": {
+    "key": "post:qa-p099",
+    "y": 155
+   },
+   "backY": 155,
+   "pass": true
+  },
+  {
+   "stem": "desktop-grove-off",
+   "errors": [],
+   "refused": [],
+   "newLines": 0,
+   "pass": true
+  }
+ ]
+}
