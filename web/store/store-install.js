@@ -1,5 +1,6 @@
 /* Store's exact release install transaction, shared with the app setup checklist.
  * IDs select a server-authorized release; never accept arbitrary install URLs or refs. */
+<<<<<<< HEAD
 // The owner-gated App Manager request every Store write uses: same origin, never cached, JSON with the Store marker.
 export function ownerRequest(path, { method = 'GET', body, base = new URL('../', import.meta.url), fetchImpl = fetch, signal } = {}) {
   const write = method !== 'GET';
@@ -8,6 +9,9 @@ export function ownerRequest(path, { method = 'GET', body, base = new URL('../',
 }
 // A Beta row (a private GitHub repository shared with the signed-in account) installs through the existing link
 // selection: the App Manager checks the exact repository and commit with this Wizard's GitHub sign-in.
+=======
+// Beta is discovery, not an Alpha subscription. Keep this shared helper identical to UX#1188.
+>>>>>>> origin/fix/store-beta-link-update-compatibility
 export const selectionSource = source => source === 'beta' ? 'link' : source;
 export async function installRelease(a, { base = new URL('../', import.meta.url) } = {}) {
   const selection = { source: selectionSource(a.source), repo: a.repo, commit: a.commit, operation: a.operation || 'install' };
