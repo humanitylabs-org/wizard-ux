@@ -1,0 +1,300 @@
+{
+  "origin": "https://chat-channels.test",
+  "web": "<repo>/web",
+  "cases": [
+    {
+      "stem": "phone-nebula-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 48,
+      "pass": true
+    },
+    {
+      "stem": "phone-nebula-on",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 48,
+      "channelLine": "Launch checklist\n5h\n# Launch",
+      "channels": [
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "back": [
+        "thread",
+        "channel",
+        "home"
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794301677642_655591d7a109"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "phone-grove-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 48,
+      "pass": true
+    },
+    {
+      "stem": "phone-grove-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 48,
+      "channelLine": "Launch checklist\n5h\n# Launch",
+      "channels": [
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "back": [
+        "thread",
+        "channel",
+        "home"
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794301683865_6bcbffb5c18a"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "desktop-nebula-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 62,
+      "pass": true
+    },
+    {
+      "stem": "desktop-nebula-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 62,
+      "channelLine": "Launch checklist\n5h\n# Launch \u00b7 Needs you: Pick a date",
+      "channels": [
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "back": [
+        "thread",
+        "filter",
+        ""
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794301688298_57d12d3146a9"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "desktop-grove-off",
+      "errors": [],
+      "refused": [],
+      "writes": [],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats"
+        ]
+      },
+      "activityRowHeight": 62,
+      "pass": true
+    },
+    {
+      "stem": "desktop-grove-on",
+      "errors": [],
+      "refused": [
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions",
+          "reason": "unexpected-write"
+        }
+      ],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PATCH",
+          "path": "/wizard/v1/ui-preferences"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/api/sessions"
+        }
+      ],
+      "tweaks": {
+        "attr": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+        "state": [
+          "wizard/unified-inbox",
+          "wizard/desktop-chats",
+          "wizard/chat-channels"
+        ]
+      },
+      "activityRowHeight": 62,
+      "channelLine": "Launch checklist\n5h\n# Launch \u00b7 Needs you: Pick a date",
+      "channels": [
+        "launch",
+        "voice",
+        "__general__"
+      ],
+      "channelRowHeight": 44,
+      "recent": [
+        "qa-l2",
+        "qa-l1"
+      ],
+      "feedOpen": [
+        "qa-l1",
+        "qa-l2"
+      ],
+      "back": [
+        "thread",
+        "filter",
+        ""
+      ],
+      "filed": [
+        "qa-v1",
+        "wizard_1794301692895_94f858fb5fa4"
+      ],
+      "pass": true
+    }
+  ]
+}
