@@ -414,7 +414,8 @@ window.WosChatPower = function chatPower(A) {
   function failureHtml(w, s) {
     // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
     if (s?.backgroundResult && !s.agent && backgroundOn()) return backgroundHtml(w, s);
-    if (!M || !failedShown(s)) return '';
+    // Issue 1235: another app owns this chat, so no retry can ever deliver; the thread shows the clear card instead.
+    if (!M || !failedShown(s) || M.foreignApp?.(s)) return '';
     const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
     const req = requestOf(w, s);
     return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, retryLabel: retrying.get(s.id), canRetry: !!req });
@@ -445,6 +446,8 @@ window.WosChatPower = function chatPower(A) {
   const retrying = new Map();
   async function retryThread(wid, sid, o, sourceId, alive) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
+    // Issue 1235: Hermes refuses every reply into a chat another app owns; a resend would only fail the same way.
+    if (M?.foreignApp?.(s)) { toast('!', `This chat lives in ${M.foreignApp(s)} · reply there`, 2600); return false; }
     if (retrying.has(sid) || M?.pending?.has(sid) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
     const savedId = sourceId || s.retryRunId;
     const wasWaiting = s.status === 'queued' && s.queueReason === 'provider_access';
@@ -550,6 +553,8 @@ window.WosChatPower = function chatPower(A) {
     const busy = E.busy.get(s.id);
     const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
     if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
+    // Issue 1235: a chat another app owns can't be retried from here; only Dismiss.
+    if (M?.foreignApp?.(s)) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b"><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
     return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {

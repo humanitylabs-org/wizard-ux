@@ -18,6 +18,8 @@
  *   WosModels.setThreadModel(sid, o) → Promise (throws on failure)
  *   WosModels.sheetHtml(o)           → the picker sheet
  *   WosModels.failureHtml(o)         → the recovery panel for a failed thread
+ *   WosModels.foreignApp(s)          → 'Telegram', 'Slack' … when another app owns the chat (replies are refused), else ''
+ *   WosModels.refusal(s)             → the plain words for that refusal, else ''
  */
 (() => {
   'use strict';
@@ -106,6 +108,15 @@
     if (!make) return null;
     return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
   }
+  // Issue 1235: a chat started in a messaging app (its Hermes session `source`) belongs to that app's connection, and
+  // Hermes refuses every reply WizardOS sends into it (permission_denied, gateway/session_api_turn.py: only api_server
+  // and bot_room sessions take API turns). The refusal is final, so the shell offers no Retry and says so at once.
+  // When replies to these chats work (wizard-agent-service issue 427), this is the one place to change.
+  const FOREIGN_APPS = { telegram: 'Telegram', slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', whatsapp_cloud: 'WhatsApp',
+    signal: 'Signal', matrix: 'Matrix', mattermost: 'Mattermost', email: 'Email', sms: 'Messages', bluebubbles: 'iMessage',
+    feishu: 'Feishu', dingtalk: 'DingTalk', wecom: 'WeCom', weixin: 'WeChat', qqbot: 'QQ' };
+  const foreignApp = s => (s && typeof s.source === 'string' && Object.prototype.hasOwnProperty.call(FOREIGN_APPS, s.source.toLowerCase()) ? FOREIGN_APPS[s.source.toLowerCase()] : '');
+  const refusal = s => { const app = foreignApp(s); return app ? `This chat was started in ${app}, so WizardOS can’t add to it. Your message is saved. Reply in ${app}, or start a new chat.` : ''; };
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
   const primaryFamilies = () => connectorOn() ? CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })))
     : ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
@@ -301,6 +312,8 @@
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider, keep = true) { return visibleChoices(shown(M.options, model, provider, keep), model, provider); },
     runError,
+    foreignApp,
+    refusal,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
     short(model, provider) {
       if (!model) return '';
