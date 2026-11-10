@@ -113,7 +113,7 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .d-stats b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d-stats small { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .d-sec { padding: 20px 20px 0; }
-.d-sec h3 { margin: 0 0 10px; font-size: 19px; font-weight: 800; }
+.d-sec h3 { margin: 0 0 10px; font-size: 1.1875rem; font-weight: 800; }
 .d-sum { margin: 0; font-size: 17px; line-height: 1.45; }
 .d-how { margin: 8px 0 0; font-size: 14px; color: var(--ink-2); }
 .d-note { margin: -4px 0 10px; font-size: 13px; color: var(--ink-3); }
@@ -187,3 +187,29 @@ html[data-color-scheme="light"] .src-list dd b { color: var(--ink); }
 .get[data-installing] .prog-bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 3px; background: var(--wz-accent, var(--violet)); animation: prog-sweep 1.3s ease-in-out infinite; }
 @keyframes prog-sweep { from { left: -40%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .get[data-installing] .prog-bar::after { animation: none; left: 0; width: 100%; opacity: .6; } }
+
+/* Sources → GitHub sign-in. One opaque panel on the sheet layer; Appearance v1 tokens only (dark fallbacks standalone). */
+.sources { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; }
+.sources + .refresh { margin-left: 0; }
+.sheet-layer.gh-sheet { min-height: 70vh; }
+.gh-panel { margin: 18px 0 0; padding: 20px; border-radius: 16px; border: 1px solid var(--line); color: var(--ink);
+  background: linear-gradient(color-mix(in srgb, var(--ink) 8%, transparent), color-mix(in srgb, var(--ink) 8%, transparent)), var(--wz-panel); }
+.gh-panel h3 { margin: 0 0 12px; font-size: 1.1875rem; font-weight: 800; }
+.gh-panel .d-sum { font-size: 1rem; }
+.gh-panel .d-note { margin: 10px 0 0; color: var(--ink-2); line-height: 1.5; }
+.gh-panel b { font-weight: 800; overflow-wrap: anywhere; }
+.gh-panel .link-error { margin: 0 0 14px; }
+.gh-go, a.gh-go { min-height: 44px; padding: 10px 22px; height: auto; text-decoration: none; margin-top: 16px; cursor: pointer; }
+.gh-go:disabled { opacity: .65; cursor: wait; }
+.gh-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
+.gh-acts .gh-go { margin-top: 12px; }
+.gh-btn { min-height: 44px; margin-top: 12px; padding: 0 18px; border-radius: 99px; font: inherit; font-size: .9375rem; font-weight: 700; cursor: pointer; color: var(--ink); background: transparent; border: 1px solid var(--line); }
+.gh-btn:disabled { opacity: .65; cursor: wait; }
+.gh-panel :is(.gh-btn, .gh-go):focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+.gh-code { margin: 16px 0 4px; padding: 16px 12px; border: 1px dashed var(--line); border-radius: 12px; text-align: center; user-select: all; -webkit-user-select: all;
+  font: 800 2.125rem/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .16em; overflow-wrap: anywhere; }
+.gh-wait { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: var(--ink-2); font-size: .875rem; }
+.gh-spin { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--wz-accent, var(--violet)) 25%, transparent); border-top-color: var(--wz-accent, var(--violet)); animation: gh-spin .8s linear infinite; }
+@keyframes gh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gh-spin { animation: none; } }
+@media (min-width: 720px) { .gh-panel { max-width: 560px; } }

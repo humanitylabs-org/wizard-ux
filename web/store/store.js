@@ -6,6 +6,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease} from './store-install.js';
 import {removalPlan, removeInstalledApp, canRemove, confirmView} from './store-remove.js';
+import {githubStatus, githubStart, githubSignOut, githubSheet, normalizeStatus, shouldPoll} from './store-github.js';
 await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
 import {sourceLabel, installedOnlyApps} from './store-source.js';
@@ -37,7 +38,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null,
+    gh: { status: { state: 'unknown' }, loading: false, busy: '', error: '', copied: false, unreachable: false, seq: 0, sawPending: false, pollT: 0 } };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -243,6 +245,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       <div class="mc-list">${Setup.html(routerId(a), c.data, rctx())}</div>${Setup.controls(routerId(a), c.data, { ...rctx(), name: a.name, store: true })}</section>`;
   }
   function showSheet(k) {
+    $('sheet').classList.toggle('gh-sheet', k === '@github');
+    if (k === '@github') return showGithubSheet();
     if (k === '@link') return showLinkSheet();
     if (k.startsWith('@remove:')) return showRemoveSheet();
     $('sheet').setAttribute('aria-label','Models and connections');
@@ -284,6 +288,73 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       ${l.error?`<div class="link-error" role="alert">${a?'Installation not confirmed:':"This install link isn't valid:"} ${esc(l.error)}</div>`:''}
       ${a?`<section class="d-sec"><p class="sheet-source">${chip(a,false)}</p><p class="d-note">${a.catalog_source?'Also available in the catalog.':'Not in the catalog.'} ${esc(s.detail || 'Shared by a link.')}</p><p class="d-sum">${esc(a.summary)}</p><dl class="info"><div><dt>Repository</dt><dd>${esc(a.repo)}</dd></div><div><dt>Commit</dt><dd>${esc(a.commit)}</dd></div><div><dt>Kind</dt><dd>${esc(kindOf(a).one)}</dd></div></dl><p class="d-note">Only install apps from people you trust. The App Manager checks this exact release before installing.</p></section><div class="mc-done">${S.busy.has(a.id)?'<span class="get wait" role="status">Installing…</span>':['get','update','switch'].includes(status(a))?`<button type="button" class="get big" data-link-install>${status(a)==='get'?'Install':status(a)==='update'?'Update':'Switch to this release'}</button>`:action(a)}</div>`:''}`;
   }
+
+  /* ---------------- Sources: sign in to GitHub so private Beta apps show up (store-github.js) ---------------- */
+  const ghOpen = () => top() === 'sheet' && S.stack.at(-1).arg === '@github';
+  const ghSig = () => JSON.stringify([S.gh.status, S.gh.loading, S.gh.busy, S.gh.error, S.gh.copied, S.gh.unreachable]);
+  function showGithubSheet() {
+    $('sheet').classList.add('gh-sheet'); $('sheet').setAttribute('aria-label', 'Sources');
+    $('sheet').innerHTML = githubSheet(S.gh, { esc });
+    ghPoll();
+  }
+  // While a code is waiting: ask the App Manager every ~2 s (only on screen, only while visible), repaint only on change.
+  function ghPoll() {
+    clearTimeout(S.gh.pollT); S.gh.pollT = 0;
+    if (!ghOpen() || S.gh.busy || !shouldPoll(S.gh.status, document.hidden)) return;
+    S.gh.pollT = setTimeout(async () => { S.gh.pollT = 0; if (document.hidden || !ghOpen()) return; await ghRead(); ghPoll(); }, 2000);
+  }
+  function ghApply(st) {
+    const g = S.gh; g.status = st;
+    if (st.state !== 'pending') g.copied = false;
+    if (st.state === 'pending') g.sawPending = true;
+    // The sign-in just finished: the catalog reads the new credential on refresh, so Beta apps appear without a reload.
+    else if (st.state === 'signed_in' && g.sawPending) { g.sawPending = false; load(true); }
+    else if (st.state !== 'signed_in') g.sawPending = false;
+  }
+  async function ghRead() {
+    const g = S.gh, at = g.seq, before = ghSig();
+    try { const st = await githubStatus(); if (g.seq !== at) return; g.unreachable = false; g.error = ''; ghApply(st); }
+    catch (err) {
+      if (g.seq !== at) return;
+      // A failed first read says so; a failed poll keeps what is shown and tries again.
+      if (g.status.state === 'unknown') { g.unreachable = true; g.error = err.status === 404 ? err.message : ''; }
+    } finally { if (g.seq === at) { g.loading = false; if (ghOpen() && ghSig() !== before) showGithubSheet(); else ghPoll(); } }
+  }
+  function openSources() {
+    if (ghOpen()) return;
+    const g = S.gh; g.error = ''; g.copied = false; g.unreachable = false; g.loading = g.status.state === 'unknown';
+    push('sheet', '@github'); showGithubSheet(); window.scrollTo(0, 0);   // paints before any request
+    ghRead();
+  }
+  function ghRetry() { const g = S.gh; g.status = { state: 'unknown' }; g.unreachable = false; g.error = ''; g.loading = true; showGithubSheet(); ghRead(); }
+  async function ghStart() {
+    const g = S.gh; if (g.busy) return;
+    const at = ++g.seq; g.busy = 'start'; g.error = ''; showGithubSheet();   // "Getting your code…" on the tap's own frame
+    try { const st = await githubStart(); if (g.seq !== at) return; g.busy = ''; ghApply(st); }
+    catch (err) { if (g.seq !== at) return; g.busy = ''; g.error = err.message || 'Couldn’t start GitHub sign-in.'; if (g.status.state === 'unknown') g.status = normalizeStatus({ state: 'signed_out' }); }
+    finally { if (g.seq === at) { g.busy = ''; if (ghOpen()) showGithubSheet(); } }
+  }
+  async function ghSignOut() {
+    const g = S.gh; if (g.busy || g.status.state !== 'signed_in' || g.status.source === 'env') return;
+    const prev = g.status, at = ++g.seq;
+    g.status = normalizeStatus({ state: 'signed_out' }); g.busy = 'signout'; g.error = ''; g.sawPending = false; showGithubSheet();   // paint first
+    try { const st = await githubSignOut(); if (g.seq !== at) return; g.busy = ''; ghApply(st); if (st.state === 'signed_out') load(true); }
+    catch (err) { if (g.seq !== at) return; g.busy = ''; g.status = prev; toast('<b>Couldn’t sign out.</b><span>Try again.</span>'); }
+    finally { if (g.seq === at) { g.busy = ''; if (ghOpen()) showGithubSheet(); } }
+  }
+  async function ghCopy() {
+    const g = S.gh, code = g.status.user_code; if (!code) return;
+    g.copied = true; showGithubSheet();
+    try { await navigator.clipboard.writeText(code); }
+    catch (_) {
+      g.copied = false; showGithubSheet();
+      const el = $('sheet').querySelector('[data-gh-code]'); if (el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      toast('<b>Press and hold the code to copy it.</b>');
+    }
+  }
+  const ghWake = () => { if (ghOpen() && S.gh.status.state === 'pending' && !document.hidden) { ghRead(); ghPoll(); } };
+  document.addEventListener('visibilitychange', ghWake); addEventListener('focus', ghWake);
+
   /* ---------------- Remove app: review on the Store's sheet layer, one exact request, readback, then leave ---------------- */
   function showRemoveSheet() {
     const r = S.remove || {}, base = find(r.key), a = base ? selected(base) : {name:r.name};
@@ -368,6 +439,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (Setup.back()) return true;
     if (!S.stack.length) return false;
     const was = S.stack.pop(); render();
+    if (was.t === 'sheet' && was.arg === '@github') { clearTimeout(S.gh.pollT); S.gh.pollT = 0; S.gh.copied = false; $('sheet').classList.remove('gh-sheet'); }
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
     if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true); else if (under?.t === 'sheet') showSheet(under.arg);
@@ -438,6 +510,12 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     // This is a navigation layer, not a native dialog: its exposed padding and
     // surrounding Store canvas still dismiss the install layer through Back.
     if (top() === 'sheet' && (e.target === $('sheet') || e.target === $('app') || e.target === document.body)) { pop(); return; }
+    // The Sources sheet sits under the Store header: the quiet part of the header is outside it too.
+    if (ghOpen() && e.target.closest('.top') && !e.target.closest('button,input,a,label')) { pop(); return; }
+    if (e.target.closest('[data-gh-start]')) { ghStart(); return; }
+    if (e.target.closest('[data-gh-retry]')) { ghRetry(); return; }
+    if (e.target.closest('[data-gh-out]')) { ghSignOut(); return; }
+    if (e.target.closest('[data-gh-copy]')) { ghCopy(); return; }
     if (e.target.closest('[data-back]')) { pop(); return; }
     const sh = e.target.closest('[data-share]'); if(sh) { shareApp(find(sh.dataset.share)); return; }
     const li = e.target.closest('[data-link-install]'); if(li) { install(S.link?.app); return; }
@@ -466,6 +544,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   });
   $('q').addEventListener('input', () => search($('q').value));
   $('refresh').addEventListener('click',()=>load(true));
+  $('sources').addEventListener('click',openSources);
   const shellChanged=()=>{
     if(!S.loaded) return;
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
@@ -487,7 +566,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
-  window.__store = { openInstallLink: input => openInstallLink(typeof input === 'string' && input.startsWith('?') ? new URLSearchParams(input) : input), state: () => ({ loaded:S.loaded, busy:S.busy.size, layers: S.stack.map(x => x.t), removing: S.removing.size, apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
+  window.__store = { openInstallLink: input => openInstallLink(typeof input === 'string' && input.startsWith('?') ? new URLSearchParams(input) : input), state: () => ({ loaded:S.loaded, busy:S.busy.size, layers: S.stack.map(x => x.t), removing: S.removing.size, github: { state: S.gh.status.state, busy: S.gh.busy, polling: !!S.gh.pollT }, apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
   adoptAppearance('App Store');
   paint(); load();
   const initialLink=new URLSearchParams(location.search);
