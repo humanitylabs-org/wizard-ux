@@ -230,8 +230,8 @@
         open: id => { if (typeof id === 'string' && id) need().openAgent?.(id); },
         /* The agent choices of a layout that draws its own chat list: { id (the agent the main Chats is focused on, '' = All),
          * agents [{ id, label, colour, private, main }] } and focus(id) = Chats' own Focus on that agent ('' = All). */
-        focus: () => { const f = live() ? shell.agentFocus?.() : null; return Object.freeze({ id: typeof f?.id === 'string' ? f.id : '', agents: Object.freeze((Array.isArray(f?.agents) ? f.agents : []).map(x => Object.freeze({ ...x }))) }); },
-        setFocus: id => live() && shell.agentFocusSet ? !!shell.agentFocusSet(typeof id === 'string' ? id : '') : false,
+        focus: () => { const f = shell ? shell.agentFocus?.() : null; return Object.freeze({ id: typeof f?.id === 'string' ? f.id : '', agents: Object.freeze((Array.isArray(f?.agents) ? f.agents : []).map(x => Object.freeze({ ...x }))) }); },
+        setFocus: id => shell?.agentFocusSet ? !!shell.agentFocusSet(typeof id === 'string' ? id : '') : false,
       }),
       /* Voice: the orb's own recorder. talk(agent) records a message for that agent (none = the screen's own);
        * tap() is the orb's tap on a running take (send / resume); dictate() types into the focused field. */

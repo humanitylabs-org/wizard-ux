@@ -2789,11 +2789,43 @@ test('agent choices: one agent (or none known) = no control at all', async () =>
 
 test('agent choices: the shell side reuses Chats\' Focus (no second router) and the layout API exposes it', () => {
   const host = noComments(read('web/core/skin-host.js')), desk = noComments(read('web/desktop/desktop.js')), chats = read('web/core/chats.js');
-  assert.match(host, /setFocus: id => live\(\) && shell\.agentFocusSet/);
+  assert.match(host, /setFocus: id => shell\?\.agentFocusSet \? !!shell\.agentFocusSet\(/);
   assert.match(desk, /agentFocusSet: id => \{ if \(id\) \{ void openAgentChats\(id\); return true; \} const w = findWin\(mainChats\); return !!w && CHATS\.setFocus\(w, null\); \}/, 'picking = openAgentChats (CHATS.setFocus), All = setFocus(null)');
   assert.match(chats, /function focusRows\(w\) \{\s*if \(!focusOf\(w\)\) return null;[\s\S]*?focusMatches\(w, s\)/, 'the list is Chats\' own focusMatches');
   const css = read('web/layouts/ai-apps/desktop.css');
   const agentCss = css.split('\n').filter(l => /\.aad-ag/.test(l)).join('\n');
   assert.ok(agentCss && !/#[0-9a-f]{3,8}\b|rgba?\(/i.test(agentCss.replace(/\/\*[\s\S]*?\*\//g, '')), 'tokens only, no literal colours');
   assert.ok(!/background:[^;]*transparent[^;]*;[^}]*\.aad-agents/.test(css), 'not a floating panel');
+});
+
+/* Regression (10 Nov 2026, forum run 4): agents.focus called `live()`, which only exists further down in skin-host.js
+ * (inside the sessions block), so ai-apps threw `ReferenceError: live is not defined` on mount and fell into layout
+ * recovery. The unit tests above run the layout against a stub API and never executed skin-host's own scope. This one
+ * evaluates the real `agents: Object.freeze({ ... })` block of makeApi() with only the names that block may use
+ * (shell, need): any other free identifier is a ReferenceError the moment the method is called. */
+const agentsBlock = () => {
+  const src = read('web/core/skin-host.js'), at = src.indexOf('agents: Object.freeze({');
+  assert.ok(at > 0, 'agents block found');
+  let i = src.indexOf('{', at), depth = 0, j = i;
+  for (; j < src.length; j++) { if (src[j] === '{') depth++; else if (src[j] === '}' && --depth === 0) break; }
+  return src.slice(at + 'agents: '.length, j + 2);   // Object.freeze({ ... })
+};
+const loadAgents = (shell, extra = {}) => new Function('shell', 'need', ...Object.keys(extra), `'use strict'; return (${agentsBlock()});`)(shell, () => ({ openAgent() {} }), ...Object.values(extra));
+
+test('skin-host agents.focus / setFocus run in their own scope (no out-of-scope live(), the run-4 ReferenceError)', () => {
+  const picked = [];
+  const shell = { agentFocus: () => ({ id: 'philosopher', agents: [{ id: 'hermes', label: 'Oscar', main: true }, { id: 'philosopher', label: 'Philosopher', colour: '#fff', private: false }] }), agentFocusSet: id => { picked.push(id); return true; } };
+  const a = loadAgents(shell);
+  const f = a.focus();
+  assert.equal(f.id, 'philosopher'); assert.deepEqual(f.agents.map(x => x.label), ['Oscar', 'Philosopher']);
+  assert.ok(Object.isFrozen(f) && Object.isFrozen(f.agents) && Object.isFrozen(f.agents[0]), 'frozen copies');
+  assert.equal(a.setFocus('philosopher'), true); assert.equal(a.setFocus(7), true);
+  assert.deepEqual(picked, ['philosopher', ''], 'a non-string means All');
+  for (const bare of [null, {}]) {   // no shell yet / a shell with no agent Focus (the phone adapter): empty, false, never throws
+    const b = loadAgents(bare);
+    assert.deepEqual({ id: b.focus().id, n: b.focus().agents.length }, { id: '', n: 0 }); assert.equal(b.setFocus('philosopher'), false);
+  }
+  // the guard itself: a free identifier in that block is caught (this is what live() was)
+  const broken = new Function('shell', 'need', `'use strict'; return ({ focus: () => live() ? shell.agentFocus() : null });`)(shell, () => ({}));
+  assert.throws(() => broken.focus(), ReferenceError);
 });
