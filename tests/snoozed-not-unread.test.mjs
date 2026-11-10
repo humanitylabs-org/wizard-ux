@@ -49,6 +49,22 @@ for (const last of [false, true]) {
   });
 }
 
+// Agent chat parity: the same rule on the main agent and on routed threads (host-profile, container, restricted), which
+// reach the shared count through agentSessions / unified() and sessionsFor(agent).
+for (const last of [false, true]) for (const agent of ['host-profile', 'container', 'restricted']) {
+  test(`snooze ${last ? 'last' : 'stock'}: main versus routed ${agent}: snoozed never counts, awake counts once`, () => {
+    const h = harness(last), routed = (id, mk) => ({ ...mk(id), agent });
+    h.L.sessions = [snoozed('main-snoozed'), row('main-awake')];
+    h.L.agentSessions[agent] = [routed('r-snoozed-1', snoozed), routed('r-snoozed-2', snoozed), routed('r-awake', row)];
+    assert.equal(h.count(), 2, 'one awake main chat + one awake routed chat');
+    assert.deepEqual([...h.L.visibleUnread(h.L.sessionsFor(agent)).map(s => s.id)], ['r-awake'], 'routed list: only the awake chat is unread');
+    assert.deepEqual([...h.L.visibleUnread(h.L.sessions).map(s => s.id)], ['main-awake'], 'main list: same rule');
+    const l = h.list();
+    assert.deepEqual([...l.ready.map(r => r.id)].sort(), ['main-awake', 'r-awake']);
+    assert.equal(l.snoozed.length, 3);
+  });
+}
+
 test('Chats list Ready header (snooze last) does not count the snoozed tail as unread', () => {
   const chats = src('web/core/chats.js');
   const line = chats.split('\n').find(l => l.includes('const secN = unreadSec ?'));
