@@ -124,3 +124,12 @@ test('phone and desktop: a channel take never re-routes to the agent of the chan
   assert.match(desk, /if \(box\) vRouteAt = chanRoute\(vRouteAt, \(\) => vRoute\);/);
   assert.match(desk, /CHATS\.takeComposer\(sealAt\.wid, sealAt\.sid, sealAt\.box\)/);
 });
+
+test('a box-mic take resumed after a reload (no tap pin left) still files into the channel carried by the take', async () => {
+  const h = harness(); // no mic tap in this page: the pin comes with the take (phone replyTake, desktop vReply)
+  const it = await h.api.sendVoiceTo('win', '__new__', new Blob(['a']), [], false, null, null, null, undefined, '', 'launch');
+  assert.equal(h.sent[0].space, false); assert.deepEqual(h.filed, [['launch', it.sessionId, true]]);
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  assert.match(app, /\.\.\.\(typeof r\.box === 'string' \? \{ box: r\.box \} : \{\}\), \.\.\.\(typeof r\.space === 'string' \? \{ space: r\.space \} : \{\}\)/, 'the reply-take record keeps box and Space over a reload');
+  assert.match(app, /CHATS\.sendVoiceTo\(rt\.wid, rt\.sid, audio, files, snap\.seal \|\| false, snap\.route, snap\.custodyId, null, undefined, '', rt\.space\)/);
+});

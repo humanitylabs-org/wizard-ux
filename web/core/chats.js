@@ -677,7 +677,16 @@ window.WizCore.chats = function createChats(H) {
     // A model picked for another agent (a private one in New chat, another channel's) never rides into this channel:
     // its chat would belong to that agent and could not be filed here. The box, its mic and the orb read c.newModel.
     if (c.newModel?.agent && c.newModel.agent !== agent) c.newModel = null;
-    if (c.draftFor !== key) { const d = KIT.drafts.get(key); c.draftFor = key; c.draft = d.text || ''; c.files = (d.files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' })); }
+    if (c.draftFor !== key) {
+      // A photo still uploading stays with the channel it was attached in: its live tray waits here (the upload
+      // finishes into it) and comes back, saved, when that channel is open again.
+      const trays = c.chanTrays || (c.chanTrays = new Map()), was = String(c.draftFor || '');
+      if (was.startsWith('chan:') && (c.files || []).some(f => f && f.uploading)) trays.set(was, c.files);
+      const d = KIT.drafts.get(key), live = trays.get(key); trays.delete(key);
+      c.draftFor = key; c.draft = d.text || '';
+      c.files = live || (d.files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
+      if (live) KIT.drafts.set(key, c.draft, c.files);
+    }
     PW?.ensureModels?.();
     // The label a new chat from this list shows (same default, same pick): the label reads the window as a new chat.
     const mlabel = PW?.modelLabel ? PW.modelLabel({ ...w, thread: '__new__' }, null) : '';

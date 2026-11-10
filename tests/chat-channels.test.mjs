@@ -529,3 +529,16 @@ test('a model picked for another agent never rides into a channel (box, mic or o
   g.env.ch('w').newModel = { model: 'c', provider: 'c', agent: 'container' };
   g.chanComposer(g.w, g.chanOpen(g.w)); assert.equal(g.env.ch('w').newModel?.model, 'c');
 });
+
+test('a photo still uploading stays with the channel it was attached in when another channel opens', () => {
+  const f = fixture(); f.openChannel(f.w, 'launch');
+  f.chanComposer(f.w, f.chanOpen(f.w));
+  const local = { key: 'k1', name: 'shot.png', mime: 'image/png', uploading: true, preview: 'blob:shot' };
+  f.env.ch('w').files = [local];
+  f.openChannel(f.w, 'voice'); f.chanComposer(f.w, f.chanOpen(f.w));
+  assert.equal(f.env.ch('w').files.length, 0, '# Voice has its own (empty) tray');
+  Object.assign(local, { id: 'up1', bytes: 9, uploading: false }); // the upload finishes while # Voice is open
+  f.openChannel(f.w, 'launch'); const html = f.chanComposer(f.w, f.chanOpen(f.w));
+  assert.equal(f.env.ch('w').files[0], local, 'the same live attachment is back in # Launch');
+  assert.match(html, /data-f="up1"/); assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').files[0]?.id, 'up1', 'and saved with that channel');
+});

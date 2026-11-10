@@ -586,14 +586,15 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = boxThread(H.win(wid)), on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined, transcript = '') {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined, transcript = '', space = undefined) {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = capturedRunId ?? (A.isWorking(s) && s.runId ? s.runId : '');
     const nm = route || (isNew ? (c.newModel || null) : null);
-    const pins = typeof boxSpace !== 'undefined' ? boxSpace : null, pinned = isNew ? pins?.get(wid) : undefined; pins?.delete(wid); // the channel this take started in
+    // The channel this take started in: carried by the take (survives a reload), else pinned by the box mic's tap.
+    const pins = typeof boxSpace !== 'undefined' ? boxSpace : null, pinned = !isNew ? undefined : typeof space === 'string' ? space : pins?.get(wid); pins?.delete(wid);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
