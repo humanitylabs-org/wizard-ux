@@ -3217,16 +3217,17 @@
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
+    // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
+    // channel, exactly like its message box (whose words and pictures ride with it), pinned to that channel's Space,
+    // and the window stays on the feed. A routed agent's channel keeps that agent's own voice path (below).
+    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id } : {};
     if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
       // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
       const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : w.agent ? 'agent chats' : 'thread list', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
-        name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
+        name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats`, ...pin };
     }
-    // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
-    // channel, exactly like its message box (whose words and pictures ride with it), and the window stays on the feed.
-    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null;
-    if (chan) return { id, mode: 'auto', kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, name: `# ${chan.name} channel` };
+    if (chan) return { id, mode: 'auto', ...pin, name: `# ${chan.name} channel` };
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
     if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
       return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
@@ -3349,7 +3350,7 @@
       if (kind === 'command' && !typed) { const lc = await LOCAL_COMMANDS.confirm(localParse(text, snap, kind), text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
       const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
       setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
-      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
+      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, ...pinSpace(v), instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
     }
     // Attached files mean "look at this": skip command routing and send words + files together. So do words,
     // photos or files waiting in the thread's composer (snap.seal): one message, never a command.

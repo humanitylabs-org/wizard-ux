@@ -673,7 +673,10 @@ window.WizCore.chats = function createChats(H) {
   }
   function chanComposer(w, open) {
     const key = chanDraftKey(w); if (!key) return '';
-    const c = ch(w.id);
+    const c = ch(w.id), agent = open.agent || winAgent(w) || '';
+    // A model picked for another agent (a private one in New chat, another channel's) never rides into this channel:
+    // its chat would belong to that agent and could not be filed here. The box, its mic and the orb read c.newModel.
+    if (c.newModel?.agent && c.newModel.agent !== agent) c.newModel = null;
     if (c.draftFor !== key) { const d = KIT.drafts.get(key); c.draftFor = key; c.draft = d.text || ''; c.files = (d.files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' })); }
     PW?.ensureModels?.();
     // The label a new chat from this list shows (same default, same pick): the label reads the window as a new chat.

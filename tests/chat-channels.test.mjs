@@ -469,7 +469,12 @@ test('General posts unfiled (no Space); routed host-profile, container and restr
 
 test('voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along', () => {
   // Phone orb: a channel feed is an auto view whose take goes to a new chat ('__new__'), never the cloud router.
-  assert.match(app, /const chan = w\.app === 'chats' && !w\.thread \? CHATS\.chanOpen\?\.\(w\) : null;\n\s*if \(chan\) return \{ id, mode: 'auto', kind: 'chat thread', thread: '__new__', channel: chan\.name/);
+  assert.match(app, /const chan = w\.app === 'chats' && !w\.thread \? CHATS\.chanOpen\?\.\(w\) : null, pin = chan \? \{ kind: 'chat thread', thread: '__new__', channel: chan\.name, space: chan\.general \? '' : chan\.id \} : \{\};/);
+  assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name:/);
+  // A routed agent's channel (host-profile, container, restricted) keeps its agent's own voice path, pinned the same way.
+  const viewOf = app.slice(app.indexOf('function viewOf(id)'), app.indexOf('// Unified Chats: a private agent'));
+  assert.ok(viewOf.indexOf('const chan =') < viewOf.indexOf('if (agentWin(w)'), 'the channel is read before the routed-agent branch');
+  assert.match(viewOf, /: `\$\{a\.name\} chats`, \.\.\.pin \};/);
   // The take's composer (words, photos) is this channel's box, not the New chat draft.
   assert.match(src, /const chanBoxOf = \(wid, sid\) => sid === '__new__' && W\[wid\] && !W\[wid\]\.thread && typeof chanDraftKey === 'function' \? chanDraftKey\(W\[wid\]\) : '';/);
   assert.match(src, /const P = peekComposer\(wid, sid\), dkey = boxKey\(wid, sid\);/);
@@ -481,7 +486,7 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   // An orb take is pinned to the channel it started in (Codex P1): phone viewOf carries its Space to every send path,
   // the desktop orb keeps it from the start of the take.
   assert.match(app, /const pinSpace = v => typeof v\?\.space === 'string' && v\.thread === '__new__' \? \{ space: v\.space \} : \{\};/);
-  assert.equal((app.match(/\.\.\.pinSpace\(s?v\)/g) || []).length, 3, 'deliverToView, the take with files, and an interrupted take');
+  assert.equal((app.match(/\.\.\.pinSpace\(s?v\)/g) || []).length, 4, 'the agent path, deliverToView, the take with files, and an interrupted take');
   const desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
   assert.match(desk, /vSpace = !forceNew && vTarget \? CHATS\.chanSpaceOf\?\.\(W\[vTarget\]\) \?\? null : null;/);
   assert.match(desk, /\.\.\.\(aimSid === '__new__' && !rp && typeof vSpace === 'string' \? \{ space: vSpace \} : \{\}\)/);
@@ -506,4 +511,17 @@ test('a private agent\'s model is never sent from a main channel box (its chat c
   g.env.ch('w').newModel = { model: 'h-model', provider: 'h', agent: 'host' };
   await g.channelSend('w', form('host ask'));
   assert.equal(g.env._sends[0][4].route?.model, 'h-model');
+});
+
+test('a model picked for another agent never rides into a channel (box, mic or orb all read it): it is dropped on paint', () => {
+  const f = fixture(); f.openChannel(f.w, 'launch');
+  f.env.ch('w').newModel = { model: 'tinfoil', provider: 'tinfoil', agent: 'restricted' };
+  f.chanComposer(f.w, f.chanOpen(f.w)); assert.equal(f.env.ch('w').newModel, null);
+  f.env.ch('w').newModel = { model: 'opus', provider: 'anthropic' };
+  f.chanComposer(f.w, f.chanOpen(f.w)); assert.equal(f.env.ch('w').newModel?.model, 'opus', 'a main pick stays in a main channel');
+  const g = fixture(); g.openChannel(g.w, 'box');
+  g.env.ch('w').newModel = { model: 'h', provider: 'h', agent: 'host' };
+  g.chanComposer(g.w, g.chanOpen(g.w)); assert.equal(g.env.ch('w').newModel, null, 'a host pick never rides into the container channel');
+  g.env.ch('w').newModel = { model: 'c', provider: 'c', agent: 'container' };
+  g.chanComposer(g.w, g.chanOpen(g.w)); assert.equal(g.env.ch('w').newModel?.model, 'c');
 });
