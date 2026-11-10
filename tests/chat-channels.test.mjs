@@ -24,7 +24,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
   const env = {
     document: { documentElement: { dataset: { tweaks: on ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats' } } },
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) },
-    requestAnimationFrame: () => {}, Date: class extends Date { static now() { return NOW; } },
+    requestAnimationFrame: () => {}, Date: class extends Date { static now() { return env._now ?? NOW; } }, _now: null,
     W: new Proxy({}, { get: (_, id) => wins[id] }), owner: id => id, save() {}, elOf: () => null,
     esc: s => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'),
     clip: (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s), ago: t => Math.round((NOW - Date.parse(t)) / H) + 'h',
@@ -38,8 +38,8 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     setFocus: (w, f) => { focusCalls.push(f); w.focus = f; renders.push('focus'); return true; },
     rerenderList: () => renders.push('list'), renderChatList: () => renders.push('list'),
     isWorking: s => s.status === 'running', attOf: s => s.attention || null,
-    LIVE: { agentOf, cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, savedMessages: () => null,
-      firstMessages: async id => { reads.push(id); return history[id] || []; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
+    LIVE: { agentOf, ownerOf: s => s.owner ?? agents[s.id] ?? '', cardAt: s => new Date(s.at).toISOString(), session: id => sessions[id] || null, sessionFor: (id, a) => sessions[a ? a + '|' + id : id] || null,
+      firstMessages: async (id, agent) => { reads.push(agent ? agent + '|' + id : id); const h = history[agent ? agent + '|' + id : id]; if (h instanceof Error) throw h; return h || []; }, prefOps: o => { ops.push(...o); for (const x of o) { const sp = spacesData.find(s => x.key === `spaces/${s.id}/name`); if (sp) sp.name = x.item; } return Promise.resolve(true); } },
     // KIT.parseRows stand-in: a row {role:'user', text, files} is an owner turn.
     toTurns: rows => rows.map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text } }),
     mediaOfFile: f => ({ id: f.id, name: f.name, mime: f.mime || '', kind: /^image\//.test(f.mime || '') ? 'image' : 'file', url: f.id ? `/wizard/files/${f.id}/content` : '' }),
@@ -203,7 +203,7 @@ test('a post is the owner\'s first message with photo thumbnails, never a title 
   assert.match(html, /class="ch-post-me"[^>]*>J</); assert.match(html, /<b>James de Fleur<\/b><time>5h<\/time>/);
   assert.match(html, /class="ch-post-t">Please fix the boot logo\non the phone</);
   assert.doesNotMatch(html, /<b>T a<\/b>/, 'no title card');
-  assert.deepEqual([...html.matchAll(/data-chpostimg="a" data-i="(\d)"[^]*?<img src="([^"]+)"/g)].map(m => m[2]), ['/wizard/files/f1/content'], 'images only');
+  assert.deepEqual([...html.matchAll(/data-chpostimg="a" data-chpostag="" data-i="(\d)"[^]*?<img src="([^"]+)"/g)].map(m => m[2]), ['/wizard/files/f1/content'], 'images only');
   assert.match(html, /2 replies/);
   f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r));
   assert.deepEqual(f.reads, ['a'], 'kept per thread');
@@ -318,4 +318,41 @@ test('long-press, right-click and Shift+F10 on a channel open the channel sheet 
   assert.match(src, /const ROW_MENU = '[^']*\.ch-list \[data-chchan\]';/);
   assert.equal((src.match(/rowMenu\((lp\.wid, lp\.row|q\.wid, q\.row|idOf\(row\), row)\)/g) || []).length, 4);
   assert.match(src, /justPressed\(\) && e\.target\.closest\('\[data-chopen\], \[data-chnotif\], \[data-chchan\]'\)/);
+});
+
+test('main vs routed: a restricted thread sharing a main thread\'s id never shows the other\'s first message', async () => {
+  const history = { a: [{ role: 'user', text: 'Main ask' }], 'restricted|a': [{ role: 'user', text: 'Private ask' }] };
+  const main = row('a', 2), priv = row('a', 2, { owner: 'restricted' });
+  const spacesList = [{ id: 'launch', name: 'Launch', threads: ['a'] }, { id: 'locked', name: 'Locked', agent: 'restricted', threads: ['a'] }];
+  const f = fixture({ history, spacesList, sessions: { a: main, 'restricted|a': priv } });
+  f.openChannel(f.w, 'launch'); f.channelFeed(f.w, f.chanOpen(f.w), [main]); await new Promise(r => setImmediate(r));
+  f.channelBack(f.w); f.openChannel(f.w, 'locked'); f.channelFeed(f.w, f.chanOpen(f.w), [priv]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a', 'restricted|a'], 'each read names its own agent');
+  const locked = f.channelFeed(f.w, f.chanOpen(f.w), [priv]);
+  assert.match(locked, />Private ask</); assert.doesNotMatch(locked, /Main ask/);
+  f.channelBack(f.w); f.openChannel(f.w, 'launch');
+  const launch = f.channelFeed(f.w, f.chanOpen(f.w), [main]);
+  assert.match(launch, />Main ask</); assert.doesNotMatch(launch, /Private ask/);
+});
+
+test('a failed first-message read is not kept: the title stands in, and a repaint after 30 s reads again', async () => {
+  const history = { a: new Error('offline') }, s0 = row('a', 2);
+  const f = fixture({ history, sessions: { a: s0 } }); f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w);
+  f.channelFeed(f.w, open, [s0]); await new Promise(r => setImmediate(r));
+  const html = f.channelFeed(f.w, open, [s0]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a'], 'no retry storm within 30 s');
+  assert.match(html, /class="ch-post-t">T a</, 'offline: the title rather than an endless skeleton');
+  history.a = [{ role: 'user', text: 'Back online ask' }]; f.env._now = NOW + 31e3;
+  f.channelFeed(f.w, open, [s0]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a', 'a']);
+  assert.match(f.channelFeed(f.w, open, [s0]), />Back online ask</);
+});
+
+test('an archived channel\'s feed takes no new posts until it is restored', () => {
+  const f = fixture();
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rscharch': '' }), 'w', f.w);
+  f.openChannel(f.w, 'voice');
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), []), /archived\. Restore it to post here/);
+  assert.match(src, /const fab = feed && typeof chanArchived === 'function' && chanArchived\(feed\.id\) \? '' :/);
 });

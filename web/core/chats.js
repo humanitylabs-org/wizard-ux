@@ -461,7 +461,8 @@ window.WizCore.chats = function createChats(H) {
     if (archived) return mine.sort(byName);
     return mine.filter(c => pin.has(c.id)).sort((a, b) => pin.get(a.id) - pin.get(b.id)).concat(mine.filter(c => !pin.has(c.id)).sort(byName), { id: CHAN_GENERAL, name: 'General', general: true });
   }
-  const rowAgent = s => LIVE.agentOf(s.id) || AGS()?.defaultId() || 'hermes';
+  // The row's own owner (a main and a routed thread can share an id), else the id-only pin.
+  const rowAgent = s => (LIVE.ownerOf ? LIVE.ownerOf(s) : LIVE.agentOf(s.id)) || AGS()?.defaultId() || 'hermes';
   const inChannel = (ch0, s) => ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || 0; // cardAt is an ISO time
@@ -511,9 +512,13 @@ window.WizCore.chats = function createChats(H) {
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
    * firstRequest / firstAttachments (wizard-agent-service issue 446); until then the shell reads the first page of
-   * the thread's history once (this device's saved copy first), a few threads at a time, and keeps it per thread. */
-  const FIRST = new Map(), firstWant = new Set(), firstAsked = new Set();
+   * the thread's history once, a few threads at a time, and keeps it per thread. Everything is keyed by the row's own
+   * agent plus its id, and the read names that agent: a main and a routed thread may share an id. A failed read
+   * (offline, timeout) is not kept; the thread is read again on a repaint after CHAN_FIRST_RETRY. */
+  const FIRST = new Map(), firstWant = new Map(), firstAsked = new Set(), firstFailed = new Map(), CHAN_FIRST_RETRY = 30e3;
   let firstBusy = 0, firstT = 0;
+  const firstAgent = s => LIVE.ownerOf ? LIVE.ownerOf(s) || '' : '';
+  const firstKey = s => firstAgent(s) + '|' + s.id;
   function chanMedia(files, images = []) {
     const list = (Array.isArray(files) ? files : []).map(f => typeof f === 'string' ? { id: f, name: 'Photo', mime: 'image/*', kind: 'image', url: f } : f && typeof f === 'object' ? mediaOfFile(f) : null);
     return list.concat((Array.isArray(images) ? images : []).map((u, i) => ({ id: 'img' + i, name: 'Photo', mime: 'image/*', kind: 'image', url: u }))).filter(m => m && m.kind === 'image' && (m.url || m.thumb));
@@ -524,22 +529,25 @@ window.WizCore.chats = function createChats(H) {
   }
   function firstPost(s) {
     if (typeof s.firstRequest === 'string') return { text: s.firstRequest, media: chanMedia(s.firstAttachments || []) };
-    if (FIRST.has(s.id)) return FIRST.get(s.id);
-    const saved = LIVE.savedMessages?.(s.id)?.rows, p = saved?.length ? firstOf(saved) : null;
-    if (p && !p.none) { FIRST.set(s.id, p); return p; }
-    if (!firstAsked.has(s.id)) firstWant.add(s.id);
+    const k = firstKey(s); if (FIRST.has(k)) return FIRST.get(k);
+    if (!firstAsked.has(k) && !(Date.now() - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY)) firstWant.set(k, { id: s.id, agent: firstAgent(s) });
     return null;
   }
   function pullFirst() {
     while (firstBusy < 3 && firstWant.size) {
-      const id = firstWant.values().next().value; firstWant.delete(id);
-      if (FIRST.has(id) || firstAsked.has(id)) continue;
-      firstAsked.add(id); firstBusy++;
-      Promise.resolve().then(() => LIVE.firstMessages ? LIVE.firstMessages(id) : LIVE.messages(id)).then(rows => FIRST.set(id, firstOf(rows || []) || { text: '', media: [], none: true }), () => FIRST.set(id, { text: '', media: [], none: true }))
-        .finally(() => { firstBusy--; clearTimeout(firstT); firstT = setTimeout(chanRepaint, 60); pullFirst(); });
+      const [k, { id, agent }] = firstWant.entries().next().value; firstWant.delete(k);
+      if (FIRST.has(k) || firstAsked.has(k)) continue;
+      firstAsked.add(k); firstBusy++;
+      Promise.resolve().then(() => LIVE.firstMessages(id, agent)).then(rows => { FIRST.set(k, firstOf(rows || []) || { text: '', media: [], none: true }); firstFailed.delete(k); }, () => firstFailed.set(k, Date.now()))
+        .finally(() => { firstAsked.delete(k); firstBusy--; clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(), 60); pullFirst(); });
     }
   }
-  function chanRepaint() { for (const id of Object.keys(CH)) { const x = H.win(id), el = elOf(id); if (x && x.app === 'chats' && !x.thread && el && !holdList(id) && chanOpen(x)) renderChatList(x, el); } }
+  // A list held under the finger or pointer repaints once it is let go (tried again shortly, a few times).
+  function chanRepaint(n = 0) {
+    let held = false;
+    for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !chanOpen(x)) continue; if (holdList(id)) held = true; else rerenderList(x); }
+    if (held && n < 20) { clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(n + 1), 400); }
+  }
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
@@ -551,20 +559,20 @@ window.WizCore.chats = function createChats(H) {
       // Slack-style: avatar, name and time, then the message as plain text (4 lines, then "more") and its pictures.
       // A thread whose first message hasn't been read yet shows its owner preview meanwhile; the title only when the
       // thread has no owner message at all (the agent started it).
-      const p = firstPost(s), stand = String(s.request || (s.previewRole === 'user' ? s.preview : '') || '');
-      const text = p ? (p.text || (p.media.length ? '' : stand || (p.none ? s.title : ''))) : stand, media = p?.media || [];
+      const p = firstPost(s), stand = String(s.request || (s.previewRole === 'user' ? s.preview : '') || ''), failed = !p && firstFailed.has(firstKey(s));
+      const text = p ? (p.text || (p.media.length ? '' : stand || (p.none ? s.title : ''))) : stand || (failed ? s.title : ''), media = p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
       const at = p?.at && isFinite(p.at) ? new Date(p.at).toISOString() : s.createdAt || LIVE.cardAt(s);
       const n = typeof s.messageCount === 'number' ? Math.max(0, s.messageCount - 1) : null;
       const state = isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '';
-      const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
+      const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
       return `<div class="ch-post" data-morph-key="post:${esc(s.id)}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r" data-chopen="${esc(s.id)}">${hat}${n != null ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
     };
-    const html = shown.map(post).join('');
+    const html = shown.map(post).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
     if (firstWant.size) pullFirst();
     const bar = orderBar('Show posts', 'data-chchanf', CHAN_FILTERS, f, o => CHAN_FILTER_LABEL[o]);
-    return `<div class="ch-chan-feed">${bar}${shown.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}</div>`;
+    return `<div class="ch-chan-feed">${bar}${shown.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}${archNote}</div>`;
   }
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b><span class="ch-chan-hash" aria-hidden="true">#</span>${esc(open.name)}</b></div>`;
@@ -637,7 +645,7 @@ window.WizCore.chats = function createChats(H) {
     const fl = e.target.closest('[data-chchanf]'); if (fl) { ch(owner(id)).chanFilter = fl.dataset.chchanf; renderChatList(w, elOf(id)); return true; }
     const mo = e.target.closest('[data-chpostmore]'); if (mo) { const k = mo.dataset.chpostmore; if (chanMore.has(k)) chanMore.delete(k); else chanMore.add(k); renderChatList(w, elOf(id)); return true; }
     // A photo opens the shared media viewer (Back closes it: closeOverlay → KIT.viewer.close).
-    const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.session(im.dataset.chpostimg), g = s ? firstPost(s)?.media || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
+    const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), g = s ? firstPost(s)?.media || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
     return false;
   }
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
@@ -1676,7 +1684,8 @@ window.WizCore.chats = function createChats(H) {
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
-    const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
+    // An archived channel's feed takes no new posts (Restore first), as its sheet offers no New post.
+    const fab = feed && typeof chanArchived === 'function' && chanArchived(feed.id) ? '' : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
     // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
