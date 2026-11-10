@@ -400,7 +400,7 @@ window.WizCore.chats = function createChats(H) {
     return m?.kind === 'space' && spaces().some(s => s.id === m.key && spaceAgent(s) === agent) ? m : { kind: 'agent', key: agent };
   }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
-  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; ch(w.id).listPending = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
+  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; ch(w.id).listPending = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; if (typeof chanHold === 'function') chanHold(w.id); } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
@@ -482,7 +482,7 @@ window.WizCore.chats = function createChats(H) {
     const f = focusOf(o), back = prev?.kind === 'space' ? { kind: 'agent', key: focusedAgent(prev) } : prev;
     // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).
     setFocus(w, sp ? { kind: 'space', key: sp.id } : f?.kind === 'space' ? back : f);
-    requestAnimationFrame(() => { const sc = elOf(w.id)?.querySelector('.ch-list > .ch-scroll'); if (sc) sc.scrollTop = sc.scrollHeight; });
+    chanHold(w.id); requestAnimationFrame(() => chanHold(w.id));
     return true;
   }
   // Back from a feed: to the Channels list, with the Focus the list had before.
@@ -569,6 +569,51 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !chanOpen(x)) continue; if (holdList(id)) held = true; else rerenderList(x); }
     if (held && n < 20) { clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(n + 1), 400); }
   }
+  /* Where a feed opens and stays (wizard-ux issue 1263; James, 10 Nov 2026: "it shouldn't auto scroll to the top ever").
+   * Unread posts: it opens at the first one, under a "New" line; all read: at the very bottom. Chosen once per open
+   * (o.chan.newKey/at), so the line never jumps away while James reads; the next open clears it. The place is held,
+   * not set once: every paint and every growth of the feed (first messages, thumbnails, "more") puts it back, because
+   * posts fill in late. Once James scrolls, the post at the top of his view is the place (the bottom when he is at the
+   * end), so a repaint, a refresh or Back from a thread lands where he was. */
+  const CHAN_NEW_Y = 8, CHAN_USER_MS = 1200, chanUserAt = {}, chanRO = {};
+  const chanKey = s => rowAgent(s) + '|' + s.id;
+  function chanStart(w, shown) {
+    const c = (W[owner(w.id)] || w)?.chan; if (!c) return null;
+    if (c.at === undefined && shown.length) { const u = shown.find(chanUnread); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y } : { end: true }; }
+    return c;
+  }
+  const chanScroller = wid => elOf(wid)?.querySelector?.('.ch-list > .ch-scroll') || null;
+  function chanHold(wid) {
+    const w = W[wid], at = w && (W[owner(wid)] || w)?.chan?.at, sc = chanScroller(wid), feed = sc?.querySelector('.ch-chan-feed');
+    if (!feed) { chanRO[wid]?.ro.disconnect(); delete chanRO[wid]; return; }
+    chanWatch(wid, sc, feed);
+    if (!at || !sc.clientHeight) return;
+    ch(wid).listPending = null; // the feed's own place outranks the list's return bookmark
+    const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+    const node = at.key && [...feed.querySelectorAll('[data-morph-key]')].find(n => n.dataset.morphKey === at.key);
+    // The New line clears the feed's sticky filter bar (Open · Needs you · All); a scrolled place keeps its own offset.
+    const bar = at.key === 'chan-new' && feed.firstElementChild, stuck = bar && bar !== node && globalThis.getComputedStyle?.(bar).position === 'sticky' ? bar.offsetHeight : 0;
+    const to = at.end || !node ? max : Math.max(0, Math.min(max, sc.scrollTop + node.getBoundingClientRect().top - sc.getBoundingClientRect().top - (at.y || 0) - stuck));
+    if (Math.abs(sc.scrollTop - to) >= 1) sc.scrollTop = to;
+  }
+  // The feed grows after a paint (first messages, pictures, "more"); each growth puts the place back.
+  function chanWatch(wid, sc, feed) {
+    const cur = chanRO[wid]; if (cur && cur.feed === feed && cur.sc === sc) return;
+    cur?.ro.disconnect(); delete chanRO[wid];
+    if (typeof ResizeObserver !== 'function') return;
+    const ro = new ResizeObserver(() => chanHold(wid)); ro.observe(feed); ro.observe(sc);
+    chanRO[wid] = { ro, feed, sc };
+  }
+  // James's own touch, wheel, key or pointer on the feed: his scrolls from now (and a fling after it) move the place.
+  const chanUser = wid => { if (wid) chanUserAt[wid] = Date.now(); };
+  function chanScrolled(wid, sc) {
+    const w = W[wid], c = w && (W[owner(wid)] || w)?.chan; if (!c || !channelsOn() || !(Date.now() - (chanUserAt[wid] || 0) < CHAN_USER_MS)) return;
+    const feed = sc.querySelector('.ch-chan-feed'); if (!feed || !sc.clientHeight) return;
+    chanUserAt[wid] = Date.now();
+    if (sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4) { c.at = { end: true }; return; }
+    const edge = sc.getBoundingClientRect().top, n = [...feed.querySelectorAll('[data-morph-key]')].find(x => x.getBoundingClientRect().bottom > edge + 1);
+    if (n) c.at = { key: n.dataset.morphKey, y: n.getBoundingClientRect().top - edge };
+  }
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
@@ -599,7 +644,8 @@ window.WizCore.chats = function createChats(H) {
       return `<div class="ch-post sending" data-morph-key="post:${esc(p.key)}">${meAv}<div class="ch-post-c"><div class="ch-post-b"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(new Date(p.at).toISOString()))}</time></span>${p.text ? `<span class="ch-post-t${long ? ' clamp' : ''}">${esc(p.text)}</span>` : ''}</div>${pics}<span class="ch-post-r">${hat}<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Sending…</span></span></div></div>`;
     };
     const sending = typeof chanSending === 'function' ? chanSending(w, open, mine) : [];
-    const html = shown.map(post).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
+    const cs = chanStart(w, shown), line = '<div class="ch-chan-new" role="separator" aria-label="New posts" data-morph-key="chan-new"><span>New</span></div>';
+    const html = shown.map(s => (cs?.newKey && cs.newKey === chanKey(s) ? line : '') + post(s)).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
     if (firstWant.size) pullFirst();
     const bar = orderBar('Show posts', 'data-chchanf', CHAN_FILTERS, f, o => CHAN_FILTER_LABEL[o]);
     return `<div class="ch-chan-feed">${bar}${shown.length || sending.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}${archNote}</div>`;
@@ -717,6 +763,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // The feed's newest post sits at the bottom: keep it in view after a send or when the feed opens.
   function chanToEnd(wid, focus = false) {
+    const o = W[owner(wid)] || W[wid]; if (o?.chan) o.chan.at = { end: true };
     requestAnimationFrame(() => {
       const el = elOf(wid), sc = el?.querySelector('.ch-list > .ch-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
       const ta = focus && el?.querySelector('[data-chchanform] textarea'); if (ta) { ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
@@ -1846,6 +1893,7 @@ window.WizCore.chats = function createChats(H) {
       else if (c.listPending !== place) holdListPlace(w, el, place, fresh ? 8000 : 3000);
     }
     PW?.paint(w.id, el);
+    if (chanOn && typeof chanHold === 'function') chanHold(w.id); // a channel's feed holds its place (issue 1263)
     bindFocusStrip(el);
     window.WosSkinHost?.rendered('list', el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -2891,8 +2939,9 @@ window.WizCore.chats = function createChats(H) {
   }
   function bindPull(root) {
     // James's own touch or wheel on the list owns its scroll from here: drop any return bookmark still being held.
-    const own = e => { const sc = e.target.closest?.('.ch-list > .ch-scroll'); const id = sc && idOf(sc); if (id) ch(id).listPending = null; };
+    const own = e => { const sc = e.target.closest?.('.ch-list > .ch-scroll'); const id = sc && idOf(sc); if (id) { ch(id).listPending = null; if (typeof chanUser === 'function') chanUser(id); } };
     root.addEventListener('wheel', own, { capture: true, passive: true });
+    for (const t of ['touchmove', 'pointerdown', 'keydown']) root.addEventListener(t, own, { capture: true, passive: true });
     root.addEventListener('touchstart', e => {
       own(e);
       ptr = null;
@@ -2967,7 +3016,7 @@ window.WizCore.chats = function createChats(H) {
     }, { capture: true, passive: true });
     root.addEventListener('scroll', e => {
       if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
-      if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) queueListPlace(id); }
+      if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) { queueListPlace(id); if (typeof chanScrolled === 'function') chanScrolled(id, e.target); } }
       if (swipeOpen) closeSwipe(true);
       const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
     }, { capture: true, passive: true });
