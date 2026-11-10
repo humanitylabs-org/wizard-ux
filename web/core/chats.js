@@ -590,8 +590,9 @@ window.WizCore.chats = function createChats(H) {
     if (!at || !sc.clientHeight) return;
     ch(wid).listPending = null; // the feed's own place outranks the list's return bookmark
     const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
-    // The same key can be drawn twice (a main and a routed thread sharing an id): the place is its nth copy.
-    const same = at.key ? [...feed.querySelectorAll('[data-morph-key]')].filter(n => n.dataset.morphKey === at.key) : [], node = same[at.nth || 0] || same[0];
+    // The same key can be drawn twice (a main and a routed thread sharing an id): the place is the copy of its own row
+    // (agent|id), wherever a re-sort moved it.
+    const same = at.key ? [...feed.querySelectorAll('[data-morph-key]')].filter(n => n.dataset.morphKey === at.key) : [], node = (at.row && same.find(n => n.dataset.chrow === at.row)) || same[0];
     // The opening place (bar: true) sits below the feed's sticky filter bar (Open · Needs you · All); a place James
     // scrolled to was measured from the scroller's own top, bar included, so it keeps that offset as is.
     const stuck = at.bar && node ? chanStuck(feed) : 0;
@@ -618,8 +619,8 @@ window.WizCore.chats = function createChats(H) {
     // The top of his view is below the sticky filter bar.
     const edge = sc.getBoundingClientRect().top + chanStuck(feed), all = [...feed.querySelectorAll('[data-morph-key]')], i = all.findIndex(x => x.getBoundingClientRect().bottom > edge + 1);
     if (i < 0) return;
-    const n = all[i], key = n.dataset.morphKey, nth = all.slice(0, i).filter(x => x.dataset.morphKey === key).length;
-    c.at = { key, y: n.getBoundingClientRect().top - sc.getBoundingClientRect().top, ...(nth ? { nth } : {}) };
+    const n = all[i], key = n.dataset.morphKey, twin = all.some(x => x !== n && x.dataset.morphKey === key);
+    c.at = { key, y: n.getBoundingClientRect().top - sc.getBoundingClientRect().top, ...(twin && n.dataset.chrow ? { row: n.dataset.chrow } : {}) };
   }
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
@@ -642,7 +643,7 @@ window.WizCore.chats = function createChats(H) {
       const state = isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '';
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
-      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${dot}${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
+      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${dot}${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${state}</button></div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
     const sendingPost = p => {

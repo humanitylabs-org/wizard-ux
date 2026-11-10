@@ -759,15 +759,19 @@ test('issue 1263 review: with a sticky filter bar, a New-line place James scroll
   assert.equal(at.key, 'post:p101'); d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(y('post:p101'), at.y, 'an ordinary post keeps its offset');
 });
 
-test('issue 1263 review: two posts drawn with the same key, the place is the copy James was at, not the first one', () => {
+test('issue 1263 review: two posts drawn with the same key (main and routed), the place is the row James was at, even after a re-sort', () => {
   const f = fixture({ spacesList: longSpaces(4) });
   f.openChannel(f.w, 'launch'); f.w.chan.at = { end: true };
   const keys = ['post:a', 'post:same', 'post:b', 'post:c', 'post:d', 'post:same', 'post:e', 'post:f', 'post:g', 'post:h'];
   const d = feedDom('', {}, 300, { keys }); f.env.elOf = () => d.el;
+  const twins = d.nodes.filter(n => n.dataset.morphKey === 'post:same'); twins[0].dataset.chrow = 'hermes|same'; twins[1].dataset.chrow = 'host|same';
   f.chanUser('w'); d.sc.scrollTop = 500; f.chanScrolled('w', d.sc);
-  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:same', y: 0, nth: 1 }, 'the second copy');
-  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(d.sc.scrollTop, 500, 'back at the second copy');
-  f.chanUser('w'); d.sc.scrollTop = 100; f.chanScrolled('w', d.sc);
-  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:same', y: 0 }, 'the first copy needs no nth');
-  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(d.sc.scrollTop, 100);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:same', y: 0, row: 'host|same' }, 'the routed copy');
+  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(d.sc.scrollTop, 500, 'back at the routed copy, not the first one');
+  // A newer reply re-sorts the two copies: the routed one is now drawn first, and the place follows it.
+  twins[0].dataset.chrow = 'host|same'; twins[1].dataset.chrow = 'hermes|same';
+  d.sc.scrollTop = 0; f.chanHold('w'); assert.equal(d.sc.scrollTop, 100, 'it follows the routed row');
+  f.chanUser('w'); d.sc.scrollTop = 300; f.chanScrolled('w', d.sc);
+  assert.deepEqual({ ...f.w.chan.at }, { key: 'post:c', y: 0 }, 'a key drawn once needs no row');
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [row('p0', 1)]), /data-morph-key="post:p0" data-chrow="hermes\|p0"/, 'each post carries its row');
 });
