@@ -111,3 +111,16 @@ test('Connections sits flush in the Settings page: the view in its Settings embe
     assert.match(frame.slice(at), /^[^{]*\{ background: var\(--sk-win\); \}/);
   }
 });
+
+// Issue 1242: on a phone the frame and the Settings page both scrolled, so the page's Wizards › Add a Wizard section
+// below the frame could not be reached. The page around the frame is a fixed column now; the frame takes what is left.
+// Browser proof: tests/qa-settings-connections-scroll.cjs (phone and desktop, real shells).
+test('Connections page has one scroll area: the frame fills the room the Wizards section leaves, on every shell', () => {
+  const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
+  assert.match(css, /\.st-page:not\(\[hidden\]\):has\(\.st-embed\) \{ display: flex; flex-direction: column; min-height: 0;/);
+  assert.match(css, /\.st-page:has\(\.st-embed\) > section \{ flex: none; \}/);
+  assert.match(css, /\.st-page:has\(\.st-embed\) > section:has\(\.st-embed\) \{ flex: 1; min-height: 0;/);
+  assert.match(css, /\.st-root:has\(> \.st-phone\.st-in-page \.st-embed\) \{ display: flex; flex-direction: column; \}/);
+  assert.match(css, /\.st-phone\.st-in-page:has\(\.st-embed\) \{ flex: 1; min-height: 0;/);
+  assert.doesNotMatch(css, /\.st-desktop \.st-page:has\(\.st-embed\) > section \{ flex: 1/, 'only the frame section grows, so Wizards keeps its own height');
+});

@@ -300,6 +300,13 @@ a.st-row { color: inherit; text-decoration: none; }
 /* The desktop shell positions every window's iframe over its whole body (.wbody iframe); this one fills its own box. */
 .st-embed { position: relative; block-size: max(420px, calc(100dvh - 232px - env(safe-area-inset-bottom))); }
 .st-root .st-embed iframe { position: absolute; inset: 0; display: block; inline-size: 100%; block-size: 100%; border: 0; background: transparent; }
-.st-desktop .st-page:has(.st-embed) { display: flex; flex-direction: column; padding-bottom: 0; }
-.st-desktop .st-page:has(.st-embed) > section { flex: 1; min-height: 0; }
-.st-desktop .st-embed { block-size: 100%; min-block-size: 360px; }
+/* One scroll area (issue 1242): the frame scrolls, the page around it does not. The frame takes the room the page's
+   other sections (Wizards › Add a Wizard) leave, and they stay in view below it, on the phone as on desktop. */
+.st-page:not([hidden]):has(.st-embed) { display: flex; flex-direction: column; min-height: 0; padding-bottom: 0; }
+.st-page:has(.st-embed) > section { flex: none; }
+.st-page:has(.st-embed) > section:has(.st-embed) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.st-page .st-embed { flex: 1; block-size: auto; min-block-size: 240px; }
+.st-root:has(> .st-phone.st-in-page .st-embed) { display: flex; flex-direction: column; }
+.st-phone.st-in-page:has(.st-embed) { flex: 1; min-height: 0; inline-size: 100%; display: flex; flex-direction: column; }
+.st-phone.st-in-page:has(.st-embed) > .st-page { flex: 1; }
+.st-desktop .st-embed { min-block-size: 360px; }
