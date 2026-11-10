@@ -49,6 +49,11 @@ requests the phone's `layout.js` / `layout.css`: `core/skin-host.js` LAYOUTS `fi
   `wos.chats.readyOrder.v1`; a stock Priority or By subject reads as Newest here). "Show sort control in sidebar"
   (off at first) adds a small Newest / Oldest menu on Ready's header. The group is mounted through the layout API's
   `desk.setting(id, node)` (core/skin-host.js).
+- Agent choices (only when there is more than one agent): under the header, small pills **All · each agent** (the Chats
+  window's Focus strip, in the sidebar). A pick is Chats' own `setFocus` on the main Chats window (`api.agents.setFocus` →
+  `openAgentChats` / `setFocus(w, null)`), so the sidebar lists that agent's chats (`sessionListFocused` = `focusRows`,
+  Chats' own `focusMatches`) and + (New chat) starts one routed to it (`winAgent`); a thread keeps working in the main
+  area; All returns to the normal list. One agent = no pills. The folded rail has none (it shows the same filtered counts).
 - Middle: the chat in a centred column with the composer.
 - Settings opens as a centred panel over the page, including when AI apps is enabled from an already-open Settings
   window. The shared Settings surface uses category → page → Back below 700 px **host** width (also in Apps/Orb or

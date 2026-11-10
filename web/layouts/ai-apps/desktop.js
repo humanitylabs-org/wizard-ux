@@ -185,8 +185,9 @@ export default function desktop(api) {
   let noteWant = false;
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
-  const readSessions = () => { sessions = api.sessions.list() || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
-  const titleOf = id => { const s = sessions || readSessions(); for (const k of KINDS) { const r = (s[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
+  const readSessions = () => { sessions = api.sessions.list({ focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
+  // (a chat opened from elsewhere may belong to an agent the sidebar is not focused on: look in the whole list too)
+  const titleOf = id => { for (const s of [sessions || readSessions(), api.sessions.list()]) for (const k of KINDS) { const r = ((s || {})[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
   // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.
   const ttAgent = id => globalThis.WizLive?.agentOf?.(id) || '';
   const ttDots = id => { const T = globalThis.WosThreadTracker; return T?.on?.() ? T.dots(id, ttAgent(id)) : ''; };
@@ -233,7 +234,32 @@ export default function desktop(api) {
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); rSet.append(icon('cog'));
   const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
   rail.append(rTog, rNew, rFind, rWs, rList, rSet);
-  const panel = el('div', 'aad-panel'); panel.append(head, scroll, foot);
+  /* Agent choices (only with more than one agent): All, then each agent, as small chips under the header. They are Chats'
+   * own Focus (api.agents.setFocus -> setFocus / winAgent): the sidebar lists that agent's chats and + starts one with it. */
+  const agentsRow = el('div', 'aad-agents', { role: 'group', 'aria-label': 'Chats from' }); agentsRow.hidden = true;
+  let agentsDrawn = '';
+  function paintAgents() {
+    const f = api.agents.focus ? api.agents.focus() : { id: '', agents: [] }, list = f.agents || [];
+    const sig = list.length > 1 ? JSON.stringify([f.id, list.map(a => [a.id, a.label, a.colour, a.private])]) : '';
+    if (sig === agentsDrawn) return;
+    agentsDrawn = sig; agentsRow.hidden = !sig;
+    if (!sig) { agentsRow.replaceChildren(); return; }
+    const chip = (id, text, colour, priv) => {
+      const on = f.id === id, b = el('button', 'aad-ag' + (on ? ' is-on' : ''), { type: 'button', 'data-aad-agent': id, 'aria-pressed': String(on), ...(priv ? { title: text + ' · private agent' } : {}) });
+      if (colour) { const d = el('i', 'aad-ag-d', { 'aria-hidden': 'true' }); d.style.setProperty('--aad-ag', colour); b.append(d); }
+      b.append(el('span', 'aad-ag-t', { text }));
+      // the pick lands on the press itself (a tap registers at once); the list repaints right after
+      api.listen(b, 'click', () => pickAgent(id));
+      return b;
+    };
+    agentsRow.replaceChildren(chip('', 'All'), ...list.map(a => chip(a.id, a.label, a.colour, a.private)));
+  }
+  function pickAgent(id) {
+    const f = api.agents.focus(); if (!f.space && (f.id || '') === id) return;   // a Space focus is replaced by the agent-wide one
+    api.agents.setFocus(id);
+    agentsDrawn = ''; paintAgents(); readSessions(); paintList(true); paintRail(true);
+  }
+  const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
@@ -1848,6 +1874,7 @@ export default function desktop(api) {
     if (r.home || r.view !== 'thread' || r.thread !== '__new__' || !onMainChats(r)) draftWant = false;
     for (const w of chatWindows()) { const s = host.chats(w.id); if (onScreen(s?.notification)) s.placeNotificationRoute(); }
     const h = here(r);
+    paintAgents();
     paintOrbIdentity(h.app);
     // an app coming to the front closes the picker; a repaint with the same app in front does not (round 21: ⌥A / + with
     // an app open flashed shut on the next render)

@@ -3048,6 +3048,15 @@
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
       const w = skinShowChats(); if (!w) return false; CHATS.openRenameSheet(w.id, sid); return true;
     },
+    // The AI apps sidebar's agent choices: the same agents and Focus the Classic Chats strip uses (setFocus / winAgent).
+    // Picking one goes through openAgentChats (Chats' Focus on the main window); All clears that Focus.
+    agentFocus: () => {
+      const AG = window.WosAgents, w = findWin(mainChats);
+      return { id: w ? CHATS.focusAgentId(w) : '', space: !!w && CHATS.focusOf(w)?.kind === 'space', agents: (AG?.visible?.() || []).map(a => ({ id: a.id, label: a.is_default ? (window.WizConfig.agent() || a.label || a.id) : (a.label || a.id), colour: AG.colour(a), private: a.privacy === 'private', main: !!a.is_default, status: a.status || '' })) };
+    },
+    agentFocusSet: id => { if (id) { void openAgentChats(id); return true; } const w = findWin(mainChats); return !!w && CHATS.setFocus(w, null); },
+    // The same rows the AI apps sidebar draws, narrowed to what the main Chats' Focus shows (one agent's chats): Chats' own rule.
+    sessionListFocused: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups(CHATS.focusRows(findWin(mainChats))) : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     // The AI apps view's main screen: the Chats desk in front as it is (its thread kept; opened if there is none), and
     // a New chat in it.
     showChats: () => !!skinShowChats(),
