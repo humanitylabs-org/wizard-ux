@@ -38,7 +38,11 @@
     "wizard/cli-install-links"
   ],
   "defaults": [
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "wizard/desktop-chats"
+  ],
+  "promotedDefaults": [
+    "wizard/desktop-chats"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
