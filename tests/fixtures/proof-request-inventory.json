@@ -1062,6 +1062,12 @@
       "source": "web/core/chat-power.js",
       "kind": "write-or-stream",
       "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_github": {
+      "status": "not-exercised",
+      "source": "web/store/store-github.js",
+      "kind": "write-or-stream",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     }
   }
 }
