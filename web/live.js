@@ -853,7 +853,9 @@
     },
     // Visible unread: idle threads the Chats list shows unread (not working, hidden, archived or snoozed). Focus badges
     // (agents, Spaces) count only these, so a dot never points at nothing.
-    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
+    // Snoozed is never unread (wizard-os issue 510): with Snooze = bottom of Ready a snoozed thread sits in Ready's tail
+    // (and in the AI apps view's Snoozed), so it must not light the Ready badge while Ready shows nothing new.
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s)) && !(snoozeLast() && isDeferred(s) && !inWorking(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },

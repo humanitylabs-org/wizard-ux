@@ -954,7 +954,8 @@ export default function desktop(api) {
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
     if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', globalThis.WizChatsListModel.unreadCount(g.rows), g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
-    else if (ready.length || unread) out.push(railRow('ready', unread, 'Ready', '', act, text));
+    // (wizard-os issue 510: an unread count with no Ready chat behind it pointed at nothing, so it needs a Ready row)
+    else if (ready.length) out.push(railRow('ready', unread, 'Ready', '', act, text));
     rList.replaceChildren(...out);
     if (fly) paintFly();
   }
