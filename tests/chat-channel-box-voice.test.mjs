@@ -65,3 +65,56 @@ test('the box model label opens the new-chat model menu without private-agent mo
   n.click('[data-chmodel]');
   assert.equal(n.privAsked[0]?.length, 1, 'the main New chat keeps unified Chats\' private models');
 });
+
+// The real composer seal helpers from core/chats.js: a take pinned to channel A's box takes A's box (never channel B's
+// in front by Send, never the New chat draft) and gives it back to A when the take is dropped.
+const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+function seals() {
+  const a = chats.indexOf('  const composerKey = sid =>'), b = chats.indexOf('  // At start: words taken by a voice send');
+  assert.ok(a > 0 && b > a);
+  const d = {}, w = { id: 'win', thread: null }, c = {}, view = { box: 'chan:hermes:launch' };
+  const ctx = { crypto: { randomUUID: () => 'aaaa-bbbb' }, INC: null, PEND: null, W: { win: w }, ch: () => c, elOf: () => ({ querySelector: () => null }), chanDraftKey: () => view.box,
+    KIT: { drafts: { get: k => d[k] || { text: '', files: [] }, set: (k, text, files = []) => { d[k] = { text, files }; }, clear: k => { delete d[k]; }, setReply() {} } },
+    pendRef: f => f, growTa() {}, syncSend() {}, refreshCompose() {}, refreshReply() {}, setDraft: (wid, text, files) => { c.draft = text; c.files = files; }, renderChats() {}, Promise };
+  vm.createContext(ctx); vm.runInContext(chats.slice(a, b) + ';this.api={takeComposer,peekComposer};', ctx);
+  return { ...ctx.api, d, w, c, view };
+}
+test('a channel take seals the box of the channel it started in, and gives the words back there', () => {
+  const s = seals();
+  s.d['chan:hermes:launch'] = { text: 'launch words', files: [] }; s.d['chan:hermes:voice'] = { text: 'voice words', files: [] }; s.d.new = { text: 'new chat draft', files: [] };
+  s.view.box = 'chan:hermes:voice'; // James is on # Voice by Send
+  const t = s.takeComposer('win', '__new__', 'chan:hermes:launch');
+  assert.equal(t.text, 'launch words'); assert.equal(s.d['chan:hermes:voice'].text, 'voice words', 'the box in front is left alone');
+  assert.equal(s.d.new.text, 'new chat draft', 'never the New chat draft');
+  t.putBack(); assert.equal(s.d['chan:hermes:launch'].text, 'launch words', 'a dropped take gives the words back to its own channel');
+  // Pinned to "no channel" (a New chat mic), a channel in front by Send is not taken either.
+  const n = seals(); n.d['chan:hermes:launch'] = { text: 'launch words', files: [] }; n.d.new = { text: 'new words', files: [] };
+  assert.equal(n.takeComposer('win', '__new__', '').text, 'new words');
+  // No pin (an older take): whatever box is in front, as before.
+  const o = seals(); o.d['chan:hermes:launch'] = { text: 'launch words', files: [] };
+  assert.equal(o.peekComposer('win', '__new__').here, true);
+});
+
+// The model is still read at Send (wizard-ux#1218), but a channel take keeps the agent it started with: by Send another
+// agent's channel may be in front, and its chat is filed into the channel it started in (Codex P1).
+test('phone and desktop: a channel take never re-routes to the agent of the channel in front by Send', () => {
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const tap = app.slice(app.indexOf('  function sendTapRoute('), app.indexOf('  // A take that sends nothing'));
+  let live = { model: 'b-model', provider: 'b', agent: 'container' };
+  const ctx = { CHATS: { modelRoute: () => live }, window: { WosModels: { snapshot: () => null } } };
+  vm.createContext(ctx); vm.runInContext(tap + ';this.sendTapRoute=sendTapRoute;', ctx);
+  const start = { model: 'a-model', provider: 'a', agent: 'host' };
+  const snap = { view: { id: 'win', thread: '__new__', space: 'host-ops' }, route: start };
+  assert.equal(ctx.sendTapRoute(snap, { wid: 'win', sid: '__new__' }).model, 'a-model', 'another agent in front: the starting route');
+  live = { model: 'a-newer', provider: 'a', agent: 'host' };
+  assert.equal(ctx.sendTapRoute(snap, { wid: 'win', sid: '__new__' }).model, 'a-newer', 'same agent: the model picked while recording');
+  live = { model: 'b-model', provider: 'b', agent: 'container' };
+  assert.equal(ctx.sendTapRoute({ view: { id: 'win', thread: '__new__' }, route: start }, { wid: 'win', sid: '__new__' }).model, 'b-model', 'not a channel take: as before');
+  const line = desk.slice(desk.indexOf('  const chanRoute ='), desk.indexOf('\n', desk.indexOf('  const chanRoute =')));
+  const d = {}; vm.createContext(d); vm.runInContext(line.replace('const chanRoute', 'this.chanRoute'), d);
+  assert.equal(d.chanRoute(() => ({ model: 'b', agent: 'container' }), () => start)().model, 'a-model');
+  assert.equal(d.chanRoute(() => ({ model: 'a2', agent: 'host' }), () => start)().model, 'a2');
+  assert.match(desk, /if \(vRouteAt && typeof vSpace === 'string'\) vRouteAt = chanRoute\(resolveRoute, \(\) => vRoute\);/);
+  assert.match(desk, /if \(box\) vRouteAt = chanRoute\(vRouteAt, \(\) => vRoute\);/);
+  assert.match(desk, /CHATS\.takeComposer\(sealAt\.wid, sealAt\.sid, sealAt\.box\)/);
+});

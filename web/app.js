@@ -2526,7 +2526,7 @@
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
-      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
+      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid,V.replyTo.box);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
       const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],sealReply:V.seal?.reply||null,parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
       const it=await OUTBOX.stage({captureId:V.custodyCapture,nativeId:parkedNativeId,audio:new Blob(V.parts,{type:V.parts[0]?.type}),kind:'reply',sessionId:V.replyTo.sid,...V.snap.route,parkedDraft:draft});
       await OUTBOX.transition(it.id,'held','Reply paused · return to resume or send');
@@ -2568,7 +2568,7 @@
     // One recorder pathway (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be triggering the same
     // pathway"): startVoice owns admission, so a Mizel meeting lends its microphone to the composer mic exactly as it
     // does to the orb, and the reply pin is set before the take opens (it survives the asynchronous loan).
-    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '' } });
+    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box: CHATS.chanBox?.(wid) || '' } : {}) } });
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
@@ -2795,9 +2795,9 @@
   // The thread a take is sent into (and whose composer rides with it): a composer-mic take's pinned thread, or the
   // thread open when an orb take started. A held command, or a take aimed at another desk, has none.
   function sealTarget() {
-    if (V.replyTo) return { wid: V.replyTo.wid, sid: V.replyTo.sid };
+    if (V.replyTo) return { wid: V.replyTo.wid, sid: V.replyTo.sid, box: V.replyTo.box };
     const v = V.snap?.view;
-    return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread } : null;
+    return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread, box: v.box } : null;
   }
   // The model route for a take, read from the selector at the Send tap (wizard-ux#1218), for the same destination the
   // take was pinned to when it started. An explicit agent pick keeps its own agent. Not used for a take resumed after
@@ -2808,7 +2808,10 @@
       const agent = snap.route?.agent || '';
       return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
     }
-    return pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+    // A take pinned to a channel keeps that channel's agent: another agent's channel in front by Send never re-routes it.
+    if (typeof snap.view?.space === 'string' && snap.route && (live?.agent || '') !== (snap.route.agent || '')) return snap.route;
+    return live;
   }
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
   function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
@@ -2940,7 +2943,7 @@
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
-    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length || t.reply ? t : null; }
+    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid, sealAt.box); V.seal = t.text || t.files.length || t.reply ? t : null; }
     if (!quickTake(V.kind, V.snap, V.replyTo, V.target, V.acc + (V.state !== 'paused' ? performance.now() - V.t0 : 0))) leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
@@ -3220,7 +3223,7 @@
     // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
     // channel, exactly like its message box (whose words and pictures ride with it), pinned to that channel's Space,
     // and the window stays on the feed. A routed agent's channel keeps that agent's own voice path (below).
-    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id } : {};
+    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '' } : {};
     if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
       // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
       const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });

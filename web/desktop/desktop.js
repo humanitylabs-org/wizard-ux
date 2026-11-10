@@ -1952,7 +1952,7 @@
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   const glow = document.createElement('div'); glow.id = 'voiceGlow'; glow.setAttribute('aria-hidden', 'true'); document.body.appendChild(glow); // edge light; never resizes the stage
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null, vBox;
   let vHandedOff = null; // a sent take the outbox can finish after a reload
   const VOICE = C.voice({
     onState: st => {
@@ -2046,6 +2046,9 @@
     try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
     finally { clearTimeout(timer); }
   }
+  // A take started in a channel (wizard/chat-channels) re-reads its model at Send but keeps the agent it started with:
+  // another agent's channel in front by then never re-routes it (its chat is filed into the starting channel).
+  const chanRoute = (read, start) => () => { const r = read(), s = start(); return s && (r?.agent || '') !== (s.agent || '') ? s : r; };
   async function talk(action = 'toggle', forceNew = false, newKey = `${MOD}V`) {
     if (VOICE.state === 'idle' && CHATS.incognitoActive(focused()?.id)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
@@ -2060,7 +2063,7 @@
       vTarget = (f?.app === 'chats' || (!forceNew && CHATS.isHosted(f?.id))) ? f.id : null;
       if (forceNew && vTarget) vSnapshot.thread = '__new__';
       // A channel feed in front (wizard/chat-channels): the take is filed into that channel, wherever James is by Send.
-      vSpace = !forceNew && vTarget ? CHATS.chanSpaceOf?.(W[vTarget]) ?? null : null;
+      vSpace = !forceNew && vTarget ? CHATS.chanSpaceOf?.(W[vTarget]) ?? null : null; vBox = typeof vSpace === 'string' ? CHATS.chanBox?.(vTarget) || '' : undefined;
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
       vConversation = !forceNew && !CHATS.isHosted(f?.id) ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
         : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
@@ -2070,6 +2073,7 @@
       try {
         const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '');
         vRoute = vConversation ? null : resolveRoute(); vRouteAt = vConversation ? null : resolveRoute; // re-read at Send (wizard-ux#1218)
+        if (vRouteAt && typeof vSpace === 'string') vRouteAt = chanRoute(resolveRoute, () => vRoute); // a channel take keeps its agent
         if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
         if (!vConversation && !vRoute?.model) throw Error('Model route unavailable · recording has not started');
       } catch(e) { toast('!',String(e.message || e),2600);return 'busy'; }
@@ -2113,14 +2117,14 @@
     // The thread in front at the send key, before any await; an agent's Chats list takes it as a new chat with that agent.
     const aimSid = vFeedback?.thread || rp?.sid || (vTarget && vSnapshot?.view?.kind === 'chat thread' ? vSnapshot.thread : '') || (vTarget ? '__new__' : '');
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
-    const sealAt = vFeedback || vNewChat ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
+    const sealAt = vFeedback || vNewChat ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid, box: aimSid === '__new__' ? vBox : undefined } : null;
     let modelRoute;
     // The destination stays pinned to where the take started; the model is read at the Send key, so a model picked
     // while recording is the one that answers (wizard-ux#1218). The recording-start route stays only when the
     // selector can't be read right now (catalogue still loading).
     try { const live = vConversation ? null : vRouteAt?.(); if (live?.model && live?.provider) vRoute = live; modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
-    const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
+    const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid, sealAt.box) : null;
     const sealed = t && (t.text || t.files.length || t.reply) ? t : false;
     vHandedOff = null; dictationFinishing = true;
     try {
@@ -2161,11 +2165,12 @@
     if (!sid) return 'busy';
     strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
     dictationFinishing = true;
-    try { vRouteAt = () => CHATS.modelRoute(wid,sid); vRoute = vRouteAt(); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
+    const box = sid === '__new__' ? CHATS.chanBox?.(wid) || '' : '';
+    try { vRouteAt = () => CHATS.modelRoute(wid,sid); vRoute = vRouteAt(); if (box) vRouteAt = chanRoute(vRouteAt, () => vRoute); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
-    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '' }; vContext = viewContext(wid, 'voice, aimed at this thread');
+    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box } : {}) }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';

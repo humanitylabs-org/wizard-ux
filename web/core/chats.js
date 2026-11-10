@@ -3389,40 +3389,43 @@ window.WizCore.chats = function createChats(H) {
   const composerKey = sid => sid === '__new__' ? 'new' : 'direct:' + sid;
   // A new chat started from a channel's feed (its mic, the orb in front of it) takes that channel's box.
   const chanBoxOf = (wid, sid) => sid === '__new__' && W[wid] && !W[wid].thread && typeof chanDraftKey === 'function' ? chanDraftKey(W[wid]) : '';
-  const boxKey = (wid, sid) => chanBoxOf(wid, sid) || composerKey(sid);
+  // box: the channel box a voice take was pinned to when it started ('' = none; undefined = whatever is in front now).
+  // A take started in channel A takes A's box even if the window shows channel B by Send.
+  const boxKey = (wid, sid, box) => (typeof box === 'string' ? box : chanBoxOf(wid, sid)) || composerKey(sid);
   const SEALED = 'sealed:';
   const fileRef = f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes });
   // What a thread's composer holds right now (the window's textarea while it shows that thread, else the draft).
-  function peekComposer(wid, sid) {
+  function peekComposer(wid, sid, box) {
     if (INC?.active(wid)) return { text: '', files: [] };
-    const w = W[wid], here = !!w && !!sid && (w.thread === sid || !!chanBoxOf(wid, sid)), c = w ? ch(wid) : null;
+    const cur = chanBoxOf(wid, sid), pinned = typeof box === 'string';
+    const w = W[wid], here = !!w && !!sid && (pinned ? (box ? box === cur : !cur && w.thread === sid) : (w.thread === sid || !!cur)), c = w ? ch(wid) : null;
     const ta = here ? elOf(wid)?.querySelector('.ch-compose textarea') : null;
-    const saved = sid ? KIT.drafts.get(boxKey(wid, sid)) : { text: '', files: [] };
+    const saved = sid ? KIT.drafts.get(boxKey(wid, sid, box)) : { text: '', files: [] };
     return { here, ta, c, text: String(here ? (ta ? ta.value : c.draft || '') : saved.text), all: here ? (c.files || []) : saved.files, reply: saved.reply };
   }
   // A photo or file in that composer is still uploading: the voice send waits for it, like a typed send.
   const composerBusy = (wid, sid) => peekComposer(wid, sid).all.some(f => f && f.uploading);
-  function restoreInto(wid, sid, text, files, reply) {
+  function restoreInto(wid, sid, text, files, reply, box) {
     // A placeholder for a file that was still uploading goes back as its receipt once that upload settles
     // (dropped if it failed or this page no longer holds it).
     const waits = (files || []).filter(f => PEND?.isPending(f?.id));
     if (waits.length) {
       Promise.all(waits.map(f => PEND.rowOf(f.id)?.upDone?.then(r => r, () => null) || null)).then(got => {
         const done = files.map(f => { const i = waits.indexOf(f); return i < 0 ? f : got[i]?.id ? fileRef(got[i]) : null; }).filter(Boolean);
-        restoreInto(wid, sid, text, done, reply);
+        restoreInto(wid, sid, text, done, reply, box);
       });
       return;
     }
-    const now = peekComposer(wid, sid);
+    const now = peekComposer(wid, sid, box);
     const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))] };
-    if (reply && !now.reply) KIT.drafts.setReply(boxKey(wid, sid), reply);
-    if (now.here) { setDraft(wid, back.text, back.files); if (now.ta && chanBoxOf(wid, sid)) now.ta.value = back.text; renderChats(W[wid]); } else KIT.drafts.set(boxKey(wid, sid), back.text, back.files);
+    if (reply && !now.reply) KIT.drafts.setReply(boxKey(wid, sid, box), reply);
+    if (now.here) { setDraft(wid, back.text, back.files); if (now.ta && chanBoxOf(wid, sid)) now.ta.value = back.text; renderChats(W[wid]); } else KIT.drafts.set(boxKey(wid, sid, box), back.text, back.files);
   }
   const NO_SEAL = { text: '', files: [], done() {}, putBack() {} };
-  function takeComposer(wid, sid) {
+  function takeComposer(wid, sid, box) {
     if (INC?.active(wid)) return NO_SEAL;
     if (!sid) return NO_SEAL;
-    const P = peekComposer(wid, sid), dkey = boxKey(wid, sid);
+    const P = peekComposer(wid, sid, box), dkey = boxKey(wid, sid, box);
     // A file still uploading is taken too (a pending placeholder): the message never waits for it.
     const taken = P.all.map(f => [f, pendRef(f)]).filter(([, r]) => r && r.id);
     const text = P.text.trim(), files = taken.map(([, r]) => r), reply = P.reply || null;
@@ -3441,7 +3444,7 @@ window.WizCore.chats = function createChats(H) {
     let open = true;
     return { text, files, reply, key: skey,
       done(it) { if (it && !it.durable) return; if (open) { open = false; KIT.drafts.clear(skey); } },
-      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files, reply); } };
+      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files, reply, box); } };
   }
   // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
   const startupSeals = new Set(Object.keys(KIT.drafts.all()).filter(k => k.startsWith(SEALED)));
@@ -3916,7 +3919,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, chanSpaceOf, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, chanSpaceOf, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
