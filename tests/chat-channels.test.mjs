@@ -944,3 +944,13 @@ test('issue 1266: what a feed keeps for this open never goes into the saved wind
   f.w.chan = saved; // the window as a reload restores it
   assert.doesNotThrow(() => f.channelFeed(f.w, f.chanOpen(f.w), rows));
 });
+
+test('issue 1266 review: a feed on a background desktop workspace (laid out, but hidden) reads nothing', () => {
+  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
+  f.openChannel(f.w, 'launch'); const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
+  d.sc.closest = sel => sel === '[hidden]' ? {} : null;            // inside .wsp[hidden]
+  f.chanHold('w'); assert.deepEqual(f.marks, [], 'hidden workspace');
+  d.sc.closest = () => null; d.sc.checkVisibility = () => false;   // visibility: hidden from another ancestor
+  f.chanSeeNow('w'); assert.deepEqual(f.marks, [], 'not visible');
+  d.sc.checkVisibility = () => true; f.chanSeeNow('w'); assert.ok(f.marks.length, 'in front: read');
+});

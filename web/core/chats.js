@@ -640,9 +640,16 @@ window.WizCore.chats = function createChats(H) {
   // This open's own memory, never saved with the window (o.chan is): the posts drawn and those seen on this open.
   const chanLoc = {}, chanLocal = wid => { const k = (W[owner(wid)] || W[wid])?.id || wid; return chanLoc[k] || (chanLoc[k] = { seen: new Map(), rows: new Map() }); };
   function chanSee(wid) { if (!channelsOn()) return; clearTimeout(chanSeeT[wid]); chanSeeT[wid] = setTimeout(() => chanSeeNow(wid), CHAN_SEE_MS); }
+  // Really in front of him: a desktop workspace in the background keeps its windows laid out (.wsp[hidden] is
+  // visibility: hidden, not display: none), so a size alone is not enough.
+  function chanShown(sc) {
+    if (sc.closest?.('[hidden]')) return false;
+    if (typeof sc.checkVisibility === 'function') return sc.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+    const st = globalThis.getComputedStyle?.(sc); return !st || st.visibility !== 'hidden';
+  }
   function chanSeeNow(wid) {
     const w = W[wid], c = w && (W[owner(wid)] || w)?.chan && chanLocal(wid), sc = chanScroller(wid), feed = sc?.querySelector('.ch-chan-feed');
-    if (!c || !feed || !sc.clientHeight || !channelsOn() || !chanOpen(w) || globalThis.document?.hidden) return;
+    if (!c || !feed || !sc.clientHeight || !channelsOn() || !chanOpen(w) || globalThis.document?.hidden || !chanShown(sc)) return;
     const box = sc.getBoundingClientRect(), top = box.top + chanStuck(feed), bottom = box.top + sc.clientHeight;
     const end = sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4, out = new Map();
     if (end) for (const [k, s] of c.rows) { if (chanUnread(s)) out.set(k, s); }
