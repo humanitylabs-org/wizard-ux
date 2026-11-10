@@ -859,10 +859,13 @@ window.WizCore.chats = function createChats(H) {
     window.WosSkinHost.inboxAct(a, n.id);
     if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
     if (a === 'app') return true; // the app opens on top; the item stays until the app (or Archive) clears it
-    if (PHONE() && keepThreadOpen()) { renderChats(w); H.changed?.(); return true; }
+    // Archive / Snooze of an alert on the phone land like Archive on a normal chat (James, 8 Nov 2026): straight to the chats
+    // list through leaveFinishedThread's phone landing, whatever the After-actions setting and however many are stacked.
+    const finish = PHONE() && (a === 'done' || a === 'snooze');
+    if (!finish && PHONE() && keepThreadOpen()) { renderChats(w); H.changed?.(); return true; }
     // A stack stays open until it is all handled (Miguel, 4 Nov 2026): Archive / Snooze on one of several moves to the
-    // next one in place (the older neighbour, else the newer); only the last one closes the chat.
-    const stay = (a === 'done' || a === 'snooze') && noteQuiet() && n.item ? [n.item, ...noteSiblings(n.item)].sort((x, y) => noteAt(y) - noteAt(x)) : [];
+    // next one in place (the older neighbour, else the newer); only the last one closes the chat. Desktop only.
+    const stay = !finish && (a === 'done' || a === 'snooze') && noteQuiet() && n.item ? [n.item, ...noteSiblings(n.item)].sort((x, y) => noteAt(y) - noteAt(x)) : [];
     if (stay.length > 1) {
       const at = stay.findIndex(i => i.id === n.id), nx = stay[at + 1] || stay[at - 1];
       const d = KIT.drafts.get('new');
@@ -876,7 +879,8 @@ window.WizCore.chats = function createChats(H) {
     // The notification leaves the chat window; an untouched draft goes with it (typed words stay as a draft).
     const d = KIT.drafts.get('new');
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
-    ch(w.id).draft = ''; chatsBack(w);
+    ch(w.id).draft = '';
+    if (finish) { ch(w.id).trail = []; chatsBack(w); } else chatsBack(w);
     toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Archived', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
@@ -919,10 +923,13 @@ window.WizCore.chats = function createChats(H) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || n.id !== nid || !n.item) return false;
     const ids = [n.id, ...noteSiblings(n.item).map(i => i.id)];
     vib(8);
-    if (!PHONE() || !keepThreadOpen()) {
+    // Archive all lands like Archive: the desktop already always left; the phone now does too, whatever After-actions says.
+    {
       const d = KIT.drafts.get('new');
       if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
-      ch(w.id).draft = ''; chatsBack(w);
+      ch(w.id).draft = '';
+      if (PHONE()) ch(w.id).trail = [];
+      chatsBack(w);
     }
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     const ok = await window.WosBell?.mark?.(ids, { read: true, archived: true });
