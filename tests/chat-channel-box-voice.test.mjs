@@ -133,3 +133,23 @@ test('a box-mic take resumed after a reload (no tap pin left) still files into t
   assert.match(app, /\.\.\.\(typeof r\.box === 'string' \? \{ box: r\.box \} : \{\}\), \.\.\.\(typeof r\.space === 'string' \? \{ space: r\.space \} : \{\}\)/, 'the reply-take record keeps box and Space over a reload');
   assert.match(app, /CHATS\.sendVoiceTo\(rt\.wid, rt\.sid, audio, files, snap\.seal \|\| false, snap\.route, snap\.custodyId, null, undefined, '', rt\.space\)/);
 });
+
+// The real addFiles from core/chats.js: an upload that finishes after another channel opened is saved with its own
+// channel (its parked tray), and a failed one leaves that tray; the box in front is never written with it.
+test('an upload finishing in a parked channel tray is saved to that channel; a failed one leaves it', async () => {
+  const a = chats.indexOf('  async function addFiles(wid, list) {'), b = chats.indexOf('  const UPLOAD_ABORT = new Map();');
+  const d = {}, c = { files: [], chanTrays: new Map() }, saves = [];
+  let release; const gate = new Promise(r => { release = r; });
+  const ctx = { INC: null, PEND: null, PREVIEW: {}, ch: () => c, refreshCompose() {}, paintUpload() {}, toast() {}, saveDraft: () => saves.push('front'), AbortController, URL: { createObjectURL: () => 'blob:x' },
+    UPLOAD_ABORT: new Map(), KIT: { drafts: { get: k => d[k] || { text: '', files: [] }, set: (k, text, files = []) => { d[k] = { text, files: files.filter(f => f.id && !f.uploading) }; } } },
+    uploadFile: async file => { await gate; if (file.name === 'bad.png') throw new Error('nope'); return { id: 'up-' + file.name, name: file.name, mime: file.type, bytes: 1 }; } };
+  vm.createContext(ctx); vm.runInContext(chats.slice(a, b) + ';this.addFiles=addFiles;', ctx);
+  d['chan:hermes:launch'] = { text: 'launch words', files: [] };
+  const run = ctx.addFiles('win', [{ name: 'ok.png', type: 'image/png', size: 1 }, { name: 'bad.png', type: 'image/png', size: 1 }]);
+  const parked = c.files; c.chanTrays.set('chan:hermes:launch', parked); c.files = []; // # Voice opened meanwhile
+  release(); await run;
+  assert.deepEqual(d['chan:hermes:launch'].files.map(f => f.id), ['up-ok.png'], 'saved with # Launch, the failed one gone');
+  assert.equal(d['chan:hermes:launch'].text, 'launch words');
+  assert.deepEqual(parked.map(f => f.name), ['ok.png'], 'the failed upload left the parked tray');
+  assert.equal(c.files.length, 0, 'the box in front never got it');
+});

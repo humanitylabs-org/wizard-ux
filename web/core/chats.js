@@ -1879,6 +1879,7 @@ window.WizCore.chats = function createChats(H) {
     const locals = picked.map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, sent: 0, total: file.size, upState: 'uploading', preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
     if (!locals.length) return;
     c.files.push(...locals); refreshCompose(wid);
+    const tray = c.files; // a channel's tray can be parked while this uploads (chanComposer); it settles there
     await Promise.all(locals.map(async local => {
       const { file } = local; delete local.file;
       const abort = new AbortController(); UPLOAD_ABORT.set(local.key, abort);
@@ -1892,10 +1893,12 @@ window.WizCore.chats = function createChats(H) {
       // collects the receipt from here, or re-uploads the kept bytes if this upload dies.
       const settle = PEND ? PEND.track(local, file) : null;
       try { const f = await uploadFile(file, { signal: abort.signal, onProgress }); Object.assign(local, f, { uploading: false }); settle?.ok(f); if (local.preview) PREVIEW[local.id] = local.preview; }
-      catch (e) { settle?.fail(e); c.files = c.files.filter(x => x !== local); if (!abort.signal.aborted && !local.handedOff) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      catch (e) { settle?.fail(e); c.files = c.files.filter(x => x !== local); if (tray !== c.files && tray.includes(local)) tray.splice(tray.indexOf(local), 1); if (!abort.signal.aborted && !local.handedOff) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
       finally { UPLOAD_ABORT.delete(local.key); }
       refreshCompose(wid);
     }));
+    // Parked with its channel (another channel opened meanwhile): save it there, never into the box in front.
+    for (const [k, t] of c.chanTrays || []) if (t === tray && tray !== c.files) KIT.drafts.set(k, KIT.drafts.get(k).text, t);
     saveDraft(wid);
   }
   const UPLOAD_ABORT = new Map();
