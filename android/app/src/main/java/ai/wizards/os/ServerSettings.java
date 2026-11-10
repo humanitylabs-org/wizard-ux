@@ -32,6 +32,7 @@ public final class ServerSettings {
             context.getSharedPreferences("reply-watch", Context.MODE_PRIVATE).edit().clear().commit();
             android.app.NotificationManager nm = context.getSystemService(android.app.NotificationManager.class);
             if (nm != null) nm.cancelAll();
+            ai.wizards.os.badge.UnreadBadges.reset(context);
         }
         return saved;
     }

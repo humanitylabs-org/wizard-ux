@@ -200,5 +200,16 @@
     if (r.status === 'pinned') { paint('confirmed'); setTimeout(() => { if (active === a) close(); },1200); }
     else close(); // OS cancellation is silent; dispatch isn't success.
   });
-  window.WizHomeScreenApps = Object.freeze({ attach, offer, canOffer: a => pinnable(a), back() { if (!overlay) return false; close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
+  // Fallback only (not wired to any button): ask Android to place the 1x1 Messenger count widget. Needs a fresh tap.
+  async function pinWidget(a) {
+    if (!pinnable(a) || !port()) return { status:'unsupported' };
+    bindPort();
+    let header;
+    try {
+      header = document.createElement('header'); header.style.cssText = 'position:fixed;left:-10000px;visibility:hidden;pointer-events:none'; header.setAttribute('aria-hidden','true'); header.innerHTML = window.WizSigil.box('span','',a);
+      document.body.append(header);
+      return await request('pin-widget', a, { name:window.WizHomeScreenPolicy.displayName(a), icon:await iconPNG(a, header) });
+    } catch (_) { return { status:'error' }; } finally { header?.remove(); }
+  }
+  window.WizHomeScreenApps = Object.freeze({ attach, offer, pinWidget, canOffer: a => pinnable(a), back() { if (!overlay) return false; close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
 })();
