@@ -42,6 +42,7 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-h b { font-size: .875rem; fon
 html[data-tweaks~="wizard/chat-channels"] .ch-post-h time { font-size: .75rem; color: var(--ink-3); }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-t { font-size: .9375rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-t.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-tb { width: 100%; margin-top: 2px; color: var(--ink); cursor: pointer; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-t a { color: var(--violet-2); }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-t code { font-size: .875em; padding: 1px 5px; border-radius: 6px; background: rgba(205, 190, 255, .1); }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-wait { display: block; width: 70%; }

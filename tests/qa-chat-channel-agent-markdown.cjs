@@ -68,7 +68,7 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         await vis('.ch-chan-open[data-chchan="alerts"]').click(); await vis('.ch-chan-h').waitFor();
         const t = vis('.ch-post.by-agent .ch-post-t'); await t.waitFor(); await nap(800);
-        const seen = await t.evaluate(el => ({ text: el.textContent, strong: el.querySelector('strong')?.textContent || '', link: el.querySelector('a[href]')?.getAttribute('href') || '', code: el.querySelector('code')?.textContent || '', strongWeight: el.querySelector('strong') ? getComputedStyle(el.querySelector('strong')).fontWeight : '' }));
+        const seen = await t.evaluate(el => ({ text: el.textContent, strong: el.querySelector('strong')?.textContent || '', link: el.querySelector('a[href]')?.getAttribute('href') || '', code: el.querySelector('code')?.textContent || '', strongWeight: el.querySelector('strong') ? getComputedStyle(el.querySelector('strong')).fontWeight : '', inButton: !!el.querySelector('a[href]')?.closest('button'), focusable: (() => { const a = el.querySelector('a[href]'); if (!a) return false; a.focus(); return document.activeElement === a; })() }));
         entry.seen = seen;
         await page.screenshot({ path: path.join(out, stem + (broken ? '-before' : '') + '.png') });
         if (broken) {
@@ -80,6 +80,8 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
           assert.ok(Number(seen.strongWeight) >= 600, 'the first sentence is bold: ' + seen.strongWeight);
           assert.equal(seen.link, LINK, 'the link is a link');
           assert.equal(seen.code, 'backups');
+          assert.equal(seen.inButton, false, 'the link is not inside the post button');
+          assert.equal(seen.focusable, true, 'the link takes keyboard focus');
           // Tapping the link opens it (a new tab) and does not open the thread.
           const popup = context.waitForEvent('page', { timeout: 5000 });
           await vis('.ch-post.by-agent .ch-post-t a[href]').click();
@@ -89,7 +91,7 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
           assert.equal(entry.threadOpened, false, 'the link tap did not open the thread');
           assert.ok(await vis('.ch-chan-feed').isVisible(), 'the feed is still on screen after the link tap');
           // Tapping the post's words (not the link) still opens its thread.
-          await vis('.ch-post.by-agent .ch-post-h').click(); await nap(800);
+          await vis('.ch-post.by-agent .ch-post-tb strong').click(); await nap(800);
           entry.threadAfterWords = await page.evaluate(() => [...document.querySelectorAll('.ch-msgs .bub')].some(e => e.getClientRects().length));
           assert.ok(entry.threadAfterWords, 'tapping the post still opens its thread');
         }

@@ -1071,6 +1071,8 @@ test('issue 1287: an agent post shows bold and links, not raw markdown; an owner
   assert.doesNotMatch(html, /\*\*Bold/);
   assert.match(html, /<a href="https:\/\/example\.com\/report" target="_blank" rel="noopener noreferrer">/, 'the link can be tapped');
   assert.match(html, /<code>code<\/code>/);
+  assert.doesNotMatch(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*<a /, 'no link inside a button: each link is its own control');
+  assert.match(html, /<div class="ch-post-tb" data-chopen="a"><span class="ch-post-t"><strong>/, 'a tap on the words still opens the thread');
   assert.match(html, /class="ch-post-t">my \*\*own\*\* words</, 'the owner\'s words stay as typed');
 });
 
