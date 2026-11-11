@@ -126,9 +126,15 @@
   const stage = $('#stage');
   const escapeBack = window.WizEscapeBack.create();
   var ownsChatList = !!globalThis.WosSkinHost?.chatsClaimed?.();   // a chat-owning layout decided at boot: the list never mounts first
+  /* The AI apps sidebar's Channels pane (wizard-ux issue 1256) backs onto the main Chats window when there is one. With
+   * none (a fresh desktop, or a restored one with no main Chats window) it backs onto this stand-in instead: a stock
+   * list window kept off the desks and never saved, so the tabs show from the first paint. The first main Chats window
+   * then takes over its open channel (sideMain). A post opened from it opens in the main Chats, as from any row. */
+  let sideBase = null;
+  const sideWin = id => (sideBase && sideBase.id === id ? sideBase : undefined);
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
-    win: id => W[id] || (/::(list|side)$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6), id.slice(-4)) : undefined),
+    win: id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined),
     root: () => stage,
     save,
     layout: id => { syncChatsPane(id); },
@@ -653,7 +659,20 @@
   const listWins = {}, sidePanes = new WeakSet();
   let sideHost = null; // the layout's Channels pane (chatChannels), repainted with the lists on live changes
   // (a layout's sidebar pane is one more such list window, id::side: the AI apps Channels pane, wizard-ux issue 1256)
-  function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } } } }); }
+  function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } else if (sideWin(id)) { if (v === '__new__') newChat(); else openThread(v); } } } }); }
+  // The window behind the sidebar's Channels pane: the main Chats window, else the stand-in (created on demand). When a
+  // main Chats window shows up, it takes over the stand-in's open channel (its feed stays on screen) and its filter.
+  function sideMain() {
+    const w = findWin(mainChats);
+    if (!w) return sideBase || (sideBase = { id: 'side-' + uid(), app: 'chats', thread: null });
+    if (sideBase) {
+      const sb = sideBase; sideBase = null;
+      if (sb.chan && !w.chan) { w.chan = { ...sb.chan, prev: w.focus || null }; w.focus = sb.focus || null; save(); }
+      const f = CHATS.ch(sb.id).chanFilter; if (f && !CHATS.ch(w.id).chanFilter) CHATS.ch(w.id).chanFilter = f;
+      CHATS.forget(sb.id); CHATS.forget(sb.id + '::side');
+    }
+    return w;
+  }
   function syncChatsPane(id) {
     const base = String(id).replace(/::list$/, ''); const w = W[base]; if (!w || w.app !== 'chats') return;
     if (globalThis.WosSkinHost?.panelMode && panelDocked) { const sid = w.thread; if (sid && panelList?.id === base) queueMicrotask(() => panelForward(base, sid)); else if (sid && panel?.id === base) panel.held = true; else if (!sid && panel?.id === base && panel.held) queueMicrotask(() => panelThreadLeft(base)); }
@@ -2836,6 +2855,9 @@
       if (w.thread) CHATS.loadThread(w);
       syncChatsPane(id);
     }
+    // the sidebar's Channels pane on its stand-in (no main Chats window yet): repainted like the one on a real window
+    const sb = typeof sideBase !== 'undefined' && sideBase && typeof sideHost !== 'undefined' && sideHost?.isConnected && sideHost.dataset.chats === sideBase.id + '::side' ? sideHost : null;
+    if (sb && !sb.contains(document.activeElement) && !CHATS.holdList(sideBase.id + '::side')) CHATS.renderChatList(listWin(sideBase.id, 'side'), sb);
     const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); }
     if (homeOpen) paintHome($('#desktopHome'), homeHtml(null));
     hudPaint();
@@ -3076,23 +3098,24 @@
      * drawn into the layout's node as id::side (tabs, channels, a feed and its box; empty with the switch off). Its
      * clicks go through Chats' own handler; a post opens in the main Chats window like a sidebar row. */
     chatChannels: host => {
-      const w = findWin(mainChats); if (!w || !host || host.nodeType !== 1 || !stage.contains(host)) { host?.replaceChildren?.(); return false; }
-      const id = w.id + '::side'; sideHost = host;
-      if (host.dataset.chats !== id) host.dataset.chats = id;
+      if (!host || host.nodeType !== 1 || !stage.contains(host)) { host?.replaceChildren?.(); return false; }
+      const w = sideMain(), id = w.id + '::side', fresh = host.dataset.chats !== id; sideHost = host;
+      if (fresh) host.dataset.chats = id;   // a new window behind it (the stand-in handed over): painted at once
       if (!sidePanes.has(host)) {
         sidePanes.add(host);
         host.addEventListener('click', e => {
-          const sid = host.dataset.chats || '', base = sid.replace(/::side$/, ''); if (!W[base]) return;
+          const sid = host.dataset.chats || '', base = sid.replace(/::side$/, ''); if (!W[base] && !sideWin(base)) return;
           const row = e.target.closest('[data-chopen]');
           if (row && CHATS.justPressed()) { e.stopPropagation(); return; }
           if (row && !e.target.closest('.ch-sheet')) { e.stopPropagation(); openThread(row.dataset.chopen); return; }
           if (CHATS.click(e, sid)) { e.stopPropagation(); syncChatsPane(base); }
         });
       }
-      if (!host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(w.id, 'side'), host);
+      if (fresh || !host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(w.id, 'side'), host);
       return !!host.firstElementChild;
     },
-    chatChannelBack: () => { const w = findWin(mainChats); return !!w && !!CHATS.channelBack(listWin(w.id, 'side')); },
+    // (a main Chats window opened since the pane last painted takes over the stand-in's channel first, so Back leaves it)
+    chatChannelBack: () => { const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side')); },
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
       return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
