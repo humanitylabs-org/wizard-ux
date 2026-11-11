@@ -1177,7 +1177,7 @@
     for (const k of ['mobile', 'desktop']) { let x = null; try { x = C.apps(k)?.APP?.[id]; } catch (_) {} if (x && !x.system && H.canOffer(x)) return x; }
     return null;
   }
-  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename']);
+  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename', 'move']);
   /* Notification rows in sessions.list() (round 5): the items Chats lists while a package shows the inbox as threads
    * (host.inboxList), as Ready rows. New = unread (Snooze, Archive), snoozed = read (Restore, Archive), the actions the
    * inbox's handler takes; open = the notification as a chat (its Badge | Chats picker above it). */

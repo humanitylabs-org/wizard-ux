@@ -30,6 +30,8 @@ export const ICON = {
   snooze: ['M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z', 'M12 8v4.5l3 2'],
   done: ['M3.5 5h17v4h-17z', 'M5.5 9v9.5h13V9', 'M10 13h4'],
   restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
+  // a # (Move to channel…, Channels on)
+  move: ['M9.5 4 7.5 20', 'M16.5 4l-2 16', 'M4.5 9h15', 'M4 15h15'],
   check: ['m5 12.5 4.5 4.5L19 7.5'],
   x: ['M6 6l12 12', 'M18 6 6 18'],
   // Move up / Move down (round 16: the right column's menu)
@@ -48,7 +50,7 @@ export const ICON = {
 };
 /* The row menu (long press on the phone, ⋯ or right click on the desktop), in the order they use (Pin, Rename, …, the
  * filing action last), Wizard's words. */
-export const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['unread', 'Mark unread'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
+export const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['unread', 'Mark unread'], ['move', 'Move to channel…'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
 /** An outline icon from ICON as an <svg> of the given class. */
 export function svgIcon(doc, name, cls) {
   const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', cls);
