@@ -75,7 +75,13 @@
     return { code: v.code, provider: one(v.provider, 60), message: one(v.message, 200) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runError: runErrorOf(item.runError), status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) {
+      const s = { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runError: runErrorOf(item.runError), status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
+      // Chats channels (wizard-ux issue 1261): the row's channel id and first owner request, checked after the spread.
+      if (!(typeof s.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(s.channel))) delete s.channel;
+      if (typeof s.firstRequest === 'string') s.firstRequest = s.firstRequest.slice(0, 400); else delete s.firstRequest;
+      return s;
+    }
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
@@ -135,6 +141,8 @@
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
+      ...(typeof item.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(item.channel) ? { channel: item.channel } : {}),
+      ...(typeof item.firstRequest === 'string' ? { firstRequest: item.firstRequest.slice(0, 400) } : {}),
     };
   }
 
@@ -843,6 +851,150 @@
     }
     return out;
   }
+  /* ---- channel store (wizard-ux issue 1261) ----
+   * Chats channels on the Agent Service's own store (wizard-agent-service docs/chats-channels.md, its
+   * WIZARD_CHANNEL_STORE switch, issue 440 phase 2): the channel list with the shared sort, pins and archive, the
+   * atomic thread move, and one channel's own feed (view=list&channel=). Chats reads it only while its
+   * wizard/chat-channels switch is on. A 404 (store off, or an older service) means Spaces: Chats stays on
+   * ui-preferences as in phase 1 and asks again every few minutes. The last list read is kept on this device, so an
+   * offline reload stays on the store. Edits show at once (applied to the kept list), are sent one at a time, and are
+   * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
+   * Membership is keyed by the thread's agent plus its id ('hermes' = main), as the store keys it. */
+  const CHANNELS_URL = '/wizard/v1/channels', CHANNEL_MEMBERSHIP_URL = '/wizard/v1/channels/membership', CHANNELS_CACHE = 'wos.chats.channels.v1';
+  function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
+    const ID = /^[a-z0-9-]{1,48}$/, AGENT = /^[a-z0-9][a-z0-9-]{0,47}$/;
+    const agentKey = a => a && AGENT.test(a) ? a : 'hermes';
+    const valid = c => !!c && typeof c.id === 'string' && ID.test(c.id) && typeof c.name === 'string' && typeof c.agent === 'string' && AGENT.test(c.agent);
+    const one = c => ({ id: c.id, agent: c.agent, name: c.name.slice(0, 60), order: Number(c.order) || 0, createdAt: typeof c.createdAt === 'string' ? c.createdAt : '', archived: !!c.archived,
+      ...(c.archived ? { archivedAt: typeof c.archivedAt === 'string' ? c.archivedAt : '' } : {}), pinned: !!c.pinned, ...(c.pinned ? { pinOrder: Number.isFinite(c.pinOrder) ? c.pinOrder : 0 } : {}),
+      ...(c.kind === 'alerts' ? { kind: 'alerts' } : {}), count: Number(c.count) || 0 });
+    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one) } : null;
+    const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
+    let doc = null; try { doc = clean(JSON.parse(store?.getItem(CHANNELS_CACHE) || 'null')); } catch (_) {}
+    let rev = doc ? 1 : 0, off = false, readAt = 0, reading = null, edits = 0, pending = 0, writes = Promise.resolve();
+    const MOVES = new Map(), FEEDS = new Map();
+    const bump = () => { rev++; try { emit(); } catch (_) {} };
+    const keep = d => { doc = d; try { if (d) store?.setItem(CHANNELS_CACHE, JSON.stringify(d)); else store?.removeItem?.(CHANNELS_CACHE); } catch (_) {} bump(); };
+    function pull() {
+      if (reading) return reading;
+      const at = edits; readAt = now();
+      reading = (async () => {
+        try {
+          const d = clean(await (await req(CHANNELS_URL, { cache: 'no-store' })).json());
+          off = false;
+          if (!d || pending || at !== edits) return; // an edit made since this read began is newer than its answer
+          if (JSON.stringify(d) !== JSON.stringify(doc)) keep(d);
+        } catch (e) {
+          if (e?.status === 404) { const had = !!doc || !off; off = true; MOVES.clear(); FEEDS.clear(); if (had) keep(null); }
+          // Offline or busy: the list this device last read stays.
+        } finally { reading = null; }
+      })();
+      return reading;
+    }
+    // The store as Chats shows it, or null (unknown yet, store off, older service). Reading it keeps it fresh.
+    function state() {
+      if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
+      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels };
+    }
+    // Sent in order; after the last one settles the list is read again (also after a refusal, to show the box's own).
+    function send(url, method, body) {
+      pending++; edits++;
+      const p = writes.then(async () => {
+        try { const r = await req(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch (_) {} return { ok: true, body: j }; }
+        catch (e) { return { ok: false, status: e?.status || 0 }; }
+        finally { pending--; }
+      });
+      writes = p.then(() => {}, () => {});
+      // A read already running began before this edit: read again once it is done.
+      p.then(r => { if (!r.ok) onError(r); if (pending) return; const again = () => { readAt = 0; pull(); }; if (reading) reading.then(again); else again(); });
+      return p;
+    }
+    function edit(fn) { if (!doc) return false; const d = { sort: doc.sort, channels: doc.channels.map(c => ({ ...c })) }; fn(d); doc = d; edits++; bump(); return true; }
+    const nowIso = () => new Date(now()).toISOString();
+    // Same rules as the store (channel-store.mjs update/reorder/setSort): one of {sort} | {id, name?, archived?, pinned?}
+    // | {order:[ids]} | {pinOrder:[ids]}. Pinning appends to that agent's pin order.
+    function patch(body) {
+      if (!doc || !body || typeof body !== 'object') return Promise.resolve({ ok: false, status: 0 });
+      edit(d => {
+        if (body.sort === 'az' || body.sort === 'za') { d.sort = body.sort; return; }
+        const ids = Array.isArray(body.order) ? body.order : Array.isArray(body.pinOrder) ? body.pinOrder : null;
+        if (ids) {
+          const pin = Array.isArray(body.pinOrder), mine = d.channels.filter(c => ids.includes(c.id)), agent = mine[0]?.agent;
+          const rest = d.channels.filter(c => c.agent === agent && !ids.includes(c.id) && (!pin || c.pinned)).sort((a, b) => pin ? a.pinOrder - b.pinOrder : a.order - b.order);
+          ids.map(id => mine.find(c => c.id === id)).filter(Boolean).concat(rest).forEach((c, i) => { if (pin) { c.pinned = true; c.pinOrder = i; } else c.order = i; });
+          return;
+        }
+        const c = d.channels.find(x => x.id === body.id); if (!c) return;
+        if (typeof body.name === 'string') c.name = body.name.trim();
+        if (typeof body.archived === 'boolean' && body.archived !== c.archived) { c.archived = body.archived; if (body.archived) c.archivedAt = nowIso(); else delete c.archivedAt; }
+        if (body.pinned === true && !c.pinned) { c.pinned = true; c.pinOrder = d.channels.filter(x => x.agent === c.agent && x.pinned && x !== c).reduce((m, x) => Math.max(m, x.pinOrder), -1) + 1; }
+        if (body.pinned === false && c.pinned) { c.pinned = false; delete c.pinOrder; }
+      });
+      return send(CHANNELS_URL, 'PATCH', body);
+    }
+    // A new channel needs the box's id: it shows once the box answers (null = not made).
+    async function create(name, agent = '') {
+      const r = await send(CHANNELS_URL, 'POST', { name, ...(agentKey(agent) !== 'hermes' ? { agent: agentKey(agent) } : {}) });
+      const c = r.ok && valid(r.body) ? one(r.body) : null;
+      if (c && doc && !doc.channels.some(x => x.id === c.id)) edit(d => { d.channels.push(c); });
+      return c;
+    }
+    // The atomic move (PUT membership): into channelId, out of that agent's other channel; null unfiles. Shown at once
+    // and kept over list reads for a while, so a list read before the move landed never moves the chat back.
+    function move(sessionId, channelId, agent = '') {
+      const k = agentKey(agent) + '|' + sessionId, mark = { to: channelId || '', at: now() };
+      MOVES.set(k, mark); bump();
+      return send(CHANNEL_MEMBERSHIP_URL, 'PUT', { sessionId, channelId: channelId || null, agent: agentKey(agent) }).then(r => {
+        if (!r.ok && MOVES.get(k) === mark) { MOVES.delete(k); bump(); }
+        return r;
+      });
+    }
+    function moves() { const t = now(), out = []; for (const [k, m] of MOVES) { if (t - m.at > moveKeep) MOVES.delete(k); else out.push([k, m.to]); } return out; }
+    /* One channel's threads (view=list&channel=<id>, oldest first) on its agent's route: the newest feedMax of them,
+     * read once per open and every `every` while shown. A 404 means the channel is gone: the list is read again. */
+    function feed(id, agent = '') {
+      if (off || !doc || !ID.test(id)) return null;
+      let f = FEEDS.get(id);
+      if (!f || f.agent !== agentKey(agent)) { f = { id, agent: agentKey(agent), rows: [], at: 0, busy: false, gone: false, ok: false }; FEEDS.set(id, f); while (FEEDS.size > 8) FEEDS.delete(FEEDS.keys().next().value); }
+      if (!f.busy && now() - f.at >= every) readFeed(f);
+      return f;
+    }
+    async function readFeed(f) {
+      f.busy = true; f.at = now();
+      const a = f.agent !== 'hermes' ? `&agent=${encodeURIComponent(f.agent)}` : '';
+      const page = async (offset, snapshot) => (await req(`/wizard/hermes/api/sessions?view=list&channel=${encodeURIComponent(f.id)}&limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${a}`, { cache: 'no-store' })).json();
+      try {
+        for (let tries = 0; ; tries++) {
+          try {
+            const first = await page(0, ''), total = Number(first.channel_total ?? 0), snapshot = typeof first.snapshot === 'string' ? first.snapshot : '';
+            let raw = (first.data || []).slice(), offset = raw.length, more = first.has_more === true;
+            if (more && total > feedMax) { raw = []; offset = total - feedMax; }
+            for (let n = 0; more && n < Math.ceil(feedMax / 100) + 1; n++) {
+              const p = await page(offset, snapshot), rows = p.data || [];
+              raw.push(...rows); offset += rows.length; more = p.has_more === true && rows.length > 0;
+            }
+            f.rows = raw.map(r => { const s = normalize(r); if (!s) return null; if (f.agent !== 'hermes') s.agent = f.agent; if (!s.channel) s.channel = f.id; return onRow(s, f.agent === 'hermes' ? '' : f.agent); }).filter(s => s && s.channel === f.id).slice(-feedMax);
+            f.ok = true; f.gone = false;
+            break;
+          } catch (e) { if (e?.status === 409 && tries < 1) continue; throw e; }
+        }
+      } catch (e) {
+        if (e?.status === 404) { f.gone = true; f.rows = []; readAt = 0; pull(); }
+        // Offline: the rows last read stay.
+      } finally { f.busy = false; bump(); }
+    }
+    const rows = () => [...FEEDS.values()].flatMap(f => f.rows);
+    // A feed row by id ('' = any agent, main first), for a post opened from the feed outside the live list.
+    function find(id, agent) {
+      const list = rows().filter(s => s.id === id);
+      if (agent === undefined) return list.find(s => !s.agent) || list[0] || null;
+      return list.find(s => agentKey(s.agent) === agentKey(agent)) || null;
+    }
+    // A window coming back to the front reads again at once (another device may have pinned or sorted meanwhile).
+    const fresh = () => { readAt = 0; for (const f of FEEDS.values()) f.at = 0; };
+    return { state, pull, patch, create, move, moves, feed, rows, find, fresh, get off() { return off; } };
+  }
+  /* ---- end channel store ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -850,7 +1002,9 @@
     cached: false, cachedAt: 0, snapAt: 0,
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
-    emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
+    // ticks: how many times the list changed (Chats keys its derived channel membership on it).
+    ticks: 0,
+    emit() { this.ticks++; for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     // Archived threads are read (James, 24 Oct 2026): Archive (Done, or aged past archiveAfterDays) never shows unread.
     isNew(s) { return !this.inArchive(s) && hasNew(s, this.seenOf(s)); },
     // Same rule as groupWork's Archive section, without the per-row day maths.
@@ -1111,7 +1265,7 @@
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
       for (const list of Object.values(this.agentSessions)) { const a = list.find(x => x.id === id); if (a) return a; }
-      return DETAIL.get(id) || SPACE_ROWS.get(id)?.row || null;
+      return DETAIL.get(id) || SPACE_ROWS.get(id)?.row || this.chanStore?.find(id) || null;
     },
     /* The row a Chats window actually shows. An agent window reads its own list, so a routed agent and main can
      * share one thread id without either window resolving the other owner's row. Main windows keep session(). */
@@ -1119,6 +1273,7 @@
       if (!otherAgent(agent)) return this.session(id);
       const a = (this.agentSessions[agent] || []).find(x => x.id === id); if (a) return a;
       const d = DETAIL.get(id); if (d && d.agent === agent) return d;
+      const c = this.chanStore?.find(id, agent); if (c) return c;
       const f = this.session(id); return f && this.ownerOf(f) === agent ? f : null;
     },
     // The owning agent of one row object ('' for main), from the row itself rather than the id-only pin map.
@@ -1764,6 +1919,17 @@
       }
     } finally { pfBusy = false; }
   }
+
+  /* The channel store (above): feed rows get this device's local state like hydrated Space rows (spaceSessions), and a
+   * routed agent's row is pinned to that agent unless the main list already holds the same id. */
+  L.chanStore = channelStore({ req, normalize, emit: () => L.emit(), onError: () => window.dispatchEvent(new Event('wos:prefs-error')),
+    onRow: (s, agent) => {
+      if (agent && !AGENT_OF.has(s.id) && !L.sessions.some(x => x.id === s.id)) AGENT_OF.set(s.id, agent);
+      const d = L.deferred[seenKeyOf(s)];
+      if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+      applyLocal(s); return s;
+    } });
+  try { addEventListener('focus', () => L.chanStore.fresh()); document.addEventListener('visibilitychange', () => { if (!document.hidden) L.chanStore.fresh(); }); } catch (e) {}
 
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };

@@ -195,7 +195,8 @@ test('main vs routed: host-profile, container and restricted rows belong only to
 
 test('posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus', () => {
   assert.match(src, /const spaceKey = isNew && typeof opts\.space === 'string' \? opts\.space : isNew && !opts\.away && focusOf\(w\)\?\.kind === 'space' \? focusOf\(w\)\.key : '';/);
-  assert.match(src, /if \(spaceKey && it\?\.sessionId\) spaceMember\(spaceKey, it\.sessionId, true\);/);
+  // Issue 1261: the send's own agent rides along, so the channel store files the chat by agent plus id.
+  assert.match(src, /if \(spaceKey && it\?\.sessionId\) spaceMember\(spaceKey, it\.sessionId, true, it\.agent \?\? AGID \?\? ''\);/);
   // Back on the desktop list goes through clearFilter, which closes a feed after search and chips.
   assert.match(src, /if \(!c\.filter\) return typeof channelBack === 'function' && channelBack\(w\) \? 'channel' : false;/);
 });
@@ -503,7 +504,7 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   assert.match(desk, /vSpace = !forceNew && vTarget \? CHATS\.chanSpaceOf\?\.\(W\[vTarget\]\) \?\? null : null;/);
   assert.match(desk, /\.\.\.\(aimSid === '__new__' && !rp && typeof vSpace === 'string' \? \{ space: vSpace \} : \{\}\)/);
   // Those takes are filed into the channel the way every new chat from a Space in front is (outbox onNew).
-  assert.match(src, /const key = spaceInFront\(it\.agent \|\| ''\);\n\s*if \(key\) spaceMember\(key, it\.sessionId, true\);/);
+  assert.match(src, /const key = spaceInFront\(it\.agent \|\| ''\);\n\s*if \(key\) spaceMember\(key, it\.sessionId, true, it\.agent \|\| ''\);/); // issue 1261: with its agent
 });
 
 test('a channel feed names the Space its new chats go to (General = none); no feed, no Space', () => {

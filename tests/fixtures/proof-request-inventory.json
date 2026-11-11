@@ -345,6 +345,18 @@
       "kind": "stream",
       "note": "AI Look up: needs a text selection and the Look up tap, which the shell flows never make; tests/lookup-pop.browser.cjs covers it with a scripted local backend. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channels": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "Chats channel store (wizard-ux issue 1261): read only while the off-by-default wizard/chat-channels switch is on, which none of the three flows turn on; tests/chat-channel-store.test.mjs covers it against a fake store. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/channels/membership": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write",
+      "note": "Chats channel store move (wizard-ux issue 1261): only when a chat is filed with wizard/chat-channels on and the store answering; tests/chat-channel-store.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/ui-preferences": {
       "status": "catalogued",
       "source": "web/core/chat-pins.js",
