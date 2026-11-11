@@ -310,6 +310,55 @@ export default function desktop(api) {
   }
   cTop.insertBefore(modeBar('chats'), cX); pTop.insertBefore(modeBar('app'), pW); sTop.append(modeBar('app2'));
   top.append(cTop, pTop);
+  /* Wizard for Mac (wizard-os#548): the Mac app's title-bar drag strip covers #bar and lets a click through only on a
+   * control INSIDE #bar (try-wizard WizardDragView reads #bar's box and the buttons in it). The chat's and the app panel's
+   * headers sit over that strip but live on their desks, so their buttons were dead in the Mac app (a click moved the
+   * window instead). Each of their buttons gets an empty, click-through stand-in in #bar, at its place; the Mac app then
+   * leaves those spots to the page and blank header space still drags the window. Plain browsers never get them. */
+  const macHoles = (() => {
+    if (root.dataset?.nativeChrome !== 'mac') return null;
+    const bar = doc.getElementById?.('bar'); if (!bar) return null;
+    const box = el('span', 'aad-mac-holes', { 'aria-hidden': 'true' });
+    bar.append(box);
+    const CONTROLS = 'button, a[href], input, select, textarea, [role="button"]';
+    let asked = false, last = '';
+    const sync = () => {
+      asked = false;
+      if (!box.isConnected) bar.append(box);
+      const b = bar.getBoundingClientRect(), spots = [];
+      for (const head of [cTop, pTop, sTop]) {
+        if (!head.isConnected) continue;
+        for (const c of head.querySelectorAll(CONTROLS)) {
+          if (!c.getClientRects().length) continue;
+          const r = c.getBoundingClientRect();
+          if (!r.width || !r.height || r.bottom <= b.top || r.top >= b.bottom || r.right <= b.left || r.left >= b.right) continue;
+          const x = Math.floor(r.left - b.left - bar.clientLeft), y = Math.floor(r.top - b.top - bar.clientTop);
+          spots.push([x, y, Math.ceil(r.right - b.left - bar.clientLeft) - x, Math.ceil(r.bottom - b.top - bar.clientTop) - y]);
+        }
+      }
+      // The Mac app keeps page coordinates and re-reads only on a change inside #bar: when #bar itself moves (the sidebar
+      // folds or opens), the spots are rebuilt too, even at the same place inside it.
+      const key = [b.left, b.top, b.width, b.height].map(Math.round).join(',') + '|' + spots.join(';'); if (key === last) return; last = key;
+      box.replaceChildren(...spots.map(([x, y, w, h]) => {
+        const i = el('i', '', { tabindex: '-1' });
+        Object.assign(i.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        return i;
+      }));
+    };
+    const soon = () => { if (!asked) { asked = true; api.frame(sync); } };
+    // The pointer moves before it clicks: keep the spots current while it is over the top row (motion, resizes, a header
+    // that moved without a repaint), and after every repaint, resize and finished slide.
+    api.listen(doc, 'pointermove', e => { if (e.clientY < bar.getBoundingClientRect().bottom + 8) soon(); });
+    for (const t of ['animationend', 'transitionend']) api.listen(doc, t, soon);
+    api.listen(globalThis, 'resize', soon);
+    const ro = globalThis.ResizeObserver ? new ResizeObserver(soon) : null;
+    for (const head of [cTop, pTop, sTop]) ro?.observe(head);
+    ro?.observe(bar);
+    const mo = globalThis.MutationObserver ? new MutationObserver(soon) : null;
+    mo?.observe(root, { attributes: true, attributeFilter: ['style', 'data-aad-side', 'data-aad-chat', 'data-aad-split', 'data-aad-mode', 'data-aad-focus', 'data-aad-wide'] });
+    soon();
+    return { soon, dispose() { ro?.disconnect(); mo?.disconnect(); box.remove(); } };
+  })();
   // a slow app: its placeholder in the panel's place from the first frame
   const pLoad = el('div', 'aad-pload', { 'aria-live': 'polite' }); pLoad.hidden = true;
   const pLoadT = el('span', 'aad-pload-t'); pLoad.append(el('span', 'aad-pload-i'), el('i', 'aad-pload-s', { 'aria-hidden': 'true' }), pLoadT);
@@ -1942,7 +1991,7 @@ export default function desktop(api) {
     paintWs(); paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     paintHome();
-    syncOrb();
+    syncOrb(); macHoles?.soon();
   }
   /* round 21 (Miguel, 4 Nov 2026): one left/right model for every open the shell starts by itself. An app (a
    * notification's Open, the launcher, a command) or a link an app owns = that app in the right panel, its one window
@@ -1988,7 +2037,7 @@ export default function desktop(api) {
     for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode']) delete root.dataset[k];
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
-    top.append(cTop); sTop.remove();
+    top.append(cTop); sTop.remove(); macHoles?.dispose();
     closeMenu(); closeWs(); offRws?.(); globalThis.WizWorkspaces?.close?.(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();

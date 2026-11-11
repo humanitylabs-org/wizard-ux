@@ -1041,3 +1041,7 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] .aad
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] .aad-rail { padding-top: calc(8px + var(--aad-mac-top)); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] .aad-ctop { padding-left: max(20px, calc(var(--wz-titlebar-left, 96px) - var(--aad-side) + 8px)); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"][data-aad-focus] .aad-hback { top: calc(12px + var(--aad-mac-top)); }
+/* Wizard for Mac (wizard-os#548): empty click-through stand-ins in #bar for the chat's and app panel's header buttons, so
+ * the Mac app's title-bar drag strip leaves those spots to the page (desktop.js macHoles). Never seen, never hit. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] #bar > .aad-mac-holes { position: absolute; inset: 0; pointer-events: none !important; visibility: visible; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] #bar > .aad-mac-holes > i { position: absolute; display: block; pointer-events: none !important; }
