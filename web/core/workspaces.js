@@ -355,7 +355,8 @@
   // live.js announces every change to the cached box preferences (a pull from the box, or an edit on this device).
   window.addEventListener('wos:prefs', () => { if (!native() && !pending) { settle(); merge(); publish(); } });
   window.addEventListener('wizard:workspaces', e => { if (native()) { try { accept(e.detail); notify(); } catch (_) {} } });
-  window.addEventListener('storage', e => { if (!native() && e.key === KEY && !pending) { merge(); publish(); } });
+  // Another tab of this Wizard changed the device list or the cached box list.
+  window.addEventListener('storage', e => { if (!native() && (e.key === KEY || e.key === BOX) && !pending) { settle(); merge(); publish(); } });
   window.addEventListener('wos:resources', () => ingest(window.WosResources?.state?.devices));
   window.WosSkinHost?.builtin('workspaces', host => {
     api = host;

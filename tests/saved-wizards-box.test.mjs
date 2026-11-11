@@ -24,7 +24,7 @@ function device(box, local = {}, { app = null } = {}) {
     crypto: { randomUUID }, AbortSignal, fetch: () => { throw new Error('fixture must not fetch') } }
   vm.runInNewContext(source, ctx)
   const W = win.WizWorkspaces
-  return { dev, W, names: () => plain(W.snapshot().items.filter(v => v.id !== 'this').map(v => v.name)), store: dev.store, settle: async () => { await tick(); await dev.prefOps([]); await tick() } }
+  return { dev, W, win, names: () => plain(W.snapshot().items.filter(v => v.id !== 'this').map(v => v.name)), store: dev.store, settle: async () => { await tick(); await dev.prefOps([]); await tick() } }
 }
 
 test('a Wizard added on desktop shows in the phone switcher; rename and forget on the phone reach desktop', async () => {
@@ -78,6 +78,26 @@ test('an older Agent Service without savedWizards keeps the list on this device,
   await desktop.W.add({ url: 'https://archimedes.test', name: 'Archimedes' }); await desktop.settle()
   assert.equal(box.state.savedWizards, undefined); assert.ok(!box.log.includes('PATCH'))
   assert.deepEqual(JSON.parse(desktop.store.get('wos.workspaces.v1')).map(w => w.name), ['Archimedes']); assert.deepEqual(desktop.names(), ['Archimedes'])
+})
+
+test('a box rolled back to a service without savedWizards drops the cache; this device keeps its own list', async () => {
+  const box = sharedBox({ savedWizards: [] })
+  const desktop = device(box, { 'wos.workspaces.v1': JSON.stringify([{ ...archie, kind: 'remote' }]) }); await desktop.settle()
+  delete box.state.savedWizards
+  await desktop.dev.pullPrefs(); await tick()
+  assert.equal(desktop.store.get('wos.workspaces.box.v1'), undefined)
+  assert.deepEqual(desktop.names(), ['Archimedes'], 'the list from before is shown again')
+  await desktop.W.add({ url: 'https://bee.test', name: 'Bee' }); await desktop.settle()
+  assert.deepEqual(desktop.names(), ['Archimedes', 'Bee']); assert.equal(box.state.savedWizards, undefined)
+})
+
+test('another tab\'s change to the box list shows in this tab', async () => {
+  const box = sharedBox({ savedWizards: [] }), tab = device(box); await tab.settle()
+  tab.store.set('wos.workspaces.box.v1', JSON.stringify([archie]))
+  // The other tab wrote the shared localStorage; browsers tell this tab only through a storage event.
+  const e = new Event('storage'); e.key = 'wos.workspaces.box.v1'
+  tab.win.dispatchEvent(e)
+  assert.deepEqual(tab.names(), ['Archimedes'])
 })
 
 // AGENTS.md "Synced across devices": a stale device and two devices editing at the same moment both keep their edit.

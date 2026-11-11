@@ -444,7 +444,11 @@
     if (!only) window.WizLauncher?.accept(j);
     const v = applyPrefOps(j, queuedOps());
     let changed = false;
-    for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if ((!only || only.has(name)) && valid(v[name])) {
+    for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if ((!only || only.has(name)) && name === 'savedWizards' && !Array.isArray(j?.savedWizards)) {
+      // A box without saved Wizards (an older or rolled-back Agent Service): drop the cache, so the switcher keeps
+      // this device's own list instead of showing edits the box never stored.
+      if (localStorage.getItem(key) != null) { localStorage.removeItem(key); changed = true; }
+    } else if ((!only || only.has(name)) && valid(v[name])) {
       const value = encode(v[name]);
       if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
     }
