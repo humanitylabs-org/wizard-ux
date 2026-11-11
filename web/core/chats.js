@@ -382,6 +382,7 @@ window.WizCore.chats = function createChats(H) {
     if (o?.space === false) return;
     const key = spaceInFront(it.agent || '');
     if (key) spaceMember(key, it.sessionId, true, it.agent || '');
+    if (key && typeof chanOwnPost === 'function') chanOwnPost(key, it.agent || ''); // its feed shows it (issue 1291)
   });
   window.addEventListener('storage', e => { if (e.key === SPACES_KEY) window.dispatchEvent(new Event('wos:prefs')); });
   function focusOf(w) {
@@ -1008,6 +1009,22 @@ window.WizCore.chats = function createChats(H) {
       const el = elOf(wid), sc = el?.querySelector('.ch-list > .ch-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
       const ta = focus && el?.querySelector('[data-chchanform] textarea'); if (ta) { ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
     });
+  }
+  /* The owner's own new post in a channel (wizard-ux issue 1291 follow-up; message box, voice key, orb, +): every feed of
+   * that channel on screen goes to its end and holds there, so the post is in view even when the feed was scrolled up
+   * or had opened at its New line. Only posts sent from here call this: other people's and agents' posts never move it.
+   * space: the channel's id, '' = General; agent: the post's agent ('' = the default one). */
+  function chanOwnPost(space, agent = '') {
+    if (typeof space !== 'string' || !channelsOn()) return 0;
+    const ag = a => a || AGS()?.defaultId?.() || 'hermes'; let n = 0;
+    for (const id of Object.keys(CH)) {
+      const w = W[id], open = w && !w.thread ? chanOpen(w) : null; if (!open) continue;
+      // General from the All view shows every agent's unfiled posts: any of his General posts; an agent's General, its own
+      const gAg = open.general ? focusAgentId(W[owner(id)] || w) : '';
+      if (open.general ? space !== '' || (gAg && ag(gAg) !== ag(agent)) : open.id !== space || ag(open.agent) !== ag(agent)) continue;
+      chanToEnd(id); n++;
+    }
+    return n;
   }
   // New chat with this window's feed in front (wizard-ux issue 1291): the feed's own box takes it, never General.
   function chanCompose(wid) {
@@ -3926,6 +3943,8 @@ window.WizCore.chats = function createChats(H) {
     // The durable outbox allocates the final thread id before dispatch; retain that
     // membership even if delivery retries or this window navigates away.
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true, it.agent ?? AGID ?? '');
+    // A post into a channel from elsewhere (a voice key, the orb): that channel's feed brings it into view.
+    if (isNew && typeof opts.space === 'string' && it?.sessionId && typeof chanOwnPost === 'function') chanOwnPost(opts.space, it.agent ?? AGID ?? '');
     // Follow only this New chat's allocated id, never a different chat opened during the disk save.
     if (isNew && !left && !opts.away && it?.sessionId && W[wid] === w && w.thread === sid && c.readNav === navAtSend) openChat(wid, it.sessionId);
     sealed?.done(it);
@@ -4290,7 +4309,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember, chanOwnPost }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';

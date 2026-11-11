@@ -64,7 +64,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,chanEditUnsent,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -1354,4 +1354,54 @@ test('AI apps sidebar (wizard-ux issue 1256, James 11 Nov 2026): a channel opene
   f.env.H.channelWin = () => null; f.env.H.channelsElsewhere = () => false;
   f.channelClick(click({ 'data-chchan': 'launch' }), 'w', main);
   assert.equal(main.chan.id, 'launch', 'in place without a feed window');
+});
+
+// wizard-ux issue 1291 follow-up (Archimedes' in-shell review, 11 Nov 2026): a feed opened at its New line, or scrolled up,
+// did not show the owner's new post (voice key, orb) until he scrolled. His own post now brings the feed to its end;
+// other people's and agents' posts never move it.
+test('issue 1291: the owner\'s own new post brings the feed to its end from the New line or a scrolled-up place; agents\' posts do not', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120, 104);
+  f.env.CH.w = {}; f.env.focusAgentId = w => w?.focus?.kind === 'agent' ? w.focus.key : '';
+  f.openChannel(f.w, 'launch');
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows), d = feedDom(html); f.env.elOf = () => d.el;
+  const bottom = () => d.sc.scrollHeight - d.sc.clientHeight;
+  f.chanHold('w'); assert.notEqual(d.sc.scrollTop, bottom(), 'opened at the New line, not the end');
+  assert.equal(f.chanOwnPost('voice', ''), 0, 'a post into another channel: this feed stays');
+  assert.equal(f.chanOwnPost('launch', 'host'), 0, 'another agent\'s channel of the same id: stays');
+  assert.equal(f.chanOwnPost('', ''), 0, 'a General post: not this feed');
+  f.chanHold('w'); assert.notEqual(d.sc.scrollTop, bottom());
+  // His post into this channel: the end, held while the post fills in.
+  assert.equal(f.chanOwnPost('launch', ''), 1);
+  assert.deepEqual({ ...f.w.chan.at }, { end: true });
+  d.nodes.push({ dataset: { morphKey: 'post:mine' }, h: 140, getBoundingClientRect() { const top = d.nodes.slice(0, d.nodes.indexOf(this)).reduce((a, x) => a + x.h, 0); return { top: top - d.sc.scrollTop, bottom: top + this.h - d.sc.scrollTop }; } });
+  f.chanHold('w'); assert.equal(d.sc.scrollTop, bottom(), 'the new post is in view');
+  // Scrolled up again, an agent's new post arrives: the place holds (no yank).
+  f.chanUser('w'); d.sc.scrollTop = 1050; f.chanScrolled('w', d.sc);
+  const at = { ...f.w.chan.at }; assert.equal(at.key, 'post:p10');
+  d.nodes.push({ dataset: { morphKey: 'post:agent' }, h: 200, getBoundingClientRect: () => ({ top: 99999, bottom: 99999 }) });
+  f.chanHold('w'); assert.equal(d.sc.scrollTop, 1050, 'someone else\'s post never moves the feed');
+  assert.deepEqual({ ...f.w.chan.at }, at);
+  // Switch off: nothing.
+  f.setOn(false); assert.equal(f.chanOwnPost('launch', ''), 0);
+});
+
+test('issue 1291: General\'s feed follows the owner\'s General posts: every agent\'s from All, its own agent\'s when focused', () => {
+  const f = fixture(); f.env.CH.w = {}; let focusAg = '';
+  f.env.focusAgentId = () => focusAg;
+  f.openChannel(f.w, '__general__'); assert.equal(f.chanOpen(f.w)?.general, true);
+  f.w.chan.at = { key: 'post:a', y: 0 };
+  assert.equal(f.chanOwnPost('launch', ''), 0, 'a channel post: not General');
+  assert.equal(f.chanOwnPost('', 'host'), 1, 'All view: General shows every agent\'s unfiled posts (review on #1306)');
+  assert.deepEqual({ ...f.w.chan.at }, { end: true });
+  focusAg = 'hermes'; f.w.chan.at = { key: 'post:a', y: 0 };
+  assert.equal(f.chanOwnPost('', 'host'), 0, 'an agent-focused General: another agent\'s post leaves it');
+  assert.equal(f.chanOwnPost('', ''), 1); assert.deepEqual({ ...f.w.chan.at }, { end: true });
+});
+
+test('issue 1291: every owner post path calls it (box mic, voice keys and the orb via sendChat\'s channel); typed sends keep chanToEnd', () => {
+  assert.match(src, /if \(isNew && typeof opts\.space === 'string' && it\?\.sessionId && typeof chanOwnPost === 'function'\) chanOwnPost\(opts\.space, it\.agent \?\? AGID \?\? ''\);/);
+  const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+  assert.match(power, /if \(typeof pinned === 'string' && it\?\.sessionId\) A\.chanOwnPost\?\.\(pinned, it\.agent \|\| ''\);/);
+  assert.match(src, /spaceMember, chanOwnPost \}\) : null;/, 'handed to chat-power');
+  assert.match(cut('  async function channelSend(', '  function chanDropSending'), /renderChatList\(w, elOf\(wid\)\); chanToEnd\(wid\);[\s\S]*chanRepaint\(\); chanToEnd\(wid\);/);
 });
