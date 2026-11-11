@@ -64,7 +64,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanSeeNow,chanReplies,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -88,9 +88,9 @@ test('Channels lists Spaces A–Z by default, General last, with one aggregate m
   const html = f.channelsBody(f.w, rows);
   const chans = html.split('class="ch-chan"').slice(1);
   assert.deepEqual(chans.map(c => c.match(/data-chchan="([^"]+)"/)[1]), ['box', 'host-ops', 'launch', 'locked', 'voice', '__general__']);
-  assert.match(chans[2], /ch-chan-dot[^>]*Needs you/, 'needs you beats working');
-  assert.doesNotMatch(chans[2], /aria-label="Working"/);
-  assert.match(chans[4], /aria-label="Working"/);
+  // Issue 1269: one slot at the right, in a fixed order: spinner (working), amber (needs you), green (new replies).
+  assert.match(chans[2], /<\/b><span class="ch-chan-ind"><i class="ch-spin" role="img" aria-label="Working"><\/i><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><\/span><\/button>/, 'working and needs you, in order, in the one slot');
+  assert.match(chans[4], /<span class="ch-chan-ind"><i class="ch-spin" role="img" aria-label="Working"><\/i><\/span>/);
   assert.doesNotMatch(chans[5], /ch-chan-dot|ch-spin/, 'General: g is done, so no marker');
   assert.doesNotMatch(html, /<time>/, 'no timestamps or previews on channel lines');
 });
@@ -552,15 +552,16 @@ test('a photo still uploading stays with the channel it was attached in when ano
 });
 
 // Unread (wizard-ux issue 1259): the per-chat read state Activity keeps (LIVE.isNew), drawn on lines and posts.
-test('an unread post makes its channel bold with a count of unread posts; needs-you keeps its dot beside the count', () => {
+test('an unread post makes its channel bold with a green dot (no number pill) after the amber one, in the right-hand slot', () => {
   const rows = [row('a', 1, { fresh: true, messageCount: 4 }), row('b', 2, { fresh: true, attention: { state: 'needs_you' } }), row('c', 3), row('d', 2), row('g', 1, { fresh: true })];
   const f = fixture();
   const chans = f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1);
   const by = Object.fromEntries(chans.map(c => [c.match(/data-chchan="([^"]+)"/)[1], c]));
   assert.match(by.launch, /^ unread"/, 'Launch is bold');
-  assert.match(by.launch, /<small class="ch-chan-n" aria-label="2 unread">2<\/small><i class="ch-chan-dot"/, 'count of posts, not messages, then the amber dot');
-  assert.doesNotMatch(by.voice, /unread|ch-chan-n/, 'a read channel stays as it is');
-  assert.match(by.__general__, /^ unread"[^]*aria-label="1 unread">1</);
+  assert.match(by.launch, /<span class="ch-chan-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="2 unread"><\/i><\/span>/, 'count of posts, not messages, in the green dot\'s label; amber first');
+  assert.doesNotMatch(by.launch, /ch-chan-n|<small/, 'no bare number pill');
+  assert.doesNotMatch(by.voice, /unread|ch-chan-ind/, 'a read channel stays as it is');
+  assert.match(by.__general__, /^ unread"[^]*aria-label="1 unread"><\/i>/);
   // The same tally as Activity's section counts.
   const L = rows.filter(s => f.inChannel({ id: 'launch', agent: 'hermes' }, s));
   assert.equal(f.env.window.WizChatsListModel.unreadThreads(L, s => !!s.fresh), 2);
@@ -570,10 +571,10 @@ test('working, archived and snoozed-last rows are not unread posts (Activity rul
   const rows = [row('a', 1, { fresh: true, status: 'running' }), row('b', 1, { fresh: true, archived: true }), row('c', 1, { fresh: true, deferred: true })];
   const f = fixture();
   let launch = f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes('data-chchan="launch"'));
-  assert.match(launch, /aria-label="1 unread">1</, 'snooze-last off: the snoozed post still counts');
+  assert.match(launch, /aria-label="1 unread"><\/i>/, 'snooze-last off: the snoozed post still counts');
   f.env._snoozeLast = true;
   launch = f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes('data-chchan="launch"'));
-  assert.doesNotMatch(launch, /ch-chan-n|^ unread/);
+  assert.doesNotMatch(launch, /ch-chan-dot new|^ unread/);
 });
 
 test('the expanded chevron lines are bold for unread posts', () => {
@@ -585,7 +586,7 @@ test('the expanded chevron lines are bold for unread posts', () => {
   assert.match(html, /class="ch-chan-post" data-chopen="b"/);
 });
 
-test('in the feed an unread post says "N new replies" with the unread dot first; read posts are unchanged', async () => {
+test('in the feed an unread post says "● N new replies" at the right, in the needs-you slot; read posts are unchanged', async () => {
   const rows = [row('a', 3, { fresh: true, messageCount: 4, readAt: 150 }), row('b', 2, { messageCount: 2 }), row('c', 1, { fresh: true, messageCount: 1 })];
   const a = [{ role: 'user', text: 'q' }, { role: 'assistant', text: '1', at: 100 }, { role: 'assistant', text: '2', at: 200 }, { role: 'assistant', text: '3', at: 300 }, { role: 'assistant', text: '4', at: 400 }];
   const f = fixture({ history: { a, b: [{ role: 'user', text: 'q' }, { role: 'assistant', text: 'ok' }], c: [{ role: 'user', text: 'q' }] } });
@@ -594,18 +595,22 @@ test('in the feed an unread post says "N new replies" with the unread dot first;
   const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
   const post = id => html.split(/<div class="ch-post(?=[ "])/).find(p => p.includes(`data-morph-key="post:${id}"`));
   assert.match(post('a'), /^ unread"/);
-  assert.match(post('a'), /class="ch-post-r unread" data-chopen="a"><i class="st unread" aria-hidden="true"><\/i><span class="ch-post-av"[^]*<span>3 new replies<\/span>/);
+  assert.match(post('a'), /class="ch-post-r unread" data-chopen="a"><span class="ch-post-av"[^]*<span>4 replies<\/span><time>[^<]*<\/time><span class="ch-post-sts"><span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"><\/i>3 new replies<\/span><\/span><\/button>/, 'issue 1269: green dot with words on the right, nothing on the left');
+  assert.doesNotMatch(html, /class="st unread"/, 'no left-side dot');
   assert.match(post('b'), /class="ch-post-r" data-chopen="b"><span class="ch-post-av"[^]*<span>1 reply<\/span>/);
-  assert.doesNotMatch(post('b'), /st unread|new repl/);
-  assert.match(post('c'), /<span>New reply<\/span>/, 'no count yet: still marked');
+  assert.doesNotMatch(post('b'), /ch-post-st new|new repl/);
+  assert.match(post('c'), /<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"><\/i>New reply<\/span>/, 'no count yet: still marked');
+  // A post that needs you and has a new reply shows both, amber first, in the same slot.
+  const both = row('a', 1, { fresh: true, status: 'waiting_for_approval' });
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [both]), /Needs you<\/span><span class="ch-post-st new">/);
 });
 
 test('reading a post (markSeen clears isNew) clears both the feed marker and the channel line on the next paint', () => {
   const a = row('a', 1, { fresh: true, messageCount: 2 }), rows = [a];
   const f = fixture();
-  assert.match(f.channelsBody(f.w, rows), /ch-chan-n/);
+  assert.match(f.channelsBody(f.w, rows), /ch-chan-dot new/);
   a.fresh = false;                                    // what LIVE.markSeen does to isNew when the thread opens
-  assert.doesNotMatch(f.channelsBody(f.w, rows), /ch-chan-n| unread"/);
+  assert.doesNotMatch(f.channelsBody(f.w, rows), /ch-chan-dot new| unread"/);
   f.openChannel(f.w, 'launch');
   assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /unread|new repl/);
 });
@@ -615,11 +620,11 @@ test('unread marks follow each row\'s own agent: main and routed (host-profile, 
   const f = fixture({ agents: { h1: 'host', k1: 'container', r1: 'restricted' } });
   const chans = Object.fromEntries(f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).map(c => [c.match(/data-chchan="([^"]+)"/)[1], c]));
   for (const k of ['host-ops', 'box', 'launch']) assert.match(chans[k], /^ unread"[^]*aria-label="1 unread"/, k);
-  assert.doesNotMatch(chans.locked, /ch-chan-n/, 'read restricted chat');
+  assert.doesNotMatch(chans.locked, /ch-chan-dot new/, 'read restricted chat');
   // A main chat that shares the routed id is not counted in the routed channel.
   const twin = [row('h1', 1, { fresh: true, owner: 'hermes' })];
   const ho = f.channelsBody(f.w, twin).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes('data-chchan="host-ops"'));
-  assert.doesNotMatch(ho, /ch-chan-n/);
+  assert.doesNotMatch(ho, /ch-chan-dot new/);
 });
 
 test('switch off: none of the unread markup is drawn (channels are not drawn at all)', () => {
@@ -837,6 +842,24 @@ test('issue 1266: a short thread is counted from the first-message read alone; a
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /<span>2 replies<\/span>/);
 });
 
+test('issue 1269: a first page the service returned full (pagination.returned = limit) is not the whole thread, even with fewer rows', async () => {
+  // Bitwarden: 14 replies; the view=wizard first page holds 46 rows (6 replies) while the service returned 50.
+  const h = [{ role: 'user', text: 'Bitwarden?' }];
+  for (let i = 0; i < 14; i++) h.push({ role: 'tool', text: 't' }, { role: 'tool', text: 't' }, { role: 'assistant', text: 'r' + i });
+  const page = h.slice(0, 1 + 3 * 6).concat(Array.from({ length: 46 - 19 }, () => ({ role: 'tool', text: 'step' }))); page.returned = 50;
+  const s = row('a', 5, { messageCount: 60 });
+  const f = fixture({ history: { a: page }, full: { a: h }, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await new Promise(r => setImmediate(r));
+  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /6 replies/, 'never the short page\'s count');
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(f.reads, ['a', 'full:a'], 'the whole thread is read');
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /<span>14 replies<\/span>/);
+  // A page the service returned short of the limit is the whole thread: no second read.
+  const g = fixture({ history: { b: Object.assign([{ role: 'user', text: 'q' }, { role: 'assistant', text: 'a' }], { returned: 2 }) }, sessions: { b: row('b', 5) } }); g.openChannel(g.w, 'launch');
+  g.channelFeed(g.w, g.chanOpen(g.w), [row('b', 5)]); await new Promise(r => setImmediate(r));
+  assert.deepEqual(g.reads, ['b']);
+});
+
 test('issue 1266 main vs routed: host-profile, container and restricted posts are counted from their own agent\'s history', async () => {
   for (const agent of ['host', 'container', 'restricted']) {
     const sp = { host: 'host-ops', container: 'box', restricted: 'locked' }[agent], tid = { host: 'h1', container: 'k1', restricted: 'r1' }[agent];
@@ -849,66 +872,57 @@ test('issue 1266 main vs routed: host-profile, container and restricted posts ar
   }
 });
 
-// A feed laid out for chanSee: every post carries its row key (agent|id), as the painted feed does.
+// A feed laid out as painted: every post carries its row key (agent|id).
 function seenDom(f, html, client = 300) {
   const d = feedDom(html, {}, client);
   for (const n of d.nodes) if (n.dataset.morphKey.startsWith('post:')) n.dataset.chrow = 'hermes|' + n.dataset.morphKey.slice(5);
+  d.sc.checkVisibility = () => true; d.sc.closest = () => null;
   f.env.elOf = () => d.el; return d;
 }
 
-test('issue 1266: a post on screen in the feed is read (the shared seen record), and keeps its marker until the next open', () => {
-  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
+// Issue 1269 (overrides 1266's "seeing a post reads it"): only opening a post clears its green dot.
+test('issue 1269: viewing, scrolling to the end, Back, re-entering and a reload never clear a green dot', () => {
+  const f = fixture({ spacesList: longSpaces(30) }), rows = manyRows(30, 2);
   for (const r of rows) r.owner = 'hermes';
   f.openChannel(f.w, 'launch');
   const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
-  f.chanHold('w'); // opens at the New line above p5: p5, p6 and the top of p7 are on screen (300px)
-  assert.deepEqual(f.marks, ['hermes|p5', 'hermes|p6', 'hermes|p7']);
-  assert.equal(rows[8].fresh, true, 'a post below the view is still unread');
-  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
-  assert.match(html, /data-morph-key="post:p5"[^]*?class="ch-post-r unread"/, 'seen this open: the marker stays beside the New line');
-  assert.match(html, /ch-chan-new/);
-  assert.match(f.channelsBody(f.w, rows), /aria-label="12 unread">12</, 'the channel counts only what is still unread');
-  f.channelBack(f.w); f.openChannel(f.w, 'launch');
-  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /data-morph-key="post:p5"[^]*?class="ch-post-r unread" data-chopen="p5"/, 'the next open: read');
-  d.sc.scrollTop = 0;
-});
-
-test('issue 1266: a feed at its end reads every post in it; the channel count and the New line are gone on the next open', () => {
-  const f = fixture({ spacesList: longSpaces(30) }), rows = manyRows(30, 2);
-  f.openChannel(f.w, 'launch');
-  const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
-  f.chanUser('w'); d.sc.scrollTop = d.sc.scrollHeight - d.sc.clientHeight; f.chanScrolled('w', d.sc); f.chanSeeNow('w');
-  assert.equal(f.marks.length, 28, 'every unread post, also the ones scrolled past');
-  assert.equal(rows.filter(r => r.fresh).length, 0);
+  f.chanHold('w');                                                   // opens at the New line: posts on screen
+  f.chanUser('w'); d.sc.scrollTop = d.sc.scrollHeight - d.sc.clientHeight; f.chanScrolled('w', d.sc); f.chanHold('w');
+  assert.deepEqual(f.marks, [], 'the feed writes no seen record');
+  assert.equal(rows.filter(r => r.fresh).length, 28, 'every unread post is still unread');
   f.channelBack(f.w);
-  assert.doesNotMatch(f.channelsBody(f.w, rows), /ch-chan-n/, 'channel count gone');
+  assert.match(f.channelsBody(f.w, rows), /aria-label="28 unread"/, 'Back: the channel still has its green dot');
   f.openChannel(f.w, 'launch');
-  assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /ch-chan-new| unread"/, 'no New line, no markers');
+  const again = f.channelFeed(f.w, f.chanOpen(f.w), rows);
+  assert.equal(again.match(/class="ch-post-st new"/g)?.length, 28, 're-entered: every green dot is there');
+  f.w.chan = JSON.parse(JSON.stringify(f.w.chan));                   // a reload restores the saved window
+  assert.equal(f.channelFeed(f.w, f.chanOpen(f.w), rows).match(/class="ch-post-st new"/g)?.length, 28, 'and after a reload');
+  assert.doesNotMatch(src, /LIVE\.markSeen\?\.\(\[\.\.\.out\.values\(\)\]\)|function chanSeeNow/, 'the feed-driven seen writer is gone');
 });
 
-test('issue 1266: opening a post seen in the feed clears its marker at once; a hidden page, switch off or no feed reads nothing', () => {
-  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
-  f.openChannel(f.w, 'launch');
-  seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
-  f.env.document.hidden = true; f.chanHold('w'); assert.deepEqual(f.marks, [], 'page hidden');
-  f.env.document.hidden = false; f.setOn(false); f.chanSeeNow('w'); assert.deepEqual(f.marks, [], 'switch off');
-  f.setOn(true); f.chanSeeNow('w'); assert.ok(f.marks.length);
+test('issue 1269: opening one post clears only that post (the per-chat seen path Activity uses), and the channel updates', () => {
+  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 17);
+  f.openChannel(f.w, 'launch'); seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.chanHold('w');
   f.env._rowOf = (_, sid) => rows.find(r => r.id === sid);
-  f.chanSeenRow('w', 'p5');
-  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), rows), /class="ch-post-r" data-chopen="p5"/, 'opened: read now');
-  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), rows), /class="ch-post-r unread" data-chopen="p6"/, 'seen only: marked until the next open');
-  const g = fixture(); g.chanSeeNow('w'); assert.deepEqual(g.marks, [], 'no feed open');
+  f.env.LIVE.markSeen([f.chanSeenRow('w', 'p18')]);                     // what openChat does: LIVE.markSeen(chanSeenRow(wid, sid))
+  assert.deepEqual(f.marks, ['p18']);
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows), post = id => html.split(/<div class="ch-post(?=[ "])/).find(p => p.includes(`data-morph-key="post:${id}"`));
+  assert.doesNotMatch(post('p18'), /ch-post-st new/, 'the opened post is read');
+  for (const id of ['p17', 'p19']) assert.match(post(id), /ch-post-st new/, id + ' keeps its dot');
+  f.channelBack(f.w);
+  assert.match(f.channelsBody(f.w, rows), /aria-label="2 unread"/, 'the channel counts what is still unread');
 });
 
-test('issue 1266 main vs routed: seeing a routed post marks that row (its own agent), never the main thread sharing its id', () => {
+test('issue 1269 main vs routed: opening a routed post marks that row (host-profile, container, restricted), never the main twin', () => {
   for (const agent of ['host', 'container', 'restricted']) {
     const sp = { host: 'host-ops', container: 'box', restricted: 'locked' }[agent], tid = { host: 'h1', container: 'k1', restricted: 'r1' }[agent];
     const main = row(tid, 2, { owner: 'hermes', fresh: true }), routed = row(tid, 1, { owner: agent, agent, fresh: true });
-    const f = fixture({ agents: { [tid]: agent } });
+    const f = fixture({ agents: { [tid]: agent }, sessions: { [tid]: main } });
     f.w.focus = { kind: 'agent', key: agent }; f.openChannel(f.w, sp);
     const html = f.channelFeed(f.w, f.chanOpen(f.w), [main, routed]);
     const d = feedDom(html, {}, 300, { keys: ['post:' + tid] }); d.nodes[0].dataset.chrow = agent + '|' + tid; f.env.elOf = () => d.el;
-    f.chanSeeNow('w');
+    f.chanHold('w'); assert.deepEqual(f.marks, [], agent + ': seeing it writes nothing');
+    f.env._rowOf = () => routed; f.env.LIVE.markSeen([f.chanSeenRow('w', tid)]);
     assert.deepEqual(f.marks, [agent + '|' + tid], agent);
     assert.equal(main.fresh, true, agent + ': the main thread stays unread');
   }
@@ -917,20 +931,21 @@ test('issue 1266 main vs routed: seeing a routed post marks that row (its own ag
 test('issue 1266: unread is a green dot and needs-you an amber one in Channels, on every skin; Activity keeps its own dot', () => {
   const f = fixture(); f.channelClick(click({ 'data-chchanx': 'launch' }), 'w', f.w);
   const html = f.channelsBody(f.w, [row('a', 1, { fresh: true }), row('b', 2, { attention: { state: 'needs_you' }, fresh: true })]);
-  assert.match(html, /class="ch-chan-post unread" data-chopen="a"><span>T a<\/span><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i>/);
-  assert.match(html, /data-chopen="b"><span>T b<\/span><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i>/);
+  assert.match(html, /class="ch-chan-post unread" data-chopen="a"><span>T a<\/span><span class="ch-chan-ind"><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i><\/span>/);
+  assert.match(html, /data-chopen="b"><span>T b<\/span><span class="ch-chan-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i><\/span>/, 'amber, then green');
   const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
-  const rules = css.split('\n').filter(l => /unread|ch-chan-n\b|ch-chan-new|ch-chan-dot\.new|ch-post-r span/.test(l));
+  const rules = css.split('\n').filter(l => /unread|ch-chan-ind|ch-chan-new|ch-chan-dot\.new|ch-post-st\.new|ch-post-r span/.test(l));
   assert.ok(rules.length >= 5);
   for (const l of rules) assert.doesNotMatch(l, /--violet/, 'no violet unread marks: ' + l.slice(0, 90));
   assert.match(css, /--ch-new: var\(--green\)/, 'the skin\'s own green');
   assert.match(css, /oklch\(from var\(--green\) l c 150\)/, 'held on a green hue where a skin\'s green is gold (Ember)');
-  assert.match(css, /\.ch-post-r \.st\.unread \{[^}]*background: var\(--ch-new\)/, 'the reply line dot');
-  assert.match(css, /\.ch-chan-dot\.new \{[^}]*background: var\(--ch-new\)/, 'the chevron line dot');
-  assert.match(css, /\.ch-chan-n \{[^}]*var\(--ch-new\)/, 'the channel count');
+  assert.match(css, /\.ch-chan-dot\.new \{[^}]*background: var\(--ch-new\)/, 'the green dot: the skin\'s full green, never a dark mix');
+  assert.match(css, /\.ch-post-st\.new \{[^}]*color: var\(--ch-new\)/, 'the feed\'s "New reply" words in that green');
+  assert.match(css, /\.ch-chan-ind \{[^}]*margin-left: auto/, 'one right-aligned slot');
+  assert.doesNotMatch(css, /\.ch-chan-n\b|\.ch-post-r \.st\.unread/, 'issue 1269: no number pill, no left-side dot');
   assert.match(css, /\.ch-chan-dot \{[^}]*background: var\(--amber\)/, 'needs you stays amber');
   assert.match(css, /\.ch-post-r\.unread span:not\(\.ch-post-st\) \{[^}]*color: var\(--ink\)/, '"N new replies" in ink');
-  assert.ok(css.split('\n').every(l => !/\.st\.unread/.test(l) || l.includes('.ch-post-r .st.unread')), 'Activity\'s .st.unread is untouched');
+  assert.ok(css.split('\n').every(l => !/\.st\.unread/.test(l)), 'Activity\'s .st.unread is untouched');
   // Grove's unread dot was gold like its needs-you dot; its green token is not.
   const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8'), grove = skins.slice(skins.indexOf("id: 'grove'"), skins.indexOf("id: 'tide'"));
   assert.notEqual(grove.match(/ green: '([^']+)'/)[1], grove.match(/ amber: '([^']+)'/)[1]);
@@ -939,21 +954,10 @@ test('issue 1266: unread is a green dot and needs-you an amber one in Channels, 
 test('issue 1266: what a feed keeps for this open never goes into the saved window (a reload restores a plain o.chan)', () => {
   const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
   f.openChannel(f.w, 'launch'); seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.chanHold('w');
-  assert.ok(f.marks.length);
   const saved = JSON.parse(JSON.stringify(f.w.chan));
   assert.deepEqual(Object.keys(saved).sort(), ['at', 'id', 'newKey', 'prev'], 'only plain fields');
   f.w.chan = saved; // the window as a reload restores it
   assert.doesNotThrow(() => f.channelFeed(f.w, f.chanOpen(f.w), rows));
-});
-
-test('issue 1266 review: a feed on a background desktop workspace (laid out, but hidden) reads nothing', () => {
-  const f = fixture({ spacesList: longSpaces(20) }), rows = manyRows(20, 5);
-  f.openChannel(f.w, 'launch'); const d = seenDom(f, f.channelFeed(f.w, f.chanOpen(f.w), rows));
-  d.sc.closest = sel => sel === '[hidden]' ? {} : null;            // inside .wsp[hidden]
-  f.chanHold('w'); assert.deepEqual(f.marks, [], 'hidden workspace');
-  d.sc.closest = () => null; d.sc.checkVisibility = () => false;   // visibility: hidden from another ancestor
-  f.chanSeeNow('w'); assert.deepEqual(f.marks, [], 'not visible');
-  d.sc.checkVisibility = () => true; f.chanSeeNow('w'); assert.ok(f.marks.length, 'in front: read');
 });
 
 // ---- issue 1266, fourth item: a post shows the owner's own words from its first frame, never the generated title ----

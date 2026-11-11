@@ -1199,7 +1199,13 @@
     async firstMessages(id, agent = '', limit = 20) {
       const a = otherAgent(agent) ? agent : '';
       const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=${Math.max(1, Math.min(50, limit | 0))}&offset=0&include_compacted=true&view=wizard${a ? `&agent=${encodeURIComponent(a)}` : ''}`, { signal: globalThis.AbortSignal?.timeout?.(12000) })).json();
-      return p.data || p.messages || p.items || [];
+      const page = p.data || p.messages || p.items || [];
+      // How many rows the service itself returned (its view=wizard page can hold fewer): only a page it returned short
+      // of the limit is the whole thread (wizard-ux issue 1269).
+      const n = Number(p.pagination?.returned ?? page.length);
+      const more = p.has_more === true || p.pagination?.has_more === true, lim = Math.max(1, Math.min(50, limit | 0));
+      page.returned = Math.max(isFinite(n) ? n : 0, page.length, more ? lim : 0);
+      return page;
     },
     /* One thread's whole history (oldest first) for the row's own agent: the Channels feed counts the replies James
      * sees from it (wizard-ux issue 1266), because message_count also counts tool calls, results and status rows. */
