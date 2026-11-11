@@ -140,6 +140,8 @@ function sessionRow(s, kind, { live, chats, pins } = {}) {
     snoozed: !!s.deferred, unread: fresh, pinned: !!pins?.has(s.id),
     ...(kind === 'working' && ['needs_you', 'check'].includes(s.attention?.state) && s.attention.ask ? { workingAsk: s.attention, background: s.background || '' } : {}),
     needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state,
+    // its "# channel" while Channels is on (wizard-ux issue 1256: the AI apps sidebar's Activity rows)
+    ...(chats.channelOf?.(s) ? { channel: chats.channelOf(s) } : {}),
     actions: [...(pins ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []),
       ...chats.threadActions(s, null).filter(a => ['snooze', 'done', 'restore'].includes(a))] };
 }

@@ -128,7 +128,7 @@
   var ownsChatList = !!globalThis.WosSkinHost?.chatsClaimed?.();   // a chat-owning layout decided at boot: the list never mounts first
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
-    win: id => W[id] || (/::list$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6)) : undefined),
+    win: id => W[id] || (/::(list|side)$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6), id.slice(-4)) : undefined),
     root: () => stage,
     save,
     layout: id => { syncChatsPane(id); },
@@ -151,7 +151,7 @@
     newChatKeys: [{ keys: ['Enter'], label: 'send' }, { keys: [MOD.replace('+', ''), 'V'], label: 'new voice chat' }],
     threadShown: (wid, el) => threadShown(wid, el),
     dictationField: () => vMode === 'dictate' && (VOICE.state !== 'idle' || dictationFinishing) ? dictTarget?.el : null,
-    owner: id => String(id).replace(/::list$/, ''),
+    owner: id => String(id).replace(/::(list|side)$/, ''),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     captureBusy: () => VOICE.state !== 'idle' || dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,
@@ -196,7 +196,7 @@
     return c ? executeCommand(c,text,snap) : false; }
   let boundManager;
   function threadShown(wid,el) {
-    if (wid.endsWith('::list')) return;
+    if (wid.endsWith('::list') || wid.endsWith('::side')) return;
     boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,appAt,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
       visible:id=>(globalThis.WosSkinHost?.panelMode&&panelHas(id))||(!homeOpen&&wsOf(id)===cur), close:id=>closeWin(id,true),   // the Orb's chat panel is in view too
       open:(obj,origin)=>{const focus=ws[cur].focus;newWin(obj,{ws:wsOf(origin)});if(W[focus])focusWin(focus,{scroll:false});},
@@ -650,8 +650,10 @@
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
    * The list pane is a second Chats "window" (id::list) that always shows the list. */
-  const listWins = {};
-  function listWin(id) { return listWins[id] || (listWins[id] = { id: id + '::list', get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } } } }); }
+  const listWins = {}, sidePanes = new WeakSet();
+  let sideHost = null; // the layout's Channels pane (chatChannels), repainted with the lists on live changes
+  // (a layout's sidebar pane is one more such list window, id::side: the AI apps Channels pane, wizard-ux issue 1256)
+  function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } } } }); }
   function syncChatsPane(id) {
     const base = String(id).replace(/::list$/, ''); const w = W[base]; if (!w || w.app !== 'chats') return;
     if (globalThis.WosSkinHost?.panelMode && panelDocked) { const sid = w.thread; if (sid && panelList?.id === base) queueMicrotask(() => panelForward(base, sid)); else if (sid && panel?.id === base) panel.held = true; else if (!sid && panel?.id === base && panel.held) queueMicrotask(() => panelThreadLeft(base)); }
@@ -2829,6 +2831,8 @@
       const el = winEl(id); if (!el) continue;
       const lp = el.querySelector(`[data-chats="${id}::list"]`);
       if (lp && !lp.contains(document.activeElement) && !CHATS.holdList(id + '::list')) CHATS.renderChatList(listWin(id), lp);
+      const sp = typeof sideHost !== 'undefined' && sideHost?.isConnected && sideHost.dataset.chats === id + '::side' ? sideHost : null;
+      if (sp && !sp.contains(document.activeElement) && !CHATS.holdList(id + '::side')) CHATS.renderChatList(listWin(id, 'side'), sp);
       if (w.thread) CHATS.loadThread(w);
       syncChatsPane(id);
     }
@@ -3068,6 +3072,27 @@
     // a New chat in it.
     showChats: () => !!skinShowChats(),
     newChat: () => { const w = skinShowChats(); if (!w) return false; newChat(); return true; },
+    /* The AI apps sidebar's Channels pane (wizard/chat-channels, wizard-ux issue 1256): the main Chats window's own list
+     * drawn into the layout's node as id::side (tabs, channels, a feed and its box; empty with the switch off). Its
+     * clicks go through Chats' own handler; a post opens in the main Chats window like a sidebar row. */
+    chatChannels: host => {
+      const w = findWin(mainChats); if (!w || !host || host.nodeType !== 1 || !stage.contains(host)) { host?.replaceChildren?.(); return false; }
+      const id = w.id + '::side'; sideHost = host;
+      if (host.dataset.chats !== id) host.dataset.chats = id;
+      if (!sidePanes.has(host)) {
+        sidePanes.add(host);
+        host.addEventListener('click', e => {
+          const sid = host.dataset.chats || '', base = sid.replace(/::side$/, ''); if (!W[base]) return;
+          const row = e.target.closest('[data-chopen]');
+          if (row && CHATS.justPressed()) { e.stopPropagation(); return; }
+          if (row && !e.target.closest('.ch-sheet')) { e.stopPropagation(); openThread(row.dataset.chopen); return; }
+          if (CHATS.click(e, sid)) { e.stopPropagation(); syncChatsPane(base); }
+        });
+      }
+      if (!host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(w.id, 'side'), host);
+      return !!host.firstElementChild;
+    },
+    chatChannelBack: () => { const w = findWin(mainChats); return !!w && !!CHATS.channelBack(listWin(w.id, 'side')); },
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
       return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },

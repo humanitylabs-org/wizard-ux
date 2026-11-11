@@ -465,6 +465,11 @@ window.WizCore.chats = function createChats(H) {
   const rowAgent = s => (LIVE.ownerOf ? LIVE.ownerOf(s) : LIVE.agentOf(s.id)) || AGS()?.defaultId() || 'hermes';
   const inChannel = (ch0, s) => ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
+  // A layout that draws its own chat list (AI apps) asks for these through the Chats API: the "# channel" of a row
+  // ('' with the switch off) and the sidebar's Channels pane, the desktop's id::side window (issue 1256).
+  // A row's channel is its OWN agent's Space (a main and a routed thread can share an id), as inChannel files it.
+  const channelOf = s => { if (!channelsOn() || !s || typeof s.id !== 'string') return ''; const a = rowAgent(s); return spaces().find(sp => spaceAgent(sp) === a && spaceContains(sp.id, s.id))?.name || 'General'; };
+  const chanSide = w => /::side$/.test(String(w?.id || '')) && channelsOn();
   // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
   // Archive drops a channel once its newest chat (or the archiving itself) is older than CHAN_ARCHIVE_PRUNE_DAYS.
@@ -797,7 +802,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Turning the switch on or off repaints the lists at once (an open feed falls back to the list it came from).
   let chanWas = null;
-  try { window.addEventListener('wos:experience', () => { const on = channelsOn(); if (chanWas === on) return; chanWas = on; for (const id of Object.keys(CH)) { const x = H.win(id); if (x && x.app === 'chats' && !x.thread) rerenderList(x); } }); } catch (_) {}
+  try { window.addEventListener('wos:experience', () => { const on = channelsOn(); if (chanWas === on) return; chanWas = on; for (const id of Object.keys(CH)) { const x = H.win(id); if (x && (x.app === 'chats' || /::side$/.test(id)) && !x.thread) rerenderList(x); } }); } catch (_) {}
   // The channel taps; false = not a channel control. Each paints on the same frame.
   function channelClick(e, id, w) {
     if (!channelsOn() || !w) return false;
@@ -1813,7 +1818,14 @@ window.WizCore.chats = function createChats(H) {
     if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.loadCounts();
     // A layout which owns the list supplies its own sidebar. Do not paint a
     // second, CSS-covered list underneath it (including a thread returning Back).
-    if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
+    // The AI apps sidebar's Channels pane (wizard-ux issue 1256) is this same list for the main Chats window, drawn
+    // into the sidebar as the id::side window while the switch is on: tabs, the channel list, a feed and its box.
+    const side = typeof chanSide === 'function' && chanSide(w);
+    if (!side) {
+      // Switched off with a feed open in the sidebar: its Focus goes back to the one before the channel.
+      if (H.ownsChatList?.() && typeof chanSwitchedOff === 'function' && chanSwitchedOff(w)) H.layout?.(owner(w.id));
+      if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
+    }
     syncListTitle(w);
     closeStream(ch(w.id));
     if (!el) return;
@@ -1867,7 +1879,7 @@ window.WizCore.chats = function createChats(H) {
     const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : 'subject'}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
     const chips = (F ? chip('status', F.label) : '');
     const ph = filtered ? 'Search within' : 'Search chats and messages';
-    const head = `<div class="ch-top"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`
+    const head = side ? chanHead(w, feed) : `<div class="ch-top"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`
       // Switching Focus (agent/Space) never pushes the list down with a count line (James, 25 Oct 2026); only a status filter says how many matched.
       + (chanOn ? chanHead(w, feed) : '')
       + (F && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
@@ -1928,6 +1940,7 @@ window.WizCore.chats = function createChats(H) {
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
+    if (side && !feed && chanView !== 'channels') body = ''; // Activity: the tabs only; the sidebar draws its own rows
     // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
     // A fresh page has no scroller yet: fall back to the place this list last saved (once per page per window).
     const fresh = !el.querySelector('.ch-scroll') && !c.listPlace && !c.listPending && !c.storedTried;
@@ -1958,7 +1971,8 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
       : LST.ok && age > STALE_LIST ? notUp('stale', LST.loading ? spin : dot, ` · ${esc(since)}${LST.loading ? ' · updating…' : ''}`)
       : c.ptrState === 'done' ? syncBar('ok', '', '<span>Up to date</span>', '', 'Up to date') : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${feed ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
+    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed ? fab : ''}</div>`
+      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${feed ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -4094,7 +4108,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, chanSpaceOf, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, chanSpaceOf, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
