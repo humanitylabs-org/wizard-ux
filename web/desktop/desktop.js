@@ -2704,6 +2704,8 @@
     if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
     // ⌥⇧← / → select by word in a text field, an app's included: the field keeps them before any layout key.
     if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && textField(keyField(e))) return;
+    // On a Mac ⌥- / ⌥⇧- type – and — (⌥= / ⌥⇧= type ≠ and ±): in a text field they are characters, not ⌥− / ⌥= resizes (issue 1278).
+    if (e.altKey && !e.metaKey && !e.ctrlKey && (e.code === 'Minus' || e.code === 'Equal') && IS_MAC && textField(keyField(e))) return;
     if (e.key === 'Escape') {
       if (e.isComposing || e.keyCode === 229) return;
       // Run BEFORE layout keys and before the app's own capture listeners. The
@@ -2732,7 +2734,7 @@
     if (alt && !shift && code === 'KeyG') return hit(() => { if (!e.repeat) pick.start(); });
     if (alt && !shift && code === 'Backquote') return hit(() => { if (e.repeat) return; if (homeOpen) { leaveHome(); log('home:back'); } else { goHome(); log('home'); } });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
-    // ⌥⇧W reopen the last closed window · ⌥Z back to where you were · ⌥− / ⌥= window narrower / wider. Even while typing.
+    // ⌥⇧W reopen the last closed window · ⌥Z back to where you were · ⌥− / ⌥= window narrower / wider (on a Mac, not in a text field: there they type – — ≠ ±).
     if (alt && shift && code === 'KeyW') return hit(() => { if (!e.repeat) reopenClosed(); });
     if (alt && !shift && code === 'KeyZ') return hit(() => { if (!e.repeat) jumpBack(); });
     // ⌥L Dark ⇄ Light (Miguel: L for light; ⌥H J K L window moves retired, ⌥[ ] step windows): the same skin's light or dark twin (Dark ⇄ Light, Landscapes Dark ⇄ Landscapes Light).

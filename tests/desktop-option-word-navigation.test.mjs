@@ -19,7 +19,7 @@ function event(code, extra = {}) {
     target: { value: '', matches: () => false, closest: () => null },
     preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra };
 }
-function shell({ field = false, value = '', chat = true, picker = false, skinConsumes = false, home = false, realTyping = false, skinKey = null } = {}) {
+function shell({ field = false, value = '', chat = true, picker = false, skinConsumes = false, home = false, realTyping = false, skinKey = null, mac = true } = {}) {
   const calls = [];
   const action = name => (...args) => calls.push([name, ...args]);
   const context = {
@@ -34,7 +34,7 @@ function shell({ field = false, value = '', chat = true, picker = false, skinCon
     jumpBack: action('back'), swapWin: action('swap'), dirFocus: action('focus'),
     stepWin: action('step'), speakScreen: action('speak'), commandVoice: action('command'),
     closePalette() {}, toggleKeys() {}, closeSettings() {}, closeUsage() {},
-    chatsUpDown: action('ready'), MOD: '⌥', log() {}, toast: action('toast'),
+    chatsUpDown: action('ready'), resizeFocused: action('resize'), IS_MAC: mac, MOD: '⌥', log() {}, toast: action('toast'),
   };
   vm.createContext(context);
   // The production field lookup (and, on request, the production typing test) run as shipped.
@@ -149,3 +149,28 @@ test('a cross-origin app frame (unreadable document) never throws and counts as 
   assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['swap', -1]]);
   assert.ok(e.defaultPrevented);
 });
+
+// Issue 1278: on a Mac ⌥- types – and ⌥⇧- types — (⌥= ≠, ⌥⇧= ±). The shell's ⌥− / ⌥= window resize (and the AI apps
+// view's) swallowed them in every text field, an app frame's included. In a field the character wins; elsewhere, and
+// off the Mac (where Alt+- types nothing), the resize keys are unchanged.
+for (const code of ['Minus', 'Equal']) for (const shiftKey of [false, true]) {
+  const chord = `⌥${shiftKey ? '⇧' : ''}${code}`;
+  for (const [name, target] of [
+    ['the chat composer', textarea()],
+    ['an app frame textarea (Notes, Messenger: forwarded frame event)', textarea()],
+    ['the app iframe itself (shell document focus)', frameWith(textarea())],
+    ['a contenteditable inside a shadow root', { tagName: 'X-EDITOR', isContentEditable: false, shadowRoot: { activeElement: { tagName: 'DIV', isContentEditable: true } }, matches: () => false, closest: () => null }],
+  ]) test(`${chord} in ${name} types its character on a Mac, even with a layout that resizes`, () => {
+    const w = shell({ realTyping: true, skinKey: ai({ typing: false }).down }), e = w.key(code, { shiftKey, target });
+    assert.ok(!e.defaultPrevented && !e.stopped, 'the field gets the key');
+    assert.deepEqual(w.calls, [], 'no layout or resize dispatch');
+  });
+  test(`${chord} outside a text field, or off the Mac, still resizes the window`, () => {
+    const body = { tagName: 'BODY', isContentEditable: false, matches: () => false, closest: () => null };
+    for (const [target, mac] of [[body, true], [frameWith(body), true], [{ tagName: 'INPUT', type: 'checkbox', isContentEditable: false, matches: () => false, closest: () => null }, true], [textarea(), false]]) {
+      const w = shell({ realTyping: true, mac }), e = w.key(code, { shiftKey, target });
+      assert.ok(e.defaultPrevented, 'the shell chord');
+      assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['resize', code === 'Equal' ? 1 : -1]]);
+    }
+  });
+}
