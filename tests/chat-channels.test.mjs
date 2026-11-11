@@ -1156,15 +1156,32 @@ test('issue 1287: an agent post shows bold and links, not raw markdown; an owner
   assert.match(html, /class="ch-post-t">my \*\*own\*\* words</, 'the owner\'s words stay as typed');
 });
 
+test('issue 1287: an agent post\'s heading lines show bold words, never a raw #', async () => {
+  const history = { a: [{ role: 'assistant', text: '## Executive signal\n# Morning projects #\n### **Already bold**\nbody #not-a-heading', at: NOW - H }], b: [{ role: 'user', text: '# a hash', at: NOW - H }] };
+  const s = row('a', 1, { title: 'Alert' }), o = row('b', 2, { title: 'Mine' });
+  const f = fixture({ history, sessions: { a: s, b: o } }); f.env.KIT.inline = realInline(); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s, o]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s, o]);
+  assert.match(html, /<strong>Executive signal<\/strong>/);
+  assert.match(html, /<strong>Morning projects<\/strong>/, 'closing hashes go too');
+  assert.match(html, /<strong>Already bold<\/strong>/);
+  assert.doesNotMatch(html, /#+ ?(Executive|Morning|<strong>)/, 'no raw # before a heading');
+  assert.match(html, /body #not-a-heading/, 'a # inside a line stays');
+  assert.match(html, /class="ch-post-t"># a hash</, 'the owner\'s words stay as typed');
+});
+
 test('issue 1287 main vs routed: host-profile, container and restricted agent posts render the same markdown', async () => {
   const inline = realInline();
   for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
     const k = agent ? `${agent}|${sid}` : sid, s = row(sid, 1, { owner: agent });
-    const f = fixture({ agents: { [sid]: agent }, history: { [k]: [{ role: 'assistant', text: `**Alert for ${agent || 'main'}.** _soon_`, at: NOW - H }] }, sessions: { [agent ? k : sid]: s } });
+    const f = fixture({ agents: { [sid]: agent }, history: { [k]: [{ role: 'assistant', text: `**Alert for ${agent || 'main'}.** _soon_\n## Heading for ${agent || 'main'}\n\`\`\`\n# keep ${agent || 'main'}\n\`\`\``, at: NOW - H }] }, sessions: { [agent ? k : sid]: s } });
     f.env.KIT.inline = inline; f.openChannel(f.w, chan);
     f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
     const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
-    assert.match(html, new RegExp(`class="ch-post-t"><strong>Alert for ${agent || 'main'}\\.</strong> <em>soon</em><`), `${agent || 'main'}: bold and italics`);
+    assert.match(html, new RegExp(`class="ch-post-t[^"]*"><strong>Alert for ${agent || 'main'}\\.</strong> <em>soon</em>\\s`), `${agent || 'main'}: bold and italics`);
+    assert.match(html, new RegExp(`<strong>Heading for ${agent || 'main'}</strong>`), `${agent || 'main'}: a heading line is bold, no raw #`);
+    assert.match(html, new RegExp(`# keep ${agent || 'main'}`), `${agent || 'main'}: a # line inside a code fence stays as written`);
+    assert.doesNotMatch(html, /\*\*keep/);
   }
 });
 
