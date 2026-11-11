@@ -1029,3 +1029,15 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose .ch
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-feed] .aad-orb { visibility: hidden; }
 /* the sidebar's channel whose feed is open in the column */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan.cur > .ch-chan-r { border-radius: 8px; background: color-mix(in srgb, var(--aad-ink) 10%, transparent); }
+
+/* Wizard for Mac (wizard-os#543): the window's red/yellow/green buttons sit over the top-left of the full-size web view,
+ * which here is the sidebar header. Keep a band the height of the Mac title bar above the sidebar's header and the
+ * folded rail, and start the chat title beside the rail after the buttons. The Mac app reports where the buttons end
+ * as --wz-titlebar-left (80 px at 100% zoom, more when zoomed out, 0 in full screen where they are hidden); the 28 pt
+ * title bar scales with it (28 / 80), so the band follows zoom and goes in full screen; 28 px when the app does not
+ * say. Plain browsers and phones are untouched. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] { --aad-mac-top: calc(var(--wz-titlebar-left, 80px) * 0.35); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] .aad-sh { margin-top: var(--aad-mac-top); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] .aad-rail { padding-top: calc(8px + var(--aad-mac-top)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] .aad-ctop { padding-left: max(20px, calc(var(--wz-titlebar-left, 96px) - var(--aad-side) + 8px)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"][data-aad-focus] .aad-hback { top: calc(12px + var(--aad-mac-top)); }

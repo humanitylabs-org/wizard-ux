@@ -48,3 +48,15 @@ test('the measured inset only ever applies inside the Mac app', () => {
   assert.ok(uses.length >= 1);
   for (const l of uses) assert.match(l, /^html\[data-native-chrome="mac"\] /);
 });
+
+test('inside the Mac app the AI apps sidebar keeps its header and rail below the window buttons (wizard-os#543)', () => {
+  const css = read('web/layouts/ai-apps/desktop.css');
+  const scope = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]\\[data-native-chrome="mac"\\]';
+  // the 28pt title bar, scaled like the measured inset (page zoom); 0 when the app reports 0 (full screen)
+  assert.match(css, new RegExp(scope + ' \\{[^}]*--aad-mac-top:\\s*calc\\(var\\(--wz-titlebar-left,\\s*80px\\)\\s*\\*\\s*0\\.35\\)'));
+  assert.match(css, new RegExp(scope + ' \\.aad-sh \\{[^}]*margin-top:\\s*var\\(--aad-mac-top\\)'));
+  assert.match(css, new RegExp(scope + ' \\.aad-rail \\{[^}]*padding-top:\\s*calc\\(8px \\+ var\\(--aad-mac-top\\)\\)'));
+  assert.match(css, new RegExp(scope + ' \\.aad-ctop \\{[^}]*padding-left:\\s*max\\(20px,'));
+  // never outside the Mac app
+  for (const l of css.split('\n').filter(l => /--aad-mac-top|--wz-titlebar-left/.test(l) && /^html/.test(l))) assert.match(l, /^html\[[^\]]*\]\[[^\]]*\]\[data-native-chrome="mac"\]|^html\[data-native-chrome="mac"\]/);
+});
