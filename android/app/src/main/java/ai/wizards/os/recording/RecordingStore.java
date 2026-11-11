@@ -74,6 +74,15 @@ public final class RecordingStore {
         write(id, o);
     }
 
+    /**
+     * wizard-ux#1231: true only when the file system positively says this take's audio is not here
+     * ({@link Files#notExists}; an I/O error or a permission problem answers false). The page then settles its row
+     * instead of failing the same claim on every launch. Read only: nothing is deleted or moved.
+     */
+    public synchronized boolean audioGone(String id) {
+        return Files.notExists(audio(id).toPath());
+    }
+
     public synchronized void claim(String id) {
         custody.adopt(audio(id), "app");
         custody.hand(id, "web-outbox");

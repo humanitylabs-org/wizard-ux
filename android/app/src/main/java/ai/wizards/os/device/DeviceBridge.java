@@ -265,6 +265,12 @@ public final class DeviceBridge implements RecorderService.Listener {
         catch (JSONException e) { return "null"; }
     }
 
+    /** wizard-ux#1231: positive proof that a take that is not recording has no audio on this phone any more. */
+    @JavascriptInterface
+    public boolean recAudioGone(String id) {
+        return id != null && !id.equals(RecorderService.active()) && RecordingStore.get(activity).audioGone(id);
+    }
+
     @JavascriptInterface
     public String recRead(String id, int offset) { return readChunk(RecordingStore.get(activity).audio(id), offset); }
 

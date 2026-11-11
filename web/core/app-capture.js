@@ -71,7 +71,11 @@
   function storageDiagnostic(operation, error, started, info = {}) {
     try {
       if (!W.WizardOSNative || typeof W.fetch !== 'function') return;
-      const code = error ? storageFailure(error).detail : 'ok';
+      // A recorder (non-storage) failure names its own fixed capture code, e.g. native_read_failed, instead of
+      // collapsing into UnknownError (issue 1231: the phone's report could not say why recovery failed).
+      const known = error ? storageFailure(error).detail : 'ok';
+      const code = known === 'UnknownError' && error.name !== 'UnknownError' && error.detail !== 'UnknownError' &&
+        typeof error.code === 'string' && error.code !== 'storage_failed' && /^[a-z][a-z0-9_]{2,40}$/.test(error.code) ? error.code : known;
       const mode = ['readonly', 'readwrite'].includes(info.mode) ? info.mode : null;
       const phase = ['lock', 'rows', 'native_status', 'native_recover', 'save', 'complete'].includes(info.phase) ? info.phase : null;
       const key = [operation, code, mode, phase].join(':');
@@ -780,7 +784,13 @@
         if (a?.id === row.nativeId && !stopOnly) return { live: true };
         // Stop/claim only the row's proven native owner; never call recStart or steal another app's mic.
         const meta = parse(a?.id === row.nativeId ? d.recStop(row.nativeId) : d.recClaim(row.nativeId));
-        if (!meta) throw fail('native_claim_pending', 'Native capture is not ready to claim; restore the bridge and retry recovery.');
+        // Issue 1231: the phone holds no audio for this take any more (another Wizard on this phone already saved it,
+        // or it moved to Cancelled recordings). Nothing is left to claim, so settle the row (pending, partial) for
+        // the app to offer and acknowledge, instead of failing the same claim on every launch. Only the phone's
+        // positive "no file" answer counts: a null read can be a passing I/O error, so an older app keeps retrying.
+        const noAudio = () => a?.id !== row.nativeId && typeof d.recAudioGone === 'function' && d.recAudioGone(row.nativeId) === true;
+        if (!meta) { if (noAudio()) return { gone: true }; throw fail('native_claim_pending', 'Native capture is not ready to claim; restore the bridge and retry recovery.'); }
+        if (!(Number(meta.bytes) > 0) && noAudio()) return { gone: true, durationMs: Number(meta.ms) || 0, meta };
         return { blob: await read(row.nativeId), durationMs: Number(meta.ms) || 0, meta };
       },
       ack: row => d.recDone(row.nativeId)
