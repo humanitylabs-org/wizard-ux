@@ -72,6 +72,9 @@ document.addEventListener('keydown', e => {
           assert.ok(r.log.length === 2 && r.log.every(x => !x.prevented), view + ': ⌥- and ⌥⇧- reached the field unclaimed');
           assert.equal(r.value, 'pages 3–5 —', view + ': both dashes typed');
           assert.ok(r.focus, view + ': focus stays in the field');
+        } else { // the bug: the shell takes both keys (they never reach the field, or arrive already claimed)
+          assert.ok(r.log.every(x => x.prevented), view + ': baseline: no key reached the field unclaimed');
+          assert.equal(r.value, 'pages 35 ', view + ': baseline: no dash typed');
         }
         assert.deepEqual(errors, []);
         console.log('PASS', view);

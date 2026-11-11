@@ -165,9 +165,9 @@ for (const code of ['Minus', 'Equal']) for (const shiftKey of [false, true]) {
     assert.ok(!e.defaultPrevented && !e.stopped, 'the field gets the key');
     assert.deepEqual(w.calls, [], 'no layout or resize dispatch');
   });
-  test(`${chord} outside a text field, or off the Mac, still resizes the window`, () => {
+  test(`${chord} outside an editable text field (a read-only one too), or off the Mac, still resizes the window`, () => {
     const body = { tagName: 'BODY', isContentEditable: false, matches: () => false, closest: () => null };
-    for (const [target, mac] of [[body, true], [frameWith(body), true], [{ tagName: 'INPUT', type: 'checkbox', isContentEditable: false, matches: () => false, closest: () => null }, true], [textarea(), false]]) {
+    for (const [target, mac] of [[body, true], [frameWith(body), true], [{ ...textarea(), readOnly: true }, true], [frameWith({ ...textarea(), readOnly: true }), true], [{ tagName: 'INPUT', type: 'checkbox', isContentEditable: false, matches: () => false, closest: () => null }, true], [textarea(), false]]) {
       const w = shell({ realTyping: true, mac }), e = w.key(code, { shiftKey, target });
       assert.ok(e.defaultPrevented, 'the shell chord');
       assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['resize', code === 'Equal' ? 1 : -1]]);

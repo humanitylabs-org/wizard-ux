@@ -2704,8 +2704,8 @@
     if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
     // ⌥⇧← / → select by word in a text field, an app's included: the field keeps them before any layout key.
     if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && textField(keyField(e))) return;
-    // On a Mac ⌥- / ⌥⇧- type – and — (⌥= / ⌥⇧= type ≠ and ±): in a text field they are characters, not ⌥− / ⌥= resizes (issue 1278).
-    if (e.altKey && !e.metaKey && !e.ctrlKey && (e.code === 'Minus' || e.code === 'Equal') && IS_MAC && textField(keyField(e))) return;
+    // On a Mac ⌥- / ⌥⇧- type – and — (⌥= / ⌥⇧= type ≠ and ±): in an editable text field they are characters, not ⌥− / ⌥= resizes (issue 1278).
+    if (e.altKey && !e.metaKey && !e.ctrlKey && (e.code === 'Minus' || e.code === 'Equal') && IS_MAC && (f => textField(f) && !f.readOnly)(keyField(e))) return;
     if (e.key === 'Escape') {
       if (e.isComposing || e.keyCode === 229) return;
       // Run BEFORE layout keys and before the app's own capture listeners. The
