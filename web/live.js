@@ -729,7 +729,7 @@
     const before = [...PEND].map(([k, p]) => k + p.key + p.state).join();
     const latest = new Map();
     for (const it of OB._items.values()) {
-      if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId || it.compact) continue;
+      if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId || it.compact || it.withdrawn) continue;
       const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
       // Custody without delivery intent must neither own Sending nor hide an older real send.
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
