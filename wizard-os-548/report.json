@@ -1,0 +1,63 @@
+{
+  "web": "/home/builder/work/ux-548/web",
+  "expect": "fixed",
+  "cases": [
+    {
+      "scene": "chat",
+      "errors": [],
+      "dead": [],
+      "checked": 6,
+      "header": [
+        288,
+        0,
+        952,
+        44
+      ],
+      "controls": 6,
+      "title": {
+        "x": 348,
+        "y": 22,
+        "drags": true
+      },
+      "pass": true
+    },
+    {
+      "scene": "chat+app",
+      "errors": [],
+      "dead": [],
+      "checked": 13,
+      "header": [
+        288,
+        0,
+        952,
+        44
+      ],
+      "controls": 13,
+      "title": {
+        "x": 348,
+        "y": 22,
+        "drags": true
+      },
+      "pass": true
+    },
+    {
+      "scene": "centred",
+      "errors": [],
+      "dead": [],
+      "checked": 6,
+      "header": [
+        0,
+        0,
+        1440,
+        44
+      ],
+      "controls": 6,
+      "title": {
+        "x": 360,
+        "y": 54,
+        "drags": false
+      },
+      "pass": true
+    }
+  ]
+}
