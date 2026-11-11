@@ -344,6 +344,19 @@
     if (u && !fastT) fastPoll();
     if (!u) fastT = 0;
   }
+  // While an update waits for Wizard to finish, the Mac can start it any minute and power Wizard OS off within
+  // seconds: look every 15 s (not the minute the status normally waits), and look at once when the connection check
+  // reports a change, so the device shows the Updating panel instead of "Can't reach Wizard".
+  const waitingNow = () => !!(ls.get(WAITING) || st()?.when_idle);
+  let lookT = 0;
+  function lookNow() {
+    if (!mac() || !waitingNow() || lookT) return;
+    lookT = 1;
+    Promise.resolve(U()?.load(true)).catch(() => {}).finally(() => { lookT = 0; render(); });
+  }
+  if (typeof setInterval === 'function') setInterval(() => { if (!document.hidden) lookNow(); }, 15e3);
+  window.addEventListener('wizreachchange', lookNow);
+  window.addEventListener('online', lookNow);
   window.WosUpdateFlow = {
     confirm, render,
     get updating() { return updating(); },
