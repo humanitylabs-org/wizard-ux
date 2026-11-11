@@ -64,7 +64,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,chanEditUnsent,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,chanEditUnsent,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -453,6 +453,36 @@ test('a send that could not be saved takes the post back and returns the words t
   assert.equal(f.CHAN_SENDING.length, 0);
   assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').text, 'keep me');
   assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), []), /ch-post sending/);
+});
+
+// Issue 1293: Dismiss on a Not sent channel post takes its "Sending…" post out of the feed at once, not after the
+// two-minute cap; only that chat's post, of its own agent.
+test('Dismiss on a Not sent channel post removes its Sending… post from the feed at once', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch'); f.env._sendResult = Promise.resolve({ sessionId: 'n7' });
+  await f.channelSend('w', form('will fail'));
+  f.env._sendResult = Promise.resolve({ sessionId: 'n8' }); await f.channelSend('w', form('still going'));
+  const open = f.chanOpen(f.w);
+  assert.equal([...f.channelFeed(f.w, open, []).matchAll(/ch-post sending/g)].length, 2);
+  assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent: 'host' }), 0, 'another agent\'s chat id leaves it');
+  assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7' }), 1);
+  const html = f.channelFeed(f.w, open, []);
+  assert.doesNotMatch(html, />will fail</); assert.match(html, /ch-post sending[^]*>still going</);
+  // The real Dismiss handler drops it after a saved dismissal, then repaints the feed.
+  assert.match(src, /const gone = OUTBOX\.get\?\.\(failedDismiss\.dataset\.obdismissfailed\);[^]*if \(ok && gone\?\.kind === 'new' && typeof chanDropSending === 'function' && chanDropSending\(gone\)\) chanRepaint\(\);/);
+});
+
+test('issue 1293 main vs routed: Dismiss drops a host-profile, container or restricted channel\'s own Sending… post only', async () => {
+  for (const [cid, agent] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const f = fixture(); f.openChannel(f.w, cid); f.env._sendResult = Promise.resolve({ sessionId: 'n7' });
+    await f.channelSend('w', form(`${agent} post`));
+    assert.equal(f.env._sends[0][4].sid, '__new__');
+    const open = f.chanOpen(f.w), sending = () => [...f.channelFeed(f.w, open, []).matchAll(/ch-post sending/g)].length;
+    assert.equal(sending(), 1, `${agent}: the post shows Sending…`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7' }), 0, `${agent}: a main chat sharing the id leaves it`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent: agent === 'host' ? 'container' : 'host' }), 0, `${agent}: another routed agent's chat leaves it`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent }), 1, `${agent}: its own dismissed chat takes it`);
+    assert.equal(sending(), 0, `${agent}: gone from the feed at once`);
+  }
 });
 
 // Issue 1294: Edit on a channel post that was saved but then not sent refills the channel's own box (the real
