@@ -316,7 +316,7 @@ window.WizCore.chats = function createChats(H) {
   // One UI vocabulary entry: rename this if the product term changes.
   const SPACE = { one: 'Space', many: 'Spaces', get ch() { return typeof channelsOn === 'function' && channelsOn(); } }, // ch: Channels wording (wizard/chat-channels)
     SPACES_KEY = 'wos.chats.spaces.v1';
-  let spacesRaw = null, spacesCache = [], spaceThreads = new Map();
+  let spacesRaw = null, spacesCache = [], spaceThreads = new Map(), spacesStore = null;
   function spaces() {
     let raw = null; try { raw = localStorage.getItem(SPACES_KEY); } catch (_) {}
     if (raw !== spacesRaw) {
@@ -324,15 +324,20 @@ window.WizCore.chats = function createChats(H) {
       try { const v = JSON.parse(raw || '[]'); spacesCache = Array.isArray(v) ? v.filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && Array.isArray(s.threads)) : []; } catch (_) { spacesCache = []; }
       spaceThreads = new Map(spacesCache.map(s => [s.id, new Set(s.threads)]));
     }
-    return spacesCache;
+    // Channels on the Agent Service store (wizard/chat-channels, wizard-ux issue 1261): the store's channels, each with
+    // its members, in the shape of a Space; else (switch off, store off, older service) the Spaces as before.
+    spacesStore = typeof chanStoreSpaces === 'function' ? chanStoreSpaces(spacesCache) : null;
+    return spacesStore ? spacesStore.list : spacesCache;
   }
   const spaceAgent = s => s?.agent || AGS()?.defaultId() || 'hermes';
   const visibleSpaces = () => spaces().filter(s => focusAgents().some(a => a.id === spaceAgent(s)));
   const focusedAgent = f => f?.kind === 'agent' ? f.key : f?.kind === 'space' ? spaceAgent(spaces().find(s => s.id === f.key)) : '';
-  function spaceContains(key, sid) { spaces(); return spaceThreads.get(key)?.has(sid) || false; }
+  function spaceContains(key, sid) { spaces(); return (spacesStore ? spacesStore.sets : spaceThreads).get(key)?.has(sid) || false; }
   // A chat is in one Space of its agent at a time (James, 29 Oct 2026); more only in data an older box wrote.
   const spacesOf = sid => { const ag = LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes'; return spaces().filter(s => spaceAgent(s) === ag && spaceContains(s.id, sid)); };
-  function spaceMember(key, sid, add) {
+  // agent: the chat's own agent when the caller knows it (the store files by agent plus id).
+  function spaceMember(key, sid, add, agent) {
+    if (typeof chanStoreMove === 'function') { const moved = chanStoreMove(key, sid, add, agent); if (moved !== null) return moved; }
     const list = spaces().map(s => ({ ...s, threads: s.threads.slice() })), space = list.find(s => s.id === key); if (!space) return false;
     const ids = new Set(space.threads); if (add) ids.add(sid); else ids.delete(sid);
     if (ids.size > 500) { toast('!', `${SPACE.ch ? 'Channel' : SPACE.one} is full`, 2400); return false; }
@@ -342,10 +347,10 @@ window.WizCore.chats = function createChats(H) {
   }
   // Choosing a Space for a chat files it there and only there (Move when it was in another); its current Space
   // again changes nothing. Removing stays its own row-sheet action.
-  function fileInSpace(key, sid) {
+  function fileInSpace(key, sid, agent) {
     const from = spacesOf(sid), name = spaces().find(x => x.id === key)?.name || (SPACE.ch ? 'channel' : SPACE.one);
     if (from.length === 1 && from[0].id === key) { toast('✓', `Already in ${name}`, 1600); return false; }
-    if (!spaceMember(key, sid, true)) return false;
+    if (!spaceMember(key, sid, true, agent)) return false;
     toast('✓', `${from.length ? 'Moved to' : 'Added to'} ${name}`, 2000); return true;
   }
   /* A Space open in front is where James is working: every new thread started there (composer, orb, voice,
@@ -361,7 +366,7 @@ window.WizCore.chats = function createChats(H) {
   OUTBOX?.onNew?.((it, o) => {
     if (o?.space === false) return;
     const key = spaceInFront(it.agent || '');
-    if (key) spaceMember(key, it.sessionId, true);
+    if (key) spaceMember(key, it.sessionId, true, it.agent || '');
   });
   window.addEventListener('storage', e => { if (e.key === SPACES_KEY) window.dispatchEvent(new Event('wos:prefs')); });
   function focusOf(w) {
@@ -427,6 +432,8 @@ window.WizCore.chats = function createChats(H) {
   let chanArchOpen = false;
   const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || attOf(s)?.state === 'needs_you');
   function chanPrefs() {
+    const st = typeof chanStore === 'function' ? chanStore() : null;
+    if (st) return chanStorePrefs(st);
     let v = null; try { v = JSON.parse(localStorage.getItem(CHAN_PREFS_KEY) || 'null'); } catch (_) {}
     v = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
     const arch = v.archived && typeof v.archived === 'object' && !Array.isArray(v.archived) ? v.archived : {};
@@ -434,6 +441,71 @@ window.WizCore.chats = function createChats(H) {
   }
   const chanArchived = id => channelsOn() && !!chanPrefs().archived[id];
   function setChanPrefs(p) { try { localStorage.setItem(CHAN_PREFS_KEY, JSON.stringify(p)); } catch (_) {} }
+  /* Phase 2 (wizard-ux issue 1261; wizard-agent-service issue 440, docs/chats-channels.md): with the switch on and the
+   * box's channel store answering (GET /wizard/v1/channels is 200; 404 while its WIZARD_CHANNEL_STORE is off or on an
+   * older service), the channels, their sort, pins and archive are the box's, the same on every device (this also
+   * covers wizard-agent-service issue 447), and the seeded Alerts channel sits pinned at the top like any pin. A chat's
+   * channel is its list row's `channel` (else the ui-preferences projection the store serves, or a move this device
+   * just made); filing and moving are the store's atomic PUT membership with the row's own agent. A channel feed adds
+   * the channel's own list (view=list&channel=) to the live rows. With the store off everything stays on Spaces. */
+  const chanStore = () => (channelsOn() && LIVE.chanStore?.state?.()) || null;
+  const storeAgent = a => !a || a === (AGS()?.defaultId() || 'hermes') ? 'hermes' : a;
+  const CHAN_STORE_MAX = 200, CHAN_FEED_DAYS = 30;
+  function chanStorePrefs(st) {
+    const pins = st.channels.filter(c => c.pinned).sort((a, b) => a.pinOrder - b.pinOrder || (a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0)).map(c => c.id);
+    return { sort: st.sort, pins, archived: Object.fromEntries(st.channels.filter(c => c.archived).map(c => [c.id, c.archivedAt || c.createdAt || new Date(0).toISOString()])), store: true };
+  }
+  // A sort, pin or archive edit: the store's PATCH when it is on, else this device's prefs (p already changed).
+  function chanPrefEdit(p, body) { if (p.store && LIVE.chanStore) LIVE.chanStore.patch(body); else setChanPrefs(p); }
+  let chanStoreMemo = null;
+  function chanStoreSpaces(proj) {
+    const st = chanStore(); if (!st) return null;
+    const S = LIVE.chanStore, tick = LIVE.ticks || 0;
+    if (chanStoreMemo && chanStoreMemo.rev === st.rev && chanStoreMemo.proj === proj && chanStoreMemo.tick === tick) return chanStoreMemo;
+    const byId = new Map(st.channels.map(c => [c.id, c])), where = new Map();
+    for (const sp of proj) { const c = byId.get(sp.id); if (c) for (const t of sp.threads) where.set(c.agent + '|' + t, c.id); }
+    // A row's own channel outranks the projection (newest 500 of open channels only); a move made here outranks both.
+    for (const list of [LIVE.sessions || [], ...Object.values(LIVE.agentSessions || {}), S.rows?.() || []]) for (const s of list) if (s && typeof s.channel === 'string') where.set(storeAgent(rowAgent(s)) + '|' + s.id, s.channel);
+    for (const [k, to] of S.moves?.() || []) where.set(k, to);
+    const threads = new Map(st.channels.map(c => [c.id, []]));
+    for (const [k, cid] of where) { const c = cid && byId.get(cid), i = k.indexOf('|'); if (c && k.slice(0, i) === c.agent) threads.get(cid).push(k.slice(i + 1)); }
+    const list = st.channels.map(c => ({ id: c.id, name: c.name, ...(c.agent === 'hermes' ? {} : { agent: c.agent }), threads: threads.get(c.id), createdAt: c.createdAt, ...(c.kind ? { kind: c.kind } : {}) }));
+    chanStoreMemo = { rev: st.rev, proj, tick, list, sets: new Map(list.map(s => [s.id, new Set(s.threads)])) };
+    return chanStoreMemo;
+  }
+  // Filing on the store: true/false as spaceMember answers, null = the store is off (Spaces as before). The chat goes
+  // only into its own agent's channel (the store would refuse another's with a 409).
+  function chanStoreMove(key, sid, add, agent) {
+    const st = chanStore(); if (!st) return null;
+    const c = st.channels.find(x => x.id === key); if (!c) return false;
+    const a = agent === undefined ? c.agent : storeAgent(agent);
+    if (a !== c.agent || (!add && !spaceContains(key, sid))) return false;
+    LIVE.chanStore.move(sid, add ? key : null, a);
+    return true;
+  }
+  // The row a window shows for this id, by its own agent (a main and a routed thread can share an id).
+  const chanRowAgent = (wid, sid) => { const r = rowOf(wid, sid); return r && r.id === sid ? rowAgent(r) : undefined; };
+  // A channel's feed: the live rows plus the channel's own list from the store (newest posts of the last 30 days).
+  function chanFeedRows(open, rows) {
+    if (!open || open.general || !chanStore()) return rows;
+    const f = LIVE.chanStore.feed(open.id, storeAgent(open.agent));
+    if (!f?.rows?.length) return rows;
+    const have = new Set(rows.map(chanKey)), cut = Date.now() - CHAN_FEED_DAYS * CHAN_DAY;
+    return rows.concat(f.rows.filter(s => !s.hidden && !have.has(chanKey(s)) && chanAt(s) >= cut));
+  }
+  // Once per device, the first time the store answers: this device's own pins and archive move onto it (a pin or an
+  // archive is only ever added, never undone here; the sort stays the box's, since another device may have chosen it).
+  const CHAN_CARRY_KEY = 'wos.chats.channel-prefs.carried.v1';
+  let chanCarried = false;
+  function chanCarry() {
+    const st = chanStore(); if (!st) return;
+    try { if (localStorage.getItem(CHAN_CARRY_KEY)) return; localStorage.setItem(CHAN_CARRY_KEY, new Date().toISOString()); } catch (_) { return; }
+    let v = null; try { v = JSON.parse(localStorage.getItem(CHAN_PREFS_KEY) || 'null'); } catch (_) {}
+    if (!v || typeof v !== 'object') return;
+    const byId = new Map(st.channels.map(c => [c.id, c]));
+    for (const id of Array.isArray(v.pins) ? v.pins : []) { const c = byId.get(id); if (c && !c.pinned && !c.archived && !(v.archived && v.archived[id])) LIVE.chanStore.patch({ id, pinned: true }); }
+    for (const id of Object.keys(v.archived && typeof v.archived === 'object' ? v.archived : {})) { const c = byId.get(id); if (c && !c.archived) LIVE.chanStore.patch({ id, archived: true, ...(c.pinned ? { pinned: false } : {}) }); }
+  }
   // The channel a window's list draws as a feed, or null. It only holds while the Focus still matches it (a Focus
   // tap elsewhere simply leaves the feed).
   function chanOpen(w) {
@@ -538,6 +610,7 @@ window.WizCore.chats = function createChats(H) {
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   function channelsBody(w, rows) {
+    if (typeof chanCarry === 'function' && !chanCarried && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
     const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now)).join('')}</div>` : ''}</section>` : '';
@@ -784,18 +857,19 @@ window.WizCore.chats = function createChats(H) {
     if (spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(t))) { toast('!', 'Already a channel with that name', 2200); return; }
     closeRowSheet();
     if (t === sp.name) return;
-    LIVE.prefOps([{ op: 'set', key: `spaces/${cid}/name`, item: t }]);
+    if (chanStore()) LIVE.chanStore.patch({ id: cid, name: t }); // the store's channel (issue 1261)
+    else LIVE.prefOps([{ op: 'set', key: `spaces/${cid}/name`, item: t }]);
     chanRepaintAll(); toast('✎', 'Renamed', 1400);
   }
   function channelSheetClick(e) {
     if (!rowSheet?.chan) return false;
     const { wid, chan: cid } = rowSheet, w = W[wid] || W[owner(wid)], p = chanPrefs(), name = spaces().find(s => s.id === cid)?.name || 'General';
-    if (e.target.closest('[data-rschpin]')) { const on = !p.pins.includes(cid); p.pins = on ? p.pins.concat(cid) : p.pins.filter(x => x !== cid); setChanPrefs(p); closeRowSheet(); chanRepaintAll(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+    if (e.target.closest('[data-rschpin]')) { const on = !p.pins.includes(cid); p.pins = on ? p.pins.concat(cid) : p.pins.filter(x => x !== cid); chanPrefEdit(p, { id: cid, pinned: on }); closeRowSheet(); chanRepaintAll(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rschrename]')) { openChannelRename(wid, cid); return true; }
     if (e.target.closest('[data-rscharch]')) {
-      const arch = !p.archived[cid];
+      const arch = !p.archived[cid], wasPinned = p.pins.includes(cid);
       if (arch) { p.archived[cid] = new Date().toISOString(); p.pins = p.pins.filter(x => x !== cid); } else delete p.archived[cid];
-      setChanPrefs(p); closeRowSheet(); chanRepaintAll(); toast('✓', `${arch ? 'Archived' : 'Restored'} # ${name}`, 1800); return true;
+      chanPrefEdit(p, { id: cid, archived: arch, ...(arch && wasPinned ? { pinned: false } : {}) }); closeRowSheet(); chanRepaintAll(); toast('✓', `${arch ? 'Archived' : 'Restored'} # ${name}`, 1800); return true;
     }
     if (e.target.closest('[data-rschnew]')) { closeRowSheet(); if (w && openChannel(w, cid)) chanToEnd(w.id, true); return true; }
     return false;
@@ -809,7 +883,7 @@ window.WizCore.chats = function createChats(H) {
     if (channelSheetClick(e)) return true;
     if (w.thread) return false;
     const v = e.target.closest('[data-chview]'); if (v) { chanView = v.dataset.chview === 'channels' ? 'channels' : 'activity'; try { localStorage.setItem(CHAN_VIEW_KEY, chanView); } catch (_) {} rerenderList(w); return true; }
-    const so = e.target.closest('[data-chchansort]'); if (so) { const p = chanPrefs(); p.sort = so.dataset.chchansort === 'za' ? 'za' : 'az'; setChanPrefs(p); chanRepaintAll(); return true; }
+    const so = e.target.closest('[data-chchansort]'); if (so) { const p = chanPrefs(); p.sort = so.dataset.chchansort === 'za' ? 'za' : 'az'; chanPrefEdit(p, { sort: p.sort }); chanRepaintAll(); return true; }
     if (e.target.closest('[data-chchanarch]')) { chanArchOpen = !chanArchOpen; renderChatList(w, elOf(id)); return true; }
     const x = e.target.closest('[data-chchanx]'); if (x) { const k = x.dataset.chchanx; if (chanExpanded.has(k)) chanExpanded.delete(k); else chanExpanded.add(k); renderChatList(w, elOf(id)); return true; }
     const c0 = e.target.closest('[data-chchan]'); if (c0) { openChannel(w, c0.dataset.chchan); return true; }
@@ -1670,7 +1744,7 @@ window.WizCore.chats = function createChats(H) {
       if (p.busy) return;
       if (e.target.closest('[data-spnew]')) { p.naming = true; renderSpacePicker(); return; }
       const s = e.target.closest('[data-spspace]');
-      if (s && p.sid) { closeSpacePicker(); if (fileInSpace(s.dataset.spspace, p.sid)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) rerenderList(ww); } return; }
+      if (s && p.sid) { closeSpacePicker(); if (fileInSpace(s.dataset.spspace, p.sid, p.agent)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) rerenderList(ww); } return; }
       if (s || e.target.closest('[data-spall]')) { closeSpacePicker(); setFocus(w, s ? { kind: 'space', key: s.dataset.spspace } : { kind: 'agent', key: p.agent }); }
     });
     wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
@@ -1688,10 +1762,13 @@ window.WizCore.chats = function createChats(H) {
     const name = p.name.trim();
     if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
     if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name))) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
-    if (spaces().length >= 50) { p.error = SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }
+    // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.
+    const onStore = typeof chanStore === 'function' && !!chanStore();
+    if (onStore ? spaces().filter(s => spaceAgent(s) === p.agent).length >= CHAN_STORE_MAX : spaces().length >= 50) { p.error = onStore ? `Maximum ${CHAN_STORE_MAX} channels` : SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }
     p.busy = true; p.error = ''; renderSpacePicker();
-    const space = { id: crypto.randomUUID(), name, agent: p.agent, threads: p.sid ? [p.sid] : [], createdAt: new Date().toISOString() };
-    const saved = await LIVE.prefOps([{ op: 'add', key: 'spaces', item: space }], { requireShared: true });
+    let space = { id: crypto.randomUUID(), name, agent: p.agent, threads: p.sid ? [p.sid] : [], createdAt: new Date().toISOString() }, saved;
+    if (onStore) { const c = await LIVE.chanStore.create(name, storeAgent(p.agent)); saved = !!c; if (c) { space = { ...space, id: c.id }; if (p.sid) spaceMember(c.id, p.sid, true, p.agent); } }
+    else saved = await LIVE.prefOps([{ op: 'add', key: 'spaces', item: space }], { requireShared: true });
     if (!saved) { p.busy = false; p.error = SPACE.ch ? 'Couldn’t create channel. Try again.' : 'Couldn’t create space. Try again.'; if (spacePicker === p) renderSpacePicker(); return; }
     if (spacePicker === p) closeSpacePicker();
     if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
@@ -1904,7 +1981,7 @@ window.WizCore.chats = function createChats(H) {
     else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
     // Channels (wizard/chat-channels): the live window only (James, 9 Nov 2026: older chats are reached by asking the agent).
-    else if (feed && !n && !F) { const live = new Set((LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).map(s => s.id)); body = channelFeed(w, feed, all.filter(s => live.has(s.id))); }
+    else if (feed && !n && !F) { const live = new Set((LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).map(s => s.id)), mine = all.filter(s => live.has(s.id)); body = channelFeed(w, feed, typeof chanFeedRows === 'function' ? chanFeedRows(feed, mine) : mine); }
     else if (chanOn && chanView === 'channels' && !n && !F) body = channelsBody(w, all);
     else if (focus?.kind === 'space' && !hit.length && !n && !F) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this ${SPACE.ch ? 'channel' : 'Space'}…</div>`;
     else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
@@ -3732,7 +3809,7 @@ window.WizCore.chats = function createChats(H) {
     }
     // The durable outbox allocates the final thread id before dispatch; retain that
     // membership even if delivery retries or this window navigates away.
-    if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true);
+    if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true, it.agent ?? AGID ?? '');
     // Follow only this New chat's allocated id, never a different chat opened during the disk save.
     if (isNew && !left && !opts.away && it?.sessionId && W[wid] === w && w.thread === sid && c.readNav === navAtSend) openChat(wid, it.sessionId);
     sealed?.done(it);
@@ -3935,7 +4012,7 @@ window.WizCore.chats = function createChats(H) {
       openSpacePicker(w, LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes', trigger, { sid }); return true;
     }
     const rsSpace = e.target.closest('[data-rsspace]');
-    if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet, add = rsSpace.dataset.add === 'true', name = spaces().find(x => x.id === rsSpace.dataset.rsspace)?.name || (SPACE.ch ? 'channel' : SPACE.one); closeRowSheet(); if (spaceMember(rsSpace.dataset.rsspace, sid, add)) toast('✓', `${add ? 'Added to' : 'Removed from'} ${name}`, 2000); return true; }
+    if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet, add = rsSpace.dataset.add === 'true', name = spaces().find(x => x.id === rsSpace.dataset.rsspace)?.name || (SPACE.ch ? 'channel' : SPACE.one); const rag = typeof chanRowAgent === 'function' ? chanRowAgent(rowSheet.wid, sid) : undefined; closeRowSheet(); if (spaceMember(rsSpace.dataset.rsspace, sid, add, rag)) toast('✓', `${add ? 'Added to' : 'Removed from'} ${name}`, 2000); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }

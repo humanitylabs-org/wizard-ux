@@ -7,5 +7,5 @@
   "capabilities": [
     "layout"
   ],
-  "description": "Chats gets Activity and Channels tabs. Activity is today's list with each chat's channel under its title; Channels shows your Spaces one per line (plus General), and opening one shows its chats as posts with a reply line. Slack-style, phase 1 (wizard-ux issue 1254)."
+  "description": "Chats gets Activity and Channels tabs. Activity is today's list with each chat's channel under its title; Channels shows your Spaces one per line (plus General), and opening one shows its chats as posts with a reply line. Slack-style, phase 1 (wizard-ux issue 1254). On a box with the Agent Service channel store, channels, pins, sort and archive are shared by every device, with Alerts pinned at the top (wizard-ux issue 1261)."
 }
