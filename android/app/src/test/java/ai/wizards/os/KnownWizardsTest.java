@@ -5,7 +5,7 @@ import org.json.JSONArray;
 import org.junit.Test;
 
 public class KnownWizardsTest {
-    @Test public void remembersEachWizardOnceWithItsName() {
+    @Test public void remembersEachWizardOnceWithItsName() throws Exception {
         String j = KnownWizards.add(null, "https://first.example");
         j = KnownWizards.name(j, "https://first.example", "  Archimedes ");
         j = KnownWizards.add(j, "https://second.example");
@@ -19,7 +19,7 @@ public class KnownWizardsTest {
         assertEquals("Archimedes", others.getJSONObject(0).getString("name"));
         assertEquals(0, new JSONArray(KnownWizards.others(KnownWizards.add(null, "https://only.example"), "https://only.example")).length());
     }
-    @Test public void boundedAndForgiving() {
+    @Test public void boundedAndForgiving() throws Exception {
         String j = "not json";
         for (int i = 0; i < 30; i++) j = KnownWizards.add(j, "https://w" + i + ".example");
         assertEquals(KnownWizards.MAX, new JSONArray(j).length());
@@ -31,7 +31,7 @@ public class KnownWizardsTest {
         assertFalse(n.contains("\n"));
         assertEquals("", new JSONArray(KnownWizards.name(null, "https://x.example", "   ")).getJSONObject(0).getString("name"));
     }
-    @Test public void previousFromAnOlderInstallIsKept() {
+    @Test public void previousFromAnOlderInstallIsKept() throws Exception {
         JSONArray j = new JSONArray(KnownWizards.withPrevious(null, "https://old.example"));
         assertEquals("https://old.example", j.getJSONObject(0).getString("url"));
         String named = KnownWizards.name(null, "https://old.example", "Old");
