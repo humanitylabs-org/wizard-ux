@@ -264,6 +264,12 @@ export default function desktop(api) {
    * channel's feed and its message box, in place of them (desktop.css). Empty and hidden with the switch off. */
   const chanBox = el('div', 'aad-chan'); chanBox.hidden = true;
   const paintChan = () => { const on = !q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; };
+  /* A channel opens in the main chat column, never in this sidebar (James, 11 Nov 2026: "Channels should display in the
+   * chat list with the channel list remaining visible on the sidebar"): its feed is one more chat in the column (FEED),
+   * drawn by api.sessions.channelFeed into feedBox over the docked Chats window. A post opens its thread there; Back
+   * (Esc, ✕) from the thread returns to the feed, and from the feed to nothing open. The sidebar list never changes. */
+  const FEED = '__feed__', feedBox = el('div', 'aad-feed'); feedBox.hidden = true;
+  const feedOn = () => api.sessions.channelFeedOpen?.() || null;
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
@@ -360,6 +366,7 @@ export default function desktop(api) {
   const scene = el('div', 'aad');
   scene.append(shade, side, top, pLoad, vt, toast, orbBox, hBack, hMid);
   api.mount(scene);
+  api.mount(feedBox);   // (moved into the docked chat column while a channel's feed shows there)
 
   // the + sheet in three levels and room under hosted apps for the floating orb, from the shared view chrome; the orb's
   // spot (its centre, its size) lets an app's own bottom tabs go either side of it
@@ -420,7 +427,7 @@ export default function desktop(api) {
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
-  api.listen(globalThis, 'wos:experience', () => { if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
+  api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
   api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -547,7 +554,7 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; if (chatThread === FEED || feedOn()) { chatThread = null; api.sessions.channelBack?.(); } unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
@@ -1442,10 +1449,29 @@ export default function desktop(api) {
     sTop.hidden = !secondEl; sName.textContent = second ? appName(second.id) : '';
     for (const { bar } of modeBars) for (const b of bar.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === model.mode));
     pTop.hidden = !pane || !model.slots.includes('app'); cX.hidden = !docked;
+    paintFeed(chat);
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
     if (loadId && pane?.id === loadId) waitLoaded(); else if (loadId && !want) doneLoading();
   }
+  // A channel's feed in the docked chat column, over the Chats window there (its own header, posts and message box).
+  function paintFeed(chat) {
+    const on = chatThread === FEED && docked && !!chat;
+    if (on && feedBox.parentNode !== chat) chat.append(feedBox);
+    const open = on ? api.sessions.channelFeed?.(feedBox) : null;
+    if (feedBox.hidden === !!open) feedBox.hidden = !open;
+    if (open) root.dataset.aadFeed = ''; else delete root.dataset.aadFeed;
+  }
+  // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
+  function feedOpened(open) {
+    if (!open) { paintTop(); return; }
+    const h = here(), r = api.route();
+    // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
+    if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
+    else if (h.app) chatThread = FEED;
+    paintTop();
+  }
+  api.listen(globalThis, 'wos:channel-feed', e => feedOpened(e?.detail?.open || null));
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
   function hidePanel({ home: goBack = true } = {}) {
@@ -1470,6 +1496,8 @@ export default function desktop(api) {
   function closeChat() {
     if (!docked) return false;
     if (panes.get().mode !== 'tiled') windowMode('tiled', 'chats');
+    // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
+    if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
   }
@@ -1615,7 +1643,7 @@ export default function desktop(api) {
   let focusStash = null;
   function focusIn() {
     readSessions();
-    focusStash = { folded, vtFolded, thread: chatThread === NOTE ? (stepAt && stepAt.startsWith('notif:') ? stepAt : null) : chatThread, app: pane ? { id: pane.id, desk: Number(pane.desk) } : null, wide, widths: { ...sized } };
+    focusStash = { folded, vtFolded, thread: chatThread === NOTE ? (stepAt && stepAt.startsWith('notif:') ? stepAt : null) : chatThread === FEED ? null : chatThread, app: pane ? { id: pane.id, desk: Number(pane.desk) } : null, wide, widths: { ...sized } };
     closeAll(); closeFly(); closeTidy(); closeMenu(); closeWs(); if (q) setSearch(false); unpeek();
     if (pane || docked) goHome();
     folded = true; vtFolded = true;
@@ -1898,19 +1926,19 @@ export default function desktop(api) {
     // A notification in the chat column that becomes a chat (Resolve this / Have Wizard handle it, or a reply sent from
     // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
     if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
-    if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
+    if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : feedOn() ? FEED : null);
     // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
     // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
-    else if (!chatThread) chatThread = behindThread();
+    else if (chatThread === FEED ? !feedOn() : !chatThread) chatThread = behindThread();
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
-    const fresh = !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    const fresh = chatThread !== FEED && !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
-    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread ? titleOf(chatThread) : '';
+    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? titleOf(chatThread) : '';
     tt.textContent = docked ? t : ''; tt.title = t;
-    cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : 'Close the chat (Esc)');
+    cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : chatThread === FEED ? 'Close the channel (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     paintHome();

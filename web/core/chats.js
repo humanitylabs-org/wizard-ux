@@ -556,7 +556,13 @@ window.WizCore.chats = function createChats(H) {
     const t = rows.filter(s => inChannel(c, s)).reduce((m, s) => Math.max(m, chanAt(s)), Date.parse(chanPrefs().archived[c.id]) || 0);
     return now - t > CHAN_ARCHIVE_PRUNE_DAYS * CHAN_DAY;
   }
+  // Where a channel opens from this window: in place, or (the AI apps sidebar's pane, wizard-ux issue 1256) in the
+  // host's own feed window in the main chat column, so the sidebar keeps its channel list.
+  const chanTarget = w => (w && H.channelWin?.(w)) || w;
+  // The sidebar pane whose channels open elsewhere: it never draws a feed itself, only marks the open channel.
+  const chanElsewhere = w => !!w && !!H.channelsElsewhere?.(w);
   function openChannel(w, id) {
+    w = chanTarget(w);
     const o = W[owner(w.id)] || w; if (!o) return false;
     // Back returns to the list this channel was opened from: a feed still open keeps its own way back; a stale one
     // (the Focus moved since) gives way to the Focus showing now.
@@ -567,6 +573,7 @@ window.WizCore.chats = function createChats(H) {
     // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).
     setFocus(w, sp ? { kind: 'space', key: sp.id } : f?.kind === 'space' ? back : f);
     chanHold(w.id); requestAnimationFrame(() => chanHold(w.id));
+    H.channelOpened?.(w.id);
     return true;
   }
   // Back from a feed: to the Channels list, with the Focus the list had before.
@@ -609,19 +616,21 @@ window.WizCore.chats = function createChats(H) {
       + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
     return marks ? `<span class="ch-chan-ind">${marks}</span>` : '';
   }
-  function channelLine(ch0, rows, now) {
-    const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id);
+  function channelLine(ch0, rows, now, cur = '') {
+    const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     const un = chanUnreadN(mine);
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   function channelsBody(w, rows) {
     if (typeof chanCarry === 'function' && !chanCarried && Date.now() >= chanCarryAfter && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
+    // The channel whose feed shows in the main column (AI apps sidebar): marked in the list, which stays as it is.
+    const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '';
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
-    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now)).join('')}</div>` : ''}</section>` : '';
-    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now)).join('')}${archSec}</div>`;
+    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur)).join('')}</div>` : ''}</section>` : '';
+    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur)).join('')}${archSec}</div>`;
   }
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
@@ -900,7 +909,7 @@ window.WizCore.chats = function createChats(H) {
       if (arch) { p.archived[cid] = new Date().toISOString(); p.pins = p.pins.filter(x => x !== cid); } else delete p.archived[cid];
       chanPrefEdit(p, { id: cid, archived: arch, ...(arch && wasPinned ? { pinned: false } : {}) }); closeRowSheet(); chanRepaintAll(); toast('✓', `${arch ? 'Archived' : 'Restored'} # ${name}`, 1800); return true;
     }
-    if (e.target.closest('[data-rschnew]')) { closeRowSheet(); if (w && openChannel(w, cid)) chanToEnd(w.id, true); return true; }
+    if (e.target.closest('[data-rschnew]')) { closeRowSheet(); const t = w && chanTarget(w); if (t && openChannel(t, cid)) chanToEnd(t.id, true); return true; }
     return false;
   }
   // Turning the switch on or off repaints the lists at once (an open feed falls back to the list it came from).
@@ -1943,8 +1952,11 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(w.id), n = norm(c.q);
     const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
     rowListAgent = AGID;
-    const chanOn = typeof channelsOn === 'function' && channelsOn(), feed = chanOn ? chanOpen(w) : null; // tests slice this renderer without the Channels block
+    // (the AI apps sidebar's pane opens its channels in the main column: it never draws a feed, wizard-ux issue 1256)
+    const chanOn = typeof channelsOn === 'function' && channelsOn(), feed = chanOn && !(typeof chanElsewhere === 'function' && chanElsewhere(w)) ? chanOpen(w) : null; // tests slice this renderer without the Channels block
     if (!chanOn && typeof chanSwitchedOff === 'function' && chanSwitchedOff(w)) { syncListTitle(w); H.layout?.(owner(w.id)); }
+    // The main column's feed window draws a feed or nothing (never the tabs or the channel list: those stay in the sidebar).
+    if (side && !feed && typeof chanElsewhere === 'function' && typeof H.channelsElsewhere === 'function' && !chanElsewhere(w)) { el.replaceChildren(); return; }
     rowChan = chanOn && !feed;
     if (!AGID) window.WizAppExtensions?.poll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
