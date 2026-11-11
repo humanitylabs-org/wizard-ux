@@ -3167,7 +3167,7 @@
     sessionAct: (sid, act) => {
       // Move to channel… (wizard-ux issue 1292): Chats' own picker over the page, on the main Chats window (or the
       // sidebar's stand-in when there is none); nothing navigates, so the Activity row stays where it is.
-      if (act === 'move') { const w = findWin(mainChats) || sideMain(); return !!w && !!CHATS.moveToChannel?.(w.id, sid); }
+      if (act === 'move') return !!CHATS.moveToChannel?.((findWin(mainChats) || sideMain())?.id, sid);
       if (act !== 'pin' && act !== 'rename') { const w = findWin(mainChats); CHATS.threadAct(w?.id || '', sid, act); return true; }
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
       const w = skinShowChats(); if (!w) return false; CHATS.openRenameSheet(w.id, sid); return true;
