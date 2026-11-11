@@ -14,6 +14,15 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-channels.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-channels-ai-apps-evidence');
 const SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
+// QA_START: how the desktop starts. 'chats' (default: a first run, the main Chats window on desk 1); 'app-desk' (a
+// restored desktop whose only desk holds an app and no Chats window, as on James's desktop, wizard-ux issue 1256);
+// 'no-chats' (an empty desk; the layout's Home makes a New chat); 'other-view' (the only Chats window is on another
+// Chats view, so it is not the main one). The Channels tabs must show on the first paint in all of them.
+const START = process.env.QA_START || 'chats';
+const DESK = { chats: null, 'no-chats': { wins: {}, ws: [{ id: 'dqa1', wins: [], focus: null, mono: false }] },
+  'app-desk': { wins: { wqa1: { id: 'wqa1', app: 'pages', appId: 'pages' } }, ws: [{ id: 'dqa1', wins: ['wqa1'], focus: 'wqa1', mono: false }], home: false },
+  'other-view': { wins: { wqa1: { id: 'wqa1', app: 'chats', thread: null, chatsProvider: 'qa-other-chats' } }, ws: [{ id: 'dqa1', wins: ['wqa1'], focus: 'wqa1', mono: false }] } }[START];
+assert.ok(DESK !== undefined, 'QA_START: chats, app-desk, no-chats or other-view');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const SPACES = [
@@ -36,18 +45,19 @@ const report = { origin, web, cases: [] };
   const browser = await chromium.launch();
   try {
     for (const skin of SKINS) for (const on of [false, true]) {
-      const stem = `ai-apps-${skin}-${on ? 'on' : 'off'}`;
+      const stem = `ai-apps-${skin}-${on ? 'on' : 'off'}${START === 'chats' ? '' : '-' + START}`;
       const entry = { stem, errors: [], refused: [], writes: [] }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
         const mix = { 'wizard/desktop-chats': true, ...(on ? { 'wizard/chat-channels': true } : {}) };
-        await context.addInitScript(({ skin, mix, spaces }) => {
+        await context.addInitScript(({ skin, mix, spaces, desk }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
+          if (desk) { localStorage.setItem('wux.desk.wins', JSON.stringify(desk.wins)); localStorage.setItem('wux.desk.ws', JSON.stringify(desk.ws)); localStorage.setItem('wux.desk.cur', '0'); localStorage.setItem('wux.desk.layoutVersion', '2'); if (desk.home === false) localStorage.setItem('wux.desk.homeOpen', 'false'); }
           for (const [k, v] of Object.entries({ 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
-        }, { skin, mix, spaces: SPACES });
+        }, { skin, mix, spaces: SPACES, desk: DESK });
         let prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
@@ -94,6 +104,11 @@ const report = { origin, web, cases: [] };
         await sideRow('qa-g1').waitFor({ timeout: 15000 });
         await page.evaluate(() => document.fonts.ready); await nap(400);
         entry.sideWidth = Math.round((await vis('.aad-side').boundingBox()).width);
+        entry.bootWins = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('wux.desk.wins') || '{}')).map(w => [w.app, w.chatsProvider || '', w.agent || '']));
+        entry.bootTabs = await page.locator('.aad-chan:not([hidden]) .ch-chan-tabs').count();
+        // A desk with only an app open (no Chats window at all): the tabs are there on the first paint all the same.
+        if (START === 'app-desk') assert.deepEqual(entry.bootWins, [['pages', '', '']], 'no Chats window when the sidebar first paints');
+        if (on) assert.equal(entry.bootTabs, 1, 'the Activity / Channels tabs on the first paint');
         if (!on) {
           assert.equal(await page.locator('.aad-side .ch-chan-tabs, .aad-side .ch-chan-list').count(), 0, 'switch off: no tabs');
           assert.equal(await page.locator('.aad-chan-line').count(), 0, 'switch off: no channel line');
