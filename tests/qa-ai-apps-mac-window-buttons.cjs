@@ -12,20 +12,24 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://mac-window-buttons.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'mac-window-buttons-evidence');
 const BROKEN = process.env.QA_EXPECT === 'broken';
-const BUTTONS = { x0: 12, x1: 80, y0: 0, y1: 28 };   // the traffic lights' box in page px at zoom 100%
+// the traffic lights' box in page px at zoom 100%; zoomed out to 80% the same points cover more CSS px, and the Mac app
+// reports --wz-titlebar-left = 100px (try-wizard WizardTitleBarInset: (buttons' end + 12) / zoom)
+const BOX = zoom => ({ x0: 12 / zoom, x1: 80 / zoom, y0: 0, y1: 28 / zoom });
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const ROWS = [['qa-a', 'Write three-word greeting'], ['qa-b', 'Run sleep 900 in background']].map(([id, title], i) => ({
   id, title, runtime: 'direct', status: 'completed', updated_at: iso(now - (i + 1) * 36e5), updatedAt: iso(now - (i + 1) * 36e5),
   last_active: (now - (i + 1) * 36e5) / 1000, message_count: 2, messageCount: 2, archived: false, preview: 'Done.' }));
+let BUTTONS = BOX(1);
 const hits = (b) => b && b.width > 0 && b.height > 0 && b.x < BUTTONS.x1 && b.x + b.width > BUTTONS.x0 && b.y < BUTTONS.y1 && b.y + b.height > BUTTONS.y0;
 const report = { web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
 
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const mode of ['open', 'rail']) {
-      const entry = { mode, errors: [], overlaps: [] }; report.cases.push(entry);
+    for (const [mode, zoom] of [['open', 0], ['rail', 0], ['open', 0.8], ['rail', 0.8]]) {
+      BUTTONS = BOX(zoom || 1);
+      const entry = { mode, zoom: zoom || 'not reported', errors: [], overlaps: [] }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
@@ -69,6 +73,7 @@ const report = { web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
           if (await page.evaluate(() => document.documentElement.dataset.aadSide) !== 'rail') await page.locator('.aad-sh .aad-ib').last().click();
         }
         await page.waitForFunction(m => document.documentElement.dataset.aadSide === m, mode, { timeout: 5000 });
+        if (zoom) await page.evaluate(z => document.documentElement.style.setProperty('--wz-titlebar-left', Math.ceil(80 / z) + 'px'), zoom);
         // open a chat so the top row shows its title beside the sidebar / rail
         const row = page.locator('.aad-side .aad-row').filter({ visible: true }).first();
         if (await row.count()) { await row.click().catch(() => {}); await nap(600); }
@@ -91,11 +96,11 @@ const report = { web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
         });
         entry.overlaps = boxes.filter(hits);
         entry.checked = boxes.length;
-        await page.screenshot({ path: path.join(out, `ai-apps-${mode}-${BROKEN ? 'before' : 'after'}.png`), clip: { x: 0, y: 0, width: 640, height: 240 } });
+        await page.screenshot({ path: path.join(out, `ai-apps-${mode}${zoom ? '-zoom80' : ''}-${BROKEN ? 'before' : 'after'}.png`), clip: { x: 0, y: 0, width: 640, height: 240 } });
         // draw the window buttons on a second capture so a reader sees where they would be
-        await page.evaluate(({ x0 }) => { const d = document.createElement('div'); d.id = 'qa-lights'; d.style.cssText = `position:fixed;z-index:99999;top:8px;left:${x0 + 8}px;display:flex;gap:8px;pointer-events:none`;
-          for (const c of ['#ff5f57', '#febc2e', '#28c840']) { const b = document.createElement('i'); b.style.cssText = `width:12px;height:12px;border-radius:50%;background:${c};display:block`; d.append(b); } document.body.append(d); }, BUTTONS);
-        await page.screenshot({ path: path.join(out, `ai-apps-${mode}-${BROKEN ? 'before' : 'after'}-lights.png`), clip: { x: 0, y: 0, width: 640, height: 240 } });
+        await page.evaluate(({ x0 }) => { const k = x0 / 12, d = document.createElement('div'); d.id = 'qa-lights'; d.style.cssText = `position:fixed;z-index:99999;top:${8 * k}px;left:${20 * k}px;display:flex;gap:${8 * k}px;pointer-events:none`;
+          for (const c of ['#ff5f57', '#febc2e', '#28c840']) { const b = document.createElement('i'); b.style.cssText = `width:${12 * k}px;height:${12 * k}px;border-radius:50%;background:${c};display:block`; d.append(b); } document.body.append(d); }, BUTTONS);
+        await page.screenshot({ path: path.join(out, `ai-apps-${mode}${zoom ? '-zoom80' : ''}-${BROKEN ? 'before' : 'after'}-lights.png`), clip: { x: 0, y: 0, width: 640, height: 240 } });
         if (BROKEN) assert.ok(entry.overlaps.length > 0, mode + ': expected controls under the window buttons on the baseline');
         else assert.deepEqual(entry.overlaps.map(o => o.label || o.what), [], mode + ': controls under the window buttons');
         assert.ok(entry.checked > 2, mode + ': found the sidebar controls');
@@ -105,6 +110,6 @@ const report = { web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
   } finally {
     await browser.close();
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
-    console.log(JSON.stringify(report.cases.map(c => ({ mode: c.mode, pass: !!c.pass, checked: c.checked, overlaps: c.overlaps.map(o => `${o.label || o.what} @${Math.round(o.x)},${Math.round(o.y)}`), errors: c.errors.slice(0, 3) })), null, 1));
+    console.log(JSON.stringify(report.cases.map(c => ({ mode: c.mode, zoom: c.zoom, pass: !!c.pass, checked: c.checked, overlaps: c.overlaps.map(o => `${o.label || o.what} @${Math.round(o.x)},${Math.round(o.y)}`), errors: c.errors.slice(0, 3) })), null, 1));
   }
 })().catch(e => { console.error(e); process.exit(1); });
