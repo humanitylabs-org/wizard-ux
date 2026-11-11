@@ -418,7 +418,7 @@ export default function setup(api) {
       const w = k === 'pin' && s.pinned ? 'Unpin' : word0;
       const it = el('button', 'aa-pop-i' + (k === 'done' ? ' is-file' : ''), { type: 'button', role: 'menuitem', 'data-act': k });
       it.append(icon(k), el('span', '', { text: w }));
-      api.listen(it, 'click', () => { if (Date.now() < swallow) return; closeMenu(); if (k === 'rename') closeDrawer(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintDrawer(); }); });
+      api.listen(it, 'click', () => { if (Date.now() < swallow) return; closeMenu(); if (k === 'rename' || k === 'move') closeDrawer(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintDrawer(); }); });
       card.append(it);
     }
     box.append(shade, card);
