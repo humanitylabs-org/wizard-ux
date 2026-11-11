@@ -2124,10 +2124,13 @@
    * thread. { wid, sid } ('__new__' = a new post), or null with no channel in front (behaviour unchanged). */
   function chanFront() {
     const f = focused(), real = sid => !!sid && sid !== '__new__';
-    if (f?.app === 'chats' && CHATS.chanOpen?.(f)) return !f.thread ? { wid: f.id, sid: '__new__' } : real(f.thread) ? { wid: f.id, sid: f.thread } : null;
+    // A thread counts only when it is that channel's own post (the window keeps its channel under any thread it opens).
+    const post = (sid, open) => real(sid) && CHATS.channelOf?.(LIVE.session(sid)) === open.name;
+    const mine = f?.app === 'chats' ? CHATS.chanOpen?.(f) : null;
+    if (mine) return !f.thread ? { wid: f.id, sid: '__new__' } : post(f.thread, mine) ? { wid: f.id, sid: f.thread } : null;
     const open = feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
     if (feedHost?.isConnected && feedHost.dataset.chats === feedBase.id + '::side' && !feedHost.closest('[hidden]')) return { wid: feedBase.id + '::side', sid: '__new__' };
-    return f && real(f.thread) && CHATS.channelOf?.(LIVE.session(f.thread)) === open.name ? { wid: f.id, sid: f.thread } : null;
+    return f && post(f.thread, open) ? { wid: f.id, sid: f.thread } : null;
   }
   // A voice take into the channel in front, exactly as its box mic records one; key (⌥V, a button) sends it again.
   async function chanTalk(c, key) {

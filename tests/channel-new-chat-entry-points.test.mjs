@@ -64,7 +64,7 @@ for (const agent of ['hermes', 'host-ops', 'box', 'locked']) {
 }
 
 test('a post\'s thread open from a channel: ⌥V replies in that thread; New chat is not hijacked', async () => {
-  const c = shell({ foreground: { id: 'w1', app: 'chats', thread: 'post-7', chan: { id: 'apps' } } });
+  const c = shell({ foreground: { id: 'w1', app: 'chats', thread: 'post-7', chan: { id: 'apps' } }, rowChannel: 'WizardOS Apps' });
   await c.talkNew();
   assert.deepEqual(j(c.calls), [['reply', 'w1', 'post-7']]);
   assert.equal(c.chanPost(), false);
@@ -72,6 +72,9 @@ test('a post\'s thread open from a channel: ⌥V replies in that thread; New cha
   await a.talkNew(); assert.deepEqual(j(a.calls), [['reply', 'main', 'post-7']], 'AI apps: a post opened from the feed');
   const other = shell({ foreground: { id: 'main', app: 'chats', thread: 'elsewhere' }, feed: { id: 'apps', name: 'WizardOS Apps' }, feedShown: false, rowChannel: 'General' });
   await other.talkNew(); assert.deepEqual(j(other.calls), [['talk', 'start', true, '⌥V']], 'a thread from another channel keeps ⌥V = new chat');
+  // Classic: the window keeps its channel when a notification or an app opens an unrelated thread in it.
+  const unrelated = shell({ foreground: { id: 'w1', app: 'chats', thread: 'alert-3', chan: { id: 'apps' } }, rowChannel: 'General' });
+  await unrelated.talkNew(); assert.deepEqual(j(unrelated.calls), [['talk', 'start', true, '⌥V']], 'an unrelated thread in a channel window is never replied to by ⌥V');
 });
 
 test('no channel in front: ⌥V, the orb and New chat behave exactly as before', async () => {
@@ -112,7 +115,7 @@ test('the orb / ⌥S path and New chat keys reach the channel: wiring in desktop
   assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),/);
   assert.match(read('web/core/skin-host.js'), /channelPost: \(\) => live\(\) \? !!shell\.chatChannelPost\?\.\(\) : false,/);
   assert.match(read('web/app.js'), /chatChannelPost: \(\) => \{ const w = W\[desks\[idx\]\?\.focus\]; return w\?\.app === 'chats' && !w\.thread && !!CHATS\.chanCompose\?\.\(w\.id\); \},/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => api\.sessions\.channelPost\?\.\(\) \|\| goHome\(\)\);/);
+  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelPost\?\.\(\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box');
   const aad = read('web/layouts/ai-apps/desktop.js');
   assert.match(aad, /api\.listen\(newBtn, 'click', newOrPost\); api\.listen\(rNew, 'click', newOrPost\);/);
   assert.match(aad, /code === 'KeyN' && !sh\) return once\(newOrPost\)/);
