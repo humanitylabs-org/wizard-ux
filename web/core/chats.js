@@ -495,7 +495,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Once per device, the first time the store answers: this device's own pins and archive move onto it (a pin or an
   // archive is only ever added, never undone here; the sort stays the box's, since another device may have chosen it).
-  // Marked done only once every write landed; a failed one is tried again a minute later.
+  // Recorded as carried only once every write landed; a failed one is tried again a minute later.
   const CHAN_CARRY_KEY = 'wos.chats.channel-prefs.carried.v1';
   let chanCarried = false, chanCarryAfter = 0;
   async function chanCarry() {
