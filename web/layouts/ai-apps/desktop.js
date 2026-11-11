@@ -608,7 +608,9 @@ export default function desktop(api) {
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
   const settings = () => { unpeek(); api.desk.settings(); };
-  api.listen(newBtn, 'click', newChat); api.listen(rNew, 'click', newChat);
+  // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
+  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
+  api.listen(newBtn, 'click', newOrPost); api.listen(rNew, 'click', newOrPost);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
   // the cog's count (System notices set to Badge, …): WosBell.attention, as on the stock desktop's cog and the phone's gear
   const setCounts = [setBtn, rSet].map(b => { const c = el('b', 'aad-count aad-setn', { 'aria-hidden': 'true' }); c.hidden = true; b.append(c); return c; });
@@ -1153,7 +1155,7 @@ export default function desktop(api) {
     const p = press; if (!p || p.held || p.moved) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; if (Math.hypot(dx, dy) < 48) return;
     p.moved = true; p.cancel?.();
-    if (p.drag && dy < 0 && -dy > Math.abs(dx)) newChat();
+    if (p.drag && dy < 0 && -dy > Math.abs(dx)) newOrPost();
   }
   function up(run) {
     const p = press; press = null; if (!p) return; p.cancel?.(); p.target.classList.remove('is-pressed'); if (p.target === orbBtn) eng?.press?.(false);
@@ -1788,7 +1790,7 @@ export default function desktop(api) {
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
     if ((code === 'KeyH' || code === 'Backquote') && !sh) return once(() => (focusOn() && focusStash ? focusOut : focusIn)());
     if (code === 'KeyS' && !sh) return once(settings);
-    if (code === 'KeyN' && !sh) return once(newChat);
+    if (code === 'KeyN' && !sh) return once(newOrPost);
     if (code === 'KeyK' && !sh) return once(() => setSearch(true));
     if (code === 'KeyL' && !sh) return once(toggleSide);
     if (code === 'KeyR' && !sh) return once(toggleTabs);

@@ -4330,6 +4330,8 @@
     },
     showChats: () => !!showChats(),
     newChat: () => { const w = showChats(); if (!w) return false; CHATS.openChat(w.id, '__new__'); return true; },
+    // New chat with a channel's feed in front (wizard-ux issue 1291): that feed's own box, never General.
+    chatChannelPost: () => { const w = W[desks[idx]?.focus]; return w?.app === 'chats' && !w.thread && !!CHATS.chanCompose?.(w.id); },
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
     // Now playing (api.media): an app's own name and mark, and bringing that app to the front.

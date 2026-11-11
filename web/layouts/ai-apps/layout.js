@@ -240,7 +240,8 @@ export default function setup(api) {
   api.listen(findBtn, 'click', () => setSearch(true));
   api.listen(cancelBtn, 'click', () => setSearch(false));
   api.listen(field, 'input', () => { q = field.value; paintDrawer(); });
-  api.listen(newBtn, 'click', goHome);
+  // A channel's feed in front: its own box takes the new chat (issue 1291); the drawer closes so the box is in view.
+  api.listen(newBtn, 'click', () => { if (api.sessions.channelPost?.()) { closeMenu(); closeSheet(); closeDrawer(); } else goHome(); });
   api.listen(mid, 'click', goHome);
   api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
   // the cog's count (System notices set to Badge, …): the same WosBell.attention the phone's gear and the desktop's cog show
