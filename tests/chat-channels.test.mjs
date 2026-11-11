@@ -1161,3 +1161,39 @@ test('issue 1266 review: internal user rows parseRows hides (notes, steers, run 
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Morning roundup</, 'the agent\'s own message (issue 441)');
   assert.equal(f.FIRST.get('|a')?.none, true, 'kept: no owner message');
 });
+
+test('AI apps sidebar (wizard-ux issue 1256, James 11 Nov 2026): a channel opened from the sidebar pane opens in the host\'s feed window; the sidebar list never changes', () => {
+  const f = fixture({ rows: [row('a', 1), row('b', 2), row('d', 3)] });
+  const main = f.w; main.focus = { kind: 'agent', key: 'hermes' };
+  const side = { id: 'w::side', thread: null }, feedOwner = { id: 'feed', thread: null, focus: { kind: 'agent', key: 'hermes' } }, feed = { id: 'feed::side', thread: null };
+  const wins = { w: main, 'w::side': side, feed: feedOwner, 'feed::side': feed }, opened = [];
+  f.env.W = new Proxy({}, { get: (_, id) => wins[id] });
+  f.env.owner = id => String(id).replace(/::side$/, '');
+  f.env.setFocus = (w, x) => { (wins[f.env.owner(w.id)] || w).focus = x; return true; };
+  Object.assign(f.env.H, { channelWin: w => w.id === 'w::side' ? feed : null, channelsElsewhere: w => w.id === 'w::side', channelCurrent: () => feedOwner.chan && f.chanOpen(feed)?.id || '', channelOpened: id => opened.push(id) });
+  const ids = h => h.split(/<div class="ch-chan(?=[ "])/).slice(1).map(l => /data-chchan="([^"]+)"/.exec(l)[1]), before = ids(f.channelsBody(side, f.rows));
+  // Opening Launch from the sidebar's pane: the feed window holds it; the window behind the sidebar is untouched.
+  assert.equal(f.channelClick(click({ 'data-chchan': 'launch' }), 'w::side', side), true);
+  assert.deepEqual(opened, ['feed::side'], 'the host is told the feed window opened a channel');
+  assert.equal(main.chan, undefined, 'the sidebar\'s window never holds the channel');
+  assert.deepEqual(main.focus, { kind: 'agent', key: 'hermes' }, 'the sidebar\'s Focus is unchanged: its channel list and Activity rows stay');
+  assert.equal(feedOwner.chan.id, 'launch'); assert.deepEqual(JSON.parse(JSON.stringify(feedOwner.focus)), { kind: 'space', key: 'launch' });
+  assert.equal(f.chanOpen(side), null, 'the sidebar pane has no feed open');
+  assert.equal(f.chanOpen(feed).name, 'Launch', 'the feed window has');
+  // The sidebar's channel list: every channel still there, Launch marked as the one open in the column.
+  const html = f.channelsBody(side, f.rows), lines = html.split(/<div class="ch-chan(?=[ "])/).slice(1);
+  assert.deepEqual(ids(html), before, 'the list as it was'); assert.ok(before.includes('launch') && before.length > 2);
+  assert.deepEqual(lines.filter(l => /^[^"]*\bcur\b/.test(l)).map(l => /data-chchan="([^"]+)"/.exec(l)[1]), ['launch'], 'Launch marked, only Launch');
+  assert.match(html, /data-chchan="launch" aria-current="true"/); assert.equal((html.match(/aria-current/g) || []).length, 1);
+  // Another channel from the sidebar: the feed moves there; the sidebar still unchanged.
+  f.channelClick(click({ 'data-chchan': 'voice' }), 'w::side', side);
+  assert.equal(f.chanOpen(feed).name, 'Voice'); assert.equal(main.chan, undefined); assert.deepEqual(main.focus, { kind: 'agent', key: 'hermes' });
+  // Back on the feed window closes it; nothing is marked in the sidebar then.
+  assert.equal(f.channelBack(feed), true); assert.equal(f.chanOpen(feed), null);
+  assert.ok(!f.channelsBody(side, f.rows).match(/<div class="ch-chan[^"]*"/g).some(c => /\bcur\b/.test(c)), 'no channel marked');
+  assert.deepEqual(ids(f.channelsBody(side, f.rows)), before);
+  // Every other window (phone, classic desktop Chats) opens a channel in place, as before.
+  f.env.H.channelWin = () => null; f.env.H.channelsElsewhere = () => false;
+  f.channelClick(click({ 'data-chchan': 'launch' }), 'w', main);
+  assert.equal(main.chan.id, 'launch', 'in place without a feed window');
+});

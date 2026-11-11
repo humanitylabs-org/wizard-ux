@@ -19,25 +19,34 @@ function desktopWorld() {
   const W = {}; [...kinds.slice(1), 'main'].forEach(k => { W['w-' + k] = { id: 'w-' + k, app: 'chats', thread: `t-${k}`, agent: k === 'main' ? '' : `qa-${k}` }; });
   const listeners = [];
   const host = { nodeType: 1, dataset: {}, firstElementChild: null, contains: () => false, replaceChildren() { calls.push(['clear']); }, addEventListener: (t, fn) => listeners.push([t, fn]) };
+  // the layout's node in the main chat column (the channel feed, issue 1256 design change of 11 Nov 2026)
+  const col = { nodeType: 1, dataset: {}, firstElementChild: null, isConnected: true, contains: () => false, replaceChildren() { calls.push(['clear-col']); this.firstElementChild = null; }, addEventListener: (t, fn) => listeners.push([t, fn, 'col']) };
+  host.isConnected = true;
+  const events = [];
   const ctx = {
-    W, calls, host, listeners, document: { activeElement: null }, stage: { contains: n => n === host }, WeakSet,
+    W, calls, host, col, events, listeners, document: { activeElement: null }, stage: { contains: n => n === host || n === col }, WeakSet, ownsChatList: true,
+    CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } }, dispatchEvent: e => events.push([e.type, JSON.parse(JSON.stringify(e.detail))]),
     CHATS: { views: { providerFor: () => 'wizard-chats', defaultId: () => 'wizard-chats' },
-      renderChatList: (w, el) => { calls.push(['paint', w.id, el === host]); el.firstElementChild = {}; },
-      click: (e, id) => (calls.push(['click', id]), true), justPressed: () => false, channelBack: w => (calls.push(['back', w.id, w.thread]), true),
+      renderChatList: (w, el) => { calls.push(['paint', w.id, el === host ? true : el === col ? 'col' : false]); el.firstElementChild = {}; },
+      click: (e, id) => (calls.push(['click', id]), true), justPressed: () => false,
+      // Chats' own Back from a feed: the channel closes and the Focus returns to the one it was opened from
+      channelBack: w => { calls.push(['back', w.id, w.thread]); const o = ctx.H.win(ctx.H.owner(w.id)); if (o?.chan) { o.focus = o.chan.prev || null; o.chan = null; } return true; },
+      chanOpen: w => { const o = ctx.H.win(ctx.H.owner(w.id)); return o?.chan ? { id: o.chan.id, name: o.chan.id[0].toUpperCase() + o.chan.id.slice(1) } : null; },
+      focusOf: w => w?.focus || null, focusAgentId: w => w?.focus?.kind === 'agent' ? w.focus.key : w?.focus?.kind === 'space' ? 'hermes' : '',
       renderChats: () => {}, ch: id => (CH[id] ||= {}), forget: id => { calls.push(['forget', id]); delete CH[id]; } },
     findWin: fn => Object.values(W).find(fn) || null, openThread: sid => calls.push(['open', sid]), syncChatsPane: id => calls.push(['sync', id]), save() {}, skinShowChats: () => W['w-main'], newChat: () => calls.push(['new']),
     uid: () => 'wq' + (++n),
   };
   const CH = ctx.CH = {}; let n = 0;
   const main = js.split('\n').find(l => l.startsWith('  const mainChats = w =>'));
-  const wins = js.split('\n').find(l => l.startsWith('  const listWins = {}'));
+  const wins = js.split('\n').find(l => l.startsWith('  const listWins = {}')) + '\n' + js.split('\n').find(l => l.startsWith('  let sideHost = null, feedHost = null;'));
   const listWin = js.split('\n').find(l => l.startsWith('  function listWin('));
   const side = slice(js, '  let sideBase = null;', '  const CHATS = window.WizChatsHost.create({');
   const sideMain = slice(js, '  function sideMain() {', '  function syncChatsPane(id) {');
   const pane = slice(js, '    chatChannels: host => {', "    // The picker's Apps");
   const hostWin = js.split('\n').find(l => l.startsWith('    win: id => W[id] ||')), hostOwner = js.split('\n').find(l => l.startsWith('    owner: id => String(id).replace('));
   vm.createContext(ctx);
-  vm.runInContext(`${side}\n${main}\n${wins}\n${listWin}\n${sideMain}\nthis.api = { ${pane} };\nthis.H = { ${hostWin}\n${hostOwner} };\nthis.sideNow = () => sideBase;`, ctx);
+  vm.runInContext(`${side}\n${main}\n${wins}\n${listWin}\n${sideMain}\nthis.api = { ${pane} };\nthis.H = { ${hostWin}\n${hostOwner} };\nthis.sideNow = () => sideBase;\nthis.feedNow = () => feedBase;\nthis.feedPaneFor = feedPaneFor;\nthis.feedPane = feedPane;`, ctx);
   return ctx;
 }
 const ev = (attrs, sheet = false) => ({ target: { closest: sel => sel === '.ch-sheet' ? (sheet ? {} : null) : sel === '[data-chopen]' && attrs.chopen ? { dataset: { chopen: attrs.chopen } } : null }, stopPropagation() {} });
@@ -103,7 +112,7 @@ test('a Chats window on another Chats view is not the main one: the stand-in bac
   assert.equal(x.W['w-main'].thread, 't-main');
 });
 
-test('the first main Chats window takes over the stand-in: its open channel, focus and filter; the feed is painted at once', () => {
+test('the first main Chats window takes over the stand-in; a channel left open in the sidebar (the earlier design) moves to the main column\'s feed', () => {
   const x = desktopWorld(); const main = x.W['w-main']; for (const k of Object.keys(x.W)) delete x.W[k];
   x.api.chatChannels(x.host); const sb = x.sideNow();
   sb.chan = { id: 'launch', prev: null }; sb.focus = { kind: 'space', key: 'launch' }; x.CH[sb.id] = { chanFilter: 'needs' };
@@ -112,23 +121,77 @@ test('the first main Chats window takes over the stand-in: its open channel, foc
   assert.equal(x.api.chatChannels(x.host), true);
   assert.equal(x.sideNow(), null, 'the stand-in is gone');
   assert.equal(x.host.dataset.chats, 'w-main::side');
-  assert.deepEqual(JSON.parse(JSON.stringify(main.chan)), { id: 'launch', prev: { kind: 'agent', key: 'hermes' } }, 'the channel stays open; Back returns to the window\'s own focus');
-  assert.deepEqual(main.focus, { kind: 'space', key: 'launch' });
   assert.equal(x.CH['w-main'].chanFilter, 'needs');
-  assert.deepEqual(x.calls.filter(c => c[0] === 'paint'), [['paint', 'w-main::side', true]], 'repainted on the new window even with a pane already drawn');
   assert.ok(x.calls.some(c => c[0] === 'forget' && c[1] === sb.id + '::side'));
-  // Back before the pane repaints: the new main window takes the channel over first, so Back leaves the feed.
+  // The channel is not left in the sidebar: it is the main column's feed now, and the sidebar's Focus is its own again.
+  const fb = x.feedNow(); assert.ok(fb && /^feed-/.test(fb.id), 'the feed window');
+  assert.equal(fb.chan.id, 'launch'); assert.deepEqual(JSON.parse(JSON.stringify(fb.focus)), { kind: 'space', key: 'launch' });
+  assert.equal(main.chan, null); assert.deepEqual(JSON.parse(JSON.stringify(main.focus)), { kind: 'agent', key: 'hermes' });
+  assert.deepEqual(x.events, [['wos:channel-feed', { open: { id: 'launch', name: 'Launch' } }]], 'the layout is told: it shows the feed in the column');
+  assert.deepEqual(x.calls.filter(c => c[0] === 'paint').at(-1), ['paint', 'w-main::side', true], 'the sidebar painted on the new window');
+  // Back before the pane repaints (no feed open yet): the new main window takes the channel over first, so Back leaves it.
   const z = desktopWorld(); const m3 = z.W['w-main']; for (const k of Object.keys(z.W)) delete z.W[k];
   z.api.chatChannels(z.host); const sb3 = z.sideNow(); sb3.chan = { id: 'launch', prev: null }; z.W['w-main'] = m3; z.calls.length = 0;
   assert.equal(z.api.chatChannelBack(), true);
   assert.equal(z.sideNow(), null); assert.deepEqual(z.calls.filter(c => c[0] === 'back'), [['back', 'w-main::side', null]]);
-  assert.equal(m3.chan?.id, 'launch', 'the channel it goes back from is the one the stand-in had open');
   // No Chats window and no stand-in yet: Back has nothing to do.
   const e = desktopWorld(); for (const k of Object.keys(e.W)) delete e.W[k]; assert.equal(e.api.chatChannelBack(), false); assert.equal(e.sideNow(), null);
-  // A main window with its own open channel keeps it.
-  const y = desktopWorld(); const m2 = y.W['w-main']; for (const k of Object.keys(y.W)) delete y.W[k];
-  y.api.chatChannels(y.host); y.sideNow().chan = { id: 'box', prev: null }; m2.chan = { id: 'launch', prev: null }; y.W['w-main'] = m2;
-  y.api.chatChannels(y.host); assert.deepEqual(m2.chan, { id: 'launch', prev: null });
+  // A main window with its own open channel (saved by the earlier design): carried to the feed on the next paint.
+  const y = desktopWorld(); const m2 = y.W['w-main']; m2.chan = { id: 'box', prev: { kind: 'agent', key: 'hermes' } }; m2.focus = { kind: 'space', key: 'box' };
+  y.api.chatChannels(y.host);
+  assert.equal(y.feedNow().chan.id, 'box'); assert.equal(m2.chan, null); assert.deepEqual(JSON.parse(JSON.stringify(m2.focus)), { kind: 'agent', key: 'hermes' });
+  assert.deepEqual(JSON.parse(JSON.stringify(y.api.chatFeedOpen())), { id: 'box', name: 'Box' });
+});
+
+test('a channel opened from the sidebar pane opens in the main column\'s own feed window (off the desks, never saved); the sidebar\'s window keeps its Focus', () => {
+  const x = desktopWorld(), main = x.W['w-main']; main.focus = { kind: 'space', key: 'launch' };
+  const keys = Object.keys(x.W).sort();
+  x.api.chatChannels(x.host);
+  const pane = x.H.win('w-main::side'), to = x.feedPaneFor(pane), fb = x.feedNow();
+  assert.ok(fb && /^feed-/.test(fb.id)); assert.equal(to.id, fb.id + '::side');
+  assert.deepEqual(JSON.parse(JSON.stringify(fb.focus)), { kind: 'agent', key: 'hermes' }, 'a fresh open starts from the sidebar\'s agent, never the Space it held');
+  assert.deepEqual(main.focus, { kind: 'space', key: 'launch' }, 'the sidebar\'s own window is untouched');
+  assert.deepEqual(Object.keys(x.W).sort(), keys, 'never put on a desk or into the saved windows');
+  // Chats resolves it like the stand-in: its id::side pane, owned by the feed window; a thread picked opens in the main Chats.
+  assert.equal(x.H.win(fb.id), fb); assert.equal(x.H.win(to.id).id, to.id); assert.equal(x.H.owner(to.id), fb.id);
+  x.calls.length = 0; x.H.win(to.id).thread = 's-9'; assert.deepEqual(x.calls, [['open', 's-9']]);
+  // Only the sidebar's pane opens elsewhere: the feed window itself, the classic list pane and a plain window open in place.
+  assert.equal(x.feedPaneFor(x.H.win(to.id)), null); assert.equal(x.feedPane(x.H.win(to.id)), false);
+  assert.equal(x.feedPane({ id: 'w-main::list' }), false); assert.equal(x.feedPane(main), false); assert.equal(x.feedPane(pane), true);
+  // Main and routed agents alike: the feed starts on the agent the sidebar lists (General = that agent's own chats).
+  for (const k of kinds) { main.focus = k === 'main' ? null : { kind: 'agent', key: `qa-${k}` }; x.feedPaneFor(pane);
+    assert.deepEqual(JSON.parse(JSON.stringify(x.feedNow().focus)), main.focus, `${k}: the feed's agent`); assert.equal(x.feedNow().chan, null); }
+  // A layout that does not own the chat list (Classic): no feed window at all.
+  x.ownsChatList = false; assert.equal(x.feedPane(pane), false);
+});
+
+test('chatFeed paints the feed window into the column\'s node, nothing when no channel is open; Back closes the feed first and tells the layout', () => {
+  const x = desktopWorld(); x.api.chatChannels(x.host);
+  x.calls.length = 0;
+  assert.equal(x.api.chatFeed(x.col), null, 'no feed window yet'); assert.equal(x.api.chatFeedOpen(), null);
+  const to = x.feedPaneFor(x.H.win('w-main::side')), fb = x.feedNow();
+  assert.equal(x.api.chatFeed(x.col), null, 'a feed window with no channel open');
+  fb.chan = { id: 'launch', prev: fb.focus }; fb.focus = { kind: 'space', key: 'launch' }; x.calls.length = 0;
+  assert.deepEqual(JSON.parse(JSON.stringify(x.api.chatFeed(x.col))), { id: 'launch', name: 'Launch' });
+  assert.equal(x.col.dataset.chats, to.id);
+  assert.deepEqual(x.calls, [['paint', to.id, 'col']], 'only the feed window is painted there');
+  assert.deepEqual(JSON.parse(JSON.stringify(x.api.chatFeedOpen())), { id: 'launch', name: 'Launch' });
+  // Its posts open in the main Chats (the column's thread); its other taps are Chats' own on the feed window.
+  const click = x.listeners.find(l => l[2] === 'col')[1];
+  x.calls.length = 0; click(ev({ chopen: 's-1' })); assert.deepEqual(x.calls, [['open', 's-1']]);
+  x.calls.length = 0; x.events.length = 0; click(ev({}));
+  assert.deepEqual(x.calls.slice(0, 1), [['click', to.id]]);
+  assert.deepEqual(x.events, [['wos:channel-feed', { open: { id: 'launch', name: 'Launch' } }]], 'a tap in the feed (its back arrow) lets the layout follow');
+  // Back: the feed closes (the column empties), the layout is told; the sidebar repaints without the mark.
+  x.calls.length = 0; x.events.length = 0;
+  assert.equal(x.api.chatChannelBack(), true);
+  assert.deepEqual(x.calls[0], ['back', to.id, null]);
+  assert.ok(x.calls.some(c => c[0] === 'paint' && c[1] === 'w-main::side' && c[2] === true), 'the sidebar list repainted');
+  assert.deepEqual(x.events, [['wos:channel-feed', { open: null }]]);
+  assert.equal(x.api.chatFeedOpen(), null); assert.equal(x.api.chatFeed(x.col), null);
+  assert.equal(x.W['w-main'].chan, undefined, 'the sidebar window never held a channel');
+  // A node outside the stage is refused.
+  assert.equal(x.api.chatFeed({ ...x.col, dataset: {}, replaceChildren() {} }), null);
 });
 
 test('Activity rows carry their "# channel" from CHATS.channelOf (main and routed rows alike); none with the switch off', () => {
@@ -189,7 +252,16 @@ test('Chats paints the side pane only with the switch on: tabs, then the channel
   assert.match(js, /panel\.append\(head, agentsRow, chanBox, scroll, foot\)/);
   assert.match(js, /const paintChan = \(\) => \{ const on = !q && !!api\.sessions\.channels\?\.\(chanBox\);/, 'hidden while the sidebar searches');
   assert.match(js, /if \(s\.channel\) title\.append\(el\('span', 'aad-chan-line', \{ text: `# \$\{s\.channel\}` \}\)\);/);
-  assert.match(js, /else if \(docked\) closeChat\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: thread → channel → list');
+  assert.match(js, /else if \(docked\) closeChat\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: a docked thread or feed first');
+  // The design change of 11 Nov 2026: the feed is a chat in the column (FEED), Back from a post lands on it, Esc closes it.
+  assert.match(js, /if \(!h\.app\) chatThread = h\.thread \|\| \(h\.note \? NOTE : h\.draft \? DRAFT : feedOn\(\) \? FEED : null\);/, 'no thread in the column and a channel open: its feed');
+  assert.match(js, /if \(chatThread === FEED\) \{ chatThread = null; anim\('undock'\); api\.sessions\.channelBack\?\.\(\); paintTop\(\); return true; \}/, 'Esc / ✕ on the feed: nothing open');
+  assert.match(js, /api\.listen\(globalThis, 'wos:channel-feed', e => feedOpened\(e\?\.detail\?\.open \|\| null\)\);/);
+  assert.match(js, /const open = on \? api\.sessions\.channelFeed\?\.\(feedBox\) : null;/);
+  assert.match(host, /channelFeed: node => live\(\) && node\?\.nodeType === 1 && \[\.\.\.a\.mounts\]\.some\(m => m\.contains\(node\)\) \? shell\.chatFeed\?\.\(node\) \|\| null : null,/, 'only the layout\'s own mounted nodes');
+  // Chats: the sidebar's pane never draws a feed (its channels open in the feed window), the feed window nothing else.
+  assert.match(src, /feed = chanOn && !\(typeof chanElsewhere === 'function' && chanElsewhere\(w\)\) \? chanOpen\(w\) : null;/, 'opening a channel never replaces the sidebar list');
+  assert.match(src, /if \(side && !feed && typeof chanElsewhere === 'function' && typeof H\.channelsElsewhere === 'function' && !chanElsewhere\(w\)\) \{ el\.replaceChildren\(\); return; \}/);
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aad-panel:has\(\.aad-chan:not\(\[hidden\]\) :is\(\.ch-side-chan, \.ch-side-feed\)\) > \.aad-scroll \{ display: none; \}/, 'Channels and a feed take the rows\' place');
   assert.match(css, /\.aad-row:has\(\.aad-chan-line\) \{ height: auto; min-height: 56px;/, 'two lines at 56 px');

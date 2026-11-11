@@ -1010,3 +1010,22 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch-field > .ch-mlabel { bottom: 1px; height: 26px; max-width: calc(100% - 8px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.75rem; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-row:has(.aad-chan-line) { height: auto; min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan-line { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aad-ink-2); font-size: 0.75rem; font-weight: 400; }
+/* A channel's feed in the main chat column (wizard-ux issue 1256, James 11 Nov 2026: the channel list stays in the
+ * sidebar): api.sessions.channelFeed paints it into .aad-feed over the docked Chats window, at the column's reading
+ * width like a thread. The column's title row carries "# name" and its ✕, so the feed's own header stays out; the
+ * feed's message box replaces the composer and the orb there. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; min-height: 0; background: linear-gradient(var(--aad-main), var(--aad-main)), var(--aad-canvas); color: var(--wz-text, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-list { position: relative; inset: auto; flex: 1; min-height: 0; background: none; box-shadow: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-h { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-list .ch-scroll { padding: 4px max(20px, calc((100% - 768px) / 2)) 16px; scrollbar-width: thin; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-feed .ch-rdy-bar { background: linear-gradient(var(--aad-main), var(--aad-main)), var(--aad-canvas); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose { width: min(768px, calc(100% - 40px)); box-sizing: border-box; margin: 0 auto; padding: 8px 0 16px; border-top: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose .ch-row2 { gap: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose .ch-field { flex-direction: column; padding-bottom: 24px; border-radius: 22px; border: 1px solid var(--aad-line); background: color-mix(in srgb, var(--aad-ink) 5%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose .ch-field:focus-within { border-color: color-mix(in srgb, var(--aad-ink) 35%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose .ch-field > textarea { flex: none; border: 0; background: transparent; padding-bottom: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-feed .ch-chan-compose .ch-field > .ch-mlabel { bottom: 1px; height: 26px; max-width: calc(100% - 8px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.75rem; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-feed] .aad-orb { visibility: hidden; }
+/* the sidebar's channel whose feed is open in the column */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan.cur > .ch-chan-r { border-radius: 8px; background: color-mix(in srgb, var(--aad-ink) 10%, transparent); }

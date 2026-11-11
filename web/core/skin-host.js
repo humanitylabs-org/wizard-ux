@@ -956,6 +956,12 @@
         channels: node => live() && node?.nodeType === 1 && [...a.mounts].some(m => m.contains(node)) ? !!shell.chatChannels?.(node) : false,
         // Back from a channel's feed to the Channels list (thread → channel → list); false when no feed is open.
         channelBack: () => live() ? !!shell.chatChannelBack?.() : false,
+        /* A channel's feed in the layout's main chat column (wizard-ux issue 1256, James 11 Nov 2026: the channel list stays
+         * in the sidebar): its header, filters, posts and message box painted into node (one of this layout's mounted
+         * nodes). Returns the open channel ({ id, name }), or null with none open (the node is emptied). */
+        channelFeed: node => live() && node?.nodeType === 1 && [...a.mounts].some(m => m.contains(node)) ? shell.chatFeed?.(node) || null : null,
+        // The channel whose feed is open in the main column ({ id, name }), or null.
+        channelFeedOpen: () => live() ? shell.chatFeedOpen?.() || null : null,
       }),
       /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
        * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
