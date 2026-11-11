@@ -1024,6 +1024,13 @@ window.WizCore.chats = function createChats(H) {
     chanRepaint(); chanToEnd(wid);
     return it;
   }
+  // A Not sent channel post taken back (Edit) or dismissed (wizard-ux issue 1293): its "Sending…" post leaves the
+  // feed at once, never after the two-minute cap. Only that chat's post, of its own agent (key: one feed only).
+  function chanDropSending(it, key = '') {
+    const sid = it?.sessionId, own = it?.agent && AGS()?.isOther?.(it.agent) ? it.agent : ''; let n = 0;
+    if (sid) for (let i = CHAN_SENDING.length - 1; i >= 0; i--) { const p = CHAN_SENDING[i]; if (p.sid === sid && (p.owner || '') === own && (!key || p.feed === key)) { CHAN_SENDING.splice(i, 1); n++; } }
+    return n;
+  }
   // Edit on a channel post that was saved but then not sent (wizard-ux issue 1294): the words go back into this
   // channel's own box, as they do when the save itself fails, never into a separate New chat. false: not this
   // feed's post (a reply, another channel's post, a plain new chat), so the shell's own Edit takes it.
@@ -1040,7 +1047,7 @@ window.WizCore.chats = function createChats(H) {
     if (t && c.draftFor === key) KIT.drafts.set(key, t.value, c.files || []);
     if (!window.WosSettings?.moveDraft({ chats: { ch }, wid, item: it, outbox: OUTBOX, toast, key })) return true;
     // Its "Sending…" post goes with it: the words are the box's again.
-    for (let i = CHAN_SENDING.length - 1; i >= 0; i--) if (CHAN_SENDING[i].feed === key && CHAN_SENDING[i].sid === it.sessionId) CHAN_SENDING.splice(i, 1);
+    chanDropSending(it, key);
     c.draftFor = ''; // the box reloads its draft (the edited words and files) on this paint
     c.pillIds = ''; // taken back, not sent: the pill never flashes "Sent" for it
     renderChatList(w, elOf(wid));
@@ -3985,8 +3992,11 @@ window.WizCore.chats = function createChats(H) {
     const failedDismiss = e.target.closest('[data-obdismissfailed]'); if (failedDismiss) {
       if (failedDismiss.disabled) return true;
       failedDismiss.disabled = true;
+      const gone = OUTBOX.get?.(failedDismiss.dataset.obdismissfailed);
       Promise.resolve(OUTBOX.dismissFailed(failedDismiss.dataset.obdismissfailed)).then(ok => {
         if (!ok) failedDismiss.disabled = false;
+        // A dismissed channel post leaves its feed now (issue 1293), not when its "Sending…" post times out.
+        if (ok && gone?.kind === 'new' && typeof chanDropSending === 'function' && chanDropSending(gone)) chanRepaint();
         // A pressed desktop list temporarily holds background paints. An explicit
         // dismissal must update its own pill now, rather than wait for a later poll.
         const current = H.win(id);
