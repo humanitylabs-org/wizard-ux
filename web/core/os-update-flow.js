@@ -155,7 +155,7 @@
   function busySheet(t, names) {
     ask({ title: names.length === 1 ? 'Wizard is still working on something' : `Wizard is still working on ${names.length} things`,
       body: workList(names) + p(`Updating now would stop ${them(names.length)}.`,
-        `Update when they finish starts the update by itself as soon as Wizard is done. You can also update any time in Settings.`),
+        `${names.length === 1 ? 'Update when it finishes' : 'Update when they finish'} starts the update by itself as soon as Wizard is done. You can also update any time in Settings.`),
       yes: names.length === 1 ? 'Update when it finishes' : 'Update when they finish', alt: 'Update anyway', no: 'Cancel',
       onYes: () => whenIdle(t), onAlt: () => start(t, { anyway: true }) });
   }
