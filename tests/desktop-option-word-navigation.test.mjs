@@ -38,8 +38,8 @@ function shell({ field = false, value = '', chat = true, picker = false, skinCon
   };
   vm.createContext(context);
   // The production field lookup (and, on request, the production typing test) run as shipped.
-  if (desktop.includes('  const keyField = ')) vm.runInContext(between(desktop, '  const keyField = ', '\n') + '\nthis.keyField = keyField;', context);
-  else context.keyField = e => e.target; // a donor from before issue 1279
+  if (desktop.includes('  const keyField = ')) vm.runInContext(['textField', 'keyField'].map(n => between(desktop, `  const ${n} = `, '\n') + `\nthis.${n} = ${n};`).join('\n'), context);
+  else Object.assign(context, { keyField: e => e.target, textField: t => context.typing(t) }); // a donor from before issue 1279
   if (realTyping) vm.runInContext(between(desktop, '  const typing = ', '\n') + '\nthis.typing = typing;', context);
   vm.runInContext(between(desktop, '  function onKey(e, fromFrame = false) {', "  addEventListener('keydown', e => onKey(e), true);"), context);
   return { calls, key(code, extra = {}) { const e = event(code, { target: { value, matches: () => false, closest: () => null }, ...extra }); context.onKey(e); return e; } };
@@ -124,6 +124,7 @@ for (const code of ['ArrowLeft', 'ArrowRight']) {
     ['the app iframe itself (shell document focus)', frameWith(textarea())],
     ['a contenteditable inside a shadow root', { tagName: 'X-EDITOR', isContentEditable: false, shadowRoot: { activeElement: { tagName: 'DIV', isContentEditable: true } }, matches: () => false, closest: () => null }],
     ['a nested app frame input', frameWith(frameWith({ tagName: 'INPUT', isContentEditable: false }))],
+    ['a search box in an app frame', frameWith({ tagName: 'INPUT', type: 'search', isContentEditable: false })],
   ]) test(`⌥⇧${code} in ${name} stays the field's word selection, even with a layout that claims arrows`, () => {
     // The real AI apps view handler as the layout key: its own typing() sees only the shell's focused iframe.
     const w = shell({ realTyping: true, skinKey: ai({ typing: false }).down }), e = w.key(code, { shiftKey: true, target });
@@ -132,7 +133,10 @@ for (const code of ['ArrowLeft', 'ArrowRight']) {
   });
   test(`⌥⇧${code} outside a text field still swaps windows`, () => {
     const body = { tagName: 'BODY', isContentEditable: false, matches: () => false, closest: () => null };
-    for (const target of [body, frameWith(body), frameWith(null)]) {
+    const control = type => ({ tagName: 'INPUT', type, isContentEditable: false, matches: () => false, closest: () => null });
+    for (const target of [body, frameWith(body), frameWith(null), control('checkbox'), frameWith(control('radio')), control('button'), { tagName: 'SELECT', isContentEditable: false, matches: () => false, closest: () => null }]) {
+      // (a checkbox, button or picker has no words to select: from an app frame the chord stays the shell's)
+      if (target.tagName !== 'IFRAME' && target.tagName !== 'BODY') { const w = shell({ realTyping: true, skinKey: () => true }), e = w.key(code, { shiftKey: true, target }); assert.ok(e.defaultPrevented, 'a layout still owns the chord on ' + target.tagName); continue; }
       const w = shell({ realTyping: true }), e = w.key(code, { shiftKey: true, target });
       assert.ok(e.defaultPrevented, 'the shell chord');
       assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['swap', code === 'ArrowLeft' ? -1 : 1]]);
