@@ -211,12 +211,20 @@ test('sort, pin, archive and rename are store PATCHes; this device keeps no chan
   assert.equal(s.chanPrefs().sort, 'za'); assert.equal(s.chanArchived('launch'), true); assert.deepEqual(s.chanPrefs().pins, ['alerts'])
 })
 
-test("this device's old pins and archive move onto the store once", async () => {
-  const s = await shell({ local: { 'wos.chats.channel-prefs.v1': JSON.stringify({ sort: 'za', pins: ['voice', 'gone'], archived: { box: '2026-11-09T00:00:00.000Z' } }) } })
-  s.chanCarry(); await settle(); s.chanCarry(); await settle()
-  const sent = s.box.log.filter(l => l.startsWith('PATCH')).map(l => JSON.parse(l.slice(l.indexOf('{'))))
-  assert.deepEqual(sent, [{ id: 'voice', pinned: true }, { id: 'box', archived: true }], 'once, only channels the store has; the sort stays the box one')
-  assert.equal(s.box.sort, 'az')
+test("this device's old pins and archive move onto the store once, and only count as moved once they landed", async () => {
+  const local = { 'wos.chats.channel-prefs.v1': JSON.stringify({ sort: 'za', pins: ['voice', 'gone'], archived: { box: '2026-11-09T00:00:00.000Z' } }) }
+  const s = await shell({ local })
+  const patches = () => s.box.log.filter(l => l.startsWith('PATCH')).map(l => JSON.parse(l.slice(l.indexOf('{'))))
+  // The box refuses the first write (offline, busy): nothing is marked, and the next try sends what is still missing.
+  s.box.fail(1, 503)
+  assert.equal(await s.chanCarry(), false); await settle()
+  assert.equal(s.store.has('wos.chats.channel-prefs.carried.v1'), false, 'not marked while a write failed')
+  assert.equal(await s.chanCarry(), true); await settle()
+  assert.equal(s.store.has('wos.chats.channel-prefs.carried.v1'), true)
+  assert.equal(await s.chanCarry(), true); await settle()
+  assert.deepEqual(patches(), [{ id: 'voice', pinned: true }, { id: 'box', archived: true }, { id: 'voice', pinned: true }], 'the archive landed the first time; only the pin is sent again; nothing after the mark')
+  assert.deepEqual(pins({ channels: s.box.channels }), ['alerts', 'voice']); assert.equal(s.box.channels.find(c => c.id === 'box').archived, true)
+  assert.equal(s.box.sort, 'az', 'the sort stays the box one')
 })
 
 test('the feed adds the channel own list to the live rows, last 30 days, by agent', async () => {

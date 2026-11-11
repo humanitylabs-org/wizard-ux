@@ -495,16 +495,23 @@ window.WizCore.chats = function createChats(H) {
   }
   // Once per device, the first time the store answers: this device's own pins and archive move onto it (a pin or an
   // archive is only ever added, never undone here; the sort stays the box's, since another device may have chosen it).
+  // Marked done only once every write landed; a failed one is tried again a minute later.
   const CHAN_CARRY_KEY = 'wos.chats.channel-prefs.carried.v1';
-  let chanCarried = false;
-  function chanCarry() {
-    const st = chanStore(); if (!st) return;
-    try { if (localStorage.getItem(CHAN_CARRY_KEY)) return; localStorage.setItem(CHAN_CARRY_KEY, new Date().toISOString()); } catch (_) { return; }
+  let chanCarried = false, chanCarryAfter = 0;
+  async function chanCarry() {
+    const st = chanStore(); if (!st) return false;
+    try { if (localStorage.getItem(CHAN_CARRY_KEY)) return true; } catch (_) { return false; }
     let v = null; try { v = JSON.parse(localStorage.getItem(CHAN_PREFS_KEY) || 'null'); } catch (_) {}
-    if (!v || typeof v !== 'object') return;
-    const byId = new Map(st.channels.map(c => [c.id, c]));
-    for (const id of Array.isArray(v.pins) ? v.pins : []) { const c = byId.get(id); if (c && !c.pinned && !c.archived && !(v.archived && v.archived[id])) LIVE.chanStore.patch({ id, pinned: true }); }
-    for (const id of Object.keys(v.archived && typeof v.archived === 'object' ? v.archived : {})) { const c = byId.get(id); if (c && !c.archived) LIVE.chanStore.patch({ id, archived: true, ...(c.pinned ? { pinned: false } : {}) }); }
+    const byId = new Map(st.channels.map(c => [c.id, c])), edits = [];
+    if (v && typeof v === 'object') {
+      const arch = v.archived && typeof v.archived === 'object' ? v.archived : {};
+      for (const id of Array.isArray(v.pins) ? v.pins : []) { const c = byId.get(id); if (c && !c.pinned && !c.archived && !arch[id]) edits.push({ id, pinned: true }); }
+      for (const id of Object.keys(arch)) { const c = byId.get(id); if (c && !c.archived) edits.push({ id, archived: true, ...(c.pinned ? { pinned: false } : {}) }); }
+    }
+    const done = (await Promise.all(edits.map(b => LIVE.chanStore.patch(b)))).every(r => r && r.ok);
+    if (done) { try { localStorage.setItem(CHAN_CARRY_KEY, new Date().toISOString()); } catch (_) {} }
+    else { chanCarried = false; chanCarryAfter = Date.now() + 60e3; }
+    return done;
   }
   // The channel a window's list draws as a feed, or null. It only holds while the Focus still matches it (a Focus
   // tap elsewhere simply leaves the feed).
@@ -610,7 +617,7 @@ window.WizCore.chats = function createChats(H) {
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   function channelsBody(w, rows) {
-    if (typeof chanCarry === 'function' && !chanCarried && chanStore()) { chanCarried = true; chanCarry(); }
+    if (typeof chanCarry === 'function' && !chanCarried && Date.now() >= chanCarryAfter && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
     const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now)).join('')}</div>` : ''}</section>` : '';
