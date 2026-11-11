@@ -280,7 +280,12 @@ export default function desktop(api) {
   const top = el('header', 'aad-top');
   const cTop = el('div', 'aad-ctop'), tt = el('span', 'aad-tt');
   const cX = el('button', 'aad-ib aad-cx', { type: 'button', 'aria-label': 'Close the chat (Esc)', title: 'Close (Esc · ⌥W)' }); cX.append(icon('x')); cX.hidden = true;
-  cTop.append(tt, cX);
+  /* Back to the channel (wizard-ux issue 1302; James, 11 Nov 2026: "if I open a channel and then I click through to a
+   * thread there's no way for me to go back to the channel"): a thread opened from a channel's feed in this column shows
+   * "‹ # name" at the left of its header, and it does what Esc does (closeChat: the feed again, at its place). A thread
+   * opened from Activity or the sidebar has none. */
+  const cBack = el('button', 'aad-cback', { type: 'button' }); cBack.hidden = true;
+  cTop.append(cBack, tt, cX);
   const pTop = el('div', 'aad-ptop'); pTop.hidden = true;
   const pIcon = el('span', 'aad-pti'), pName = el('span', 'aad-ptn');
   const pTools = el('span', 'aad-ptools'); pTools.hidden = true;
@@ -771,7 +776,7 @@ export default function desktop(api) {
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
     if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}`);
-    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; api.sessions.open(s.id); });
+    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
     if ((s.actions || []).some(k => ACTS.some(([a]) => a === k))) {
@@ -983,7 +988,7 @@ export default function desktop(api) {
   function openChat(id, key) {
     if (panes.get().focus !== 'chats') panes.set({ focus: 'chats' });
     if (q) setSearch(false);
-    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
+    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); fromFeed = null; api.sessions.open(id);
     paintRail(true);
   }
   function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
@@ -1513,6 +1518,26 @@ export default function desktop(api) {
     if (feedBox.hidden === !!open) feedBox.hidden = !open;
     if (open) root.dataset.aadFeed = ''; else delete root.dataset.aadFeed;
   }
+  // The post last opened from the feed (its row or its Reply), and the channel it was opened in.
+  let fromFeed = null;
+  function feedPost(e) {
+    const t = e?.target, row = t?.closest?.('[data-chopen], [data-chreply]'), open = feedOn();
+    if (!row || !open || t.closest('.ch-post-t a[href]') || t.closest('.ch-sheet')) return;
+    fromFeed = { sid: row.dataset.chopen || row.dataset.chreply, id: open.id, name: open.name };
+  }
+  api.listen(feedBox, 'click', feedPost, true);
+  // The channel the chat in the column goes back to, or null: only that post, docked, with its channel still open.
+  function feedBack() {
+    if (!fromFeed || !docked || chatThread !== fromFeed.sid) return null;
+    const open = feedOn(); return open && open.id === fromFeed.id ? open : null;
+  }
+  function paintBack() {
+    // another chat (or none) in the column: that post's Back is spent; the feed itself keeps it for a reopen
+    if (fromFeed && chatThread !== fromFeed.sid && chatThread !== FEED) fromFeed = null;
+    const b = feedBack(); cBack.hidden = !b; if (!b) return;
+    const name = `# ${b.name || ''}`; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
+  }
+  api.listen(cBack, 'click', () => closeChat());
   // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
   function feedOpened(open) {
     if (!open) { paintTop(); return; }
@@ -1741,7 +1766,7 @@ export default function desktop(api) {
     const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && h.note ? stepAt : cc && ids.includes(cc) ? cc : null;
     const nx = cur == null && dir < 0 ? { id: ids[ids.length - 1], wrapped: false } : readyStep(ids, cur, dir); if (!nx) return;
     if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
-    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id);
+    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); fromFeed = null; api.sessions.open(nx.id);
   }
   /* Round 21 (Miguel, 4 Nov 2026: the keys as obvious as possible): ⌥ + a mnemonic letter, ⇧ only for the reverse /
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
@@ -1988,7 +2013,7 @@ export default function desktop(api) {
     const fresh = chatThread !== FEED && !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
     const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? titleOf(chatThread) : '';
-    tt.textContent = docked ? t : ''; tt.title = t;
+    tt.textContent = docked ? t : ''; tt.title = t; paintBack();
     cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : chatThread === FEED ? 'Close the channel (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();

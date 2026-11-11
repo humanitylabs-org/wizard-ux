@@ -507,6 +507,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-top {
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop { flex: none; width: var(--aad-chat-w, 0px); min-width: 0; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 20px; pointer-events: auto; }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-chat]) .aad-ctop { visibility: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .aad-ctop { background: var(--aad-main); box-shadow: 1px 0 0 var(--aad-line); }
+/* Back to the channel a thread was opened from (issue 1302): the channel's name, quiet, at the header's left */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cback { flex: 0 1 auto; max-width: 40%; height: 28px; margin: 0 0 0 -8px; padding: 0 10px 0 8px; border: 0; border-radius: 8px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--wz-text-secondary, var(--aad-ink-2)); background: none; font: 600 0.8125rem / 1.75rem var(--wz-font-ui); transition: background 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cback:hover { background: var(--aad-hover); color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cback:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cback[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.43 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-cx[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop {
