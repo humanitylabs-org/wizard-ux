@@ -840,7 +840,10 @@ window.WizCore.chats = function createChats(H) {
       // Its links are never inside the post's button: the agent's words sit beside it (a tap there still opens the
       // thread; the header button is the keyboard's way in), so each link is its own control.
       // A heading line ("## Executive signal") shows as bold words, never a raw "#": the feed keeps one text size.
-      const heads = t => t.replace(/^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/gm, (l, h) => !h ? l : h.includes('**') ? h : `**${h}**`);
+      // Lines inside a ``` or ~~~ fence are code and stay as written ("# a shell comment").
+      let fence = '';
+      const heads = t => t.split('\n').map(l => { const f = /^ {0,3}(`{3,}|~{3,})/.exec(l); if (f) { if (!fence) fence = f[1][0]; else if (f[1][0] === fence) fence = ''; return l; }
+        const m = !fence && /^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(l); return !m || !m[1] ? l : m[1].includes('**') ? m[1] : `**${m[1]}**`; }).join('\n');
       const words = byAgent && KIT?.inline ? KIT.inline(heads(text)) : esc(text);
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${words}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
       // A post the agent wrote (an alert, a reminder, a chat it opened; wizard-agent-service issue 441) carries the

@@ -1174,11 +1174,14 @@ test('issue 1287 main vs routed: host-profile, container and restricted agent po
   const inline = realInline();
   for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
     const k = agent ? `${agent}|${sid}` : sid, s = row(sid, 1, { owner: agent });
-    const f = fixture({ agents: { [sid]: agent }, history: { [k]: [{ role: 'assistant', text: `**Alert for ${agent || 'main'}.** _soon_`, at: NOW - H }] }, sessions: { [agent ? k : sid]: s } });
+    const f = fixture({ agents: { [sid]: agent }, history: { [k]: [{ role: 'assistant', text: `**Alert for ${agent || 'main'}.** _soon_\n## Heading for ${agent || 'main'}\n\`\`\`\n# keep ${agent || 'main'}\n\`\`\``, at: NOW - H }] }, sessions: { [agent ? k : sid]: s } });
     f.env.KIT.inline = inline; f.openChannel(f.w, chan);
     f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
     const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
-    assert.match(html, new RegExp(`class="ch-post-t"><strong>Alert for ${agent || 'main'}\\.</strong> <em>soon</em><`), `${agent || 'main'}: bold and italics`);
+    assert.match(html, new RegExp(`class="ch-post-t[^"]*"><strong>Alert for ${agent || 'main'}\\.</strong> <em>soon</em>\\s`), `${agent || 'main'}: bold and italics`);
+    assert.match(html, new RegExp(`<strong>Heading for ${agent || 'main'}</strong>`), `${agent || 'main'}: a heading line is bold, no raw #`);
+    assert.match(html, new RegExp(`# keep ${agent || 'main'}`), `${agent || 'main'}: a # line inside a code fence stays as written`);
+    assert.doesNotMatch(html, /\*\*keep/);
   }
 });
 
