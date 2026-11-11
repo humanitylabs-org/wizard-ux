@@ -421,6 +421,8 @@
     spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
     // Short answer first (skin-host replySummary): on, how long replies start, and the short answer's length.
     replySummary: ['wos.chats.replySummary.v1', v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.on === 'boolean', JSON.stringify],
+    // The owner's other Wizards for the switcher (core/workspaces.js): the same list on every device of this box.
+    savedWizards: ['wos.workspaces.box.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = (patch, { requireShared = false } = {}) => {
@@ -465,14 +467,19 @@
    * as pins, wizard-ux #670). Each edit is queued here (kept across reloads and offline spells), shown at once, and
    * sent as Agent Service PATCH operations, applied atomically to the stored lists. An older service (405) gets the
    * same operations replayed onto a fresh read, written and read back. Pins keep their own queue (core/chat-pins.js). */
-  const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/;
-  const opField = o => SPACE_OP.test(o.key) ? 'spaces' : o.key;
+  const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/, WIZARD_OP = /^savedWizards\/([A-Za-z0-9._:-]{1,120})\/name$/;
+  const opField = o => SPACE_OP.test(o.key) ? 'spaces' : WIZARD_OP.test(o.key) ? 'savedWizards' : o.key;
+  const originOf = u => { try { return new URL(u).origin; } catch (e) { return ''; } };
   // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
   function applyPrefOps(prefs, ops) {
     const next = { ...prefs };
     for (const { op, key, item, items } of ops) {
       const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
-      if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
+      const wiz = WIZARD_OP.exec(key);
+      // Saved Wizards: adding is a no-op for an id or address already saved; renaming a forgotten one is a no-op.
+      if (key === 'savedWizards') next.savedWizards = op === 'add' ? (list.some(w => w.id === item.id || (!!originOf(w.url) && originOf(w.url) === originOf(item.url))) ? list : list.concat(item)) : list.filter(w => w.id !== item);
+      else if (wiz) next.savedWizards = list.map(w => w.id === wiz[1] ? { ...w, name: item } : w);
+      else if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
         : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
       else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.map(s => (s.agent || 'hermes') === (item.agent || 'hermes') && s.threads.some(t => item.threads.includes(t)) ? { ...s, threads: s.threads.filter(t => !item.threads.includes(t)) } : s).concat(item)) : list.filter(s => s.id !== item);
       // One Space per chat (James, 29 Oct 2026), as the Agent Service applies it: adding moves the chat out of that
