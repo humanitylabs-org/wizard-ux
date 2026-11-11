@@ -140,28 +140,28 @@
  * the top bar as #dvWeb; phone: the strip under the status bar). */
 #dvOsu .dv-um { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #dvOsu[data-shell="desktop"] { position: relative; left: auto; right: auto; top: auto; z-index: auto; flex-direction: row; align-items: center; gap: 6px;
-  height: 26px; min-width: 0; flex-shrink: 1; max-width: min(calc(50vw - 150px), 520px); padding: 0 3px 0 10px; border-radius: 8px; font-size: 12px;
+  height: 26px; min-width: 0; flex-shrink: 1; max-width: min(calc(50vw - 150px), 520px); padding: 0 3px 0 10px; border-radius: 8px; font-size: var(--wz-text-sm);
   background: var(--wz-panel, var(--wz-base, var(--bg))); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: none; margin-right: 6px; }
-#dvOsu[data-shell="desktop"] > button { height: 20px; padding: 0 9px; font-size: 11.5px; line-height: 18px; cursor: pointer; flex: none; }
+#dvOsu[data-shell="desktop"] > button { height: 20px; padding: 0 9px; font-size: var(--wz-text-sm); line-height: 18px; cursor: pointer; flex: none; }
 #dvOsu[data-shell="desktop"] > button:hover { filter: brightness(1.15); }
 #dvOsu[data-shell="phone"] > button { flex: none; }
 
 /* The sheet (APP-DESIGN-RULES rule 4): kit/wizard-ui.css's sheet block, which the shell can't load whole (it also
  * resets the page). Behaviour: kit/wizard-sheet.js. Wide = centred card up to 520 px; narrow = bottom sheet. */
-dialog.wz-sheet.osu-sheet { color: var(--wz-text, var(--ink)); background: linear-gradient(var(--wz-panel, transparent), var(--wz-panel, transparent)), var(--wz-opaque-base, #0e0822); border: 1px solid var(--wz-border, var(--line-2)); border-radius: 20px;
-  padding: 20px; width: min(520px, calc(100% - 24px)); max-width: none; max-height: 85%; overflow: auto; box-shadow: 0 18px 50px rgba(0, 0, 0, .45); }
-dialog.wz-sheet.osu-sheet::backdrop { background: color-mix(in srgb, var(--wz-base, #0e0822) 74%, transparent); }
+dialog.wz-sheet.osu-sheet { color: var(--wz-text, var(--ink)); background: linear-gradient(var(--wz-panel, transparent), var(--wz-panel, transparent)), var(--bg); border: 1px solid var(--wz-border, var(--line-2)); border-radius: 20px;
+  padding: 20px; width: min(520px, calc(100% - 24px)); max-width: none; max-height: 85%; overflow: auto; box-shadow: var(--wz-shadow, none); }
+dialog.wz-sheet.osu-sheet::backdrop { background: color-mix(in srgb, var(--wz-base) 74%, transparent); }
 .osu-sheet .wz-sheet-x { position: sticky; top: 0; float: right; width: 36px; height: 36px; margin: -6px -6px 0 8px; border: 0; border-radius: 50%; display: grid; place-items: center;
-  color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface, rgba(255,255,255,.06)); font-size: 18px; line-height: 1; cursor: pointer; }
+  color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface); font-size: var(--wz-text-lg); line-height: 1; cursor: pointer; }
 .osu-sheet .wz-sheet-grip { display: none; }
-.osu-sheet > h2 { margin: 0 0 10px; font-size: var(--wz-text-heading, 17px); font-weight: 700; line-height: 1.3; }
+.osu-sheet > h2 { margin: 0 0 10px; font-size: var(--wz-text-heading); font-weight: 700; line-height: 1.3; }
 .osu-sheet-p { margin: 0 0 8px; line-height: 1.45; }
 .osu-sheet-note { margin: 0; font-size: .875em; line-height: 1.4; color: var(--wz-text-secondary, var(--ink-3)); }
 .osu-sheet-act { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
 .osu-sheet-act { flex-wrap: wrap; }
 /* The third answer (Update anyway / Stop reminding me) sits apart on the left and reads as the quieter choice. */
 .osu-sheet-act .wz-button.osu-alt { margin-right: auto; background: none; border-color: transparent; color: var(--wz-text-secondary, var(--ink-3)); }
-.osu-sheet-work { margin: 0 0 12px; padding: 10px 12px; list-style: none; border-radius: 12px; background: var(--wz-surface, rgba(255,255,255,.06)); }
+.osu-sheet-work { margin: 0 0 12px; padding: 10px 12px; list-style: none; border-radius: 12px; background: var(--wz-surface); }
 .osu-sheet-work li { line-height: 1.4; overflow-wrap: anywhere; }
 .osu-sheet-work li + li { margin-top: 4px; }
 @media (max-width: 480px) {
@@ -175,17 +175,17 @@ dialog.wz-sheet.osu-sheet::backdrop { background: color-mix(in srgb, var(--wz-ba
   .osu-sheet-act > .wz-button { flex: 1; }
 }
 
-/* Opaque: the shell's --wz-panel mixes with a see-through base, so both surfaces sit on a solid base. */
-:root { --wz-opaque-base: #0e0822; }
+/* Opaque: the shell's --wz-panel can mix with a see-through skin base, so the sheet and the Updating panel sit on
+ * the page's own solid colour (--bg). */
 /* Updating: one opaque panel, nothing to tap. Desktop: under the top bar, centred; phone: above the dock. */
 .osu-busy { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 20px;
-  background: linear-gradient(var(--wz-panel, transparent), var(--wz-panel, transparent)), var(--wz-opaque-base, #0e0822);
-  color: var(--wz-text, var(--ink)); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: 0 18px 50px rgba(0, 0, 0, .45); }
+  background: linear-gradient(var(--wz-panel, transparent), var(--wz-panel, transparent)), var(--bg);
+  color: var(--wz-text, var(--ink)); border: 1px solid var(--wz-border, var(--line-2)); box-shadow: var(--wz-shadow, none); }
 .osu-busy[data-shell="desktop"] { top: 64px; left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); }
 .osu-busy[data-shell="phone"] { left: 12px; right: 12px; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
-.osu-busy-t { font-size: var(--wz-text-heading, 17px); font-weight: 700; line-height: 1.3; }
+.osu-busy-t { font-size: var(--wz-text-heading); font-weight: 700; line-height: 1.3; }
 .osu-steps { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
-.osu-steps li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--wz-text-secondary, var(--ink-3)); }
+.osu-steps li { display: flex; align-items: center; gap: 10px; font-size: var(--wz-text-md); color: var(--wz-text-secondary, var(--ink-3)); }
 .osu-steps li i { flex: none; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--wz-border, var(--line-2)); box-sizing: border-box; }
 .osu-steps li.done { color: var(--wz-text, var(--ink)); }
 .osu-steps li.done i { border-color: var(--wz-accent, var(--violet-2)); background: var(--wz-accent, var(--violet-2)); }
@@ -194,7 +194,7 @@ dialog.wz-sheet.osu-sheet::backdrop { background: color-mix(in srgb, var(--wz-ba
 @keyframes osu-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .osu-steps li.now i { animation: none; } }
 .osu-busy-l, .osu-busy-n { margin: 0; line-height: 1.4; }
-.osu-busy-n { font-size: 12.5px; color: var(--wz-text-secondary, var(--ink-3)); }
+.osu-busy-n { font-size: var(--wz-text-sm); color: var(--wz-text-secondary, var(--ink-3)); }
 /* While it updates, the outage is expected: no connection pills, offline card, saved-copy notes or reload banner. */
 html[data-wos-updating] .wx-banner.net, html[data-wos-updating] #wxOffline, html[data-wos-updating] .ch-saved,
 html[data-wos-updating] #dvWeb { display: none !important; }

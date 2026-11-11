@@ -253,7 +253,7 @@
         const ctl = typeof AbortController === 'function' ? new AbortController() : null;
         const limit = ctl ? setTimeout(() => ctl.abort(), 20e3) : 0;
         const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) })
-          .finally(() => clearTimeout(limit));
+          .finally(() => { if (limit) clearTimeout(limit); });
         const d = r.ok ? await r.json().catch(() => null) : null;
         if (valid(d)) {
           st = d; off = false; issue = '';

@@ -520,6 +520,10 @@
       ],
       "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
+    "core/os-update-flow.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Direct entrypoint import; WizardOS update banner, sheets and Updating panel, only on a Mac's Wizard (App Manager by_host)"
+    },
     "core/own-views.js": {
       "loadedBy": [
         "phone",
@@ -983,6 +987,7 @@
     "core/mic.js",
     "core/my-skin.js",
     "core/notif-bell.js",
+    "core/os-update-flow.js",
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
@@ -1042,6 +1047,7 @@
     "icon-192.png",
     "kit/controls.css",
     "kit/shell-tokens.css",
+    "kit/wizard-sheet.js",
     "live.js",
     "manifest.webmanifest",
     "outbox.js"
