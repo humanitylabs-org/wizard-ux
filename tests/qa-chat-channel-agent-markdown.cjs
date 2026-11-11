@@ -56,26 +56,41 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
           if (m) { const id = decodeURIComponent(m[1]); if (id !== alert.id) return r.fulfill({ status: 404, json: { error: 'missing' } });
             if (!m[2]) return r.fulfill({ json: { session: alert } });
+            // A real box answers the first message a moment after the list, so the feed paints a loading post first and
+            // then repaints it with the words (the repaint that doubled the words on main).
+            await nap(Number(process.env.QA_HIST_DELAY || 1500));
             const all = hist[id], off = Number(u.searchParams.get('offset') || 0), lim = Number(u.searchParams.get('limit') || 500), page = all.slice(off, off + lim);
             return r.fulfill({ json: { messages: page, pagination: { returned: page.length } } }); }
           return r.fulfill({ json: ownerRead(p) });
         });
-        const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(String(e.stack || e.message).slice(0, 900)));
+        const page = await context.newPage(); await page.clock.install(); page.on('pageerror', e => entry.errors.push(String(e.stack || e.message).slice(0, 900)));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         await vis('.ch-chan-open[data-chchan="alerts"]').click(); await vis('.ch-chan-h').waitFor();
-        const t = vis('.ch-post.by-agent .ch-post-t'); await t.waitFor(); await nap(800);
+        const t = vis('.ch-post.by-agent .ch-post-t:not(.ch-post-wait)'); await t.waitFor(); await nap(800);
         const seen = await t.evaluate(el => ({ text: el.textContent, strong: el.querySelector('strong')?.textContent || '', link: el.querySelector('a[href]')?.getAttribute('href') || '', code: el.querySelector('code')?.textContent || '', strongWeight: el.querySelector('strong') ? getComputedStyle(el.querySelector('strong')).fontWeight : '', inButton: !!el.querySelector('a[href]')?.closest('button'), focusable: (() => { const a = el.querySelector('a[href]'); if (!a) return false; a.focus(); return document.activeElement === a; })() }));
         entry.seen = seen;
+        // Repaints (live ticks, focus, a resize) must keep one words block per agent post: the header button and the
+        // words share a morph key, and main inserted a second copy of the words on repaint (issue 1287 review).
+        const words = () => page.evaluate(() => [...document.querySelectorAll('.ch-post.by-agent')].filter(e => e.getClientRects().length).map(e => e.querySelectorAll('.ch-post-tb').length));
+        entry.words = [await words()];
+        for (let i = 0; i < 3; i++) {
+          await page.clock.fastForward('01:05'); await nap(1200); // the minute tick repaints the feed's relative times
+          entry.words.push(await words());
+          if (i === 0) await page.screenshot({ path: path.join(out, stem + '-repaint' + (process.env.QA_TAG || '') + '.png') });
+        }
+        entry.doubled = entry.words.some(w => w.some(n => n !== 1));
         await page.screenshot({ path: path.join(out, stem + (broken ? '-before' : '') + '.png') });
         if (broken) {
           assert.ok(seen.text.includes('**Disk is 91% full'), 'main shows the raw asterisks');
           assert.equal(seen.link, '', 'main has no tappable link');
+          if (process.env.QA_BROKEN === 'doubled') assert.ok(entry.doubled, 'main shows the agent words twice after a repaint: ' + JSON.stringify(entry.words));
         } else {
           assert.ok(!seen.text.includes('*'), 'no asterisks on screen: ' + seen.text);
+          assert.equal(entry.doubled, false, 'one words block per agent post after every repaint: ' + JSON.stringify(entry.words));
           assert.equal(seen.strong, 'Disk is 91% full on the box.');
           assert.ok(Number(seen.strongWeight) >= 600, 'the first sentence is bold: ' + seen.strongWeight);
           assert.equal(seen.link, LINK, 'the link is a link');
@@ -103,6 +118,6 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
     }
   } finally { await browser.close(); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 1));
-  for (const c of report.cases) console.log(c.pass ? 'PASS' : 'FAIL', c.stem, c.failure || '', JSON.stringify({ seen: c.seen, opened: c.opened, linkOpenedThread: c.threadOpened, thread: c.threadAfterWords, errs: c.errors, refused: c.refused }));
+  for (const c of report.cases) console.log(c.pass ? 'PASS' : 'FAIL', c.stem, c.failure || '', JSON.stringify({ words: c.words, seen: c.seen, opened: c.opened, linkOpenedThread: c.threadOpened, thread: c.threadAfterWords, errs: c.errors, refused: c.refused }));
   process.exit(report.cases.every(c => c.pass) ? 0 : 1);
 })();

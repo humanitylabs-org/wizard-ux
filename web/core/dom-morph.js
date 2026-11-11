@@ -31,13 +31,16 @@
     kids(o, f, opts);
   }
   function kids(op, fp, opts) {
+    // Siblings may share a key (a post's header button and its words both carry data-chopen; wizard-ux issue 1287):
+    // each key holds its live nodes in order and a fresh child takes the first one of its own tag. Keeping only the
+    // first node per key left the second one unmatched, so a copy was inserted beside it on every repaint.
     const byKey = new Map();
-    for (let c = op.firstChild; c; c = c.nextSibling) { const k = keyOf(c); if (k && !byKey.has(k)) byKey.set(k, c); }
+    for (let c = op.firstChild; c; c = c.nextSibling) { const k = keyOf(c); if (k) { const l = byKey.get(k); if (l) l.push(c); else byKey.set(k, [c]); } }
     let cur = op.firstChild;
     for (let f = fp.firstChild; f; f = f.nextSibling) {
       const k = keyOf(f);
       let m = null;
-      if (k) { const c = byKey.get(k); if (c && c.nodeName === f.nodeName) { m = c; byKey.delete(k); } }
+      if (k) { const l = byKey.get(k), i = l ? l.findIndex(c => c.nodeName === f.nodeName) : -1; if (i >= 0) m = l.splice(i, 1)[0]; }
       else if (cur && alike(cur, f)) m = cur;
       else {
         // A removed unkeyed node (a day divider, a sync bar) must not shift every later node onto the wrong partner.
@@ -53,7 +56,7 @@
     while (cur) { const nx = cur.nextSibling; cur.remove(); cur = nx; }
     // A keyed node no fresh child claimed is gone, wherever it sits: the unkeyed look-ahead above steps over keyed
     // nodes, so one can be left before cur (a stale row kept beside its replacement, out of order; 23 Oct 2026).
-    for (const c of byKey.values()) if (c.parentNode === op) c.remove();
+    for (const l of byKey.values()) for (const c of l) if (c.parentNode === op) c.remove();
   }
   function morph(oldRoot, html, opts = {}) {
     if (!oldRoot || !oldRoot.isConnected) return false;

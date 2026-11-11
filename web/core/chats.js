@@ -839,7 +839,9 @@ window.WizCore.chats = function createChats(H) {
       // report opens with a bold sentence, never "**…**"). The owner's own words stay plain text, as typed.
       // Its links are never inside the post's button: the agent's words sit beside it (a tap there still opens the
       // thread; the header button is the keyboard's way in), so each link is its own control.
-      const words = byAgent && KIT?.inline ? KIT.inline(text) : esc(text);
+      // A heading line ("## Executive signal") shows as bold words, never a raw "#": the feed keeps one text size.
+      const heads = t => t.replace(/^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/gm, (l, h) => !h ? l : h.includes('**') ? h : `**${h}**`);
+      const words = byAgent && KIT?.inline ? KIT.inline(heads(text)) : esc(text);
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${words}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
       // A post the agent wrote (an alert, a reminder, a chat it opened; wizard-agent-service issue 441) carries the
       // agent's avatar and name, and a Reply button until the thread has replies; then the usual reply line.

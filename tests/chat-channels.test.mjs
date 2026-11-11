@@ -1156,6 +1156,20 @@ test('issue 1287: an agent post shows bold and links, not raw markdown; an owner
   assert.match(html, /class="ch-post-t">my \*\*own\*\* words</, 'the owner\'s words stay as typed');
 });
 
+test('issue 1287: an agent post\'s heading lines show bold words, never a raw #', async () => {
+  const history = { a: [{ role: 'assistant', text: '## Executive signal\n# Morning projects #\n### **Already bold**\nbody #not-a-heading', at: NOW - H }], b: [{ role: 'user', text: '# a hash', at: NOW - H }] };
+  const s = row('a', 1, { title: 'Alert' }), o = row('b', 2, { title: 'Mine' });
+  const f = fixture({ history, sessions: { a: s, b: o } }); f.env.KIT.inline = realInline(); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s, o]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s, o]);
+  assert.match(html, /<strong>Executive signal<\/strong>/);
+  assert.match(html, /<strong>Morning projects<\/strong>/, 'closing hashes go too');
+  assert.match(html, /<strong>Already bold<\/strong>/);
+  assert.doesNotMatch(html, /#+ ?(Executive|Morning|<strong>)/, 'no raw # before a heading');
+  assert.match(html, /body #not-a-heading/, 'a # inside a line stays');
+  assert.match(html, /class="ch-post-t"># a hash</, 'the owner\'s words stay as typed');
+});
+
 test('issue 1287 main vs routed: host-profile, container and restricted agent posts render the same markdown', async () => {
   const inline = realInline();
   for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
