@@ -4324,7 +4324,10 @@
     sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     sessionAct: (sid, act) => {
       // Move to channel… (wizard-ux issue 1292): Chats' own picker, over the view as it is (no trip to Chats).
-      if (act === 'move') { const here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0), w = here ? W[here] : showChats(); return !!w && !!CHATS.moveToChannel?.(w.id, sid); }
+      if (act === 'move') { const find = () => Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); let here = find();
+        // No Chats yet: open one beside, out of view (stay), so the view in front stays in front.
+        if (!here) { openApp(APP.wizard, {}, { stay: true }); here = find(); }
+        return !!here && !!CHATS.moveToChannel?.(here, sid); }
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
       const w = showChats(); if (!w) return false;
       if (act === 'rename') { CHATS.openRenameSheet(w.id, sid); return true; }

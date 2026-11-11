@@ -364,7 +364,9 @@ window.WizCore.chats = function createChats(H) {
   // Move to channel… from a row a layout draws itself (the AI apps Activity rows): the same picker as a feed's row menu.
   function moveToChannel(wid, sid) {
     const w = W[wid]; if (!w || !sid || typeof channelsOn !== 'function' || !channelsOn()) return false;
-    openSpacePicker(w, LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes', null, { sid }); return !!spacePicker;
+    // The row's own owner (Activity keeps the main row when a routed thread shares its id), not the id-global pin.
+    const row = LIVE.session?.(sid), agent = row ? rowAgent(row) : LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes';
+    openSpacePicker(w, agent, null, { sid }); return !!spacePicker;
   }
   /* A Space open in front is where James is working: every new thread started there (composer, orb, voice,
    * launcher) joins it (James, 25 Oct 2026). A Chats composer files its own (Space fixed at send, below) and opts

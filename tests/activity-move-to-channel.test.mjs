@@ -12,6 +12,7 @@ const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const src = read('web/core/chats.js');
 const cut = (a, b, from = src) => { const i = from.indexOf(a); assert.ok(i >= 0, a); const j = from.indexOf(b, i + a.length); assert.ok(j > i, b); return from.slice(i, j); };
 
+const ROUTED = ['host-ops', 'box', 'locked']; // a routed agent per profile: host, container, restricted
 function model() {
   const ctx = {}; vm.createContext(ctx); vm.runInContext(read('web/core/chats-list-model.js'), ctx);
   return ctx.WizChatsListModel;
@@ -46,11 +47,19 @@ test('both shells open Chats\' own picker through CHATS.moveToChannel, without t
   // one brace-free line: tests/orb-layout pins `sessionAct: (sid, act) => {[^}]*CHATS.threadAct(`
   assert.match(d, /if \(act === 'move'\) return !!CHATS\.moveToChannel\?\.\(\(findWin\(mainChats\) \|\| sideMain\(\)\)\?\.id, sid\);/);
   assert.ok(d.indexOf("act === 'move'") < d.indexOf('skinShowChats'), 'desktop: before any Chats navigation');
-  assert.match(a, /if \(act === 'move'\) \{ const here = Object\.keys\(W\)\.find\(id => mainChats\(W\[id\]\) && deskOf\(id\) >= 0\), w = here \? W\[here\] : showChats\(\);/);
+  assert.match(a, /if \(act === 'move'\) \{ const find = \(\) => Object\.keys\(W\)\.find\(id => mainChats\(W\[id\]\) && deskOf\(id\) >= 0\); let here = find\(\);/);
+  // no Chats window yet: one opens beside, out of view (stay), never showChats() (which goes to its desk)
+  assert.match(a, /if \(!here\) \{ openApp\(APP\.wizard, \{\}, \{ stay: true \}\); here = find\(\); \}/);
+  assert.ok(!cut("if (act === 'move')", 'moveToChannel?.(here, sid)', a).includes('showChats'), 'phone: no navigation');
+  // desktop with no main Chats: the sidebar's stand-in (sideMain) is not in W, but Chats resolves windows through
+  // H.win = chatsWin, which knows the stand-in (sideWin), so the picker finds it
+  assert.match(dj, /const chatsWin = id => W\[id\] \|\| sideWin\(id\) \|\|/);
+  assert.match(dj, /\n    win: chatsWin,/);
+  assert.match(dj, /const sideWin = id => \(sideBase && sideBase\.id === id \? sideBase :/);
 });
 
 // The real picker code from chats.js: General is a row, the current channel is marked, picks write the store.
-function picker({ on = true, inSpace = 'launch' } = {}) {
+function picker({ on = true, inSpace = 'launch', session = null, pin = '' } = {}) {
   const sets = new Map([['launch', new Set(inSpace === 'launch' ? ['t1'] : [])], ['voice', new Set(inSpace === 'voice' ? ['t1'] : [])]]);
   const channels = [{ id: 'launch', agent: 'hermes', name: 'Launch' }, { id: 'voice', agent: 'hermes', name: 'Voice' }];
   const moves = [], toasts = [], body = [];
@@ -68,10 +77,11 @@ function picker({ on = true, inSpace = 'launch' } = {}) {
     SPACE: { one: 'Space', many: 'Spaces', get ch() { return on; } }, channelsOn: () => on,
     esc: s => String(s), norm: s => String(s).toLowerCase(), toast: (...a) => toasts.push(a[1]),
     AGS: () => ({ colour: () => '#fff', defaultId: () => 'hermes' }), agentRec: id => ({ id, label: 'Archimedes' }),
-    focusAgents: () => [{ id: 'hermes' }], focusOf: () => null, focusHoldUntil: 0,
+    focusAgents: () => [{ id: 'hermes' }, ...ROUTED.map(id => ({ id }))],
+    rowAgent: r => r.agent || 'hermes', focusOf: () => null, focusHoldUntil: 0,
     focusOptions: () => channels.map((c, i) => ({ kind: 'space', key: c.id, label: c.name, recent: 10 - i, unread: 0 })),
     spaces: () => channels, spaceAgent: s => s?.agent || 'hermes', spaceContains: (k, sid) => !!sets.get(k)?.has(sid),
-    LIVE: { agentOf: () => '', chanStore: { move: (sid, to, a) => { moves.push([sid, to, a]); for (const s of sets.values()) s.delete(sid); if (to) sets.get(to).add(sid); } } },
+    LIVE: { agentOf: () => pin, session: id => session && session.id === id ? session : null, chanStore: { move: (sid, to, a) => { moves.push([sid, to, a]); for (const s of sets.values()) s.delete(sid); if (to) sets.get(to).add(sid); } } },
     chanStore: () => ({ channels }), storeAgent: a => !a || a === 'hermes' ? 'hermes' : a, rerenderList() {}, setFocus() {}, createPickerSpace() {},
   };
   vm.createContext(env);
@@ -82,7 +92,7 @@ function picker({ on = true, inSpace = 'launch' } = {}) {
   vm.runInContext(`${code}\nthis.api = { moveToChannel, closeSpacePicker, get picker() { return spacePicker; } };`, env);
   const click = attrs => ({ target: { closest: sel => { const k = sel.replace(/^\[|\]$/g, '').split('=')[0]; return k in attrs ? { dataset: { [k.replace(/^data-/, '')]: attrs[k] } } : null; } } });
   const fire = attrs => body[0].listeners.click.forEach(fn => fn(click(attrs)));
-  return { ...env.api, body, moves, toasts, fire, sets };
+  return { moveToChannel: env.api.moveToChannel, closeSpacePicker: env.api.closeSpacePicker, get picker() { return env.api.picker; }, body, moves, toasts, fire, sets };
 }
 
 test('the picker lists every channel and General last, the current channel marked; opened from no Chats view', () => {
@@ -117,4 +127,15 @@ test('Channels off: moveToChannel opens nothing, and the Spaces picker has no Ge
   const p = picker({ on: false });
   assert.equal(p.moveToChannel('w', 't1'), false); assert.equal(p.body.length, 0);
   assert.match(src, /const gen = p\.sid && SPACE\.ch \? /);
+});
+
+test('the picker is for the row\'s own agent: a main row whose id a routed agent also uses stays main', () => {
+  for (const [agent, profile] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    // main row listed in Activity, id-global pin points at the routed agent: still main's channels
+    const m = picker({ session: { id: 't1' }, pin: agent });
+    assert.equal(m.moveToChannel('w', 't1'), true, profile); assert.equal(m.picker.agent, 'hermes', `${profile}: main row`);
+    // the routed agent's own row: its channels
+    const r = picker({ session: { id: 't1', agent }, pin: '' });
+    assert.equal(r.moveToChannel('w', 't1'), true, profile); assert.equal(r.picker.agent, agent, `${profile}: routed row`);
+  }
 });
