@@ -3,6 +3,11 @@
 (() => {
   'use strict';
   const KEY = 'wos.workspaces.v1', MAX = 100;
+  // The owner's list lives on the box (Agent Service ui-preferences `savedWizards`, wizard-ux issue 1237), so every
+  // device signed into this Wizard shows the same switcher. live.js keeps the box list cached in BOX (offline cache)
+  // and edits it by item operation (WizLive.prefOps). KEY is only the list from before: uploaded once (MOVED), then
+  // left alone. A service without the field never fills BOX, so this device keeps its own list as before.
+  const BOX = 'wos.workspaces.box.v1', MOVED = 'wos.workspaces.moved.v1', AUTO = 'wos.workspaces.auto.v1';
   const text = (v, n = 120) => typeof v === 'string' ? v.trim().slice(0, n) : '';
   const native = () => window.wizardUX?.native?.workspaces === true;
   function address(value) {
@@ -41,6 +46,28 @@
       return normalize(JSON.parse(raw)).filter(v => v.url).map(v => ({ ...v, kind: 'remote', source: 'local' }));
     } catch (_) { return []; }
   }
+  const origin = url => { try { return new URL(url).origin; } catch (_) { return ''; } };
+  const live = () => typeof window.WizLive?.prefOps === 'function' ? window.WizLive : null;
+  // null until this box has answered with a savedWizards list (an older Agent Service never does).
+  function boxSaved() {
+    if (native() || !live()) return null;
+    try {
+      const raw = localStorage.getItem(BOX); if (raw == null || raw.length > 250000) return null;
+      const list = JSON.parse(raw); if (!Array.isArray(list)) return null;
+      return normalize(list).filter(v => v.url).map(v => ({ ...v, kind: 'remote', source: 'box' }));
+    } catch (_) { return null; }
+  }
+  const moved = () => { try { return localStorage.getItem(MOVED) === '1'; } catch (_) { return false; } };
+  const op = (o, item) => ({ op: o, key: 'savedWizards', item });
+  const boxEntry = v => ({ id: v.id, name: v.name, url: v.url });
+  // One-time upload of this device's saved Wizards. Adding is a no-op on the box for an id or address it already has,
+  // so two devices uploading the same Wizard keep one entry.
+  function moveLocal() {
+    if (moved() || boxSaved() === null) return;
+    const items = saved();
+    try { localStorage.setItem(MOVED, '1'); } catch (_) { return; }
+    if (items.length) void live().prefOps(items.map(v => op('add', boxEntry(v)))).catch(() => {});
+  }
   function persist(items) {
     localStorage.setItem(KEY, JSON.stringify(items.map(({ id, name, url }) => ({ id, name, url, kind: 'remote' }))));
   }
@@ -50,10 +77,11 @@
     const entries = normalize([own, ...managed]);
     const urls = new Set(entries.filter(v => v.url).map(v => v.url));
     const origins = new Set(entries.filter(v => v.url).map(v => new URL(v.url).origin));
-    for (const v of saved()) if (!entries.some(i => i.id === v.id) && !urls.has(v.url) && !origins.has(new URL(v.url).origin) && entries.length < MAX) { entries.push(v); urls.add(v.url); origins.add(new URL(v.url).origin); }
+    const box = boxSaved();
+    for (const v of box === null ? saved() : moved() ? box : [...box, ...saved()]) if (!entries.some(i => i.id === v.id) && !urls.has(v.url) && !origins.has(new URL(v.url).origin) && entries.length < MAX) { entries.push(v); urls.add(v.url); origins.add(new URL(v.url).origin); }
     accept({ active: 'this', items: entries });
   }
-  function ingest(devices) { if (!native() && devices && typeof devices === 'object') { registry = devices; if (!pending) { merge(); publish(); } } }
+  function ingest(devices) { if (!native() && devices && typeof devices === 'object') { registry = devices; nameForApp(); if (!pending) { merge(); publish(); } } }
   async function list() {
     if (loading) return loading;
     loading = (async () => {
@@ -67,6 +95,7 @@
             if (r.ok) { const j = await r.json(); if (j && typeof j === 'object') registry = j; }
           } catch (_) { /* local entries and this Wizard remain usable offline */ }
         }
+        nameForApp(); settle();
         if (!pending) { merge(); publish(); }
       }
       return snapshot();
@@ -112,12 +141,49 @@
       history.replaceState(history.state, '', location.pathname + location.search);
       const url = address(r?.url), name = text(r?.name, 60) || 'Wizard';
       if (!url || new URL(url).origin === location.origin) return;
-      const items = saved(); if (items.some(v => new URL(v.url).origin === new URL(url).origin)) return;
-      const id = 'from-' + new URL(url).host.replace(/[^a-z0-9.-]/gi, '-').slice(0, 60);
-      persist([...items, { id, name, url, kind: 'remote' }].slice(-MAX));
+      arrived = { name, url };
     } catch (_) { /* a malformed hash is ignored */ }
   }
+  // Save a Wizard this device has been on (the one we came from, or one the Android app connected to) once, without
+  // asking: the owner never has to know or type its address. In the shared list when this box has one.
+  function remember(url, name) {
+    url = address(url); name = text(name, 60) || 'Wizard';
+    if (!url || origin(url) === location.origin) return false;
+    const box = boxSaved(), mine = box === null ? saved() : [...box, ...(moved() ? [] : saved())];
+    if (mine.some(v => origin(v.url) === origin(url)) || state.items.some(v => v.url && origin(v.url) === origin(url))) return false;
+    const id = 'from-' + new URL(url).host.replace(/[^a-z0-9.-]/gi, '-').slice(0, 60);
+    if (box === null) persist([...saved(), { id, name, url, kind: 'remote' }].slice(-MAX));
+    else void live().prefOps([op('add', { id, name, url })]).catch(() => {});
+    return true;
+  }
+  let arrived = null;
   adoptReturn();
+  // The Android app remembers the Wizards it was connected to through Change Wizard (address and name). Each one is
+  // added once per device; a Wizard the owner forgets afterwards stays forgotten.
+  const droid = () => window.WizardOSNative;
+  function fromApp() {
+    const app = droid(); if (native() || typeof app?.knownWizards !== 'function') return;
+    let known = [], done = [];
+    try { known = JSON.parse(app.knownWizards() || '[]'); } catch (_) { return; }
+    try { done = JSON.parse(localStorage.getItem(AUTO) || '[]'); if (!Array.isArray(done)) done = []; } catch (_) { done = []; }
+    const before = done.length;
+    for (const k of Array.isArray(known) ? known.slice(0, 20) : []) {
+      const url = address(k?.url), at = origin(url); if (!url || at === location.origin || done.includes(at)) continue;
+      remember(url, text(k?.name, 60) || new URL(url).hostname.split('.')[0]); done.push(at);
+    }
+    if (done.length !== before) try { localStorage.setItem(AUTO, JSON.stringify(done.slice(-MAX))); } catch (_) {}
+  }
+  // Tell the app this Wizard's name, so another Wizard can list it by name after a Change Wizard.
+  function nameForApp() {
+    const name = text(registry.this?.wizard, 60), app = droid();
+    if (name && !native() && typeof app?.nameThisWizard === 'function') try { app.nameThisWizard(name); } catch (_) {}
+  }
+  // Runs whenever the lists may have changed (load, box answer, resources): upload once, add arrivals, then show.
+  let settling = false;
+  function settle() {
+    if (settling) return; settling = true;
+    try { moveLocal(); if (arrived) { remember(arrived.url, arrived.name); arrived = null; } fromApp(); } finally { settling = false; }
+  }
   const toast = message => api?.toast(message);
   // The Android app could not switch (it says why itself): show the Wizard that is still open as the active one.
   function switchFailed() { if (!handoff) return; state.active = handoff; handoff = ''; notify(); }
@@ -159,6 +225,27 @@
       const result = await window.WizCore.bridge.call('workspaces.' + action, params);
       if (result?.ok !== true) throw new Error('Couldn’t save that change.');
       await list(); return result;
+    }
+    const box = boxSaved();
+    if (box !== null) {
+      moveLocal();
+      const all = moved() ? box : [...box, ...saved()];
+      let ops;
+      if (action === 'add') {
+        const url = address(params.url), name = text(params.name);
+        if (!url) throw new Error('Use an http:// or https:// address, without a password.');
+        if (!name) throw new Error('Give this Wizard a name.');
+        if (state.items.length >= MAX) throw new Error('Your Wizard list is full. Remove one first.');
+        if (state.items.some(v => v.url === url) || all.some(v => origin(v.url) === origin(url))) throw new Error('That Wizard is already in your list.');
+        ops = [op('add', { id: 'remote-' + crypto.randomUUID(), name, url })];
+      } else {
+        if (!all.some(v => v.id === params.id)) throw new Error('Manage this entry on the computer that owns the list.');
+        if (action === 'rename') { const name = text(params.name); if (!name) throw new Error('Give this Wizard a name.'); ops = [{ op: 'set', key: 'savedWizards/' + params.id + '/name', item: name }]; }
+        else ops = [op('remove', params.id)];
+      }
+      // Shown at once from the cached list; the box applies the same operation (queued while offline).
+      void live().prefOps(ops).catch(() => {});
+      merge(); publish(); return { ok: true };
     }
     const items = saved();
     if (action === 'add') {
@@ -264,9 +351,12 @@
   const W = window.WizWorkspaces = { list, snapshot, subscribe, switch: switchTo, add: addWizard,
     rename: (id, name) => mutate('rename', { id, name }), remove, switchFailed, groups, subtitle, address, destination, openMenu, close, ingest,
     get visible() { return state.items.length >= 2; } };
-  merge();
+  settle(); merge();
+  // live.js announces every change to the cached box preferences (a pull from the box, or an edit on this device).
+  window.addEventListener('wos:prefs', () => { if (!native() && !pending) { settle(); merge(); publish(); } });
   window.addEventListener('wizard:workspaces', e => { if (native()) { try { accept(e.detail); notify(); } catch (_) {} } });
-  window.addEventListener('storage', e => { if (!native() && e.key === KEY && !pending) { merge(); publish(); } });
+  // Another tab of this Wizard changed the device list or the cached box list.
+  window.addEventListener('storage', e => { if (!native() && (e.key === KEY || e.key === BOX) && !pending) { settle(); merge(); publish(); } });
   window.addEventListener('wos:resources', () => ingest(window.WosResources?.state?.devices));
   window.WosSkinHost?.builtin('workspaces', host => {
     api = host;

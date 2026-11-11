@@ -43,7 +43,7 @@ export function liveDevice(box, local = {}, { pulled = true } = {}) {
     if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status })
     return r
   }
-  const ctx = { req, console, Event: class { constructor(type) { this.type = type } }, setInterval() {}, setTimeout: () => 0, clearTimeout() {},
+  const ctx = { req, console, URL, Event: class { constructor(type) { this.type = type } }, setInterval() {}, setTimeout: () => 0, clearTimeout() {},
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     addEventListener() {} }
   ctx.window = { dispatchEvent: e => events.push(e.type), addEventListener() {} }
