@@ -1,0 +1,159 @@
+{
+  "origin": "https://chat-channel-posting-order.test",
+  "web": "/home/builder/work/ux-1289/web",
+  "expect": "fixed",
+  "cases": [
+    {
+      "stem": "phone-nebula",
+      "errors": [],
+      "refused": [],
+      "order": [
+        "qa-o0",
+        "qa-o1",
+        "qa-o2",
+        "qa-o3"
+      ],
+      "posts": [
+        {
+          "id": "qa-o0",
+          "words": "Draft the launch email for Friday",
+          "head": "4h",
+          "replies": "2 replies1m2 new replies"
+        },
+        {
+          "id": "qa-o1",
+          "words": "Check the press list",
+          "head": "3h",
+          "replies": "1 reply3h1 new reply"
+        },
+        {
+          "id": "qa-o2",
+          "words": "Book the photographer",
+          "head": "2h",
+          "replies": "1 reply2h1 new reply"
+        },
+        {
+          "id": "qa-o3",
+          "words": "Order the banners",
+          "head": "1h",
+          "replies": "1 reply58m1 new reply"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "stem": "phone-grove",
+      "errors": [],
+      "refused": [],
+      "order": [
+        "qa-o0",
+        "qa-o1",
+        "qa-o2",
+        "qa-o3"
+      ],
+      "posts": [
+        {
+          "id": "qa-o0",
+          "words": "Draft the launch email for Friday",
+          "head": "4h",
+          "replies": "2 replies1m2 new replies"
+        },
+        {
+          "id": "qa-o1",
+          "words": "Check the press list",
+          "head": "3h",
+          "replies": "1 reply3h1 new reply"
+        },
+        {
+          "id": "qa-o2",
+          "words": "Book the photographer",
+          "head": "2h",
+          "replies": "1 reply2h1 new reply"
+        },
+        {
+          "id": "qa-o3",
+          "words": "Order the banners",
+          "head": "1h",
+          "replies": "1 reply58m1 new reply"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "stem": "ai-apps-nebula",
+      "errors": [],
+      "refused": [],
+      "order": [
+        "qa-o0",
+        "qa-o1",
+        "qa-o2",
+        "qa-o3"
+      ],
+      "posts": [
+        {
+          "id": "qa-o0",
+          "words": "Draft the launch email for Friday",
+          "head": "4h",
+          "replies": "2 replies1m2 new replies"
+        },
+        {
+          "id": "qa-o1",
+          "words": "Check the press list",
+          "head": "3h",
+          "replies": "1 reply3h1 new reply"
+        },
+        {
+          "id": "qa-o2",
+          "words": "Book the photographer",
+          "head": "2h",
+          "replies": "1 reply2h1 new reply"
+        },
+        {
+          "id": "qa-o3",
+          "words": "Order the banners",
+          "head": "1h",
+          "replies": "1 reply58m1 new reply"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "stem": "ai-apps-grove",
+      "errors": [],
+      "refused": [],
+      "order": [
+        "qa-o0",
+        "qa-o1",
+        "qa-o2",
+        "qa-o3"
+      ],
+      "posts": [
+        {
+          "id": "qa-o0",
+          "words": "Draft the launch email for Friday",
+          "head": "4h",
+          "replies": "2 replies1m2 new replies"
+        },
+        {
+          "id": "qa-o1",
+          "words": "Check the press list",
+          "head": "3h",
+          "replies": "1 reply3h1 new reply"
+        },
+        {
+          "id": "qa-o2",
+          "words": "Book the photographer",
+          "head": "2h",
+          "replies": "1 reply2h1 new reply"
+        },
+        {
+          "id": "qa-o3",
+          "words": "Order the banners",
+          "head": "1h",
+          "replies": "1 reply58m1 new reply"
+        }
+      ],
+      "pass": true
+    }
+  ]
+}
