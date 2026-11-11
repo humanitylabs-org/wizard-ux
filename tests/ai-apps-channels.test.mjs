@@ -44,7 +44,7 @@ function desktopWorld() {
   const side = slice(js, '  let sideBase = null;', '  const CHATS = window.WizChatsHost.create({');
   const sideMain = slice(js, '  function sideMain() {', '  function syncChatsPane(id) {');
   const pane = slice(js, '    chatChannels: host => {', "    // The picker's Apps");
-  const hostWin = js.split('\n').find(l => l.startsWith('    win: id => W[id] ||')), hostOwner = js.split('\n').find(l => l.startsWith('    owner: id => String(id).replace('));
+  const hostWin = js.split('\n').find(l => l.startsWith('    win: chatsWin,')), hostOwner = js.split('\n').find(l => l.startsWith('    owner: id => String(id).replace('));
   vm.createContext(ctx);
   vm.runInContext(`${side}\n${main}\n${wins}\n${listWin}\n${sideMain}\nthis.api = { ${pane} };\nthis.H = { ${hostWin}\n${hostOwner} };\nthis.sideNow = () => sideBase;\nthis.feedNow = () => feedBase;\nthis.feedPaneFor = feedPaneFor;\nthis.feedPane = feedPane;`, ctx);
   return ctx;

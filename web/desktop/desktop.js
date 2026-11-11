@@ -137,9 +137,11 @@
    * the window behind the sidebar: its channel list and Activity rows stay exactly as they were. */
   let feedBase = null;
   const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : undefined);
+  // Any Chats window by id: a desk window, the sidebar's stand-in or the feed, or one of their list panes (id::list/side).
+  const chatsWin = id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined);
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
-    win: id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined),
+    win: chatsWin,
     root: () => stage,
     save,
     layout: id => { syncChatsPane(id); },
@@ -1636,7 +1638,7 @@
       { kind: 'cmd', name: 'Previous window', icon: '←', keys: `${MOD}[`, run: () => stepWin(-1) },
       { kind: 'cmd', name: 'Next desktop', icon: '→', run: () => stepDesk(1) },
       { kind: 'cmd', name: 'Previous desktop', icon: '←', run: () => stepDesk(-1) },
-      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat() },
+      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => chanPost() || newChat() },
       { kind: 'cmd', name: 'Wider window', icon: '⇔', keys: `${MOD}=`, run: () => resizeFocused(1) },
       { kind: 'cmd', name: 'Narrower window', icon: '⇔', keys: `${MOD}−`, run: () => resizeFocused(-1) },
       { kind: 'cmd', name: 'Reopen closed window', icon: '↺', keys: `${MOD}⇧W`, run: () => reopenClosed() },
@@ -2021,8 +2023,9 @@
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   const glow = document.createElement('div'); glow.id = 'voiceGlow'; glow.setAttribute('aria-hidden', 'true'); document.body.appendChild(glow); // edge light; never resizes the stage
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null, vBox;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vChanKey = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null, vBox;
   let vHandedOff = null; // a sent take the outbox can finish after a reload
+  const vChan = () => (vReply?.sid === '__new__' && vReply.box ? CHATS.chanOpen?.(chatsWin(vReply.wid)) || null : null); // a take into a channel's box
   const VOICE = C.voice({
     onState: st => {
       window.WosCaptureTools.awake(st !== 'idle');
@@ -2036,10 +2039,10 @@
       window.WosSkinHost?.voice(st); // a layout's own orb follows the take
       pill.classList.toggle('dict', vMode === 'dictate');
       pill.classList.toggle('app-voice', vMode === 'talk' && !!vConversation);
-      $('#voiceKey').textContent = vMode === 'dictate' ? `${MOD}D` : commandTake ? `${MOD}C` : vNewChat ? vNewKey : nativeDesktop ? 'Right ⌘' : `${MOD}S`;
+      $('#voiceKey').textContent = vMode === 'dictate' ? `${MOD}D` : commandTake ? `${MOD}C` : vNewChat || vChanKey ? vNewKey : nativeDesktop ? 'Right ⌘' : `${MOD}S`;
       $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : commandTake ? 'run locally' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
-        : st === 'think' ? 'Sending…' : commandTake ? 'Local command · nothing sent to agent' : vConversation ? 'Listening · ' + vConversation.label : vFeedback ? 'Feedback · '+clip(vFeedback.title || vFeedback.thread,28) : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
+        : st === 'think' ? 'Sending…' : commandTake ? 'Local command · nothing sent to agent' : vConversation ? 'Listening · ' + vConversation.label : vFeedback ? 'Feedback · '+clip(vFeedback.title || vFeedback.thread,28) : vChan() ? `Listening · new post in # ${clip(vChan().name, 26)}` : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
@@ -2071,8 +2074,8 @@
   // A separate chord always starts a new thread, even with an existing thread focused.
   // Never retarget an in-flight reply/dictation or discard it when the new-voice chord is pressed.
   function talkNew(key = `${MOD}V`) {
-    if (VOICE.state === 'idle') return talk('start', true, key);
-    if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && vNewChat) return talk('send');
+    if (VOICE.state === 'idle') { const c = chanFront(); return c ? chanTalk(c, key) : talk('start', true, key); }
+    if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && (vNewChat || vChanKey)) return talk('send');
     toast('🎙', 'Finish the current recording before starting a new voice chat', 2400);
     return 'busy';
   }
@@ -2115,6 +2118,25 @@
     try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
     finally { clearTimeout(timer); }
   }
+  /* A channel in front (wizard/chat-channels, wizard-ux issue 1291): the focused Chats window's feed, the AI apps main
+   * column's feed, or a post's thread opened from one of them. Every way of starting a new chat there (⌥V, the orb,
+   * New chat and its keys) goes where the feed's own box sends: a new post in that channel, or a reply in that post's
+   * thread. { wid, sid } ('__new__' = a new post), or null with no channel in front (behaviour unchanged). */
+  function chanFront() {
+    const f = focused(), real = sid => !!sid && sid !== '__new__';
+    if (f?.app === 'chats' && CHATS.chanOpen?.(f)) return !f.thread ? { wid: f.id, sid: '__new__' } : real(f.thread) ? { wid: f.id, sid: f.thread } : null;
+    const open = feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
+    if (feedHost?.isConnected && feedHost.dataset.chats === feedBase.id + '::side' && !feedHost.closest('[hidden]')) return { wid: feedBase.id + '::side', sid: '__new__' };
+    return f && real(f.thread) && CHATS.channelOf?.(LIVE.session(f.thread)) === open.name ? { wid: f.id, sid: f.thread } : null;
+  }
+  // A voice take into the channel in front, exactly as its box mic records one; key (⌥V, a button) sends it again.
+  async function chanTalk(c, key) {
+    const r = await recordReply(c.wid, c.sid);
+    if (r === 'recording') { vChanKey = !!key; vNewKey = key || vNewKey; return 'voice'; }
+    return r;
+  }
+  // New chat (⌘N, ⌥Enter, the palette, a layout's +) with a channel's feed in front: that feed's own box, never General.
+  function chanPost() { const c = chanFront(); return !!c && c.sid === '__new__' && !!CHATS.chanCompose?.(c.wid); }
   // A take started in a channel (wizard/chat-channels) re-reads its model at Send but keeps the agent it started with:
   // another agent's channel in front by then never re-routes it (its chat is filed into the starting channel).
   const chanRoute = (read, start) => () => { const r = read(), s = start(); return s && (r?.agent || '') !== (s.agent || '') ? s : r; };
@@ -2125,7 +2147,9 @@
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      commandTake = false; strictReply = false; vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
+      // ⌥S, Right ⌘, the orb: a feed in the AI apps main column is a channel too (the classic feed is handled below).
+      if (action === 'toggle' && !forceNew) { const c = chanFront(); if (c && c.wid !== focused()?.id && c.sid === '__new__') return chanTalk(c, ''); }
+      commandTake = false; strictReply = false; vMode = 'talk'; vNewChat = forceNew; vChanKey = false; vNewKey = newKey;
       const f = focused(); vSnapshot = commandSnapshot();
       vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,title:f.from.title,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
@@ -2239,7 +2263,8 @@
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
-    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box, ...(typeof CHATS.chanSpaceOf?.(W[wid]) === 'string' ? { space: CHATS.chanSpaceOf(W[wid]) } : {}) } : {}) }; vContext = viewContext(wid, 'voice, aimed at this thread');
+    const space = sid === '__new__' ? CHATS.chanSpaceOf?.(chatsWin(wid)) : null; // the AI apps feed is no desk window
+    vMode = 'talk'; vNewChat = false; vChanKey = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box, ...(typeof space === 'string' ? { space } : {}) } : {}) }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';
@@ -2792,8 +2817,8 @@
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     // ⌥N: a New chat on this desk. Reuses this desk's Chats window, else opens one beside the window in front (like Reply).
-    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat(); });
-    if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); chanPost() || newChat(); });
+    if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) chanPost() || newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
 
     // ⌥X Resolve this: an open notification goes to the agent to stop these or fix the cause.
@@ -3181,6 +3206,7 @@
     },
     chatFeedOpen: () => { const o = feedOpen(); return o ? { id: o.id, name: o.name } : null; },
     // Back: the main column's feed closes first; then (a feed the earlier design left in the sidebar) the sidebar's own.
+    chatChannelPost: () => chanPost(),
     chatChannelBack: () => {
       if (feedBase && feedOpen()) { const ok = !!CHATS.channelBack(listWin(feedBase.id, 'side')); if (ok) feedOpened(feedBase.id + '::side'); return ok; }
       const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side'));
