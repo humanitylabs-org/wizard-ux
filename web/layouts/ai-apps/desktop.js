@@ -259,7 +259,12 @@ export default function desktop(api) {
     api.agents.setFocus(id);
     agentsDrawn = ''; paintAgents(); readSessions(); paintList(true); paintRail(true);
   }
-  const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, scroll, foot);
+  /* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane for this sidebar, through
+   * api.sessions.channels: the Activity / Channels tabs over the rows below, and in Channels the channel list, or a
+   * channel's feed and its message box, in place of them (desktop.css). Empty and hidden with the switch off. */
+  const chanBox = el('div', 'aad-chan'); chanBox.hidden = true;
+  const paintChan = () => { const on = !q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; };
+  const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
@@ -414,6 +419,8 @@ export default function desktop(api) {
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
+  // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
+  api.listen(globalThis, 'wos:experience', () => { if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
   api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -693,6 +700,8 @@ export default function desktop(api) {
     // helper pill either way: the spinner already shows it (James, 7 Nov 2026).
     const ask = s.workingAsk && !globalThis.WosThreadTracker?.onFor?.(ttAgent(s.id)) ? s.workingAsk : null; // main agent only
     if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
+    // Channels on (issue 1256): the chat's channel, muted on a second line, as in Chats' Activity
+    if (s.channel) title.append(el('span', 'aad-chan-line', { text: `# ${s.channel}` }));
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
     if (dots) b.append(dots);
@@ -703,6 +712,7 @@ export default function desktop(api) {
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
+    if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
@@ -798,10 +808,11 @@ export default function desktop(api) {
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
+    if (typeof paintChan === 'function') paintChan();
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
-      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
+      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -1592,6 +1603,7 @@ export default function desktop(api) {
     const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
     if (appFocused) api.apps.back?.(pane.id);
     else if (docked) closeChat();
+    else if (api.sessions?.channelBack?.()) paintList(); // Channels: thread → channel → list (issue 1256)
     return true; // bare AI apps desktop: no DOM change, no legacy navigation
   });
   /* round 18 item 3b (Miguel): ⌥↓ / ⌥↑ walk EXACTLY Ready as this sidebar draws it (grouped by status, the chosen order

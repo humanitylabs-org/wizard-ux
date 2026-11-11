@@ -986,3 +986,27 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] > .win > :is(.wbody, .wbar) { transition: none; }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) :is(.aad-grip, .aad-pload) { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"] :is(.aad-side, .aad-vt, .aad-top, #bar) { display: none !important; }
+/* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane in the sidebar (api.sessions.channels).
+ * Activity: its tabs over the sidebar's own rows, each row with a muted "# channel" second line (56 px, two lines).
+ * Channels and a channel's feed: the pane fills the sidebar in place of the rows; the feed's message box at its foot. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan { position: relative; flex: none; display: flex; flex-direction: column; min-height: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(.ch-side-chan, .ch-side-feed) { flex: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) :is(.ch-side-chan, .ch-side-feed)) > .aad-scroll { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-list { position: relative; inset: auto; flex: 1; min-height: 0; background: none; box-shadow: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-side:not(.ch-side-chan):not(.ch-side-feed) > .ch-scroll { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-list .ch-scroll { padding: 2px 8px 12px; scrollbar-width: thin; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-tabs { gap: 4px; padding: 0 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-tabs .ch-rdy-bar { gap: 4px; padding: 2px 0 6px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-rdy-bar button { padding: 4px 9px; white-space: nowrap; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-h { padding-left: 4px; padding-right: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-feed .ch-rdy-bar { background: var(--aad-panel); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose { gap: 6px; padding: 8px 8px 6px; border-top-color: var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch-row2 { gap: 6px; }
+/* 288 px: the model label always sits on its own strip under the words (Chats' lab-row), never over them */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch-field { flex-direction: column; padding-bottom: 24px; border-radius: 20px; border: 1px solid var(--aad-line); background: color-mix(in srgb, var(--aad-ink) 5%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch-field:focus-within { border-color: color-mix(in srgb, var(--aad-ink) 35%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch-field > textarea { flex: none; border: 0; background: transparent; padding-bottom: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-chan-compose .ch-field > .ch-mlabel { bottom: 1px; height: 26px; max-width: calc(100% - 8px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 0.75rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-row:has(.aad-chan-line) { height: auto; min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan-line { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aad-ink-2); font-size: 0.75rem; font-weight: 400; }

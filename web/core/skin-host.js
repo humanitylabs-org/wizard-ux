@@ -950,6 +950,12 @@
         // The Chats window as it is (its thread kept), and a New chat in it: the AI apps view's main screen.
         chats: () => live() ? !!shell.showChats?.() : false,
         newChat: () => live() ? !!shell.newChat?.() : false,
+        /* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane for the main Chats window,
+         * painted into node (one of this layout's mounted nodes): the Activity / Channels tabs, the channel list, a
+         * channel's feed and its message box. Call it again to repaint; true while it shows anything (switch on). */
+        channels: node => live() && node?.nodeType === 1 && [...a.mounts].some(m => m.contains(node)) ? !!shell.chatChannels?.(node) : false,
+        // Back from a channel's feed to the Channels list (thread → channel → list); false when no feed is open.
+        channelBack: () => live() ? !!shell.chatChannelBack?.() : false,
       }),
       /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
        * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
