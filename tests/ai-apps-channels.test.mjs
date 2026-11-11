@@ -88,14 +88,20 @@ test('Activity rows carry their "# channel" from CHATS.channelOf (main and route
 test('the real channelOf / chanSide: names per agent, only with the switch on; only id::side is a sidebar pane', () => {
   const src = read('web/core/chats.js');
   const block = slice(src, '  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
-  const spacesData = [{ id: 'launch', name: 'Launch', threads: ['a'] }, { id: 'box', name: 'Box', agent: 'container', threads: ['k1'] }];
-  const agents = { k1: 'container', r1: 'restricted', h1: 'host' };
+  // 'x' is both a main thread (in Launch) and a container agent's thread (in Box): the row's own owner decides.
+  const spacesData = [{ id: 'launch', name: 'Launch', threads: ['a', 'x'] }, { id: 'box', name: 'Box', agent: 'container', threads: ['k1', 'x'] }, { id: 'ops', name: 'Ops', agent: 'host', threads: ['x'] }];
+  const agents = { k1: 'container', r1: 'restricted', h1: 'host', x: 'container' }; // the id-only pin points at one of them
   const env = { document: { documentElement: { dataset: { tweaks: 'wizard/chat-channels' } } }, localStorage: { getItem: () => null, setItem() {} }, window: {},
-    spacesOf: sid => spacesData.filter(s => (s.agent || 'hermes') === (agents[sid] || 'hermes') && s.threads.includes(sid)), LIVE: {} };
+    spaces: () => spacesData, spaceAgent: s => s?.agent || 'hermes', spaceContains: (key, sid) => !!spacesData.find(s => s.id === key)?.threads.includes(sid),
+    AGS: () => ({ defaultId: () => 'hermes' }), LIVE: { ownerOf: s => s.owner ?? agents[s.id] ?? '', agentOf: id => agents[id] || '' } };
   vm.createContext(env);
   vm.runInContext(block + ';this.api={channelOf,chanSide};', env);
   const { channelOf, chanSide } = env.api;
   assert.equal(channelOf({ id: 'a' }), 'Launch');
+  assert.equal(channelOf({ id: 'x', owner: '' }), 'Launch', 'same id: the main row is in the main Space');
+  assert.equal(channelOf({ id: 'x', owner: 'container' }), 'Box', 'same id: the container row is in its own Space');
+  assert.equal(channelOf({ id: 'x', owner: 'host' }), 'Ops', 'same id: the host-profile row is in its own Space');
+  assert.equal(channelOf({ id: 'x', owner: 'restricted' }), 'General', 'same id: the restricted row, filed nowhere, is in General');
   assert.equal(channelOf({ id: 'k1' }), 'Box', 'a container agent\'s row is in its own agent\'s Space');
   assert.equal(channelOf({ id: 'r1' }), 'General', 'a restricted agent\'s unfiled row is in General');
   assert.equal(channelOf({ id: 'h1' }), 'General', 'a host-profile agent\'s unfiled row is in General');

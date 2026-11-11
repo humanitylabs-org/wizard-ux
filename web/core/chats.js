@@ -467,7 +467,8 @@ window.WizCore.chats = function createChats(H) {
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
   // A layout that draws its own chat list (AI apps) asks for these through the Chats API: the "# channel" of a row
   // ('' with the switch off) and the sidebar's Channels pane, the desktop's id::side window (issue 1256).
-  const channelOf = s => channelsOn() && s && typeof s.id === 'string' ? chanName(s) : '';
+  // A row's channel is its OWN agent's Space (a main and a routed thread can share an id), as inChannel files it.
+  const channelOf = s => { if (!channelsOn() || !s || typeof s.id !== 'string') return ''; const a = rowAgent(s); return spaces().find(sp => spaceAgent(sp) === a && spaceContains(sp.id, s.id))?.name || 'General'; };
   const chanSide = w => /::side$/.test(String(w?.id || '')) && channelsOn();
   // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
