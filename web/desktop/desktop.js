@@ -3114,7 +3114,8 @@
       if (fresh || !host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(w.id, 'side'), host);
       return !!host.firstElementChild;
     },
-    chatChannelBack: () => { const w = findWin(mainChats) || sideBase; return !!w && !!CHATS.channelBack(listWin(w.id, 'side')); },
+    // (a main Chats window opened since the pane last painted takes over the stand-in's channel first, so Back leaves it)
+    chatChannelBack: () => { const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side')); },
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
       return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },

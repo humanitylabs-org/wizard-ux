@@ -117,6 +117,14 @@ test('the first main Chats window takes over the stand-in: its open channel, foc
   assert.equal(x.CH['w-main'].chanFilter, 'needs');
   assert.deepEqual(x.calls.filter(c => c[0] === 'paint'), [['paint', 'w-main::side', true]], 'repainted on the new window even with a pane already drawn');
   assert.ok(x.calls.some(c => c[0] === 'forget' && c[1] === sb.id + '::side'));
+  // Back before the pane repaints: the new main window takes the channel over first, so Back leaves the feed.
+  const z = desktopWorld(); const m3 = z.W['w-main']; for (const k of Object.keys(z.W)) delete z.W[k];
+  z.api.chatChannels(z.host); const sb3 = z.sideNow(); sb3.chan = { id: 'launch', prev: null }; z.W['w-main'] = m3; z.calls.length = 0;
+  assert.equal(z.api.chatChannelBack(), true);
+  assert.equal(z.sideNow(), null); assert.deepEqual(z.calls.filter(c => c[0] === 'back'), [['back', 'w-main::side', null]]);
+  assert.equal(m3.chan?.id, 'launch', 'the channel it goes back from is the one the stand-in had open');
+  // No Chats window and no stand-in yet: Back has nothing to do.
+  const e = desktopWorld(); for (const k of Object.keys(e.W)) delete e.W[k]; assert.equal(e.api.chatChannelBack(), false); assert.equal(e.sideNow(), null);
   // A main window with its own open channel keeps it.
   const y = desktopWorld(); const m2 = y.W['w-main']; for (const k of Object.keys(y.W)) delete y.W[k];
   y.api.chatChannels(y.host); y.sideNow().chan = { id: 'box', prev: null }; m2.chan = { id: 'launch', prev: null }; y.W['w-main'] = m2;
