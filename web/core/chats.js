@@ -551,6 +551,11 @@ window.WizCore.chats = function createChats(H) {
   const chanSide = w => /::side$/.test(String(w?.id || '')) && channelsOn();
   // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
+  // A post's place in its channel feed (wizard-ux issue 1289, James: Slack threads): when the thread was started, so a
+  // new reply never moves its post. A row without a start time (an older Service, a chat still in the outbox) falls
+  // back to its card time, which for a new chat is now: it sorts as the newest post.
+  const chanPostedAt = s => Date.parse(s.startedAt) || Date.parse(s.createdAt) || chanAt(s);
+  const chanPostOrder = (a, b) => chanPostedAt(a) - chanPostedAt(b) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
   // Archive drops a channel once its newest chat (or the archiving itself) is older than CHAN_ARCHIVE_PRUNE_DAYS.
   function chanPruned(c, rows, now = Date.now()) {
     const t = rows.filter(s => inChannel(c, s)).reduce((m, s) => Math.max(m, chanAt(s)), Date.parse(chanPrefs().archived[c.id]) || 0);
@@ -813,7 +818,7 @@ window.WizCore.chats = function createChats(H) {
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
-    const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort((a, b) => chanAt(a) - chanAt(b));
+    const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort(chanPostOrder);
     const cs = chanStart(w, shown);
     // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
     const hat = `<span class="ch-post-av" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent || focusedAgent(focusOf(w)) || '')) || ''}</span>`;
@@ -824,7 +829,7 @@ window.WizCore.chats = function createChats(H) {
       // only when the thread has no owner message at all (the agent started it).
       const p = firstPost(s), byAgent = p?.none && p.agent ? p.agent : null, said = byAgent ? { text: byAgent.text } : chanPostText(s, p), text = said.text, media = byAgent ? byAgent.media : p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
-      const pAt = byAgent ? byAgent.at : p?.at, at = pAt && isFinite(pAt) ? new Date(pAt).toISOString() : s.createdAt || LIVE.cardAt(s);
+      const pAt = byAgent ? byAgent.at : p?.at, at = pAt && isFinite(pAt) ? new Date(pAt).toISOString() : s.startedAt || s.createdAt || LIVE.cardAt(s);
       // Replies are the bubbles James sees in the thread (chanReplies), never a raw message count; none until read.
       const r = chanReplies(s), n = r && !r.partial ? Math.max(0, r.ats.length - (byAgent ? 1 : 0)) : 0, un = chanUnread(s);
       // Unread (issue 1269): a green dot with words ("● 2 new replies", "● New reply") at the right of the reply line,

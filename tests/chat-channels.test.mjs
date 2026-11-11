@@ -686,6 +686,34 @@ test('in the feed an unread post says "● N new replies" at the right, in the n
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [both]), /Needs you<\/span><span class="ch-post-st new">/);
 });
 
+test('issue 1289: posts stay in posting order; a reply to an older post updates its reply line where it sits (main and routed)', async () => {
+  for (const [kind, agent] of [['main', ''], ['host-profile', 'host'], ['container', 'container'], ['restricted', 'restricted']]) {
+    const spacesList = [{ id: 'ch', name: 'Ch', ...(agent ? { agent } : {}), threads: ['a', 'b', 'c'] }];
+    const k = id => (agent ? agent + '|' : '') + id, own = agent ? { owner: agent } : {};
+    // Three posts started 30, 20 and 10 hours ago; each had one reply soon after.
+    const started = { a: 30, b: 20, c: 10 }, hist = {};
+    for (const [id, h] of Object.entries(started)) hist[k(id)] = [{ role: 'user', text: 'post ' + id, at: NOW - h * H }, { role: 'assistant', text: 'ok', at: NOW - (h - 1) * H }];
+    const mk = (id, at, extra = {}) => row(id, at, { ...own, startedAt: new Date(NOW - started[id] * H).toISOString(), messageCount: 2, lastAssistantAt: new Date(NOW - (started[id] - 1) * H).toISOString(), ...extra });
+    const f = fixture({ spacesList, history: hist });
+    f.openChannel(f.w, 'ch'); const open = f.chanOpen(f.w);
+    const order = html => [...html.matchAll(/data-morph-key="post:([^"]+)"/g)].map(m => m[1]);
+    const post = (html, id) => html.split(/<div class="ch-post(?=[ "])/).find(p => p.includes(`data-morph-key="post:${id}"`));
+    let rows = [mk('c', 9), mk('a', 29), mk('b', 19)];
+    f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    let html = f.channelFeed(f.w, open, rows);
+    assert.deepEqual(order(html), ['a', 'b', 'c'], kind + ': oldest post first');
+    assert.match(post(html, 'a'), /<b>[^<]*<\/b><time>30h<\/time>[^]*<span>1 reply<\/span><time>29h<\/time>/, kind);
+    // A new reply lands on the oldest post: its card time is now the newest of all three.
+    hist[k('a')] = [...hist[k('a')], { role: 'user', text: 'and?' }, { role: 'assistant', text: 'done', at: NOW }];
+    rows = [mk('c', 9), mk('a', 0, { messageCount: 4, lastAssistantAt: new Date(NOW).toISOString(), fresh: true }), mk('b', 19)];
+    f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    html = f.channelFeed(f.w, open, rows);
+    assert.deepEqual(order(html), ['a', 'b', 'c'], kind + ': the reply never moves its post');
+    assert.match(post(html, 'a'), /<b>[^<]*<\/b><time>30h<\/time>/, kind + ': the header keeps the post\'s own time');
+    assert.match(post(html, 'a'), /<span>2 replies<\/span><time>0h<\/time>/, kind + ': the reply line has the new count and time');
+  }
+});
+
 test('reading a post (markSeen clears isNew) clears both the feed marker and the channel line on the next paint', () => {
   const a = row('a', 1, { fresh: true, messageCount: 2 }), rows = [a];
   const f = fixture();
