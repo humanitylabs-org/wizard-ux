@@ -71,6 +71,11 @@ test('wiring: the Back sits left of the title, every sidebar open clears it, the
   assert.match(js, /stepAt = s\.id; fromFeed = null; api\.sessions\.open\(s\.id\);/, 'an Activity row');
   assert.match(js, /noteWant = id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(id\);/, 'the rail');
   assert.match(js, /noteWant = nx\.id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(nx\.id\);/, '⌥↓ / ⌥↑');
+  // Back never exits (AGENTS.md): the button is the in-page Esc path only; closeChat swaps the column, no history step.
+  assert.match(js, /api\.listen\(cBack, 'click', \(\) => closeChat\(\)\);/);
+  const close = js.slice(js.indexOf('  function closeChat() {'), js.indexOf('\n  }\n', js.indexOf('  function closeChat() {')));
+  assert.doesNotMatch(close, /history\.|location\.|\.back\(/, 'no history navigation in the Back path');
+  assert.match(close, /if \(chatThread === FEED\)[^\n]*channelBack\?\.\(\)/, 'Esc on the feed itself still closes the feed');
   const rule = css.match(/\.aad-cback \{([^}]+)\}/)[1];
   assert.doesNotMatch(rule.replace(/var\([^)]*\)/g, ''), /#[0-9a-f]{3,8}\b|rgb/i, 'colours from tokens');
   assert.match(css, /\.aad-cback\[hidden\] \{ display: none; \}/);
