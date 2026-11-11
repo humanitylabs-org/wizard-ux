@@ -61,7 +61,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Mic, retry, model, place | `WosChatPower` (`chat-power.js`); `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `md`, `copyRich`, `viewer`; contained initial fit / zoom-pan / keys+native seek); Chats `mediaBlock` |
-| Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
+| Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue`; Move to channel… picker `CHATS.moveToChannel(wid, sid)` (feed row sheet + AI apps Activity rows, General row) |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; action setting | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
