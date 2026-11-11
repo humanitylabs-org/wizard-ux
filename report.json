@@ -1,0 +1,444 @@
+{
+ "origin": "https://chat-channel-read.test",
+ "web": "/home/builder/work/ux-1269/web",
+ "cases": [
+  {
+   "stem": "phone-nebula-on",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 1,
+   "before": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "first": {
+    "lines": 1,
+    "newText": "rgb(120, 237, 150)",
+    "newDot": "rgb(120, 237, 150)",
+    "needsDot": "rgb(255, 190, 85)",
+    "base": "rgb(5, 3, 12)",
+    "contrast": 14.01
+   },
+   "busyLine": "2 replies9h",
+   "longLine": "14 replies4h14 new replies",
+   "afterScroll": 6,
+   "back": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "again": 6,
+   "reloadFeed": 6,
+   "openedPuts": 1,
+   "afterOpen": {
+    "unread": 5,
+    "target": false
+   },
+   "reload": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "5 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "pass": true
+  },
+  {
+   "stem": "phone-nebula-off",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 0,
+   "activityDot": "rgba(205, 190, 255, 0.06) / rgb(125, 116, 163)",
+   "violet2": "#b99bff",
+   "pass": true
+  },
+  {
+   "stem": "phone-grove-on",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 1,
+   "before": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "first": {
+    "lines": 1,
+    "newText": "rgb(121, 232, 149)",
+    "newDot": "rgb(121, 232, 149)",
+    "needsDot": "rgb(240, 180, 90)",
+    "base": "rgb(5, 11, 7)",
+    "contrast": 13.04
+   },
+   "busyLine": "2 replies9h",
+   "longLine": "14 replies4h14 new replies",
+   "afterScroll": 6,
+   "back": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "again": 6,
+   "reloadFeed": 6,
+   "openedPuts": 1,
+   "afterOpen": {
+    "unread": 5,
+    "target": false
+   },
+   "reload": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "5 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "pass": true
+  },
+  {
+   "stem": "phone-grove-off",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 0,
+   "activityDot": "rgba(205, 190, 255, 0.06) / rgb(127, 154, 134)",
+   "violet2": "rgba(230,198,107,1)",
+   "pass": true
+  },
+  {
+   "stem": "phone-obsidian-light-on",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 1,
+   "before": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "first": {
+    "lines": 1,
+    "newText": "rgb(25, 122, 59)",
+    "newDot": "rgb(25, 122, 59)",
+    "needsDot": "rgb(154, 100, 0)",
+    "base": "rgb(255, 255, 255)",
+    "contrast": 5.4
+   },
+   "busyLine": "2 replies9h",
+   "longLine": "14 replies4h14 new replies",
+   "afterScroll": 6,
+   "back": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "again": 6,
+   "reloadFeed": 6,
+   "openedPuts": 1,
+   "afterOpen": {
+    "unread": 5,
+    "target": false
+   },
+   "reload": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "5 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 181
+   },
+   "pass": true
+  },
+  {
+   "stem": "phone-obsidian-light-off",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 0,
+   "activityDot": "rgba(0, 0, 0, 0.07) / rgb(107, 107, 107)",
+   "violet2": "rgba(26,26,26,1)",
+   "pass": true
+  },
+  {
+   "stem": "desktop-nebula-on",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 1,
+   "before": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "first": {
+    "lines": 1,
+    "newText": "rgb(120, 237, 150)",
+    "newDot": "rgb(120, 237, 150)",
+    "needsDot": "rgb(255, 190, 85)",
+    "base": "rgb(5, 3, 12)",
+    "contrast": 14.01
+   },
+   "busyLine": "2 replies9h",
+   "longLine": "14 replies4h14 new replies",
+   "afterScroll": 6,
+   "back": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "again": 6,
+   "reloadFeed": 6,
+   "openedPuts": 1,
+   "afterOpen": {
+    "unread": 5,
+    "target": false
+   },
+   "reload": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "5 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "pass": true
+  },
+  {
+   "stem": "desktop-nebula-off",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 0,
+   "activityDot": "rgba(205, 190, 255, 0.06) / rgb(125, 116, 163)",
+   "violet2": "#b99bff",
+   "pass": true
+  },
+  {
+   "stem": "desktop-grove-on",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 1,
+   "before": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "first": {
+    "lines": 1,
+    "newText": "rgb(121, 232, 149)",
+    "newDot": "rgb(121, 232, 149)",
+    "needsDot": "rgb(240, 180, 90)",
+    "base": "rgb(5, 11, 7)",
+    "contrast": 13.04
+   },
+   "busyLine": "2 replies9h",
+   "longLine": "14 replies4h14 new replies",
+   "afterScroll": 6,
+   "back": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "again": 6,
+   "reloadFeed": 6,
+   "openedPuts": 1,
+   "afterOpen": {
+    "unread": 5,
+    "target": false
+   },
+   "reload": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "5 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "pass": true
+  },
+  {
+   "stem": "desktop-grove-off",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 0,
+   "activityDot": "rgba(205, 190, 255, 0.06) / rgb(127, 154, 134)",
+   "violet2": "rgba(230,198,107,1)",
+   "pass": true
+  },
+  {
+   "stem": "desktop-obsidian-light-on",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 1,
+   "before": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "first": {
+    "lines": 1,
+    "newText": "rgb(25, 122, 59)",
+    "newDot": "rgb(25, 122, 59)",
+    "needsDot": "rgb(154, 100, 0)",
+    "base": "rgb(255, 255, 255)",
+    "contrast": 5.4
+   },
+   "busyLine": "2 replies9h",
+   "longLine": "14 replies4h14 new replies",
+   "afterScroll": 6,
+   "back": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "6 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "again": 6,
+   "reloadFeed": 6,
+   "openedPuts": 1,
+   "afterOpen": {
+    "unread": 5,
+    "target": false
+   },
+   "reload": {
+    "unread": true,
+    "pill": false,
+    "order": [
+     "spin",
+     "amber",
+     "green"
+    ],
+    "label": "5 unread",
+    "beside": 0,
+    "gapToChevron": 6,
+    "gapFromName": 134
+   },
+   "pass": true
+  },
+  {
+   "stem": "desktop-obsidian-light-off",
+   "errors": [],
+   "refused": [],
+   "seenPuts": 0,
+   "activityDot": "rgba(0, 0, 0, 0.07) / rgb(107, 107, 107)",
+   "violet2": "rgba(26,26,26,1)",
+   "pass": true
+  }
+ ]
+}
