@@ -1024,6 +1024,30 @@ window.WizCore.chats = function createChats(H) {
     chanRepaint(); chanToEnd(wid);
     return it;
   }
+  // Edit on a channel post that was saved but then not sent (wizard-ux issue 1294): the words go back into this
+  // channel's own box, as they do when the save itself fails, never into a separate New chat. false: not this
+  // feed's post (a reply, another channel's post, a plain new chat), so the shell's own Edit takes it.
+  const CHAN_HOW = /^typing in the # (.*) channel in Chats$/;
+  function chanEditUnsent(wid, it) {
+    const w = W[wid], key = chanDraftKey(w), open = key ? chanOpen(w) : null, how = CHAN_HOW.exec(String(it?.how || ''));
+    if (!open || !how || it.kind !== 'new' || !it.sessionId) return false;
+    // Its own agent's channel only: a main and a routed channel can share a name (and a chat id).
+    const ag = a => a || AGS()?.defaultId?.() || 'hermes'; if (ag(it.agent) !== ag(open.agent || winAgent(w))) return false;
+    if (how[1] !== open.name && (open.general || !spaceContains(open.id, it.sessionId))) return false;
+    const c = ch(wid), t = elOf(wid)?.querySelector('[data-chchanform] textarea');
+    if (c.draftFor === key && (c.files || []).some(f => f && f.uploading)) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return true; }
+    // Words typed in the box since are part of its draft: an edit never overwrites them.
+    if (t && c.draftFor === key) KIT.drafts.set(key, t.value, c.files || []);
+    if (!window.WosSettings?.moveDraft({ chats: { ch }, wid, item: it, outbox: OUTBOX, toast, key })) return true;
+    // Its "Sending…" post goes with it: the words are the box's again.
+    for (let i = CHAN_SENDING.length - 1; i >= 0; i--) if (CHAN_SENDING[i].feed === key && CHAN_SENDING[i].sid === it.sessionId) CHAN_SENDING.splice(i, 1);
+    c.draftFor = ''; // the box reloads its draft (the edited words and files) on this paint
+    c.pillIds = ''; // taken back, not sent: the pill never flashes "Sent" for it
+    renderChatList(w, elOf(wid));
+    const box = elOf(wid)?.querySelector('[data-chchanform] textarea'); if (box) { box.value = c.draft || ''; growTa(box); syncSend(box.form || box.closest?.('form'), c); }
+    chanToEnd(wid, true);
+    return true;
+  }
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
@@ -3995,7 +4019,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
     if (window.WizAppExtensions?.handle(e)) return true;
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
-    const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
+    const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it && !(typeof chanEditUnsent === 'function' && chanEditUnsent(id, it))) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
     const sw = e.target.closest('[data-chswipe]');
     if (sw && swipeOpen) { const { wid: rw, sid } = swipeOpen, k = sw.dataset.chswipe; closeSwipe(true);

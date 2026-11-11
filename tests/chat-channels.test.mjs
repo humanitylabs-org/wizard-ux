@@ -64,7 +64,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,chanEditUnsent,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -453,6 +453,56 @@ test('a send that could not be saved takes the post back and returns the words t
   assert.equal(f.CHAN_SENDING.length, 0);
   assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').text, 'keep me');
   assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), []), /ch-post sending/);
+});
+
+// Issue 1294: Edit on a channel post that was saved but then not sent refills the channel's own box (the real
+// WosSettings.moveDraft from core/settings.js), never a separate New chat; other unsent items keep the shell's Edit.
+const settingsSrc = readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+const moveDraftSrc = (() => { const i = settingsSrc.indexOf('  function moveDraft('); return settingsSrc.slice(i, settingsSrc.indexOf('\n  }\n', i) + 4); })();
+function editFixture() {
+  const f = fixture(); const removed = [];
+  f.env.OUTBOX = { remove: id => { removed.push(id); return true; }, quarantined: () => false };
+  f.env.window.WosChat = { drafts: f.env.KIT.drafts };
+  f.env.window.WosSettings = { moveDraft: vm.runInContext(`(${moveDraftSrc.trim().replace(/^function moveDraft/, 'function')})`, f.env) };
+  return { f, removed };
+}
+const failedPost = (how, extra = {}) => ({ id: 'ob1', kind: 'new', sessionId: 'n9', state: 'failed', how, text: 'Ship the boot logo', files: [{ id: 'p1', name: 'shot.png', mime: 'image/png' }], ...extra });
+
+test('Edit on a Not sent channel post puts the words and files back in that channel\'s box', () => {
+  const { f, removed } = editFixture(); f.openChannel(f.w, 'launch');
+  assert.equal(f.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats')), true);
+  assert.deepEqual(removed, ['ob1'], 'the unsent item becomes the draft');
+  const d = f.env.KIT.drafts.get('chan:hermes:launch');
+  assert.equal(d.text, 'Ship the boot logo'); assert.deepEqual(d.files.map(x => x.id), ['p1']);
+  assert.match(f.chanComposer(f.w, f.chanOpen(f.w)), /has-text[^]*>Ship the boot logo<\/textarea>/);
+  assert.equal(f.w.thread, null, 'still on the channel feed'); assert.equal(f.drafts.length, 0, 'no New chat opened');
+  // Renamed since it was sent: still this channel's post, by its filing.
+  const g = editFixture(); g.f.spacesData[0].threads.push('n9'); g.f.openChannel(g.f.w, 'launch');
+  assert.equal(g.f.chanEditUnsent('w', failedPost('typing in the # Old name channel in Chats')), true);
+  assert.equal(g.f.env.KIT.drafts.get('chan:hermes:launch').text, 'Ship the boot logo');
+});
+
+test('Edit keeps words already in the channel box, and leaves replies and other chats to the shell', () => {
+  const { f, removed } = editFixture(); f.openChannel(f.w, 'launch');
+  f.env.KIT.drafts.set('chan:hermes:launch', 'half typed', []);
+  assert.equal(f.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats')), true);
+  assert.deepEqual(removed, [], 'original kept'); assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').text, 'half typed');
+  assert.match(f.toasts.at(-1), /Existing draft kept/);
+  const { f: g } = editFixture(); g.openChannel(g.w, 'launch');
+  assert.equal(g.chanEditUnsent('w', failedPost('typing in Chats')), false, 'a plain new chat');
+  assert.equal(g.chanEditUnsent('w', failedPost('typing in the # Voice channel in Chats')), false, 'another channel');
+  assert.equal(g.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats', { kind: 'reply' })), false, 'a reply');
+  g.channelBack(g.w); assert.equal(g.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats')), false, 'no feed open');
+  // Main vs routed: a host-profile, container or restricted channel takes back only its own agent's post.
+  for (const [cid, agent] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const { f: r } = editFixture(); r.openChannel(r.w, cid); const name = r.chanOpen(r.w).name;
+    assert.equal(r.chanEditUnsent('w', failedPost(`typing in the # ${name} channel in Chats`)), false, `a main post never lands in ${agent}'s channel`);
+    assert.equal(r.chanEditUnsent('w', failedPost(`typing in the # ${name} channel in Chats`, { agent })), true);
+    assert.equal(r.env.KIT.drafts.get(`chan:${agent}:${cid}`).text, 'Ship the boot logo');
+  }
+  const { f: m } = editFixture(); m.openChannel(m.w, 'launch');
+  assert.equal(m.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats', { agent: 'host' })), false, 'a routed post never lands in a main channel');
+  assert.match(src, /if \(it && !\(typeof chanEditUnsent === 'function' && chanEditUnsent\(id, it\)\)\) H\.editUnsent\(it\)/);
 });
 
 test('General posts unfiled (no Space); routed host-profile, container and restricted channels keep their own agent', async () => {

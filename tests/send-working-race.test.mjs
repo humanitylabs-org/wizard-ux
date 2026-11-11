@@ -82,3 +82,13 @@ test('a new chat gets a synthetic Working row until the server lists it', () => 
   const t = setup(); t.L.sessions = []; t.it.kind = 'new'; t.OB._items.set('send', t.it); t.sync();
   assert.equal(t.L.sessions[0].status, 'submitting'); assert.equal(t.L.sessions[0].synthetic, true);
 });
+// Issue 1294: a failed new chat taken back to edit (or discarded) passes through the outbox's delete tombstone
+// (state 'sent', withdrawn) before its compact marker: it never becomes a sent chat with a Working row.
+test('a failed new chat taken back to edit leaves no synthetic Working row', () => {
+  const t = setup(); t.L.sessions = []; Object.assign(t.it, { kind: 'new', state: 'failed' }); t.OB._items.set('send', t.it); t.sync();
+  assert.equal(t.L.sessions.length, 0);
+  Object.assign(t.it, { withdrawn: true, state: 'sent', sentAt: t.it.createdAt }); t.sync();
+  assert.equal(t.L.sessions.length, 0); assert.equal(t.api.PEND.size, 0);
+  t.OB._items.set('send', { id: 'send', state: 'sent', compact: true, createdAt: t.it.createdAt }); t.sync();
+  assert.equal(t.L.sessions.length, 0); assert.equal(t.api.PEND.size, 0);
+});
