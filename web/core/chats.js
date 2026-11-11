@@ -1004,7 +1004,9 @@ window.WizCore.chats = function createChats(H) {
     const ag = a => a || AGS()?.defaultId?.() || 'hermes'; let n = 0;
     for (const id of Object.keys(CH)) {
       const w = W[id], open = w && !w.thread ? chanOpen(w) : null; if (!open) continue;
-      if (open.general ? space !== '' || ag(focusAgentId(W[owner(id)] || w)) !== ag(agent) : open.id !== space || ag(open.agent) !== ag(agent)) continue;
+      // General from the All view shows every agent's unfiled posts: any of his General posts; an agent's General, its own
+      const gAg = open.general ? focusAgentId(W[owner(id)] || w) : '';
+      if (open.general ? space !== '' || (gAg && ag(gAg) !== ag(agent)) : open.id !== space || ag(open.agent) !== ag(agent)) continue;
       chanToEnd(id); n++;
     }
     return n;

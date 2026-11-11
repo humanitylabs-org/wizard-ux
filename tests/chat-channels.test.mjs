@@ -1385,11 +1385,16 @@ test('issue 1291: the owner\'s own new post brings the feed to its end from the 
   f.setOn(false); assert.equal(f.chanOwnPost('launch', ''), 0);
 });
 
-test('issue 1291: General\'s feed follows the owner\'s General post of its own agent', () => {
-  const f = fixture(); f.env.CH.w = {}; f.env.focusAgentId = w => w?.focus?.kind === 'agent' ? w.focus.key : '';
+test('issue 1291: General\'s feed follows the owner\'s General posts: every agent\'s from All, its own agent\'s when focused', () => {
+  const f = fixture(); f.env.CH.w = {}; let focusAg = '';
+  f.env.focusAgentId = () => focusAg;
   f.openChannel(f.w, '__general__'); assert.equal(f.chanOpen(f.w)?.general, true);
   f.w.chan.at = { key: 'post:a', y: 0 };
-  assert.equal(f.chanOwnPost('launch', ''), 0); assert.equal(f.chanOwnPost('', 'host'), 0, 'another agent\'s General');
+  assert.equal(f.chanOwnPost('launch', ''), 0, 'a channel post: not General');
+  assert.equal(f.chanOwnPost('', 'host'), 1, 'All view: General shows every agent\'s unfiled posts (review on #1306)');
+  assert.deepEqual({ ...f.w.chan.at }, { end: true });
+  focusAg = 'hermes'; f.w.chan.at = { key: 'post:a', y: 0 };
+  assert.equal(f.chanOwnPost('', 'host'), 0, 'an agent-focused General: another agent\'s post leaves it');
   assert.equal(f.chanOwnPost('', ''), 1); assert.deepEqual({ ...f.w.chan.at }, { end: true });
 });
 
