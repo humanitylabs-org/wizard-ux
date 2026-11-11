@@ -786,8 +786,9 @@
         const meta = parse(a?.id === row.nativeId ? d.recStop(row.nativeId) : d.recClaim(row.nativeId));
         // Issue 1231: the phone holds no audio for this take any more (another Wizard on this phone already saved it,
         // or it moved to Cancelled recordings). Nothing is left to claim, so settle the row (pending, partial) for
-        // the app to offer and acknowledge, instead of failing the same claim on every launch.
-        const noAudio = () => a?.id !== row.nativeId && parse(d.recRead(row.nativeId, 0)) === null;
+        // the app to offer and acknowledge, instead of failing the same claim on every launch. Only the phone's
+        // positive "no file" answer counts: a null read can be a passing I/O error, so an older app keeps retrying.
+        const noAudio = () => a?.id !== row.nativeId && typeof d.recAudioGone === 'function' && d.recAudioGone(row.nativeId) === true;
         if (!meta) { if (noAudio()) return { gone: true }; throw fail('native_claim_pending', 'Native capture is not ready to claim; restore the bridge and retry recovery.'); }
         if (!(Number(meta.bytes) > 0) && noAudio()) return { gone: true, durationMs: Number(meta.ms) || 0, meta };
         return { blob: await read(row.nativeId), durationMs: Number(meta.ms) || 0, meta };

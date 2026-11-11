@@ -163,4 +163,27 @@ public class RecordingStoreTest {
         assertTrue(new RecordingStore(dir).stayWith(A));
         assertTrue(new RecordingStore(dir).pending(null, B).isEmpty());
     }
+
+    /* ---- wizard-ux#1231: the page settles a take only on positive proof that its audio is gone ---- */
+
+    @Test
+    public void audioGoneIsTrueOnlyWhenTheFileIsReallyMissing() throws Exception {
+        File dir = tmp.newFolder("rec");
+        RecordingStore st = new RecordingStore(dir);
+        String id = st.create("app");
+        assertTrue("metadata without audio: nothing to claim", st.audioGone(id));
+        fill(st.audio(id), 0);
+        assertFalse("an empty file is still a file", st.audioGone(id));
+        fill(st.audio(id), 3000);
+        assertFalse(st.audioGone(id));
+        assertTrue("read only", st.audio(id).isFile() && new File(dir, id + ".json").isFile());
+        assertTrue("an unknown take has no audio either", st.audioGone("rec-0-unknown"));
+        File locked = tmp.newFolder("locked");
+        RecordingStore unreadable = new RecordingStore(new File(locked, "rec"));
+        String other = unreadable.create("app");
+        fill(unreadable.audio(other), 10);
+        assertTrue(locked.setExecutable(false, false));
+        try { assertFalse("a folder it cannot look into is never called empty", unreadable.audioGone(other)); }
+        finally { locked.setExecutable(true, false); }
+    }
 }

@@ -20,6 +20,8 @@ function device(takes) {
     recStop: () => 'null',
     recRead: (id, off) => { const t = takes[id]; if (!t?.audio) return 'null';
       return JSON.stringify({b64: Buffer.from(t.audio.subarray(off)).toString('base64'), next: -1, size: t.audio.length}); },
+    // The phone's positive "no file" answer (Files.notExists); `io` marks a take whose disk read is failing.
+    recAudioGone: id => !takes[id]?.audio && !takes[id]?.io,
     recDone: id => { acked.push(id); delete takes[id]; }};
 }
 function adapterFor(d) {
@@ -58,6 +60,16 @@ test('a take that still has audio is read as before, and audio without metadata 
   assert.equal(a.status, 'pending'); assert.equal(a.bytes, 4); assert.equal(a.rescueComplete, true);
   assert.equal(b.status, 'recoverable'); assert.equal(b.recoveryError, 'native_claim_pending');
   assert.equal(f.c.recoveryError.code, 'native_claim_pending');
+});
+test('a failing read is never taken for a missing take, and an older app keeps retrying', async () => {
+  const d = device({n1: {meta: null, audio: null, io: true}, n2: {meta: {id: 'n2', ms: 1}, audio: null, io: true}});
+  const f = recovery([row('a', 'n1'), row('b', 'n2')], d);
+  await f.c.recoverLocked({});
+  for (const r of f.all) assert.equal(r.status, 'recoverable', r.id);
+  const old = device({n3: {meta: null, audio: null}}); delete old.recAudioGone;
+  const g = recovery([row('c', 'n3')], old);
+  await g.c.recoverLocked({});
+  assert.equal(g.all[0].status, 'recoverable'); assert.equal(g.c.recoveryError.code, 'native_claim_pending');
 });
 test('a live native take is never settled', async () => {
   const d = device({}); d.recActive = () => JSON.stringify({id: 'n1'});
