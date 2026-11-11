@@ -184,6 +184,14 @@
     const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
     return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
   }
+  /* Marking a row read never forgets a newer revision this device already knows was read (wizard-ux issue 1266):
+   * the Channels feed can mark a row from a list read older than the record (a stale refresh, another device's
+   * write). The record keeps the newer of the two revisions, read as of now; replies newer than both stay unread. */
+  function seenRecord(prior, s, seenAt) {
+    const fresh = recordFor(s, seenAt); if (!prior) return fresh;
+    const { unreadAt, ...kept } = later(prior, fresh);
+    return { ...kept, seenAt: Math.max(seenAt, prior.seenAt || 0) };
+  }
   function merge(a, b) {
     if (!a) return b; if (!b) return a;
     const threads = { ...a.threads };
@@ -201,6 +209,7 @@
 
   /* ---- network ---- */
   const J = { 'Content-Type': 'application/json' };
+  const THREAD_ROWS_MAX = 50000; // threadRows' ceiling: 100 pages of 500
   async function req(path, init = {}) {
     if (!init.signal && (!init.method || init.method === 'GET') && /^\/wizard\/hermes\/api\/sessions\/[^/?]+(?:\/messages\?|\?view=detail)/.test(path)) {
       if (globalThis.AbortSignal?.timeout) init = { ...init, signal: AbortSignal.timeout(12000) };
@@ -1058,10 +1067,10 @@
       const ts = Date.now();
       const list = all;
       if (!list.length) return;
-      const records = list.map(s => [seenKeyOf(s), recordFor(s, ts)]);
+      const records = list.map(s => [seenKeyOf(s), s]);
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
-      for (const [k, r] of records) threads[k] = r;
+      for (const [k, s] of records) threads[k] = seenRecord(threads[k], s, ts);
       state = { ...state, threads };
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
@@ -1194,10 +1203,13 @@
     },
     /* One thread's whole history (oldest first) for the row's own agent: the Channels feed counts the replies James
      * sees from it (wizard-ux issue 1266), because message_count also counts tool calls, results and status rows. */
+    // Read to the end (each page has its own timeout); a history past THREAD_ROWS_MAX comes back marked truncated, so
+    // the caller never takes a part for the whole.
     async threadRows(id, agent = '') {
-      const a = otherAgent(agent) ? agent : '', rows = [], signal = globalThis.AbortSignal?.timeout?.(12000);
-      for (let offset = 0; offset < 5000; offset += 500) {
-        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${a ? `&agent=${encodeURIComponent(a)}` : ''}`, { signal })).json();
+      const a = otherAgent(agent) ? agent : '', rows = [];
+      for (let offset = 0; ; offset += 500) {
+        if (offset >= THREAD_ROWS_MAX) { rows.truncated = true; break; }
+        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${a ? `&agent=${encodeURIComponent(a)}` : ''}`, { signal: globalThis.AbortSignal?.timeout?.(12000) })).json();
         const page = p.data || p.messages || p.items || [];
         rows.push(...page);
         const n = Number(p.pagination?.returned ?? page.length);

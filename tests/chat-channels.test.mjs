@@ -349,14 +349,15 @@ test('main vs routed: a restricted thread sharing a main thread\'s id never show
   assert.match(launch, />Main ask</); assert.doesNotMatch(launch, /Private ask/);
 });
 
-test('a failed first-message read is not kept: the title stands in, and a repaint after 30 s reads again', async () => {
+test('a failed first-message read is not kept: a skeleton (never the generated title) stands in, and a repaint after 30 s reads again', async () => {
   const history = { a: new Error('offline') }, s0 = row('a', 2);
   const f = fixture({ history, sessions: { a: s0 } }); f.openChannel(f.w, 'launch');
   const open = f.chanOpen(f.w);
   f.channelFeed(f.w, open, [s0]); await new Promise(r => setImmediate(r));
   const html = f.channelFeed(f.w, open, [s0]); await new Promise(r => setImmediate(r));
   assert.deepEqual(f.reads, ['a'], 'no retry storm within 30 s');
-  assert.match(html, /class="ch-post-t">T a</, 'offline: the title rather than an endless skeleton');
+  assert.match(html, /ch-post-wait/, 'offline: the loading line, never the chat title (issue 1266)');
+  assert.doesNotMatch(html, />T a</);
   history.a = [{ role: 'user', text: 'Back online ask' }]; f.env._now = NOW + 31e3;
   f.channelFeed(f.w, open, [s0]); await new Promise(r => setImmediate(r));
   assert.deepEqual(f.reads, ['a', 'a']);
@@ -953,4 +954,113 @@ test('issue 1266 review: a feed on a background desktop workspace (laid out, but
   d.sc.closest = () => null; d.sc.checkVisibility = () => false;   // visibility: hidden from another ancestor
   f.chanSeeNow('w'); assert.deepEqual(f.marks, [], 'not visible');
   d.sc.checkVisibility = () => true; f.chanSeeNow('w'); assert.ok(f.marks.length, 'in front: read');
+});
+
+// ---- issue 1266, fourth item: a post shows the owner's own words from its first frame, never the generated title ----
+const TITLE = 'Process Jonathan call transcript for insights';
+const noTitle = (html, why) => { assert.doesNotMatch(html, /class="ch-post-t[^"]*">Process Jonathan/, why); assert.doesNotMatch(html, /ch-post-h"><b>[^<]*<\/b><time>[^<]*<\/time><\/span><span class="ch-post-t[^"]*">T /, why); };
+
+test('issue 1266: an empty first read (a chat just started) is not kept as "no owner message": read again, never the title', async () => {
+  const history = { a: [] }, s = row('a', 0, { title: TITLE, status: 'running' });
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w);
+  f.channelFeed(f.w, open, [s]); await settle();
+  let html = f.channelFeed(f.w, open, [s]); await settle();
+  noTitle(html, 'empty history: no title');
+  assert.match(html, /ch-post-wait/, 'the loading line meanwhile');
+  assert.deepEqual(f.reads, ['a'], 'not again within the short wait');
+  history.a = [{ role: 'user', text: 'I just had a call with Jonathan.' }]; f.env._now = NOW + 2.1e3;
+  f.channelFeed(f.w, open, [s]); await settle();
+  assert.deepEqual(f.reads, ['a', 'a'], 'read again soon');
+  assert.match(f.channelFeed(f.w, open, [s]), />I just had a call with Jonathan\.</);
+});
+
+test('issue 1266: the reviewer\'s sequence: empty read, then a row with firstRequest, then a stale row without it: the words stay', async () => {
+  const history = { a: [] }, f = fixture({ history }); f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w), stale = row('a', 0, { title: TITLE, status: 'running' });
+  f.channelFeed(f.w, open, [stale]); await settle();
+  noTitle(f.channelFeed(f.w, open, [stale]), 'empty history');
+  const fresh = { ...stale, firstRequest: 'Jonathan transcript: we talked about virtue.' };
+  assert.match(f.channelFeed(f.w, open, [fresh]), />Jonathan transcript: we talked about virtue\.</);
+  for (let i = 0; i < 4; i++) {
+    const html = f.channelFeed(f.w, open, [i % 2 ? fresh : stale]); await settle();
+    assert.match(html, />Jonathan transcript: we talked about virtue\.</, 'refresh ' + i + ': the words stay');
+    noTitle(html, 'refresh ' + i);
+  }
+});
+
+test('issue 1266: a voice note says "Voice note" until its transcript is known, then the transcript; 30 s of refreshes and work never show the title', async () => {
+  const history = { a: [] }, f = fixture({ history }); f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w);
+  // The outbox's synthetic row first (live.js addSynthetic: preview "🎙 Voice note"), then Wizard's row with its title.
+  const synth = { id: 'a', title: '🎙 Voice note', status: 'submitting', at: NOW, preview: '🎙 Voice note', previewRole: 'user', synthetic: true, pendText: '🎙 Voice note' };
+  const listed = row('a', 0, { title: TITLE, status: 'running', request: '', preview: '', pendText: '🎙 Voice note' });
+  const seen = [];
+  const paint = async (r, t) => { f.env._now = NOW + t; const html = f.channelFeed(f.w, open, [r]); seen.push(html); await settle(); return html; };
+  let html = await paint(synth, 0);
+  assert.match(html, /class="ch-post-t ch-post-voice">Voice note</, 'the neutral placeholder from the first frame');
+  html = await paint(listed, 500);
+  assert.match(html, /ch-post-voice">Voice note</);
+  // History holds the voice note before its words (an audio attachment with no transcript yet).
+  history.a = [{ role: 'user', text: '', files: [{ id: 'v1', name: 'voice.m4a', mime: 'audio/mp4' }] }];
+  for (let t = 3e3; t < 12e3; t += 1500) assert.match(await paint(t % 3e3 ? synth : listed, t), /ch-post-voice">Voice note</, 'still the placeholder at ' + t);
+  history.a = [{ role: 'user', text: 'I just had a call with Jonathan. Please pass the transcript to the philosopher.' }, { role: 'assistant', text: '' }];
+  for (let t = 12e3; t <= 42e3; t += 1500) {
+    const r = [listed, synth, { ...listed, status: 'completed' }, { ...listed, request: 'I just had a call with Jonathan. Please pass the transcript to the philosopher.' }][(t / 1500) % 4];
+    await paint(r, t);
+  }
+  const last = seen.at(-1);
+  assert.match(last, />I just had a call with Jonathan\. Please pass the transcript to the philosopher\.</);
+  for (const h of seen) noTitle(h, 'never a frame of the generated title');
+  const after = seen.slice(seen.findIndex(h => />I just had a call/.test(h)));
+  assert.ok(after.length > 10 && after.every(h => />I just had a call/.test(h)), 'once shown, the words never flip back');
+});
+
+test('issue 1266: a typed post keeps the words it was sent with through stale rows and an empty first read', async () => {
+  const history = { a: [] }, f = fixture({ history }); f.openChannel(f.w, 'launch');
+  const open = f.chanOpen(f.w);
+  const r1 = row('a', 0, { title: TITLE, status: 'running', request: 'Summarise the Jonathan call', preview: 'Summarise the Jonathan call', previewRole: 'user' });
+  const r2 = row('a', 0, { title: TITLE, status: 'running', request: '', preview: 'Running read_file', previewRole: 'assistant' });
+  for (let i = 0; i < 6; i++) { const html = f.channelFeed(f.w, open, [i % 2 ? r2 : r1]); await settle(); assert.match(html, />Summarise the Jonathan call</, 'frame ' + i); noTitle(html, 'frame ' + i); }
+});
+
+test('issue 1266: a thread the agent started itself (no owner message in a real history) still shows its title', async () => {
+  const history = { a: [{ role: 'assistant', text: 'Morning roundup' }] }, s = row('a', 1, { title: 'Daily roundup' });
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+});
+
+test('issue 1266 review: a history cut short by threadRows\' page limit gives no count, never a partial one', async () => {
+  const h = busyThread(), cut = h.slice(); cut.truncated = true;
+  const s = row('a', 5, { messageCount: h.length });
+  const f = fixture({ history: { a: h.slice(0, 50) }, full: { a: cut }, sessions: { a: s } }); f.env.toTurns = realParseRows();
+  f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.deepEqual(f.reads, ['a', 'full:a']);
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.doesNotMatch(html, /\d+ repl/, 'no count');
+  assert.deepEqual(f.reads, ['a', 'full:a'], 'not re-read in a loop while the thread has not moved');
+});
+
+test('issue 1266: an owner message whose words are not readable yet (a voice note mid-transcription) is never taken for an agent-started thread', async () => {
+  const history = { a: [{ role: 'user', text: '', content: '<helm_attachments>{"items":[{"mime":"audio/webm"}]}</helm_attachments>' }] };
+  const s = row('a', 0, { title: TITLE, status: 'running' });
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /ch-post-voice">Voice note</); noTitle(html, 'no title');
+  assert.equal(f.FIRST.has('|a'), false, 'not kept: read again soon');
+});
+
+test('issue 1266 review: internal user rows parseRows hides (notes, steers, run context) do not hold an agent-started post on the loading line', async () => {
+  const history = { a: [{ role: 'user', display_kind: 'agent_note', content: 'From the scheduler: roundup' }, { role: 'user', content: '[Cross-thread note] internal' }, { role: 'assistant', text: 'Morning roundup' }] };
+  const s = row('a', 1, { title: 'Daily roundup' });
+  // The stand-in turns every user row into an owner turn; a parseRows-like one drops these internal rows.
+  const f = fixture({ history, sessions: { a: s } }); f.env.toTurns = rows => rows.filter(r => r.role === 'assistant').map(r => ({ a: { text: r.text } }));
+  f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+  assert.equal(f.FIRST.get('|a')?.none, true, 'kept: no owner message');
 });
