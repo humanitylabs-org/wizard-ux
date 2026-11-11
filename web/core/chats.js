@@ -644,13 +644,22 @@ window.WizCore.chats = function createChats(H) {
   // voice: the owner's voice note whose transcript is not there yet.
   function firstOf(rows) {
     if (!Array.isArray(rows) || !rows.length) return null;
-    let t = null; try { t = toTurns(rows).find(x => x.u && (x.u.text || x.u.files?.length || x.u.images?.length)); } catch (_) { return null; }
+    let turns; try { turns = toTurns(rows); } catch (_) { return null; }
+    const ti = turns.findIndex(x => x.u && (x.u.text || x.u.files?.length || x.u.images?.length)), t = turns[ti];
+    // The agent started it (wizard-agent-service issue 441: an alert, a reminder, a new chat it opened): the post is the
+    // agent's own first message with its pictures, also once the owner has replied under it.
+    const ai = turns.findIndex(x => !x.u && ((x.a && x.a.text) || x.media?.length)), a = turns[ai];
+    const byAgent = () => {
+      const said0 = a?.a ? String(a.a.plainText || a.a.text || '') : '', pics = (a?.media || []).filter(m => m && m.kind === 'image' && (m.url || m.thumb));
+      return { text: '', media: [], none: true, ...(a && (said0.trim() || pics.length) ? { agent: { text: said0.slice(0, CHAN_TEXT_MAX), media: pics, at: Number(a.a?.at ?? a.mediaAt ?? a.at) || 0 } } : {}) };
+    };
+    if (t && a && ai < ti) return byAgent();
     if (!t) {
       // An owner message with nothing to show yet (empty, or a voice note before its words) is not an agent-started
       // thread. Internal user rows (display_kind: notes, steers, run context) that parseRows hides are not his.
       const body = r => r.content ?? r.text ?? '', said = r => { try { return typeof body(r) === 'string' ? body(r) : JSON.stringify(body(r)); } catch (_) { return ''; } };
       const own = rows.find(r => r && r.role === 'user' && !r.display_kind && !r.kind && (!said(r).trim() || /audio\//.test(said(r))));
-      return own ? { text: '', media: [], wait: true, ...(/audio\//.test(said(own)) ? { voice: true } : {}) } : { text: '', media: [], none: true };
+      return own ? { text: '', media: [], wait: true, ...(/audio\//.test(said(own)) ? { voice: true } : {}) } : byAgent();
     }
     const files = t.u.files || [], typed = String(t.u.text || '').trim() ? String(t.u.text) : '';
     const heard = typed || String(files.find(f => f && typeof f.transcript === 'string' && f.transcript.trim())?.transcript || '');
@@ -659,7 +668,13 @@ window.WizCore.chats = function createChats(H) {
   }
   function firstPost(s) {
     if (typeof s.firstRequest === 'string' && (s.firstRequest.trim() || chanMedia(s.firstAttachments || []).length)) return { text: s.firstRequest, media: chanMedia(s.firstAttachments || []) };
-    const k = firstKey(s); if (FIRST.has(k)) return FIRST.get(k);
+    const k = firstKey(s);
+    if (FIRST.has(k)) {
+      const f = FIRST.get(k);
+      // Read before the agent's first words were there: read again once the thread moves (its list revision changes).
+      if (!(f.none && !f.agent && f.rev !== undefined && f.rev !== replyRev(s))) return f;
+      FIRST.delete(k); firstAsked.delete(k); firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) }); return f;
+    }
     const pend = firstPend.get(k), now = Date.now();
     if (!firstAsked.has(k) && !(now - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY) && !(pend && now - pend.at < pend.wait)) firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) });
     return null;
@@ -711,7 +726,7 @@ window.WizCore.chats = function createChats(H) {
         if (first) {
           // Kept once it holds the owner's words (or proves the agent started the thread); else read again soon.
           const p = firstOf(rows), was = firstPend.get(k);
-          if (p && !p.voice && !p.wait) { FIRST.set(k, p); firstPend.delete(k); }
+          if (p && !p.voice && !p.wait) { FIRST.set(k, p.none && !p.agent ? { ...p, rev } : p); firstPend.delete(k); }
           else { const wait = Math.min(CHAN_FIRST_RETRY, was ? was.wait * 2 : CHAN_FIRST_WAIT); firstPend.set(k, { at: Date.now(), wait, voice: !!p?.voice || !!was?.voice }); setTimeout(() => chanRepaint(), wait + 50); }
         }
         failed.delete(k);
@@ -798,11 +813,11 @@ window.WizCore.chats = function createChats(H) {
       // Slack-style: avatar, name and time, then the message as plain text (4 lines, then "more") and its pictures.
       // A thread whose first message hasn't been read yet shows its owner preview meanwhile (chanPostText); the title
       // only when the thread has no owner message at all (the agent started it).
-      const p = firstPost(s), said = chanPostText(s, p), text = said.text, media = p?.media || [];
+      const p = firstPost(s), byAgent = p?.none && p.agent ? p.agent : null, said = byAgent ? { text: byAgent.text } : chanPostText(s, p), text = said.text, media = byAgent ? byAgent.media : p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
-      const at = p?.at && isFinite(p.at) ? new Date(p.at).toISOString() : s.createdAt || LIVE.cardAt(s);
+      const pAt = byAgent ? byAgent.at : p?.at, at = pAt && isFinite(pAt) ? new Date(pAt).toISOString() : s.createdAt || LIVE.cardAt(s);
       // Replies are the bubbles James sees in the thread (chanReplies), never a raw message count; none until read.
-      const r = chanReplies(s), n = r && !r.partial ? r.ats.length : 0, un = chanUnread(s);
+      const r = chanReplies(s), n = r && !r.partial ? Math.max(0, r.ats.length - (byAgent ? 1 : 0)) : 0, un = chanUnread(s);
       // Unread (issue 1269): a green dot with words ("● 2 new replies", "● New reply") at the right of the reply line,
       // in the slot and style of the amber "Needs you", never a dot on the left. It stays until the post is opened.
       const nn = un ? chanNewN(s, r) : 0, replies = n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
@@ -811,7 +826,13 @@ window.WizCore.chats = function createChats(H) {
       const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
-      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button></div></div>`;
+      // A post the agent wrote (an alert, a reminder, a chat it opened; wizard-agent-service issue 441) carries the
+      // agent's avatar and name, and a Reply button until the thread has replies; then the usual reply line.
+      const av = byAgent ? `<span class="ch-post-me ch-post-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(firstAgent(s) || open.agent || '')) || ''}</span>` : meAv;
+      const who = byAgent ? (typeof agentName === 'function' ? agentName(firstAgent(s) || open.agent || '') : 'Wizard') : (me || 'You');
+      const foot = byAgent && !n ? `<span class="ch-post-rr"><button type="button" class="ch-post-reply" data-chreply="${esc(s.id)}" aria-label="Reply to ${esc(who)}">Reply</button>${marks}</span>`
+        : `<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button>`;
+      return `<div class="ch-post${un ? ' unread' : ''}${byAgent ? ' by-agent' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${av}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(who)}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}${foot}</div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
     const sendingPost = p => {
@@ -896,6 +917,8 @@ window.WizCore.chats = function createChats(H) {
     const c0 = e.target.closest('[data-chchan]'); if (c0) { openChannel(w, c0.dataset.chchan); return true; }
     if (e.target.closest('[data-chchanback]')) { channelBack(w); return true; }
     const fl = e.target.closest('[data-chchanf]'); if (fl) { ch(owner(id)).chanFilter = fl.dataset.chchanf; renderChatList(w, elOf(id)); return true; }
+    // Reply under an agent's post: its thread opens with the composer ready, so the reply continues that thread.
+    const rp = e.target.closest('[data-chreply]'); if (rp) { openChat(id, rp.dataset.chreply); const focus = () => { const ta = (elOf(owner(id)) || elOf(id))?.querySelector('.ch-compose textarea'); if (ta) ta.focus({ preventScroll: true }); return !!ta; }; setTimeout(() => { if (!focus()) setTimeout(focus, 250); }, 60); return true; }
     const mo = e.target.closest('[data-chpostmore]'); if (mo) { const k = mo.dataset.chpostmore; if (chanMore.has(k)) chanMore.delete(k); else chanMore.add(k); renderChatList(w, elOf(id)); return true; }
     // A photo opens the shared media viewer (Back closes it: closeOverlay → KIT.viewer.close).
     const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), g = s ? firstPost(s)?.media || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }

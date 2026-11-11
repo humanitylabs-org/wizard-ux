@@ -89,3 +89,9 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-r.unread span:not(.ch-post-st
 /* Where a channel opens (wizard-ux issue 1263): a slim "New" line above the first unread post, like a chat's unread line. */
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-new { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--ch-new); font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-new::before { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--ch-new) 55%, transparent); }
+/* a post the agent wrote (wizard-agent-service issue 441: Alerts): its sigil as the avatar, and a Reply button under it */
+html[data-tweaks~="wizard/chat-channels"] .ch-post-ag { background: transparent; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-ag .ag-sig { width: 100%; height: 100%; border-radius: inherit; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-rr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; margin-top: 2px; color: var(--ink-3); font-size: .75rem; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-rr .ch-post-sts { display: inline-flex; align-items: center; gap: 8px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-post-reply { min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: .8125rem; font-weight: 500; }

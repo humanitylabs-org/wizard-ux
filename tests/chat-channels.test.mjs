@@ -1029,11 +1029,63 @@ test('issue 1266: a typed post keeps the words it was sent with through stale ro
   for (let i = 0; i < 6; i++) { const html = f.channelFeed(f.w, open, [i % 2 ? r2 : r1]); await settle(); assert.match(html, />Summarise the Jonathan call</, 'frame ' + i); noTitle(html, 'frame ' + i); }
 });
 
-test('issue 1266: a thread the agent started itself (no owner message in a real history) still shows its title', async () => {
-  const history = { a: [{ role: 'assistant', text: 'Morning roundup' }] }, s = row('a', 1, { title: 'Daily roundup' });
-  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+test('issue 1266: a thread the agent started itself with nothing readable yet still shows its title', async () => {
+  const history = { a: [{ role: 'assistant', text: '' }] }, s = row('a', 1, { title: 'Daily roundup' });
+  const f = fixture({ history, sessions: { a: s } }); f.env.toTurns = () => [];
+  f.openChannel(f.w, 'launch');
   f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+});
+
+// Alerts (wizard-agent-service issue 441): a post the agent wrote is the agent's own first message, with its avatar,
+// name and a Reply button; Reply opens its thread with the composer ready.
+test('issue 441: an agent-started post shows the agent\'s message, avatar and name, and a Reply button', async () => {
+  const history = { a: [{ role: 'assistant', text: 'Reminder: the synthetic invoice is due today.', at: NOW - H }] }, s = row('a', 1, { title: 'Invoice reminder', attention: { state: 'needs_you' } });
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /class="ch-post-t">Reminder: the synthetic invoice is due today\.</);
+  assert.match(html, /class="ch-post by-agent"/);
+  assert.match(html, /<span class="ch-post-me ch-post-ag" aria-hidden="true"><i class="ag-sig" data-agent="hermes"><\/i><\/span>/, 'the agent\'s sigil, not the owner\'s initial');
+  assert.match(html, /<b>Wizard<\/b>/, 'the agent\'s name, not the owner\'s');
+  assert.doesNotMatch(html, /James de Fleur/);
+  assert.match(html, /<button type="button" class="ch-post-reply" data-chreply="a" aria-label="Reply to Wizard">Reply<\/button>/);
+  assert.doesNotMatch(html, /class="ch-post-r[ "]/, 'no reply line before any reply');
+  assert.doesNotMatch(html, />Invoice reminder</, 'the post is the message, not the title');
+  assert.match(html, /<span class="ch-post-st needs">.*Needs you<\/span>/, 'an alert that needs the owner keeps the amber state');
+});
+
+test('issue 441: Reply opens the thread and focuses its composer; a thread with replies shows the reply line instead', async () => {
+  const opened = [], focused = [];
+  const ta = { focus: o => focused.push(o) };
+  const history = { a: [{ role: 'assistant', text: 'Synthetic alert', at: NOW - 2 * H }, { role: 'user', text: 'Thanks', at: NOW - H }, { role: 'assistant', text: 'Done', at: NOW - H / 2 }] };
+  const s = row('a', 1, { messageCount: 3 });
+  const f = fixture({ history, sessions: { a: s } });
+  f.env.openChat = (wid, sid) => opened.push([wid, sid]); f.env.elOf = () => ({ querySelector: sel => sel === '.ch-compose textarea' ? ta : null });
+  assert.equal(f.channelClick(click({ 'data-chreply': 'a' }), 'w', f.w), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(opened)), [['w', 'a']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(focused)), [{ preventScroll: true }]);
+  f.openChannel(f.w, 'launch');
+  for (let i = 0; i < 3; i++) { f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle(); }
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /class="ch-post-t">Synthetic alert</);
+  assert.doesNotMatch(html, /data-chreply/, 'replied: the reply line, not the Reply button');
+  assert.match(html, /<span>1 reply<\/span>/, 'the agent\'s first message is the post, not a reply');
+});
+
+test('issue 441: an agent post read before its first words is read again once the thread moves', async () => {
+  const history = { a: [] }, s = row('a', 1, { title: 'Synthetic report', messageCount: 1 });
+  history.a = [{ role: 'assistant', text: '' }];
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  const turns = f.env.toTurns; f.env.toTurns = rows => turns(rows).filter(t => t.a?.text);
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Synthetic report</);
+  const reads = f.reads.length;
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.equal(f.reads.filter(r => r === 'a').length, f.reads.slice(0, reads).filter(r => r === 'a').length, 'not re-read while the thread has not moved');
+  history.a = [{ role: 'assistant', text: 'Synthetic report body' }]; s.messageCount = 2;
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Synthetic report body</);
 });
 
 test('issue 1266 review: a history cut short by threadRows\' page limit gives no count, never a partial one', async () => {
@@ -1066,6 +1118,6 @@ test('issue 1266 review: internal user rows parseRows hides (notes, steers, run 
   const f = fixture({ history, sessions: { a: s } }); f.env.toTurns = rows => rows.filter(r => r.role === 'assistant').map(r => ({ a: { text: r.text } }));
   f.openChannel(f.w, 'launch');
   f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
-  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Morning roundup</, 'the agent\'s own message (issue 441)');
   assert.equal(f.FIRST.get('|a')?.none, true, 'kept: no owner message');
 });
