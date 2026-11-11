@@ -1073,6 +1073,46 @@ test('issue 441: Reply opens the thread and focuses its composer; a thread with 
   assert.match(html, /<span>1 reply<\/span>/, 'the agent\'s first message is the post, not a reply');
 });
 
+test('issue 441 main vs routed: host-profile, container and restricted alerts carry their own agent, history read and Reply', async () => {
+  const names = { hermes: 'Wizard', host: 'Host agent', container: 'Box agent', restricted: 'Locked agent' };
+  for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
+    const k = agent ? `${agent}|${sid}` : sid;
+    const history = { [k]: [{ role: 'assistant', text: `Synthetic alert for ${agent || 'main'}`, at: NOW - H }, { role: 'user', text: 'Synthetic owner reply', at: NOW - H / 2 }] };
+    const s = row(sid, 1, { owner: agent, messageCount: 2 });
+    const f = fixture({ agents: { [sid]: agent }, history, sessions: { [agent ? k : sid]: s } });
+    f.env.agentName = id => names[id || 'hermes'];
+    const opened = [], focused = [];
+    f.env.openChat = (wid, id) => opened.push(id); f.env.elOf = () => ({ querySelector: sel => sel === '.ch-compose textarea' ? { focus: () => focused.push(sid) } : null });
+    f.openChannel(f.w, chan);
+    f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+    assert.ok(f.reads.includes(k), `${agent || 'main'}: the history read names the row's own agent`);
+    assert.match(html, new RegExp(`class="ch-post-t">Synthetic alert for ${agent || 'main'}<`), `${agent || 'main'}: the agent's message, not the owner's reply`);
+    assert.doesNotMatch(html, /Synthetic owner reply/);
+    assert.match(html, new RegExp(`<span class="ch-post-me ch-post-ag" aria-hidden="true"><i class="ag-sig" data-agent="${agent || 'hermes'}"></i></span>`));
+    assert.match(html, new RegExp(`<b>${names[agent || 'hermes']}</b>`));
+    assert.match(html, new RegExp(`data-chreply="${sid}"`));
+    assert.equal(f.channelClick(click({ 'data-chreply': sid }), 'w', f.w), true);
+    assert.deepEqual([...opened, ...focused], [sid, sid]);
+  }
+});
+
+test('issue 441 review: an alert\'s photos open in the viewer, and a fresh alert is never "1 new reply"', async () => {
+  const pic = { id: 'p1', name: 'Chart', mime: 'image/png', kind: 'image', url: '/wizard/files/p1/content' };
+  const history = { a: [{ role: 'assistant', text: 'Synthetic chart alert', at: NOW - H }] };
+  const s = row('a', 1, { fresh: true, messageCount: 1 });
+  const f = fixture({ history, full: history, sessions: { a: s } });
+  const turns = f.env.toTurns; f.env.toTurns = rows => turns(rows).map(t => t.a ? { ...t, media: [pic] } : t);
+  f.openChannel(f.w, 'launch');
+  for (let i = 0; i < 3; i++) { f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle(); }
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /data-chpostimg="a"/);
+  assert.equal(f.channelClick(click({ 'data-chpostimg': 'a' }), 'w', f.w), true);
+  assert.equal(f.viewer.length, 1, 'the alert\'s photo opens'); assert.equal(f.viewer[0][0][0].id, 'p1');
+  assert.doesNotMatch(html, /new repl/, 'the opening post is not a new reply');
+  assert.match(html, /<span class="ch-post-st new">[^]*?New<\/span>/);
+});
+
 test('issue 441: an agent post read before its first words is read again once the thread moves', async () => {
   const history = { a: [] }, s = row('a', 1, { title: 'Synthetic report', messageCount: 1 });
   history.a = [{ role: 'assistant', text: '' }];

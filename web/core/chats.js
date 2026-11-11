@@ -820,8 +820,9 @@ window.WizCore.chats = function createChats(H) {
       const r = chanReplies(s), n = r && !r.partial ? Math.max(0, r.ats.length - (byAgent ? 1 : 0)) : 0, un = chanUnread(s);
       // Unread (issue 1269): a green dot with words ("● 2 new replies", "● New reply") at the right of the reply line,
       // in the slot and style of the amber "Needs you", never a dot on the left. It stays until the post is opened.
-      const nn = un ? chanNewN(s, r) : 0, replies = n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
-      const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : 'New reply'}</span>` : '';
+      // An agent's post is its own first message: never counted as a new reply.
+      const nn = un ? chanNewN(s, byAgent && r ? { ...r, ats: r.ats.slice(1) } : r) : 0, replies = n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
+      const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : byAgent && !n ? 'New' : 'New reply'}</span>` : '';
       const state = (isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '') + fresh;
       const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
@@ -921,7 +922,7 @@ window.WizCore.chats = function createChats(H) {
     const rp = e.target.closest('[data-chreply]'); if (rp) { openChat(id, rp.dataset.chreply); const focus = () => { const ta = (elOf(owner(id)) || elOf(id))?.querySelector('.ch-compose textarea'); if (ta) ta.focus({ preventScroll: true }); return !!ta; }; setTimeout(() => { if (!focus()) setTimeout(focus, 250); }, 60); return true; }
     const mo = e.target.closest('[data-chpostmore]'); if (mo) { const k = mo.dataset.chpostmore; if (chanMore.has(k)) chanMore.delete(k); else chanMore.add(k); renderChatList(w, elOf(id)); return true; }
     // A photo opens the shared media viewer (Back closes it: closeOverlay → KIT.viewer.close).
-    const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), g = s ? firstPost(s)?.media || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
+    const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), fp = s ? firstPost(s) : null, g = fp ? (fp.none && fp.agent ? fp.agent.media : fp.media) || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
     return false;
   }
   /* The channel's message box (wizard-ux issue 1258; James, 10 Nov 2026: "I should be able to have a text box at the
