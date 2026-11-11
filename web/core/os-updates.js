@@ -84,7 +84,12 @@
     if (inflight) return inflight;
     inflight = (async () => {
       try {
-        const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
+        // A time limit: a request on a dead connection must fail, or `inflight` never settles and the update status
+        // (and the Mac's Updating panel) freezes on the last answer.
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        const limit = ctl ? setTimeout(() => ctl.abort(), 20e3) : 0;
+        const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) })
+          .finally(() => clearTimeout(limit));
         const d = r.ok ? await r.json().catch(() => null) : null;
         if (valid(d)) {
           st = d; off = false; issue = '';
