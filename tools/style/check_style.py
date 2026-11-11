@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 EXTENSIONS = {'.css', '.html', '.htm', '.js', '.mjs', '.jsx', '.tsx', '.ts', '.vue', '.svelte', '.svg', '.py'}
@@ -33,7 +34,7 @@ SKIN_LITERAL_RULES = {'literal-colour', 'literal-font', 'px-type'}
 # repo's own CI rebuilds them and fails on drift (a `git diff --exit-code` step naming
 # the file or a parent folder), read from the base commit as well as the PR so a PR
 # can never grant itself the skip. Kit drift and symlinks still fail there.
-DRIFT_CHECK = re.compile(r'\bgit\s+diff\b(?=[^\n]*\s--(?:exit-code|quiet)\b)([^\n#]*)')
+RUN_PREFIX = re.compile(r'^\s*(?:-\s+)?(?:run:\s*)?')
 GUIDE = 'https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md'
 
 
@@ -62,15 +63,33 @@ def changed_lines(root, base):
 
 
 def drift_checked_paths(texts):
-    """Paths a workflow drift-checks with `git diff --exit-code [--] <path>...`."""
+    """Paths a workflow drift-checks with `git diff --exit-code|--quiet [--] <path>...`.
+
+    Only executable commands count: YAML comments, quoted text (`echo "git diff ..."`)
+    and step names are ignored; shell line continuations are joined first.
+    """
     paths = set()
     for text in texts:
-        for m in DRIFT_CHECK.finditer(text):
-            for tok in re.split(r'&&|\|\||[;|)]', m[1])[0].split():
-                tok = tok.strip('\'"').rstrip('/')
-                if not tok or tok.startswith('-') or any(c in tok for c in '$*?`'):
-                    continue
-                paths.add(tok[2:] if tok.startswith('./') else tok)
+        for line in re.sub(r'\\\r?\n', ' ', text).splitlines():
+            line = RUN_PREFIX.sub('', line, count=1)
+            lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            try:
+                toks = list(lex)
+            except ValueError:
+                continue
+            seg = []
+            for tok in toks + [';']:
+                if tok and set(tok) <= set('&|;()'):
+                    if seg[:2] == ['git', 'diff'] and ({'--exit-code', '--quiet'} & set(seg)):
+                        for arg in seg[2:]:
+                            arg = arg.rstrip('/')
+                            if arg.startswith('./'): arg = arg[2:]
+                            if arg and not arg.startswith('-') and not any(c in arg for c in '$*?`{}'):
+                                paths.add(arg)
+                    seg = []
+                else:
+                    seg.append(tok)
     return paths
 
 
@@ -101,10 +120,10 @@ def scan(root, policy, *, base=None, strict=False):
     vendor_layers = tuple(policy.get('generated_vendor', []))
     if any(not isinstance(x, str) or not x.endswith('/') or x.startswith(('/', '.')) or '*' in x for x in vendor_layers):
         raise ValueError('generated_vendor entries must be relative directory prefixes ending in /')
-    drift = None
+    drift = []
     if vendor_layers:
-        drift = drift_checked_paths(workflow_texts(root))
-        if base: drift &= drift_checked_paths(workflow_texts(root, base))
+        drift = [drift_checked_paths(workflow_texts(root))]
+        if base: drift.append(drift_checked_paths(workflow_texts(root, base)))
     findings = []
     for p in sorted(root.rglob('*')):
         rel = p.relative_to(root).as_posix()
@@ -133,7 +152,7 @@ def scan(root, policy, *, base=None, strict=False):
                             or re.match(r'\s*(?:\{|::?[\w-]|\[)', after)):
                         continue
                 line = text.count('\n', 0, m.start()) + 1
-                if drift and rel.startswith(vendor_layers) and covered(rel, drift):
+                if drift and rel.startswith(vendor_layers) and all(covered(rel, d) for d in drift):
                     findings.append(dict(path=rel, line=line, rule=rule, error=False, generated=True)); continue
                 if rule in SKIN_LITERAL_RULES and rel.startswith(skin_layers):
                     findings.append(dict(path=rel, line=line, rule=rule, error=False, skin_layer=True)); continue
