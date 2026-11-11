@@ -336,7 +336,9 @@ export default function desktop(api) {
           spots.push([x, y, Math.ceil(r.right - b.left - bar.clientLeft) - x, Math.ceil(r.bottom - b.top - bar.clientTop) - y]);
         }
       }
-      const key = spots.join(';'); if (key === last) return; last = key;
+      // The Mac app keeps page coordinates and re-reads only on a change inside #bar: when #bar itself moves (the sidebar
+      // folds or opens), the spots are rebuilt too, even at the same place inside it.
+      const key = [b.left, b.top, b.width, b.height].map(Math.round).join(',') + '|' + spots.join(';'); if (key === last) return; last = key;
       box.replaceChildren(...spots.map(([x, y, w, h]) => {
         const i = el('i', '', { tabindex: '-1' });
         Object.assign(i.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
@@ -351,8 +353,11 @@ export default function desktop(api) {
     api.listen(globalThis, 'resize', soon);
     const ro = globalThis.ResizeObserver ? new ResizeObserver(soon) : null;
     for (const head of [cTop, pTop, sTop]) ro?.observe(head);
+    ro?.observe(bar);
+    const mo = globalThis.MutationObserver ? new MutationObserver(soon) : null;
+    mo?.observe(root, { attributes: true, attributeFilter: ['style', 'data-aad-side', 'data-aad-chat', 'data-aad-split', 'data-aad-mode', 'data-aad-focus', 'data-aad-wide'] });
     soon();
-    return { soon, dispose() { ro?.disconnect(); box.remove(); } };
+    return { soon, dispose() { ro?.disconnect(); mo?.disconnect(); box.remove(); } };
   })();
   // a slow app: its placeholder in the panel's place from the first frame
   const pLoad = el('div', 'aad-pload', { 'aria-live': 'polite' }); pLoad.hidden = true;

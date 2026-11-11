@@ -45,7 +45,9 @@ const report = { web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
   const browser = await chromium.launch();
   try {
     // centred: the chat floats below the strip, so its header was never under it (a check that the stand-ins follow)
-    for (const scene of ['chat', 'chat+app', 'centred']) {
+    // fold: the sidebar folds to its rail with the keyboard only (no pointer over the top row), so #bar and the header move
+    // together and the Mac app must still be told (Codex review)
+    for (const scene of ['chat', 'chat+app', 'centred', 'fold']) {
       const entry = { scene, errors: [], dead: [], checked: 0 }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
       try {
@@ -90,9 +92,10 @@ const report = { web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
         await page.waitForFunction(() => document.documentElement.hasAttribute('data-aad-chat'), null, { timeout: 10000 });
         if (scene === 'chat+app') { await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP['app-store'])); await page.waitForFunction(() => document.documentElement.hasAttribute('data-aad-split'), null, { timeout: 10000 }); }
         if (scene === 'centred') { await page.mouse.move(700, 20); await nap(100); await page.locator('.aad-ctop [data-mode="centre"]').click({ force: true }); }
+        if (scene === 'fold') { await nap(800); await page.keyboard.press('Control+Shift+S'); await page.waitForFunction(() => document.documentElement.dataset.aadSide === 'rail', null, { timeout: 5000 }); }
         await nap(800);
-        // the pointer reaches the top row before it clicks
-        await page.mouse.move(900, 22); await nap(300);
+        // the pointer reaches the top row before it clicks (not for fold: that one must follow without it)
+        if (scene !== 'fold') { await page.mouse.move(900, 22); await nap(300); }
         const r = await page.evaluate(() => {
           const reg = window.__regions; if (!reg) return null;
           const [hx, hy, hw, hh] = reg.header, inR = ([x, y, w, h], px, py, pad = 0) => px >= x - pad && px <= x + w + pad && py >= y - pad && py <= y + h + pad;
