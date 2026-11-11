@@ -60,3 +60,19 @@ test('inside the Mac app the AI apps sidebar keeps its header and rail below the
   // never outside the Mac app
   for (const l of css.split('\n').filter(l => /--aad-mac-top|--wz-titlebar-left/.test(l) && /^html/.test(l))) assert.match(l, /^html\[[^\]]*\]\[[^\]]*\]\[data-native-chrome="mac"\]|^html\[data-native-chrome="mac"\]/);
 });
+
+test('inside the Mac app the chat and app panel header buttons get click-through spots in #bar (wizard-os#548)', () => {
+  // try-wizard WizardDragView takes a mouse-down in #bar's box as a window drag unless it is on a control INSIDE #bar;
+  // the AI apps headers sit over #bar on their desks, so each of their buttons needs a stand-in there.
+  const js = read('web/layouts/ai-apps/desktop.js'), css = read('web/layouts/ai-apps/desktop.css');
+  const block = js.slice(js.indexOf('const macHoles = (() => {'), js.indexOf('  })();', js.indexOf('const macHoles = (() => {')));
+  assert.ok(block.length > 100, 'macHoles block');
+  assert.match(block, /root\.dataset\?\.nativeChrome !== 'mac'\) return null/, 'only inside the Mac app');
+  assert.match(block, /bar\.append\(box\)/, 'the spots live inside #bar, where the Mac app looks');
+  assert.match(block, /for \(const head of \[cTop, pTop, sTop\]\)/, 'every header the layout owns');
+  assert.match(block, /tabindex: '-1'/, 'a stand-in the Mac app counts as a control, never in the tab order');
+  assert.match(js, /syncOrb\(\); macHoles\?\.soon\(\);/, 'repainted with the top row');
+  assert.match(js, /macHoles\?\.dispose\(\);/, 'removed when the layout goes');
+  const scope = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]\\[data-native-chrome="mac"\\]';
+  assert.match(css, new RegExp(scope + ' #bar > \\.aad-mac-holes > i \\{[^}]*pointer-events:\\s*none !important'), 'never takes a click itself');
+});
