@@ -27,6 +27,13 @@ KIT_NAMES = {'wizard-ui.css': 'ui.css', 'wizard-tokens.css': 'tokens.css', 'wiza
 # rules (cyclic tokens, kit drift, symlinks) still fail there. Prefixes come from the
 # canonical policy's "skin_layers" list so the scope is reviewed, never a per-app glob.
 SKIN_LITERAL_RULES = {'literal-colour', 'literal-font', 'px-type'}
+# Committed generated third-party bundles (policy "generated_vendor", e.g. web/vendor/)
+# are build output: a bundler renames identifiers file-wide, so library theme colours
+# would count as changed lines. They warn on every content rule, but only while the
+# repo's own CI rebuilds them and fails on drift (a `git diff --exit-code` step naming
+# the file or a parent folder), read from the base commit as well as the PR so a PR
+# can never grant itself the skip. Kit drift and symlinks still fail there.
+DRIFT_CHECK = re.compile(r'\bgit\s+diff\b(?=[^\n]*\s--(?:exit-code|quiet)\b)([^\n#]*)')
 GUIDE = 'https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md'
 
 
@@ -54,6 +61,34 @@ def changed_lines(root, base):
     return changed
 
 
+def drift_checked_paths(texts):
+    """Paths a workflow drift-checks with `git diff --exit-code [--] <path>...`."""
+    paths = set()
+    for text in texts:
+        for m in DRIFT_CHECK.finditer(text):
+            for tok in re.split(r'&&|\|\||[;|)]', m[1])[0].split():
+                tok = tok.strip('\'"').rstrip('/')
+                if not tok or tok.startswith('-') or any(c in tok for c in '$*?`'):
+                    continue
+                paths.add(tok[2:] if tok.startswith('./') else tok)
+    return paths
+
+
+def workflow_texts(root, ref=None):
+    if ref is None:
+        wf = root / '.github' / 'workflows'
+        return [p.read_text(errors='replace') for p in sorted(wf.glob('*')) if p.suffix in ('.yml', '.yaml') and p.is_file()] if wf.is_dir() else []
+    try:
+        names = git(root, 'ls-tree', '--name-only', ref + ':.github/workflows').split()
+    except subprocess.CalledProcessError:
+        return []
+    return [git(root, 'show', f'{ref}:.github/workflows/{n}') for n in names if n.endswith(('.yml', '.yaml'))]
+
+
+def covered(rel, paths):
+    return any(rel == p or rel.startswith(p + '/') for p in paths)
+
+
 def scan(root, policy, *, base=None, strict=False):
     root = Path(root).resolve()
     changed = changed_lines(root, base) if base else {}
@@ -63,6 +98,13 @@ def scan(root, policy, *, base=None, strict=False):
     skin_layers = tuple(policy.get('skin_layers', []))
     if any(not isinstance(x, str) or not x.endswith('/') or x.startswith(('/', '.')) or '*' in x for x in skin_layers):
         raise ValueError('skin_layers entries must be relative directory prefixes ending in /')
+    vendor_layers = tuple(policy.get('generated_vendor', []))
+    if any(not isinstance(x, str) or not x.endswith('/') or x.startswith(('/', '.')) or '*' in x for x in vendor_layers):
+        raise ValueError('generated_vendor entries must be relative directory prefixes ending in /')
+    drift = None
+    if vendor_layers:
+        drift = drift_checked_paths(workflow_texts(root))
+        if base: drift &= drift_checked_paths(workflow_texts(root, base))
     findings = []
     for p in sorted(root.rglob('*')):
         rel = p.relative_to(root).as_posix()
@@ -91,6 +133,8 @@ def scan(root, policy, *, base=None, strict=False):
                             or re.match(r'\s*(?:\{|::?[\w-]|\[)', after)):
                         continue
                 line = text.count('\n', 0, m.start()) + 1
+                if drift and rel.startswith(vendor_layers) and covered(rel, drift):
+                    findings.append(dict(path=rel, line=line, rule=rule, error=False, generated=True)); continue
                 if rule in SKIN_LITERAL_RULES and rel.startswith(skin_layers):
                     findings.append(dict(path=rel, line=line, rule=rule, error=False, skin_layer=True)); continue
                 findings.append(dict(path=rel, line=line, rule=rule, error=strict or line in changed.get(rel, set())))

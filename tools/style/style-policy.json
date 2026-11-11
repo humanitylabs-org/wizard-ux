@@ -46,6 +46,9 @@
     "web/skins/",
     "web/tweaks/"
   ],
+  "generated_vendor": [
+    "web/vendor/"
+  ],
   "exceptions": [
     {
       "path": "web/core/skins.css",
