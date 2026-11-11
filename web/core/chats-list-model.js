@@ -142,7 +142,8 @@ function sessionRow(s, kind, { live, chats, pins } = {}) {
     needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state,
     // its "# channel" while Channels is on (wizard-ux issue 1256: the AI apps sidebar's Activity rows)
     ...(chats.channelOf?.(s) ? { channel: chats.channelOf(s) } : {}),
-    actions: [...(pins ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []),
+    // Move to channel… (wizard-ux issue 1292): the same picker as a channel feed's row menu, only while Channels is on
+    actions: [...(pins ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...(chats.channelOf?.(s) ? ['move'] : []),
       ...chats.threadActions(s, null).filter(a => ['snooze', 'done', 'restore'].includes(a))] };
 }
 const deferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
