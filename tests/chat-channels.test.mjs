@@ -1055,6 +1055,39 @@ test('issue 441: an agent-started post shows the agent\'s message, avatar and na
   assert.match(html, /<span class="ch-post-st needs">.*Needs you<\/span>/, 'an alert that needs the owner keeps the amber state');
 });
 
+// Issue 1287: an agent's post renders the chat bubble's inline markdown (the real KIT.inline from core/chat-kit.js):
+// a bold first line shows bold with no asterisks, links are links. The owner's own words stay plain text.
+function realInline() {
+  const ctx = { location: { origin: 'https://w.example', hostname: 'w.example', href: 'https://w.example/wizard-os-home/' }, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: {}, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) }, addEventListener() {}, setTimeout, clearTimeout, console, URL, Intl, Date };
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(kitSrc, ctx); return ctx.WosChat.inline;
+}
+test('issue 1287: an agent post shows bold and links, not raw markdown; an owner post stays plain', async () => {
+  const history = { a: [{ role: 'assistant', text: '**Bold point.** rest, see https://example.com/report and `code`', at: NOW - H }], b: [{ role: 'user', text: 'my **own** words', at: NOW - H }] };
+  const s = row('a', 1, { title: 'Alert' }), o = row('b', 2, { title: 'Mine' });
+  const f = fixture({ history, sessions: { a: s, b: o } }); f.env.KIT.inline = realInline(); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s, o]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s, o]);
+  assert.match(html, /class="ch-post-t"><strong>Bold point\.<\/strong> rest/, 'bold, with no asterisks');
+  assert.doesNotMatch(html, /\*\*Bold/);
+  assert.match(html, /<a href="https:\/\/example\.com\/report" target="_blank" rel="noopener noreferrer">/, 'the link can be tapped');
+  assert.match(html, /<code>code<\/code>/);
+  assert.doesNotMatch(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*<a /, 'no link inside a button: each link is its own control');
+  assert.match(html, /<div class="ch-post-tb" data-chopen="a"><span class="ch-post-t"><strong>/, 'a tap on the words still opens the thread');
+  assert.match(html, /class="ch-post-t">my \*\*own\*\* words</, 'the owner\'s words stay as typed');
+});
+
+test('issue 1287 main vs routed: host-profile, container and restricted agent posts render the same markdown', async () => {
+  const inline = realInline();
+  for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
+    const k = agent ? `${agent}|${sid}` : sid, s = row(sid, 1, { owner: agent });
+    const f = fixture({ agents: { [sid]: agent }, history: { [k]: [{ role: 'assistant', text: `**Alert for ${agent || 'main'}.** _soon_`, at: NOW - H }] }, sessions: { [agent ? k : sid]: s } });
+    f.env.KIT.inline = inline; f.openChannel(f.w, chan);
+    f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+    assert.match(html, new RegExp(`class="ch-post-t"><strong>Alert for ${agent || 'main'}\\.</strong> <em>soon</em><`), `${agent || 'main'}: bold and italics`);
+  }
+});
+
 test('issue 441: Reply opens the thread and focuses its composer; a thread with replies shows the reply line instead', async () => {
   const opened = [], focused = [];
   const ta = { focus: o => focused.push(o) };

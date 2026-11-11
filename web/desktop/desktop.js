@@ -708,7 +708,7 @@
     if (sidePanes.has(host)) return; sidePanes.add(host);
     host.addEventListener('click', e => {
       const sid = host.dataset.chats || '', base = sid.replace(/::side$/, ''); if (!W[base] && !sideWin(base)) return;
-      const row = e.target.closest('[data-chopen]');
+      const row = !e.target.closest('.ch-post-t a[href]') && e.target.closest('[data-chopen]'); // a link in a post is the link (ux#1287)
       if (row && CHATS.justPressed()) { e.stopPropagation(); return; }
       if (row && !e.target.closest('.ch-sheet')) { e.stopPropagation(); openThread(row.dataset.chopen); return; }
       if (CHATS.click(e, sid)) { e.stopPropagation(); syncChatsPane(base); if (feedBase && base === feedBase.id) feedOpened(sid); }
@@ -1564,7 +1564,7 @@
       // Topic emoji taps belong to shared Chats; do not let the desktop pane adapter open the row first.
       if (e.target.closest('[data-chpick]')) { const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { e.stopPropagation(); syncChatsPane(id); return; } }
       // Rows in the list pane open in this window's thread pane.
-      const row = e.target.closest('[data-chopen]');
+      const row = !e.target.closest('.ch-post-t a[href]') && e.target.closest('[data-chopen]'); // a link in a post is the link (ux#1287)
       if (row && e.target.closest('.pane-list') && CHATS.justPressed()) { e.stopPropagation(); return; } // a long-press/right-click just opened the actions sheet
       if (row && e.target.closest('.pane-list') && !e.target.closest('.ch-sheet')) { e.stopPropagation(); CHATS.openChat(id, row.dataset.chopen); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
       if (e.target.closest('.pane-list [data-chnew]') || e.target.closest('[data-panenew]')) { e.stopPropagation(); CHATS.openNewDraft(id, ''); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
