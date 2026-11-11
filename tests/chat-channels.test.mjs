@@ -471,6 +471,20 @@ test('Dismiss on a Not sent channel post removes its Sending… post from the fe
   assert.match(src, /const gone = OUTBOX\.get\?\.\(failedDismiss\.dataset\.obdismissfailed\);[^]*if \(ok && gone\?\.kind === 'new' && typeof chanDropSending === 'function' && chanDropSending\(gone\)\) chanRepaint\(\);/);
 });
 
+test('issue 1293 main vs routed: Dismiss drops a host-profile, container or restricted channel\'s own Sending… post only', async () => {
+  for (const [cid, agent] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const f = fixture(); f.openChannel(f.w, cid); f.env._sendResult = Promise.resolve({ sessionId: 'n7' });
+    await f.channelSend('w', form(`${agent} post`));
+    assert.equal(f.env._sends[0][4].sid, '__new__');
+    const open = f.chanOpen(f.w), sending = () => [...f.channelFeed(f.w, open, []).matchAll(/ch-post sending/g)].length;
+    assert.equal(sending(), 1, `${agent}: the post shows Sending…`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7' }), 0, `${agent}: a main chat sharing the id leaves it`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent: agent === 'host' ? 'container' : 'host' }), 0, `${agent}: another routed agent's chat leaves it`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent }), 1, `${agent}: its own dismissed chat takes it`);
+    assert.equal(sending(), 0, `${agent}: gone from the feed at once`);
+  }
+});
+
 // Issue 1294: Edit on a channel post that was saved but then not sent refills the channel's own box (the real
 // WosSettings.moveDraft from core/settings.js), never a separate New chat; other unsent items keep the shell's Edit.
 const settingsSrc = readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
