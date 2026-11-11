@@ -2339,6 +2339,11 @@
 
   /* ---------------- keyboard ---------------- */
   const typing = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  // The field a key is really typed in: through shadow roots and into a focused app frame (a key the layout sees
+  // from the shell document only names the iframe), so app text fields keep their keys too (issue 1279).
+  // A field that edits text (word moves and selection), not a checkbox, button or picker.
+  const textField = t => typing(t) && t.tagName !== 'SELECT' && !(t.tagName === 'INPUT' && /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i.test(t.type || ''));
+  const keyField = e => { let t = e?.composedPath?.()?.[0] || e?.target; for (let i = 0; i < 4 && t; i++) { let n = null; try { n = t.tagName === 'IFRAME' ? t.contentDocument?.activeElement : t.shadowRoot?.activeElement; } catch (x) {} if (!n || n === t || n.tagName === 'BODY') break; t = n; } return t; };
   let lastWs = cur;
   function dirFocus(dx, dy) {
     const d = ws[cur]; if (d.wins.length < 2) return;
@@ -2697,6 +2702,8 @@
     // macOS word jumps belong to the field/app, even with an empty composer or a sheet open.
     // Yield before layout, picker and window-manager dispatch; shifted arrows keep their distinct controls.
     if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
+    // ⌥⇧← / → select by word in a text field, an app's included: the field keeps them before any layout key.
+    if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && textField(keyField(e))) return;
     if (e.key === 'Escape') {
       if (e.isComposing || e.keyCode === 229) return;
       // Run BEFORE layout keys and before the app's own capture listeners. The
