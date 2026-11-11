@@ -557,10 +557,11 @@ window.WizCore.chats = function createChats(H) {
     if (!Array.isArray(rows) || !rows.length) return null;
     let t = null; try { t = toTurns(rows).find(x => x.u && (x.u.text || x.u.files?.length || x.u.images?.length)); } catch (_) { return null; }
     if (!t) {
-      // An owner message with nothing to show yet (a voice note before its words) is not an agent-started thread.
-      const own = rows.find(r => r && r.role === 'user'); if (!own) return { text: '', media: [], none: true };
-      let raw = ''; try { raw = JSON.stringify(own); } catch (_) {}
-      return { text: '', media: [], wait: true, ...(/audio\//.test(raw) ? { voice: true } : {}) };
+      // An owner message with nothing to show yet (empty, or a voice note before its words) is not an agent-started
+      // thread. Internal user rows (display_kind: notes, steers, run context) that parseRows hides are not his.
+      const body = r => r.content ?? r.text ?? '', said = r => { try { return typeof body(r) === 'string' ? body(r) : JSON.stringify(body(r)); } catch (_) { return ''; } };
+      const own = rows.find(r => r && r.role === 'user' && !r.display_kind && !r.kind && (!said(r).trim() || /audio\//.test(said(r))));
+      return own ? { text: '', media: [], wait: true, ...(/audio\//.test(said(own)) ? { voice: true } : {}) } : { text: '', media: [], none: true };
     }
     const files = t.u.files || [], typed = String(t.u.text || '').trim() ? String(t.u.text) : '';
     const heard = typed || String(files.find(f => f && typeof f.transcript === 'string' && f.transcript.trim())?.transcript || '');

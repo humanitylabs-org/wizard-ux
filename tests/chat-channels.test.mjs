@@ -1053,3 +1053,14 @@ test('issue 1266: an owner message whose words are not readable yet (a voice not
   assert.match(html, /ch-post-voice">Voice note</); noTitle(html, 'no title');
   assert.equal(f.FIRST.has('|a'), false, 'not kept: read again soon');
 });
+
+test('issue 1266 review: internal user rows parseRows hides (notes, steers, run context) do not hold an agent-started post on the loading line', async () => {
+  const history = { a: [{ role: 'user', display_kind: 'agent_note', content: 'From the scheduler: roundup' }, { role: 'user', content: '[Cross-thread note] internal' }, { role: 'assistant', text: 'Morning roundup' }] };
+  const s = row('a', 1, { title: 'Daily roundup' });
+  // The stand-in turns every user row into an owner turn; a parseRows-like one drops these internal rows.
+  const f = fixture({ history, sessions: { a: s } }); f.env.toTurns = rows => rows.filter(r => r.role === 'assistant').map(r => ({ a: { text: r.text } }));
+  f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+  assert.equal(f.FIRST.get('|a')?.none, true, 'kept: no owner message');
+});
