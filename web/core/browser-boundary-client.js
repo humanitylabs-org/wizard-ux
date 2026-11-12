@@ -32,6 +32,8 @@
  * Recording (`capture.*`): the shell's one recorder records for this window's app; preparing or starting a new
  * recording needs a real tap here. Its events come as `notice` `capture` (onCapture), and onReady runs after every
  * hello so WizardApp can read the recorder's state again and reattach its sessions on the new channel.
+ * Saved settings (`storage.load`, `storage.save`): the page's localStorage stand-in (core/app-client.js) keeps the
+ * shell's copy for this window's app up to date.
  */
 (() => {
   'use strict';
@@ -41,7 +43,8 @@
   const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
-    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm'], STICKY = ['badge.set', 'titlebar.set'];
+    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
+    'storage.load', 'storage.save'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, serial = 0, claimed = new Set();

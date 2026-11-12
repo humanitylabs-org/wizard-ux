@@ -40,7 +40,8 @@
  *    `identity.nip44_encrypt`, `identity.nip44_decrypt`, Android: an installed apps.json app only, the phone's own
  *    approval sheet only while that window is in front, back only to the document that asked); and recording
  *    (`capture.*`: the shell's one recorder, for the window's own app; preparing or starting a new recording needs a
- *    real tap in that window, events stream back as `notice` `capture`).
+ *    real tap in that window, events stream back as `notice` `capture`); and the app's own saved settings
+ *    (`storage.load`, `storage.save`: see appStorage below).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
  *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`, Wizard ID's public info, signed event or
@@ -51,6 +52,13 @@
  *    shell is ready; only its version string crosses), `refresh` (read your data again; only the reason crosses) and
  *    `share` (a share was handed to this app: pull it; nothing else crosses) and `capture` (a recording event or this
  *    app's current recording, plain data and audio only).
+ *  - appStorage: a sandboxed page has no localStorage of its own (the browser refuses it to an opaque origin), so the
+ *    app kit (core/app-client.js) gives it a stand-in and the shell keeps the data, per installed app id, in its own
+ *    storage (`wos.app-storage.v1.<appId>`, 512K characters per app, 1.5M for all apps together). A new app window
+ *    gets it at once through the frame's name (frameAttributes(url, appId) / storageName(appId)), with the app's own
+ *    path (the page drops it outside that path), because a page reads its settings while it loads, before any message
+ *    can arrive; `storage.load` answers a window that got none, and
+ *    `storage.save` takes the page's changes (set, remove, clear) for the window's own app id only.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -66,7 +74,8 @@
   const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
-    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm'];
+    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
+    'storage.load', 'storage.save'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
@@ -91,6 +100,8 @@
     // Recording (capture.*): the shell's recorder's own data for this app (session info, takes with their audio, chunk
     // lists), as plain data and audio only.
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && 'capture' in v) return { capture: plain(v.capture) };
+    // The app's own saved settings (storage.load): string keys and values only.
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.store instanceof Map) return { store: Object.fromEntries([...v.store].filter(([k, x]) => typeof k === 'string' && typeof x === 'string')) };
     if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
     if (typeof v === 'string') return v.length <= 32 ? v : null;
@@ -351,12 +362,75 @@
       wait.resolve({ status: STATUSES.includes(d.status) ? d.status : 'refused', seal: typeof d.seal === 'string' && d.seal.length <= 80 ? d.seal : null });
     }
   });
+  // A sandboxed app's own saved settings (see the header). Kept as string pairs in a Map, so no key (not even
+  // `__proto__`) can reach an object's prototype.
+  const STORE = 'wos.app-storage.v1.', STORE_NAME = 'wzst1:', STORE_MAX = 512 * 1024, STORE_ALL = 1536 * 1024;
+  const STORE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+  const storeSize = m => { let n = 0; for (const [k, v] of m) n += k.length + v.length; return n; };
+  function storeRead(id) {
+    const m = new Map();
+    if (typeof id !== 'string' || !STORE_ID.test(id)) return m;
+    try {
+      const o = JSON.parse(localStorage.getItem(STORE + id) || '{}');
+      if (o && typeof o === 'object' && !Array.isArray(o)) for (const k of Object.keys(o)) if (typeof o[k] === 'string') m.set(k, o[k]);
+    } catch (_) {}
+    return m;
+  }
+  // The page's changes, in order: { k, v } sets, { k, d: 1 } removes, { c: 1 } clears. All or nothing: false when the
+  // app id, a change or the size is not acceptable, and then nothing is written.
+  function storeApply(id, ops) {
+    if (typeof id !== 'string' || !STORE_ID.test(id) || !Array.isArray(ops) || !ops.length || ops.length > 5000) return false;
+    const m = storeRead(id);
+    for (const op of ops) {
+      if (!op || typeof op !== 'object') return false;
+      if (op.c === 1) { m.clear(); continue; }
+      if (typeof op.k !== 'string' || op.k.length > 4096) return false;
+      if (op.d === 1) m.delete(op.k);
+      else if (typeof op.v === 'string') m.set(op.k, op.v);
+      else return false;
+    }
+    const n = storeSize(m);
+    if (n > STORE_MAX) return false;
+    try {
+      let others = 0;
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(STORE) && k !== STORE + id) others += (localStorage.getItem(k) || '').length; }
+      if (others + n > STORE_ALL) return false;
+      if (m.size) localStorage.setItem(STORE + id, JSON.stringify(Object.fromEntries(m))); else localStorage.removeItem(STORE + id);
+      return true;
+    } catch (_) { return false; }
+  }
+  // The installed app's own path (its registered url), as app-services.js checks a window: the page keeps its settings
+  // only while it stays under it (app-client.js), so another app's page on this host never reads them.
+  function storeBase(id) {
+    try {
+      const all = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')].flatMap(r => r?.APPS || []);
+      const a = all.find(x => x && x.id === id && typeof x.url === 'string');
+      const u = a && new URL(a.url, location.href);
+      if (!u || u.origin !== location.origin) return '';
+      return u.pathname.endsWith('/') ? u.pathname : u.pathname.slice(0, u.pathname.lastIndexOf('/') + 1);
+    } catch (_) { return ''; }
+  }
+  // What a new app window starts with: the frame's name (the page reads it before it can hear anything), with the
+  // app's own path. '' = not an installed app here.
+  function storageName(id) {
+    const base = typeof id === 'string' && STORE_ID.test(id) ? storeBase(id) : '';
+    return base ? STORE_NAME + JSON.stringify({ p: base, l: Object.fromEntries(storeRead(id)) }) : '';
+  }
+  const attr = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   window.WizBrowserBoundary = Object.freeze({
     enabled: true,
     sandbox: SANDBOX,
     // The attributes every app frame gets while the boundary is on (no allow-same-origin, ever).
     // The shell's own pages (shellPage) are the one exception: they stay same-origin (see guard above).
-    frameAttributes: url => (url !== undefined && shellPage(url) ? '' : `sandbox="${SANDBOX}"`),
+    // With the window's installed app id, its saved settings ride along as the frame's name (appStorage).
+    frameAttributes: (url, appId) => {
+      if (url !== undefined && shellPage(url)) return '';
+      const name = appId ? storageName(appId) : '';
+      return `sandbox="${SANDBOX}"` + (name ? ` name="${attr(name)}"` : '');
+    },
+    storageName,
+    // For core/app-services.js only, always with the frame's own installed app id (never one the page names).
+    appStorage: Object.freeze({ load: id => ({ store: storeRead(id) }), save: storeApply }),
     shellPage,
     owns: frame => sessions.has(frame),
     // Whether the app document now in this frame answered on its current channel (`wizard:boundary-ready` fires then).
