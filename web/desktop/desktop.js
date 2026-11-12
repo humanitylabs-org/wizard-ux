@@ -2919,6 +2919,21 @@
   }
   addEventListener('keydown', e => onKey(e), true);
   addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);
+  // Browser boundary (wizard-os#133): a sandboxed app is never readable, so its clicks and the shell's keys typed in it
+  // (Esc, ⌥ chords) arrive by postMessage. The app holds back the ⌥ codes named here, as onKey's hit() did before.
+  if (window.WizBrowserBoundary?.onInput) {
+    window.WizBrowserBoundary.keys(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Backquote', 'Comma', 'Slash', 'Minus', 'Equal', 'BracketLeft', 'BracketRight', 'Enter', 'Space',
+      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC', 'KeyD', 'KeyF', 'KeyG', 'KeyI', 'KeyL', 'KeyN', 'KeyO', 'KeyP', 'KeyR', 'KeyS', 'KeyT', 'KeyV', 'KeyW', 'KeyX', 'KeyZ']);
+    window.WizBrowserBoundary.onInput((f, ev) => {
+      const el = f.closest?.('[data-win]'); if (!el) return;
+      if (ev.kind === 'pointer') return desktopHost.focus(el.dataset.win, { scroll: false });
+      if (ev.kind === 'blur') return keyHints.hide();
+      // The field stand-in carries only what onKey's pass-throughs read (a text field, read-only or not).
+      const t = ev.field ? { tagName: 'INPUT', type: 'text', readOnly: ev.readOnly, isContentEditable: false } : f;
+      const e = { ...ev, target: t, composedPath: () => [t], isComposing: false, keyCode: 0, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {} };
+      if (ev.type === 'keyup') { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); } else onKey(e, true);
+    });
+  }
   addEventListener('blur', () => keyHints.hide());
   addEventListener('pointerdown', e => { if (!keyHints.mine(e.target)) keyHints.hide(); }, true);
   // Composer: ⌘/Ctrl+Enter sends (shared Chats binds it); Enter stays a newline, as in the phone.

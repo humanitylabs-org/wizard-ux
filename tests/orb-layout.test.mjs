@@ -339,7 +339,7 @@ test('Orbs view: hold the LEFT ⌥ for bare app letters — only while held, one
   // the layout sees keys before the desktop's own ⌥ bindings (app frames too), and owns the hold overlay
   assert.match(desk, /if \(globalThis\.WosSkinHost\?\.key\?\.\(e\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); return; \}/);
   assert.match(desk, /e\.code !== 'AltLeft' \|\| e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| window\.WosSkinHost\?\.holdKeys\) return;/);
-  assert.equal((desk.match(/keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\);/g) || []).length, 2, 'releases from the page and from app frames');
+  assert.equal((desk.match(/keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\);/g) || []).length, 3, 'releases from the page, from app frames and from sandboxed app frames (browser boundary)');
   assert.match(desk, /openPalette: \(\) => palToggle\('all'\),/);
 });
 

@@ -16,6 +16,11 @@
  *    the field did not change in between, release() lets it go.
  *  - field.focus: the app says (a boolean, nothing else) whether a text field has focus, so the shell's dictation
  *    (core/focused-field.js) can offer the orb for a sandboxed app; fieldState(frame) and onField(fn) expose it.
+ *  - input: a click in the app (to focus its window), the window losing focus, and only the keys that belong to the
+ *    shell (Esc and ⌥ chords, never plain typing). keys(codes) tells every app which ⌥ codes the shell takes, so the
+ *    app holds them back from its own page. onInput(fn) gets them for the focused, visible frame only; a click and
+ *    every ⌥ key but bare ⌥ also need the browser's own sign of a real keypress or click (transient user activation,
+ *    which reaches the shell from the app's frame), so a page cannot drive the shell's keys by posting messages alone.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -24,8 +29,8 @@
   if (!window.WizShellBoundary?.on) return;
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
-  const sessions = new Map(), pending = new Map(), fieldListeners = new Set();
-  let serial = 0;
+  const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
+  let serial = 0, claimed = [];
   const fieldChanged = () => { for (const fn of [...fieldListeners]) { try { fn(); } catch (_) {} } };
   const newChannel = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
   const opaqueFrame = f => !!f && f.tagName === 'IFRAME' && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin') && !f.hasAttribute('srcdoc');
@@ -58,13 +63,35 @@
     if (!opaqueFrame(frame)) return () => {};
     const had = sessions.get(frame); if (had) return had.detach;
     const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0 };
-    const hello = () => { revoke(st); send(st, 'hello'); };
+    const hello = () => { revoke(st); send(st, 'hello', { keys: claimed }); };
     st.detach = () => { if (sessions.get(frame) !== st) return; frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
     sessions.set(frame, st);
     frame.addEventListener('load', hello); hello();
     return st.detach;
   }
   const visible = f => f.isConnected && !f.closest('[hidden], [inert]') && f.getClientRects().length > 0;
+  // The browser's transient user activation: a real click or key in the app's frame also activates the shell (its
+  // ancestor) for a few seconds; a page that only posts messages never gets it. No API: refuse.
+  const activated = () => globalThis.navigator?.userActivation?.isActive === true;
+  const focusedFrame = f => document.activeElement === f && (typeof document.hasFocus !== 'function' || document.hasFocus());
+  const word = v => (typeof v === 'string' && v.length <= 32 ? v : '');
+  function emit(frame, ev) { for (const fn of [...inputListeners]) { try { fn(frame, ev); } catch (_) {} } }
+  function input(st, d) {
+    if (!st.ready || !inputListeners.size) return;
+    const frame = st.frame;
+    if (d.kind === 'blur') return emit(frame, Object.freeze({ kind: 'blur' }));
+    if (!visible(frame)) return;
+    if (d.kind === 'pointer') { if (activated()) emit(frame, Object.freeze({ kind: 'pointer' })); return; }
+    if (d.kind !== 'key' || (d.event !== 'keydown' && d.event !== 'keyup') || !focusedFrame(frame)) return;
+    const ev = { kind: 'key', type: d.event, key: word(d.key), code: word(d.code), altKey: d.altKey === true, shiftKey: d.shiftKey === true,
+      metaKey: d.metaKey === true, ctrlKey: d.ctrlKey === true, repeat: d.repeat === true, field: d.field === true, readOnly: d.readOnly === true };
+    const esc = ev.key === 'Escape', bareAlt = ev.key === 'Alt' && !ev.metaKey && !ev.ctrlKey;
+    // Only the shell's keys: Esc, ⌥ itself (the keys guide) and ⌥ chords (⌘ and Ctrl stay the app's and the browser's).
+    if (!esc && !bareAlt && !(ev.altKey && !ev.metaKey && !ev.ctrlKey)) return;
+    // Esc is never an activation in browsers, and bare ⌥ only shows the keys guide; every other key needs one.
+    if (ev.type === 'keydown' && !esc && !bareAlt && !activated()) return;
+    emit(frame, Object.freeze(ev));
+  }
   const STATUSES = ['handled', 'atRoot', 'pinned', 'inserted', 'refused', 'stale'];
   addEventListener('message', e => {
     const d = e.data;
@@ -72,7 +99,7 @@
     const st = [...sessions.values()].find(s => s.frame.contentWindow === e.source);
     if (!connected(st)) return;
     // A client that loaded after our hello asks for one; it gets a fresh hello on the current channel.
-    if (d.op === 'boot') { if (!st.ready) send(st, 'hello'); return; }
+    if (d.op === 'boot') { if (!st.ready) send(st, 'hello', { keys: claimed }); return; }
     if (d.channel !== st.channel) return;
     if (d.op === 'ready') {
       st.ready = true;
@@ -86,6 +113,7 @@
       st.field = d.editable === true; fieldChanged();
       return;
     }
+    if (d.op === 'input') { input(st, d); return; }
     if (d.op === 'theme.applied') {
       if (st.appearance && d.revision === st.appearance.revision) themedWin(st.frame)?.classList.add('wz-themed');
       return;
@@ -130,6 +158,12 @@
     // generation a seal belongs to. null = not attached or not ready.
     fieldState(frame) { const st = sessions.get(frame); return connected(st) && st.ready ? Object.freeze({ focused: st.field, gen: st.gen }) : null; },
     onField(fn) { if (typeof fn !== 'function') return () => {}; fieldListeners.add(fn); return () => fieldListeners.delete(fn); },
+    // Desktop keys: which ⌥ codes the shell takes (the app then keeps them from its page), and the input it forwards.
+    keys(codes) {
+      claimed = Array.isArray(codes) ? codes.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : [];
+      for (const st of sessions.values()) if (st.ready) send(st, 'keys', { keys: claimed });
+    },
+    onInput(fn) { if (typeof fn !== 'function') return () => {}; inputListeners.add(fn); return () => inputListeners.delete(fn); },
     theme(frame, appearance) { const st = sessions.get(frame); if (!st || !appearance) return; st.appearance = appearance; if (st.ready) send(st, 'theme', { appearance }); },
     async pinField(frame) {
       const st = sessions.get(frame);
