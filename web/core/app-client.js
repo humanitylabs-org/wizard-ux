@@ -46,6 +46,82 @@
   // Wizard ID: the phone's sheet may stay open 3 minutes. Under the boundary the shell first waits up to a minute for
   // the window to be in front (app-services.js boundaryIdentity), so the app waits for both.
   const ID_WAIT = opaque ? 255000 : 190000;
+  /* Saved settings under the boundary: the browser refuses localStorage and sessionStorage to an opaque origin (any use
+   * throws), so the page gets stand-ins with the same methods. localStorage is the shell's copy for this window's
+   * installed app (browser-boundary.js appStorage): a new window starts with it in its frame name, read here before the
+   * app's own scripts run, and every change goes back to the shell (`storage.save`). Both also live in this frame's
+   * name, so a reload inside the window keeps them; sessionStorage never leaves the window. A window that started
+   * without them asks once (`storage.load`) and then fires a `storage` event, so the app can read them again. Before a
+   * link or form takes the window to another site the name is cleared, so that page cannot read them. */
+  const boundaryStorage = opaque ? (() => {
+    try { void window.localStorage; return null; } catch (_) {}
+    const NAME = 'wzst1:', MAX = 512 * 1024;
+    let seed = null;
+    try { if (typeof window.name === 'string' && window.name.startsWith(NAME)) seed = JSON.parse(window.name.slice(NAME.length)); } catch (_) { seed = null; }
+    const pairs = o => { const m = new Map(); if (o && typeof o === 'object' && !Array.isArray(o)) for (const k of Object.keys(o)) if (typeof o[k] === 'string') m.set(k, o[k]); return m; };
+    const local = pairs(seed?.l), session = pairs(seed?.s), changed = new Set();
+    let ops = [], timer = 0, cleared = false, sender = null;
+    const keep = () => { try { window.name = NAME + JSON.stringify({ l: Object.fromEntries(local), s: Object.fromEntries(session) }); } catch (_) {} };
+    const flush = () => { clearTimeout(timer); timer = 0; if (!ops.length || !sender) return; const batch = ops; ops = []; sender(batch); };
+    const size = m => { let n = 0; for (const [k, v] of m) n += k.length + v.length; return n; };
+    function note(map, op) {
+      keep();
+      if (map !== local) return;
+      if (op.c) { cleared = true; changed.clear(); } else changed.add(op.k);
+      ops.push(op); if (!timer) timer = setTimeout(flush, 150);
+    }
+    function make(map) {
+      const api = Object.freeze({
+        get length() { return map.size; },
+        key: i => { const k = [...map.keys()][Number(i) >>> 0]; return k === undefined ? null : k; },
+        getItem: k => { k = String(k); return map.has(k) ? map.get(k) : null; },
+        setItem: (k, v) => {
+          k = String(k); v = String(v);
+          const had = map.has(k), old = map.get(k); if (had && old === v) return;
+          map.set(k, v);
+          if (size(map) > MAX) { if (had) map.set(k, old); else map.delete(k); throw new DOMException('The app\u2019s saved settings are full.', 'QuotaExceededError'); }
+          note(map, { k, v });
+        },
+        removeItem: k => { k = String(k); if (!map.has(k)) return; map.delete(k); note(map, { k, d: 1 }); },
+        clear: () => { if (!map.size) return; map.clear(); note(map, { c: 1 }); },
+      });
+      const own = p => typeof p === 'string' && !(p in api) && map.has(p);
+      // Named access (localStorage.foo, Object.keys(localStorage)) like the real one.
+      return new Proxy(Object.create(null), {
+        get: (_, p) => (p in api ? (p === 'length' ? api.length : api[p]) : own(p) ? map.get(p) : undefined),
+        set: (_, p, v) => { if (typeof p === 'string' && !(p in api)) api.setItem(p, v); return true; },
+        deleteProperty: (_, p) => { if (typeof p === 'string') api.removeItem(p); return true; },
+        has: (_, p) => p in api || own(p),
+        ownKeys: () => [...map.keys()],
+        getOwnPropertyDescriptor: (_, p) => (own(p) ? { value: map.get(p), writable: true, enumerable: true, configurable: true } : undefined),
+      });
+    }
+    try {
+      Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, get: (s => () => s)(make(local)) });
+      Object.defineProperty(window, 'sessionStorage', { configurable: true, enumerable: true, get: (s => () => s)(make(session)) });
+    } catch (_) { return null; }
+    // A link or form in the page that takes this window to another site: clear the name first, so that page cannot read
+    // them (the Navigation API is off for an opaque page). The app's own scripts hold the data anyway; this covers
+    // content the app shows, such as a link in a note. If that navigation is cancelled, the next change keeps them again.
+    const away = (url, target) => { try { if ((!target || target === '_self') && new URL(url, location.href).origin !== location.origin) window.name = ''; } catch (_) {} };
+    addEventListener('click', e => { const a = e.target?.closest?.('a[href], area[href]'); if (a && !a.hasAttribute('download')) away(a.href, a.target); }, true);
+    addEventListener('submit', e => { const f = e.target; if (f?.tagName === 'FORM') away(e.submitter?.formAction || f.action, e.submitter?.formTarget || f.target); }, true);
+    addEventListener('pagehide', flush);
+    return {
+      // The boundary client is connected: from now on changes go to the shell. A window that started without its
+      // saved settings asks for them once and takes every key the page has not changed itself meanwhile.
+      ready(client) {
+        if (!sender) sender = batch => { try { client.request('storage.save', { ops: batch }, 10000).catch(() => {}); } catch (_) {} };
+        if (seed) { flush(); return; }
+        seed = {};
+        client.request('storage.load', {}, 10000).then(v => {
+          const store = pairs(v?.store); let any = false;
+          if (!cleared) for (const [k, x] of store) if (!changed.has(k) && local.get(k) !== x) { local.set(k, x); any = true; }
+          if (any) { keep(); try { dispatchEvent(new StorageEvent('storage', { key: null })); } catch (_) {} }
+        }, () => {}).finally(flush);
+      },
+    };
+  })() : null;
   let boundaryLoad = null;
   function boundaryClient() {
     if (!opaque) return Promise.resolve(null);
@@ -60,7 +136,7 @@
   // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
   // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
   const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
-    onCapture: d => boundaryCapture.notice(d), onReady: () => boundaryCapture.hello(), keys: () => keyList(document), press: key => keyPress(key) });
+    onCapture: d => boundaryCapture.notice(d), onReady: () => { boundaryCapture.hello(); if (boundaryStorage && window.WizBoundaryClient) boundaryStorage.ready(window.WizBoundaryClient); }, keys: () => keyList(document), press: key => keyPress(key) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
   const localHolds = new Map();

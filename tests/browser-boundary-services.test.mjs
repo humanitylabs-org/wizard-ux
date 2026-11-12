@@ -572,3 +572,15 @@ test('capture: a take still held when the shell reloaded is discarded, never lis
   assert.deepEqual(R.asked.at(-1), ['cancel', 't1']);
   assert.equal(ls.getItem('wos.capture.held.v1'), null);
 });
+
+test('saved settings: storage.load / storage.save always use the window\'s own app id, never one the page names', () => {
+  const calls = [];
+  const f = fixture();
+  f.B.appStorage = { load: id => { calls.push(['load', id]); return { store: new Map([['a', 'b']]) }; }, save: (id, ops) => { calls.push(['save', id, ops]); return true; } };
+  assert.equal(f.call('storage.save', { ops: [{ k: 'a', v: 'b' }], appId: 'other' }), true);
+  assert.deepEqual(Object.fromEntries(f.call('storage.load', { appId: 'other' }).store), { a: 'b' });
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['save', 'morning-report', [{ k: 'a', v: 'b' }]], ['load', 'morning-report']]);
+  f.B.readyNow = false;
+  assert.throws(() => f.call('storage.save', { ops: [{ k: 'x', v: 'y' }] }), /not verified/);
+  assert.equal(calls.length, 2, 'a window that is not the verified app saves nothing');
+});

@@ -16,7 +16,8 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
   window.probe = async () => {
     const out = { origin: self.origin, locationOrigin: location.origin };
     try { out.parentDoc = !!parent.document; } catch (e) { out.parentDoc = 'blocked:' + e.name; }
-    try { out.storage = typeof localStorage.getItem('x'); } catch (e) { out.storage = 'blocked:' + e.name; }
+    // The page's localStorage is its own (the app kit's stand-in, slice 34) or refused, never the shell's.
+    try { out.storage = localStorage.getItem('shell') ?? (Object.keys(localStorage).length ? 'keys:' + Object.keys(localStorage) : 'own'); } catch (e) { out.storage = 'blocked:' + e.name; }
     try { const r = await fetch('/wizard/v1/threads', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } }); out.owner = r.status; } catch (e) { out.owner = 'blocked:' + e.name; }
     return out;
   };
@@ -84,7 +85,7 @@ const server = http.createServer((req, res) => {
   if (probe.origin !== 'null') fails.push('app origin is not opaque');
   if (probe.locationOrigin !== new URL(base).origin) fails.push('location.origin');
   if (!String(probe.parentDoc).startsWith('blocked')) fails.push('app reached parent.document');
-  if (!String(probe.storage).startsWith('blocked')) fails.push('app reached shell storage');
+  if (!String(probe.storage).startsWith('blocked') && probe.storage !== 'own') fails.push('app reached shell storage');
   if (!ownerCall || ownerCall.token || ownerCall.origin !== 'null') fails.push('owner call from the app was not opaque/tokenless');
   if (r1 !== 'pending' || r2 !== 'pending') fails.push('back result');
   if (!steps.includes('app-back')) fails.push('app Back did not run');

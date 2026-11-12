@@ -135,6 +135,8 @@
     // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.
     const opaque = !!window.WizBrowserBoundary?.enabled;
     if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
+    // Its saved settings ride along as the frame's name, set before the frame exists (the page reads them as it loads).
+    if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(id); if (seed) frame.name = seed; }
     const saved = read();
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.

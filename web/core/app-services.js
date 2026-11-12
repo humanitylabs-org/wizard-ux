@@ -1287,6 +1287,10 @@
       if (method === 'vault.has' || method === 'vault.seal' || method === 'vault.open' || method === 'vault.forget') return boundaryVault(st, frame, method.slice(6), args);
       if (['identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'].includes(method)) return boundaryIdentity(st, frame, method.slice(9), args);
       if (method.startsWith('capture.')) return boundaryCapture(st, frame, method, args, ctx);
+      // The app's own saved settings (its localStorage stand-in, core/app-client.js): always the window's installed
+      // app id, never one the page names.
+      if (method === 'storage.load') return window.WizBrowserBoundary.appStorage.load(st.appId);
+      if (method === 'storage.save') return window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {

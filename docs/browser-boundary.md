@@ -194,6 +194,18 @@ On:
 - Voice commands stay closed under the boundary: an app's `voice.commands` claim must answer synchronously while the
   shell parses a held-orb command, which a message channel can't do, and no installed app registers one (apps declare
   spoken words as data, `voice_routes`, which the shell opens itself and which work as before).
+- Saved settings: the browser refuses `localStorage` and `sessionStorage` to an opaque page (any use throws), so
+  `core/app-client.js` gives the page stand-ins with the same methods (named access, `key()`, `length`,
+  `QuotaExceededError` over 512K characters). The shell keeps each app's `localStorage` in its own storage
+  (`wos.app-storage.v1.<appId>`, 1.5M characters for all apps together), keyed by the window's installed app id, never
+  one the page names (`storage.save` with the page's changes, `storage.load`). A page reads its settings while it
+  loads, before any message can arrive, so a new window gets them in the frame's name: `frameAttributes(url, appId)`
+  in the phone and desktop markup, `storageName(appId)` for the pinned app. The page keeps both in the name as it
+  changes them, so a reload or a link to another page of the app keeps them too; `sessionStorage` never leaves the
+  window. A window that started without them (the Welcome's frames) asks once and fires a `storage` event. A link or
+  form that takes the window to another site clears the name first (the app's own scripts hold the data anyway).
+  Not covered: IndexedDB, Cache Storage and cookies; the copy stays after an app is removed. Proof:
+  `tests/qa-browser-boundary-storage.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -203,7 +215,8 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
-- Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). The
+- Most apps still need their own backend calls (and IndexedDB or cookies, where they use them) to work from an opaque
+  origin (wizard-os#385); `localStorage` and `sessionStorage` work (above). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly

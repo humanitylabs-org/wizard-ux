@@ -269,8 +269,8 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
     assert.ok(b < html.indexOf('<script src="core/appearance-host.js"></script>') && b < html.indexOf('<script src="core/app-services.js"></script>'), page);
   }
   const gate = v => "${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(" + v + ") : ''}";
-  assert.ok(read('web/app.js').includes('<iframe class="appframe"' + gate('frameUrl')), 'phone app frames');
-  assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate('url')), 'desktop app frames');
+  assert.ok(read('web/app.js').includes('<iframe class="appframe"' + gate('frameUrl, a.id')), 'phone app frames');
+  assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate('url, a.id')), 'desktop app frames');
   const services = read('web/core/app-services.js');
   assert.match(services, /if \(window\.WizBrowserBoundary\?\.owns\(frame\)\) return window\.WizBrowserBoundary\.back\(frame, onRoot\);/);
   assert.match(services, /window\.WizBrowserBoundary\?\.enabled \? window\.WizBrowserBoundary\.attach\(frame\) : null/);
@@ -896,4 +896,58 @@ test('app keys: ⌥E/U/I in a text field stay accents on a Mac only', async () =
     k.f.a.document.activeElement = { tagName: 'INPUT', type: 'text', readOnly: false };
     assert.equal((await k.press({ key: '´', code: 'KeyE', altKey: true })).prevented, !mac, mac ? 'Mac: an accent' : 'elsewhere: the app key');
   }
+});
+
+// Slice 34: a sandboxed app's own saved settings (its localStorage stand-in in core/app-client.js) live in the shell.
+function memStorage(init = {}) {
+  const m = new Map(Object.entries(init));
+  return { get length() { return m.size; }, key: i => [...m.keys()][i] ?? null, getItem: k => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); }, removeItem: k => { m.delete(k); }, dump: () => Object.fromEntries(m) };
+}
+function storeShell(init) { const sh = shell(); sh.g.localStorage = memStorage(init); return sh; }
+
+test('saved settings: kept per installed app id, applied in order, never another app\'s', () => {
+  const sh = storeShell(), S = sh.B.appStorage;
+  assert.equal(S.save('notes', [{ k: 'draft', v: 'Buy figs' }, { k: 'mode', v: 'dark' }, { k: 'gone', v: 'x' }, { k: 'gone', d: 1 }]), true);
+  assert.deepEqual(JSON.parse(sh.g.localStorage.getItem('wos.app-storage.v1.notes')), { draft: 'Buy figs', mode: 'dark' });
+  assert.deepEqual(Object.fromEntries(S.load('notes').store), { draft: 'Buy figs', mode: 'dark' });
+  assert.equal(S.load('other').store.size, 0, 'another app reads none of it');
+  assert.equal(S.save('notes', [{ c: 1 }, { k: 'mode', v: 'light' }]), true);
+  assert.deepEqual(JSON.parse(sh.g.localStorage.getItem('wos.app-storage.v1.notes')), { mode: 'light' });
+  assert.equal(S.save('notes', [{ c: 1 }]), true);
+  assert.equal(sh.g.localStorage.getItem('wos.app-storage.v1.notes'), null, 'empty: the key goes');
+});
+
+test('saved settings: bad ids, bad changes and too much are refused whole; __proto__ is just a key', () => {
+  const sh = storeShell(), S = sh.B.appStorage;
+  for (const id of ['', 'Notes', '../x', 'agent:x', 'a'.repeat(65), null]) assert.equal(S.save(id, [{ k: 'a', v: 'b' }]), false, String(id));
+  assert.equal(S.save('notes', [{ k: 'a', v: 'b' }, { k: 'n', v: 5 }]), false);
+  assert.equal(S.save('notes', [{ k: 'a', v: 'b' }, null]), false);
+  assert.equal(S.save('notes', 'ops'), false);
+  assert.equal(sh.g.localStorage.getItem('wos.app-storage.v1.notes'), null, 'nothing of a refused batch is written');
+  assert.equal(S.save('notes', [{ k: 'big', v: 'x'.repeat(512 * 1024) }]), false, 'over 512K characters per app');
+  assert.equal(S.save('notes', [{ k: '__proto__', v: 'p' }]), true);
+  assert.deepEqual([...S.load('notes').store], [['__proto__', 'p']]);
+  assert.equal(Object.getPrototypeOf(S.load('notes').store), Map.prototype);
+});
+
+test('saved settings: all apps together stay under 1.5M characters of the shell\'s storage', () => {
+  const half = 'y'.repeat(500 * 1024);
+  const sh = storeShell({ 'wos.app-storage.v1.a': JSON.stringify({ k: half }), 'wos.app-storage.v1.b': JSON.stringify({ k: half }), 'wos.app-storage.v1.c': JSON.stringify({ k: half }) });
+  assert.equal(sh.B.appStorage.save('notes', [{ k: 'k', v: 'z'.repeat(60 * 1024) }]), false);
+  assert.equal(sh.B.appStorage.save('a', [{ k: 'k', v: 'small' }]), true, 'an app may still shrink its own');
+});
+
+test('saved settings: a new app window gets them in its frame name, escaped for the markup', () => {
+  const sh = storeShell(), B = sh.B;
+  assert.match(B.frameAttributes('/notes/', 'notes'), /^sandbox="allow-scripts allow-forms allow-downloads"$/, 'nothing saved: no name');
+  B.appStorage.save('notes', [{ k: 'q"<b>&', v: '"x"' }]);
+  const attrs = B.frameAttributes('/notes/', 'notes');
+  const m = attrs.match(/^sandbox="allow-scripts allow-forms allow-downloads" name="([^"]*)"$/);
+  assert.ok(m, attrs);
+  const name = m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  assert.equal(name, B.storageName('notes'));
+  assert.deepEqual(JSON.parse(name.slice('wzst1:'.length)), { l: { 'q"<b>&': '"x"' } });
+  assert.doesNotMatch(B.frameAttributes('/notes/'), /name=/, 'no app id: no name');
+  assert.equal(B.frameAttributes('/wizard-os-home/store/', 'notes'), '', 'the shell\'s own pages stay as they are');
 });
