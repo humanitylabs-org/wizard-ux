@@ -229,8 +229,17 @@ On:
   document ends them all. `EventSource` to this host goes through that streamed `fetch` too (a stand-in with
   `readyState`, named events, `lastEventId`, `retry:` and reconnect with `Last-Event-ID`, `close()`; an answer that is
   not a 200 `text/event-stream` closes it), so a live feed from the app's own backend arrives as it is written; another
-  site's stream uses the browser's own. Not covered: `WebSocket`. Proof: `tests/qa-browser-boundary-backend.cjs`,
-  `tests/qa-browser-boundary-xhr.cjs`, `tests/qa-browser-boundary-stream.cjs`.
+  site's stream uses the browser's own. `WebSocket` to this host goes through the shell as well (the Recorder's live
+  transcript refuses `Origin: null`): app-client.js puts a stand-in in its place and the shell opens the socket
+  (`ws.open`) with this host's origin and cookies, on the same rule (the window's own app path, never an owner route).
+  The server's messages and its close come as `notice` `ws` (text or bytes; code, reason, clean) to the window's
+  current document only; the page's messages go as `ws.send` (in order, at most 8 on the way, a Blob read first;
+  4 MB per message, a server not reading past 16 MB fails it) and its `close(code, reason)` as `ws.close`. At most 8
+  open per window; a new document or closing the window closes them at the server. The stand-in keeps `readyState`,
+  `protocol`, `extensions`, `binaryType`, `bufferedAmount` and the open/message/error/close events. Another site, an
+  address outside the path or a window with no shell channel gets the browser's own `WebSocket`, as before. Proof:
+  `tests/qa-browser-boundary-backend.cjs`, `tests/qa-browser-boundary-xhr.cjs`, `tests/qa-browser-boundary-stream.cjs`,
+  `tests/qa-browser-boundary-websocket.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -240,9 +249,9 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
-- Apps that use `WebSocket`, IndexedDB or cookies read by their own scripts still need work from an opaque origin
-  (wizard-os#385); `fetch` (also streamed), `XMLHttpRequest` and `EventSource` to the app's own backend, `localStorage`
-  and `sessionStorage` work (above). The
+- Apps that use IndexedDB or cookies read by their own scripts still need work from an opaque origin
+  (wizard-os#385); `fetch` (also streamed), `XMLHttpRequest`, `EventSource` and `WebSocket` to the app's own backend,
+  `localStorage` and `sessionStorage` work (above). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly

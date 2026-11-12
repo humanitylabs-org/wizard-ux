@@ -153,8 +153,7 @@
    * the status, headers and body. An address the shell won't fetch for this app (`outside`: another app, an owner
    * route), or a window with no shell channel, gets the page's own fetch unchanged, as before. The body streams: the
    * shell sends the status and headers first and the body in pieces as they arrive (`net` notices), so a reply written
-   * as it goes and server-sent events read live. XMLHttpRequest and EventSource go the same way (below). Not covered:
-   * WebSocket. */
+   * as it goes and server-sent events read live. XMLHttpRequest, EventSource and WebSocket go the same way (below). */
   let netNotice = () => {};
   if (opaque && typeof window.fetch === 'function' && typeof Request === 'function') (() => {
     const native = window.fetch, NULL_BODY = [101, 103, 204, 205, 304];
@@ -162,6 +161,7 @@
      * it has taken (net.ack, every ACK_STEP bytes), and the shell reads on only while little waits in between. Cancel
      * (the page's reader, or its AbortSignal) stops the call in the shell too (net.abort). */
     const streams = new Map(), ACK_STEP = 256 * 1024, QUEUE = 1024 * 1024;
+    const sockets = new Map(); // this page's own WebSockets through the shell (below), by key
     function bodyStream(key, c, onEnd) {
       let ctrl = null, got = 0, acked = 0, done = false;
       const finish = () => { if (done) return false; done = true; streams.delete(key); try { onEnd(); } catch (_) {} return true; };
@@ -184,7 +184,11 @@
       return s;
     }
     // A new shell channel (the window reattached) ends every open stream: the shell stopped them.
-    netNotice = d => { if (d?.event === 'reset') { for (const s of [...streams.values()]) s.on({ event: 'error' }); return; } streams.get(d?.key)?.on(d); };
+    netNotice = d => {
+      if (d?.event === 'reset') { for (const s of [...streams.values()]) s.on({ event: 'error' }); for (const w of [...sockets.values()]) w({ event: 'reset' }); return; }
+      if (d?.ws === true) { sockets.get(d.key)?.(d); return; }
+      streams.get(d?.key)?.on(d);
+    };
     const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
     // The shell channel: a sandboxed app window gets its hello at once; a page nobody attached (no channel within 10 s)
     // keeps its own fetch.
@@ -480,6 +484,142 @@
       Object.defineProperty(window, 'XMLHttpRequest', { configurable: true, writable: true, value: XMLHttpRequest });
       Object.defineProperty(window, 'XMLHttpRequestUpload', { configurable: true, writable: true, value: XMLHttpRequestUpload });
     } catch (_) {}
+    /* WebSocket to this host goes through the shell too (ws.open): an opaque page's own socket goes out with
+     * `Origin: null` and no cookies, and a server that checks the Origin (the Recorder's live transcript) refuses it.
+     * The shell opens it inside this window's own app path only. The server's messages come back as `ws` notices; the
+     * page's go as ws.send, in the page's order, at most WS_INFLIGHT on the way at once (bufferedAmount counts the
+     * rest). It keeps the usual shape: readyState, url, protocol, extensions, binaryType (blob or arraybuffer),
+     * bufferedAmount, open / message / error / close, send (text, ArrayBuffer, a view or a Blob) and close(code,
+     * reason). Another site's socket, an address the shell won't open for this app (`outside`), or a window with no
+     * shell channel gets the browser's own WebSocket, as before. */
+    if (typeof window.WebSocket === 'function' && typeof EventTarget === 'function') {
+      const NativeWS = window.WebSocket, WS_EVENTS = ['open', 'message', 'error', 'close'], WS_INFLIGHT = 8;
+      const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/, bytes = t => new TextEncoder().encode(t).byteLength;
+      const wsFail = (what, m, name) => new DOMException("Failed to " + what + " 'WebSocket': " + m, name);
+      const isBlob = x => typeof Blob === 'function' && x instanceof Blob;
+      class WebSocket extends EventTarget {
+        #url = ''; #ready = 0; #protocol = ''; #ext = ''; #bin = 'blob'; #buffered = 0; #key = ''; #c = null; #native = null;
+        #out = []; #busy = 0; #chain = Promise.resolve(); #early = [];
+        constructor(url, protocols) {
+          if (arguments.length < 1) throw new TypeError("Failed to construct 'WebSocket': 1 argument required, but only 0 present.");
+          let u;
+          try { u = new URL(String(url), location.href); } catch (_) { throw wsFail('construct', "The URL '" + url + "' is invalid.", 'SyntaxError'); }
+          if (u.protocol === 'http:') u.protocol = 'ws:'; else if (u.protocol === 'https:') u.protocol = 'wss:';
+          if (!/^wss?:$/.test(u.protocol)) throw wsFail('construct', "The URL's scheme must be either 'http', 'https', 'ws', or 'wss'.", 'SyntaxError');
+          u.hash = '';
+          const list = protocols === undefined ? [] : typeof protocols === 'string' ? [protocols] : Array.from(protocols, String);
+          if (list.some(p => !TOKEN.test(p)) || new Set(list).size !== list.length) throw wsFail('construct', 'The subprotocol is invalid or duplicated.', 'SyntaxError');
+          const own = new URL(u.href); own.protocol = u.protocol === 'wss:' ? 'https:' : 'http:';
+          if (own.origin !== location.origin) return protocols === undefined ? new NativeWS(url) : new NativeWS(url, protocols);
+          super();
+          for (const t of WS_EVENTS) {
+            let h = null;
+            Object.defineProperty(this, 'on' + t, { configurable: true, enumerable: true, get: () => h,
+              set: v => { if (h) this.removeEventListener(t, h); h = typeof v === 'function' ? v : null; if (h) this.addEventListener(t, h); } });
+          }
+          this.#url = u.href;
+          this.#key = 'ws-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          this.#open(list, protocols);
+        }
+        get url() { return this.#url; }
+        get readyState() { return this.#native ? this.#native.readyState : this.#ready; }
+        get protocol() { return this.#native ? this.#native.protocol : this.#protocol; }
+        get extensions() { return this.#native ? this.#native.extensions : this.#ext; }
+        get bufferedAmount() { return this.#native ? this.#native.bufferedAmount : this.#buffered; }
+        get binaryType() { return this.#bin; }
+        set binaryType(v) { if (v !== 'blob' && v !== 'arraybuffer') return; this.#bin = v; if (this.#native) this.#native.binaryType = v; }
+        async #open(list, protocols) {
+          const c = await channel();
+          if (this.#ready !== 0) return this.#gone(1006, '', false); // closed while it waited for the shell
+          if (!c) return this.#viaNative(protocols);
+          this.#c = c; sockets.set(this.#key, d => this.#hear(d));
+          let v;
+          try { v = await c.request('ws.open', { key: this.#key, url: this.#url, protocols: list }, 60000); } catch (err) {
+            sockets.delete(this.#key); this.#c = null;
+            if ((err?.code === 'outside' || err?.code === 'unavailable') && this.#ready === 0) return this.#viaNative(protocols);
+            return this.#gone(1006, '', false);
+          }
+          if (this.#ready !== 0) return; // close() meanwhile: its close comes from the shell
+          this.#protocol = typeof v?.ws?.protocol === 'string' ? v.ws.protocol : '';
+          this.#ext = typeof v?.ws?.extensions === 'string' ? v.ws.extensions : '';
+          this.#ready = 1; this.dispatchEvent(new Event('open'));
+          for (const d of this.#early.splice(0)) this.#hear(d);
+          this.#pump();
+        }
+        // A notice from the shell for this socket: a message from the server, its close, or the end of the channel.
+        #hear(d) {
+          if (d.event === 'reset') return this.#gone(1006, '', false);
+          if (this.#ready === 0) { this.#early.push(d); return; }
+          if (d.event === 'close') return this.#gone(d.code, d.reason, d.wasClean);
+          if (d.event !== 'message' || this.#ready !== 1) return;
+          const data = typeof d.data !== 'string' && this.#bin === 'blob' ? new Blob([d.data]) : d.data;
+          this.dispatchEvent(new MessageEvent('message', { data, origin: new URL(this.#url).origin }));
+        }
+        #gone(code, reason, clean) {
+          if (this.#ready === 3) return;
+          this.#ready = 3; this.#out.length = 0; this.#early.length = 0;
+          sockets.delete(this.#key);
+          if (!clean) this.dispatchEvent(new Event('error'));
+          this.dispatchEvent(new CloseEvent('close', { code, reason: reason || '', wasClean: !!clean }));
+        }
+        #viaNative(protocols) {
+          if (this.#ready !== 0) return this.#gone(1006, '', false);
+          let n;
+          try { n = protocols === undefined ? new NativeWS(this.#url) : new NativeWS(this.#url, protocols); } catch (_) { return this.#gone(1006, '', false); }
+          this.#native = n; n.binaryType = this.#bin;
+          n.addEventListener('open', () => this.dispatchEvent(new Event('open')));
+          n.addEventListener('message', e => this.dispatchEvent(new MessageEvent('message', { data: e.data, origin: e.origin })));
+          n.addEventListener('error', () => this.dispatchEvent(new Event('error')));
+          n.addEventListener('close', e => { this.#ready = 3; this.dispatchEvent(new CloseEvent('close', { code: e.code, reason: e.reason, wasClean: e.wasClean })); });
+        }
+        send(data) {
+          if (arguments.length < 1) throw new TypeError("Failed to execute 'send' on 'WebSocket': 1 argument required, but only 0 present.");
+          if (this.#native) return this.#native.send(data);
+          if (this.#ready === 0) throw wsFail('execute \'send\' on', 'Still in CONNECTING state.', 'InvalidStateError');
+          let item;
+          if (Object.prototype.toString.call(data) === '[object ArrayBuffer]') item = data.slice(0);
+          else if (ArrayBuffer.isView(data)) item = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+          else if (isBlob(data)) item = data;
+          else item = String(data);
+          const n = typeof item === 'string' ? bytes(item) : isBlob(item) ? item.size : item.byteLength;
+          this.#buffered += n;
+          if (this.#ready !== 1) return; // closing or closed: counted, never sent (as the browser does)
+          this.#out.push([item, n]); this.#pump();
+        }
+        // Sends what waits, in order (a Blob is read first, on the same chain), with at most WS_INFLIGHT on the way.
+        #pump() {
+          while (this.#ready === 1 && this.#busy < WS_INFLIGHT && this.#out.length) {
+            const [item, n] = this.#out.shift(), c = this.#c, key = this.#key;
+            this.#busy++;
+            const done = () => { this.#busy--; this.#buffered = Math.max(0, this.#buffered - n); this.#pump(); };
+            // The chain waits only for a Blob's bytes, never for the shell's answer, so up to WS_INFLIGHT are on the way.
+            this.#chain = this.#chain.then(async () => {
+              const data = isBlob(item) ? await item.arrayBuffer() : item;
+              if (this.#ready !== 1 || this.#c !== c) return done();
+              c.request('ws.send', { key, data }, 30000).then(done, () => { done(); this.#gone(1006, '', false); });
+            }).catch(done);
+          }
+        }
+        close(code, reason) {
+          if (code !== undefined) {
+            code = Number(code);
+            if (!Number.isInteger(code) || (code !== 1000 && (code < 3000 || code > 4999))) throw wsFail('execute \'close\' on', 'The close code must be either 1000, or between 3000 and 4999.', 'InvalidAccessError');
+          }
+          if (reason !== undefined) { reason = String(reason); if (bytes(reason) > 123) throw wsFail('execute \'close\' on', 'The close reason must not be greater than 123 UTF-8 bytes.', 'SyntaxError'); }
+          if (this.#native) return this.#native.close(...arguments);
+          if (this.#ready >= 2) return;
+          this.#ready = 2; this.#out.length = 0;
+          // Not open yet: it never opens (error, then close 1006). Open: the closing handshake runs in the shell and its
+          // close comes back as a notice.
+          if (this.#c) this.#c.request('ws.close', { key: this.#key, ...(code !== undefined ? { code } : {}), ...(reason !== undefined ? { reason } : {}) }, 10000).catch(() => this.#gone(1006, '', false));
+        }
+      }
+      for (const [k, v] of Object.entries({ CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 })) {
+        Object.defineProperty(WebSocket, k, { value: v, enumerable: true });
+        Object.defineProperty(WebSocket.prototype, k, { value: v, enumerable: true });
+      }
+      try { Object.defineProperty(window, 'WebSocket', { configurable: true, writable: true, value: WebSocket }); } catch (_) {}
+    }
   })();
   let boundaryLoad = null;
   function boundaryClient() {
