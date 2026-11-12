@@ -208,6 +208,19 @@ On:
   change the shell could not keep (all apps full) is undone in the page, with a `storage` event.
   Not covered: IndexedDB, Cache Storage and cookies; the copy stays after an app is removed. Proof:
   `tests/qa-browser-boundary-storage.cjs`.
+- The app's own backend: an opaque page's own `fetch` to this host goes out with `Origin: null` and no cookies, and the
+  browser hides the answer (CORS), so most apps could not load their data. `core/app-client.js` sends a `fetch` to this
+  host through the shell (`net.fetch`) and gives the page a normal `Response` (status, headers, body, `url`,
+  `redirected`; `AbortSignal` works). `core/app-services.js` makes the call only inside the window's own app path (the
+  same rule as its links), never to an owner route (`WizBrowserBoundary.ownerRoute`, the same list as
+  `core/shell-token.js`, so the token is never added) and drops a page's `X-Wizard-Shell-Token` header. The browser
+  hides where a redirect goes until it has followed it, so only GET and HEAD follow one (an answer from outside the
+  path is refused); any other method's redirect is never followed, so a POST is never sent on to another app. An abort
+  stops the call in the shell too (`net.abort`, the window's own open call only). At most 8 at once per window, apart from the other services, and 32 MB each
+  way. A call open when the window gets a new channel fails instead of running twice. An address outside the path
+  (another app, an owner route) gets the page's own fetch unchanged, so it still goes out with `Origin: null`, no cookie
+  and no token. Not covered: `XMLHttpRequest`, `EventSource`, `WebSocket` and streamed answers (the body arrives
+  whole). Proof: `tests/qa-browser-boundary-backend.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -217,8 +230,9 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
-- Most apps still need their own backend calls (and IndexedDB or cookies, where they use them) to work from an opaque
-  origin (wizard-os#385); `localStorage` and `sessionStorage` work (above). The
+- Apps that use `XMLHttpRequest`, `EventSource`, `WebSocket`, streamed answers, IndexedDB or cookies read by their own
+  scripts still need work from an opaque origin (wizard-os#385); `fetch` to the app's own backend, `localStorage` and
+  `sessionStorage` work (above). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly

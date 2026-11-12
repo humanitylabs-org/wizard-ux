@@ -41,7 +41,8 @@
  *    approval sheet only while that window is in front, back only to the document that asked); and recording
  *    (`capture.*`: the shell's one recorder, for the window's own app; preparing or starting a new recording needs a
  *    real tap in that window, events stream back as `notice` `capture`); and the app's own saved settings
- *    (`storage.load`, `storage.save`: see appStorage below).
+ *    (`storage.load`, `storage.save`: see appStorage below); and the app's calls to its own backend (`net.fetch`: see
+ *    net below).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
  *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`, Wizard ID's public info, signed event or
@@ -59,6 +60,13 @@
  *    path (the page drops it outside that path), because a page reads its settings while it loads, before any message
  *    can arrive; `storage.load` answers a window that got none, and
  *    `storage.save` takes the page's changes (set, remove, clear) for the window's own app id only.
+ *  - net: an opaque page's own fetch to its app's backend goes out with `Origin: null` and no cookies, and the browser
+ *    hides the answer (CORS), so app-client.js sends a `fetch` to this host as `net.fetch` and the shell makes it.
+ *    core/app-services.js makes it only inside the window's own app path (the same rule as its links), never to an
+ *    owner route (ownerRoute, the same list as core/shell-token.js, so no token is ever added). Only GET and HEAD
+ *    follow a redirect, and only to an answer inside that path; any other method's redirect is never followed.
+ *    `net.abort` stops one of the window's own open calls. At most NET_INFLIGHT at once per window, apart from the other services, and
+ *    NET_MAX bytes each way. What crosses back is the status, the headers the browser shows a page and the body.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -75,13 +83,19 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save'];
+    'storage.load', 'storage.save', 'net.fetch', 'net.abort'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
   // with the tap it is handed (a fresh tap, or a recording this window prepared on one; a start on touch-down is held
   // until a tap confirms it, capture.confirm).
   const TAPPED = ['share.text', 'share.file', 'share.wizard', 'capture.prepare'], INFLIGHT = 4;
+  // An app's own backend calls (net.fetch): a separate budget, so a slow call never blocks Back or the other services.
+  const NET_INFLIGHT = 8, NET_MAX = 32 * 1024 * 1024;
+  // Owner routes on this origin: the same list as core/shell-token.js OWNER (a test keeps them identical). An app's
+  // net.fetch never goes there.
+  const OWNER = /^\/(?:wizard\/|api\/|v1\/|wizard-os-home\/(?:api|store-install)\/|wizard-ux\/(?:api|store-install)\/)/;
+  const ownerRoute = u => { try { const x = new URL(String(u), location.href); return x.origin === location.origin && (OWNER.test(x.pathname) || x.pathname.includes('//')); } catch (_) { return true; } };
   const NOTICE_REASONS = ['visible', 'focus', 'poll', 'agent'];
   // A share handed to this app (share.pending): only the item's own share fields, never the shell's record of it.
   const SHARE_KINDS = ['text', 'url', 'image', 'file'], SHARE_FIELDS = [['text', 200000], ['url', 8192], ['title', 1024], ['name', 255], ['mime', 255], ['target', 160]];
@@ -102,6 +116,8 @@
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && 'capture' in v) return { capture: plain(v.capture) };
     // The app's own saved settings (storage.load): string keys and values only.
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.store instanceof Map) return { store: Object.fromEntries([...v.store].filter(([k, x]) => typeof k === 'string' && typeof x === 'string')) };
+    // An app's own backend answer (net.fetch): status, the headers a page may see, the body bytes and the final address.
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.net && typeof v.net === 'object') return { net: netShape(v.net) };
     if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
     if (typeof v === 'string') return v.length <= 32 ? v : null;
@@ -114,6 +130,12 @@
       return identityShape(v);
     }
     return null;
+  }
+  function netShape(r) {
+    const status = Number.isInteger(r.status) && r.status >= 200 && r.status <= 599 ? r.status : 502;
+    const headers = Array.isArray(r.headers) ? r.headers.slice(0, 200).filter(h => Array.isArray(h) && h.length === 2 && typeof h[0] === 'string' && typeof h[1] === 'string' && h[0].length <= 256 && h[1].length <= 16384).map(h => [h[0], h[1]]) : [];
+    const body = Object.prototype.toString.call(r.body) === '[object ArrayBuffer]' && r.body.byteLength <= NET_MAX ? r.body : null;
+    return { status, statusText: typeof r.statusText === 'string' ? r.statusText.slice(0, 256) : '', headers, body, url: typeof r.url === 'string' && r.url.length <= 8192 ? r.url : '', redirected: r.redirected === true };
   }
   // Plain data only: JSON values, Blobs (recorded audio) and binary PCM. No functions, no shell objects, bounded size.
   const BINARY = v => Object.prototype.toString.call(v) === '[object ArrayBuffer]' || ArrayBuffer.isView(v);
@@ -203,7 +225,7 @@
   }
   function revoke(st) {
     for (const [id, wait] of pending) if (wait.st === st) { clearTimeout(wait.timer); pending.delete(id); wait.resolve({ status: 'stale' }); }
-    st.channel = newChannel(); st.ready = false; st.backPending = false; st.inflight = 0; st.appKeys = [];
+    st.channel = newChannel(); st.ready = false; st.backPending = false; st.inflight = 0; st.netInflight = 0; st.appKeys = [];
     // A new document: whatever field it had focused is gone, and old dictation seals no longer match (gen).
     st.gen = (st.gen || 0) + 1; if (st.field) { st.field = false; fieldChanged(); }
     themedWin(st.frame)?.classList.remove('wz-themed');
@@ -343,15 +365,18 @@
       // The tap must be in this window: a tap or key elsewhere in the shell also activates the shell, but then this
       // frame no longer has focus (a click or key in the frame gives it focus).
       if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', d.method.startsWith('capture.') ? 'Recording needs a tap in the app' : 'Share needs a tap in the app');
-      if ((st.inflight || 0) >= INFLIGHT) return answer(undefined, 'busy', 'Too many app requests at once');
+      const net = d.method === 'net.fetch', slot = net ? 'netInflight' : 'inflight';
+      if ((st[slot] || 0) >= (net ? NET_INFLIGHT : INFLIGHT)) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
       // Whether this request came right after a real tap or key in this focused, visible window (see TAPPED).
       const tapped = activated() && visible(st.frame) && focusedFrame(st.frame), lifted = tapped || frameActivated(st.frame);
       try { value = server(st.frame, d.method, d.args, Object.freeze({ tapped, lifted })); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
       if (!value || typeof value.then !== 'function') return answer(shape(value));
-      st.inflight = (st.inflight || 0) + 1;
-      Promise.resolve(value).then(v => answer(shape(v)), err => answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)))
-        .finally(() => { if (st.channel === channel) st.inflight--; });
+      st[slot] = (st[slot] || 0) + 1;
+      // A refusal may carry its own code (net.fetch: `outside`, so the app's own fetch goes out unchanged instead).
+      const code = err => (net && err?.code === 'outside' ? 'outside' : 'refused');
+      Promise.resolve(value).then(v => answer(shape(v)), err => answer(undefined, code(err), String(err?.message || 'Refused').slice(0, 200)))
+        .finally(() => { if (st.channel === channel) st[slot]--; });
       return;
     }
     if (d.op === 'reply' && typeof d.id === 'string') {
@@ -431,6 +456,9 @@
     storageName,
     // For core/app-services.js only, always with the frame's own installed app id (never one the page names).
     appStorage: Object.freeze({ load: id => ({ store: storeRead(id) }), save: storeApply }),
+    // For core/app-services.js net.fetch: whether a URL is an owner route on this origin (never fetched for an app).
+    ownerRoute,
+    netMax: NET_MAX,
     shellPage,
     owns: frame => sessions.has(frame),
     // Whether the app document now in this frame answered on its current channel (`wizard:boundary-ready` fires then).

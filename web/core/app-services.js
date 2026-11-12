@@ -1223,6 +1223,67 @@
     }
     return out({ id: session.id, info: captureInfo(session), ...(e.held ? { held: true } : {}) });
   }
+  /* An app's own backend call under the boundary (net.fetch, docs/browser-boundary.md): the page's fetch to this host
+   * is made here, with the shell's credentials for this host, but only inside the window's own app path (within(), the
+   * same rule as its links) and never to an owner route, so the shell token is never added. The browser hides where a
+   * redirect goes until it has followed it, so only GET and HEAD follow one (and an answer from outside the path is
+   * refused); a POST or any other method is never sent on to a redirect's address, which may be another app. An address outside the path answers `outside`: the page's own fetch then goes out
+   * unchanged (Origin: null), as before. */
+  const NET_METHOD = /^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/, NET_CACHE = ['default', 'no-store', 'reload', 'no-cache', 'force-cache'];
+  const NET_DROP = /^(?:x-wizard-shell-token|cookie|cookie2|host|origin|referer)$/i;
+  const outside = () => Object.assign(fault('Outside this app'), { code: 'outside' });
+  const netTarget = (st, href) => {
+    let u; try { u = new URL(String(href)); } catch (_) { return null; }
+    if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
+    return within(u, st.url) && !window.WizBrowserBoundary.ownerRoute(u.href) ? u : null;
+  };
+  async function boundaryNet(st, args) {
+    const B = window.WizBrowserBoundary, MAX = B.netMax;
+    if (!args || typeof args !== 'object' || typeof args.url !== 'string' || args.url.length > 8192) throw fault('Bad request');
+    const u = netTarget(st, args.url); if (!u) throw outside();
+    const method = typeof args.method === 'string' ? args.method.toUpperCase() : 'GET';
+    if (!NET_METHOD.test(method)) throw fault('Method not allowed');
+    const headers = new Headers();
+    if (Array.isArray(args.headers)) for (const h of args.headers.slice(0, 100)) {
+      if (!Array.isArray(h) || typeof h[0] !== 'string' || typeof h[1] !== 'string' || h[0].length > 256 || h[1].length > 16384 || NET_DROP.test(h[0])) continue;
+      try { headers.append(h[0], h[1]); } catch (_) {}
+    }
+    let body;
+    if (args.body != null) {
+      if (Object.prototype.toString.call(args.body) !== '[object ArrayBuffer]' || args.body.byteLength > MAX) throw fault('Request too large');
+      if (method !== 'GET' && method !== 'HEAD') body = args.body;
+    }
+    const gen = B.gen(st.frame), safe = method === 'GET' || method === 'HEAD';
+    // The page can stop its own call (net.abort with this call's key): one key per open call, this window's only.
+    const key = typeof args.key === 'string' && args.key.length <= 64 ? args.key : '';
+    const stop = new AbortController(); st.netCalls ||= new Map();
+    if (key) { if (st.netCalls.has(key)) throw fault('Bad request'); st.netCalls.set(key, stop); }
+    try {
+      const res = await window.fetch(u.href, { method, headers, body, credentials: args.credentials === 'omit' ? 'omit' : 'same-origin', redirect: safe ? 'follow' : 'manual',
+        cache: NET_CACHE.includes(args.cache) ? args.cache : 'default', referrerPolicy: 'no-referrer', signal: stop.signal });
+      if (res.type === 'opaqueredirect') throw fault('Redirect not followed for ' + method);
+      // A redirect may not leave the app's path (another app, an owner route): its answer stays with the shell.
+      if (!netTarget(st, res.url || u.href)) { try { res.body?.cancel(); } catch (_) {} throw fault('Redirected outside this app'); }
+      return await netAnswer(st, res, u, method, gen, MAX);
+    } finally { if (key && st.netCalls.get(key) === stop) st.netCalls.delete(key); }
+  }
+  async function netAnswer(st, res, u, method, gen, MAX) {
+    const B = window.WizBrowserBoundary;
+    let out = null;
+    if (res.body && method !== 'HEAD') {
+      const reader = res.body.getReader(), parts = []; let n = 0;
+      for (;;) {
+        const { done, value } = await reader.read(); if (done) break;
+        n += value.byteLength; if (n > MAX) { try { reader.cancel(); } catch (_) {} throw fault('Answer too large'); }
+        parts.push(value);
+      }
+      const all = new Uint8Array(n); let at = 0; for (const p of parts) { all.set(p, at); at += p.byteLength; }
+      out = all.buffer;
+    }
+    // The window loaded another page meanwhile: that page never gets this answer.
+    if (!boundaryLive(st) || B.gen(st.frame) !== gen) throw fault('App document changed');
+    return { net: { status: res.status, statusText: res.statusText, headers: [...res.headers], body: out, url: res.url || u.href, redirected: res.redirected === true } };
+  }
   if (window.WizBrowserBoundary?.serve) {
     window.WizBrowserBoundary.serve((frame, method, args, ctx) => {
       const st = frames.get(frame);
@@ -1291,6 +1352,8 @@
       // app id, never one the page names.
       if (method === 'storage.load') return window.WizBrowserBoundary.appStorage.load(st.appId);
       if (method === 'storage.save') return window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
+      if (method === 'net.fetch') return boundaryNet(st, args);
+      if (method === 'net.abort') { const c = typeof args?.key === 'string' ? st.netCalls?.get(args.key) : null; if (!c) return false; c.abort(); st.netCalls.delete(args.key); return true; }
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {
@@ -1298,6 +1361,8 @@
       if (st.tools) setTools(st, null);
       window.WizBackgroundAudio?.duck?.(st, false); // the old document's duck ends with it
       captureForget(st, window.WizBrowserBoundary.gen(frame)); // its recording events and preparations end; the recorder keeps going
+      for (const c of st.netCalls?.values() || []) c.abort(); // the old document's backend calls stop; no page gets their answers
+      st.netCalls?.clear();
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

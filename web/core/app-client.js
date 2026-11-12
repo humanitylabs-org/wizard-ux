@@ -147,6 +147,59 @@
       },
     };
   })() : null;
+  /* The app's own backend under the boundary: an opaque page's fetch to this host goes out with `Origin: null` and no
+   * cookies, and the browser hides the answer (CORS). So a fetch to this host goes through the shell (`net.fetch`), which
+   * makes it only inside this window's own app path (core/app-services.js boundaryNet) and gives back a Response with
+   * the status, headers and body. An address the shell won't fetch for this app (`outside`: another app, an owner
+   * route), or a window with no shell channel, gets the page's own fetch unchanged, as before. Not covered:
+   * XMLHttpRequest, EventSource, WebSocket and streamed answers (the whole body arrives at once). */
+  if (opaque && typeof window.fetch === 'function' && typeof Request === 'function') (() => {
+    const native = window.fetch, NULL_BODY = [101, 103, 204, 205, 304];
+    const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
+    // The shell channel: a sandboxed app window gets its hello at once; a page nobody attached (no channel within 10 s)
+    // keeps its own fetch.
+    const channel = () => boundaryClient().then(async c => { for (let i = 0; c && !c.ready && i < 100; i++) await new Promise(r => setTimeout(r, 100)); return c && c.ready ? c : null; });
+    window.fetch = function fetch(input, init) {
+      let req;
+      try { req = new Request(input, init); } catch (err) { return Promise.reject(err); }
+      // From here on the page's own fetch takes `req` (or its copy): a Request body can be read only once.
+      let u; try { u = new URL(req.url); } catch (_) { return native.call(this, req); }
+      if (u.origin !== location.origin || req.mode === 'no-cors' || req.mode === 'navigate') return native.call(this, req);
+      const signal = req.signal;
+      if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
+      const self = this, spare = req.clone();
+      // An abort before the call reaches the shell stops it from being sent at all; one after it asks the shell to stop
+      // (net.abort, by this call's own key), so it no longer runs on or holds one of the window's slots.
+      const key = 'nf-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      let sent = null;
+      const cancel = () => { if (sent) sent.request('net.abort', { key }, 5000).catch(() => {}); };
+      signal?.addEventListener('abort', cancel, { once: true });
+      const run = (async () => {
+        const body = req.method === 'GET' || req.method === 'HEAD' ? null : await req.arrayBuffer();
+        const c = await channel();
+        if (signal?.aborted) throw signal.reason ?? abortError();
+        if (!c) return native.call(self, spare);
+        let v;
+        try {
+          sent = c;
+          v = await c.request('net.fetch', { key, url: req.url, method: req.method, headers: [...req.headers], body, credentials: req.credentials, cache: req.cache }, 300000);
+        } catch (err) {
+          if (err?.code === 'outside' || err?.code === 'unavailable') return native.call(self, spare);
+          throw new TypeError('Failed to fetch');
+        }
+        const r = v?.net; if (!r || typeof r !== 'object') throw new TypeError('Failed to fetch');
+        const res = new Response(NULL_BODY.includes(r.status) || req.method === 'HEAD' ? null : r.body, { status: r.status, statusText: r.statusText || '', headers: r.headers || [] });
+        try { Object.defineProperty(res, 'url', { value: r.url || req.url }); Object.defineProperty(res, 'redirected', { value: r.redirected === true }); } catch (_) {}
+        return res;
+      })().finally(() => { sent = null; signal?.removeEventListener('abort', cancel); });
+      if (!signal) return run;
+      return new Promise((resolve, reject) => {
+        const stop = () => reject(signal.reason ?? abortError());
+        signal.addEventListener('abort', stop, { once: true });
+        run.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
+      });
+    };
+  })();
   let boundaryLoad = null;
   function boundaryClient() {
     if (!opaque) return Promise.resolve(null);
