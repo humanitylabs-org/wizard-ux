@@ -2185,3 +2185,24 @@ test('issue 1336 (Codex P2): Undo waits for the archive still in flight, then re
   assert.equal(await actFn(f, 'actRestore')('b', Promise.reject(new Error('offline'))), false, 'a failed archive still lets Undo try');
   assert.deepEqual(order, ['restore:b', 'paint']); assert.equal(f.toasts.at(-1), 'Couldn’t undo · still archived');
 });
+
+// wizard-ux issue 1358: one Channels switch. Right after Channels turn on, Chats asks the box again a few times (the
+// Agent Service reads the same switch from the synced Look file); turning them off asks for nothing.
+test('issue 1358: turning Channels on re-reads the box a few times; turning them off reads nothing', () => {
+  const a = liveSrc.indexOf('  /* One Channels switch (wizard-ux issue 1358)'), b = liveSrc.indexOf("  try { addEventListener('focus'", a);
+  assert.ok(a > 0 && b > a);
+  const timers = [], calls = [], listeners = {};
+  const L = { chanStore: { fresh: () => calls.push('store.fresh'), pull: () => calls.push('store.pull') }, chanReads: { fresh: () => calls.push('reads.fresh'), pull: () => calls.push('reads.pull') }, refresh: () => { calls.push('refresh'); return Promise.resolve(); } };
+  const ctx = vm.createContext({ L, Promise, window: { addEventListener: (n, fn) => { listeners[n] = fn; } },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length - 1; }, clearTimeout: i => { if (timers[i]) timers[i].live = false; } });
+  vm.runInContext(liveSrc.slice(a, b), ctx);
+  const flip = (id, on) => listeners['wos:tweak-choice']({ detail: { id, on } });
+  flip('wizard/desktop-chats', true);
+  assert.equal(timers.length, 0, 'another switch: nothing');
+  flip('wizard/chat-channels', true);
+  assert.deepEqual(timers.map(t => t.ms), [1500, 5000, 12000]);
+  timers[0].fn();
+  assert.deepEqual(calls, ['store.fresh', 'store.pull', 'reads.fresh', 'reads.pull', 'refresh']);
+  flip('wizard/chat-channels', false);
+  assert.equal(timers.filter(t => t.live).length, 0, 'off: pending re-reads are cancelled and none are added');
+});

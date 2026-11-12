@@ -2018,14 +2018,15 @@
     } });
   L.chanReads = channelReads({ req, emit: () => L.emit() });
   /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
-   * right after it flips ask the box again a few times (the Look file write and the service's 3 s read take a moment)
+   * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
    * instead of waiting out the store's 5-minute off interval. */
   try {
     let chanFlip = [];
     window.addEventListener('wos:tweak-choice', e => {
       if (e?.detail?.id !== 'wizard/chat-channels') return;
       chanFlip.forEach(clearTimeout);
-      chanFlip = [1500, 5000, 12000].map(ms => setTimeout(() => { L.chanStore.fresh(); L.chanStore.pull(); L.chanReads.fresh(); L.chanReads.pull(); Promise.resolve(L.refresh()).catch(() => {}); }, ms));
+      // Off: Channels stop asking at once (the store and read marks are read only while the switch is on).
+      chanFlip = !e.detail.on ? [] : [1500, 5000, 12000].map(ms => setTimeout(() => { L.chanStore.fresh(); L.chanStore.pull(); L.chanReads.fresh(); L.chanReads.pull(); Promise.resolve(L.refresh()).catch(() => {}); }, ms));
     });
   } catch (e) {}
   try { addEventListener('focus', () => { L.chanStore.fresh(); L.chanReads.fresh(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { L.chanStore.fresh(); L.chanReads.fresh(); } }); } catch (e) {}
