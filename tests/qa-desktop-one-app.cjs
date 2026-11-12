@@ -99,7 +99,9 @@ const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
           await shot('5-list-again');
           await page.keyboard.press('Escape'); await settle();
           assert.ok(await box(page, '.aad-side'), stem + ': at the list Back stays put');
-          await page.evaluate(() => __wux.openThread('qa-a')); await settle();
+          // the same chat's row again: the chat (still open behind the list)
+          await page.locator('.aad-side .aad-rw[data-sid="qa-a"] .aad-row').filter({ visible: true }).first().click(); await settle();
+          assert.equal(await box(page, '.aad-side'), null, stem + ': its row shows the chat again');
           await page.locator(BACK).filter({ visible: true }).first().click(); await settle();
           assert.ok(await box(page, '.aad-side'), stem + ': the visible Back shows the list');
         }

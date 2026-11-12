@@ -301,6 +301,12 @@ export default function desktop(api) {
   const feedOn = () => api.sessions.channelFeedOpen?.() || null;
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
+  // one app at a time, the list alone: its row for the chat already open behind it shows that chat again (another row
+  // opens its chat, and paintOne follows the new thread)
+  api.listen(side, 'click', e => {
+    const w = e.target?.closest?.('.aad-row')?.closest?.('.aad-rw');
+    if (w && one() && !pane && oneList && !oneSplit() && w.dataset.sid === chatThread) { oneList = false; oneSeen = chatThread; paintTop(); }
+  });
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
   /* ---------- round 15 (Miguel, 3 Nov 2026: Arc-style): the top row over the main area ----------
@@ -1806,7 +1812,7 @@ export default function desktop(api) {
   function chatBack() {
     const up = listBack();
     // one app at a time: the list fills the window again; the chat stays open behind it (Chats as it was)
-    if (one()) { if (!up) return false; oneList = true; paintTop(); return true; }
+    if (one() && up) { oneList = true; paintTop(); return true; }
     if (!closeChat()) return false;
     if (up && !peek && peekable()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); paintSide(); }
     return true;

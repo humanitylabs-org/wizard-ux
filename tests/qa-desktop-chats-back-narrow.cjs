@@ -94,7 +94,7 @@ const report = { origin, web, cases: [] };
         await page.evaluate(() => { window.__qaSameDocument = true; }); // a real navigation (Back leaving Wizard) drops it
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const side = () => page.evaluate(() => document.documentElement.dataset.aadSide || '');
-        const back = () => page.evaluate(() => { const b = document.querySelector('.aad-cback'); return b && !b.hidden && b.getClientRects().length ? b.textContent : ''; });
+        const back = () => page.evaluate(() => { const b = [...document.querySelectorAll('.aad-cback, .aad-oneback')].find(b => !b.hidden && b.getClientRects().length); return b && !b.hidden && b.getClientRects().length ? b.textContent : ''; });
         const thread = () => page.evaluate(() => { const t = [...document.querySelectorAll('.ch-thread')].find(t => t.getClientRects().length); return t ? t.innerText.slice(0, 400) : ''; });
         const step = async (name, extra = {}) => { const s = { name, side: await side(), back: await back(), ...extra }; entry.steps.push(s); await page.screenshot({ path: path.join(out, `${stem}-${String(entry.steps.length).padStart(2, '0')}-${name}.png`) }); return s; };
         const listBeside = width >= 680; // DOCKED_FROM: the sidebar open beside the chat (no app beside it here)
@@ -111,7 +111,7 @@ const report = { origin, web, cases: [] };
         assert.equal(s.back, listBeside ? '' : '‹ Activity', `${stem}: a list chat ${listBeside ? 'beside the list: no Back' : 'shows ‹ Activity'}`);
         if (!listBeside) {
           assert.equal(s.side, oneW ? 'none' : 'rail', 'the list is not beside it');
-          await vis('.aad-cback').click(); await nap(700);
+          await vis('.aad-cback, .aad-oneback').click(); await nap(700);
           s = await step('list-thread-back', { thread: await thread() });
           assert.equal(s.side, over, 'Back shows the list'); assert.equal(s.back, '', 'the chat closed');
           assert.ok(await vis(`.aad-side .aad-rw[data-sid="qa-g1"] .aad-row`).isVisible(), 'the list it came from');
@@ -149,14 +149,14 @@ const report = { origin, web, cases: [] };
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p02"]').click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-thread')].some(t => t.getClientRects().length && /Synthetic ask for Launch post 2/.test(t.innerText)), null, { timeout: 8000 }); await nap(700);
         s = await step('post'); assert.equal(s.back, '‹ # Launch', 'a post: back to its channel at every width');
-        await vis('.aad-cback').click();
+        await vis('.aad-cback, .aad-oneback').click();
         await vis('.aad-feed .ch-chan-feed').waitFor({ timeout: 5000 }); await nap(800);
         s = await step('post-back'); assert.equal(s.back, listBeside ? '' : '‹ Channels', 'Back from the post: the feed');
         // Esc on the post too
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p02"]').click(); await nap(900); assert.equal(await back(), '‹ # Launch');
         await page.keyboard.press('Escape'); await vis('.aad-feed .ch-chan-feed').waitFor({ timeout: 5000 }); await nap(600);
         // Back from the feed: the channel list
-        if (!listBeside) await vis('.aad-cback').click(); else await page.keyboard.press('Escape');
+        if (!listBeside) await vis('.aad-cback, .aad-oneback').click(); else await page.keyboard.press('Escape');
         await nap(800);
         s = await step('feed-back');
         assert.ok(await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').isVisible(), 'the channel list');
