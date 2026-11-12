@@ -88,20 +88,31 @@ On:
   channel is the proof (`WizBrowserBoundary.ready(frame)` and the `wizard:boundary-ready` event on the frame; an error
   page never answers). No answer within 8 s keeps local help open and offers the direct line, as before. Proof:
   `tests/qa-browser-boundary-troubleshooter.cjs` and `tests/troubleshooter-boundary.test.mjs`.
+- Badge and title bar: a sandboxed app sets its own unread count (`WizardApp.badge.set`) and its own window-bar tools
+  (`WizardApp.titlebar.set`) over the channel. `core/app-services.js` is the one server (`WizBrowserBoundary.serve`);
+  it gets only the frame element and accepts it when the element is still the registered app window, its `src` is
+  inside that installed app's path, the document in it is one the shell loaded (a page that navigated its own frame,
+  e.g. a link to another app, is refused until the shell loads the window again, since `src` keeps the old URL) and
+  the frame answered `ready` on its current channel. Relative title-bar links resolve against the page's own address
+  (sent by its client) and must still stay inside the app. The app id is the window's,
+  never the page's word; tools are the same validated data as before. A tap goes back as `tool` on the current
+  channel (`WizBrowserBoundary.tool`). Every load clears that window's tools (`onReset`), and the app's client sends its
+  last badge and bar again on the new channel. Proof: `tests/qa-browser-boundary-services.cjs` (real Chromium) and
+  `tests/browser-boundary-services.test.mjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services `share.*`, `voice.transcribe`, titlebar, badge and capture are closed under the boundary (only
-  `ready` is answered).
+  app services `share.*`, `voice.transcribe`, capture, orb, vault, identity, update holds and voice commands are
+  closed under the boundary (only `ready`, `badge.set` and `titlebar.set` are answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.
-- Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). That
-  includes the Troubleshooter's own `/troubleshoot/api/` calls (its server needs to answer `Origin: null` from its
-  own sandboxed page); until then its direct line is the repair path with the switch on.
+- Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). The
+  Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
+  boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly
   those browser-marked loads through without the token (wizard-agent-service#479).
 - Native bridges (Android/Mac) still reach every frame (wizard-os#387).

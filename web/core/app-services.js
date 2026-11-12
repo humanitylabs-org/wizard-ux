@@ -91,6 +91,26 @@
       return !!w && !st.frame.hasAttribute('srcdoc') && within(new URL(st.frame.src), st.url) && w.location.origin === ORIGIN && within(new URL(w.location.href), st.url) && (!doc || w.document === doc);
     } catch (_) { return false; } // off-origin resources fail closed: current path cannot be verified
   }
+  // Browser owner boundary (wizard-os#133): a sandboxed app frame cannot be read, so it is verified by what the shell
+  // itself controls: the registered element, still connected, its src inside the installed app's path, a document the
+  // shell itself loaded there (navOk), and a ready answer on the frame's current boundary channel. Only window-local
+  // services (badge, title bar) accept it.
+  // navOk: the src attribute keeps the shell's URL when a page navigates its own frame (a link to another app, a
+  // location change), and the new document can't be read. So a load counts only when the shell set src since the last
+  // one; a self-navigated document gets no badge or title bar until the shell loads the window again.
+  function trackNav(st) {
+    st.navOk = true; st.navExpect = true;
+    if (typeof MutationObserver !== 'function') return () => {}; // every real browser has it
+    const mo = new MutationObserver(() => { st.navExpect = true; });
+    mo.observe(st.frame, { attributes: true, attributeFilter: ['src'] });
+    return () => mo.disconnect();
+  }
+  function boundaryLive(st) {
+    if (!st || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st) || st.frame.hasAttribute('srcdoc') || st.navOk !== true) return false;
+    if (window.WizBrowserBoundary?.ready?.(st.frame) !== true) return false;
+    try { return within(new URL(st.frame.src), st.url); } catch (_) { return false; }
+  }
+  const live = (st, doc) => valid(st, doc) || boundaryLive(st);
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
   function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
@@ -107,15 +127,16 @@
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
     const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
-    const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
+    const load = () => { if (st.boundaryNav) { st.navOk = st.navExpect; st.navExpect = false; } if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
     frames.set(frame, st); frame.addEventListener('load', load);
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     // Browser owner boundary (wizard-os#133): a sandboxed frame gets its Back/appearance/field channel. Every legacy
     // service below fails closed for it on its own (valid() cannot read an opaque document).
     const detachBoundary = window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary.attach(frame) : null;
+    const stopNav = detachBoundary ? (st.boundaryNav = true, trackNav(st)) : null;
     const detachServices = st.detach;
-    st.detach = () => { detachReading?.(); detachBoundary?.(); detachServices(); queueSweep(); };
+    st.detach = () => { detachReading?.(); stopNav?.(); detachBoundary?.(); detachServices(); queueSweep(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});
@@ -138,7 +159,7 @@
     qr: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2M14 18v2M18 18h2v2h-2z',
     settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' };
   const barOf = st => st.frame.closest('.win')?.querySelector(':scope > .wbar') || null;
-  function cleanTools(st, list) {
+  function cleanTools(st, list, base) {
     if (list == null) return null;
     if (!Array.isArray(list) || list.length > 6) throw fault('Use up to 6 title-bar tools');
     const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
@@ -150,7 +171,7 @@
         o.options = x.options.map(p => ({ value: str(p?.value, 64), label: str(p?.label, 60) })); o.value = str(x.value, 64);
       }
       if (x.kind === 'link') {
-        let u = null; try { u = new URL(String(x.href || ''), st.doc?.location?.href || st.url.href); } catch (_) {}
+        let u = null; try { u = new URL(String(x.href || ''), base || st.doc?.location?.href || st.url.href); } catch (_) {}
         if (!u || !within(u, st.url)) throw fault('Title-bar links stay inside the app');
         o.href = u.href;
       }
@@ -173,7 +194,7 @@
   // dispatch. A layout-owned slot is not a clone of Classic's titlebar.
   const toolSlots = new WeakMap();
   function renderTools(frame, box) {
-    const st = frames.get(frame), owner = st && valid(st, st.doc) ? st : null;
+    const st = frames.get(frame), owner = st && live(st, st.doc) ? st : null;
     if (!toolSlots.has(box)) {
       toolSlots.set(box, { owner: null, key: '' });
       // Own the gesture: a tap here is never a title-bar double tap, a drag or a window action.
@@ -205,9 +226,10 @@
   }
   function dispatchTool(box, id, value) {
     const held = toolSlots.get(box), st = held?.owner;
-    if (!st || !valid(st, held.doc)) return false;
+    if (!st || !live(st, held.doc)) return false;
     const tool = st.tools?.find(x => x.id === id);
     if (!tool || tool.disabled || (value === undefined ? tool.kind !== 'button' : tool.kind !== 'select' || !tool.options.some(o => o.value === value))) return false;
+    if (!valid(st, held.doc)) return window.WizBrowserBoundary.tool(st.frame, id, value);
     try { st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); return true; } catch (_) { return false; }
   }
   /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
@@ -229,7 +251,7 @@
     const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
     try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
   }
-  function setTools(st, list) { st.tools = cleanTools(st, list); const shown = paintTools(st); window.dispatchEvent(new CustomEvent('wizard:app-tools')); return shown; }
+  function setTools(st, list, base) { st.tools = cleanTools(st, list, base); const shown = paintTools(st); window.dispatchEvent(new CustomEvent('wizard:app-tools')); return shown; }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
   // never owner links, arbitrary same-origin frames or off-origin apps. Label comes from the catalog.
   async function identity(st, doc, method, args) {
@@ -907,7 +929,24 @@
       return true;
     } catch (_) { done?.(false); return false; }
   }
-  window.WizAppServices = Object.freeze({ fresh: Object.freeze({ tick: freshTick, tool: freshTool }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  // Under the boundary a sandboxed app sets its own badge and title bar over the boundary channel (browser-boundary.js).
+  if (window.WizBrowserBoundary?.serve) {
+    window.WizBrowserBoundary.serve((frame, method, args) => {
+      const st = frames.get(frame);
+      if (!boundaryLive(st)) throw fault('App window not verified');
+      if (method === 'badge.set') { setBadge(st.appId, args?.n, args?.more === true); st.badged = true; return true; }
+      if (method === 'titlebar.set') {
+        // The page's own address, only as the base for relative links (each link must still stay inside the app).
+        let base = null; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u.href; } } catch (_) {}
+        return setTools(st, args?.tools, base);
+      }
+      throw fault('Not available');
+    });
+    window.WizBrowserBoundary.onReset(frame => { const st = frames.get(frame); if (st?.tools) setTools(st, null); });
+  }
+  // The shell is about to load a page in this window itself (location.replace keeps src as it was): see trackNav.
+  const expectLoad = frame => { const st = frames.get(frame); if (st) st.navExpect = true; };
+  window.WizAppServices = Object.freeze({ expectLoad, fresh: Object.freeze({ tick: freshTick, tool: freshTool }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     titlebar: Object.freeze({ render: renderTools }),
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),

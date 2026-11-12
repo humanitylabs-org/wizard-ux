@@ -1016,7 +1016,7 @@
   }
   function linkDesk(u, rel, srcId) {
     const src = W[srcId];
-    if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
+    if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
@@ -1172,7 +1172,7 @@
   function framePage(w, rel) {
     w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
     let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
-    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
     return true;
   }
   function placeApp(mine, obj, opts = {}, refresh) {
@@ -1579,7 +1579,7 @@
   function probeFrame(f, url) {
     const wrap = f.closest('.frame-wrap'); if (!wrap) return;
     fetch(url, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' }).then(r => {
-      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } } }
+      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (e) { f.src = url; } } }
       else { wrap.classList.add('coming'); setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000); }
     }).catch(() => setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000));
   }
@@ -1653,7 +1653,7 @@
         if (why === 'about:blank') {
           // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
           // popstate fires). That press belongs to the shell: take the step and restore the app in place.
-          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); ensureGuard(true); try { f.contentWindow.location.replace(u); } catch (e) {} }
+          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); ensureGuard(true); try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(u); } catch (e) {} }
           return;
         }
         if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
