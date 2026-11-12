@@ -314,19 +314,19 @@ async function keyed({ activation = true, mac = false } = {}) {
   return { sh, f, got, press: async (init, type = 'keydown') => { const e = keyEvent(init); f.app.fire(type, e); await tick(); await tick(); return e; } };
 }
 
-test('keys: Esc and claimed ⌥ chords are taken from the app page and reach the shell; plain typing never leaves the app', async () => {
+test('keys: Esc and the named ⌥ codes are taken from the app page and reach the shell; other keys never leave the app', async () => {
   const { f, got, press } = await keyed();
   const esc = await press({ key: 'Escape', code: 'Escape' });
   assert.equal(esc.prevented && esc.stopped, true, 'Esc is the shell\'s Back, as before the boundary');
   const n = await press({ key: '˜', code: 'KeyN', altKey: true });
   assert.equal(n.prevented, true, '⌥N is the shell\'s: the app page never types its dead key');
   const e = await press({ key: '´', code: 'KeyE', altKey: true });
-  assert.equal(e.prevented, false, 'an unclaimed ⌥ letter stays the app\'s (accents)');
+  assert.equal(e.prevented, false, 'an unnamed ⌥ letter stays the app\'s alone (accents, the app\'s own ⌥ keys)');
   const plain = await press({ key: 'a', code: 'KeyA' });
   const cmd = await press({ key: 'w', code: 'KeyW', metaKey: true });
   assert.equal(plain.prevented || cmd.prevented, false);
-  assert.deepEqual(got.map(x => [x.type, x.code, x.same]), [['keydown', 'Escape', true], ['keydown', 'KeyN', true], ['keydown', 'KeyE', true]]);
-  assert.ok(f.sent.every(m => m.data.op !== 'input' || m.data.code !== 'KeyA'), 'a plain key is never posted');
+  assert.deepEqual(got.map(x => [x.type, x.code, x.same]), [['keydown', 'Escape', true], ['keydown', 'KeyN', true]]);
+  assert.ok(f.sent.every(m => m.data.op !== 'input' || !['KeyA', 'KeyE', 'KeyW'].includes(m.data.code)), 'plain, unnamed and ⌘ keys are never posted');
   await press({ key: 'Alt', code: 'AltLeft', altKey: false }, 'keyup');
   assert.deepEqual(got.at(-1), { same: true, kind: 'key', type: 'keyup', key: 'Alt', code: 'AltLeft', altKey: false, shiftKey: false, metaKey: false, ctrlKey: false, repeat: false, field: false, readOnly: false });
 });
@@ -339,6 +339,7 @@ test('keys: word moves and Mac ⌥- in a text field stay the field\'s; the field
   const up = await press({ key: 'ArrowUp', code: 'ArrowUp', altKey: true });
   assert.deepEqual([left.prevented, sel.prevented, up.prevented], [false, false, true]);
   assert.equal((await press({ key: '–', code: 'Minus', altKey: true })).prevented, true, 'off a Mac ⌥- is the shell\'s narrower');
+  assert.deepEqual(got.map(x => x.code), ['ArrowUp', 'Minus'], 'only the keys the shell takes are posted');
   assert.equal(got.at(-1).field, true);
   assert.equal(Object.keys(got.at(-1)).some(k => /value|text|name|id/i.test(k)), false);
   const mac = await keyed({ mac: true });
@@ -369,6 +370,8 @@ test('keys: without a real keypress (user activation) or focus, posted ⌥ keys 
   const other = frame(sh, { client: false });
   sh.ev.fire('message', { source: other.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: 'Escape', code: 'Escape' } });
   sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: 'w', code: 'KeyW', metaKey: true } });
+  // With activation, a made-up ⌥ chord the shell did not name (⌥V: a new voice chat) is still refused.
+  sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: '√', code: 'KeyV', altKey: true } });
   assert.equal(got.at(-1).kind, 'pointer');
 });
 

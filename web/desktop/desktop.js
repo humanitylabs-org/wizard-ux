@@ -2920,10 +2920,14 @@
   addEventListener('keydown', e => onKey(e), true);
   addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);
   // Browser boundary (wizard-os#133): a sandboxed app is never readable, so its clicks and the shell's keys typed in it
-  // (Esc, ⌥ chords) arrive by postMessage. The app holds back the ⌥ codes named here, as onKey's hit() did before.
+  // arrive by postMessage. The shell cannot tell a real key from one the app made up (user activation only says some
+  // input happened), so only keys that move between and around the owner's own windows come across: Esc, the ⌥ guide,
+  // desks, Home, window steps and swaps, full screen, sizes, a new desktop. Keys that speak, send, open a chat, act on
+  // a chat, open search or pick buttons (⌥V S C D N X G Space…) stay the app's while it has the keyboard; a click
+  // outside it gives them back. The app holds back exactly these codes (no double action), as onKey's hit() did.
   if (window.WizBrowserBoundary?.onInput) {
-    window.WizBrowserBoundary.keys(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Backquote', 'Comma', 'Slash', 'Minus', 'Equal', 'BracketLeft', 'BracketRight', 'Enter', 'Space',
-      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC', 'KeyD', 'KeyF', 'KeyG', 'KeyI', 'KeyL', 'KeyN', 'KeyO', 'KeyP', 'KeyR', 'KeyS', 'KeyT', 'KeyV', 'KeyW', 'KeyX', 'KeyZ']);
+    window.WizBrowserBoundary.keys(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Backquote',
+      'BracketLeft', 'BracketRight', 'ArrowLeft', 'ArrowRight', 'KeyF', 'KeyT', 'Minus', 'Equal', 'Slash']);
     window.WizBrowserBoundary.onInput((f, ev) => {
       const el = f.closest?.('[data-win]'); if (!el) return;
       if (ev.kind === 'pointer') return desktopHost.focus(el.dataset.win, { scroll: false });

@@ -16,11 +16,12 @@
  *    the field did not change in between, release() lets it go.
  *  - field.focus: the app says (a boolean, nothing else) whether a text field has focus, so the shell's dictation
  *    (core/focused-field.js) can offer the orb for a sandboxed app; fieldState(frame) and onField(fn) expose it.
- *  - input: a click in the app (to focus its window), the window losing focus, and only the keys that belong to the
- *    shell (Esc and ⌥ chords, never plain typing). keys(codes) tells every app which ⌥ codes the shell takes, so the
- *    app holds them back from its own page. onInput(fn) gets them for the focused, visible frame only; a click and
- *    every ⌥ key but bare ⌥ also need the browser's own sign of a real keypress or click (transient user activation,
- *    which reaches the shell from the app's frame), so a page cannot drive the shell's keys by posting messages alone.
+ *  - input: a click in the app (to focus its window), the window losing focus, Esc, bare ⌥ (the keys guide) and the
+ *    ⌥ codes named by keys(codes), never plain typing; the app holds exactly those back from its own page. The shell
+ *    cannot tell a real key from a made-up one, so keys(codes) must only name keys that move around the owner's own
+ *    windows. onInput(fn) gets them for the focused, visible frame only; a click and a named ⌥ key also need the
+ *    browser's transient user activation (a real click or key in the frame activates the shell too), so a page that
+ *    only posts messages cannot press them at all.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -86,9 +87,10 @@
     const ev = { kind: 'key', type: d.event, key: word(d.key), code: word(d.code), altKey: d.altKey === true, shiftKey: d.shiftKey === true,
       metaKey: d.metaKey === true, ctrlKey: d.ctrlKey === true, repeat: d.repeat === true, field: d.field === true, readOnly: d.readOnly === true };
     const esc = ev.key === 'Escape', bareAlt = ev.key === 'Alt' && !ev.metaKey && !ev.ctrlKey;
-    // Only the shell's keys: Esc, ⌥ itself (the keys guide) and ⌥ chords (⌘ and Ctrl stay the app's and the browser's).
-    if (!esc && !bareAlt && !(ev.altKey && !ev.metaKey && !ev.ctrlKey)) return;
-    // Esc is never an activation in browsers, and bare ⌥ only shows the keys guide; every other key needs one.
+    // Only the shell's keys: Esc, ⌥ itself (the keys guide) and the named ⌥ codes (⌘ and Ctrl stay the app's and the browser's).
+    if (!esc && !bareAlt && !(ev.altKey && !ev.metaKey && !ev.ctrlKey && claimed.includes(ev.code))) return;
+    // Esc is never an activation in browsers (it can only ask for the Back the app could already ask for), and bare ⌥
+    // only shows the keys guide; a named ⌥ key needs one.
     if (ev.type === 'keydown' && !esc && !bareAlt && !activated()) return;
     emit(frame, Object.freeze(ev));
   }

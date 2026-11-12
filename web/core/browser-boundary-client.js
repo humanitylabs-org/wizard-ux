@@ -9,9 +9,9 @@
  *    if nobody typed in it meanwhile.
  * And we tell the shell, as one boolean (`field.focus`), whether a text field has focus, so its orb offers dictation.
  * Desktop keys (`input`): a click here (the shell focuses this window), this window losing focus, and only the shell's
- * keys: Esc and ⌥ chords, never plain typing. Esc and the ⌥ codes the shell named (`keys`) are held back from this
- * page, the way the shell's own key handler took them before the boundary; ⌥ word moves and, on a Mac, ⌥- / ⌥= typed
- * in a text field stay the field's.
+ * keys: Esc, bare ⌥ and the ⌥ codes the shell named (`keys`), never plain typing. Esc and those codes are held back
+ * from this page, the way the shell's own key handler took them before the boundary; every other ⌥ chord stays this
+ * page's alone, and so do ⌥ word moves and, on a Mac, ⌥- / ⌥= typed in a text field.
  * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary.
  */
 (() => {
@@ -78,15 +78,17 @@
   }
   const sendKey = (type, e, field, readOnly) => send({ op: 'input', kind: 'key', event: type, key: String(e.key || '').slice(0, 32), code: String(e.code || '').slice(0, 32),
     altKey: !!e.altKey, shiftKey: !!e.shiftKey, metaKey: !!e.metaKey, ctrlKey: !!e.ctrlKey, repeat: !!e.repeat, field, readOnly });
-  const shellKey = e => e.key === 'Escape' || (e.altKey && !e.metaKey && !e.ctrlKey);
+  const bareAlt = e => e.key === 'Alt' && !e.metaKey && !e.ctrlKey;
   addEventListener('keydown', e => {
-    if (!channel || !shellKey(e)) return;
-    if (e.key === 'Escape' && (e.isComposing || e.keyCode === 229)) return;
+    if (!channel) return;
+    const esc = e.key === 'Escape';
+    if (esc && (e.isComposing || e.keyCode === 229)) return;
+    if (!esc && !bareAlt(e) && !(e.altKey && !e.metaKey && !e.ctrlKey)) return;
     const el = deepActive(), field = textField(el), readOnly = !!el?.readOnly;
-    if (e.key === 'Escape' || shellTakes(e, field, readOnly)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    if (esc || shellTakes(e, field, readOnly)) { e.preventDefault(); e.stopImmediatePropagation(); } else if (!bareAlt(e)) return;
     sendKey('keydown', e, field, readOnly);
   }, true);
-  addEventListener('keyup', e => { if (channel && (shellKey(e) || e.key === 'Alt')) sendKey('keyup', e, false, false); }, true);
+  addEventListener('keyup', e => { if (channel && bareAlt(e)) sendKey('keyup', e, false, false); }, true);
   addEventListener('blur', () => { if (channel) send({ op: 'input', kind: 'blur' }); });
   addEventListener('pointerdown', () => { if (channel) send({ op: 'input', kind: 'pointer' }); }, true);
   addEventListener('message', e => {
