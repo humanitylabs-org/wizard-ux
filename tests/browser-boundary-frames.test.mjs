@@ -560,3 +560,29 @@ test('share to Wizard needs a tap in the window; update holds are placed again o
   assert.ok(calls.filter(c => c[0] === 'update.hold').length >= placing);
   assert.deepEqual([...held], []);
 });
+
+// Slice 19: the shell's notices (update ready, read your data again) reach a sandboxed app on its channel only.
+test('notices: update and refresh reach the ready app on its current channel, as protocol data only', async () => {
+  const sh = shell(), f = frame(sh);
+  const updates = [], refreshes = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => false, onUpdate: v => updates.push(v), onRefresh: r => refreshes.push(r) });
+  assert.equal(sh.B.notice(f.el, 'update', { available: { version: 'v:1' } }), false, 'not attached: nothing');
+  sh.B.attach(f.el);
+  assert.equal(sh.B.notice(f.el, 'refresh', { reason: 'poll' }), false, 'not ready yet: nothing');
+  await tick(); await tick();
+  assert.equal(sh.B.notice(f.el, 'update', { available: { version: 'v:1', changes: [{ thread: 'private' }] } }), true);
+  assert.equal(sh.B.notice(f.el, 'refresh', { reason: 'agent' }), true);
+  assert.equal(sh.B.notice(f.el, 'refresh', { reason: 'javascript:1' }), false, 'unknown reason');
+  assert.equal(sh.B.notice(f.el, 'open', {}), false, 'unknown notice');
+  await tick(); await tick();
+  assert.deepEqual(clone(updates), [{ version: 'v:1' }], 'only the version crosses');
+  assert.deepEqual(refreshes, ['agent']);
+  // A message on an old channel, or from another window, is ignored by the client.
+  const stale = { type: 'wizard:boundary', version: 1, channel: 'old', op: 'notice', kind: 'refresh', reason: 'poll' };
+  f.app.fire('message', { source: f.a.parent, origin: ORIGIN, data: stale });
+  const cur = f.sent.findLast(s => s.data.op === 'ready').data.channel;
+  f.app.fire('message', { source: {}, origin: ORIGIN, data: { ...stale, channel: cur } });
+  f.app.fire('message', { source: f.a.parent, origin: 'https://evil.example', data: { ...stale, channel: cur } });
+  assert.deepEqual(refreshes, ['agent']);
+  assert.ok(sh.log.filter(l => l.to === 'app').every(l => l.target === '*'));
+});

@@ -23,9 +23,9 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
   const location = new URL('https://wizard.example/wizard-os-home/'), counts = {}, taps = [], legacy = [];
   const win = new El('article'), bar = new El('header'); bar.className = 'wbar'; win.append(bar);
   const child = { get location() { throw new Error('SecurityError'); }, get document() { throw new Error('SecurityError'); }, postMessage: m => legacy.push(m) };
-  const loads = [], observers = [];
+  const loads = [], observers = [], on = {}, notices = [];
   const frame = { tagName: 'IFRAME', src: src || 'https://wizard.example/' + id + '/', isConnected: true, contentWindow: child,
-    hasAttribute: n => n === 'sandbox', addEventListener: (t, fn) => { if (t === 'load') loads.push(fn); }, removeEventListener() {}, closest: s => (s === '.win' ? win : null) };
+    hasAttribute: n => n === 'sandbox', addEventListener: (t, fn) => { if (t === 'load') loads.push(fn); else (on[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { if (on[t]) on[t] = on[t].filter(x => x !== fn); }, closest: s => (s === '.win' ? win : null) };
   // The src attribute set by the shell (a MutationObserver record), and a document load in the frame.
   class MutationObserver { constructor(fn) { this.fn = fn; } observe(el, o) { if (el === frame && o.attributeFilter?.includes('src')) observers.push(this); } disconnect() { observers.splice(observers.indexOf(this), 1); } }
   const app = { id, kind: 'wizard', url: '/' + id + '/' };
@@ -34,7 +34,8 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
     onReset(fn) { this.resets.add(fn); return () => this.resets.delete(fn); },
     ready: f => f === frame && B.readyNow,
     tool: (f, tid, value) => { taps.push({ f, tid, value }); return true; },
-    attach: () => () => {}, enabled: true, genNow: 1, gen: f => (f === frame ? B.genNow : null) };
+    attach: () => () => {}, enabled: true, genNow: 1, gen: f => (f === frame ? B.genNow : null),
+    notice: (f, kind, data) => { if (f !== frame || !B.readyNow) return false; notices.push({ kind, ...data }); return true; } };
   const shared = [], heard = [], sheets = [];
   // The shell's Send to <agent> sheet: records what it shows and whether it may still send when the owner taps Send.
   const WizShareWizard = { valid: d => { if (!d?.files?.length && !d?.text?.trim()) throw new Error('Nothing to share'); return d; },
@@ -45,7 +46,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
   vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: () => true });
-  return { B, frame, bar, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
+  return { B, frame, bar, notices, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
     load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
 const box = f => f.bar.children.find(c => c.className === 'wtools');
@@ -201,4 +202,34 @@ test('update holds: the app\'s unsaved work makes a shell update wait, until it 
   assert.throws(() => f.call('update.hold', {}), /Too many/);
   const off = fixture({ ready: false });
   assert.throws(() => off.call('update.hold', {}), /not verified/);
+});
+
+// Slice 19: the shell's own notices to a sandboxed app (update ready, read your data again) go over its channel.
+test('a sandboxed app hears a shell update, now and on every new channel, never through the shell origin', () => {
+  const f = fixture();
+  f.services.update.announce({ version: 'v:abc', changes: [{ thread: 'secret thread' }] });
+  assert.deepEqual(f.notices.map(n => n.kind), ['update']);
+  assert.equal(f.notices[0].available.version, 'v:abc');
+  f.fire('wizard:boundary-ready'); // the reloaded document answered on a new channel
+  assert.equal(f.notices.length, 2); assert.equal(f.notices[1].available.version, 'v:abc');
+  assert.equal(f.legacy.length, 0, 'nothing is posted to an opaque window with the shell origin');
+  f.detach(); f.fire('wizard:boundary-ready'); assert.equal(f.notices.length, 2, 'a closed window hears nothing');
+  const moved = fixture({ src: 'https://wizard.example/other-app/' });
+  moved.services.update.announce({ version: 'v:2' }); assert.equal(moved.notices.length, 0, 'outside its app path: nothing');
+});
+
+test('a sandboxed app is asked to read its data again (fresh data) over its channel, rate-limited per document', () => {
+  const f = fixture();
+  const t0 = 1_000_000;
+  f.services.fresh.tick(t0); // first sight of this document: counting starts, no ask
+  assert.equal(f.notices.length, 0);
+  f.services.fresh.tick(t0 + 61000); // a minute in view
+  assert.deepEqual(f.notices.map(n => [n.kind, n.reason]), [['refresh', 'poll']]);
+  assert.equal(f.services.fresh.tool('mcp_morning_report_add', t0 + 62000), 1);
+  f.services.fresh.tick(t0 + 62500); assert.equal(f.notices.length, 1, 'within the gap the agent ask waits');
+  f.services.fresh.tick(t0 + 65000); assert.deepEqual(f.notices.at(-1), { kind: 'refresh', reason: 'agent' });
+  f.B.genNow = 2; f.services.fresh.tick(t0 + 200000); // a new document has just read its data
+  assert.equal(f.notices.length, 2);
+  f.B.readyNow = false; f.services.fresh.tick(t0 + 400000); assert.equal(f.notices.length, 2, 'not ready: nothing');
+  assert.equal(f.legacy.length, 0);
 });

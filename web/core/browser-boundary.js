@@ -34,6 +34,8 @@
  *    status, a transcript), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
  *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
  *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
+ *  - notice(frame, kind, data): the shell's own notices to a ready app, on its current channel: `update` (a new
+ *    shell is ready; only its version string crosses) and `refresh` (read your data again; only the reason crosses).
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -50,6 +52,7 @@
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   const TAPPED = ['share.text', 'share.file', 'share.wizard'], INFLIGHT = 4;
+  const NOTICE_REASONS = ['visible', 'focus', 'poll', 'agent'];
   // What may cross back to the app: protocol data only, never a shell object.
   function shape(v) {
     if (typeof v === 'boolean') return v;
@@ -268,6 +271,20 @@
       if (value !== undefined && (typeof value !== 'string' || value.length > 64)) return false;
       send(st, 'tool', value === undefined ? { tool: id } : { tool: id, value });
       return true;
+    },
+    // Shell -> app notices (see the header): protocol data only, to the document that answered on the current channel.
+    notice(frame, kind, data = {}) {
+      const st = sessions.get(frame);
+      if (!connected(st) || !st.ready) return false;
+      if (kind === 'refresh') {
+        if (!NOTICE_REASONS.includes(data?.reason)) return false;
+        send(st, 'notice', { kind, reason: data.reason }); return true;
+      }
+      if (kind === 'update') {
+        const v = data?.available, version = typeof v?.version === 'string' ? v.version.slice(0, 128) : '';
+        send(st, 'notice', { kind, available: v ? { version } : null }); return true;
+      }
+      return false;
     },
     theme(frame, appearance) { const st = sessions.get(frame); if (!st || !appearance) return; st.appearance = appearance; if (st.ready) send(st, 'theme', { appearance }); },
     async pinField(frame) {

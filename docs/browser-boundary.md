@@ -116,15 +116,20 @@ On:
   to the document now in the window: every new channel drops them in the shell, and the app's client places its
   holds again on its next channel (the app's own hold id stays the same). No keep callback crosses the boundary, so
   such a hold is never skipped. Proof: `tests/qa-browser-boundary-share-wizard-holds.cjs` (real Chromium).
+- Shell notices: a shell update that is ready (`WizardApp.update.onAvailable`) and the fresh-data asks
+  (`WizardApp.view.onRefresh`: back in view, to the front, a minute in view, an agent tool for this app) reach a
+  sandboxed app as `notice` on its channel (`WizBrowserBoundary.notice`), with the same window checks as the badge.
+  Only the update's version string and the ask's reason cross. A document that answers on a new channel hears a
+  pending update again. Proof: `tests/qa-browser-boundary-notices.cjs` (real Chromium).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services receiving shares, capture, orb, vault, identity, the update-available notice and voice commands are
-  closed under the boundary (only `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`,
-  `voice.transcribe`, `update.hold` and `update.release` are answered).
+  app services receiving shares, capture, orb, vault, identity and voice commands are closed under the boundary
+  (only `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`, `voice.transcribe`,
+  `update.hold` and `update.release` are answered, and the update and fresh-data notices are sent).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.
