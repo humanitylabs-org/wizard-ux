@@ -151,8 +151,8 @@
    * cookies, and the browser hides the answer (CORS). So a fetch to this host goes through the shell (`net.fetch`), which
    * makes it only inside this window's own app path (core/app-services.js boundaryNet) and gives back a Response with
    * the status, headers and body. An address the shell won't fetch for this app (`outside`: another app, an owner
-   * route), or a window with no shell channel, gets the page's own fetch unchanged, as before. Not covered:
-   * XMLHttpRequest, EventSource, WebSocket and streamed answers (the whole body arrives at once). */
+   * route), or a window with no shell channel, gets the page's own fetch unchanged, as before. XMLHttpRequest goes the
+   * same way (below). Not covered: EventSource, WebSocket and streamed answers (the whole body arrives at once). */
   if (opaque && typeof window.fetch === 'function' && typeof Request === 'function') (() => {
     const native = window.fetch, NULL_BODY = [101, 103, 204, 205, 304];
     const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
@@ -199,6 +199,159 @@
         run.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
       });
     };
+    /* XMLHttpRequest goes the same way: an async request becomes a fetch through the stand-in above (so a call to this
+     * app's own backend goes through the shell, and anything else goes out exactly as the page's own fetch would). The
+     * stand-in keeps the usual shape: readyState, status, headers, responseType ('', text, json, arraybuffer, blob,
+     * document), the on* handlers and listeners, abort, timeout, upload events and withCredentials. A synchronous request
+     * cannot wait for the shell: it uses the browser's own XMLHttpRequest, as before. */
+    if (typeof window.XMLHttpRequest !== 'function' || typeof EventTarget !== 'function') return;
+    const NativeXHR = window.XMLHttpRequest, viaShell = window.fetch;
+    const XHR_EVENTS = ['readystatechange', 'loadstart', 'progress', 'abort', 'error', 'load', 'timeout', 'loadend'];
+    const state = name => new DOMException('The object\u2019s state must be OPENED.', name || 'InvalidStateError');
+    const progress = (type, loaded, total) => new ProgressEvent(type, { lengthComputable: total > 0, loaded, total });
+    function withHandlers(target, types) {
+      for (const t of types) {
+        let h = null;
+        Object.defineProperty(target, 'on' + t, {
+          configurable: true, enumerable: true, get: () => h,
+          set: v => { if (h) target.removeEventListener(t, h); h = typeof v === 'function' ? v : null; if (h) target.addEventListener(t, h); },
+        });
+      }
+    }
+    class XMLHttpRequestUpload extends EventTarget { constructor() { super(); withHandlers(this, XHR_EVENTS.slice(1)); } }
+    class XMLHttpRequest extends EventTarget {
+      #s = { ready: 0, method: 'GET', url: '', headers: [], sent: false, status: 0, statusText: '', resHeaders: null, url2: '', raw: null, text: '', type: '', mime: '', timeout: 0, cred: false, stop: null, gen: 0, sync: null };
+      constructor() { super(); withHandlers(this, XHR_EVENTS); this.upload = new XMLHttpRequestUpload(); }
+      get readyState() { return this.#s.sync ? this.#s.sync.readyState : this.#s.ready; }
+      get status() { return this.#s.sync ? this.#s.sync.status : this.#s.status; }
+      get statusText() { return this.#s.sync ? this.#s.sync.statusText : this.#s.statusText; }
+      get responseURL() { return this.#s.sync ? this.#s.sync.responseURL : this.#s.url2; }
+      get responseType() { return this.#s.type; }
+      set responseType(v) {
+        if (this.#s.ready >= 3) throw state();
+        if (['', 'text', 'json', 'arraybuffer', 'blob', 'document'].includes(v)) this.#s.type = v;
+      }
+      get timeout() { return this.#s.timeout; }
+      set timeout(v) { this.#s.timeout = Math.max(0, Number(v) || 0); }
+      get withCredentials() { return this.#s.cred; }
+      set withCredentials(v) { if (this.#s.sent) throw state(); this.#s.cred = !!v; }
+      get responseText() {
+        if (this.#s.sync) return this.#s.sync.responseText;
+        if (this.#s.type !== '' && this.#s.type !== 'text') throw state();
+        return this.#s.ready >= 3 ? this.#s.text : '';
+      }
+      get responseXML() { if (this.#s.sync) return this.#s.sync.responseXML; return this.#s.type === '' || this.#s.type === 'document' ? this.#doc() : null; }
+      get response() {
+        const s = this.#s;
+        if (s.sync) return s.sync.response;
+        if (s.type === '' || s.type === 'text') return s.ready >= 3 ? s.text : '';
+        if (s.ready !== 4 || !s.raw) return null;
+        if (s.type === 'json') { try { return JSON.parse(s.text); } catch (_) { return null; } }
+        if (s.type === 'arraybuffer') return s.raw.slice(0);
+        if (s.type === 'blob') return new Blob([s.raw], { type: s.mime || this.getResponseHeader('content-type') || '' });
+        return this.#doc();
+      }
+      #doc() {
+        const s = this.#s; if (s.ready !== 4 || !s.raw) return null;
+        const type = (s.mime || this.getResponseHeader('content-type') || '').split(';')[0].trim().toLowerCase();
+        const kind = type === 'text/html' ? (s.type === 'document' ? 'text/html' : '') : /^(?:text|application)\/(?:[\w.+-]*\+)?xml$/.test(type) ? type : '';
+        if (!kind) return null;
+        try { return new DOMParser().parseFromString(s.text, kind); } catch (_) { return null; }
+      }
+      overrideMimeType(m) { if (this.#s.ready >= 3) throw state(); this.#s.mime = String(m); }
+      getResponseHeader(name) {
+        if (this.#s.sync) return this.#s.sync.getResponseHeader(name);
+        if (!this.#s.resHeaders || this.#s.ready < 2) return null;
+        const k = String(name).toLowerCase(), all = this.#s.resHeaders.filter(h => h[0].toLowerCase() === k).map(h => h[1]);
+        return all.length ? all.join(', ') : null;
+      }
+      getAllResponseHeaders() {
+        if (this.#s.sync) return this.#s.sync.getAllResponseHeaders();
+        if (!this.#s.resHeaders || this.#s.ready < 2) return '';
+        return this.#s.resHeaders.map(h => h[0].toLowerCase() + ': ' + h[1] + '\r\n').join('');
+      }
+      open(method, url, async = true, user, password) {
+        const s = this.#s;
+        // A request still open ends without events (its answer is dropped: the generation moved on).
+        s.gen++;
+        if (s.stop) { s.stop.abort(); s.stop = null; }
+        const m = String(method).toUpperCase();
+        if (/^(?:CONNECT|TRACE|TRACK)$/.test(m)) throw new DOMException('\u2018' + method + '\u2019 HTTP method is unsupported.', 'SecurityError');
+        const u = new URL(String(url), location.href);
+        if (user != null) u.username = user; if (password != null) u.password = password;
+        Object.assign(s, { method: /^(?:DELETE|GET|HEAD|OPTIONS|POST|PUT|PATCH)$/.test(m) ? m : String(method), url: u.href, headers: [], sent: false, status: 0, statusText: '', resHeaders: null, url2: '', raw: null, text: '', sync: null });
+        // A synchronous request can't wait for the shell: the browser's own one handles it, as before.
+        if (async === false) {
+          const x = new NativeXHR(); s.sync = x;
+          x.withCredentials = s.cred; x.open(method, url, false, user, password); if (s.mime) x.overrideMimeType(s.mime);
+          s.ready = 1; return;
+        }
+        s.ready = 1; this.dispatchEvent(new Event('readystatechange'));
+      }
+      setRequestHeader(name, value) {
+        const s = this.#s;
+        if (s.ready !== 1 || s.sent) throw state();
+        if (s.sync) return s.sync.setRequestHeader(name, value);
+        s.headers.push([String(name), String(value)]);
+      }
+      send(body = null) {
+        const s = this.#s;
+        if (s.ready !== 1 || s.sent) throw state();
+        if (s.sync) {
+          s.sent = true;
+          try { s.sync.send(body); } finally { s.sent = false; }
+          s.ready = 4; this.dispatchEvent(new Event('readystatechange'));
+          if (s.sync.status) { this.dispatchEvent(progress('load', 0, 0)); }
+          this.dispatchEvent(progress('loadend', 0, 0)); return;
+        }
+        s.sent = true;
+        const gen = s.gen, stop = new AbortController(); s.stop = stop;
+        if (s.method === 'GET' || s.method === 'HEAD') body = null;
+        else if (typeof Document === 'function' && body instanceof Document) body = new XMLSerializer().serializeToString(body);
+        // Upload events fire for any body (FormData and URLSearchParams too, whose size is only known once encoded).
+        const upload = body != null, size = !upload ? 0 : typeof body === 'string' ? new Blob([body]).size : body.size ?? body.byteLength ?? 0;
+        const live = () => s.gen === gen && s.stop === stop;
+        let timer = 0, why = '';
+        const end = (type, loaded, total) => {
+          clearTimeout(timer); if (!live()) return; s.stop = null; s.sent = false;
+          if (type !== 'load') { s.status = 0; s.statusText = ''; s.resHeaders = null; s.raw = null; s.text = ''; }
+          s.ready = 4; this.dispatchEvent(new Event('readystatechange'));
+          if (type !== 'load' && upload) { this.upload.dispatchEvent(progress(type, 0, 0)); this.upload.dispatchEvent(progress('loadend', 0, 0)); }
+          this.dispatchEvent(progress(type, loaded, total)); this.dispatchEvent(progress('loadend', loaded, total));
+        };
+        this.dispatchEvent(progress('loadstart', 0, 0));
+        if (upload) this.upload.dispatchEvent(progress('loadstart', 0, size));
+        if (s.timeout) timer = setTimeout(() => { why = 'timeout'; stop.abort(); }, s.timeout);
+        stop.signal.addEventListener('abort', () => { if (!why) why = 'abort'; end(why, 0, 0); }, { once: true });
+        viaShell.call(window, s.url, { method: s.method, headers: s.headers, body, credentials: s.cred ? 'include' : 'same-origin', signal: stop.signal }).then(async res => {
+          if (!live()) return;
+          if (upload) { this.upload.dispatchEvent(progress('progress', size, size)); this.upload.dispatchEvent(progress('load', size, size)); this.upload.dispatchEvent(progress('loadend', size, size)); }
+          s.status = res.status; s.statusText = res.statusText; s.resHeaders = [...res.headers]; s.url2 = res.url || s.url;
+          s.ready = 2; this.dispatchEvent(new Event('readystatechange'));
+          const raw = await res.arrayBuffer(); if (!live()) return;
+          s.raw = raw;
+          const cs = /charset=([^;]+)/i.exec(s.mime || res.headers.get('content-type') || '');
+          try { s.text = new TextDecoder(cs ? cs[1].trim().replace(/^"|"$/g, '') : 'utf-8').decode(raw); } catch (_) { s.text = new TextDecoder().decode(raw); }
+          s.ready = 3; this.dispatchEvent(new Event('readystatechange'));
+          this.dispatchEvent(progress('progress', raw.byteLength, raw.byteLength));
+          end('load', raw.byteLength, raw.byteLength);
+        }, () => { if (live()) end('error', 0, 0); });
+      }
+      abort() {
+        const s = this.#s;
+        if (s.sync) return s.sync.abort();
+        if (s.stop) { s.stop.abort(); s.ready = 0; return; }
+        if (s.ready === 4) { s.ready = 0; s.status = 0; }
+      }
+    }
+    for (const [k, v] of Object.entries({ UNSENT: 0, OPENED: 1, HEADERS_RECEIVED: 2, LOADING: 3, DONE: 4 })) {
+      Object.defineProperty(XMLHttpRequest, k, { value: v, enumerable: true });
+      Object.defineProperty(XMLHttpRequest.prototype, k, { value: v, enumerable: true });
+    }
+    try {
+      Object.defineProperty(window, 'XMLHttpRequest', { configurable: true, writable: true, value: XMLHttpRequest });
+      Object.defineProperty(window, 'XMLHttpRequestUpload', { configurable: true, writable: true, value: XMLHttpRequestUpload });
+    } catch (_) {}
   })();
   let boundaryLoad = null;
   function boundaryClient() {

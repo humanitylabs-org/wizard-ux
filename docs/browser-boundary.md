@@ -219,8 +219,11 @@ On:
   stops the call in the shell too (`net.abort`, the window's own open call only). At most 8 at once per window, apart from the other services, and 32 MB each
   way. A call open when the window gets a new channel fails instead of running twice. An address outside the path
   (another app, an owner route) gets the page's own fetch unchanged, so it still goes out with `Origin: null`, no cookie
-  and no token. Not covered: `XMLHttpRequest`, `EventSource`, `WebSocket` and streamed answers (the body arrives
-  whole). Proof: `tests/qa-browser-boundary-backend.cjs`.
+  and no token. `XMLHttpRequest` goes the same way: app-client.js puts a stand-in in its place that makes an async
+  request through that `fetch` (status, headers, `responseType` text/json/arraybuffer/blob/document, abort, timeout,
+  upload events, `withCredentials`); a synchronous one still uses the browser's own. Not covered: `EventSource`,
+  `WebSocket` and streamed answers (the body arrives whole). Proof: `tests/qa-browser-boundary-backend.cjs`,
+  `tests/qa-browser-boundary-xhr.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -230,8 +233,8 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
-- Apps that use `XMLHttpRequest`, `EventSource`, `WebSocket`, streamed answers, IndexedDB or cookies read by their own
-  scripts still need work from an opaque origin (wizard-os#385); `fetch` to the app's own backend, `localStorage` and
+- Apps that use `EventSource`, `WebSocket`, streamed answers, IndexedDB or cookies read by their own scripts still need
+  work from an opaque origin (wizard-os#385); `fetch` and `XMLHttpRequest` to the app's own backend, `localStorage` and
   `sessionStorage` work (above). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
