@@ -416,6 +416,44 @@ test('keys: without a real keypress (user activation) or focus, posted ⌥ keys 
   assert.equal(got.at(-1).kind, 'pointer');
 });
 
+test('layout keys: a running layout adds its own ⌥ window keys; they reach the shell only with a real keypress, and off() gives them back', async () => {
+  const { sh, f, got, press } = await keyed();
+  assert.equal((await press({ key: '˙', code: 'KeyH', altKey: true })).prevented, false, 'without a layout ⌥H stays the app\'s');
+  const off = sh.B.layoutKeys(['KeyH', 'KeyK', 42, 'x'.repeat(40)]); await tick();
+  const h = await press({ key: '˙', code: 'KeyH', altKey: true });
+  assert.equal(h.prevented && h.stopped, true, '⌥H is the view\'s Home: the app page never sees it');
+  assert.equal((await press({ key: '˚', code: 'KeyK', altKey: true })).prevented, true);
+  assert.equal((await press({ key: '¬', code: 'KeyL', altKey: true })).prevented, false, 'a code nobody named stays the app\'s');
+  assert.deepEqual(got.map(x => x.code), ['KeyH', 'KeyK']);
+  got.length = 0;
+  // The desktop renaming its own list keeps the layout's.
+  assert.equal((await press({ key: '˜', code: 'KeyN', altKey: true })).prevented, true, 'the desktop\'s own keys still come across');
+  sh.B.keys(['Digit2']); await tick();
+  assert.equal((await press({ key: '˜', code: 'KeyN', altKey: true })).prevented, false);
+  assert.equal((await press({ key: '˙', code: 'KeyH', altKey: true })).prevented, true, 'the layout\'s stay');
+  // A page posting ⌥H without a real keypress is dropped like any other named key.
+  sh.g.navigator.userActivation.isActive = false;
+  const channel = f.sent.filter(m => m.data.op === 'ready').at(-1).data.channel;
+  sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: '˙', code: 'KeyH', altKey: true } });
+  await tick();
+  assert.deepEqual(got.map(x => x.code), ['KeyN', 'KeyH']);
+  sh.g.navigator.userActivation.isActive = true;
+  off(); off(); await tick();
+  assert.equal((await press({ key: '˙', code: 'KeyH', altKey: true })).prevented, false, 'the layout gone (Classic): ⌥H is the app\'s again');
+  assert.equal((await press({ key: '…', code: 'Digit2', altKey: true })).prevented, true, 'a second off() never drops the desktop\'s keys');
+  assert.deepEqual(got.map(x => x.code), ['KeyN', 'KeyH', 'Digit2']);
+});
+
+test('layout keys wiring: the AI apps view takes its own window keys from a sandboxed app while it runs, never voice, send or chat keys', async () => {
+  const layout = read('web/layouts/ai-apps/desktop.js');
+  assert.match(layout, /const offFrameKeys = globalThis\.WizBrowserBoundary\?\.layoutKeys\?\.\(FRAME_KEYS\) \|\| null;/);
+  assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);\n    offFrameKeys\?\.\(\);/, 'the view lets go when it is torn down');
+  const keys = JSON.parse(/export const FRAME_KEYS = Object\.freeze\((\[[^\]]*\])\)/.exec(layout)[1].replace(/'/g, '"'));
+  assert.ok(keys.includes('KeyH') && keys.includes('KeyK'), '⌥H Home and ⌥K search come across');
+  for (const k of ['KeyN', 'KeyS', 'KeyW', 'KeyD', 'KeyV', 'KeyC', 'Space', 'KeyE', 'KeyX', 'KeyZ', 'KeyB', 'KeyP', 'ArrowUp', 'ArrowDown', 'KeyU', 'KeyI'])
+    assert.equal(keys.includes(k), false, k + ' stays the app\'s while it has the keyboard');
+});
+
 test('keys: the claimed list reaches an app that is already connected', async () => {
   const { sh, press } = await keyed();
   assert.equal((await press({ key: 'Ω', code: 'KeyZ', altKey: true })).prevented, false);

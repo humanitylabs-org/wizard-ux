@@ -18,7 +18,7 @@
  *  - field.focus: the app says (a boolean, nothing else) whether a text field has focus, so the shell's dictation
  *    (core/focused-field.js) can offer the orb for a sandboxed app; fieldState(frame) and onField(fn) expose it.
  *  - input: a click in the app (to focus its window), the window losing focus, Esc, bare ⌥ (the keys guide) and the
- *    ⌥ codes named by keys(codes), never plain typing; the app holds exactly those back from its own page. The shell
+ *    ⌥ codes named by keys(codes) and by the running layout's layoutKeys(codes), never plain typing; the app holds exactly those back from its own page. The shell
  *    cannot tell a real key from a made-up one, so keys(codes) must only name keys that move around the owner's own
  *    windows. With a layout that presses app keys (pressAppKeys, the AI apps view) the app also reports its own
  *    data-wz-key controls (`keys.app`: key, label, box in its window) and forwards ⌥ + one of those keys; appKeys(frame)
@@ -139,6 +139,15 @@
     return null;
   }
   let serial = 0, claimed = [], server = null;
+  // The ⌥ codes the shell takes: the desktop's own (keys(codes)) plus those of each layout that adds its own window
+  // keys while it runs (layoutKeys(codes), e.g. the AI apps view's ⌥H Home and ⌥K search).
+  let baseKeys = [];
+  const layoutSets = new Set();
+  const codeList = codes => (Array.isArray(codes) ? codes.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : []);
+  function claimNow() {
+    claimed = [...new Set([...baseKeys, ...[...layoutSets].flat()])].slice(0, 64);
+    for (const st of sessions.values()) if (st.ready) { st.appSent = appOn(st); send(st, 'keys', keysMsg(st)); }
+  }
   const appPressers = new Set();   // layouts that press app keys, each with the one frame it presses them in (its app in front)
   /* App keys (data-wz-key, docs/ai-apps-view.md › App keys): the app reports which of its controls carry an ⌥ key
    * (the key, a short label and where it sits in its own window), and the layout that presses app keys (pressAppKeys)
@@ -364,9 +373,12 @@
     fieldState(frame) { const st = sessions.get(frame); return connected(st) && st.ready ? Object.freeze({ focused: st.field, gen: st.gen }) : null; },
     onField(fn) { if (typeof fn !== 'function') return () => {}; fieldListeners.add(fn); return () => fieldListeners.delete(fn); },
     // Desktop keys: which ⌥ codes the shell takes (the app then keeps them from its page), and the input it forwards.
-    keys(codes) {
-      claimed = Array.isArray(codes) ? codes.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : [];
-      for (const st of sessions.values()) if (st.ready) { st.appSent = appOn(st); send(st, 'keys', keysMsg(st)); }
+    keys(codes) { baseKeys = codeList(codes); claimNow(); },
+    // A layout's own window keys, taken too while it runs (the same rule: only keys that move between and around the
+    // owner's own windows or open the shell's own panels, never ones that speak, send or act on a chat). off() lets go.
+    layoutKeys(codes) {
+      const set = Object.freeze(codeList(codes)); layoutSets.add(set); claimNow();
+      return () => { if (layoutSets.delete(set)) claimNow(); };
     },
     onInput(fn) { if (typeof fn !== 'function') return () => {}; inputListeners.add(fn); return () => inputListeners.delete(fn); },
     // A layout that presses app keys (the AI apps view) says so while it runs, with frameFn() = the frame of its app in
