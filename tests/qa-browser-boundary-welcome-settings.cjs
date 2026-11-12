@@ -20,6 +20,7 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
   window.probe = async () => {
     const out = { origin: self.origin };
     try { out.parentDoc = !!parent.document; } catch (e) { out.parentDoc = 'blocked:' + e.name; }
+    // The shell's own storage is out of reach; since slice 34 the app kit gives the page a stand-in of its own (a number).
     try { out.storage = localStorage.length; } catch (e) { out.storage = 'blocked:' + e.name; }
     try { const r = await fetch('/wizard/v1/threads', { method: 'POST', body: '{}' }); out.owner = r.status; } catch (e) { out.owner = 'blocked:' + e.name; }
     return out;
@@ -71,7 +72,7 @@ async function opaqueApp(page, p, label) {
   await fr?.waitForFunction(() => typeof window.probe === 'function', null, { timeout: 5000 }).catch(() => {});
   const before = seen.filter(s => s.path === '/wizard/v1/threads').length;
   const probe = fr ? await fr.evaluate(() => window.probe()).catch(e => ({ error: e.message })) : { error: 'no frame' };
-  check(probe.origin === 'null' && String(probe.parentDoc).startsWith('blocked') && String(probe.storage).startsWith('blocked') && (probe.owner === 401 || String(probe.owner).startsWith('blocked')),
+  check(probe.origin === 'null' && String(probe.parentDoc).startsWith('blocked') && (String(probe.storage).startsWith('blocked') || typeof probe.storage === 'number') && (probe.owner === 401 || String(probe.owner).startsWith('blocked')),
     `${label}: page is opaque, can't reach the shell or its storage, owner call refused: ${JSON.stringify(probe)}`);
   const call = seen.filter(s => s.path === '/wizard/v1/threads').slice(before);
   check(call.length === 1 && call[0].token === '' && call[0].origin === 'null', `${label}: its owner call went out with Origin null and no token`);
