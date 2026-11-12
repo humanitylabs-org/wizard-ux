@@ -13,8 +13,10 @@
  * from this page, the way the shell's own key handler took them before the boundary; every other ⌥ chord stays this
  * page's alone, and so do ⌥ word moves and, on a Mac, ⌥- / ⌥= typed in a text field.
  * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary:
- * `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file` (the shell opens its own share sheet, and only
- * right after a real tap in this page) and `voice.transcribe`. The last badge and title bar are sent again on every
+ * `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard` (the shell opens its own sheet, and
+ * only right after a real tap in this page), `voice.transcribe` and `update.hold` / `update.release`. Holds are this
+ * document's: the shell drops them with each channel, so they are placed again on every new channel (the id the app
+ * gets stays the same). The last badge and title bar are sent again on every
  * new channel (the shell clears the title bar on each load), and a title-bar tap comes back as `tool` (onTool).
  */
 (() => {
@@ -22,13 +24,14 @@
   if (window.WizBoundaryClient) return;
   let framed = false; try { framed = parent !== window; } catch (_) { framed = true; }
   if (!framed || globalThis.origin !== 'null') return;
-  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'voice.transcribe'], STICKY = ['badge.set', 'titlebar.set'];
+  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   let channel = '', back = null, applyTheme = null, onTool = null, serial = 0, claimed = new Set();
   const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
+  const holds = new Map();   // the app's hold id -> { reason, shell: the shell's id on the current channel, placing }
   const error = (code, message) => Object.assign(new Error(message), { code });
   const send = data => { try { parent.postMessage({ ...data, type: TYPE, version: VERSION, channel }, SHELL); } catch (_) {} };
   function release(id) { const s = seals.get(id); if (s) { s.el.removeEventListener('input', s.changed); seals.delete(id); } }
@@ -37,7 +40,7 @@
     for (const wait of requests.values()) { clearTimeout(wait.timer); wait.reject(error('denied', 'App document changed')); }
     requests.clear();
   }
-  addEventListener('pagehide', () => { clear(); sticky.clear(); channel = ''; });
+  addEventListener('pagehide', () => { clear(); sticky.clear(); holds.clear(); channel = ''; });
   const editable = el => !!el?.isConnected && typeof el.matches === 'function'
     && el.matches('textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input[type=email],input:not([type])')
     && !el.disabled && !el.readOnly && !el.closest('[inert],[data-no-dictation]') && typeof el.selectionStart === 'number';
@@ -106,6 +109,8 @@
       channel = d.channel; setKeys(d.keys); send({ op: 'ready' }); reportField(true);
       for (const [id, wait] of requests) send({ op: 'service.request', id, method: wait.method, args: wait.args });
       for (const go of [...waiters]) go();
+      // Holds: the shell dropped them with the old channel. One still being placed is re-sent above with the requests.
+      for (const h of holds.values()) { h.shell = null; if (!h.placing) place(h); }
       for (const [method, args] of sticky) {
         if (![...requests.values()].some(w => w.method === method)) send({ op: 'service.request', id: 'wbs-' + (++serial), method, args });
       }
@@ -158,6 +163,41 @@
       return reply('inserted');
     }
   });
+  // Asks the shell for one hold. A reply always comes on the channel that is current when it arrives (the shell drops
+  // answers for an old one, and an open request is re-sent with each hello). If the app released the hold meanwhile,
+  // the shell's id is let go at once.
+  function place(h) {
+    h.placing = true;
+    const p = send1('update.hold', { reason: h.reason });
+    p.then(id => {
+      h.placing = false;
+      if (typeof id !== 'string') return;
+      if ([...holds.values()].includes(h) && !h.shell) h.shell = id;
+      else send1('update.release', { id }).catch(() => {});
+    }, () => { h.placing = false; });
+    return p;
+  }
+  function send1(method, args, timeout = 15000) {
+    if (requests.size + waiters.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
+    const id = 'wbs-' + (++serial);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { waiters.delete(go); requests.delete(id); reject(error('timeout', 'Shared app request timed out')); }, timeout);
+      function go() { waiters.delete(go); requests.set(id, { resolve, reject, timer, method, args }); send({ op: 'service.request', id, method, args }); }
+      if (channel) go(); else waiters.add(go);
+    });
+  }
+  function hold(args) {
+    if (holds.size >= 64) return Promise.reject(error('busy', 'Too many update holds'));
+    const key = 'hold-' + (++serial), h = { reason: String(args?.reason || 'Unsaved work').slice(0, 160), shell: null, placing: false };
+    holds.set(key, h);
+    return place(h).then(() => key, err => { holds.delete(key); throw err; });
+  }
+  function unhold(args) {
+    const h = holds.get(args?.id); if (!h) return Promise.resolve(false);
+    holds.delete(args.id);
+    if (h.shell) send1('update.release', { id: h.shell }).catch(() => {});
+    return Promise.resolve(true);
+  }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
     connect({ onBack, onTheme, onTool: tap } = {}) {
@@ -168,16 +208,12 @@
     get ready() { return !!channel; },
     request(method, args, timeout = 15000) {
       if (!METHODS.includes(method)) return Promise.reject(error('unavailable', 'Not available inside the browser boundary yet'));
-      if (requests.size + waiters.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
+      if (method === 'update.hold') return hold(args);
+      if (method === 'update.release') return unhold(args);
       // The shell can't read this page's address; relative title-bar links resolve against it (and are still checked).
       if (method === 'titlebar.set' || method === 'share.text') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
       if (STICKY.includes(method)) sticky.set(method, args);
-      const id = 'wbs-' + (++serial);
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { waiters.delete(go); requests.delete(id); reject(error('timeout', 'Shared app request timed out')); }, timeout);
-        function go() { waiters.delete(go); requests.set(id, { resolve, reject, timer, method, args }); send({ op: 'service.request', id, method, args }); }
-        if (channel) go(); else waiters.add(go);
-      });
+      return send1(method, args, timeout);
     },
   });
 })();
