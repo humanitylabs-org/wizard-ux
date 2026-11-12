@@ -51,7 +51,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats | `WizCore` (`chats.js`/`.css`); desktop `keepThreadOpen`; `WizConfig.chatAfterAction` (phone); Archive/Snooze→`archiveOrder`, `leaveFinishedThread`; `WizLive.messages`/`firstMessages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` alerts; Esc→`CHATS.clearFilter(id::list)` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort` (A-Z/Newest/Oldest); stalled waits Ready, `background` stays Working; running helper keeps interrupted/failed Working; `WizLive.workingOrder`; Ready's `orderBar`; |
-| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; AI apps headers/keys; device-local |
+| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock; AI apps headers/keys/Back; device-local |
 | Desktop lifecycle | `WizDesktop.host` (`desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chat state | `WizLive` (`live.js`): rename/read fence, `chanStore`; `WizCore.chats` dispose |
@@ -59,7 +59,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open after send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
-| Mic, retry, model, place | `WosChatPower` (`chat-power.js`); `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
+| Mic, retry, model, place | `WosChatPower` (`chat-power.js`; `chanOwnPost`); `voice.reply` → `recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `md`, `copyRich`, `viewer`; contained initial fit / zoom-pan / keys+native seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |

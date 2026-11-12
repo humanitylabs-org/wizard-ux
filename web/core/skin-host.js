@@ -956,6 +956,16 @@
         channels: node => live() && node?.nodeType === 1 && [...a.mounts].some(m => m.contains(node)) ? !!shell.chatChannels?.(node) : false,
         // Back from a channel's feed to the Channels list (thread → channel → list); false when no feed is open.
         channelBack: () => live() ? !!shell.chatChannelBack?.() : false,
+        /* A channel's feed in the layout's main chat column (wizard-ux issue 1256, James 11 Nov 2026: the channel list stays
+         * in the sidebar): its header, filters, posts and message box painted into node (one of this layout's mounted
+         * nodes). Returns the open channel ({ id, name }), or null with none open (the node is emptied). */
+        channelFeed: node => live() && node?.nodeType === 1 && [...a.mounts].some(m => m.contains(node)) ? shell.chatFeed?.(node) || null : null,
+        // The channel whose feed is open in the main column ({ id, name }), or null.
+        channelFeedOpen: () => live() ? shell.chatFeedOpen?.() || null : null,
+        // New chat with a channel's feed in front (wizard-ux issue 1291): its own box takes the post (true), never General.
+        channelPost: () => live() ? !!shell.chatChannelPost?.() : false,
+        // + / ⌥N on the Channels list with no channel open (wizard-ux issue 1308): the new-channel form opens (true).
+        channelNew: () => live() ? !!shell.chatChannelNew?.() : false,
       }),
       /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
        * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
@@ -1169,7 +1179,7 @@
     for (const k of ['mobile', 'desktop']) { let x = null; try { x = C.apps(k)?.APP?.[id]; } catch (_) {} if (x && !x.system && H.canOffer(x)) return x; }
     return null;
   }
-  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename']);
+  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename', 'move']);
   /* Notification rows in sessions.list() (round 5): the items Chats lists while a package shows the inbox as threads
    * (host.inboxList), as Ready rows. New = unread (Snooze, Archive), snoozed = read (Restore, Archive), the actions the
    * inbox's handler takes; open = the notification as a chat (its Badge | Chats picker above it). */

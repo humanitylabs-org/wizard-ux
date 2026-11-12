@@ -93,7 +93,7 @@
     return n;
   }
   markLegacyStarters(W, window.WizLauncher?.get('autoOpen'), joinedWorkspaces());
-  // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
+  // Recorder (formerly Mizel.ai) moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
   // Apps from the Agent Service can arrive after first paint (fresh install, cleared cache): a frame window
@@ -2017,7 +2017,7 @@
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
 
-  // Mizel.ai recordings: the bridge opens one "🎙 …" thread per recording; they live in the shade as their own source.
+  // Recorder recordings (formerly Mizel.ai): the bridge opens one "🎙 …" thread per recording; they live in the shade as their own source.
   const isRec = n => /^\s*\u{1F399}/u.test(n?.title || '');
   const REC_WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
   function recState(s) { if (REC_WORKING.has(s.status)) return { k: 'run', g: '⏳', t: 'Follow-ups running' };
@@ -2042,7 +2042,7 @@
   function noteHtml(n, g) {
     const sub = n.status === 'queued' && n.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
     return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
-      <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Mizel.ai' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
+      <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Recorder' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
   }
   function renderInbox() {
     const L = live();
@@ -4323,6 +4323,11 @@
      * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
     sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     sessionAct: (sid, act) => {
+      // Move to channel… (wizard-ux issue 1292): Chats' own picker, over the view as it is (no trip to Chats).
+      if (act === 'move') { const find = () => Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); let here = find();
+        // No Chats yet: open one beside, out of view (stay), so the view in front stays in front.
+        if (!here) { openApp(APP.wizard, {}, { stay: true }); here = find(); }
+        return !!here && !!CHATS.moveToChannel?.(here, sid); }
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
       const w = showChats(); if (!w) return false;
       if (act === 'rename') { CHATS.openRenameSheet(w.id, sid); return true; }
@@ -4330,6 +4335,8 @@
     },
     showChats: () => !!showChats(),
     newChat: () => { const w = showChats(); if (!w) return false; CHATS.openChat(w.id, '__new__'); return true; },
+    // New chat with a channel's feed in front (wizard-ux issue 1291): that feed's own box, never General.
+    chatChannelPost: () => { const w = W[desks[idx]?.focus]; return w?.app === 'chats' && !w.thread && !!CHATS.chanCompose?.(w.id); },
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
     // Now playing (api.media): an app's own name and mark, and bringing that app to the front.

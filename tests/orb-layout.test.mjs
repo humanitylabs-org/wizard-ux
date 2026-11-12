@@ -80,7 +80,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
-  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'archiveOrder', 'channelBack', 'channels', 'chats', 'list', 'newChat', 'open', 'openList', 'order', 'ownList', 'setOrder', 'setWorkingOrder', 'workingOrder']);
+  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'archiveOrder', 'channelBack', 'channelFeed', 'channelFeedOpen', 'channelNew', 'channelPost', 'channels', 'chats', 'list', 'newChat', 'open', 'openList', 'order', 'ownList', 'setOrder', 'setWorkingOrder', 'workingOrder']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'back', 'badgeText', 'badges', 'close', 'get', 'homeScreen', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'openLink', 'path', 'routeOpens', 'search', 'store']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['attention', 'classic', 'emptyHome', 'home', 'look', 'setting', 'settings']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'reply', 'state', 'talk', 'tap']);

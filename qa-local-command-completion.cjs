@@ -3,7 +3,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
  for(const desktop of [false,true]) for(const command of ['settings','wisdom','mizel']){
   if(command!=='settings'&&process.env.QA_LOCAL_ONLY!=='1')continue;
   const label=(desktop?'desktop':'phone')+' '+command;
-  const f=await boot(desktop); f.state.text='open '+(command==='mizel'?'Mizel.ai':command);f.state.cmd=command==='settings'?{route:'command',action:'open_view',view:'settings'}:{route:'command',action:'open_app',app:command};
+  const f=await boot(desktop); f.state.text='open '+(command==='mizel'?'Recorder':command);f.state.cmd=command==='settings'?{route:'command',action:'open_view',view:'settings'}:{route:'command',action:'open_app',app:command};
   await f.p.evaluate(()=>{window.__sentCount=0;WosOutbox.onSent(()=>__sentCount++);});
   if(desktop){await f.p.evaluate(w=>__wux.chats.openChat(w,null),f.wid);await f.p.evaluate(()=>__wux.talk('start'));await sleep(1100);await f.p.evaluate(()=>__wux.talk('send'));}else{await f.p.evaluate(()=>__wos.goDesk(0));await f.take();}
   await f.p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.completion==='local')).catch(async e=>{console.log('LOCAL DEBUG',desktop,await f.rows(),f.state);throw e;});

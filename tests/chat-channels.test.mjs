@@ -64,7 +64,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanReplies,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -455,6 +455,86 @@ test('a send that could not be saved takes the post back and returns the words t
   assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), []), /ch-post sending/);
 });
 
+// Issue 1293: Dismiss on a Not sent channel post takes its "Sending…" post out of the feed at once, not after the
+// two-minute cap; only that chat's post, of its own agent.
+test('Dismiss on a Not sent channel post removes its Sending… post from the feed at once', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch'); f.env._sendResult = Promise.resolve({ sessionId: 'n7' });
+  await f.channelSend('w', form('will fail'));
+  f.env._sendResult = Promise.resolve({ sessionId: 'n8' }); await f.channelSend('w', form('still going'));
+  const open = f.chanOpen(f.w);
+  assert.equal([...f.channelFeed(f.w, open, []).matchAll(/ch-post sending/g)].length, 2);
+  assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent: 'host' }), 0, 'another agent\'s chat id leaves it');
+  assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7' }), 1);
+  const html = f.channelFeed(f.w, open, []);
+  assert.doesNotMatch(html, />will fail</); assert.match(html, /ch-post sending[^]*>still going</);
+  // The real Dismiss handler drops it after a saved dismissal, then repaints the feed.
+  assert.match(src, /const gone = OUTBOX\.get\?\.\(failedDismiss\.dataset\.obdismissfailed\);[^]*if \(ok && gone\?\.kind === 'new' && typeof chanDropSending === 'function' && chanDropSending\(gone\)\) chanRepaint\(\);/);
+});
+
+test('issue 1293 main vs routed: Dismiss drops a host-profile, container or restricted channel\'s own Sending… post only', async () => {
+  for (const [cid, agent] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const f = fixture(); f.openChannel(f.w, cid); f.env._sendResult = Promise.resolve({ sessionId: 'n7' });
+    await f.channelSend('w', form(`${agent} post`));
+    assert.equal(f.env._sends[0][4].sid, '__new__');
+    const open = f.chanOpen(f.w), sending = () => [...f.channelFeed(f.w, open, []).matchAll(/ch-post sending/g)].length;
+    assert.equal(sending(), 1, `${agent}: the post shows Sending…`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7' }), 0, `${agent}: a main chat sharing the id leaves it`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent: agent === 'host' ? 'container' : 'host' }), 0, `${agent}: another routed agent's chat leaves it`);
+    assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7', agent }), 1, `${agent}: its own dismissed chat takes it`);
+    assert.equal(sending(), 0, `${agent}: gone from the feed at once`);
+  }
+});
+
+// Issue 1294: Edit on a channel post that was saved but then not sent refills the channel's own box (the real
+// WosSettings.moveDraft from core/settings.js), never a separate New chat; other unsent items keep the shell's Edit.
+const settingsSrc = readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+const moveDraftSrc = (() => { const i = settingsSrc.indexOf('  function moveDraft('); return settingsSrc.slice(i, settingsSrc.indexOf('\n  }\n', i) + 4); })();
+function editFixture() {
+  const f = fixture(); const removed = [];
+  f.env.OUTBOX = { remove: id => { removed.push(id); return true; }, quarantined: () => false };
+  f.env.window.WosChat = { drafts: f.env.KIT.drafts };
+  f.env.window.WosSettings = { moveDraft: vm.runInContext(`(${moveDraftSrc.trim().replace(/^function moveDraft/, 'function')})`, f.env) };
+  return { f, removed };
+}
+const failedPost = (how, extra = {}) => ({ id: 'ob1', kind: 'new', sessionId: 'n9', state: 'failed', how, text: 'Ship the boot logo', files: [{ id: 'p1', name: 'shot.png', mime: 'image/png' }], ...extra });
+
+test('Edit on a Not sent channel post puts the words and files back in that channel\'s box', () => {
+  const { f, removed } = editFixture(); f.openChannel(f.w, 'launch');
+  assert.equal(f.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats')), true);
+  assert.deepEqual(removed, ['ob1'], 'the unsent item becomes the draft');
+  const d = f.env.KIT.drafts.get('chan:hermes:launch');
+  assert.equal(d.text, 'Ship the boot logo'); assert.deepEqual(d.files.map(x => x.id), ['p1']);
+  assert.match(f.chanComposer(f.w, f.chanOpen(f.w)), /has-text[^]*>Ship the boot logo<\/textarea>/);
+  assert.equal(f.w.thread, null, 'still on the channel feed'); assert.equal(f.drafts.length, 0, 'no New chat opened');
+  // Renamed since it was sent: still this channel's post, by its filing.
+  const g = editFixture(); g.f.spacesData[0].threads.push('n9'); g.f.openChannel(g.f.w, 'launch');
+  assert.equal(g.f.chanEditUnsent('w', failedPost('typing in the # Old name channel in Chats')), true);
+  assert.equal(g.f.env.KIT.drafts.get('chan:hermes:launch').text, 'Ship the boot logo');
+});
+
+test('Edit keeps words already in the channel box, and leaves replies and other chats to the shell', () => {
+  const { f, removed } = editFixture(); f.openChannel(f.w, 'launch');
+  f.env.KIT.drafts.set('chan:hermes:launch', 'half typed', []);
+  assert.equal(f.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats')), true);
+  assert.deepEqual(removed, [], 'original kept'); assert.equal(f.env.KIT.drafts.get('chan:hermes:launch').text, 'half typed');
+  assert.match(f.toasts.at(-1), /Existing draft kept/);
+  const { f: g } = editFixture(); g.openChannel(g.w, 'launch');
+  assert.equal(g.chanEditUnsent('w', failedPost('typing in Chats')), false, 'a plain new chat');
+  assert.equal(g.chanEditUnsent('w', failedPost('typing in the # Voice channel in Chats')), false, 'another channel');
+  assert.equal(g.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats', { kind: 'reply' })), false, 'a reply');
+  g.channelBack(g.w); assert.equal(g.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats')), false, 'no feed open');
+  // Main vs routed: a host-profile, container or restricted channel takes back only its own agent's post.
+  for (const [cid, agent] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const { f: r } = editFixture(); r.openChannel(r.w, cid); const name = r.chanOpen(r.w).name;
+    assert.equal(r.chanEditUnsent('w', failedPost(`typing in the # ${name} channel in Chats`)), false, `a main post never lands in ${agent}'s channel`);
+    assert.equal(r.chanEditUnsent('w', failedPost(`typing in the # ${name} channel in Chats`, { agent })), true);
+    assert.equal(r.env.KIT.drafts.get(`chan:${agent}:${cid}`).text, 'Ship the boot logo');
+  }
+  const { f: m } = editFixture(); m.openChannel(m.w, 'launch');
+  assert.equal(m.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats', { agent: 'host' })), false, 'a routed post never lands in a main channel');
+  assert.match(src, /if \(it && !\(typeof chanEditUnsent === 'function' && chanEditUnsent\(id, it\)\)\) H\.editUnsent\(it\)/);
+});
+
 test('General posts unfiled (no Space); routed host-profile, container and restricted channels keep their own agent', async () => {
   const f = fixture(); f.env._sendResult = Promise.resolve({ sessionId: 'g1' });
   f.openChannel(f.w, '__general__'); await f.channelSend('w', form('general ask'));
@@ -604,6 +684,34 @@ test('in the feed an unread post says "● N new replies" at the right, in the n
   // A post that needs you and has a new reply shows both, amber first, in the same slot.
   const both = row('a', 1, { fresh: true, status: 'waiting_for_approval' });
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [both]), /Needs you<\/span><span class="ch-post-st new">/);
+});
+
+test('issue 1289: posts stay in posting order; a reply to an older post updates its reply line where it sits (main and routed)', async () => {
+  for (const [kind, agent] of [['main', ''], ['host-profile', 'host'], ['container', 'container'], ['restricted', 'restricted']]) {
+    const spacesList = [{ id: 'ch', name: 'Ch', ...(agent ? { agent } : {}), threads: ['a', 'b', 'c'] }];
+    const k = id => (agent ? agent + '|' : '') + id, own = agent ? { owner: agent } : {};
+    // Three posts started 30, 20 and 10 hours ago; each had one reply soon after.
+    const started = { a: 30, b: 20, c: 10 }, hist = {};
+    for (const [id, h] of Object.entries(started)) hist[k(id)] = [{ role: 'user', text: 'post ' + id, at: NOW - h * H }, { role: 'assistant', text: 'ok', at: NOW - (h - 1) * H }];
+    const mk = (id, at, extra = {}) => row(id, at, { ...own, startedAt: new Date(NOW - started[id] * H).toISOString(), messageCount: 2, lastAssistantAt: new Date(NOW - (started[id] - 1) * H).toISOString(), ...extra });
+    const f = fixture({ spacesList, history: hist });
+    f.openChannel(f.w, 'ch'); const open = f.chanOpen(f.w);
+    const order = html => [...html.matchAll(/data-morph-key="post:([^"]+)"/g)].map(m => m[1]);
+    const post = (html, id) => html.split(/<div class="ch-post(?=[ "])/).find(p => p.includes(`data-morph-key="post:${id}"`));
+    let rows = [mk('c', 9), mk('a', 29), mk('b', 19)];
+    f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    let html = f.channelFeed(f.w, open, rows);
+    assert.deepEqual(order(html), ['a', 'b', 'c'], kind + ': oldest post first');
+    assert.match(post(html, 'a'), /<b>[^<]*<\/b><time>30h<\/time>[^]*<span>1 reply<\/span><time>29h<\/time>/, kind);
+    // A new reply lands on the oldest post: its card time is now the newest of all three.
+    hist[k('a')] = [...hist[k('a')], { role: 'user', text: 'and?' }, { role: 'assistant', text: 'done', at: NOW }];
+    rows = [mk('c', 9), mk('a', 0, { messageCount: 4, lastAssistantAt: new Date(NOW).toISOString(), fresh: true }), mk('b', 19)];
+    f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+    html = f.channelFeed(f.w, open, rows);
+    assert.deepEqual(order(html), ['a', 'b', 'c'], kind + ': the reply never moves its post');
+    assert.match(post(html, 'a'), /<b>[^<]*<\/b><time>30h<\/time>/, kind + ': the header keeps the post\'s own time');
+    assert.match(post(html, 'a'), /<span>2 replies<\/span><time>0h<\/time>/, kind + ': the reply line has the new count and time');
+  }
 });
 
 test('reading a post (markSeen clears isNew) clears both the feed marker and the channel line on the next paint', () => {
@@ -1029,11 +1137,153 @@ test('issue 1266: a typed post keeps the words it was sent with through stale ro
   for (let i = 0; i < 6; i++) { const html = f.channelFeed(f.w, open, [i % 2 ? r2 : r1]); await settle(); assert.match(html, />Summarise the Jonathan call</, 'frame ' + i); noTitle(html, 'frame ' + i); }
 });
 
-test('issue 1266: a thread the agent started itself (no owner message in a real history) still shows its title', async () => {
-  const history = { a: [{ role: 'assistant', text: 'Morning roundup' }] }, s = row('a', 1, { title: 'Daily roundup' });
-  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+test('issue 1266: a thread the agent started itself with nothing readable yet still shows its title', async () => {
+  const history = { a: [{ role: 'assistant', text: '' }] }, s = row('a', 1, { title: 'Daily roundup' });
+  const f = fixture({ history, sessions: { a: s } }); f.env.toTurns = () => [];
+  f.openChannel(f.w, 'launch');
   f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+});
+
+// Alerts (wizard-agent-service issue 441): a post the agent wrote is the agent's own first message, with its avatar,
+// name and a Reply button; Reply opens its thread with the composer ready.
+test('issue 441: an agent-started post shows the agent\'s message, avatar and name, and a Reply button', async () => {
+  const history = { a: [{ role: 'assistant', text: 'Reminder: the synthetic invoice is due today.', at: NOW - H }] }, s = row('a', 1, { title: 'Invoice reminder', attention: { state: 'needs_you' } });
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /class="ch-post-t">Reminder: the synthetic invoice is due today\.</);
+  assert.match(html, /class="ch-post by-agent"/);
+  assert.match(html, /<span class="ch-post-me ch-post-ag" aria-hidden="true"><i class="ag-sig" data-agent="hermes"><\/i><\/span>/, 'the agent\'s sigil, not the owner\'s initial');
+  assert.match(html, /<b>Wizard<\/b>/, 'the agent\'s name, not the owner\'s');
+  assert.doesNotMatch(html, /James de Fleur/);
+  assert.match(html, /<button type="button" class="ch-post-reply" data-chreply="a" aria-label="Reply to Wizard">Reply<\/button>/);
+  assert.doesNotMatch(html, /class="ch-post-r[ "]/, 'no reply line before any reply');
+  assert.doesNotMatch(html, />Invoice reminder</, 'the post is the message, not the title');
+  assert.match(html, /<span class="ch-post-st needs">.*Needs you<\/span>/, 'an alert that needs the owner keeps the amber state');
+});
+
+// Issue 1287: an agent's post renders the chat bubble's inline markdown (the real KIT.inline from core/chat-kit.js):
+// a bold first line shows bold with no asterisks, links are links. The owner's own words stay plain text.
+function realInline() {
+  const ctx = { location: { origin: 'https://w.example', hostname: 'w.example', href: 'https://w.example/wizard-os-home/' }, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, navigator: {}, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) }, addEventListener() {}, setTimeout, clearTimeout, console, URL, Intl, Date };
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(kitSrc, ctx); return ctx.WosChat.inline;
+}
+test('issue 1287: an agent post shows bold and links, not raw markdown; an owner post stays plain', async () => {
+  const history = { a: [{ role: 'assistant', text: '**Bold point.** rest, see https://example.com/report and `code`', at: NOW - H }], b: [{ role: 'user', text: 'my **own** words', at: NOW - H }] };
+  const s = row('a', 1, { title: 'Alert' }), o = row('b', 2, { title: 'Mine' });
+  const f = fixture({ history, sessions: { a: s, b: o } }); f.env.KIT.inline = realInline(); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s, o]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s, o]);
+  assert.match(html, /class="ch-post-t"><strong>Bold point\.<\/strong> rest/, 'bold, with no asterisks');
+  assert.doesNotMatch(html, /\*\*Bold/);
+  assert.match(html, /<a href="https:\/\/example\.com\/report" target="_blank" rel="noopener noreferrer">/, 'the link can be tapped');
+  assert.match(html, /<code>code<\/code>/);
+  assert.doesNotMatch(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*<a /, 'no link inside a button: each link is its own control');
+  assert.match(html, /<div class="ch-post-tb" data-chopen="a"><span class="ch-post-t"><strong>/, 'a tap on the words still opens the thread');
+  assert.match(html, /class="ch-post-t">my \*\*own\*\* words</, 'the owner\'s words stay as typed');
+});
+
+test('issue 1287: an agent post\'s heading lines show bold words, never a raw #', async () => {
+  const history = { a: [{ role: 'assistant', text: '## Executive signal\n# Morning projects #\n### **Already bold**\nbody #not-a-heading', at: NOW - H }], b: [{ role: 'user', text: '# a hash', at: NOW - H }] };
+  const s = row('a', 1, { title: 'Alert' }), o = row('b', 2, { title: 'Mine' });
+  const f = fixture({ history, sessions: { a: s, b: o } }); f.env.KIT.inline = realInline(); f.openChannel(f.w, 'launch');
+  f.channelFeed(f.w, f.chanOpen(f.w), [s, o]); await settle();
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s, o]);
+  assert.match(html, /<strong>Executive signal<\/strong>/);
+  assert.match(html, /<strong>Morning projects<\/strong>/, 'closing hashes go too');
+  assert.match(html, /<strong>Already bold<\/strong>/);
+  assert.doesNotMatch(html, /#+ ?(Executive|Morning|<strong>)/, 'no raw # before a heading');
+  assert.match(html, /body #not-a-heading/, 'a # inside a line stays');
+  assert.match(html, /class="ch-post-t"># a hash</, 'the owner\'s words stay as typed');
+});
+
+test('issue 1287 main vs routed: host-profile, container and restricted agent posts render the same markdown', async () => {
+  const inline = realInline();
+  for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
+    const k = agent ? `${agent}|${sid}` : sid, s = row(sid, 1, { owner: agent });
+    const f = fixture({ agents: { [sid]: agent }, history: { [k]: [{ role: 'assistant', text: `**Alert for ${agent || 'main'}.** _soon_\n## Heading for ${agent || 'main'}\n\`\`\`\n# keep ${agent || 'main'}\n\`\`\``, at: NOW - H }] }, sessions: { [agent ? k : sid]: s } });
+    f.env.KIT.inline = inline; f.openChannel(f.w, chan);
+    f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+    assert.match(html, new RegExp(`class="ch-post-t[^"]*"><strong>Alert for ${agent || 'main'}\\.</strong> <em>soon</em>\\s`), `${agent || 'main'}: bold and italics`);
+    assert.match(html, new RegExp(`<strong>Heading for ${agent || 'main'}</strong>`), `${agent || 'main'}: a heading line is bold, no raw #`);
+    assert.match(html, new RegExp(`# keep ${agent || 'main'}`), `${agent || 'main'}: a # line inside a code fence stays as written`);
+    assert.doesNotMatch(html, /\*\*keep/);
+  }
+});
+
+test('issue 441: Reply opens the thread and focuses its composer; a thread with replies shows the reply line instead', async () => {
+  const opened = [], focused = [];
+  const ta = { focus: o => focused.push(o) };
+  const history = { a: [{ role: 'assistant', text: 'Synthetic alert', at: NOW - 2 * H }, { role: 'user', text: 'Thanks', at: NOW - H }, { role: 'assistant', text: 'Done', at: NOW - H / 2 }] };
+  const s = row('a', 1, { messageCount: 3 });
+  const f = fixture({ history, sessions: { a: s } });
+  f.env.openChat = (wid, sid) => opened.push([wid, sid]); f.env.elOf = () => ({ querySelector: sel => sel === '.ch-compose textarea' ? ta : null });
+  assert.equal(f.channelClick(click({ 'data-chreply': 'a' }), 'w', f.w), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(opened)), [['w', 'a']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(focused)), [{ preventScroll: true }]);
+  f.openChannel(f.w, 'launch');
+  for (let i = 0; i < 3; i++) { f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle(); }
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /class="ch-post-t">Synthetic alert</);
+  assert.doesNotMatch(html, /data-chreply/, 'replied: the reply line, not the Reply button');
+  assert.match(html, /<span>1 reply<\/span>/, 'the agent\'s first message is the post, not a reply');
+});
+
+test('issue 441 main vs routed: host-profile, container and restricted alerts carry their own agent, history read and Reply', async () => {
+  const names = { hermes: 'Wizard', host: 'Host agent', container: 'Box agent', restricted: 'Locked agent' };
+  for (const [chan, agent, sid] of [['launch', '', 'a'], ['host-ops', 'host', 'h1'], ['box', 'container', 'k1'], ['locked', 'restricted', 'r1']]) {
+    const k = agent ? `${agent}|${sid}` : sid;
+    const history = { [k]: [{ role: 'assistant', text: `Synthetic alert for ${agent || 'main'}`, at: NOW - H }, { role: 'user', text: 'Synthetic owner reply', at: NOW - H / 2 }] };
+    const s = row(sid, 1, { owner: agent, messageCount: 2 });
+    const f = fixture({ agents: { [sid]: agent }, history, sessions: { [agent ? k : sid]: s } });
+    f.env.agentName = id => names[id || 'hermes'];
+    const opened = [], focused = [];
+    f.env.openChat = (wid, id) => opened.push(id); f.env.elOf = () => ({ querySelector: sel => sel === '.ch-compose textarea' ? { focus: () => focused.push(sid) } : null });
+    f.openChannel(f.w, chan);
+    f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+    assert.ok(f.reads.includes(k), `${agent || 'main'}: the history read names the row's own agent`);
+    assert.match(html, new RegExp(`class="ch-post-t">Synthetic alert for ${agent || 'main'}<`), `${agent || 'main'}: the agent's message, not the owner's reply`);
+    assert.doesNotMatch(html, /Synthetic owner reply/);
+    assert.match(html, new RegExp(`<span class="ch-post-me ch-post-ag" aria-hidden="true"><i class="ag-sig" data-agent="${agent || 'hermes'}"></i></span>`));
+    assert.match(html, new RegExp(`<b>${names[agent || 'hermes']}</b>`));
+    assert.match(html, new RegExp(`data-chreply="${sid}"`));
+    assert.equal(f.channelClick(click({ 'data-chreply': sid }), 'w', f.w), true);
+    assert.deepEqual([...opened, ...focused], [sid, sid]);
+  }
+});
+
+test('issue 441 review: an alert\'s photos open in the viewer, and a fresh alert is never "1 new reply"', async () => {
+  const pic = { id: 'p1', name: 'Chart', mime: 'image/png', kind: 'image', url: '/wizard/files/p1/content' };
+  const history = { a: [{ role: 'assistant', text: 'Synthetic chart alert', at: NOW - H }] };
+  const s = row('a', 1, { fresh: true, messageCount: 1 });
+  const f = fixture({ history, full: history, sessions: { a: s } });
+  const turns = f.env.toTurns; f.env.toTurns = rows => turns(rows).map(t => t.a ? { ...t, media: [pic] } : t);
+  f.openChannel(f.w, 'launch');
+  for (let i = 0; i < 3; i++) { f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle(); }
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), [s]);
+  assert.match(html, /data-chpostimg="a"/);
+  assert.equal(f.channelClick(click({ 'data-chpostimg': 'a' }), 'w', f.w), true);
+  assert.equal(f.viewer.length, 1, 'the alert\'s photo opens'); assert.equal(f.viewer[0][0][0].id, 'p1');
+  assert.doesNotMatch(html, /new repl/, 'the opening post is not a new reply');
+  assert.match(html, /<span class="ch-post-st new">[^]*?New<\/span>/);
+});
+
+test('issue 441: an agent post read before its first words is read again once the thread moves', async () => {
+  const history = { a: [] }, s = row('a', 1, { title: 'Synthetic report', messageCount: 1 });
+  history.a = [{ role: 'assistant', text: '' }];
+  const f = fixture({ history, sessions: { a: s } }); f.openChannel(f.w, 'launch');
+  const turns = f.env.toTurns; f.env.toTurns = rows => turns(rows).filter(t => t.a?.text);
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Synthetic report</);
+  const reads = f.reads.length;
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.equal(f.reads.filter(r => r === 'a').length, f.reads.slice(0, reads).filter(r => r === 'a').length, 'not re-read while the thread has not moved');
+  history.a = [{ role: 'assistant', text: 'Synthetic report body' }]; s.messageCount = 2;
+  f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Synthetic report body</);
 });
 
 test('issue 1266 review: a history cut short by threadRows\' page limit gives no count, never a partial one', async () => {
@@ -1066,6 +1316,92 @@ test('issue 1266 review: internal user rows parseRows hides (notes, steers, run 
   const f = fixture({ history, sessions: { a: s } }); f.env.toTurns = rows => rows.filter(r => r.role === 'assistant').map(r => ({ a: { text: r.text } }));
   f.openChannel(f.w, 'launch');
   f.channelFeed(f.w, f.chanOpen(f.w), [s]); await settle();
-  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Daily roundup</);
+  assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [s]), /class="ch-post-t">Morning roundup</, 'the agent\'s own message (issue 441)');
   assert.equal(f.FIRST.get('|a')?.none, true, 'kept: no owner message');
+});
+
+test('AI apps sidebar (wizard-ux issue 1256, James 11 Nov 2026): a channel opened from the sidebar pane opens in the host\'s feed window; the sidebar list never changes', () => {
+  const f = fixture({ rows: [row('a', 1), row('b', 2), row('d', 3)] });
+  const main = f.w; main.focus = { kind: 'agent', key: 'hermes' };
+  const side = { id: 'w::side', thread: null }, feedOwner = { id: 'feed', thread: null, focus: { kind: 'agent', key: 'hermes' } }, feed = { id: 'feed::side', thread: null };
+  const wins = { w: main, 'w::side': side, feed: feedOwner, 'feed::side': feed }, opened = [];
+  f.env.W = new Proxy({}, { get: (_, id) => wins[id] });
+  f.env.owner = id => String(id).replace(/::side$/, '');
+  f.env.setFocus = (w, x) => { (wins[f.env.owner(w.id)] || w).focus = x; return true; };
+  Object.assign(f.env.H, { channelWin: w => w.id === 'w::side' ? feed : null, channelsElsewhere: w => w.id === 'w::side', channelCurrent: () => feedOwner.chan && f.chanOpen(feed)?.id || '', channelOpened: id => opened.push(id) });
+  const ids = h => h.split(/<div class="ch-chan(?=[ "])/).slice(1).map(l => /data-chchan="([^"]+)"/.exec(l)[1]), before = ids(f.channelsBody(side, f.rows));
+  // Opening Launch from the sidebar's pane: the feed window holds it; the window behind the sidebar is untouched.
+  assert.equal(f.channelClick(click({ 'data-chchan': 'launch' }), 'w::side', side), true);
+  assert.deepEqual(opened, ['feed::side'], 'the host is told the feed window opened a channel');
+  assert.equal(main.chan, undefined, 'the sidebar\'s window never holds the channel');
+  assert.deepEqual(main.focus, { kind: 'agent', key: 'hermes' }, 'the sidebar\'s Focus is unchanged: its channel list and Activity rows stay');
+  assert.equal(feedOwner.chan.id, 'launch'); assert.deepEqual(JSON.parse(JSON.stringify(feedOwner.focus)), { kind: 'space', key: 'launch' });
+  assert.equal(f.chanOpen(side), null, 'the sidebar pane has no feed open');
+  assert.equal(f.chanOpen(feed).name, 'Launch', 'the feed window has');
+  // The sidebar's channel list: every channel still there, Launch marked as the one open in the column.
+  const html = f.channelsBody(side, f.rows), lines = html.split(/<div class="ch-chan(?=[ "])/).slice(1);
+  assert.deepEqual(ids(html), before, 'the list as it was'); assert.ok(before.includes('launch') && before.length > 2);
+  assert.deepEqual(lines.filter(l => /^[^"]*\bcur\b/.test(l)).map(l => /data-chchan="([^"]+)"/.exec(l)[1]), ['launch'], 'Launch marked, only Launch');
+  assert.match(html, /data-chchan="launch" aria-current="true"/); assert.equal((html.match(/aria-current/g) || []).length, 1);
+  // Another channel from the sidebar: the feed moves there; the sidebar still unchanged.
+  f.channelClick(click({ 'data-chchan': 'voice' }), 'w::side', side);
+  assert.equal(f.chanOpen(feed).name, 'Voice'); assert.equal(main.chan, undefined); assert.deepEqual(main.focus, { kind: 'agent', key: 'hermes' });
+  // Back on the feed window closes it; nothing is marked in the sidebar then.
+  assert.equal(f.channelBack(feed), true); assert.equal(f.chanOpen(feed), null);
+  assert.ok(!f.channelsBody(side, f.rows).match(/<div class="ch-chan[^"]*"/g).some(c => /\bcur\b/.test(c)), 'no channel marked');
+  assert.deepEqual(ids(f.channelsBody(side, f.rows)), before);
+  // Every other window (phone, classic desktop Chats) opens a channel in place, as before.
+  f.env.H.channelWin = () => null; f.env.H.channelsElsewhere = () => false;
+  f.channelClick(click({ 'data-chchan': 'launch' }), 'w', main);
+  assert.equal(main.chan.id, 'launch', 'in place without a feed window');
+});
+
+// wizard-ux issue 1291 follow-up (Archimedes' in-shell review, 11 Nov 2026): a feed opened at its New line, or scrolled up,
+// did not show the owner's new post (voice key, orb) until he scrolled. His own post now brings the feed to its end;
+// other people's and agents' posts never move it.
+test('issue 1291: the owner\'s own new post brings the feed to its end from the New line or a scrolled-up place; agents\' posts do not', () => {
+  const f = fixture({ spacesList: longSpaces(120) }), rows = manyRows(120, 104);
+  f.env.CH.w = {}; f.env.focusAgentId = w => w?.focus?.kind === 'agent' ? w.focus.key : '';
+  f.openChannel(f.w, 'launch');
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows), d = feedDom(html); f.env.elOf = () => d.el;
+  const bottom = () => d.sc.scrollHeight - d.sc.clientHeight;
+  f.chanHold('w'); assert.notEqual(d.sc.scrollTop, bottom(), 'opened at the New line, not the end');
+  assert.equal(f.chanOwnPost('voice', ''), 0, 'a post into another channel: this feed stays');
+  assert.equal(f.chanOwnPost('launch', 'host'), 0, 'another agent\'s channel of the same id: stays');
+  assert.equal(f.chanOwnPost('', ''), 0, 'a General post: not this feed');
+  f.chanHold('w'); assert.notEqual(d.sc.scrollTop, bottom());
+  // His post into this channel: the end, held while the post fills in.
+  assert.equal(f.chanOwnPost('launch', ''), 1);
+  assert.deepEqual({ ...f.w.chan.at }, { end: true });
+  d.nodes.push({ dataset: { morphKey: 'post:mine' }, h: 140, getBoundingClientRect() { const top = d.nodes.slice(0, d.nodes.indexOf(this)).reduce((a, x) => a + x.h, 0); return { top: top - d.sc.scrollTop, bottom: top + this.h - d.sc.scrollTop }; } });
+  f.chanHold('w'); assert.equal(d.sc.scrollTop, bottom(), 'the new post is in view');
+  // Scrolled up again, an agent's new post arrives: the place holds (no yank).
+  f.chanUser('w'); d.sc.scrollTop = 1050; f.chanScrolled('w', d.sc);
+  const at = { ...f.w.chan.at }; assert.equal(at.key, 'post:p10');
+  d.nodes.push({ dataset: { morphKey: 'post:agent' }, h: 200, getBoundingClientRect: () => ({ top: 99999, bottom: 99999 }) });
+  f.chanHold('w'); assert.equal(d.sc.scrollTop, 1050, 'someone else\'s post never moves the feed');
+  assert.deepEqual({ ...f.w.chan.at }, at);
+  // Switch off: nothing.
+  f.setOn(false); assert.equal(f.chanOwnPost('launch', ''), 0);
+});
+
+test('issue 1291: General\'s feed follows the owner\'s General posts: every agent\'s from All, its own agent\'s when focused', () => {
+  const f = fixture(); f.env.CH.w = {}; let focusAg = '';
+  f.env.focusAgentId = () => focusAg;
+  f.openChannel(f.w, '__general__'); assert.equal(f.chanOpen(f.w)?.general, true);
+  f.w.chan.at = { key: 'post:a', y: 0 };
+  assert.equal(f.chanOwnPost('launch', ''), 0, 'a channel post: not General');
+  assert.equal(f.chanOwnPost('', 'host'), 1, 'All view: General shows every agent\'s unfiled posts (review on #1306)');
+  assert.deepEqual({ ...f.w.chan.at }, { end: true });
+  focusAg = 'hermes'; f.w.chan.at = { key: 'post:a', y: 0 };
+  assert.equal(f.chanOwnPost('', 'host'), 0, 'an agent-focused General: another agent\'s post leaves it');
+  assert.equal(f.chanOwnPost('', ''), 1); assert.deepEqual({ ...f.w.chan.at }, { end: true });
+});
+
+test('issue 1291: every owner post path calls it (box mic, voice keys and the orb via sendChat\'s channel); typed sends keep chanToEnd', () => {
+  assert.match(src, /if \(isNew && typeof opts\.space === 'string' && it\?\.sessionId && typeof chanOwnPost === 'function'\) chanOwnPost\(opts\.space, it\.agent \?\? AGID \?\? ''\);/);
+  const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+  assert.match(power, /if \(typeof pinned === 'string' && it\?\.sessionId\) A\.chanOwnPost\?\.\(pinned, it\.agent \|\| ''\);/);
+  assert.match(src, /spaceMember, chanOwnPost \}\) : null;/, 'handed to chat-power');
+  assert.match(cut('  async function channelSend(', '  function chanDropSending'), /renderChatList\(w, elOf\(wid\)\); chanToEnd\(wid\);[\s\S]*chanRepaint\(\); chanToEnd\(wid\);/);
 });

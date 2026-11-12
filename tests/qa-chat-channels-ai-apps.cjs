@@ -5,8 +5,9 @@
 // Per case: switch off = the sidebar as today (no tabs, no "# channel", no pane); switch on = Activity tabs over the
 // sidebar's own rows, each with a muted "# channel" second line in a 56 px row; Channels (one line per Space plus
 // General, the right-hand indicator slot, a chevron); a channel feed (Open / Needs you / All, posts with a reply line);
-// a post opens the thread in the chat column and the feed stays; Back thread -> channel -> list; a new post from the
-// feed's message box is filed into the channel; switching off inside a feed gives the sidebar back unchanged.
+// a channel's feed opens in the main chat column and the sidebar keeps its channel list (James, 11 Nov 2026); a post
+// opens the thread in the column; Back post -> feed -> nothing open; a new post from the feed's message box is filed
+// into the channel; switching off inside a feed gives the sidebar back unchanged.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -14,6 +15,15 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-channels.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-channels-ai-apps-evidence');
 const SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
+// QA_START: how the desktop starts. 'chats' (default: a first run, the main Chats window on desk 1); 'app-desk' (a
+// restored desktop whose only desk holds an app and no Chats window, as on James's desktop, wizard-ux issue 1256);
+// 'no-chats' (an empty desk; the layout's Home makes a New chat); 'other-view' (the only Chats window is on another
+// Chats view, so it is not the main one). The Channels tabs must show on the first paint in all of them.
+const START = process.env.QA_START || 'chats';
+const DESK = { chats: null, 'no-chats': { wins: {}, ws: [{ id: 'dqa1', wins: [], focus: null, mono: false }] },
+  'app-desk': { wins: { wqa1: { id: 'wqa1', app: 'pages', appId: 'pages' } }, ws: [{ id: 'dqa1', wins: ['wqa1'], focus: 'wqa1', mono: false }], home: false },
+  'other-view': { wins: { wqa1: { id: 'wqa1', app: 'chats', thread: null, chatsProvider: 'qa-other-chats' } }, ws: [{ id: 'dqa1', wins: ['wqa1'], focus: 'wqa1', mono: false }] } }[START];
+assert.ok(DESK !== undefined, 'QA_START: chats, app-desk, no-chats or other-view');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const SPACES = [
@@ -36,18 +46,19 @@ const report = { origin, web, cases: [] };
   const browser = await chromium.launch();
   try {
     for (const skin of SKINS) for (const on of [false, true]) {
-      const stem = `ai-apps-${skin}-${on ? 'on' : 'off'}`;
+      const stem = `ai-apps-${skin}-${on ? 'on' : 'off'}${START === 'chats' ? '' : '-' + START}`;
       const entry = { stem, errors: [], refused: [], writes: [] }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
         const mix = { 'wizard/desktop-chats': true, ...(on ? { 'wizard/chat-channels': true } : {}) };
-        await context.addInitScript(({ skin, mix, spaces }) => {
+        await context.addInitScript(({ skin, mix, spaces, desk }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
+          if (desk) { localStorage.setItem('wux.desk.wins', JSON.stringify(desk.wins)); localStorage.setItem('wux.desk.ws', JSON.stringify(desk.ws)); localStorage.setItem('wux.desk.cur', '0'); localStorage.setItem('wux.desk.layoutVersion', '2'); if (desk.home === false) localStorage.setItem('wux.desk.homeOpen', 'false'); }
           for (const [k, v] of Object.entries({ 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
-        }, { skin, mix, spaces: SPACES });
+        }, { skin, mix, spaces: SPACES, desk: DESK });
         let prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
@@ -94,6 +105,11 @@ const report = { origin, web, cases: [] };
         await sideRow('qa-g1').waitFor({ timeout: 15000 });
         await page.evaluate(() => document.fonts.ready); await nap(400);
         entry.sideWidth = Math.round((await vis('.aad-side').boundingBox()).width);
+        entry.bootWins = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('wux.desk.wins') || '{}')).map(w => [w.app, w.chatsProvider || '', w.agent || '']));
+        entry.bootTabs = await page.locator('.aad-chan:not([hidden]) .ch-chan-tabs').count();
+        // A desk with only an app open (no Chats window at all): the tabs are there on the first paint all the same.
+        if (START === 'app-desk') assert.deepEqual(entry.bootWins, [['pages', '', '']], 'no Chats window when the sidebar first paints');
+        if (on) assert.equal(entry.bootTabs, 1, 'the Activity / Channels tabs on the first paint');
         if (!on) {
           assert.equal(await page.locator('.aad-side .ch-chan-tabs, .aad-side .ch-chan-list').count(), 0, 'switch off: no tabs');
           assert.equal(await page.locator('.aad-chan-line').count(), 0, 'switch off: no channel line');
@@ -141,57 +157,67 @@ const report = { origin, web, cases: [] };
         await page.screenshot({ path: path.join(out, stem + '-channel-sheet.png') });
         await page.keyboard.press('Escape'); await nap(800); // a right-click holds row taps for 700 ms (Chats' own long-press guard)
         assert.equal(await page.locator('.ch-sheet').count(), 0, 'Esc closes the channel sheet');
-        // Feed.
+        // Feed: in the main chat column; the sidebar keeps its channel list (James, 11 Nov 2026), Launch marked.
+        const sideList = async () => page.locator('.aad-chan .ch-chan-list > .ch-chan .ch-chan-open').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.chchan));
         await launch.click();
-        await vis('.aad-chan .ch-chan-h').waitFor();
-        assert.match(await vis('.aad-chan .ch-chan-h').innerText(), /#\s*Launch/);
-        const posts = async () => page.locator('.aad-chan .ch-chan-feed .ch-post-b').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.chopen));
+        await vis('.aad-feed .ch-chan-feed').waitFor();
+        assert.deepEqual(await sideList(), ['ideas', 'launch', 'voice', '__general__'], 'opening a channel never replaces the sidebar list');
+        assert.equal(await page.locator('.aad-chan .ch-chan-feed, .aad-chan .ch-chan-h').filter({ visible: true }).count(), 0, 'no feed in the sidebar');
+        assert.equal(await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').getAttribute('aria-current'), 'true', 'the open channel is marked in the list');
+        entry.title = (await vis('.aad-tt').innerText()).trim(); assert.equal(entry.title, '# Launch', 'the column\'s title');
+        const posts = async () => page.locator('.aad-feed .ch-chan-feed .ch-post-b').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.chopen));
         entry.feedOpen = await posts(); assert.deepEqual(entry.feedOpen, ['qa-l1', 'qa-l2'], 'Open: oldest to newest, archived left out');
-        await vis('.aad-chan .ch-post-b[data-chopen="qa-l1"] .ch-post-t:not(.ch-post-wait)').waitFor({ timeout: 8000 });
-        entry.postText = (await vis('.aad-chan .ch-post-b[data-chopen="qa-l1"] .ch-post-t').innerText()).slice(0, 40);
+        await vis('.aad-feed .ch-post-b[data-chopen="qa-l1"] .ch-post-t:not(.ch-post-wait)').waitFor({ timeout: 8000 });
+        entry.postText = (await vis('.aad-feed .ch-post-b[data-chopen="qa-l1"] .ch-post-t').innerText()).slice(0, 40);
         assert.ok(FIRST.startsWith(entry.postText), 'the first owner message: ' + entry.postText);
-        await vis('.aad-chan [data-chchanf="needs"]').click(); assert.deepEqual(await posts(), ['qa-l1']);
-        await vis('.aad-chan [data-chchanf="all"]').click(); assert.deepEqual(await posts(), ['qa-l3', 'qa-l1', 'qa-l2']);
-        await vis('.aad-chan [data-chchanf="open"]').click();
-        await page.waitForFunction(() => /1 reply|New reply|new repl/.test(document.querySelector('.aad-chan .ch-post-r[data-chopen="qa-l1"]')?.innerText || ''), null, { timeout: 8000 });
-        entry.unreadLine = (await vis('.aad-chan .ch-post-r[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
+        await vis('.aad-feed [data-chchanf="needs"]').click(); assert.deepEqual(await posts(), ['qa-l1']);
+        await vis('.aad-feed [data-chchanf="all"]').click(); assert.deepEqual(await posts(), ['qa-l3', 'qa-l1', 'qa-l2']);
+        await vis('.aad-feed [data-chchanf="open"]').click();
+        await page.waitForFunction(() => /1 reply|New reply|new repl/.test(document.querySelector('.aad-feed .ch-post-r[data-chopen="qa-l1"]')?.innerText || ''), null, { timeout: 8000 });
+        entry.unreadLine = (await vis('.aad-feed .ch-post-r[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
         assert.match(entry.unreadLine, /1 reply.*(New reply|1 new reply)/, 'the reply line with the green words on the right (issue 1269)');
-        const box = vis('.aad-chan .ch-chan-compose');
+        const box = vis('.aad-feed .ch-chan-compose');
         assert.equal(await box.locator('textarea').getAttribute('placeholder'), 'Message # Launch');
-        entry.boxAtBottom = await page.evaluate(() => { const b = document.querySelector('.aad-chan .ch-chan-compose'), s = b.closest('.aad-panel').querySelector('.aad-foot'); return Math.round(s.getBoundingClientRect().top - b.getBoundingClientRect().bottom); });
-        assert.ok(entry.boxAtBottom >= 0 && entry.boxAtBottom < 40, 'the box sits at the foot of the sidebar: ' + entry.boxAtBottom);
-        entry.feedFits = await page.evaluate(() => { const f = document.querySelector('.aad-chan .ch-chan-feed'), side = f.closest('.aad-side').getBoundingClientRect(); return [...f.querySelectorAll('.ch-post')].every(p => p.getBoundingClientRect().right <= side.right + 0.5); });
-        assert.ok(entry.feedFits, 'posts fit the sidebar');
+        entry.feedGeom = await page.evaluate(() => { const f = document.querySelector('.aad-feed'), r = f.getBoundingClientRect(), side = document.querySelector('.aad-side').getBoundingClientRect(), b = f.querySelector('.ch-chan-compose').getBoundingClientRect(), p = f.querySelector('.ch-post').getBoundingClientRect();
+          return { left: Math.round(r.left), width: Math.round(r.width), sideRight: Math.round(side.right), boxGap: Math.round(r.bottom - b.bottom), post: Math.round(p.width) }; });
+        assert.ok(entry.feedGeom.left >= entry.feedGeom.sideRight - 1, 'the feed is right of the sidebar: ' + JSON.stringify(entry.feedGeom));
+        assert.ok(entry.feedGeom.post > (START === 'app-desk' ? 320 : 600), 'posts at the column\'s width (beside the app panel on an app desk), not 288 px: ' + entry.feedGeom.post);
+        assert.ok(entry.feedGeom.boxGap >= 0 && entry.feedGeom.boxGap < 40, 'the box at the foot of the column: ' + entry.feedGeom.boxGap);
         await page.screenshot({ path: path.join(out, stem + '-feed.png') });
-        // A post opens the thread in the chat column; the feed stays in the sidebar; reading it clears its green dot.
-        await vis('.aad-chan .ch-post-b[data-chopen="qa-l1"]').click();
+        // A post opens the thread in the column; the sidebar list stays; reading it clears its green dot.
+        await vis('.aad-feed .ch-post-b[data-chopen="qa-l1"]').click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-thread')].some(t => t.getClientRects().length && /launch checklist ready for Friday/.test(t.innerText)), null, { timeout: 8000 });
-        assert.ok(await vis('.aad-chan .ch-chan-h').isVisible(), 'the feed stays in the sidebar beside the thread');
-        await page.waitForFunction(() => !document.querySelector('.aad-chan .ch-post.unread[data-morph-key="post:qa-l1"]'), null, { timeout: 5000 });
+        assert.equal(await page.locator('.aad-feed').filter({ visible: true }).count(), 0, 'the thread in the column, the feed behind it');
+        assert.deepEqual(await sideList(), ['ideas', 'launch', 'voice', '__general__'], 'the sidebar list stays beside the thread');
         await page.screenshot({ path: path.join(out, stem + '-thread.png') });
-        // Back: thread -> channel -> list.
+        // Back: post -> feed -> nothing open.
         const back = () => page.evaluate(() => __wux.escStep());
-        entry.back = [await back()]; await nap(250);
-        for (let i = 0; i < 2 && await page.locator('.ch-thread').filter({ visible: true }).filter({ hasText: 'launch checklist ready for Friday' }).count(); i++) { entry.back.push(await back()); await nap(250); }
-        assert.ok(await vis('.aad-chan .ch-chan-h').isVisible(), 'Back from the thread lands on the channel');
-        entry.back.push(await back()); await nap(250);
-        await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').waitFor();
-        assert.equal(await page.locator('.aad-chan .ch-chan-h').filter({ visible: true }).count(), 0, 'Back from the channel lands on the Channels list');
+        entry.back = [await back()]; await nap(300);
+        await vis('.aad-feed .ch-chan-feed').waitFor({ timeout: 5000 });
+        assert.equal(await page.locator('.ch-thread').filter({ visible: true }).filter({ hasText: 'launch checklist ready for Friday' }).count(), 0, 'Back from the post lands on the feed');
+        await page.waitForFunction(() => !document.querySelector('.aad-feed .ch-post.unread[data-morph-key="post:qa-l1"]'), null, { timeout: 5000 });
+        await page.screenshot({ path: path.join(out, stem + '-back-to-feed.png') });
+        entry.back.push(await back()); await nap(300);
+        assert.equal(await page.locator('.aad-feed').filter({ visible: true }).count(), 0, 'Back from the feed: nothing open');
+        assert.deepEqual(await sideList(), ['ideas', 'launch', 'voice', '__general__'], 'the sidebar list as it was');
+        assert.equal(await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').getAttribute('aria-current'), null, 'no channel marked');
         entry.launchAfterRead = await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').locator('.ch-chan-ind > *').evaluateAll(n => n.map(x => x.getAttribute('aria-label')));
         assert.deepEqual(entry.launchAfterRead, ['Working', 'Needs you'], 'read: no green dot on Launch');
-        // A new post from the Voice feed's box is filed into Voice; the sidebar stays on the feed.
-        await vis('.aad-chan .ch-chan-open[data-chchan="voice"]').click(); await vis('.aad-chan .ch-chan-h').waitFor(); await nap(400);
-        const ta = vis('.aad-chan .ch-chan-compose textarea');
+        await page.screenshot({ path: path.join(out, stem + '-closed.png') });
+        // A new post from the Voice feed's box is filed into Voice; the column stays on the feed.
+        await vis('.aad-chan .ch-chan-open[data-chchan="voice"]').click(); await vis('.aad-feed .ch-chan-feed').waitFor(); await nap(400);
+        const ta = vis('.aad-feed .ch-chan-compose textarea');
         await ta.fill('Synthetic new post for the Voice channel'); await nap(300);
         assert.equal(await ta.inputValue(), 'Synthetic new post for the Voice channel', 'the words stay in the channel box');
         await page.screenshot({ path: path.join(out, stem + '-channel-box.png') });
-        await vis('.aad-chan .ch-chan-compose [type="submit"]').click();
+        await vis('.aad-feed .ch-chan-compose [type="submit"]').click();
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('wos.chats.spaces.v1') || '[]').find(s => s.id === 'voice')?.threads.length === 2, null, { timeout: 8000 });
         entry.filed = await page.evaluate(() => JSON.parse(localStorage.getItem('wos.chats.spaces.v1')).find(s => s.id === 'voice').threads);
         const newId = entry.filed[1];
-        await vis(`.aad-chan .ch-post-b[data-chopen="${newId}"]`).waitFor({ timeout: 8000 });
-        assert.ok(await vis('.aad-chan .ch-chan-h').isVisible(), 'stays in the channel');
-        assert.match(await vis(`.aad-chan .ch-post-b[data-chopen="${newId}"]`).innerText(), /Synthetic new post for the Voice channel/);
+        await vis(`.aad-feed .ch-post-b[data-chopen="${newId}"]`).waitFor({ timeout: 8000 });
+        assert.ok(await vis('.aad-feed .ch-chan-feed').isVisible(), 'stays in the channel');
+        assert.match(await vis(`.aad-feed .ch-post-b[data-chopen="${newId}"]`).innerText(), /Synthetic new post for the Voice channel/);
+        assert.deepEqual(await sideList(), ['ideas', 'launch', 'voice', '__general__'], 'the sidebar list after a post');
         await nap(1200);
         assert.ok((entry.runs || []).length >= 1 && entry.runs[0].includes('Synthetic new post for the Voice channel'), 'the new chat was sent with the words');
         await page.screenshot({ path: path.join(out, stem + '-channel-posted.png') });
@@ -200,7 +226,7 @@ const report = { origin, web, cases: [] };
         await page.waitForFunction(() => !(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'));
         await nap(600);
         await sideRow('qa-g1').waitFor({ timeout: 5000 });
-        assert.equal(await page.locator('.aad-chan:not([hidden]), .aad-side .ch-chan-tabs, .aad-side .ch-chan-h').filter({ visible: true }).count(), 0, 'switch off: no pane');
+        assert.equal(await page.locator('.aad-chan:not([hidden]), .aad-side .ch-chan-tabs, .aad-side .ch-chan-h, .aad-feed').filter({ visible: true }).count(), 0, 'switch off: no pane, no feed');
         assert.equal(await page.locator('.aad-chan-line').count(), 0, 'switch off: no channel line');
         entry.afterOff = await page.locator('.aad-scroll .aad-rw').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.sid));
         assert.ok(entry.afterOff.includes('qa-g1') && entry.afterOff.includes('qa-v1'), 'switch off: the whole list, not the Voice channel: ' + entry.afterOff);

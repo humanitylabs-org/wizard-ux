@@ -625,6 +625,8 @@ window.WosChatPower = function chatPower(A) {
     }
     sealed.done(it);
     if (pinned && it?.sessionId) A.spaceMember?.(pinned, it.sessionId, true);
+    // The channel box's own mic (General too): the feed brings the owner's post into view (wizard-ux issue 1291).
+    if (typeof pinned === 'string' && it?.sessionId) A.chanOwnPost?.(pinned, it.agent || '');
     if (isNew && !left && it?.sessionId && H.win(wid) === w && w.thread === sid && c.readNav === navAtSend) { A.openChat(wid, it.sessionId); A.renderChats(w); }
     return it;
   }

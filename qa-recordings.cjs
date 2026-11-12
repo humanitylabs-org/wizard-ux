@@ -1,4 +1,4 @@
-// Mizel.ai recordings QA: a "🎙 …" thread shows as Mizel.ai in the shade, appears on the Mizel desk strip,
+// Recorder recordings QA: a "🎙 …" thread shows as Recorder in the shade, appears on the Mizel desk strip,
 // and a tap opens it in the Chats window. Every Hermes/Wizard write is intercepted; the run fails on any real /v1/runs.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
@@ -34,10 +34,10 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
     L.emit();
   }, now);
 
-  // 1. Shade shows the source as Mizel.ai
+  // 1. Shade shows the source as Recorder
   await p.evaluate(() => __wos.openSheet('inbox')); await p.waitForTimeout(700);
   const shade = await p.evaluate(() => [...document.querySelectorAll('#inboxBody .note')].filter(n => /qa-rec-/.test(n.dataset.note)).map(n => ({ id: n.dataset.note, g: n.dataset.g, src: n.querySelector('.src').textContent, ic: n.querySelector('.ic').textContent })));
-  ok(shade.some(n => n.id === 'qa-rec-run' && n.src === 'Mizel.ai' && n.ic === '◉' && n.g === 'working'), 'running 🎙 thread is in the shade as Mizel.ai, under Working', JSON.stringify(shade));
+  ok(shade.some(n => n.id === 'qa-rec-run' && n.src === 'Recorder' && n.ic === '◉' && n.g === 'working'), 'running 🎙 thread is in the shade as Recorder, under Working', JSON.stringify(shade));
   await p.evaluate(() => document.querySelector('#inboxBody .note[data-note="qa-rec-run"]').scrollIntoView({ block: 'center' })); await p.waitForTimeout(300);
   await p.screenshot({ path: OUT + '/rec-shade.png' });
   await p.evaluate(() => __wos.closeSheets()); await p.waitForTimeout(400);

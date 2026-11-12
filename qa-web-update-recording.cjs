@@ -1,5 +1,5 @@
-// QA: "Update ready · Reload" during a Mizel.ai recording (James, 18 Oct: "every time I try to reload it says
-// please finish the recording first. Is there any way to make Mizel.ai persist through reloads?").
+// QA: "Update ready · Reload" during a Recorder recording (James, 18 Oct: "every time I try to reload it says
+// please finish the recording first. Is there any way to make Recorder persist through reloads?").
 //   A. Phone shell + the Android meeting recorder (window.wizardMizelPort, modelled on MizelProtocol): Reload goes
 //      through at once (after the typed notes save), the native recorder never stops or restarts, Mizel comes back
 //      on the same meeting with the right clock, live words resume, notes kept, no second meeting, no web chunk
@@ -167,7 +167,7 @@ async function phase(b, { native, label }) {
     }
     const json = (o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
     if (u.pathname === '/wizard/v1/bootstrap') return json({ bootstrap: 1, settings: { agent: { name: 'QA Agent' } }, capabilities: {}, endpoints: { apps: '/wizard/v1/apps', sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs' } });
-    if (u.pathname === '/wizard/v1/apps') return json({ schema: 1, apps: [{ id: 'mizel', name: 'Mizel.ai', desc: 'Record, transcribe, outline', url: '/mizel-live/#/', icon: '◉', colors: ['#3fe0ff', '#2f8cff'], source: 'launcher.json' }] });
+    if (u.pathname === '/wizard/v1/apps') return json({ schema: 1, apps: [{ id: 'mizel', name: 'Recorder', desc: 'Record, transcribe, outline', url: '/mizel-live/#/', icon: '◉', colors: ['#3fe0ff', '#2f8cff'], source: 'launcher.json' }] });
     if (u.pathname === '/wizard/hermes/api/model/options') return json({ model: 'fixture-model', provider: 'fixture', providers: [{ slug: 'fixture', name: 'Synthetic fixture route', authenticated: true, is_current: true, models: ['fixture-model'] }] });
     if (u.pathname === '/wizard/hermes/api/sessions' && q.method() === 'GET') return json({ data: [], has_more: false });
     if (u.pathname === '/wizard/thread-seen') return json({ state: { initializedAt: Date.now(), threads: {} } });

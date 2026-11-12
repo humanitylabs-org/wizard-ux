@@ -183,7 +183,8 @@
   async function del(id) {
     const it = items.get(id); if (!it) return;
     // A tombstone survives an interrupted delete, preventing stale IDB/fallback rows from replaying.
-    Object.assign(it, { state: 'sent', sentAt: now(), audio: null, error: '' });
+    // withdrawn: never sent (taken back to edit, discarded), so no list holds it as a sent chat (wizard-ux issue 1294).
+    Object.assign(it, { ...(it.state !== 'sent' ? { withdrawn: true } : {}), state: 'sent', sentAt: now(), audio: null, error: '' });
     delete it.parkedDraft; delete it.pendingBlobs; // a deletion tombstone must not retain hidden audio parts
     await put(it);
     // Never erase the durable terminal marker: an inaccessible legacy/fallback store may

@@ -126,9 +126,22 @@
   const stage = $('#stage');
   const escapeBack = window.WizEscapeBack.create();
   var ownsChatList = !!globalThis.WosSkinHost?.chatsClaimed?.();   // a chat-owning layout decided at boot: the list never mounts first
+  /* The AI apps sidebar's Channels pane (wizard-ux issue 1256) backs onto the main Chats window when there is one. With
+   * none (a fresh desktop, or a restored one with no main Chats window) it backs onto this stand-in instead: a stock
+   * list window kept off the desks and never saved, so the tabs show from the first paint. The first main Chats window
+   * then takes over its open channel (sideMain). A post opened from it opens in the main Chats, as from any row. */
+  let sideBase = null;
+  /* A channel's feed opens in the AI apps main chat column, never in the sidebar (James, 11 Nov 2026: "Channels should
+   * display in the chat list with the channel list remaining visible on the sidebar"). It is drawn by one more stand-in
+   * list window of its own (feedBase, off the desks and never saved), so opening a channel never touches the Focus of
+   * the window behind the sidebar: its channel list and Activity rows stay exactly as they were. */
+  let feedBase = null;
+  const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : undefined);
+  // Any Chats window by id: a desk window, the sidebar's stand-in or the feed, or one of their list panes (id::list/side).
+  const chatsWin = id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined);
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
-    win: id => W[id] || (/::(list|side)$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6), id.slice(-4)) : undefined),
+    win: chatsWin,
     root: () => stage,
     save,
     layout: id => { syncChatsPane(id); },
@@ -152,6 +165,12 @@
     threadShown: (wid, el) => threadShown(wid, el),
     dictationField: () => vMode === 'dictate' && (VOICE.state !== 'idle' || dictationFinishing) ? dictTarget?.el : null,
     owner: id => String(id).replace(/::(list|side)$/, ''),
+    // The sidebar's Channels pane opens a channel in the main column's feed window (wizard-ux issue 1256); every other
+    // window opens it in place. Opening it there repaints the sidebar (its open channel marked) and tells the layout.
+    channelWin: w => feedPaneFor(w),
+    channelsElsewhere: w => feedPane(w),
+    channelCurrent: () => feedOpen()?.id || '',
+    channelOpened: id => feedOpened(id),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     captureBusy: () => VOICE.state !== 'idle' || dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,
@@ -651,9 +670,59 @@
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
    * The list pane is a second Chats "window" (id::list) that always shows the list. */
   const listWins = {}, sidePanes = new WeakSet();
-  let sideHost = null; // the layout's Channels pane (chatChannels), repainted with the lists on live changes
+  let sideHost = null, feedHost = null; // the layout's Channels pane (chatChannels) and channel feed (chatFeed), repainted with the lists on live changes
   // (a layout's sidebar pane is one more such list window, id::side: the AI apps Channels pane, wizard-ux issue 1256)
-  function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } } } }); }
+  function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } else if (sideWin(id)) { if (v === '__new__') newChat(); else openThread(v); } } } }); }
+  // The window behind the sidebar's Channels pane: the main Chats window, else the stand-in (created on demand). When a
+  // main Chats window shows up, it takes over the stand-in's open channel (its feed stays on screen) and its filter.
+  function sideMain() {
+    const w = findWin(mainChats);
+    if (!w) return sideBase || (sideBase = { id: 'side-' + uid(), app: 'chats', thread: null });
+    if (sideBase) {
+      const sb = sideBase; sideBase = null;
+      if (sb.chan && !w.chan) { w.chan = { ...sb.chan, prev: w.focus || null }; w.focus = sb.focus || null; save(); }
+      const f = CHATS.ch(sb.id).chanFilter; if (f && !CHATS.ch(w.id).chanFilter) CHATS.ch(w.id).chanFilter = f;
+      CHATS.forget(sb.id); CHATS.forget(sb.id + '::side');
+    }
+    return w;
+  }
+  // The main column's feed window: the sidebar's pane opens channels there (null for every other window).
+  const feedPane = w => { const id = String(w?.id || ''); return !!ownsChatList && /::side$/.test(id) && !(feedBase && id === feedBase.id + '::side'); };
+  function feedPaneFor(w) {
+    if (!feedPane(w)) return null;
+    const id = String(w.id), base = W[id.slice(0, -6)] || sideWin(id.slice(0, -6)); if (!base) return null;
+    if (!feedBase) feedBase = { id: 'feed-' + uid(), app: 'chats', thread: null, focus: null };
+    // A fresh open starts from the sidebar's own Focus (General shows the agent it lists), never a Space it held.
+    const f = CHATS.focusOf(base); feedBase.chan = null; CHATS.ch(feedBase.id).chanFilter = CHATS.ch(feedBase.id).chanFilter || CHATS.ch(base.id).chanFilter;
+    feedBase.focus = f?.kind === 'space' ? { kind: 'agent', key: CHATS.focusAgentId(base) } : f ? { ...f } : null;
+    if (feedBase.focus && !feedBase.focus.key) feedBase.focus = null;
+    return listWin(feedBase.id, 'side');
+  }
+  const feedOpen = () => (feedBase ? CHATS.chanOpen(listWin(feedBase.id, 'side')) : null);
+  function feedOpened(id) {
+    if (!feedBase || id !== feedBase.id + '::side') return;
+    if (sideHost?.isConnected) { const w = sideMain(); CHATS.renderChatList(listWin(w.id, 'side'), sideHost); }
+    if (feedHost?.isConnected && feedHost.dataset.chats === id) CHATS.renderChatList(listWin(feedBase.id, 'side'), feedHost);
+    try { globalThis.dispatchEvent(new CustomEvent('wos:channel-feed', { detail: { open: feedOpen() } })); } catch (_) {}
+  }
+  // The sidebar pane's and the feed's clicks: a post opens in the main Chats like a sidebar row; the rest is Chats' own.
+  function paneClicks(host) {
+    if (sidePanes.has(host)) return; sidePanes.add(host);
+    host.addEventListener('click', e => {
+      const sid = host.dataset.chats || '', base = sid.replace(/::side$/, ''); if (!W[base] && !sideWin(base)) return;
+      const row = !e.target.closest('.ch-post-t a[href]') && e.target.closest('[data-chopen]'); // a link in a post is the link (ux#1287)
+      if (row && CHATS.justPressed()) { e.stopPropagation(); return; }
+      if (row && !e.target.closest('.ch-sheet')) { e.stopPropagation(); openThread(row.dataset.chopen); return; }
+      if (CHATS.click(e, sid)) { e.stopPropagation(); syncChatsPane(base); if (feedBase && base === feedBase.id) feedOpened(sid); }
+    });
+  }
+  // A feed left open in the sidebar by the earlier design (saved on the main Chats window): it moves to the main column.
+  function feedCarry(w) {
+    const pane = listWin(w.id, 'side'), open = w.chan && CHATS.chanOpen(pane); if (!open) return;
+    const to = feedPaneFor(pane); if (!to) return;
+    feedBase.focus = w.focus ? { ...w.focus } : null; feedBase.chan = { ...w.chan, prev: feedBase.focus };
+    CHATS.channelBack(pane); feedOpened(to.id);
+  }
   function syncChatsPane(id) {
     const base = String(id).replace(/::list$/, ''); const w = W[base]; if (!w || w.app !== 'chats') return;
     if (globalThis.WosSkinHost?.panelMode && panelDocked) { const sid = w.thread; if (sid && panelList?.id === base) queueMicrotask(() => panelForward(base, sid)); else if (sid && panel?.id === base) panel.held = true; else if (!sid && panel?.id === base && panel.held) queueMicrotask(() => panelThreadLeft(base)); }
@@ -1497,7 +1566,7 @@
       // Topic emoji taps belong to shared Chats; do not let the desktop pane adapter open the row first.
       if (e.target.closest('[data-chpick]')) { const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { e.stopPropagation(); syncChatsPane(id); return; } }
       // Rows in the list pane open in this window's thread pane.
-      const row = e.target.closest('[data-chopen]');
+      const row = !e.target.closest('.ch-post-t a[href]') && e.target.closest('[data-chopen]'); // a link in a post is the link (ux#1287)
       if (row && e.target.closest('.pane-list') && CHATS.justPressed()) { e.stopPropagation(); return; } // a long-press/right-click just opened the actions sheet
       if (row && e.target.closest('.pane-list') && !e.target.closest('.ch-sheet')) { e.stopPropagation(); CHATS.openChat(id, row.dataset.chopen); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
       if (e.target.closest('.pane-list [data-chnew]') || e.target.closest('[data-panenew]')) { e.stopPropagation(); CHATS.openNewDraft(id, ''); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
@@ -1569,7 +1638,7 @@
       { kind: 'cmd', name: 'Previous window', icon: '←', keys: `${MOD}[`, run: () => stepWin(-1) },
       { kind: 'cmd', name: 'Next desktop', icon: '→', run: () => stepDesk(1) },
       { kind: 'cmd', name: 'Previous desktop', icon: '←', run: () => stepDesk(-1) },
-      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat() },
+      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => chanPost() || newChat() },
       { kind: 'cmd', name: 'Wider window', icon: '⇔', keys: `${MOD}=`, run: () => resizeFocused(1) },
       { kind: 'cmd', name: 'Narrower window', icon: '⇔', keys: `${MOD}−`, run: () => resizeFocused(-1) },
       { kind: 'cmd', name: 'Reopen closed window', icon: '↺', keys: `${MOD}⇧W`, run: () => reopenClosed() },
@@ -1954,8 +2023,9 @@
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   const glow = document.createElement('div'); glow.id = 'voiceGlow'; glow.setAttribute('aria-hidden', 'true'); document.body.appendChild(glow); // edge light; never resizes the stage
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null, vBox;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vChanKey = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vRouteAt = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false, vSpace = null, vBox;
   let vHandedOff = null; // a sent take the outbox can finish after a reload
+  const vChan = () => (vReply?.sid === '__new__' && vReply.box ? CHATS.chanOpen?.(chatsWin(vReply.wid)) || null : null); // a take into a channel's box
   const VOICE = C.voice({
     onState: st => {
       window.WosCaptureTools.awake(st !== 'idle');
@@ -1969,10 +2039,10 @@
       window.WosSkinHost?.voice(st); // a layout's own orb follows the take
       pill.classList.toggle('dict', vMode === 'dictate');
       pill.classList.toggle('app-voice', vMode === 'talk' && !!vConversation);
-      $('#voiceKey').textContent = vMode === 'dictate' ? `${MOD}D` : commandTake ? `${MOD}C` : vNewChat ? vNewKey : nativeDesktop ? 'Right ⌘' : `${MOD}S`;
+      $('#voiceKey').textContent = vMode === 'dictate' ? `${MOD}D` : commandTake ? `${MOD}C` : vNewChat || vChanKey ? vNewKey : nativeDesktop ? 'Right ⌘' : `${MOD}S`;
       $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : commandTake ? 'run locally' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
-        : st === 'think' ? 'Sending…' : commandTake ? 'Local command · nothing sent to agent' : vConversation ? 'Listening · ' + vConversation.label : vFeedback ? 'Feedback · '+clip(vFeedback.title || vFeedback.thread,28) : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
+        : st === 'think' ? 'Sending…' : commandTake ? 'Local command · nothing sent to agent' : vConversation ? 'Listening · ' + vConversation.label : vFeedback ? 'Feedback · '+clip(vFeedback.title || vFeedback.thread,28) : vChan() ? `Listening · new post in # ${clip(vChan().name, 26)}` : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
@@ -2004,8 +2074,8 @@
   // A separate chord always starts a new thread, even with an existing thread focused.
   // Never retarget an in-flight reply/dictation or discard it when the new-voice chord is pressed.
   function talkNew(key = `${MOD}V`) {
-    if (VOICE.state === 'idle') return talk('start', true, key);
-    if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && vNewChat) return talk('send');
+    if (VOICE.state === 'idle') { const c = chanFront(); return c ? chanTalk(c, key) : talk('start', true, key); }
+    if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && (vNewChat || vChanKey)) return talk('send');
     toast('🎙', 'Finish the current recording before starting a new voice chat', 2400);
     return 'busy';
   }
@@ -2048,6 +2118,35 @@
     try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
     finally { clearTimeout(timer); }
   }
+  /* A channel in front (wizard/chat-channels, wizard-ux issue 1291): the focused Chats window's feed, the AI apps main
+   * column's feed, or a post's thread opened from one of them. Every way of starting a new chat there (⌥V, the orb,
+   * New chat and its keys) goes where the feed's own box sends: a new post in that channel, or a reply in that post's
+   * thread. { wid, sid } ('__new__' = a new post), or null with no channel in front (behaviour unchanged). */
+  function chanFront() {
+    const f = focused(), real = sid => !!sid && sid !== '__new__';
+    // A thread counts only when it is that channel's own post (the window keeps its channel under any thread it opens).
+    const post = (sid, open) => real(sid) && CHATS.channelOf?.(LIVE.session(sid)) === open.name;
+    const mine = f?.app === 'chats' ? CHATS.chanOpen?.(f) : null;
+    if (mine) return !f.thread ? { wid: f.id, sid: '__new__' } : post(f.thread, mine) ? { wid: f.id, sid: f.thread } : null;
+    const open = feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
+    if (feedHost?.isConnected && feedHost.dataset.chats === feedBase.id + '::side' && !feedHost.closest('[hidden]')) return { wid: feedBase.id + '::side', sid: '__new__' };
+    return f && post(f.thread, open) ? { wid: f.id, sid: f.thread } : null;
+  }
+  // A voice take into the channel in front, exactly as its box mic records one; key (⌥V, a button) sends it again.
+  async function chanTalk(c, key) {
+    const r = await recordReply(c.wid, c.sid);
+    if (r === 'recording') { vChanKey = !!key; vNewKey = key || vNewKey; return 'voice'; }
+    return r;
+  }
+  // New chat (⌘N, ⌥Enter, the palette, a layout's +) with a channel's feed in front: that feed's own box, never General.
+  function chanPost() { const c = chanFront(); return !!c && c.sid === '__new__' && !!CHATS.chanCompose?.(c.wid); }
+  /* + / ⌥N on the Channels list with no channel open: the new-channel name form (wizard-ux issue 1308). AI apps: the
+   * sidebar's Channels pane on screen with no feed in the main column; else the Chats window in front showing that list. */
+  function chanNew() {
+    if (CHATS.chanView?.() !== 'channels') return false;
+    if (ownsChatList) return !feedOpen() && !!sideHost?.isConnected && !sideHost.closest('[hidden]') && !!CHATS.chanNew?.(sideMain().id + '::side');
+    const f = focused(); return f?.app === 'chats' && !CHATS.chanOpen?.(f) && !!CHATS.chanNew?.(f.id + '::list');
+  }
   // A take started in a channel (wizard/chat-channels) re-reads its model at Send but keeps the agent it started with:
   // another agent's channel in front by then never re-routes it (its chat is filed into the starting channel).
   const chanRoute = (read, start) => () => { const r = read(), s = start(); return s && (r?.agent || '') !== (s.agent || '') ? s : r; };
@@ -2058,7 +2157,9 @@
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      commandTake = false; strictReply = false; vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
+      // ⌥S, Right ⌘, the orb: a feed in the AI apps main column is a channel too (the classic feed is handled below).
+      if (action === 'toggle' && !forceNew) { const c = chanFront(); if (c && c.wid !== focused()?.id && c.sid === '__new__') return chanTalk(c, ''); }
+      commandTake = false; strictReply = false; vMode = 'talk'; vNewChat = forceNew; vChanKey = false; vNewKey = newKey;
       const f = focused(); vSnapshot = commandSnapshot();
       vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,title:f.from.title,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
@@ -2172,7 +2273,8 @@
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
-    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box, ...(typeof CHATS.chanSpaceOf?.(W[wid]) === 'string' ? { space: CHATS.chanSpaceOf(W[wid]) } : {}) } : {}) }; vContext = viewContext(wid, 'voice, aimed at this thread');
+    const space = sid === '__new__' ? CHATS.chanSpaceOf?.(chatsWin(wid)) : null; // the AI apps feed is no desk window
+    vMode = 'talk'; vNewChat = false; vChanKey = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box, ...(typeof space === 'string' ? { space } : {}) } : {}) }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';
@@ -2320,6 +2422,11 @@
 
   /* ---------------- keyboard ---------------- */
   const typing = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  // The field a key is really typed in: through shadow roots and into a focused app frame (a key the layout sees
+  // from the shell document only names the iframe), so app text fields keep their keys too (issue 1279).
+  // A field that edits text (word moves and selection), not a checkbox, button or picker.
+  const textField = t => typing(t) && t.tagName !== 'SELECT' && !(t.tagName === 'INPUT' && /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i.test(t.type || ''));
+  const keyField = e => { let t = e?.composedPath?.()?.[0] || e?.target; for (let i = 0; i < 4 && t; i++) { let n = null; try { n = t.tagName === 'IFRAME' ? t.contentDocument?.activeElement : t.shadowRoot?.activeElement; } catch (x) {} if (!n || n === t || n.tagName === 'BODY') break; t = n; } return t; };
   let lastWs = cur;
   function dirFocus(dx, dy) {
     const d = ws[cur]; if (d.wins.length < 2) return;
@@ -2678,6 +2785,10 @@
     // macOS word jumps belong to the field/app, even with an empty composer or a sheet open.
     // Yield before layout, picker and window-manager dispatch; shifted arrows keep their distinct controls.
     if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
+    // ⌥⇧← / → select by word in a text field, an app's included: the field keeps them before any layout key.
+    if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight') && textField(keyField(e))) return;
+    // On a Mac ⌥- / ⌥⇧- type – and — (⌥= / ⌥⇧= type ≠ and ±): in an editable text field they are characters, not ⌥− / ⌥= resizes (issue 1278).
+    if (e.altKey && !e.metaKey && !e.ctrlKey && (e.code === 'Minus' || e.code === 'Equal') && IS_MAC && (f => textField(f) && !f.readOnly)(keyField(e))) return;
     if (e.key === 'Escape') {
       if (e.isComposing || e.keyCode === 229) return;
       // Run BEFORE layout keys and before the app's own capture listeners. The
@@ -2706,7 +2817,7 @@
     if (alt && !shift && code === 'KeyG') return hit(() => { if (!e.repeat) pick.start(); });
     if (alt && !shift && code === 'Backquote') return hit(() => { if (e.repeat) return; if (homeOpen) { leaveHome(); log('home:back'); } else { goHome(); log('home'); } });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
-    // ⌥⇧W reopen the last closed window · ⌥Z back to where you were · ⌥− / ⌥= window narrower / wider. Even while typing.
+    // ⌥⇧W reopen the last closed window · ⌥Z back to where you were · ⌥− / ⌥= window narrower / wider (on a Mac, not in a text field: there they type – — ≠ ±).
     if (alt && shift && code === 'KeyW') return hit(() => { if (!e.repeat) reopenClosed(); });
     if (alt && !shift && code === 'KeyZ') return hit(() => { if (!e.repeat) jumpBack(); });
     // ⌥L Dark ⇄ Light (Miguel: L for light; ⌥H J K L window moves retired, ⌥[ ] step windows): the same skin's light or dark twin (Dark ⇄ Light, Landscapes Dark ⇄ Landscapes Light).
@@ -2716,8 +2827,8 @@
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     // ⌥N: a New chat on this desk. Reuses this desk's Chats window, else opens one beside the window in front (like Reply).
-    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat(); });
-    if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); chanPost() || chanNew() || newChat(); });
+    if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) chanPost() || newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
 
     // ⌥X Resolve this: an open notification goes to the agent to stop these or fix the cause.
@@ -2836,6 +2947,12 @@
       if (w.thread) CHATS.loadThread(w);
       syncChatsPane(id);
     }
+    // the sidebar's Channels pane on its stand-in (no main Chats window yet): repainted like the one on a real window
+    const sb = typeof sideBase !== 'undefined' && sideBase && typeof sideHost !== 'undefined' && sideHost?.isConnected && sideHost.dataset.chats === sideBase.id + '::side' ? sideHost : null;
+    if (sb && !sb.contains(document.activeElement) && !CHATS.holdList(sideBase.id + '::side')) CHATS.renderChatList(listWin(sideBase.id, 'side'), sb);
+    // the channel feed in the main column (its own stand-in window): the same
+    const fb = typeof feedBase !== 'undefined' && feedBase && typeof feedHost !== 'undefined' && feedHost?.isConnected && feedHost.dataset.chats === feedBase.id + '::side' ? feedHost : null;
+    if (fb && !fb.contains(document.activeElement) && !CHATS.holdList(feedBase.id + '::side')) CHATS.renderChatList(listWin(feedBase.id, 'side'), fb);
     const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); }
     if (homeOpen) paintHome($('#desktopHome'), homeHtml(null));
     hudPaint();
@@ -3055,6 +3172,9 @@
     // The thread's own actions (Chats threadAct: the snooze tweak's interception, toasts, optimistic list); Pin = the Pins
     // toggle; Rename = Chats' rename sheet, over the chat.
     sessionAct: (sid, act) => {
+      // Move to channel… (wizard-ux issue 1292): Chats' own picker over the page, on the main Chats window (or the
+      // sidebar's stand-in when there is none); nothing navigates, so the Activity row stays where it is.
+      if (act === 'move') return !!CHATS.moveToChannel?.((findWin(mainChats) || sideMain())?.id, sid);
       if (act !== 'pin' && act !== 'rename') { const w = findWin(mainChats); CHATS.threadAct(w?.id || '', sid, act); return true; }
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
       const w = skinShowChats(); if (!w) return false; CHATS.openRenameSheet(w.id, sid); return true;
@@ -3076,23 +3196,35 @@
      * drawn into the layout's node as id::side (tabs, channels, a feed and its box; empty with the switch off). Its
      * clicks go through Chats' own handler; a post opens in the main Chats window like a sidebar row. */
     chatChannels: host => {
-      const w = findWin(mainChats); if (!w || !host || host.nodeType !== 1 || !stage.contains(host)) { host?.replaceChildren?.(); return false; }
-      const id = w.id + '::side'; sideHost = host;
-      if (host.dataset.chats !== id) host.dataset.chats = id;
-      if (!sidePanes.has(host)) {
-        sidePanes.add(host);
-        host.addEventListener('click', e => {
-          const sid = host.dataset.chats || '', base = sid.replace(/::side$/, ''); if (!W[base]) return;
-          const row = e.target.closest('[data-chopen]');
-          if (row && CHATS.justPressed()) { e.stopPropagation(); return; }
-          if (row && !e.target.closest('.ch-sheet')) { e.stopPropagation(); openThread(row.dataset.chopen); return; }
-          if (CHATS.click(e, sid)) { e.stopPropagation(); syncChatsPane(base); }
-        });
-      }
-      if (!host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(w.id, 'side'), host);
+      if (!host || host.nodeType !== 1 || !stage.contains(host)) { host?.replaceChildren?.(); return false; }
+      const w = sideMain(), id = w.id + '::side', fresh = host.dataset.chats !== id; sideHost = host;
+      if (fresh) host.dataset.chats = id;   // a new window behind it (the stand-in handed over): painted at once
+      if (w.chan) feedCarry(w);
+      paneClicks(host);
+      if (fresh || !host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(w.id, 'side'), host);
       return !!host.firstElementChild;
     },
-    chatChannelBack: () => { const w = findWin(mainChats); return !!w && !!CHATS.channelBack(listWin(w.id, 'side')); },
+    /* The channel's feed in the AI apps main chat column (wizard-ux issue 1256, James 11 Nov 2026): the open channel's
+     * header, Open / Needs you / All, its posts and its message box, drawn into the layout's node as feedBase's id::side
+     * window. A post opens its thread in the main Chats window (the column), and Back there returns to this feed.
+     * Returns the open channel ({ id, name }) or null (nothing open, or the switch off: the node is emptied). */
+    chatFeed: host => {
+      if (!host || host.nodeType !== 1 || !stage.contains(host)) { host?.replaceChildren?.(); return null; }
+      const open = feedOpen(); if (!open) { if (host.firstElementChild) host.replaceChildren(); return null; }
+      const id = feedBase.id + '::side', fresh = host.dataset.chats !== id; feedHost = host;
+      if (fresh) host.dataset.chats = id;
+      paneClicks(host);
+      if (fresh || !host.contains(document.activeElement) || !host.firstElementChild) CHATS.renderChatList(listWin(feedBase.id, 'side'), host);
+      return { id: open.id, name: open.name };
+    },
+    chatFeedOpen: () => { const o = feedOpen(); return o ? { id: o.id, name: o.name } : null; },
+    // Back: the main column's feed closes first; then (a feed the earlier design left in the sidebar) the sidebar's own.
+    chatChannelPost: () => chanPost(),
+    chatChannelNew: () => chanNew(),
+    chatChannelBack: () => {
+      if (feedBase && feedOpen()) { const ok = !!CHATS.channelBack(listWin(feedBase.id, 'side')); if (ok) feedOpened(feedBase.id + '::side'); return ok; }
+      const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side'));
+    },
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
       return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },

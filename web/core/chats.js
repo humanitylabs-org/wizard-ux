@@ -353,6 +353,21 @@ window.WizCore.chats = function createChats(H) {
     if (!spaceMember(key, sid, true, agent)) return false;
     toast('✓', `${from.length ? 'Moved to' : 'Added to'} ${name}`, 2000); return true;
   }
+  // General in the Move to channel picker (wizard-ux issue 1292): out of its channel, into no channel (the store's
+  // atomic move to null). Already in General changes nothing.
+  function fileInGeneral(sid, agent) {
+    const from = spacesOf(sid);
+    if (!from.length) { toast('✓', 'Already in General', 1600); return false; }
+    let ok = false; for (const s of from) ok = spaceMember(s.id, sid, false, agent) || ok;
+    if (ok) toast('✓', 'Moved to General', 2000); return ok;
+  }
+  // Move to channel… from a row a layout draws itself (the AI apps Activity rows): the same picker as a feed's row menu.
+  function moveToChannel(wid, sid) {
+    const w = W[wid]; if (!w || !sid || typeof channelsOn !== 'function' || !channelsOn()) return false;
+    // The row's own owner (Activity keeps the main row when a routed thread shares its id), not the id-global pin.
+    const row = LIVE.session?.(sid), agent = row ? rowAgent(row) : LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes';
+    openSpacePicker(w, agent, null, { sid }); return !!spacePicker;
+  }
   /* A Space open in front is where James is working: every new thread started there (composer, orb, voice,
    * launcher) joins it (James, 25 Oct 2026). A Chats composer files its own (Space fixed at send, below) and opts
    * out here; every other new thread is announced by the outbox once saved, and the Chats window in front decides:
@@ -367,6 +382,7 @@ window.WizCore.chats = function createChats(H) {
     if (o?.space === false) return;
     const key = spaceInFront(it.agent || '');
     if (key) spaceMember(key, it.sessionId, true, it.agent || '');
+    if (key && typeof chanOwnPost === 'function') chanOwnPost(key, it.agent || ''); // its feed shows it (issue 1291)
   });
   window.addEventListener('storage', e => { if (e.key === SPACES_KEY) window.dispatchEvent(new Event('wos:prefs')); });
   function focusOf(w) {
@@ -551,12 +567,23 @@ window.WizCore.chats = function createChats(H) {
   const chanSide = w => /::side$/.test(String(w?.id || '')) && channelsOn();
   // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
+  // A post's place in its channel feed (wizard-ux issue 1289, James: Slack threads): when the thread was started, so a
+  // new reply never moves its post. A row without a start time (an older Service, a chat still in the outbox) falls
+  // back to its card time, which for a new chat is now: it sorts as the newest post.
+  const chanPostedAt = s => Date.parse(s.startedAt) || Date.parse(s.createdAt) || chanAt(s);
+  const chanPostOrder = (a, b) => chanPostedAt(a) - chanPostedAt(b) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
   // Archive drops a channel once its newest chat (or the archiving itself) is older than CHAN_ARCHIVE_PRUNE_DAYS.
   function chanPruned(c, rows, now = Date.now()) {
     const t = rows.filter(s => inChannel(c, s)).reduce((m, s) => Math.max(m, chanAt(s)), Date.parse(chanPrefs().archived[c.id]) || 0);
     return now - t > CHAN_ARCHIVE_PRUNE_DAYS * CHAN_DAY;
   }
+  // Where a channel opens from this window: in place, or (the AI apps sidebar's pane, wizard-ux issue 1256) in the
+  // host's own feed window in the main chat column, so the sidebar keeps its channel list.
+  const chanTarget = w => (w && H.channelWin?.(w)) || w;
+  // The sidebar pane whose channels open elsewhere: it never draws a feed itself, only marks the open channel.
+  const chanElsewhere = w => !!w && !!H.channelsElsewhere?.(w);
   function openChannel(w, id) {
+    w = chanTarget(w);
     const o = W[owner(w.id)] || w; if (!o) return false;
     // Back returns to the list this channel was opened from: a feed still open keeps its own way back; a stale one
     // (the Focus moved since) gives way to the Focus showing now.
@@ -567,6 +594,7 @@ window.WizCore.chats = function createChats(H) {
     // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).
     setFocus(w, sp ? { kind: 'space', key: sp.id } : f?.kind === 'space' ? back : f);
     chanHold(w.id); requestAnimationFrame(() => chanHold(w.id));
+    H.channelOpened?.(w.id);
     return true;
   }
   // Back from a feed: to the Channels list, with the Focus the list had before.
@@ -609,19 +637,43 @@ window.WizCore.chats = function createChats(H) {
       + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
     return marks ? `<span class="ch-chan-ind">${marks}</span>` : '';
   }
-  function channelLine(ch0, rows, now) {
-    const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id);
+  function channelLine(ch0, rows, now, cur = '') {
+    const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     const un = chanUnreadN(mine);
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
+  }
+  // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
+  // it is a visible one the form can take (a hidden agent's list gets no row: never filed under another agent).
+  const chanNewAgent = w => {
+    const ags = typeof focusAgents === 'function' ? focusAgents() : []; if (!ags.length) return ''; // (tests slice the list without the agents)
+    const a = focusedAgent(focusOf(w)) || AGS()?.defaultId() || 'hermes';
+    return ags.some(x => x.id === a) ? a : '';
+  };
+  // + New channel (wizard-ux issue 1308): the existing name form, opened straight on its input; Esc or outside cancels.
+  function chanNewForm(w, tab = null) {
+    const a = w && chanNewAgent(w); if (!a) return false;
+    openSpacePicker(w, a, tab, { naming: true, from: w.id, direct: true });
+    return !!spacePicker;
+  }
+  /* The shell's + / ⌥N on the Channels list with no channel open starts a new channel (issue 1308): true when this
+   * window shows that list (channels on, Channels tab, no feed, no search) and the form opened; else false. */
+  function chanNew(wid) {
+    const w = W[wid]; if (!channelsOn() || !w || chanView !== 'channels' || chanOpen(w) || norm(ch(wid).q)) return false;
+    return chanNewForm(w, elOf(wid)?.querySelector('[data-chchannew]') || null);
   }
   function channelsBody(w, rows) {
     if (typeof chanCarry === 'function' && !chanCarried && Date.now() >= chanCarryAfter && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
+    // The channel whose feed shows in the main column (AI apps sidebar): marked in the list, which stays as it is.
+    const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '';
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
-    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now)).join('')}</div>` : ''}</section>` : '';
-    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now)).join('')}${archSec}</div>`;
+    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur)).join('')}</div>` : ''}</section>` : '';
+    // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
+    // existing name form (openSpacePicker naming) for the agent this list shows.
+    const add = chanNewAgent(w) ? '<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>New channel</b></button>' : '';
+    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur)).join('')}${add}${archSec}</div>`;
   }
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
@@ -644,13 +696,22 @@ window.WizCore.chats = function createChats(H) {
   // voice: the owner's voice note whose transcript is not there yet.
   function firstOf(rows) {
     if (!Array.isArray(rows) || !rows.length) return null;
-    let t = null; try { t = toTurns(rows).find(x => x.u && (x.u.text || x.u.files?.length || x.u.images?.length)); } catch (_) { return null; }
+    let turns; try { turns = toTurns(rows); } catch (_) { return null; }
+    const ti = turns.findIndex(x => x.u && (x.u.text || x.u.files?.length || x.u.images?.length)), t = turns[ti];
+    // The agent started it (wizard-agent-service issue 441: an alert, a reminder, a new chat it opened): the post is the
+    // agent's own first message with its pictures, also once the owner has replied under it.
+    const ai = turns.findIndex(x => !x.u && ((x.a && x.a.text) || x.media?.length)), a = turns[ai];
+    const byAgent = () => {
+      const said0 = a?.a ? String(a.a.plainText || a.a.text || '') : '', pics = (a?.media || []).filter(m => m && m.kind === 'image' && (m.url || m.thumb));
+      return { text: '', media: [], none: true, ...(a && (said0.trim() || pics.length) ? { agent: { text: said0.slice(0, CHAN_TEXT_MAX), media: pics, at: Number(a.a?.at ?? a.mediaAt ?? a.at) || 0 } } : {}) };
+    };
+    if (t && a && ai < ti) return byAgent();
     if (!t) {
       // An owner message with nothing to show yet (empty, or a voice note before its words) is not an agent-started
       // thread. Internal user rows (display_kind: notes, steers, run context) that parseRows hides are not his.
       const body = r => r.content ?? r.text ?? '', said = r => { try { return typeof body(r) === 'string' ? body(r) : JSON.stringify(body(r)); } catch (_) { return ''; } };
       const own = rows.find(r => r && r.role === 'user' && !r.display_kind && !r.kind && (!said(r).trim() || /audio\//.test(said(r))));
-      return own ? { text: '', media: [], wait: true, ...(/audio\//.test(said(own)) ? { voice: true } : {}) } : { text: '', media: [], none: true };
+      return own ? { text: '', media: [], wait: true, ...(/audio\//.test(said(own)) ? { voice: true } : {}) } : byAgent();
     }
     const files = t.u.files || [], typed = String(t.u.text || '').trim() ? String(t.u.text) : '';
     const heard = typed || String(files.find(f => f && typeof f.transcript === 'string' && f.transcript.trim())?.transcript || '');
@@ -659,7 +720,13 @@ window.WizCore.chats = function createChats(H) {
   }
   function firstPost(s) {
     if (typeof s.firstRequest === 'string' && (s.firstRequest.trim() || chanMedia(s.firstAttachments || []).length)) return { text: s.firstRequest, media: chanMedia(s.firstAttachments || []) };
-    const k = firstKey(s); if (FIRST.has(k)) return FIRST.get(k);
+    const k = firstKey(s);
+    if (FIRST.has(k)) {
+      const f = FIRST.get(k);
+      // Read before the agent's first words were there: read again once the thread moves (its list revision changes).
+      if (!(f.none && !f.agent && f.rev !== undefined && f.rev !== replyRev(s))) return f;
+      FIRST.delete(k); firstAsked.delete(k); firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) }); return f;
+    }
     const pend = firstPend.get(k), now = Date.now();
     if (!firstAsked.has(k) && !(now - (firstFailed.get(k) || 0) < CHAN_FIRST_RETRY) && !(pend && now - pend.at < pend.wait)) firstWant.set(k, { id: s.id, agent: firstAgent(s), rev: replyRev(s) });
     return null;
@@ -711,7 +778,7 @@ window.WizCore.chats = function createChats(H) {
         if (first) {
           // Kept once it holds the owner's words (or proves the agent started the thread); else read again soon.
           const p = firstOf(rows), was = firstPend.get(k);
-          if (p && !p.voice && !p.wait) { FIRST.set(k, p); firstPend.delete(k); }
+          if (p && !p.voice && !p.wait) { FIRST.set(k, p.none && !p.agent ? { ...p, rev } : p); firstPend.delete(k); }
           else { const wait = Math.min(CHAN_FIRST_RETRY, was ? was.wait * 2 : CHAN_FIRST_WAIT); firstPend.set(k, { at: Date.now(), wait, voice: !!p?.voice || !!was?.voice }); setTimeout(() => chanRepaint(), wait + 50); }
         }
         failed.delete(k);
@@ -789,7 +856,7 @@ window.WizCore.chats = function createChats(H) {
   const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
   function channelFeed(w, open, rows) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
-    const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort((a, b) => chanAt(a) - chanAt(b));
+    const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort(chanPostOrder);
     const cs = chanStart(w, shown);
     // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
     const hat = `<span class="ch-post-av" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent || focusedAgent(focusOf(w)) || '')) || ''}</span>`;
@@ -798,20 +865,37 @@ window.WizCore.chats = function createChats(H) {
       // Slack-style: avatar, name and time, then the message as plain text (4 lines, then "more") and its pictures.
       // A thread whose first message hasn't been read yet shows its owner preview meanwhile (chanPostText); the title
       // only when the thread has no owner message at all (the agent started it).
-      const p = firstPost(s), said = chanPostText(s, p), text = said.text, media = p?.media || [];
+      const p = firstPost(s), byAgent = p?.none && p.agent ? p.agent : null, said = byAgent ? { text: byAgent.text } : chanPostText(s, p), text = said.text, media = byAgent ? byAgent.media : p?.media || [];
       const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
-      const at = p?.at && isFinite(p.at) ? new Date(p.at).toISOString() : s.createdAt || LIVE.cardAt(s);
+      const pAt = byAgent ? byAgent.at : p?.at, at = pAt && isFinite(pAt) ? new Date(pAt).toISOString() : s.startedAt || s.createdAt || LIVE.cardAt(s);
       // Replies are the bubbles James sees in the thread (chanReplies), never a raw message count; none until read.
-      const r = chanReplies(s), n = r && !r.partial ? r.ats.length : 0, un = chanUnread(s);
+      const r = chanReplies(s), n = r && !r.partial ? Math.max(0, r.ats.length - (byAgent ? 1 : 0)) : 0, un = chanUnread(s);
       // Unread (issue 1269): a green dot with words ("● 2 new replies", "● New reply") at the right of the reply line,
       // in the slot and style of the amber "Needs you", never a dot on the left. It stays until the post is opened.
-      const nn = un ? chanNewN(s, r) : 0, replies = n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
-      const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : 'New reply'}</span>` : '';
+      // An agent's post is its own first message: never counted as a new reply.
+      const nn = un ? chanNewN(s, byAgent && r ? { ...r, ats: r.ats.slice(1) } : r) : 0, replies = n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
+      const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : byAgent && !n ? 'New' : 'New reply'}</span>` : '';
       const state = (isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '') + fresh;
       const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
-      const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${esc(text)}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
-      return `<div class="ch-post${un ? ' unread' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${meAv}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(at))}</time></span>${body}</button>${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button></div></div>`;
+      // An agent's words keep the chat bubble's inline markdown (wizard-ux issue 1287: bold, italics, links, code; a
+      // report opens with a bold sentence, never "**…**"). The owner's own words stay plain text, as typed.
+      // Its links are never inside the post's button: the agent's words sit beside it (a tap there still opens the
+      // thread; the header button is the keyboard's way in), so each link is its own control.
+      // A heading line ("## Executive signal") shows as bold words, never a raw "#": the feed keeps one text size.
+      // Lines inside a ``` or ~~~ fence are code and stay as written ("# a shell comment").
+      let fence = '';
+      const heads = t => t.split('\n').map(l => { const f = /^ {0,3}(`{3,}|~{3,})/.exec(l); if (f) { if (!fence) fence = f[1][0]; else if (f[1][0] === fence) fence = ''; return l; }
+        const m = !fence && /^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(l); return !m || !m[1] ? l : m[1].includes('**') ? m[1] : `**${m[1]}**`; }).join('\n');
+      const words = byAgent && KIT?.inline ? KIT.inline(heads(text)) : esc(text);
+      const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${words}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
+      // A post the agent wrote (an alert, a reminder, a chat it opened; wizard-agent-service issue 441) carries the
+      // agent's avatar and name, and a Reply button until the thread has replies; then the usual reply line.
+      const av = byAgent ? `<span class="ch-post-me ch-post-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(firstAgent(s) || open.agent || '')) || ''}</span>` : meAv;
+      const who = byAgent ? (typeof agentName === 'function' ? agentName(firstAgent(s) || open.agent || '') : 'Wizard') : (me || 'You');
+      const foot = byAgent && !n ? `<span class="ch-post-rr"><button type="button" class="ch-post-reply" data-chreply="${esc(s.id)}" aria-label="Reply to ${esc(who)}">Reply</button>${marks}</span>`
+        : `<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button>`;
+      return `<div class="ch-post${un ? ' unread' : ''}${byAgent ? ' by-agent' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}">${av}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(who)}</b><time>${esc(ago(at))}</time></span>${byAgent ? '' : body}</button>${byAgent && body ? `<div class="ch-post-tb" data-chopen="${esc(s.id)}">${body}</div>` : ''}${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}${foot}</div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
     const sendingPost = p => {
@@ -878,7 +962,7 @@ window.WizCore.chats = function createChats(H) {
       if (arch) { p.archived[cid] = new Date().toISOString(); p.pins = p.pins.filter(x => x !== cid); } else delete p.archived[cid];
       chanPrefEdit(p, { id: cid, archived: arch, ...(arch && wasPinned ? { pinned: false } : {}) }); closeRowSheet(); chanRepaintAll(); toast('✓', `${arch ? 'Archived' : 'Restored'} # ${name}`, 1800); return true;
     }
-    if (e.target.closest('[data-rschnew]')) { closeRowSheet(); if (w && openChannel(w, cid)) chanToEnd(w.id, true); return true; }
+    if (e.target.closest('[data-rschnew]')) { closeRowSheet(); const t = w && chanTarget(w); if (t && openChannel(t, cid)) chanToEnd(t.id, true); return true; }
     return false;
   }
   // Turning the switch on or off repaints the lists at once (an open feed falls back to the list it came from).
@@ -894,11 +978,14 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chchanarch]')) { chanArchOpen = !chanArchOpen; renderChatList(w, elOf(id)); return true; }
     const x = e.target.closest('[data-chchanx]'); if (x) { const k = x.dataset.chchanx; if (chanExpanded.has(k)) chanExpanded.delete(k); else chanExpanded.add(k); renderChatList(w, elOf(id)); return true; }
     const c0 = e.target.closest('[data-chchan]'); if (c0) { openChannel(w, c0.dataset.chchan); return true; }
+    const nc = e.target.closest('[data-chchannew]'); if (nc) { chanNewForm(w, nc); return true; }
     if (e.target.closest('[data-chchanback]')) { channelBack(w); return true; }
     const fl = e.target.closest('[data-chchanf]'); if (fl) { ch(owner(id)).chanFilter = fl.dataset.chchanf; renderChatList(w, elOf(id)); return true; }
+    // Reply under an agent's post: its thread opens with the composer ready, so the reply continues that thread.
+    const rp = e.target.closest('[data-chreply]'); if (rp) { openChat(id, rp.dataset.chreply); const focus = () => { const ta = (elOf(owner(id)) || elOf(id))?.querySelector('.ch-compose textarea'); if (ta) ta.focus({ preventScroll: true }); return !!ta; }; setTimeout(() => { if (!focus()) setTimeout(focus, 250); }, 60); return true; }
     const mo = e.target.closest('[data-chpostmore]'); if (mo) { const k = mo.dataset.chpostmore; if (chanMore.has(k)) chanMore.delete(k); else chanMore.add(k); renderChatList(w, elOf(id)); return true; }
     // A photo opens the shared media viewer (Back closes it: closeOverlay → KIT.viewer.close).
-    const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), g = s ? firstPost(s)?.media || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
+    const im = e.target.closest('[data-chpostimg]'); if (im) { const s = LIVE.sessionFor ? LIVE.sessionFor(im.dataset.chpostimg, im.dataset.chpostag || '') : LIVE.session(im.dataset.chpostimg), fp = s ? firstPost(s) : null, g = fp ? (fp.none && fp.agent ? fp.agent.media : fp.media) || [] : []; if (g.length) KIT.viewer.open(g, Math.min(g.length - 1, Math.max(0, +im.dataset.i || 0))); return true; }
     return false;
   }
   /* The channel's message box (wizard-ux issue 1258; James, 10 Nov 2026: "I should be able to have a text box at the
@@ -946,6 +1033,27 @@ window.WizCore.chats = function createChats(H) {
       const ta = focus && el?.querySelector('[data-chchanform] textarea'); if (ta) { ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
     });
   }
+  /* The owner's own new post in a channel (wizard-ux issue 1291 follow-up; message box, voice key, orb, +): every feed of
+   * that channel on screen goes to its end and holds there, so the post is in view even when the feed was scrolled up
+   * or had opened at its New line. Only posts sent from here call this: other people's and agents' posts never move it.
+   * space: the channel's id, '' = General; agent: the post's agent ('' = the default one). */
+  function chanOwnPost(space, agent = '') {
+    if (typeof space !== 'string' || !channelsOn()) return 0;
+    const ag = a => a || AGS()?.defaultId?.() || 'hermes'; let n = 0;
+    for (const id of Object.keys(CH)) {
+      const w = W[id], open = w && !w.thread ? chanOpen(w) : null; if (!open) continue;
+      // General from the All view shows every agent's unfiled posts: any of his General posts; an agent's General, its own
+      const gAg = open.general ? focusAgentId(W[owner(id)] || w) : '';
+      if (open.general ? space !== '' || (gAg && ag(gAg) !== ag(agent)) : open.id !== space || ag(open.agent) !== ag(agent)) continue;
+      chanToEnd(id); n++;
+    }
+    return n;
+  }
+  // New chat with this window's feed in front (wizard-ux issue 1291): the feed's own box takes it, never General.
+  function chanCompose(wid) {
+    if (!chanDraftKey(W[wid]) || !elOf(wid)?.querySelector('[data-chchanform] textarea')) return false;
+    chanToEnd(wid, true); return true;
+  }
   // Posts still on their way for this feed: until the chat's row is in the channel (or two minutes pass).
   function chanSending(w, open, mine) {
     const key = chanDraftKey(w), now = Date.now();
@@ -985,6 +1093,37 @@ window.WizCore.chats = function createChats(H) {
     FIRST.set(owner0 + '|' + p.sid, { text: text.slice(0, CHAN_TEXT_MAX), media, at: p.at });
     chanRepaint(); chanToEnd(wid);
     return it;
+  }
+  // A Not sent channel post taken back (Edit) or dismissed (wizard-ux issue 1293): its "Sending…" post leaves the
+  // feed at once, never after the two-minute cap. Only that chat's post, of its own agent (key: one feed only).
+  function chanDropSending(it, key = '') {
+    const sid = it?.sessionId, own = it?.agent && AGS()?.isOther?.(it.agent) ? it.agent : ''; let n = 0;
+    if (sid) for (let i = CHAN_SENDING.length - 1; i >= 0; i--) { const p = CHAN_SENDING[i]; if (p.sid === sid && (p.owner || '') === own && (!key || p.feed === key)) { CHAN_SENDING.splice(i, 1); n++; } }
+    return n;
+  }
+  // Edit on a channel post that was saved but then not sent (wizard-ux issue 1294): the words go back into this
+  // channel's own box, as they do when the save itself fails, never into a separate New chat. false: not this
+  // feed's post (a reply, another channel's post, a plain new chat), so the shell's own Edit takes it.
+  const CHAN_HOW = /^typing in the # (.*) channel in Chats$/;
+  function chanEditUnsent(wid, it) {
+    const w = W[wid], key = chanDraftKey(w), open = key ? chanOpen(w) : null, how = CHAN_HOW.exec(String(it?.how || ''));
+    if (!open || !how || it.kind !== 'new' || !it.sessionId) return false;
+    // Its own agent's channel only: a main and a routed channel can share a name (and a chat id).
+    const ag = a => a || AGS()?.defaultId?.() || 'hermes'; if (ag(it.agent) !== ag(open.agent || winAgent(w))) return false;
+    if (how[1] !== open.name && (open.general || !spaceContains(open.id, it.sessionId))) return false;
+    const c = ch(wid), t = elOf(wid)?.querySelector('[data-chchanform] textarea');
+    if (c.draftFor === key && (c.files || []).some(f => f && f.uploading)) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return true; }
+    // Words typed in the box since are part of its draft: an edit never overwrites them.
+    if (t && c.draftFor === key) KIT.drafts.set(key, t.value, c.files || []);
+    if (!window.WosSettings?.moveDraft({ chats: { ch }, wid, item: it, outbox: OUTBOX, toast, key })) return true;
+    // Its "Sending…" post goes with it: the words are the box's again.
+    chanDropSending(it, key);
+    c.draftFor = ''; // the box reloads its draft (the edited words and files) on this paint
+    c.pillIds = ''; // taken back, not sent: the pill never flashes "Sent" for it
+    renderChatList(w, elOf(wid));
+    const box = elOf(wid)?.querySelector('[data-chchanform] textarea'); if (box) { box.value = c.draft || ''; growTa(box); syncSend(box.form || box.closest?.('form'), c); }
+    chanToEnd(wid, true);
+    return true;
   }
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
@@ -1723,10 +1862,10 @@ window.WizCore.chats = function createChats(H) {
     if (old.tab?.isConnected) old.tab.focus({ preventScroll: true });
     return true;
   }
-  function openSpacePicker(w, agent, tab, { naming = false, sid = '' } = {}) {
+  function openSpacePicker(w, agent, tab, { naming = false, sid = '', from = '', direct = false } = {}) {
     if (!focusAgents().some(a => a.id === agent)) return;
     closeSpacePicker();
-    spacePicker = { wid: owner(w.id), agent, tab, naming, sid, busy: false, error: '', name: '' };
+    spacePicker = { wid: owner(w.id), from, direct, agent, tab, naming, sid, busy: false, error: '', name: '' };
     renderSpacePicker();
   }
   function renderSpacePicker() {
@@ -1736,14 +1875,20 @@ window.WizCore.chats = function createChats(H) {
     if (!w || !focusAgents().some(a => a.id === p.agent)) { closeSpacePicker(); return; }
     const rows = opts.filter(o => o.kind === 'space' && spaceAgent(spaces().find(s => s.id === o.key)) === p.agent).sort((a, b) => b.recent - a.recent);
     const allOn = f?.kind === 'agent' && f.key === p.agent;
+    // Channels: General is a place too (a chat in no channel), last as in the channel list, marked when it is there.
+    const genOn = !!p.sid && SPACE.ch && !spacesOf(p.sid).length;
+    const gen = p.sid && SPACE.ch ? `<button type="button" class="ch-fopt${genOn ? ' on' : ''}" data-spgeneral aria-pressed="${genOn}"><span>General</span><small></small>${genOn ? '<b>✓</b>' : ''}</button>` : '';
     const pickTitle = SPACE.ch ? 'Move to channel' : p.sid && spacesOf(p.sid).length ? `Move to ${SPACE.one}` : `Add to a ${SPACE.one}`;
     const wrap = document.createElement('div'); wrap.dataset.chspacepicker = '';
     wrap.className = 'ch-space-shade';
-    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? pickTitle : esc(a.label) + (SPACE.ch ? ' channels' : ' Spaces')}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? pickTitle : esc(a.label)}</b><button type="button" data-spclose aria-label="Close ${SPACE.ch ? 'channels' : 'Spaces'}">×</button></header><div class="ch-space-rows">${p.sid ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${rows.map(o => { const on = p.sid ? spaceContains(o.key, p.sid) : f?.kind === 'space' && f.key === o.key; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${on}"><span>${esc(o.label)}</span><small>${o.unread || ''}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">${SPACE.ch ? 'New channel' : 'New space'}</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="${SPACE.ch ? 'Channel name' : 'Space name'}" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>' + (SPACE.ch ? '+ New channel' : '+ New space') + '</button>'}</div>`;
+    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? pickTitle : esc(a.label) + (SPACE.ch ? ' channels' : ' Spaces')}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? pickTitle : p.direct ? 'New channel' : esc(a.label)}</b><button type="button" data-spclose aria-label="Close ${SPACE.ch ? 'channels' : 'Spaces'}">×</button></header><div class="ch-space-rows">${p.sid || p.direct ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${(p.direct ? [] : rows).map(o => { const on = p.sid ? spaceContains(o.key, p.sid) : f?.kind === 'space' && f.key === o.key; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${on}"><span>${esc(o.label)}</span><small>${o.unread || ''}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}${gen}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">${SPACE.ch ? 'New channel' : 'New space'}</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="${SPACE.ch ? 'Channel name' : 'Space name'}" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>' + (SPACE.ch ? '+ New channel' : '+ New space') + '</button>'}</div>`;
     document.body.appendChild(wrap);
-    const card = wrap.firstElementChild, strip = p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
+    const card = wrap.firstElementChild, strip = p.direct ? null : p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
     if (r?.height && r.top > 0 && r.top < innerHeight) { card.style.bottom = `${Math.max(8, innerHeight - r.top + 8)}px`; if (innerWidth > 640) card.style.left = `${Math.max(8, Math.min(tr?.left || r.left, innerWidth - 296))}px`; }
-    if (!card.style.bottom) card.style.bottom = 'max(16px, env(safe-area-inset-bottom))';
+    // Wide screens with no strip to sit on (a feed's or an Activity row's Move to channel…): a card in the middle, not a
+    // full-width bar along the bottom; the phone keeps its bottom sheet.
+    else if (innerWidth > 640) Object.assign(card.style, { left: '50%', right: 'auto', top: '50%', width: 'min(360px, calc(100vw - 16px))', transform: 'translate(-50%, -50%)' });
+    if (!card.style.bottom && !card.style.top) card.style.bottom = 'max(16px, env(safe-area-inset-bottom))';
     p.tab?.setAttribute('aria-expanded', 'true');
     wrap.addEventListener('click', e => {
       if (e.target === wrap && Date.now() < focusHoldUntil) { e.preventDefault(); return; }
@@ -1751,13 +1896,14 @@ window.WizCore.chats = function createChats(H) {
       if (p.busy) return;
       if (e.target.closest('[data-spnew]')) { p.naming = true; renderSpacePicker(); return; }
       const s = e.target.closest('[data-spspace]');
+      if (e.target.closest('[data-spgeneral]') && p.sid) { closeSpacePicker(); if (fileInGeneral(p.sid, p.agent)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) rerenderList(ww); } return; }
       if (s && p.sid) { closeSpacePicker(); if (fileInSpace(s.dataset.spspace, p.sid, p.agent)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) rerenderList(ww); } return; }
       if (s || e.target.closest('[data-spall]')) { closeSpacePicker(); setFocus(w, s ? { kind: 'space', key: s.dataset.spspace } : { kind: 'agent', key: p.agent }); }
     });
     wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
     wrap.querySelector('form')?.addEventListener('submit', e => { e.preventDefault(); createPickerSpace(p); });
     wrap.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy && !p.direct) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
       if (e.target.tagName === 'INPUT' && e.key !== 'Tab') return;
       const items = [...wrap.querySelectorAll('button:not(:disabled),input:not(:disabled)')], i = items.indexOf(document.activeElement);
       if (['Tab', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowUp' || e.shiftKey ? -1 : 1) + items.length) % items.length; items[next]?.focus(); }
@@ -1768,7 +1914,7 @@ window.WizCore.chats = function createChats(H) {
     if (p !== spacePicker || p.busy) return;
     const name = p.name.trim();
     if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
-    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name))) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
+    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name)) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
     // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.
     const onStore = typeof chanStore === 'function' && !!chanStore();
     if (onStore ? spaces().filter(s => spaceAgent(s) === p.agent).length >= CHAN_STORE_MAX : spaces().length >= 50) { p.error = onStore ? `Maximum ${CHAN_STORE_MAX} channels` : SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }
@@ -1780,6 +1926,9 @@ window.WizCore.chats = function createChats(H) {
     if (spacePicker === p) closeSpacePicker();
     if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
     const w = W[p.wid]; if (!w) return;
+    // Channels (wizard-ux issue 1308): the new channel's empty feed opens with its box focused, where the list was
+    // (the AI apps sidebar's opens in the main column). No "Fill my new Space" agent chat: that stays for classic Spaces.
+    if (SPACE.ch) { const t = chanTarget(W[p.from] || w); if (t && openChannel(t, space.id)) { chanToEnd(t.id, true); setTimeout(() => chanToEnd(t.id, true), 150); } return; }
     setFocus(w, { kind: 'space', key: space.id });
     const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with your Spaces tool, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
     if (!it) toast('!', `${SPACE.ch ? 'Channel' : 'Space'} created; fill message wasn’t saved. Ask the agent to fill it from a new chat.`, 5000);
@@ -1919,8 +2068,11 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(w.id), n = norm(c.q);
     const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
     rowListAgent = AGID;
-    const chanOn = typeof channelsOn === 'function' && channelsOn(), feed = chanOn ? chanOpen(w) : null; // tests slice this renderer without the Channels block
+    // (the AI apps sidebar's pane opens its channels in the main column: it never draws a feed, wizard-ux issue 1256)
+    const chanOn = typeof channelsOn === 'function' && channelsOn(), feed = chanOn && !(typeof chanElsewhere === 'function' && chanElsewhere(w)) ? chanOpen(w) : null; // tests slice this renderer without the Channels block
     if (!chanOn && typeof chanSwitchedOff === 'function' && chanSwitchedOff(w)) { syncListTitle(w); H.layout?.(owner(w.id)); }
+    // The main column's feed window draws a feed or nothing (never the tabs or the channel list: those stay in the sidebar).
+    if (side && !feed && typeof chanElsewhere === 'function' && typeof H.channelsElsewhere === 'function' && !chanElsewhere(w)) { el.replaceChildren(); return; }
     rowChan = chanOn && !feed;
     if (!AGID) window.WizAppExtensions?.poll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
@@ -2035,7 +2187,9 @@ window.WizCore.chats = function createChats(H) {
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     // A channel's feed has its message box instead (wizard-ux issue 1258); an archived one takes no new posts (Restore
     // first), as its sheet offers no New post.
-    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
+    // On the Channels list (none open) the list's own + starts a new channel too (wizard-ux issue 1308).
+    const fabNew = chanOn && chanView === 'channels' && !n && !F && typeof chanNewAgent === 'function' && !!chanNewAgent(w);
+    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" ${fabNew ? 'data-chchannew' : 'data-chnew'} data-chfab aria-label="${fabNew ? 'New channel' : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
     // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
@@ -3817,6 +3971,8 @@ window.WizCore.chats = function createChats(H) {
     // The durable outbox allocates the final thread id before dispatch; retain that
     // membership even if delivery retries or this window navigates away.
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true, it.agent ?? AGID ?? '');
+    // A post into a channel from elsewhere (a voice key, the orb): that channel's feed brings it into view.
+    if (isNew && typeof opts.space === 'string' && it?.sessionId && typeof chanOwnPost === 'function') chanOwnPost(opts.space, it.agent ?? AGID ?? '');
     // Follow only this New chat's allocated id, never a different chat opened during the disk save.
     if (isNew && !left && !opts.away && it?.sessionId && W[wid] === w && w.thread === sid && c.readNav === navAtSend) openChat(wid, it.sessionId);
     sealed?.done(it);
@@ -3920,8 +4076,11 @@ window.WizCore.chats = function createChats(H) {
     const failedDismiss = e.target.closest('[data-obdismissfailed]'); if (failedDismiss) {
       if (failedDismiss.disabled) return true;
       failedDismiss.disabled = true;
+      const gone = OUTBOX.get?.(failedDismiss.dataset.obdismissfailed);
       Promise.resolve(OUTBOX.dismissFailed(failedDismiss.dataset.obdismissfailed)).then(ok => {
         if (!ok) failedDismiss.disabled = false;
+        // A dismissed channel post leaves its feed now (issue 1293), not when its "Sending…" post times out.
+        if (ok && gone?.kind === 'new' && typeof chanDropSending === 'function' && chanDropSending(gone)) chanRepaint();
         // A pressed desktop list temporarily holds background paints. An explicit
         // dismissal must update its own pill now, rather than wait for a later poll.
         const current = H.win(id);
@@ -3954,7 +4113,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
     if (window.WizAppExtensions?.handle(e)) return true;
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
-    const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
+    const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it && !(typeof chanEditUnsent === 'function' && chanEditUnsent(id, it))) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
     const sw = e.target.closest('[data-chswipe]');
     if (sw && swipeOpen) { const { wid: rw, sid } = swipeOpen, k = sw.dataset.chswipe; closeSwipe(true);
@@ -3966,7 +4125,8 @@ window.WizCore.chats = function createChats(H) {
     const pn = e.target.closest('[data-chpin]'); if (pn) { const on = PIN.toggle(pn.dataset.chpin); vib(8); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     const nr = e.target.closest('.ch-list .ch-notif-row[data-chnotif]'); if (nr) { window.WosSkinHost?.inboxAct?.('open', nr.dataset.chnotif); return true; }
     if (typeof channelClick === 'function' && channelClick(e, id, w)) return true;
-    const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
+    // A link inside a channel post (issue 1287) is the link, not a tap on the post: it takes the link paths below.
+    const o = e.target.closest('[data-chopen]'); if (o && !e.target.closest('.ch-post-t a[href]')) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
     if (e.target.closest('[data-chretry]')) { const c = ch(id); clearTimeout(c.retryT); c.failN = 1; renderThreadLive(w); loadThread(w, true); return true; }
     if (e.target.closest('[data-chcarryx]')) { ch(id).carry = null; renderThreadNow(w); return true; }
@@ -4049,7 +4209,7 @@ window.WizCore.chats = function createChats(H) {
     const ml = e.target.closest('a[data-mlink]'); if (ml) { e.preventDefault(); const u = ml.dataset.mlink; KIT.viewer.open([{ url: u, name: ml.textContent.trim() || 'File', kind: 'file', mime: '' }]); return true; }
     const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session, { via: 'link' }); return true; }
     // A private-origin link (a report, a hosted app) opens in a window of this shell: the shell never navigates away.
-    const al = e.target.closest('.bub a[href]');
+    const al = e.target.closest('.bub a[href], .ch-post-t a[href]');
     // A link to this app itself (…/wizard-os-home/?session=…, ?view=…, ?video=…) opens in place, never reloads.
     { const DL = window.WizCore.deeplink, href = al?.getAttribute('href'); let u = null; try { u = href ? new URL(href, location.href) : null; } catch (err) {}
       const d = u && DL?.isOwn(u) ? DL.parse(u.href) : null; // a thread link to this app's own page: same trail as a session link
@@ -4177,7 +4337,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember, chanOwnPost }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
@@ -4192,7 +4352,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, chanSpaceOf, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

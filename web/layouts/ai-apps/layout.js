@@ -240,7 +240,8 @@ export default function setup(api) {
   api.listen(findBtn, 'click', () => setSearch(true));
   api.listen(cancelBtn, 'click', () => setSearch(false));
   api.listen(field, 'input', () => { q = field.value; paintDrawer(); });
-  api.listen(newBtn, 'click', goHome);
+  // A channel's feed in front: its own box takes the new chat (issue 1291); the drawer closes so the box is in view.
+  api.listen(newBtn, 'click', () => { if (api.sessions.channelPost?.()) { closeMenu(); closeSheet(); closeDrawer(); } else goHome(); });
   api.listen(mid, 'click', goHome);
   api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
   // the cog's count (System notices set to Badge, …): the same WosBell.attention the phone's gear and the desktop's cog show
@@ -417,7 +418,7 @@ export default function setup(api) {
       const w = k === 'pin' && s.pinned ? 'Unpin' : word0;
       const it = el('button', 'aa-pop-i' + (k === 'done' ? ' is-file' : ''), { type: 'button', role: 'menuitem', 'data-act': k });
       it.append(icon(k), el('span', '', { text: w }));
-      api.listen(it, 'click', () => { if (Date.now() < swallow) return; closeMenu(); if (k === 'rename') closeDrawer(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintDrawer(); }); });
+      api.listen(it, 'click', () => { if (Date.now() < swallow) return; closeMenu(); if (k === 'rename' || k === 'move') closeDrawer(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintDrawer(); }); });
       card.append(it);
     }
     box.append(shade, card);

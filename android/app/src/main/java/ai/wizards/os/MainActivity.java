@@ -1138,6 +1138,33 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             });
             return "started";
         }
+        /**
+         * Saved Wizards (wizard-ux issue 1237): the Wizards this app was connected to through Connect / Change Wizard,
+         * as [{url, name}] without the current one. The shell adds each to the owner's saved Wizards once, so the
+         * switcher appears without anyone typing an address. Names and addresses only; never any access.
+         */
+        @JavascriptInterface
+        public String knownWizards() {
+            if (MainActivity.this instanceof AppSessionActivity || !onShell()) return "[]";
+            return ServerSettings.known(MainActivity.this);
+        }
+        /** The current Wizard's shell names itself, so the next Wizard can list this one by name. */
+        @JavascriptInterface
+        public void nameThisWizard(String name) {
+            if (MainActivity.this instanceof AppSessionActivity || name == null || !onShell()) return;
+            ServerSettings.nameCurrent(MainActivity.this, name);
+        }
+        /** The page shown is this Wizard's own shell (asked on the UI thread, as WebView requires). */
+        private boolean onShell() {
+            final boolean[] ok = {false};
+            final java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            main.post(() -> {
+                try { WebView w = web; String url = w == null ? null : w.getUrl(); ok[0] = url != null && Origin.isShell(MainActivity.this, Uri.parse(url)); }
+                finally { l.countDown(); }
+            });
+            try { l.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return ok[0];
+        }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
 

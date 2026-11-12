@@ -712,7 +712,8 @@
     painted(ctx, section) { const host = section?.querySelector?.('[data-st-resources]'); if (host) window.WosResources.bars(host); },
     act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   // A shell chooses the composer; common code owns preservation before consuming an unsent record.
-  function moveDraft({ chats, wid, item, outbox, toast }) {
+  // key: put the words into that draft (a channel's own box, wizard-ux issue 1294) instead of the window's composer.
+  function moveDraft({ chats, wid, item, outbox, toast, key = '' }) {
     if (item.audio || item.audioFile || item.hasAudio || item.body || item.state === 'unconfirmed' || item.state === 'sending' || outbox.quarantined?.(item.id)) {
       toast('!', 'Original kept · retry it or open its thread', 2400); return false;
     }
@@ -722,11 +723,11 @@
         toast('!', 'Original model route kept · select that model before editing', 2600); return false;
       }
     }
-    const draft = chats.ch(wid);
-    if (draft.draft || draft.files?.length) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return false; }
+    const draft = key ? window.WosChat?.drafts.get(key) || {} : chats.ch(wid);
+    if ((key ? draft.text?.trim() : draft.draft) || draft.files?.length) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return false; }
     const text = item.text || item.typed || '', files = item.files || [];
-    chats.setDraft(wid, text, files);
-    const saved = window.WosChat?.drafts.get(chats.ch(wid).draftFor);
+    if (key) window.WosChat?.drafts.set(key, text, files); else chats.setDraft(wid, text, files);
+    const saved = window.WosChat?.drafts.get(key || chats.ch(wid).draftFor);
     if (!saved || saved.text !== text || files.length !== saved.files.length || files.some((f, i) => f.id !== saved.files[i]?.id)) {
       toast('!', 'Draft could not be saved · original unsent message kept', 2600); return false;
     }

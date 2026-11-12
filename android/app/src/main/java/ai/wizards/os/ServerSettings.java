@@ -28,12 +28,27 @@ public final class ServerSettings {
             saved = context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("origin", clean).commit();
         }
         if (saved && !old.equals(clean)) {
+            SharedPreferences p = context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE);
+            synchronized (ServerSettings.class) { p.edit().putString("known", KnownWizards.add(KnownWizards.add(p.getString("known", null), old), clean)).commit(); }
             if (!old.isEmpty()) context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("previous", old).commit();
             context.getSharedPreferences("reply-watch", Context.MODE_PRIVATE).edit().clear().commit();
             android.app.NotificationManager nm = context.getSystemService(android.app.NotificationManager.class);
             if (nm != null) nm.cancelAll();
         }
         return saved;
+    }
+    /** Every Wizard this app was connected to except the current one, as [{url, name}] (the previous one included). */
+    public static synchronized String known(Context context) {
+        SharedPreferences p = context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE);
+        return KnownWizards.others(KnownWizards.withPrevious(p.getString("known", null), previous(context)), origin(context));
+    }
+    /** The current Wizard's own shell tells us its name, so another Wizard can list it by name. */
+    public static synchronized void nameCurrent(Context context, String name) {
+        String here = origin(context);
+        if (here.isEmpty()) return;
+        SharedPreferences p = context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE);
+        String before = p.getString("known", null), after = KnownWizards.name(before, here, name);
+        if (!after.equals(before)) p.edit().putString("known", after).apply();
     }
     /** The Wizard this app was on before the last switch, so Change Wizard can offer the way back in one tap. */
     public static synchronized String previous(Context context) {

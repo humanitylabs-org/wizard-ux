@@ -14,7 +14,8 @@
  *     Ready count (round 5, the phone's ☰ count).
  *   - Collapsed, it is a 120 px rail (round 12: words, not icons; was a 52 px icon rail, ChatGPT / Perplexity): ◫, +, 🔍, the open apps' icons, All apps, and the cog
  *     at the bottom. ◫ or Ctrl / ⌘ + Shift + S (ChatGPT's key) toggles it; the choice is kept on this device. It stays
- *     open from 900 px up (none of them fold it there); narrower it rests as the rail and opens over the page.
+ *     open from 680 px up (none of them fold it there; James, 12 Nov 2026: was 900), or 900 px while a chat is docked
+ *     beside an app panel; narrower it rests as the rail and opens over the page.
  *   - The main area beside it: a 52 px top row (what is in front on the left, a thread's title or an app's name; a small
  *     home button in its middle, always there (round 5, as on the phone); on the right, on Home only (round 5), the
  *     workspace switcher, where they put Temporary / Incognito), then the chat or the app.
@@ -75,7 +76,7 @@ import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sections
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
 
-export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
+export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;
 /** Round 9 (Miguel, 2 Nov 2026): the panels resizable by drag, within these limits (px). Round 15: the sidebar, the
  * open-apps column on the right (Arc's vertical tabs; 52 px folded) and the app panel docked left of it. */
 export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400] };
@@ -264,6 +265,12 @@ export default function desktop(api) {
    * channel's feed and its message box, in place of them (desktop.css). Empty and hidden with the switch off. */
   const chanBox = el('div', 'aad-chan'); chanBox.hidden = true;
   const paintChan = () => { const on = !q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; };
+  /* A channel opens in the main chat column, never in this sidebar (James, 11 Nov 2026: "Channels should display in the
+   * chat list with the channel list remaining visible on the sidebar"): its feed is one more chat in the column (FEED),
+   * drawn by api.sessions.channelFeed into feedBox over the docked Chats window. A post opens its thread there; Back
+   * (Esc, ✕) from the thread returns to the feed, and from the feed to nothing open. The sidebar list never changes. */
+  const FEED = '__feed__', feedBox = el('div', 'aad-feed'); feedBox.hidden = true;
+  const feedOn = () => api.sessions.channelFeedOpen?.() || null;
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
@@ -274,7 +281,12 @@ export default function desktop(api) {
   const top = el('header', 'aad-top');
   const cTop = el('div', 'aad-ctop'), tt = el('span', 'aad-tt');
   const cX = el('button', 'aad-ib aad-cx', { type: 'button', 'aria-label': 'Close the chat (Esc)', title: 'Close (Esc · ⌥W)' }); cX.append(icon('x')); cX.hidden = true;
-  cTop.append(tt, cX);
+  /* Back to the channel (wizard-ux issue 1302; James, 11 Nov 2026: "if I open a channel and then I click through to a
+   * thread there's no way for me to go back to the channel"): a thread opened from a channel's feed in this column shows
+   * "‹ # name" at the left of its header, and it does what Esc does (closeChat: the feed again, at its place). A thread
+   * opened from Activity or the sidebar has none. */
+  const cBack = el('button', 'aad-cback', { type: 'button' }); cBack.hidden = true;
+  cTop.append(cBack, tt, cX);
   const pTop = el('div', 'aad-ptop'); pTop.hidden = true;
   const pIcon = el('span', 'aad-pti'), pName = el('span', 'aad-ptn');
   const pTools = el('span', 'aad-ptools'); pTools.hidden = true;
@@ -304,6 +316,55 @@ export default function desktop(api) {
   }
   cTop.insertBefore(modeBar('chats'), cX); pTop.insertBefore(modeBar('app'), pW); sTop.append(modeBar('app2'));
   top.append(cTop, pTop);
+  /* Wizard for Mac (wizard-os#548): the Mac app's title-bar drag strip covers #bar and lets a click through only on a
+   * control INSIDE #bar (try-wizard WizardDragView reads #bar's box and the buttons in it). The chat's and the app panel's
+   * headers sit over that strip but live on their desks, so their buttons were dead in the Mac app (a click moved the
+   * window instead). Each of their buttons gets an empty, click-through stand-in in #bar, at its place; the Mac app then
+   * leaves those spots to the page and blank header space still drags the window. Plain browsers never get them. */
+  const macHoles = (() => {
+    if (root.dataset?.nativeChrome !== 'mac') return null;
+    const bar = doc.getElementById?.('bar'); if (!bar) return null;
+    const box = el('span', 'aad-mac-holes', { 'aria-hidden': 'true' });
+    bar.append(box);
+    const CONTROLS = 'button, a[href], input, select, textarea, [role="button"]';
+    let asked = false, last = '';
+    const sync = () => {
+      asked = false;
+      if (!box.isConnected) bar.append(box);
+      const b = bar.getBoundingClientRect(), spots = [];
+      for (const head of [cTop, pTop, sTop]) {
+        if (!head.isConnected) continue;
+        for (const c of head.querySelectorAll(CONTROLS)) {
+          if (!c.getClientRects().length) continue;
+          const r = c.getBoundingClientRect();
+          if (!r.width || !r.height || r.bottom <= b.top || r.top >= b.bottom || r.right <= b.left || r.left >= b.right) continue;
+          const x = Math.floor(r.left - b.left - bar.clientLeft), y = Math.floor(r.top - b.top - bar.clientTop);
+          spots.push([x, y, Math.ceil(r.right - b.left - bar.clientLeft) - x, Math.ceil(r.bottom - b.top - bar.clientTop) - y]);
+        }
+      }
+      // The Mac app keeps page coordinates and re-reads only on a change inside #bar: when #bar itself moves (the sidebar
+      // folds or opens), the spots are rebuilt too, even at the same place inside it.
+      const key = [b.left, b.top, b.width, b.height].map(Math.round).join(',') + '|' + spots.join(';'); if (key === last) return; last = key;
+      box.replaceChildren(...spots.map(([x, y, w, h]) => {
+        const i = el('i', '', { tabindex: '-1' });
+        Object.assign(i.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        return i;
+      }));
+    };
+    const soon = () => { if (!asked) { asked = true; api.frame(sync); } };
+    // The pointer moves before it clicks: keep the spots current while it is over the top row (motion, resizes, a header
+    // that moved without a repaint), and after every repaint, resize and finished slide.
+    api.listen(doc, 'pointermove', e => { if (e.clientY < bar.getBoundingClientRect().bottom + 8) soon(); });
+    for (const t of ['animationend', 'transitionend']) api.listen(doc, t, soon);
+    api.listen(globalThis, 'resize', soon);
+    const ro = globalThis.ResizeObserver ? new ResizeObserver(soon) : null;
+    for (const head of [cTop, pTop, sTop]) ro?.observe(head);
+    ro?.observe(bar);
+    const mo = globalThis.MutationObserver ? new MutationObserver(soon) : null;
+    mo?.observe(root, { attributes: true, attributeFilter: ['style', 'data-aad-side', 'data-aad-chat', 'data-aad-split', 'data-aad-mode', 'data-aad-focus', 'data-aad-wide'] });
+    soon();
+    return { soon, dispose() { ro?.disconnect(); mo?.disconnect(); box.remove(); } };
+  })();
   // a slow app: its placeholder in the panel's place from the first frame
   const pLoad = el('div', 'aad-pload', { 'aria-live': 'polite' }); pLoad.hidden = true;
   const pLoadT = el('span', 'aad-pload-t'); pLoad.append(el('span', 'aad-pload-i'), el('i', 'aad-pload-s', { 'aria-hidden': 'true' }), pLoadT);
@@ -360,6 +421,7 @@ export default function desktop(api) {
   const scene = el('div', 'aad');
   scene.append(shade, side, top, pLoad, vt, toast, orbBox, hBack, hMid);
   api.mount(scene);
+  api.mount(feedBox);   // (moved into the docked chat column while a channel's feed shows there)
 
   // the + sheet in three levels and room under hosted apps for the floating orb, from the shared view chrome; the orb's
   // spot (its centre, its size) lets an app's own bottom tabs go either side of it
@@ -370,9 +432,17 @@ export default function desktop(api) {
 
   /* ---------- the sidebar's width: open, the rail, or open over the page (narrow) ---------- */
   let folded = api.storage.get('folded') === true, peek = false;
-  const narrow = () => (globalThis.innerWidth || 1440) < DOCKED_FROM;
+  // A chat docked beside an app panel needs that room: there the sidebar keeps the old 900 px breakpoint, so the app
+  // is never squeezed to nothing between the docked chat and the open-apps column (Codex review on PR 1313).
+  const narrow = () => (globalThis.innerWidth || 1440) < (root.dataset.aadChat && root.dataset.aadSplit ? CROWDED_FROM : DOCKED_FROM);
+  const sideWant = () => narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
+  /** the sidebar again after a resize or a chat docking beside an app (or leaving): only when its mode changes */
+  function syncSide() {
+    if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; }
+    if (sideWant() !== root.dataset.aadSide) paintSide();
+  }
   function paintSide(relayout = true) {
-    const mode = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
+    const mode = sideWant();
     const was = root.dataset.aadSide;
     if (relayout && was && was !== mode) flip([top, orbBox, ...shownDesks()], () => { root.dataset.aadSide = mode; });
     else root.dataset.aadSide = mode;
@@ -420,8 +490,8 @@ export default function desktop(api) {
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
-  api.listen(globalThis, 'wos:experience', () => { if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
-  api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
+  api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
+  api.listen(globalThis, 'resize', syncSide);
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
    * A thin separator on its inner edge (a hairline in the accent on hover); drag it, or ←/→ (⇧ for bigger steps) with it
@@ -547,12 +617,16 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; if (chatThread === FEED || feedOn()) { chatThread = null; api.sessions.channelBack?.(); } unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
   const settings = () => { unpeek(); api.desk.settings(); };
-  api.listen(newBtn, 'click', newChat); api.listen(rNew, 'click', newChat);
+  // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
+  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
+  // + / ⌥N on the Channels list with no channel open start a new channel (wizard-ux issue 1308).
+  const plus = () => { if (!feedOn() && api.sessions.channelNew?.()) { closeMenu(); return; } newOrPost(); };
+  api.listen(newBtn, 'click', plus); api.listen(rNew, 'click', plus);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
   // the cog's count (System notices set to Badge, …): WosBell.attention, as on the stock desktop's cog and the phone's gear
   const setCounts = [setBtn, rSet].map(b => { const c = el('b', 'aad-count aad-setn', { 'aria-hidden': 'true' }); c.hidden = true; b.append(c); return c; });
@@ -713,7 +787,7 @@ export default function desktop(api) {
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
     if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}`);
-    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; api.sessions.open(s.id); });
+    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
     if ((s.actions || []).some(k => ACTS.some(([a]) => a === k))) {
@@ -925,7 +999,7 @@ export default function desktop(api) {
   function openChat(id, key) {
     if (panes.get().focus !== 'chats') panes.set({ focus: 'chats' });
     if (q) setSearch(false);
-    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
+    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); fromFeed = null; api.sessions.open(id);
     paintRail(true);
   }
   function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
@@ -1097,7 +1171,7 @@ export default function desktop(api) {
     const p = press; if (!p || p.held || p.moved) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; if (Math.hypot(dx, dy) < 48) return;
     p.moved = true; p.cancel?.();
-    if (p.drag && dy < 0 && -dy > Math.abs(dx)) newChat();
+    if (p.drag && dy < 0 && -dy > Math.abs(dx)) newOrPost();
   }
   function up(run) {
     const p = press; press = null; if (!p) return; p.cancel?.(); p.target.classList.remove('is-pressed'); if (p.target === orbBtn) eng?.press?.(false);
@@ -1428,7 +1502,7 @@ export default function desktop(api) {
     if (!docked && !wasDocked && !!(pane && chat) !== !!root.dataset.aadSplit) flip([homeComposer(), orbBox], setState); else setState();
     if (docked && !wasDocked) anim('dock');
     applySizes(); watchPaneWins();
-    if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
+    if (was !== `${!!root.dataset.aadSplit}${docked}`) { syncSide(); retileSoon(); }
     // One physical pane owns both the layout header and the app window. Moving
     // the header (not cloning it) preserves its tools/listeners and iframe state.
     const headerHost = pane?.el || top;
@@ -1442,10 +1516,49 @@ export default function desktop(api) {
     sTop.hidden = !secondEl; sName.textContent = second ? appName(second.id) : '';
     for (const { bar } of modeBars) for (const b of bar.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === model.mode));
     pTop.hidden = !pane || !model.slots.includes('app'); cX.hidden = !docked;
+    paintFeed(chat);
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
     if (loadId && pane?.id === loadId) waitLoaded(); else if (loadId && !want) doneLoading();
   }
+  // A channel's feed in the docked chat column, over the Chats window there (its own header, posts and message box).
+  function paintFeed(chat) {
+    const on = chatThread === FEED && docked && !!chat;
+    if (on && feedBox.parentNode !== chat) chat.append(feedBox);
+    const open = on ? api.sessions.channelFeed?.(feedBox) : null;
+    if (feedBox.hidden === !!open) feedBox.hidden = !open;
+    if (open) root.dataset.aadFeed = ''; else delete root.dataset.aadFeed;
+  }
+  // The post last opened from the feed (its row or its Reply), and the channel it was opened in.
+  let fromFeed = null;
+  function feedPost(e) {
+    const t = e?.target, row = t?.closest?.('[data-chopen], [data-chreply]'), open = feedOn();
+    if (!row || !open || t.closest('.ch-post-t a[href]') || t.closest('.ch-sheet')) return;
+    fromFeed = { sid: row.dataset.chopen || row.dataset.chreply, id: open.id, name: open.name };
+  }
+  api.listen(feedBox, 'click', feedPost, true);
+  // The channel the chat in the column goes back to, or null: only that post, docked, with its channel still open.
+  function feedBack() {
+    if (!fromFeed || !docked || chatThread !== fromFeed.sid) return null;
+    const open = feedOn(); return open && open.id === fromFeed.id ? open : null;
+  }
+  function paintBack() {
+    // another chat (or none) in the column: that post's Back is spent; the feed itself keeps it for a reopen
+    if (fromFeed && chatThread !== fromFeed.sid && chatThread !== FEED) fromFeed = null;
+    const b = feedBack(); cBack.hidden = !b; if (!b) return;
+    const name = `# ${b.name || ''}`; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
+  }
+  api.listen(cBack, 'click', () => closeChat());
+  // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
+  function feedOpened(open) {
+    if (!open) { paintTop(); return; }
+    const h = here(), r = api.route();
+    // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
+    if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
+    else if (h.app) chatThread = FEED;
+    paintTop();
+  }
+  api.listen(globalThis, 'wos:channel-feed', e => feedOpened(e?.detail?.open || null));
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
   function hidePanel({ home: goBack = true } = {}) {
@@ -1470,6 +1583,8 @@ export default function desktop(api) {
   function closeChat() {
     if (!docked) return false;
     if (panes.get().mode !== 'tiled') windowMode('tiled', 'chats');
+    // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
+    if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
   }
@@ -1615,7 +1730,7 @@ export default function desktop(api) {
   let focusStash = null;
   function focusIn() {
     readSessions();
-    focusStash = { folded, vtFolded, thread: chatThread === NOTE ? (stepAt && stepAt.startsWith('notif:') ? stepAt : null) : chatThread, app: pane ? { id: pane.id, desk: Number(pane.desk) } : null, wide, widths: { ...sized } };
+    focusStash = { folded, vtFolded, thread: chatThread === NOTE ? (stepAt && stepAt.startsWith('notif:') ? stepAt : null) : chatThread === FEED ? null : chatThread, app: pane ? { id: pane.id, desk: Number(pane.desk) } : null, wide, widths: { ...sized } };
     closeAll(); closeFly(); closeTidy(); closeMenu(); closeWs(); if (q) setSearch(false); unpeek();
     if (pane || docked) goHome();
     folded = true; vtFolded = true;
@@ -1662,7 +1777,7 @@ export default function desktop(api) {
     const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && h.note ? stepAt : cc && ids.includes(cc) ? cc : null;
     const nx = cur == null && dir < 0 ? { id: ids[ids.length - 1], wrapped: false } : readyStep(ids, cur, dir); if (!nx) return;
     if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
-    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id);
+    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); fromFeed = null; api.sessions.open(nx.id);
   }
   /* Round 21 (Miguel, 4 Nov 2026: the keys as obvious as possible): ⌥ + a mnemonic letter, ⇧ only for the reverse /
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
@@ -1711,7 +1826,7 @@ export default function desktop(api) {
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
     if ((code === 'KeyH' || code === 'Backquote') && !sh) return once(() => (focusOn() && focusStash ? focusOut : focusIn)());
     if (code === 'KeyS' && !sh) return once(settings);
-    if (code === 'KeyN' && !sh) return once(newChat);
+    if (code === 'KeyN' && !sh) return once(plus);
     if (code === 'KeyK' && !sh) return once(() => setSearch(true));
     if (code === 'KeyL' && !sh) return once(toggleSide);
     if (code === 'KeyR' && !sh) return once(toggleTabs);
@@ -1898,23 +2013,23 @@ export default function desktop(api) {
     // A notification in the chat column that becomes a chat (Resolve this / Have Wizard handle it, or a reply sent from
     // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
     if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
-    if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
+    if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : feedOn() ? FEED : null);
     // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
     // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
-    else if (!chatThread) chatThread = behindThread();
+    else if (chatThread === FEED ? !feedOn() : !chatThread) chatThread = behindThread();
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
-    const fresh = !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    const fresh = chatThread !== FEED && !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
-    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread ? titleOf(chatThread) : '';
-    tt.textContent = docked ? t : ''; tt.title = t;
-    cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : 'Close the chat (Esc)');
+    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? titleOf(chatThread) : '';
+    tt.textContent = docked ? t : ''; tt.title = t; paintBack();
+    cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : chatThread === FEED ? 'Close the channel (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     paintHome();
-    syncOrb();
+    syncOrb(); macHoles?.soon();
   }
   /* round 21 (Miguel, 4 Nov 2026): one left/right model for every open the shell starts by itself. An app (a
    * notification's Open, the launcher, a command) or a link an app owns = that app in the right panel, its one window
@@ -1960,7 +2075,7 @@ export default function desktop(api) {
     for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode']) delete root.dataset[k];
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
-    top.append(cTop); sTop.remove();
+    top.append(cTop); sTop.remove(); macHoles?.dispose();
     closeMenu(); closeWs(); offRws?.(); globalThis.WizWorkspaces?.close?.(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();

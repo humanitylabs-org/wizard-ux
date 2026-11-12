@@ -19,13 +19,13 @@ function event(code, extra = {}) {
     target: { value: '', matches: () => false, closest: () => null },
     preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra };
 }
-function shell({ field = false, value = '', chat = true, picker = false, skinConsumes = false, home = false } = {}) {
+function shell({ field = false, value = '', chat = true, picker = false, skinConsumes = false, home = false, realTyping = false, skinKey = null, mac = true } = {}) {
   const calls = [];
   const action = name => (...args) => calls.push([name, ...args]);
   const context = {
     pick: { active: () => picker, key: action('pick') },
     window: { WosSkinHost: { key: () => { calls.push(['layout']); return skinConsumes; } } },
-    WosSkinHost: null, keyHints: { pinned: () => false, down() {} }, NATIVE_MENU: false,
+    WosSkinHost: skinKey && { key: e => { calls.push(['layout']); return skinKey(e); } }, keyHints: { pinned: () => false, down() {} }, NATIVE_MENU: false,
     homeOpen: home, focused: () => ({ id: 'synthetic', app: chat ? 'chats' : 'frame', thread: 'synthetic-thread' }),
     typing: () => field, CHATS: { threadAct: action('threadAct') },
     winEl: () => ({ querySelector: () => ({}) }), VOICE: { state: 'idle' },
@@ -34,9 +34,13 @@ function shell({ field = false, value = '', chat = true, picker = false, skinCon
     jumpBack: action('back'), swapWin: action('swap'), dirFocus: action('focus'),
     stepWin: action('step'), speakScreen: action('speak'), commandVoice: action('command'),
     closePalette() {}, toggleKeys() {}, closeSettings() {}, closeUsage() {},
-    chatsUpDown: action('ready'), MOD: '⌥', log() {}, toast: action('toast'),
+    chatsUpDown: action('ready'), resizeFocused: action('resize'), IS_MAC: mac, MOD: '⌥', log() {}, toast: action('toast'),
   };
   vm.createContext(context);
+  // The production field lookup (and, on request, the production typing test) run as shipped.
+  if (desktop.includes('  const keyField = ')) vm.runInContext(['textField', 'keyField'].map(n => between(desktop, `  const ${n} = `, '\n') + `\nthis.${n} = ${n};`).join('\n'), context);
+  else Object.assign(context, { keyField: e => e.target, textField: t => context.typing(t) }); // a donor from before issue 1279
+  if (realTyping) vm.runInContext(between(desktop, '  const typing = ', '\n') + '\nthis.typing = typing;', context);
   vm.runInContext(between(desktop, '  function onKey(e, fromFrame = false) {', "  addEventListener('keydown', e => onKey(e), true);"), context);
   return { calls, key(code, extra = {}) { const e = event(code, { target: { value, matches: () => false, closest: () => null }, ...extra }); context.onKey(e); return e; } };
 }
@@ -59,7 +63,7 @@ function ai({ modal = '', typing = false, docked = true } = {}) {
     : '  api.keys.on({ down: e => {\n    if (!e.altKey';
   const src = between(layout, start, '\n  const vtRows = ');
   vm.runInContext('var down; var api = {keys:{on(h){down=h.down;}}};\n' + src, context);
-  return { calls, key: (code, extra = {}) => context.down(event(code, extra)) };
+  return { calls, down: e => context.down(e), key: (code, extra = {}) => context.down(event(code, extra)) };
 }
 for (const code of ['ArrowLeft', 'ArrowRight']) {
   for (const scene of [
@@ -108,3 +112,65 @@ test('help and hints cannot advertise the removed arrow actions or Someday chord
   assert.doesNotMatch(layout, /putIn\(doc\.querySelector\('\.boom-sheet \[data-boom-someday\]'\), '←'\)/);
   assert.doesNotMatch(layout, /ArrowLeft: 'snooze'|ArrowRight: 'done'/);
 });
+
+// Issue 1279: ⌥⇧← / → in an app's text field (Messenger's composer inside its frame) selected nothing, because the
+// AI apps view's key handler (WosSkinHost.key) runs first and only sees the shell document, where the focused thing is
+// the app's iframe. The text field must keep the chord before any layout key; outside a field the swap still works.
+const textarea = () => ({ tagName: 'TEXTAREA', isContentEditable: false, value: 'alpha beta', matches: () => false, closest: () => null });
+const frameWith = inner => ({ tagName: 'IFRAME', isContentEditable: false, contentDocument: { activeElement: inner }, matches: () => false, closest: () => null });
+for (const code of ['ArrowLeft', 'ArrowRight']) {
+  for (const [name, target] of [
+    ['an app frame textarea (forwarded frame event)', textarea()],
+    ['the app iframe itself (shell document focus)', frameWith(textarea())],
+    ['a contenteditable inside a shadow root', { tagName: 'X-EDITOR', isContentEditable: false, shadowRoot: { activeElement: { tagName: 'DIV', isContentEditable: true } }, matches: () => false, closest: () => null }],
+    ['a nested app frame input', frameWith(frameWith({ tagName: 'INPUT', isContentEditable: false }))],
+    ['a search box in an app frame', frameWith({ tagName: 'INPUT', type: 'search', isContentEditable: false })],
+  ]) test(`⌥⇧${code} in ${name} stays the field's word selection, even with a layout that claims arrows`, () => {
+    // The real AI apps view handler as the layout key: its own typing() sees only the shell's focused iframe.
+    const w = shell({ realTyping: true, skinKey: ai({ typing: false }).down }), e = w.key(code, { shiftKey: true, target });
+    assert.ok(!e.defaultPrevented && !e.stopped, 'native word selection');
+    assert.deepEqual(w.calls, [], 'no layout, swap or focus dispatch');
+  });
+  test(`⌥⇧${code} outside a text field still swaps windows`, () => {
+    const body = { tagName: 'BODY', isContentEditable: false, matches: () => false, closest: () => null };
+    const control = type => ({ tagName: 'INPUT', type, isContentEditable: false, matches: () => false, closest: () => null });
+    for (const target of [body, frameWith(body), frameWith(null), control('checkbox'), frameWith(control('radio')), control('button'), { tagName: 'SELECT', isContentEditable: false, matches: () => false, closest: () => null }]) {
+      // (a checkbox, button or picker has no words to select: from an app frame the chord stays the shell's)
+      if (target.tagName !== 'IFRAME' && target.tagName !== 'BODY') { const w = shell({ realTyping: true, skinKey: () => true }), e = w.key(code, { shiftKey: true, target }); assert.ok(e.defaultPrevented, 'a layout still owns the chord on ' + target.tagName); continue; }
+      const w = shell({ realTyping: true }), e = w.key(code, { shiftKey: true, target });
+      assert.ok(e.defaultPrevented, 'the shell chord');
+      assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['swap', code === 'ArrowLeft' ? -1 : 1]]);
+    }
+  });
+}
+test('a cross-origin app frame (unreadable document) never throws and counts as not typing', () => {
+  const target = { tagName: 'IFRAME', get contentDocument() { throw new Error('SecurityError'); }, matches: () => false, closest: () => null };
+  const w = shell({ realTyping: true }), e = w.key('ArrowLeft', { shiftKey: true, target });
+  assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['swap', -1]]);
+  assert.ok(e.defaultPrevented);
+});
+
+// Issue 1278: on a Mac ⌥- types – and ⌥⇧- types — (⌥= ≠, ⌥⇧= ±). The shell's ⌥− / ⌥= window resize (and the AI apps
+// view's) swallowed them in every text field, an app frame's included. In a field the character wins; elsewhere, and
+// off the Mac (where Alt+- types nothing), the resize keys are unchanged.
+for (const code of ['Minus', 'Equal']) for (const shiftKey of [false, true]) {
+  const chord = `⌥${shiftKey ? '⇧' : ''}${code}`;
+  for (const [name, target] of [
+    ['the chat composer', textarea()],
+    ['an app frame textarea (Notes, Messenger: forwarded frame event)', textarea()],
+    ['the app iframe itself (shell document focus)', frameWith(textarea())],
+    ['a contenteditable inside a shadow root', { tagName: 'X-EDITOR', isContentEditable: false, shadowRoot: { activeElement: { tagName: 'DIV', isContentEditable: true } }, matches: () => false, closest: () => null }],
+  ]) test(`${chord} in ${name} types its character on a Mac, even with a layout that resizes`, () => {
+    const w = shell({ realTyping: true, skinKey: ai({ typing: false }).down }), e = w.key(code, { shiftKey, target });
+    assert.ok(!e.defaultPrevented && !e.stopped, 'the field gets the key');
+    assert.deepEqual(w.calls, [], 'no layout or resize dispatch');
+  });
+  test(`${chord} outside an editable text field (a read-only one too), or off the Mac, still resizes the window`, () => {
+    const body = { tagName: 'BODY', isContentEditable: false, matches: () => false, closest: () => null };
+    for (const [target, mac] of [[body, true], [frameWith(body), true], [{ ...textarea(), readOnly: true }, true], [frameWith({ ...textarea(), readOnly: true }), true], [{ tagName: 'INPUT', type: 'checkbox', isContentEditable: false, matches: () => false, closest: () => null }, true], [textarea(), false]]) {
+      const w = shell({ realTyping: true, mac }), e = w.key(code, { shiftKey, target });
+      assert.ok(e.defaultPrevented, 'the shell chord');
+      assert.deepEqual(w.calls.filter(c => c[0] !== 'layout'), [['resize', code === 'Equal' ? 1 : -1]]);
+    }
+  });
+}
