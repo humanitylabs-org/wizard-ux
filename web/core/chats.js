@@ -481,12 +481,12 @@ window.WizCore.chats = function createChats(H) {
    * lists the ask; a plain owner message never clears it. Channels also give Mark done (the menus), Reply on any
    * message in the main agent's threads, and retires the Thread tracker strip and dots (thread-tracker.js on()). */
   const needsThreadOn = () => channelsOn();
-  const needsAsk = s => { if (!s || s.archived || s.status === 'waiting_for_approval' || !needsThreadOn()) return null; const a = attOf(s); return a?.state === 'needs_you' ? a : null; };
+  const needsAsk = s => { if (!s || s.archived || s.status === 'waiting_for_approval' || !needsThreadOn()) return null; const a = attOf(s); return ['needs_you', 'check'].includes(a?.state) ? a : null; }; // the one rule above (issue 1360)
   // Reply on any message (the quote above the composer) is standard for the main agent's threads with this switch.
   const replyStd = agent => needsThreadOn() && (!agent || agent === 'hermes');
   function needsLineHtml(s) {
     const a = needsAsk(s); if (!a) return '';
-    return `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span><span class="ch-needs-ask">${esc(a.ask)}</span>${LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}</div>`;
+    return `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>${a.state === 'check' ? 'Your call' : 'Needs you'}</span><span class="ch-needs-ask">${esc(a.ask)}</span>${LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}</div>`;
   }
   // Which reply carries the line: the agent's newest reply in the thread (its status line is the row's attention).
   // Remembered per window so Reply on that message (needsReplied) and the opening place (needsLand) find it.
