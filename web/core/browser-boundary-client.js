@@ -67,6 +67,8 @@
   const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
+  // Backend calls the page has stopped (net.abort, by key): such a call is never sent again on a new channel.
+  const stopped = new Set();
   const holds = new Map();   // the app's hold id -> { reason, shell: the shell's id on the current channel, placing }
   const error = (code, message) => Object.assign(new Error(message), { code });
   const send = data => { try { parent.postMessage({ ...data, type: TYPE, version: VERSION, channel }, SHELL); } catch (_) {} };
@@ -200,7 +202,7 @@
         // A socket's open and its messages likewise: the shell closed its sockets with the old channel.
         // A backend call the shell says it never took (it came after the shell had moved on, e.g. one the page made while
         // it was still loading, before the shell's load hello) never reached the server, so it goes again on the new channel.
-        if (took && wait.method === 'net.fetch' && !took.has(id)) {
+        if (took && wait.method === 'net.fetch' && !took.has(id) && !stopped.has(String(wait.args?.key))) {
           send({ op: 'service.request', id, method: wait.method, args: wait.args });
           continue;
         }
@@ -394,6 +396,7 @@
       // The shell can't read this page's address; relative title-bar links resolve against it (and are still checked).
       if (method === 'titlebar.set' || method === 'share.text' || method === 'link.open' || method === 'media.view') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
       if (STICKY.includes(method)) sticky.set(method, args);
+      if (method === 'net.abort' && args?.key) { stopped.add(String(args.key)); if (stopped.size > 256) stopped.delete(stopped.values().next().value); }
       return send1(method, args, timeout);
     },
   });

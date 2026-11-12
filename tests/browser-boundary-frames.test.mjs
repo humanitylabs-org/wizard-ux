@@ -1036,6 +1036,13 @@ test('app backend (net.fetch): a call the shell never took goes again on the new
   assert.deepEqual(calls, ['https://box.example.ts.net/notes/api/config'], 'sent to the server once, on the new channel');
   const hellos = sh.log.filter(x => x.op === 'hello');
   assert.ok(hellos.length >= 2);
+  // A call the page stopped (net.abort) before the new hello came is never sent again (Codex P2).
+  const stoppedCall = f.a.WizBoundaryClient.request('net.fetch', { key: 'k-stop', url: 'https://box.example.ts.net/notes/api/save', method: 'POST' }, 2000);
+  f.load();
+  f.a.WizBoundaryClient.request('net.abort', { key: 'k-stop' }, 2000).catch(() => {});
+  await assert.rejects(stoppedCall, e => e.code === 'failed');
+  await tick(); await tick();
+  assert.deepEqual(calls, ['https://box.example.ts.net/notes/api/config'], 'the stopped POST never reached the server');
   // A call the shell did take is never sent twice: a new load fails it, as before, and so does attaching the frame again.
   const slow = f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/slow', method: 'POST' }, 2000);
   await tick(); await tick();
