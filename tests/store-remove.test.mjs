@@ -1,7 +1,7 @@
 // Store "Remove app": the exact-identity request, its outcomes and the confirmation contents. Fixture fetches only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetAppData, markRemoved, settleRemoved, pendingForgets, forgetRemoved} from '../web/store/store-remove.js';
+import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetAppData, markRemoved, settleRemoved, pendingForgets, forgetRemoved, keptAppIds, sweepGone} from '../web/store/store-remove.js';
 const A='a'.repeat(40), B='b'.repeat(40);
 const base=new URL('https://box.example/wizard-os-home/');
 const esc=s=>String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -149,4 +149,60 @@ test('the removed-apps note: marked before deleting, settled after, pending agai
  assert.equal(markRemoved('fresh',{storage,now:now+31*864e5}),true);
  assert.deepEqual(note(),{fresh:{at:now+31*864e5,pending:true}});
  assert.equal(markRemoved('../x',{storage,now}),false); assert.equal(settleRemoved('nope',{storage,now}),false);
+});
+
+
+// wizard-os#133 slice 42: an app removed some other way (the agent, the box command, another device's Store). The
+// shell's app list (core/apps.js) hands each fresh list to sweepGone. Real-Chromium proof: tests/qa-browser-boundary-sweep.cjs.
+function listStorage(seed={}){const s=memStorage();for(const [k,v] of Object.entries(seed))s.m.set(k,v);s.key=i=>[...s.m.keys()][i]??null;Object.defineProperty(s,'length',{get:()=>s.m.size});return s;}
+// fakeIdb plus a read-only `dbs` store whose keys are [app, database name].
+function sweepIdb(dbKeys=[]){
+ const i=fakeIdb(), open=i.open;
+ i.open=name=>{const r=open(name);let fn=null;
+  Object.defineProperty(r,'onsuccess',{set:v=>{fn=v;},get:()=>fn&&(()=>{const db=r.result,tx=db.transaction;
+   db.transaction=(names,mode)=>mode!=='readonly'?tx.call(db,names,mode):{objectStore:()=>({getAllKeys(){const q={result:dbKeys,onsuccess:null};queueMicrotask(()=>q.onsuccess?.());return q;}})};
+   fn();})});
+  return r;};
+ return i;}
+test('keptAppIds lists the apps this device keeps shell data for, from saved settings and the shell databases',async()=>{
+ const storage=listStorage({'wos.app-storage.v1.ledger':'{}','wos.app-storage.v1.Bad Id':'{}','wos.skin':'x'});
+ assert.deepEqual([...await keptAppIds({storage,idb:sweepIdb([['music','clips'],['music','x'],['files','frames'],['../x','y']])})].sort(),['files','ledger','music']);
+ const none=fakeIdb({exists:false});
+ assert.deepEqual([...await keptAppIds({storage:listStorage(),idb:none})],[]); assert.deepEqual(none.log.deletes,[],'never creates the shell database');
+});
+test('sweepGone: an app missing from the box list loses its data here only after 2 reads at least a day apart',async()=>{
+ const now=1_800_000_000_000, day=864e5, gone=s=>JSON.parse(s.getItem('wos.app-gone.v1')||'null');
+ const storage=listStorage({'wos.app-storage.v1.ledger':'{\"a\":\"1\"}','wos.app-storage.v1.cards':'{}'});
+ const idb=()=>sweepIdb([['music','clips']]);
+ // First miss: noted, nothing deleted.
+ assert.deepEqual(await sweepGone(['cards','notes'],{storage,now,idb:idb(),keyRange}),[]);
+ assert.deepEqual(gone(storage),{ledger:{at:now,reads:1},music:{at:now,reads:1}});
+ assert.ok(storage.getItem('wos.app-storage.v1.ledger'));
+ // Missed again within the day: still kept.
+ assert.deepEqual(await sweepGone(['cards'],{storage,now:now+day-1,idb:idb(),keyRange}),[]);
+ assert.deepEqual(gone(storage).ledger,{at:now,reads:2});
+ // Music is back in a list: its note goes, its data stays.
+ assert.deepEqual(await sweepGone(['cards','music'],{storage,now:now+day-1,idb:idb(),keyRange}),[]);
+ assert.deepEqual(Object.keys(gone(storage)),['ledger']);
+ // A day after the first miss and still gone: deleted, marked removed (old windows stop writing), note dropped.
+ const i=idb();
+ assert.deepEqual(await sweepGone(['cards'],{storage,now:now+day,idb:i,keyRange}),['ledger']);
+ assert.equal(storage.getItem('wos.app-storage.v1.ledger'),null); assert.ok(storage.getItem('wos.app-storage.v1.cards'));
+ assert.ok(i.log.deletes.some(([n,,r])=>n==='rows'&&r.lo[0]==='ledger'));
+ assert.deepEqual(JSON.parse(storage.getItem('wos.app-removed.v1')),{ledger:{at:now+day}});
+ assert.deepEqual(gone(storage),{music:{at:now+day,reads:1}},'music, gone from this list, starts its own wait');
+});
+test('sweepGone: an empty list deletes nothing; an app the Store removed here goes at once once it is gone',async()=>{
+ const now=1_800_000_000_000;
+ const storage=listStorage({'wos.app-storage.v1.ledger':'1'});
+ assert.deepEqual(await sweepGone([],{storage,now,idb:sweepIdb(),keyRange}),[]);
+ assert.equal(storage.getItem('wos.app-gone.v1'),null); assert.equal(storage.getItem('wos.app-storage.v1.ledger'),'1');
+ // The Store removed cards here but its delete failed (pending): still listed (reinstalled) = kept; gone = deleted now.
+ markRemoved('cards',{storage,now}); storage.setItem('wos.app-storage.v1.cards','1');
+ assert.deepEqual(await sweepGone(['cards','ledger'],{storage,now:now+1,idb:sweepIdb(),keyRange}),[]);
+ assert.equal(storage.getItem('wos.app-storage.v1.cards'),'1');
+ assert.deepEqual(await sweepGone(['ledger'],{storage,now:now+2,idb:sweepIdb(),keyRange}),['cards']);
+ assert.equal(storage.getItem('wos.app-storage.v1.cards'),null);
+ assert.deepEqual(JSON.parse(storage.getItem('wos.app-removed.v1')),{cards:{at:now}},'a retry keeps the first removal time');
+ assert.equal(storage.getItem('wos.app-gone.v1'),null);
 });

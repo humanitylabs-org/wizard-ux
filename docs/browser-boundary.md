@@ -210,7 +210,7 @@ On:
   link or form that leaves that path clears it first (a navigation the app's own scripts make is theirs: they hold the
   data anyway). A window that started without them (the Welcome's frames) asks once and fires a `storage` event; a
   change the shell could not keep (all apps full) is undone in the page, with a `storage` event.
-  Not covered: Cache Storage; the copy stays after an app is removed. Proof:
+  Not covered: Cache Storage. The copy is deleted when the app is removed (below). Proof:
   `tests/qa-browser-boundary-storage.cjs`.
 - IndexedDB: the browser refuses it to an opaque page (`open` throws), so `core/app-client.js` puts a stand-in in its
   place with the same classes (`instanceof IDBRequest` holds, so libraries such as idb work), requests and events:
@@ -223,10 +223,18 @@ On:
   at all) and `complete` fires only after that. Over 64 MB for the app (256 MB for all apps) the transaction aborts
   with `QuotaExceededError` and nothing of it stays. After a change, the app's other windows read that database again
   before their next transaction (`notice` `idb`). Values are copies (structuredClone), Blobs included (Music's offline
-  clips). Not covered: the databases stay after an app is removed; an upgrade does not wait for other open
+  clips). They are deleted when the app is removed (below). Not covered: an upgrade does not wait for other open
   connections (they get `versionchange`). `document.cookie` throws in an opaque page too, so the page gets a jar of
   its own for that document (what it writes it reads back; nothing reaches its server, and the owner's cookies stay
   out of reach). Proof: `tests/qa-browser-boundary-idb.cjs`.
+- Removing an app deletes that app's saved settings and databases on the device (`web/store/store-remove.js`). The
+  Store's own Remove does it at once on that device, once the App Manager and the readback confirm the removal
+  (`tests/qa-browser-boundary-forget.cjs`). Every other device, and an app removed by the agent or the box command,
+  learns it from the box's app list (`core/apps.js` hands each fresh list to `sweepGone`): an app the Store removed
+  there goes on the next read without it; any other app goes once 2 reads at least a day apart both lacked it, because
+  a list can miss an app for a moment and deleting is final. A list with no installed app at all deletes nothing.
+  Either way the app is noted as removed (`wos.app-removed.v1`), so a window of it opened before writes nothing back.
+  Proof: `tests/qa-browser-boundary-sweep.cjs`.
 - The app's own backend: an opaque page's own `fetch` to this host goes out with `Origin: null` and no cookies, and the
   browser hides the answer (CORS), so most apps could not load their data. `core/app-client.js` sends a `fetch` to this
   host through the shell (`net.fetch`) and gives the page a normal `Response` (status, headers, body, `url`,

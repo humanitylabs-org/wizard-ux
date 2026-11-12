@@ -82,7 +82,7 @@ export async function forgetAppData(id, { storage = globalThis.localStorage, idb
 /* The Store's note of the apps it removed on this device (`wos.app-removed.v1`: { id: { at, pending? } }, kept 30
  * days). core/app-services.js reads it: a window of the app that was open before `at` never writes the app's data
  * again (its frame lives on until the shell's app list refreshes). `pending` = its data here is not deleted yet; the
- * Store tries again on its next load while the app is still gone (retryForget). */
+ * Store tries again on its next load while the app is still gone, and so does sweepGone below. */
 const REMOVED = 'wos.app-removed.v1', KEEP = 30 * 864e5;
 function removedNotes(storage, now) {
   let o = {}; try { o = JSON.parse(storage?.getItem?.(REMOVED) || '{}') || {}; } catch (_) {}
@@ -110,6 +110,51 @@ export async function forgetRemoved(id, { retry = false, ...opts } = {}) {
   const ok = await forgetAppData(id, opts) || await forgetAppData(id, opts);
   if (ok) settleRemoved(id, opts);
   return ok;
+}
+
+/* Apps removed some other way (the agent, the box command, the Store on another device): this device only learns it
+ * from the box's app list (core/apps.js calls sweepGone after each fresh read). A list can miss an app for a moment
+ * (a broken recipe, an update in between), and deleting is final, so an app the Store removed here goes at once, but
+ * any other app with data here goes only once 2 reads, 24 hours apart or more, both missed it (`wos.app-gone.v1`:
+ * { id: { at, reads } }, the first miss). Back in a list: its note goes. Resolves the ids whose data was deleted. */
+const GONE = 'wos.app-gone.v1', GONE_WAIT = 24 * 36e5, GONE_READS = 2, PREFIX = 'wos.app-storage.v1.';
+// The app ids this device keeps data for: saved settings, and databases (shell IndexedDB, never created here).
+export async function keptAppIds({ storage = globalThis.localStorage, idb = globalThis.indexedDB } = {}) {
+  const ids = new Set();
+  try { for (let i = 0; i < (storage?.length || 0); i++) { const k = storage.key(i); if (k?.startsWith(PREFIX) && ID.test(k.slice(PREFIX.length))) ids.add(k.slice(PREFIX.length)); } } catch (_) {}
+  if (!idb?.open) return ids;
+  try {
+    const d = await new Promise((res, rej) => {
+      const r = idb.open('wos-app-idb-v1');
+      r.onupgradeneeded = () => { try { r.transaction.abort(); } catch (_) {} };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => { const e = r.error; if (e?.name === 'AbortError') res(null); else rej(e); };
+      r.onblocked = () => rej(new Error('blocked'));
+    });
+    if (!d) return ids;
+    try {
+      if (![...(d.objectStoreNames || [])].includes('dbs')) return ids;
+      const keys = await new Promise((res, rej) => { const q = d.transaction(['dbs'], 'readonly').objectStore('dbs').getAllKeys(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); });
+      for (const k of keys) if (Array.isArray(k) && ID.test(k[0] || '')) ids.add(k[0]);
+    } finally { d.close(); }
+  } catch (_) {}
+  return ids;
+}
+export async function sweepGone(listed, { storage = globalThis.localStorage, now = Date.now(), ...opts } = {}) {
+  const keep = new Set([...(listed || [])].map(String));
+  if (!keep.size) return [];   // an empty list is a broken read, never a sign that every app is gone
+  const o = { storage, now, ...opts }, pending = new Set(pendingForgets(o)), kept = await keptAppIds(o);
+  let notes = {}; try { notes = JSON.parse(storage?.getItem?.(GONE) || '{}') || {}; } catch (_) {}
+  const next = {}, done = [];
+  for (const id of new Set([...kept, ...pending])) {
+    if (keep.has(id)) continue;
+    const n = notes[id], first = Number.isFinite(n?.at) && n.at <= now && Number.isSafeInteger(n?.reads) && n.reads > 0 ? n : { at: now, reads: 0 };
+    const seen = { at: first.at, reads: first.reads + 1 };
+    if ((pending.has(id) || (seen.reads >= GONE_READS && now - seen.at >= GONE_WAIT)) && await forgetRemoved(id, { ...o, retry: pending.has(id) })) { done.push(id); continue; }
+    if (!pending.has(id)) next[id] = seen;
+  }
+  try { if (Object.keys(next).length) storage.setItem(GONE, JSON.stringify(next)); else storage?.removeItem?.(GONE); } catch (_) {}
+  return done;
 }
 
 // Only an exact App Manager install (repository and full commit), under its own registry id, that is not part of
