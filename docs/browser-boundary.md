@@ -202,8 +202,10 @@ On:
   loads, before any message can arrive, so a new window gets them in the frame's name: `frameAttributes(url, appId)`
   in the phone and desktop markup, `storageName(appId)` for the pinned app. The page keeps both in the name as it
   changes them, so a reload or a link to another page of the app keeps them too; `sessionStorage` never leaves the
-  window. A window that started without them (the Welcome's frames) asks once and fires a `storage` event. A link or
-  form that takes the window to another site clears the name first (the app's own scripts hold the data anyway).
+  window. The name carries the app's own path: a page outside it (another app on this host) drops it unread, and a
+  link or form that leaves that path clears it first (a navigation the app's own scripts make is theirs: they hold the
+  data anyway). A window that started without them (the Welcome's frames) asks once and fires a `storage` event; a
+  change the shell could not keep (all apps full) is undone in the page, with a `storage` event.
   Not covered: IndexedDB, Cache Storage and cookies; the copy stays after an app is removed. Proof:
   `tests/qa-browser-boundary-storage.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell

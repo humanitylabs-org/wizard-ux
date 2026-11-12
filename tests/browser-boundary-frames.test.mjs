@@ -904,7 +904,11 @@ function memStorage(init = {}) {
   return { get length() { return m.size; }, key: i => [...m.keys()][i] ?? null, getItem: k => (m.has(k) ? m.get(k) : null),
     setItem: (k, v) => { m.set(k, String(v)); }, removeItem: k => { m.delete(k); }, dump: () => Object.fromEntries(m) };
 }
-function storeShell(init) { const sh = shell(); sh.g.localStorage = memStorage(init); return sh; }
+function storeShell(init) {
+  const sh = shell(); sh.g.localStorage = memStorage(init);
+  sh.g.WizCore = { apps: () => ({ APPS: [{ id: 'notes', url: '/notes/' }, { id: 'deep', url: '/apps/deep/index.html' }, { id: 'far', url: 'https://elsewhere.example/far/' }] }) };
+  return sh;
+}
 
 test('saved settings: kept per installed app id, applied in order, never another app\'s', () => {
   const sh = storeShell(), S = sh.B.appStorage;
@@ -938,16 +942,17 @@ test('saved settings: all apps together stay under 1.5M characters of the shell\
   assert.equal(sh.B.appStorage.save('a', [{ k: 'k', v: 'small' }]), true, 'an app may still shrink its own');
 });
 
-test('saved settings: a new app window gets them in its frame name, escaped for the markup', () => {
+test('saved settings: a new app window gets them in its frame name with its own path, escaped for the markup', () => {
   const sh = storeShell(), B = sh.B;
-  assert.match(B.frameAttributes('/notes/', 'notes'), /^sandbox="allow-scripts allow-forms allow-downloads"$/, 'nothing saved: no name');
+  const unescape = v => v.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  const nameOf = attrs => { const m = attrs.match(/^sandbox="allow-scripts allow-forms allow-downloads" name="([^"]*)"$/); assert.ok(m, attrs); return unescape(m[1]); };
+  assert.deepEqual(JSON.parse(nameOf(B.frameAttributes('/notes/', 'notes')).slice(6)), { p: '/notes/', l: {} }, 'nothing saved yet: the path only');
   B.appStorage.save('notes', [{ k: 'q"<b>&', v: '"x"' }]);
-  const attrs = B.frameAttributes('/notes/', 'notes');
-  const m = attrs.match(/^sandbox="allow-scripts allow-forms allow-downloads" name="([^"]*)"$/);
-  assert.ok(m, attrs);
-  const name = m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  const name = nameOf(B.frameAttributes('/notes/#/n/1', 'notes'));
   assert.equal(name, B.storageName('notes'));
-  assert.deepEqual(JSON.parse(name.slice('wzst1:'.length)), { l: { 'q"<b>&': '"x"' } });
+  assert.deepEqual(JSON.parse(name.slice('wzst1:'.length)), { p: '/notes/', l: { 'q"<b>&': '"x"' } });
+  assert.deepEqual(JSON.parse(B.storageName('deep').slice(6)).p, '/apps/deep/', 'a file url: its folder');
+  for (const id of ['far', 'unknown', 'agent:x']) assert.equal(B.storageName(id), '', id + ': not an installed app on this host, no name');
   assert.doesNotMatch(B.frameAttributes('/notes/'), /name=/, 'no app id: no name');
   assert.equal(B.frameAttributes('/wizard-os-home/store/', 'notes'), '', 'the shell\'s own pages stay as they are');
 });

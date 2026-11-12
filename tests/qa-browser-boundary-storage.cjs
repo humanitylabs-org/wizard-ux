@@ -136,6 +136,28 @@ const server = http.createServer((req, res) => {
   await page.waitForTimeout(600);
   const there = await (await win(w2)).evaluate(() => window.seen).catch(e => 'error:' + e.message);
   ok(there === '', 'another site the window goes to does not get them: ' + JSON.stringify(String(there).slice(0, 80)));
+  // 9. Another app on this host never reads them: a link to its path clears the name, and its page drops a name that
+  // is not for its own path (here: the window is sent there by script, which a link would have cleared).
+  const w6 = await page.evaluate(() => openWin('notes', '/notes/', '/notes/', { tag: '6' }));
+  await page.waitForTimeout(300); let f6 = await win(w6);
+  await f6.evaluate(() => { const a = document.createElement('a'); a.href = '/other/?via=link'; a.textContent = 'other app'; document.body.append(a); });
+  await f6.click('a'); await page.waitForTimeout(400); f6 = await win(w6);
+  const viaLink = await f6.evaluate(() => ({ url: location.pathname + location.search, name: window.name, keys: atLoad.keys }));
+  ok(viaLink.url === '/other/?via=link' && viaLink.name === '' && JSON.stringify(viaLink.keys) === '[]', 'a link to another app on this host does not carry them: ' + JSON.stringify(viaLink));
+  const w7 = await page.evaluate(() => openWin('notes', '/notes/', '/notes/', { tag: '7' }));
+  await page.waitForTimeout(300); let f7 = await win(w7);
+  await f7.evaluate(() => { location.href = '/other/?via=script'; });
+  await page.waitForTimeout(400); f7 = await win(w7);
+  const viaScript = await f7.evaluate(() => ({ url: location.pathname + location.search, name: window.name, keys: atLoad.keys, draft: atLoad.draft }));
+  ok(viaScript.url === '/other/?via=script' && viaScript.name === '' && viaScript.draft === null, 'another app\'s page drops a name that is not for its own path: ' + JSON.stringify(viaScript));
+  // 10. A change the shell cannot keep (all apps' settings full) is undone in the page, with a storage event.
+  const w8 = await page.evaluate(() => openWin('notes', '/notes/', '/notes/', { tag: '8' }));
+  await page.waitForTimeout(400); const f8 = await win(w8);
+  await page.evaluate(() => localStorage.setItem('wos.app-storage.v1.filler', JSON.stringify({ k: 'y'.repeat(1530 * 1024) })));
+  await f8.evaluate(() => { window.events = 0; try { localStorage.setItem('fill', 'z'.repeat(60 * 1024)); } catch (_) {} });
+  const undone = await until(() => f8.evaluate(() => events > 0 && localStorage.getItem('fill') === null && localStorage.getItem('notes.draft') === 'Buy figs'));
+  ok(undone && !JSON.parse(await page.evaluate(() => saved('notes')) || '{}').fill, 'a change the shell could not keep is undone in the page (storage event), the rest stays');
+  await page.evaluate(() => localStorage.removeItem('wos.app-storage.v1.filler'));
   ok(!errors.length, 'no shell page errors ' + (errors.length ? JSON.stringify(errors) : ''));
   await browser.close(); server.close(); away.close();
   if (process.env.QA_EXPECT === 'broken') {

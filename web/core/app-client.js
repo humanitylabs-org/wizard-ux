@@ -50,25 +50,45 @@
    * throws), so the page gets stand-ins with the same methods. localStorage is the shell's copy for this window's
    * installed app (browser-boundary.js appStorage): a new window starts with it in its frame name, read here before the
    * app's own scripts run, and every change goes back to the shell (`storage.save`). Both also live in this frame's
-   * name, so a reload inside the window keeps them; sessionStorage never leaves the window. A window that started
-   * without them asks once (`storage.load`) and then fires a `storage` event, so the app can read them again. Before a
-   * link or form takes the window to another site the name is cleared, so that page cannot read them. */
+   * name, so a reload inside the window keeps them; sessionStorage never leaves the window. The name carries the app's
+   * own path: a page outside it (another app on this host) drops it unread, and a link or form that leaves that path
+   * clears it first, so the next page cannot read it. A window that started without them asks once (`storage.load`)
+   * and then fires a `storage` event, so the app can read them again; so does a change the shell could not keep. */
   const boundaryStorage = opaque ? (() => {
     try { void window.localStorage; return null; } catch (_) {}
-    const NAME = 'wzst1:', MAX = 512 * 1024;
+    const NAME = 'wzst1:', MAX = 512 * 1024, KEY_MAX = 4096, BATCH = 1000;
     let seed = null;
     try { if (typeof window.name === 'string' && window.name.startsWith(NAME)) seed = JSON.parse(window.name.slice(NAME.length)); } catch (_) { seed = null; }
+    const under = (path, base) => typeof base === 'string' && base.startsWith('/') && base.endsWith('/') && typeof path === 'string' && path.startsWith(base) && !/%(?:2f|5c|2e|25)/i.test(path);
+    // Another page's settings (another app's path, or no path at all) are never read, and go now.
+    if (!seed || typeof seed !== 'object' || !under(location.pathname, seed.p)) seed = null;
+    if (!seed) { try { if (String(window.name).startsWith(NAME)) window.name = ''; } catch (_) {} }
+    const base = seed ? seed.p : '';
     const pairs = o => { const m = new Map(); if (o && typeof o === 'object' && !Array.isArray(o)) for (const k of Object.keys(o)) if (typeof o[k] === 'string') m.set(k, o[k]); return m; };
     const local = pairs(seed?.l), session = pairs(seed?.s), changed = new Set();
-    let ops = [], timer = 0, cleared = false, sender = null;
-    const keep = () => { try { window.name = NAME + JSON.stringify({ l: Object.fromEntries(local), s: Object.fromEntries(session) }); } catch (_) {} };
-    const flush = () => { clearTimeout(timer); timer = 0; if (!ops.length || !sender) return; const batch = ops; ops = []; sender(batch); };
+    let ops = [], timer = 0, cleared = false, sender = null, client = null, asked = !!seed;
+    // Without the app's path (a window that started without a seed) nothing goes in the name.
+    const keep = () => { if (!base) return; try { window.name = NAME + JSON.stringify({ p: base, l: Object.fromEntries(local), s: Object.fromEntries(session) }); } catch (_) {} };
+    const flush = () => { clearTimeout(timer); timer = 0; if (!ops.length || !sender) return; const all = ops; ops = []; for (let i = 0; i < all.length; i += BATCH) sender(all.slice(i, i + BATCH)); };
     const size = m => { let n = 0; for (const [k, v] of m) n += k.length + v.length; return n; };
+    const announce = () => { try { dispatchEvent(new StorageEvent('storage', { key: null })); } catch (_) {} };
     function note(map, op) {
       keep();
       if (map !== local) return;
       if (op.c) { cleared = true; changed.clear(); } else changed.add(op.k);
       ops.push(op); if (!timer) timer = setTimeout(flush, 150);
+    }
+    function apply(map, op) { if (op.c) map.clear(); else if (op.d) map.delete(op.k); else map.set(op.k, op.v); }
+    // The shell could not keep a change (its storage for all apps is full, or it refused it): the page goes back to
+    // what the shell has, plus the changes not sent yet, so it never believes in a setting that is gone on reopening.
+    function refused() {
+      if (!client) return;
+      client.request('storage.load', {}, 10000).then(v => {
+        local.clear(); for (const [k, x] of pairs(v?.store)) local.set(k, x);
+        for (const op of ops) apply(local, op);
+        keep(); announce();
+        console.warn('WizardApp: the shell could not keep a saved setting (storage full); it was undone.');
+      }, () => {});
     }
     function make(map) {
       const api = Object.freeze({
@@ -79,7 +99,7 @@
           k = String(k); v = String(v);
           const had = map.has(k), old = map.get(k); if (had && old === v) return;
           map.set(k, v);
-          if (size(map) > MAX) { if (had) map.set(k, old); else map.delete(k); throw new DOMException('The app\u2019s saved settings are full.', 'QuotaExceededError'); }
+          if (k.length > KEY_MAX || size(map) > MAX) { if (had) map.set(k, old); else map.delete(k); throw new DOMException('The app\u2019s saved settings are full.', 'QuotaExceededError'); }
           note(map, { k, v });
         },
         removeItem: k => { k = String(k); if (!map.has(k)) return; map.delete(k); note(map, { k, d: 1 }); },
@@ -88,7 +108,7 @@
       const own = p => typeof p === 'string' && !(p in api) && map.has(p);
       // Named access (localStorage.foo, Object.keys(localStorage)) like the real one.
       return new Proxy(Object.create(null), {
-        get: (_, p) => (p in api ? (p === 'length' ? api.length : api[p]) : own(p) ? map.get(p) : undefined),
+        get: (_, p) => (p in api ? api[p] : own(p) ? map.get(p) : undefined),
         set: (_, p, v) => { if (typeof p === 'string' && !(p in api)) api.setItem(p, v); return true; },
         deleteProperty: (_, p) => { if (typeof p === 'string') api.removeItem(p); return true; },
         has: (_, p) => p in api || own(p),
@@ -100,24 +120,29 @@
       Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, get: (s => () => s)(make(local)) });
       Object.defineProperty(window, 'sessionStorage', { configurable: true, enumerable: true, get: (s => () => s)(make(session)) });
     } catch (_) { return null; }
-    // A link or form in the page that takes this window to another site: clear the name first, so that page cannot read
-    // them (the Navigation API is off for an opaque page). The app's own scripts hold the data anyway; this covers
-    // content the app shows, such as a link in a note. If that navigation is cancelled, the next change keeps them again.
-    const away = (url, target) => { try { if ((!target || target === '_self') && new URL(url, location.href).origin !== location.origin) window.name = ''; } catch (_) {} };
+    // A link or form in the page that leaves the app's own path (another app on this host, or another site): clear the
+    // name first (the Navigation API is off for an opaque page). The app's own scripts hold the data anyway, so a
+    // navigation they make is theirs; this covers content the app shows, such as a link in a note. If that navigation
+    // is cancelled, the next change keeps them again.
+    const away = (url, target) => {
+      if (target && target !== '_self') return;
+      try { const u = new URL(url, location.href); if (u.origin !== location.origin || !under(u.pathname, base)) window.name = ''; } catch (_) { window.name = ''; }
+    };
     addEventListener('click', e => { const a = e.target?.closest?.('a[href], area[href]'); if (a && !a.hasAttribute('download')) away(a.href, a.target); }, true);
     addEventListener('submit', e => { const f = e.target; if (f?.tagName === 'FORM') away(e.submitter?.formAction || f.action, e.submitter?.formTarget || f.target); }, true);
     addEventListener('pagehide', flush);
     return {
       // The boundary client is connected: from now on changes go to the shell. A window that started without its
       // saved settings asks for them once and takes every key the page has not changed itself meanwhile.
-      ready(client) {
-        if (!sender) sender = batch => { try { client.request('storage.save', { ops: batch }, 10000).catch(() => {}); } catch (_) {} };
-        if (seed) { flush(); return; }
-        seed = {};
-        client.request('storage.load', {}, 10000).then(v => {
-          const store = pairs(v?.store); let any = false;
-          if (!cleared) for (const [k, x] of store) if (!changed.has(k) && local.get(k) !== x) { local.set(k, x); any = true; }
-          if (any) { keep(); try { dispatchEvent(new StorageEvent('storage', { key: null })); } catch (_) {} }
+      ready(c) {
+        client = c;
+        if (!sender) sender = batch => { try { c.request('storage.save', { ops: batch }, 10000).then(ok => { if (ok === false) refused(); }, () => {}); } catch (_) {} };
+        if (asked) { flush(); return; }
+        asked = true;
+        c.request('storage.load', {}, 10000).then(v => {
+          let any = false;
+          if (!cleared) for (const [k, x] of pairs(v?.store)) if (!changed.has(k) && local.get(k) !== x) { local.set(k, x); any = true; }
+          if (any) { keep(); announce(); }
         }, () => {}).finally(flush);
       },
     };

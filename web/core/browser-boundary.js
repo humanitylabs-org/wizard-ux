@@ -55,8 +55,9 @@
  *  - appStorage: a sandboxed page has no localStorage of its own (the browser refuses it to an opaque origin), so the
  *    app kit (core/app-client.js) gives it a stand-in and the shell keeps the data, per installed app id, in its own
  *    storage (`wos.app-storage.v1.<appId>`, 512K characters per app, 1.5M for all apps together). A new app window
- *    gets it at once through the frame's name (frameAttributes(url, appId) / storageName(appId)), because a page reads
- *    its settings while it loads, before any message can arrive; `storage.load` answers a window that got none, and
+ *    gets it at once through the frame's name (frameAttributes(url, appId) / storageName(appId)), with the app's own
+ *    path (the page drops it outside that path), because a page reads its settings while it loads, before any message
+ *    can arrive; `storage.load` answers a window that got none, and
  *    `storage.save` takes the page's changes (set, remove, clear) for the window's own app id only.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
@@ -398,10 +399,22 @@
       return true;
     } catch (_) { return false; }
   }
-  // What a new app window starts with: the frame's name (the page reads it before it can hear anything). '' = none.
+  // The installed app's own path (its registered url), as app-services.js checks a window: the page keeps its settings
+  // only while it stays under it (app-client.js), so another app's page on this host never reads them.
+  function storeBase(id) {
+    try {
+      const all = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')].flatMap(r => r?.APPS || []);
+      const a = all.find(x => x && x.id === id && typeof x.url === 'string');
+      const u = a && new URL(a.url, location.href);
+      if (!u || u.origin !== location.origin) return '';
+      return u.pathname.endsWith('/') ? u.pathname : u.pathname.slice(0, u.pathname.lastIndexOf('/') + 1);
+    } catch (_) { return ''; }
+  }
+  // What a new app window starts with: the frame's name (the page reads it before it can hear anything), with the
+  // app's own path. '' = not an installed app here.
   function storageName(id) {
-    const m = storeRead(id);
-    return m.size ? STORE_NAME + JSON.stringify({ l: Object.fromEntries(m) }) : '';
+    const base = typeof id === 'string' && STORE_ID.test(id) ? storeBase(id) : '';
+    return base ? STORE_NAME + JSON.stringify({ p: base, l: Object.fromEntries(storeRead(id)) }) : '';
   }
   const attr = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   window.WizBrowserBoundary = Object.freeze({
