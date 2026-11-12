@@ -39,9 +39,25 @@
   });
   const framed = parent !== window;
   const detached = () => !service;
+  /* Browser owner boundary (wizard-os#133): a box with the boundary on loads app frames sandboxed, so this document has
+   * an opaque origin and cannot reach the shell's window. Back, appearance and field insertion then travel by
+   * postMessage through core/browser-boundary-client.js; requests carry only what the shell answers there. */
+  const opaque = framed && globalThis.origin === 'null';
+  let boundaryLoad = null;
+  function boundaryClient() {
+    if (!opaque) return Promise.resolve(null);
+    if (window.WizBoundaryClient) return Promise.resolve(window.WizBoundaryClient);
+    return boundaryLoad || (boundaryLoad = new Promise(resolve => {
+      const s = document.createElement('script'); s.src = '/wizard-os-home/core/browser-boundary-client.js';
+      s.onload = () => { const c = window.WizBoundaryClient || null; c?.connect({ onBack: back, onTheme: applyTheme }); resolve(c); };
+      s.onerror = () => { boundaryLoad = null; resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    }));
+  }
   const localHolds = new Map();
   const notify = (set, value) => { for (const fn of set) try { fn(value); } catch (e) { console.warn('WizardApp subscriber', e); } };
   function request(op, args, timeout = 15000, onAdmitted) {
+    if (typeof opaque !== 'undefined' && opaque) return boundaryClient().then(c => c ? c.request(op, args, timeout) : Promise.reject(new Error('Shared app transport unavailable')));
     if (!framed || requests.size >= 32) return Promise.reject(new Error('Shared app transport unavailable'));
     const id = 'wa-' + (++requestId) + '-' + Math.random().toString(36).slice(2);
     return new Promise((resolve, reject) => {
@@ -562,5 +578,6 @@
       settle: keepId => { if(service) return service.capture.settle(keepId); if(framed) throw new Error('Capture cleanup needs the verified host connection'); return captureModule().settle(standaloneId(),keepId); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
+  if (opaque) { if (window.WizBoundaryClient) window.WizBoundaryClient.connect({ onBack: back, onTheme: applyTheme }); else boundaryClient(); }
   ready();
 })();

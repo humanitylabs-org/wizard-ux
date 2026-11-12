@@ -1,5 +1,16 @@
 {
   "coreModules": {
+    "core/browser-boundary-client.js": {
+      "loadedBy": [],
+      "note": "Browser owner boundary (wizard-os#133), app side: loaded by app-client.js only inside a sandboxed app frame."
+    },
+    "core/browser-boundary.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Browser owner boundary (wizard-os#133): sandboxed app frames, Back/appearance/field by postMessage when the box switched it on; no-op otherwise."
+    },
     "core/desktop-host.js": {
       "loadedBy": ["desktop"],
       "note": "Desktop-only lifecycle adapter boundary; no second window state or rendering. Phone adapter unchanged."
@@ -939,6 +950,7 @@
     "core/brand.css",
     "core/brand.js",
     "core/bridge.js",
+    "core/browser-boundary.js",
     "core/cancelled.js",
     "core/capture-tools.js",
     "core/chat-errors.js",

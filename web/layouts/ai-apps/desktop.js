@@ -1781,7 +1781,9 @@ export default function desktop(api) {
     if (panes.get().mode === 'full') {
       // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
       const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
-      if (frame && globalThis.WizAppServices?.back?.(frame) === 'handled') return true;
+      // 'pending': a sandboxed app (browser boundary) answers later; at its root full screen ends then.
+      const r = frame ? globalThis.WizAppServices?.back?.(frame, () => windowMode('tiled')) : null;
+      if (r === 'handled' || (r === 'pending' && globalThis.WizBrowserBoundary?.owns(frame))) return true;
       windowMode('tiled'); return true;
     }
     const a = doc.activeElement;

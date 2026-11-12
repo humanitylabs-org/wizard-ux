@@ -82,7 +82,21 @@
     try { f.contentWindow.postMessage({ type: 'wizard:appearance', appearance: a }, ORIGIN); } catch (e) {}
   }
   function forget(f) { frames.delete(f); themedWin(f)?.classList.remove('wz-themed'); }
+  // Browser boundary (wizard-os#133, core/browser-boundary.js): a sandboxed app frame cannot be read, so it gets the same
+  // context by postMessage through WizBrowserBoundary.theme(), pushed on change. The boundary re-sends the last one on
+  // every reload of the frame and marks the window .wz-themed only after the app acknowledged that revision.
+  const opaqueSig = new WeakMap();
+  function syncBoundary() {
+    const B = window.WizBrowserBoundary; if (!B?.enabled) return;
+    for (const f of winFrames()) {
+      if (!B.owns(f)) continue;
+      const a = context(f), sig = JSON.stringify({ ...a, revision: 0 });
+      if (opaqueSig.get(f) === sig) continue;
+      a.revision = ++revision; opaqueSig.set(f, sig); B.theme(f, a);
+    }
+  }
   function sync() {
+    syncBoundary();
     for (const f of [...frames.keys()]) {
       if (!f.isConnected) { frames.delete(f); continue; }
       let doc = null; try { doc = f.contentDocument; } catch (e) {}
@@ -92,7 +106,7 @@
   }
   function queue(resetTokens) {
     if (resetTokens) tokensCache = null;
-    if (scheduled || !frames.size) return; scheduled = true;
+    if (scheduled || (!frames.size && !window.WizBrowserBoundary?.enabled)) return; scheduled = true;
     queueMicrotask(() => { scheduled = false; sync(); });
   }
 

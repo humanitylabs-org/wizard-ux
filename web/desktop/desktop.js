@@ -666,7 +666,7 @@
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
     if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
+    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes() : ''} src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
@@ -847,6 +847,8 @@
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
       try { const d = f.contentDocument; bad = !d || /^chrome-error:|^about:blank/.test(d.URL || '') && f.getAttribute('src') !== 'about:blank'; } catch (e) { bad = true; }
+      // Browser boundary: a sandboxed app is never readable, so unreadable is not refused. It talks by postMessage.
+      if (window.WizBrowserBoundary?.enabled && f.hasAttribute('sandbox')) bad = false;
       el.querySelector('.frame-fallback')?.classList.toggle('on', bad);
       // Clicking inside a same-origin app focuses its window; Esc inside it still reaches the shell.
       try {
@@ -2477,7 +2479,8 @@
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
     if (f && f.app !== 'chats') { if (ws[cur].mono) { toggleMono(); return 'mono'; } }
     if (f?.app === 'frame') {
-      const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
+      // A sandboxed app (browser boundary) answers later; at its root its workflow/preview closes then.
+      const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'), () => { if (!(f.workflow && closeWorkflow(f)) && f.preview) closeWin(f.id); });
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
       // Shell-owned previews and sign-in workflows return to their opener;
       // ordinary installed apps at root stay mounted.
