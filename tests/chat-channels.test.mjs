@@ -1957,7 +1957,7 @@ test('issue 1331: Reply on any message is standard for the main agent; the Threa
 test('issue 1331: Archive turns quiet; Mark done is the strong button, only while a Needs you is open', () => {
   const css = readFileSync(new URL('../web/tweaks/wizard/needs-you-in-thread/tweak.css', import.meta.url), 'utf8');
   const S = 'html[data-tweaks~="wizard/needs-you-in-thread"][data-tweaks~="wizard/chat-channels"]';
-  assert.match(css, new RegExp(S.replace(/[[\]~"/.]/g, '\\$&') + ' \\.ch-tacts button\\[data-chact="done"\\] \\{ color: var\\(--wz-text-secondary\\); border-color: var\\(--wz-border\\); background: transparent;'), 'Archive: neutral ink, no accent fill');
+  assert.ok(css.includes(S + ' .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent;'), 'Archive: neutral ink, no accent fill');
   assert.match(css, /\.ch-tacts button\.ch-tact-md \{[^}]*background: var\(--wz-accent\); color: var\(--wz-base\);/, 'Mark done: the accent fill');
   for (const rule of css.split('\n').filter(l => l.includes('{'))) assert.ok(rule.startsWith(S), 'scoped: ' + rule.slice(0, 60));
   const ta = src.indexOf('    const tacts = NV ?'), tacts = src.slice(ta, src.indexOf('    clearReading(w.id);', ta));
