@@ -1506,3 +1506,36 @@ test('issue 1316: the watermark only moves forward, is written at most once per 
   assert.deepEqual(f.marks, [], 'no per-thread seen write from the feed');
   assert.match(src, /window\.addEventListener\('pagehide', \(\) => \{ if \(chanReadT\) chanReadSave\(true\); \}\)/, 'a pending write is flushed when the page goes');
 });
+
+// PR #1320 review: a narrowed feed never reads what it does not show.
+test('issue 1316 review: the Needs you filter at its end never reads a changed post it leaves out', () => {
+  const f = fixture({ spacesList: [], marksAt: readTo(50) }); const rows = generalRows(20);
+  f.openChannel(f.w, '__general__'); readToEnd(f, rows); f.channelBack(f.w);
+  rows[5].at = NOW + H / 4;                                           // a reply lands on g5 (not needs-you)
+  rows.push(row('g20', -0.5, { owner: 'hermes', startedAt: new Date(NOW + H / 2).toISOString(), attention: { state: 'needs_you' } }));
+  f.openChannel(f.w, '__general__'); f.env.ch('w').chanFilter = 'needs';
+  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
+  assert.deepEqual(keysOf(html).filter(k => k !== 'chan-new'), ['post:g20'], 'the filter shows only the needs-you post');
+  const d = feedDom(html); f.env.elOf = () => d.el; f.chanHold('w');
+  assert.equal(f.chanReadAt('general'), NOW + H / 4 - 1, 'read up to just before the hidden g5, not past it');
+  f.channelBack(f.w); f.env.ch('w').chanFilter = 'open';
+  assert.match(generalLine(f, rows), /aria-label="2 unread"/, 'g5 is still new, and g20 after it');
+});
+
+test('issue 1316 review: an agent-focused General has its own mark; reading it never reads All\'s other agents', () => {
+  const f = fixture({ spacesList: [], marksAt: readTo(50), agents: { h1: 'host' } });
+  const focus = { ag: '' }; f.env.focusAgentId = () => focus.ag;
+  const rows = generalRows(10).concat(row('h1', 0, { owner: 'host', agent: 'host', startedAt: new Date(NOW).toISOString() }));
+  f.openChannel(f.w, '__general__'); readToEnd(f, rows); f.channelBack(f.w);
+  rows[3].at = NOW + H / 4;                                           // a reply on a main-agent post
+  rows[10].at = NOW + H / 2;                                          // and a newer one on the host's
+  focus.ag = 'host';
+  const hostRows = rows.filter(r => r.owner === 'host');              // the focused render path scopes General to the host
+  f.openChannel(f.w, '__general__'); readToEnd(f, hostRows); f.channelBack(f.w);
+  assert.equal(f.chanReadAt('general|host'), NOW + H / 2, 'the host\'s General is read');
+  assert.equal(f.chanReadAt('general'), NOW, 'All\'s General did not move');
+  focus.ag = '';
+  assert.match(generalLine(f, rows), /aria-label="2 unread"/, 'in All, g3 (main) is still new');
+  f.openChannel(f.w, '__general__'); readToEnd(f, rows); f.channelBack(f.w);
+  focus.ag = 'host'; assert.equal(f.chanReadAt('general|host'), NOW + H / 2, 'reading All reads each focused General too');
+});

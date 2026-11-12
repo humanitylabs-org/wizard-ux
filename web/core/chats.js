@@ -650,12 +650,14 @@ window.WizCore.chats = function createChats(H) {
     document.addEventListener('visibilitychange', () => { if (document.hidden && chanReadT) chanReadSave(true); });
     window.addEventListener('storage', e => { if (e.key === CHAN_READ_KEY && !chanReadT) { chanReadDoc = null; chanReadPaint(); } });
   } catch (_) {}
-  // General is one channel whichever agent's list it is opened from (the desktop sidebar and its feed column agree).
-  const chanReadKey = c => !c ? '' : c.general || c.id === CHAN_GENERAL ? 'general' : storeAgent(c.agent) + '|' + c.id;
-  const chanReadAt = key => { const d = chanReads(); return d.at[key] ?? d.since; };
+  // A channel is its agent and id. General focused on one agent shows only that agent's posts, so it has its own mark
+  // (general|<agent>); the All General covers every agent's, so reading it to a time reads each focused one too.
+  const chanReadKey = (c, gAg = '') => !c ? '' : c.general || c.id === CHAN_GENERAL ? (gAg ? 'general|' + storeAgent(gAg) : 'general') : storeAgent(c.agent) + '|' + c.id;
+  const chanReadAt = key => { const d = chanReads(), own = d.at[key] ?? d.since; return key.startsWith('general|') ? Math.max(own, d.at.general ?? d.since) : own; };
+  const chanGenAgent = w => { try { return focusAgentId(W[owner(w.id)] || w) || ''; } catch (_) { return ''; } };
   // Changed after the mark. A working post waits for its reply; a Done or snoozed-last one is not new (Activity's rule).
   const chanChanged = (s, mark) => !isWorking(s) && !s.archived && !(snoozeLast() && deferredOf(s)) && chanAt(s) > mark;
-  const chanNewCount = (c, rows) => { const mark = chanReadAt(chanReadKey(c)); return rows.filter(s => chanChanged(s, mark)).length; };
+  const chanNewCount = (c, rows, gAg = '') => { const mark = chanReadAt(chanReadKey(c, gAg)); return rows.filter(s => chanChanged(s, mark)).length; };
   // Only ever forward. The channel lists on screen (the phone's list, the desktop's sidebar pane) show it at once.
   function chanReadTo(key, t) {
     if (!key || !Number.isFinite(t)) return false;
@@ -665,17 +667,18 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   function chanReadPaint() { if (!channelsOn()) return; for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); } }
-  /* How far the owner has read a feed: every post whose top is above the bottom of his view, but never past a post that
-   * changed and is still below it (the mark is a time and the feed is in posting order: a new reply on an old post must
-   * not read a newer post he has not reached). At the end of the feed that is the newest post it shows. */
+  /* How far the owner has read a feed: every post whose top is above the bottom of his view, but never past a post of
+   * the channel that changed and he has not seen: one still below the view, or one the feed's filter (Open, Needs you)
+   * leaves out (the mark is a time and the feed is in posting order: a new reply on an old post must not read a newer
+   * post he has not reached). At the end of an unfiltered feed that is its newest post. */
   function chanReadFeed(wid, sc, feed) {
     const w = W[wid], open = w && chanOpen(w), m = chanActs[wid];
-    if (!open || !m || m.key !== chanReadKey(open) || !sc?.clientHeight || !feed) return false;
-    const mark = chanReadAt(m.key), edge = sc.getBoundingClientRect().top + sc.clientHeight;
+    if (!open || !m || m.key !== chanReadKey(open, open.general ? chanGenAgent(w) : '') || !sc?.clientHeight || !feed) return false;
+    const mark = chanReadAt(m.key), edge = sc.getBoundingClientRect().top + sc.clientHeight, past = new Set();
+    for (const n of feed.querySelectorAll('[data-morph-key]')) if (n.getBoundingClientRect().top < edge) { past.add(n.dataset.morphKey); if (n.dataset.chrow) past.add('row:' + n.dataset.chrow); }
     let seen = -Infinity, cap = Infinity;
-    for (const n of feed.querySelectorAll('[data-morph-key]')) {
-      const p = m.at.get(n.dataset.chrow) || m.at.get(n.dataset.morphKey); if (!p) continue;
-      if (n.getBoundingClientRect().top < edge) seen = Math.max(seen, p.at);
+    for (const p of m.rows) {
+      if (p.shown && (past.has('row:' + p.row) || past.has(p.post))) seen = Math.max(seen, p.at);
       else if (p.changed && p.at > mark) cap = Math.min(cap, p.at - 1);
     }
     return chanReadTo(m.key, Math.min(seen, cap));
@@ -704,11 +707,11 @@ window.WizCore.chats = function createChats(H) {
       + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
     return marks ? `<span class="ch-chan-ind">${marks}</span>` : '';
   }
-  function channelLine(ch0, rows, now, cur = '') {
+  function channelLine(ch0, rows, now, cur = '', gAg = '') {
     const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
-    const un = chanNewCount(ch0, mine);
+    const un = chanNewCount(ch0, mine, gAg);
     return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
@@ -735,13 +738,13 @@ window.WizCore.chats = function createChats(H) {
     if (typeof chanCarry === 'function' && !chanCarried && Date.now() >= chanCarryAfter && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
     // The channel whose feed shows in the main column (AI apps sidebar): marked in the list, which stays as it is.
-    const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '';
+    const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '', gAg = chanGenAgent(w);
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
-    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur)).join('')}</div>` : ''}</section>` : '';
+    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur, gAg)).join('')}</div>` : ''}</section>` : '';
     // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
     // existing name form (openSpacePicker naming) for the agent this list shows.
     const add = chanNewAgent(w) ? '<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>New channel</b></button>' : '';
-    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur)).join('')}${add}${archSec}</div>`;
+    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur, gAg)).join('')}${add}${archSec}</div>`;
   }
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
@@ -876,7 +879,7 @@ window.WizCore.chats = function createChats(H) {
   const chanKey = s => rowAgent(s) + '|' + s.id;
   function chanStart(w, shown, open) {
     const c = (W[owner(w.id)] || w)?.chan; if (!c) return null;
-    if (c.at === undefined && shown.length) { const mark = chanReadAt(chanReadKey(open)), u = shown.find(s => chanChanged(s, mark)); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y, bar: true } : { end: true }; }
+    if (c.at === undefined && shown.length) { const mark = chanReadAt(chanReadKey(open, open.general ? chanGenAgent(w) : '')), u = shown.find(s => chanChanged(s, mark)); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y, bar: true } : { end: true }; }
     return c;
   }
   const chanScroller = wid => elOf(wid)?.querySelector?.('.ch-list > .ch-scroll') || null;
@@ -932,9 +935,9 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
     const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort(chanPostOrder);
     const cs = chanStart(w, shown, open);
-    // Each post's activity time for the watermark (chanReadFeed), by its row and by its key.
-    const acts = new Map(); for (const s of mine) { const p = { at: chanAt(s), changed: chanChanged(s, -Infinity) }; acts.set(chanKey(s), p); const k = 'post:' + s.id, o = acts.get(k); if (!o || o.at < p.at) acts.set(k, p); }
-    chanActs[w.id] = { key: chanReadKey(open), at: acts };
+    // Every post of the channel with its activity time for the watermark (chanReadFeed), shown by the filter or not.
+    const on = new Set(shown);
+    chanActs[w.id] = { key: chanReadKey(open, open.general ? chanGenAgent(w) : ''), rows: mine.map(s => ({ row: chanKey(s), post: 'post:' + s.id, at: chanAt(s), changed: chanChanged(s, -Infinity), shown: on.has(s) })) };
     // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
     const hat = `<span class="ch-post-av" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent || focusedAgent(focusOf(w)) || '')) || ''}</span>`;
     const me = String(window.WizConfig?.owner?.() || '').trim(), meAv = `<span class="ch-post-me" aria-hidden="true">${esc((me || 'You').slice(0, 1).toUpperCase())}</span>`;
