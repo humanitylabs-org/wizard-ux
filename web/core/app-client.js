@@ -60,7 +60,7 @@
   // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
   // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
   const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
-    onCapture: d => boundaryCapture.notice(d), onReady: () => boundaryCapture.hello() });
+    onCapture: d => boundaryCapture.notice(d), onReady: () => boundaryCapture.hello(), keys: () => keyList(document), press: key => keyPress(key) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
   const localHolds = new Map();

@@ -704,3 +704,70 @@ test('capture: prepare needs a tap, start carries the tap to the server, answers
   await tick(); await tick();
   assert.deepEqual(heard, [{ event: 'level', id: 't1', value: 0.5 }, { event: 'current', value: { id: 't1', phase: 'recording' } }]);
 });
+
+// App keys (data-wz-key) under the boundary: the AI apps view presses an app's own ⌥ keys (wizard-os#133 slice 24).
+async function appKeyed() {
+  const k = await keyed(), pressed = [];
+  const rect = { left: 10, top: 20, width: 30, height: 12 };
+  let live = [{ el: { getBoundingClientRect: () => rect }, key: 'j', label: 'Next note' }];
+  k.f.a.WizBoundaryClient.connect({ keys: () => live, press: key => { pressed.push(key); return true; } });
+  await tick(); await tick();
+  return { ...k, pressed, setLive: l => { live = l; } };
+}
+
+test('app keys: only while a layout presses them does the app report, hold back and press its own ⌥ keys', async () => {
+  const { sh, f, got, press, pressed } = await appKeyed();
+  // No layout presses app keys (Classic desktop): ⌥J stays the page's, nothing is reported.
+  assert.equal((await press({ key: '∆', code: 'KeyJ', altKey: true })).prevented, false);
+  assert.equal(sh.B.appKeys(f.el).length, 0);
+  assert.equal(f.sent.some(m => m.data.op === 'keys.app'), false);
+  const off = sh.B.pressAppKeys(); await tick(); await tick();
+  const keys = sh.B.appKeys(f.el);
+  assert.deepEqual(clone(keys.map(t => [t.key, t.label])), [['j', 'Next note']]);
+  const r = keys[0].el.getBoundingClientRect();
+  assert.deepEqual([r.left, r.top, r.right, r.bottom], [10, 20, 40, 32], 'its box in the app window, for the keycap');
+  assert.equal(keys[0].el.ownerDocument.elementFromPoint(0, 0), keys[0].el, 'the guide hit test lands on the stand-in');
+  const j = await press({ key: '∆', code: 'KeyJ', altKey: true });
+  assert.equal(j.prevented, true, '⌥J is pressed by the shell, never typed by the page');
+  assert.deepEqual(got.at(-1) && [got.at(-1).type, got.at(-1).code], ['keydown', 'KeyJ']);
+  // keys the app does not mark, ⇧ variants and ⌥E in a field stay the page's
+  assert.equal((await press({ key: '˚', code: 'KeyK', altKey: true })).prevented, false);
+  assert.equal((await press({ key: 'Ô', code: 'KeyJ', altKey: true, shiftKey: true })).prevented, false);
+  keys[0].el.click(); await tick(); await tick();
+  assert.deepEqual(pressed, ['j'], 'the stand-in asks the app to press its own control');
+  off(); await tick(); await tick();
+  assert.equal(sh.B.appKeys(f.el).length, 0);
+  assert.equal((await press({ key: '∆', code: 'KeyJ', altKey: true })).prevented, false, 'the view gone: ⌥J is the page\'s again');
+});
+
+test('app keys: forged or reserved keys are dropped; a press only reaches a key that is live now; a reload clears them', async () => {
+  const { sh, f, got, press, pressed, setLive } = await appKeyed();
+  sh.B.pressAppKeys(); await tick(); await tick();
+  const channel = f.sent.filter(m => m.data.op === 'ready').at(-1).data.channel;
+  const post = data => sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, ...data } });
+  post({ op: 'keys.app', keys: [{ key: 'h', label: 'Home', x: 0, y: 0, w: 10, h: 10 }, { key: 'v', x: 0, y: 0, w: 10, h: 10 }, { key: 'q', x: 0, y: 0, w: 0, h: 10 }, { key: 'm', x: 'a', y: 0, w: 10, h: 10 }, { key: 'k', label: 'x'.repeat(300), x: 1, y: 2, w: 3, h: 4 }] });
+  assert.deepEqual(clone(sh.B.appKeys(f.el).map(t => [t.key, t.label.length])), [['k', 64]], 'Wizard\'s own keys and bad boxes never become app keys');
+  // a made-up ⌥H (Wizard's Home) is not an app key even if posted as one
+  sh.g.document.activeElement = f.el;
+  post({ op: 'input', kind: 'key', event: 'keydown', key: '˙', code: 'KeyH', altKey: true });
+  assert.notEqual(got.at(-1)?.code, 'KeyH');
+  // the page no longer has ⌥J: a stale stand-in press does nothing
+  const stale = sh.B.appKeys(f.el)[0];
+  setLive([]);
+  stale.el.click(); await tick(); await tick();
+  assert.deepEqual(pressed, []);
+  setLive([{ el: { getBoundingClientRect: () => ({ left: 1, top: 1, width: 5, height: 5 }) }, key: 'j', label: '' }]);
+  f.load(); await tick(); await tick();
+  stale.el.click(); await tick(); await tick();
+  assert.deepEqual(pressed, [], 'a stand-in from the old document never presses on the new one');
+  assert.deepEqual(clone(sh.B.appKeys(f.el).map(t => t.key)), ['j'], 'the new document reports its keys on its own channel');
+  void press;
+});
+
+test('app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\'s keys from the boundary', () => {
+  const layout = read('web/layouts/ai-apps/desktop.js'), client = read('web/core/app-client.js');
+  assert.match(layout, /const offAppKeys = globalThis\.WizBrowserBoundary\?\.pressAppKeys\?\.\(\) \|\| null;/);
+  assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);/, 'the view lets go when it is torn down');
+  assert.match(layout, /if \(B\?\.owns\?\.\(f\)\) \{ try \{ return B\.appKeys\(f\)\.filter\(t => t && t\.el && isAppKey\(t\.key\)\);/);
+  assert.match(client, /keys: \(\) => keyList\(document\), press: key => keyPress\(key\)/, 'WizardApp hands its own key list and press to the boundary client');
+});
