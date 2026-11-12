@@ -11,9 +11,12 @@ const apps = ['editor', 'notes', 'calendar', 'music'].map(id => ({
  id: 'qa-' + id, name: 'Synthetic ' + id, url: '/qa-boot-apps/' + id + '/',
  source: 'apps.json', type: 'view', kind: 'wizard', status: 'running',
 }));
+// Dated an hour before the run, never a fixed day: the sidebar only lists recent chats, so a
+// fixed date aged out of it a week later and every restored-apps mode found no chat rows (#1324).
+const recent = new Date(Date.now() - 3600e3).toISOString();
 const thread = { id: 'qa-thread', title: 'Synthetic restored thread', status: 'completed',
- source: 'wizard-mobile', updated_at: '2026-11-05T00:00:00Z', message_count: 2,
- latest_message: { role: 'assistant', content: 'Synthetic completed reply.', timestamp: '2026-11-05T00:00:00Z' },
+ source: 'wizard-mobile', updated_at: recent, message_count: 2,
+ latest_message: { role: 'assistant', content: 'Synthetic completed reply.', timestamp: recent },
  wizard_attention: { kind: 'check', summary: 'Synthetic review' } };
 const appHTML = '<!doctype html><html><meta charset="utf-8"><style>html{color-scheme:dark}body{background:var(--wz-base,#14141e);color:var(--wz-text,#eee);font:16px system-ui}</style><body><h1>Synthetic installed app</h1><input aria-label="Retained draft" value="Synthetic draft"><script src="/wizard-os-home/core/app-client.js"></script><script src="/qa-boot-apps/fixture.js"></script></body></html>';
 const appJS = `window.fixtureCalls=[];window.fixturePulses=0;
