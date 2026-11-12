@@ -522,6 +522,7 @@ window.WizCore.chats = function createChats(H) {
       const base = Math.max(sc === nb ? nb.getBoundingClientRect().top : 0, head ? head.getBoundingClientRect().bottom : 0);
       const off = line.getBoundingClientRect().top - threadViewportTop(nb, base) - 8;
       if (Math.abs(off) > 1) sc.scrollTo({ top: sc.scrollTop + off, behavior: 'auto' });
+      if (typeof PW !== 'undefined') PW?.landAt?.(w.id, line); // the line is now the reading place: the opening restore keeps it (second AI review)
       return off;
     };
     const settle = (line, n) => { if (n > 0 && line.isConnected && find() === line && Math.abs(place(line)) > 1) requestAnimationFrame(() => settle(line, n - 1)); };
