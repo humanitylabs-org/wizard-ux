@@ -541,9 +541,10 @@
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
-    /* The agent orb as this app's main button (two-orb layout): claim({ icon, label }, onTap) puts the icon on the orb
-     * in this app's colour while the app is in front; tap runs onTap, hold still picks an agent. Resolves true when
-     * the host shows it (the app then hides its own button), false when there is no orb to claim. */
+    /* The agent orb as this app's main button: claim({ icon, label }, onTap) puts the icon on a host agent orb in this
+     * app's colour while the app is in front; tap runs onTap. Resolves true when the host shows it (the app then hides
+     * its own button), false when there is no orb to claim. No shell view draws one since the Two orbs layout went
+     * (wizard-ux issue 1338), so today it resolves false and apps keep their own button; kept so apps never break. */
     orb: Object.freeze({
       claim: (spec, onTap) => { orbHandler = typeof onTap === 'function' ? onTap : null; return service?.orb ? Promise.resolve(service.orb.set(spec)) : transportReady ? request('orb.set', { spec }).then(v => v === true, () => false) : Promise.resolve(false); },
       release: () => { orbHandler = null; return service?.orb ? Promise.resolve(service.orb.set(null)) : transportReady ? request('orb.set', { spec: null }).then(() => true, () => false) : Promise.resolve(false); },

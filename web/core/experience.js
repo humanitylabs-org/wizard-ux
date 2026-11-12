@@ -14,7 +14,9 @@
   const copy = value => JSON.parse(JSON.stringify(value));
   const desktop = document.documentElement?.dataset?.shell === 'desktop';
   const DESKTOP_VIEW = 'wos.desktop-view.v1', DESKTOP_SEED = 'wos.desktop-view-migration.v1';
-  const desktopViews = ['classic', 'ai-apps', 'orb', 'apps'];
+  const desktopViews = ['classic', 'ai-apps'];
+  // Views removed in wizard-ux issue 1338: a saved choice of one counts as no choice, so it falls back to the standard view.
+  const RETIRED_VIEWS = new Set(['miguel/orb-shell', 'miguel/apps-home']);
   let desktopView = '', desktopMigration = null;
   try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
@@ -194,8 +196,6 @@
         try { desktopMigration.materializedLayout = localStorage.getItem('wos.layout'); localStorage.setItem(DESKTOP_SEED, JSON.stringify(desktopMigration)); } catch (_) {}
       }
       const who = wornOwner();
-      // A legacy layout can boot before this deferred module; the worn family now owns it.
-      if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
       catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults(); migratePromoted();
       // A preset pick uses the profile the installed list already warmed; other refreshes re-read it for news.
       const next = who ? await (warm === true && profileReads.has(who) ? profileReads.get(who) : read(`tweaks/${who}/profile.json`)) : null;
@@ -240,7 +240,7 @@
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
-  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps, AI apps). One view per shell
+  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. AI apps). One view per shell
    * type (Miguel, 4 Nov 2026): the desktop and the phone each wear their own, or none (the stock shell, Desks). A manifest
    * may name the shells it supports (`shells: ["desktop"]`); none named = both. The choice per shell type is kept in
    * state.views { desktop, phone } (a view id, '' = Desks); a shell type with no choice yet keeps the old meaning: the
@@ -250,7 +250,7 @@
   const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
   const shellsOf = id => { const s = manifests.get(id)?.shells; const ok = Array.isArray(s) ? SHELLS.filter(x => s.includes(x)) : []; return ok.length ? ok : [...SHELLS]; };
   const viewIds = (shell = shellHere()) => [...manifests.keys()].filter(id => viewOf(id) && shellsOf(id).includes(shell));
-  const chosenView = shell => typeof state.views?.[shell] === 'string' ? state.views[shell] : undefined;
+  const chosenView = shell => typeof state.views?.[shell] === 'string' && !RETIRED_VIEWS.has(state.views[shell]) ? state.views[shell] : undefined;
   const layoutForView = id => { const layout = manifests.get(id)?.layout; return viewOf(id) && desktopViews.includes(layout) ? layout : ''; };
   function rememberDesktopView(id) { desktopView = id; try { localStorage.setItem(DESKTOP_VIEW, id); localStorage.removeItem?.(DESKTOP_SEED); } catch (_) {} }
   function migrateDesktopView(legacy) {

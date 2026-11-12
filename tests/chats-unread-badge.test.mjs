@@ -73,9 +73,7 @@ test('badge publication preserves other app counts and only unread routed notifi
   c.WosBell.unreadCount = () => 0; assert.equal(h.paint(), 0); assert.equal(N.label('wizard'), '');
 });
 
-test('AI Apps menu and folded Orb conversations use the same badge feed and say unread, not Ready', () => {
-  const ai = source('web/layouts/ai-apps/layout.js'), orb = source('web/layouts/orb/layout.js');
+test('AI Apps menu uses the badge feed and says unread, not Ready', () => {
+  const ai = source('web/layouts/ai-apps/layout.js');
   assert.doesNotMatch(ai.slice(ai.indexOf('  function paintBadges()'), ai.indexOf('  /* ---------- a chat row')), /\$\{rt\} ready/);
-  const paint = orb.slice(orb.indexOf('  function paintReady()'), orb.indexOf('  function fold('));
-  assert.match(paint, /badgeMap\[.*wizard.*\]/); assert.doesNotMatch(paint, /L\.ready|\$\{n\} ready/);
 });
