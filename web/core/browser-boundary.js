@@ -73,10 +73,9 @@
   // Backstop for such a frame: if it ever lands on a same-origin page that is not one of the shell's own (none of
   // them navigates its frame elsewhere today), it is reloaded sandboxed like any app page. Another site's page can't
   // reach the shell, so it is left alone and checked again on its next load.
-  const guarded = new WeakSet();
+  const guarded = new WeakMap();
   function guard(frame) {
-    if (guarded.has(frame)) return;
-    guarded.add(frame);
+    if (guarded.has(frame)) return guarded.get(frame);
     const check = () => {
       if (!frame.isConnected || frame.hasAttribute('sandbox')) return;
       let href = '';
@@ -90,11 +89,19 @@
       attach(frame);
       frame.src = href;
     };
+    // The window's own disposer (app-services) also ends a session the guard started later.
+    const dispose = () => {
+      frame.removeEventListener('load', check);
+      guarded.delete(frame);
+      sessions.get(frame)?.detach();
+    };
+    guarded.set(frame, dispose);
     frame.addEventListener('load', check);
     check();
+    return dispose;
   }
   function attach(frame) {
-    if (frame?.tagName === 'IFRAME' && !frame.hasAttribute('sandbox') && !frame.hasAttribute('srcdoc')) { guard(frame); return () => {}; }
+    if (frame?.tagName === 'IFRAME' && !frame.hasAttribute('sandbox') && !frame.hasAttribute('srcdoc')) return guard(frame);
     if (!opaqueFrame(frame)) return () => {};
     const had = sessions.get(frame); if (had) return had.detach;
     const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0 };

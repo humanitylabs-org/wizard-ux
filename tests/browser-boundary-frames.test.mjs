@@ -418,3 +418,25 @@ test('on: an unsandboxed shell frame that lands on any other same-origin page is
   assert.equal(el.src, origin + '/notes/', 'reloaded, now sandboxed');
   assert.equal(sh.B.owns(el), true, 'and on the boundary channel like any app frame');
 });
+
+test('on: the disposer of a guarded shell window also ends the session the guard started later', () => {
+  const sh = shell();
+  const attrs = new Map(), listeners = new Set();
+  const origin = sh.g.location.origin;
+  const loc = { href: origin + '/wizard-os-home/agents/index.html', origin, pathname: '/wizard-os-home/agents/index.html' };
+  const el = {
+    tagName: 'IFRAME', isConnected: true, src: loc.href,
+    contentWindow: { get location() { return loc; }, postMessage() {} },
+    hasAttribute: n => attrs.has(n), getAttribute: n => attrs.get(n) ?? null, setAttribute: (n, v) => attrs.set(n, v),
+    addEventListener: (n, fn) => listeners.add(fn), removeEventListener: (n, fn) => listeners.delete(fn),
+    closest: () => null, getClientRects: () => [1],
+  };
+  const dispose = sh.B.attach(el);
+  assert.equal(sh.B.attach(el), dispose, 'one guard per window');
+  Object.assign(loc, { href: origin + '/notes/', pathname: '/notes/' });
+  for (const fn of [...listeners]) fn({});
+  assert.equal(sh.B.owns(el), true);
+  dispose();
+  assert.equal(sh.B.owns(el), false, 'closing the window lets go of its session');
+  assert.equal(listeners.size, 0, 'and of every load listener');
+});
