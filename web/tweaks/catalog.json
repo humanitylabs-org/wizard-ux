@@ -29,7 +29,8 @@
     "wizard/connector-models",
     "wizard/link-token-repair",
     "wizard/cli-install-links",
-    "wizard/chat-channels"
+    "wizard/chat-channels",
+    "wizard/channel-read-sync"
   ],
   "defaults": [
     "wizard/unified-inbox",

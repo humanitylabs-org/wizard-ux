@@ -66,7 +66,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -1538,4 +1538,85 @@ test('issue 1316 review: an agent-focused General has its own mark; reading it n
   assert.match(generalLine(f, rows), /aria-label="2 unread"/, 'in All, g3 (main) is still new');
   f.openChannel(f.w, '__general__'); readToEnd(f, rows); f.channelBack(f.w);
   focus.ag = 'host'; assert.equal(f.chanReadAt('general|host'), NOW + H / 2, 'reading All reads each focused General too');
+});
+
+// wizard-agent-service issue 471: with wizard/channel-read-sync on, the watermark is also kept on the box
+// (/wizard/v1/channels/read, forward only), so reading a channel on one device clears it on the owner's others.
+// The real LIVE.chanReads (web/live.js channelReads) runs against a fake box shared by two fixtures.
+const liveSrc = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const readsBlock = (() => { const a = liveSrc.indexOf('  /* ---- channel reads'), b = liveSrc.indexOf('  /* ---- end channel reads ---- */'); assert.ok(a > 0 && b > a); return liveSrc.slice(a, b); })();
+function fakeBox({ on = true } = {}) {
+  const box = { at: {}, on, calls: [] };
+  box.req = async (url, init = {}) => {
+    box.calls.push([init.method || 'GET', url, init.body ? JSON.parse(init.body) : null]);
+    if (url !== '/wizard/v1/channels/read' || !box.on) { const e = new Error('HTTP 404'); e.status = 404; throw e; }
+    if (init.method === 'PUT') for (const [k, t] of Object.entries(JSON.parse(init.body).at)) if (!(box.at[k] >= t)) box.at[k] = t;
+    return { json: async () => ({ schema: 'wizard.channel-reads/1', at: { ...box.at } }) };
+  };
+  return box;
+}
+async function syncDevice(box, opts = {}, sync = true) {
+  const f = fixture({ spacesList: [], marksAt: readTo(50), ...opts });
+  const ctx = vm.createContext({}); vm.runInContext(readsBlock + ';this.channelReads=channelReads;', ctx);
+  f.env.LIVE.chanReads = ctx.channelReads({ req: box.req, emit() {} });
+  if (sync) f.env.document.documentElement.dataset.tweaks += ' wizard/channel-read-sync';
+  f.chanReadAt('general'); await settle(); await settle();       // the first look asks the box
+  return f;
+}
+
+test('issue 471: reading General to the bottom on the desktop clears it on the phone (switch on); forward only', async () => {
+  const box = fakeBox(), rows = generalRows(20);
+  const desktop = await syncDevice(box), phone = await syncDevice(box);
+  assert.match(generalLine(phone, rows), /aria-label="20 unread"/, 'the phone starts with everything new');
+  desktop.openChannel(desktop.w, '__general__'); readToEnd(desktop, rows); desktop.channelBack(desktop.w);
+  await settle();
+  assert.equal(box.at.general, NOW - H, 'the desktop wrote its mark to the box');
+  phone.env.LIVE.chanReads.fresh(); phone.chanReadAt('general'); await settle(); await settle();   // the next sync read
+  assert.doesNotMatch(generalLine(phone, rows), / unread"/, 'the phone shows General read');
+  phone.openChannel(phone.w, '__general__');
+  assert.doesNotMatch(phone.channelFeed(phone.w, phone.chanOpen(phone.w), rows), /ch-chan-new/, 'and opens it at the bottom, no New line');
+  assert.deepEqual({ ...phone.w.chan.at }, { end: true });
+  // A device that read less never moves the box back; a later post still comes back as new on both.
+  phone.chanReadTo('general', NOW - 5 * H); await settle();
+  assert.equal(box.at.general, NOW - H);
+  rows.push(row('g20', 0, { owner: 'hermes', startedAt: new Date(NOW).toISOString() }));
+  assert.match(generalLine(phone, rows), /aria-label="1 unread"/);
+  assert.match(generalLine(desktop, rows), /aria-label="1 unread"/);
+});
+
+test('issue 471: switch off, or a box without the read sync (404): each device keeps its own mark and nothing is sent', async () => {
+  const rows = generalRows(10);
+  const box = fakeBox(), desktop = await syncDevice(box), off = await syncDevice(box, {}, false);
+  assert.ok(!off.env.LIVE.chanReads.off && box.calls.length === 1, 'a device with the switch off never asks the box');
+  desktop.openChannel(desktop.w, '__general__'); readToEnd(desktop, rows); await settle();
+  assert.match(generalLine(off, rows), /aria-label="10 unread"/, 'switch off: the other device is unchanged (per device, as before)');
+  const old = fakeBox({ on: false }), a = await syncDevice(old);
+  assert.equal(a.env.LIVE.chanReads.off, true);
+  a.openChannel(a.w, '__general__'); readToEnd(a, rows); await settle();
+  assert.deepEqual(old.calls.map(c => c[0]), ['GET'], 'after the 404 no write is tried');
+  assert.equal(a.chanReadAt('general'), NOW - H, 'the device\'s own mark still works');
+  assert.equal(JSON.parse(a.store.get(READ_KEY)).at.general, NOW - H);
+});
+
+test('issue 471: main, host-profile, container and restricted channels each sync under their own agent key', async () => {
+  const box = fakeBox(), desktop = await syncDevice(box), phone = await syncDevice(box);
+  const chans = [{ id: 'launch', agent: 'hermes' }, { id: 'host-ops', agent: 'host' }, { id: 'box', agent: 'container' }, { id: 'locked', agent: 'restricted' }];
+  chans.forEach((c, i) => desktop.chanReadTo(desktop.chanReadKey(c), NOW - (10 - i) * H));
+  desktop.chanReadTo(desktop.chanReadKey({ general: true }, 'host'), NOW - 2 * H);
+  await settle();
+  assert.deepEqual(Object.keys(box.at).sort(), ['container|box', 'general|host', 'hermes|launch', 'host|host-ops', 'restricted|locked']);
+  phone.env.LIVE.chanReads.fresh(); phone.chanReadAt('general'); await settle(); await settle();
+  chans.forEach((c, i) => assert.equal(phone.chanReadAt(phone.chanReadKey(c)), NOW - (10 - i) * H, c.agent + ': the phone reads the desktop\'s mark'));
+  assert.equal(phone.chanReadAt('general|host'), NOW - 2 * H, 'a focused General keeps its own agent');
+  assert.equal(phone.chanReadAt('general|restricted'), NOW - 50 * H, 'another agent\'s General is not read by it');
+});
+
+test('issue 471: marks read on a device before the switch go to the box once, the first time it answers', async () => {
+  const box = fakeBox(); box.at['hermes|launch'] = NOW - 3 * H;
+  const marks = { since: NOW - 50 * H, at: { general: NOW - 2 * H, 'hermes|launch': NOW - 4 * H } };
+  const f = await syncDevice(box, { marksAt: marks });
+  f.chanReadAt('general'); await settle();
+  assert.deepEqual(box.at, { general: NOW - 2 * H, 'hermes|launch': NOW - 3 * H }, 'only the mark ahead of the box went up; the box kept its newer one');
+  assert.equal(box.calls.filter(c => c[0] === 'PUT').length, 1, 'once');
+  assert.equal(f.chanReadAt('hermes|launch'), NOW - 3 * H, 'the device reads the newer of its own and the box\'s');
 });
