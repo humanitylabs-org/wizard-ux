@@ -4,8 +4,8 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const cut = (a,b) => src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
-function fixture(agentIds, collections, focus = null, remembered = {}) {
-  const env = { spaceAgent: s => s?.agent || 'hermes', focusAgents: () => agentIds.map(id=>({id})), visibleSpaces:()=>collections, spaces:()=>collections,
+function fixture(agentIds, collections, focus = null, remembered = {}, channels = false) {
+  const env = { channelsOn: () => channels, spaceAgent: s => s?.agent || 'hermes', focusAgents: () => agentIds.map(id=>({id,label:id==='hermes'?'Archimedes':id})), visibleSpaces:()=>collections, spaces:()=>collections,
     focusOf:()=>focus, focusedAgent:f=>f?.kind==='agent'?f.key:f?.kind==='space'?'hermes':'',
     esc:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
     AGS:()=>({colour:()=>'',sigil:()=>'',isPrivate:()=>false}),agentRec:id=>({id}),
@@ -44,4 +44,22 @@ test('under All an agent tab still names the Space it remembers',()=>{
   assert.match(html,/all:" aria-pressed="true"/);
   assert.match(html,/agent:hermes"[^>]*aria-pressed="false"[^]*?<span>SS<\/span>/);
   assert.doesNotMatch(fixture(['hermes','private'],[{id:'ss',name:'SS'}]),/<span>SS<\/span>/);
+});
+// wizard-ux issue 1340: with channels on, a channel is a feed, never the agent tab's name (phone strip read
+// "WizardOS Apps" after General, where "Archimedes" belongs).
+test('with channels on, an agent tab always names its agent, never a channel',()=>{
+  const sp=[{id:'apps',name:'WizardOS Apps'}], rem={hermes:{kind:'space',key:'apps'}};
+  for (const focus of [null,{kind:'agent',key:'hermes'},{kind:'space',key:'apps'}]) {
+    const html=fixture(['hermes','private'],sp,focus,rem,true);
+    assert.match(html,/agent:hermes"[^>]*><span>Archimedes<\/span>/,JSON.stringify(focus));
+    assert.doesNotMatch(html,/WizardOS Apps/);
+  }
+  // Switch off: the Spaces behaviour stays (the tab names the remembered Space).
+  assert.match(fixture(['hermes','private'],sp,null,rem,false),/<span>WizardOS Apps<\/span>/);
+});
+test('with channels on, the agent tab opens the agent, not the channel it last had',()=>{
+  const run=on=>{const env={channelsOn:()=>on,W:{w:{id:'w',agentFocus:{hermes:{kind:'space',key:'apps'}}}},owner:id=>id,spaces:()=>[{id:'apps',name:'WizardOS Apps',agent:'hermes'}],spaceAgent:s=>s?.agent||'hermes'};
+    vm.createContext(env);vm.runInContext(cut('  function rememberedFocus(', '  function addFilter('),env);return JSON.parse(JSON.stringify(env.rememberedFocus({id:'w'},'hermes')));};
+  assert.deepEqual(run(true),{kind:'agent',key:'hermes'});
+  assert.deepEqual(run(false),{kind:'space',key:'apps'});
 });
