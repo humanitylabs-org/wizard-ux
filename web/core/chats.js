@@ -4393,7 +4393,10 @@ window.WizCore.chats = function createChats(H) {
     const steerRunId = isWorking(s) && s.runId ? s.runId : '';
     const nm = opts.route || (isNew && !opts.away && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     // A new chat goes to the agent its model belongs to: the window's agent, or a Private pick in the main Chats.
-    const AGID = Object.hasOwn(opts, 'agent') ? opts.agent : isNew ? (opts.route?.agent || winAgent(w) || (nm?.agent && AGS()?.isOther(nm.agent) ? nm.agent : '')) : '';
+    // A take pinned to a channel (opts.space) brings the route it was sent on: its agent is that route's own ('' = the
+    // main agent), never the agent this window shows by the time it is saved (wizard-ux issue 1312).
+    const chanPinned = isNew && typeof opts.space === 'string' && !!opts.route;
+    const AGID = Object.hasOwn(opts, 'agent') ? opts.agent : chanPinned ? (opts.route.agent || '') : isNew ? (opts.route?.agent || winAgent(w) || (nm?.agent && AGS()?.isOther(nm.agent) ? nm.agent : '')) : '';
     const winAG = isNew ? winAgent(w) : '';
     const dkey = isNew ? (winAG ? 'agentnew:' + winAG : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }

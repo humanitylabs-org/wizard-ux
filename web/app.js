@@ -2812,8 +2812,16 @@
       return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
     }
     const live = pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
-    // A take pinned to a channel keeps that channel's agent: another agent's channel in front by Send never re-routes it.
-    if (typeof snap.view?.space === 'string' && snap.route && (live?.agent || '') !== (snap.route.agent || '')) return snap.route;
+    // A take pinned to a channel goes to that channel's agent ('' = the main agent: General with no agent picked),
+    // on the model picked for it. Another agent's channel in front by Send, or a model or agent left over from another
+    // agent's thread at the start of the take, never re-routes it (wizard-ux issue 1312).
+    if (typeof snap.view?.space === 'string') {
+      const want = typeof snap.view.chanAgent === 'string' ? snap.view.chanAgent : snap.route?.agent || '';
+      if (live && (live.agent || '') === want) return live;
+      if (snap.route && (snap.route.agent || '') === want) return snap.route;
+      const nm = CHATS.PW?.newModel?.(CHATS.ch?.(pin?.wid || snap.view.id) || {});
+      return window.WosModels.snapshot('', nm && (nm.agent || '') === want ? nm : null, want);
+    }
     return live;
   }
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
@@ -3226,7 +3234,7 @@
     // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
     // channel, exactly like its message box (whose words and pictures ride with it), pinned to that channel's Space,
     // and the window stays on the feed. A routed agent's channel keeps that agent's own voice path (below).
-    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '' } : {};
+    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '', chanAgent: CHATS.winAgent(w) || '' } : {};
     if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
       // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
       const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });
