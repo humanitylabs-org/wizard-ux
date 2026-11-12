@@ -221,9 +221,16 @@ On:
   (another app, an owner route) gets the page's own fetch unchanged, so it still goes out with `Origin: null`, no cookie
   and no token. `XMLHttpRequest` goes the same way: app-client.js puts a stand-in in its place that makes an async
   request through that `fetch` (status, headers, `responseType` text/json/arraybuffer/blob/document, abort, timeout,
-  upload events, `withCredentials`); a synchronous one still uses the browser's own. Not covered: `EventSource`,
-  `WebSocket` and streamed answers (the body arrives whole). Proof: `tests/qa-browser-boundary-backend.cjs`,
-  `tests/qa-browser-boundary-xhr.cjs`.
+  upload events, `withCredentials`); a synchronous one still uses the browser's own. Answers stream: the shell sends
+  the status and headers first and the body in pieces of at most 256 KB as they arrive (`notice` `net`: bytes, end or
+  error, for that call's key, to the window's current document only). The page's reads say how much it has taken
+  (`net.ack`), and the shell reads on only while at most 1 MB waits in between, so a page that stops reading stops the
+  stream. At most 16 open calls per window; cancelling the body or aborting stops the call in the shell, and a new
+  document ends them all. `EventSource` to this host goes through that streamed `fetch` too (a stand-in with
+  `readyState`, named events, `lastEventId`, `retry:` and reconnect with `Last-Event-ID`, `close()`; an answer that is
+  not a 200 `text/event-stream` closes it), so a live feed from the app's own backend arrives as it is written; another
+  site's stream uses the browser's own. Not covered: `WebSocket`. Proof: `tests/qa-browser-boundary-backend.cjs`,
+  `tests/qa-browser-boundary-xhr.cjs`, `tests/qa-browser-boundary-stream.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -233,9 +240,9 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
-- Apps that use `EventSource`, `WebSocket`, streamed answers, IndexedDB or cookies read by their own scripts still need
-  work from an opaque origin (wizard-os#385); `fetch` and `XMLHttpRequest` to the app's own backend, `localStorage` and
-  `sessionStorage` work (above). The
+- Apps that use `WebSocket`, IndexedDB or cookies read by their own scripts still need work from an opaque origin
+  (wizard-os#385); `fetch` (also streamed), `XMLHttpRequest` and `EventSource` to the app's own backend, `localStorage`
+  and `sessionStorage` work (above). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly

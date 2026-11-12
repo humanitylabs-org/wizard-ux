@@ -1256,16 +1256,67 @@
     const gen = B.gen(st.frame), safe = method === 'GET' || method === 'HEAD';
     // The page can stop its own call (net.abort with this call's key): one key per open call, this window's only.
     const key = typeof args.key === 'string' && args.key.length <= 64 ? args.key : '';
+    // A streamed answer (stream: true, with a key) comes back as its status and headers first, then its body in pieces.
+    const stream = args.stream === true && !!key;
     const stop = new AbortController(); st.netCalls ||= new Map();
-    if (key) { if (st.netCalls.has(key)) throw fault('Bad request'); st.netCalls.set(key, stop); }
+    if (key) {
+      if (st.netCalls.has(key)) throw fault('Bad request');
+      if (st.netCalls.size >= NET_OPEN) throw fault('Too many open app calls');
+      st.netCalls.set(key, stop);
+    }
+    let pumping = false;
     try {
       const res = await window.fetch(u.href, { method, headers, body, credentials: args.credentials === 'omit' ? 'omit' : 'same-origin', redirect: safe ? 'follow' : 'manual',
         cache: NET_CACHE.includes(args.cache) ? args.cache : 'default', referrerPolicy: 'no-referrer', signal: stop.signal });
       if (res.type === 'opaqueredirect') throw fault('Redirect not followed for ' + method);
       // A redirect may not leave the app's path (another app, an owner route): its answer stays with the shell.
       if (!netTarget(st, res.url || u.href)) { try { res.body?.cancel(); } catch (_) {} throw fault('Redirected outside this app'); }
-      return await netAnswer(st, res, u, method, gen, MAX);
-    } finally { if (key && st.netCalls.get(key) === stop) st.netCalls.delete(key); }
+      if (!stream || !res.body || method === 'HEAD') return await netAnswer(st, res, u, method, gen, MAX);
+      if (!boundaryLive(st) || B.gen(st.frame) !== gen) { try { res.body.cancel(); } catch (_) {} throw fault('App document changed'); }
+      // The head goes back first (this answer); the pieces follow as `net` notices once it has been sent.
+      pumping = true;
+      setTimeout(() => netPump(st, key, res.body.getReader(), gen, stop), 0);
+      return { net: { status: res.status, statusText: res.statusText, headers: [...res.headers], body: null, stream: true, url: res.url || u.href, redirected: res.redirected === true } };
+    } finally { if (!pumping && key && st.netCalls.get(key) === stop) st.netCalls.delete(key); }
+  }
+  /* A streamed answer's body (server-sent events, a reply that arrives as it is written): pieces of at most NET_PIECE
+   * bytes go to the window's current document as `net` notices (chunk, then end or error). The page says how much it
+   * has taken (net.ack); the shell reads on only while less than NET_WINDOW bytes wait in between, so a page that stops
+   * reading stops the stream (as a browser does). It ends with the call (net.abort), the document (a load) or the
+   * window. */
+  const NET_OPEN = 16, NET_PIECE = 256 * 1024, NET_WINDOW = 1024 * 1024;
+  async function netPump(st, key, reader, gen, stop) {
+    const B = window.WizBrowserBoundary, flow = { sent: 0, acked: 0, wake: null };
+    const live = () => !stop.signal.aborted && boundaryLive(st) && B.gen(st.frame) === gen && st.netCalls?.get(key) === stop;
+    const wake = () => { const w = flow.wake; flow.wake = null; w?.(); };
+    stop.signal.addEventListener('abort', wake, { once: true });
+    (st.netFlows ||= new Map()).set(key, { ack: n => { if (Number.isFinite(n) && n > flow.acked) { flow.acked = Math.min(n, flow.sent); wake(); } } });
+    let ended = false;
+    try {
+      // Waits while the page has NET_WINDOW bytes or more not yet taken (between reads and between the pieces of one
+      // large read alike); false once the call is over.
+      const room = async () => { while (live() && flow.sent - flow.acked >= NET_WINDOW) await new Promise(r => { flow.wake = r; }); return live(); };
+      read: for (;;) {
+        if (!await room()) break;
+        const { done, value } = await reader.read();
+        if (!live()) break;
+        if (done) { ended = true; B.notice(st.frame, 'net', { key, event: 'end' }); break; }
+        for (let at = 0; at < value.byteLength; at += NET_PIECE) {
+          if (!await room()) break read;
+          const piece = value.slice(at, at + NET_PIECE);
+          if (!B.notice(st.frame, 'net', { key, event: 'chunk', chunk: piece.buffer })) throw fault('App document changed');
+          flow.sent += piece.byteLength;
+        }
+      }
+    } catch (err) {
+      ended = true;
+      if (live()) B.notice(st.frame, 'net', { key, event: 'error', message: String(err?.message || 'Connection lost').slice(0, 200) });
+    } finally {
+      stop.signal.removeEventListener('abort', wake);
+      if (!ended) { try { reader.cancel(); } catch (_) {} }
+      st.netFlows?.delete(key);
+      if (st.netCalls?.get(key) === stop) st.netCalls.delete(key);
+    }
   }
   async function netAnswer(st, res, u, method, gen, MAX) {
     const B = window.WizBrowserBoundary;
@@ -1354,6 +1405,8 @@
       if (method === 'storage.save') return window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
       if (method === 'net.fetch') return boundaryNet(st, args);
       if (method === 'net.abort') { const c = typeof args?.key === 'string' ? st.netCalls?.get(args.key) : null; if (!c) return false; c.abort(); st.netCalls.delete(args.key); return true; }
+      // How much of a streamed answer the page has taken (see netPump): the shell may read on.
+      if (method === 'net.ack') { const fl = typeof args?.key === 'string' ? st.netFlows?.get(args.key) : null; if (!fl) return false; fl.ack(Number(args.n)); return true; }
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {
@@ -1362,7 +1415,7 @@
       window.WizBackgroundAudio?.duck?.(st, false); // the old document's duck ends with it
       captureForget(st, window.WizBrowserBoundary.gen(frame)); // its recording events and preparations end; the recorder keeps going
       for (const c of st.netCalls?.values() || []) c.abort(); // the old document's backend calls stop; no page gets their answers
-      st.netCalls?.clear();
+      st.netCalls?.clear(); st.netFlows?.clear();
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

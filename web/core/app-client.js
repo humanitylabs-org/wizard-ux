@@ -151,10 +151,40 @@
    * cookies, and the browser hides the answer (CORS). So a fetch to this host goes through the shell (`net.fetch`), which
    * makes it only inside this window's own app path (core/app-services.js boundaryNet) and gives back a Response with
    * the status, headers and body. An address the shell won't fetch for this app (`outside`: another app, an owner
-   * route), or a window with no shell channel, gets the page's own fetch unchanged, as before. XMLHttpRequest goes the
-   * same way (below). Not covered: EventSource, WebSocket and streamed answers (the whole body arrives at once). */
+   * route), or a window with no shell channel, gets the page's own fetch unchanged, as before. The body streams: the
+   * shell sends the status and headers first and the body in pieces as they arrive (`net` notices), so a reply written
+   * as it goes and server-sent events read live. XMLHttpRequest and EventSource go the same way (below). Not covered:
+   * WebSocket. */
+  let netNotice = () => {};
   if (opaque && typeof window.fetch === 'function' && typeof Request === 'function') (() => {
     const native = window.fetch, NULL_BODY = [101, 103, 204, 205, 304];
+    /* A streamed answer's body: pieces from the shell (onNet) go into a ReadableStream. The page's reads say how much
+     * it has taken (net.ack, every ACK_STEP bytes), and the shell reads on only while little waits in between. Cancel
+     * (the page's reader, or its AbortSignal) stops the call in the shell too (net.abort). */
+    const streams = new Map(), ACK_STEP = 256 * 1024, QUEUE = 1024 * 1024;
+    function bodyStream(key, c, onEnd) {
+      let ctrl = null, got = 0, acked = 0, done = false;
+      const finish = () => { if (done) return false; done = true; streams.delete(key); try { onEnd(); } catch (_) {} return true; };
+      const s = {
+        stream: new ReadableStream({
+          start(x) { ctrl = x; },
+          pull() { if (!done && got - acked >= ACK_STEP) { acked = got; c.request('net.ack', { key, n: got }, 5000).catch(() => {}); } },
+          cancel() { if (finish()) c.request('net.abort', { key }, 5000).catch(() => {}); },
+        }, { highWaterMark: QUEUE, size: ch => ch.byteLength }),
+        on(d) {
+          if (done) return;
+          if (d.event === 'chunk') { got += d.chunk.byteLength; try { ctrl.enqueue(new Uint8Array(d.chunk)); } catch (_) {} return; }
+          if (!finish()) return;
+          if (d.event === 'end') { try { ctrl.close(); } catch (_) {} return; }
+          try { ctrl.error(d.error || new TypeError('network error')); } catch (_) {}
+        },
+        fail(err) { if (finish()) { try { ctrl.error(err); } catch (_) {} c.request('net.abort', { key }, 5000).catch(() => {}); } },
+      };
+      streams.set(key, s);
+      return s;
+    }
+    // A new shell channel (the window reattached) ends every open stream: the shell stopped them.
+    netNotice = d => { if (d?.event === 'reset') { for (const s of [...streams.values()]) s.on({ event: 'error' }); return; } streams.get(d?.key)?.on(d); };
     const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
     // The shell channel: a sandboxed app window gets its hello at once; a page nobody attached (no channel within 10 s)
     // keeps its own fetch.
@@ -171,8 +201,11 @@
       // An abort before the call reaches the shell stops it from being sent at all; one after it asks the shell to stop
       // (net.abort, by this call's own key), so it no longer runs on or holds one of the window's slots.
       const key = 'nf-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      let sent = null;
-      const cancel = () => { if (sent) sent.request('net.abort', { key }, 5000).catch(() => {}); };
+      let sent = null, flow = null;
+      const cancel = () => {
+        if (flow) { flow.fail(signal.reason ?? abortError()); return; }
+        if (sent) sent.request('net.abort', { key }, 5000).catch(() => {});
+      };
       signal?.addEventListener('abort', cancel, { once: true });
       const run = (async () => {
         const body = req.method === 'GET' || req.method === 'HEAD' ? null : await req.arrayBuffer();
@@ -180,18 +213,26 @@
         if (signal?.aborted) throw signal.reason ?? abortError();
         if (!c) return native.call(self, spare);
         let v;
+        // Ready before the call goes out: the body's pieces may follow its head at once.
+        const pipe = typeof ReadableStream === 'function' ? bodyStream(key, c, () => signal?.removeEventListener('abort', cancel)) : null;
         try {
           sent = c;
-          v = await c.request('net.fetch', { key, url: req.url, method: req.method, headers: [...req.headers], body, credentials: req.credentials, cache: req.cache }, 300000);
+          v = await c.request('net.fetch', { key, url: req.url, method: req.method, headers: [...req.headers], body, credentials: req.credentials, cache: req.cache, stream: !!pipe }, 300000);
         } catch (err) {
+          streams.delete(key);
           if (err?.code === 'outside' || err?.code === 'unavailable') return native.call(self, spare);
           throw new TypeError('Failed to fetch');
         }
-        const r = v?.net; if (!r || typeof r !== 'object') throw new TypeError('Failed to fetch');
-        const res = new Response(NULL_BODY.includes(r.status) || req.method === 'HEAD' ? null : r.body, { status: r.status, statusText: r.statusText || '', headers: r.headers || [] });
+        const r = v?.net; if (!r || typeof r !== 'object') { streams.delete(key); throw new TypeError('Failed to fetch'); }
+        const streamed = r.stream === true && !!pipe;
+        if (!streamed) streams.delete(key);
+        const empty = NULL_BODY.includes(r.status) || req.method === 'HEAD';
+        if (streamed && empty) pipe.fail(abortError());
+        const res = new Response(empty ? null : streamed ? pipe.stream : r.body, { status: r.status, statusText: r.statusText || '', headers: r.headers || [] });
         try { Object.defineProperty(res, 'url', { value: r.url || req.url }); Object.defineProperty(res, 'redirected', { value: r.redirected === true }); } catch (_) {}
+        if (streamed && !empty) flow = pipe;
         return res;
-      })().finally(() => { sent = null; signal?.removeEventListener('abort', cancel); });
+      })().finally(() => { sent = null; if (!flow) signal?.removeEventListener('abort', cancel); });
       if (!signal) return run;
       return new Promise((resolve, reject) => {
         const stop = () => reject(signal.reason ?? abortError());
@@ -199,6 +240,93 @@
         run.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
       });
     };
+    /* EventSource (server-sent events) to this host goes the same way: the stand-in reads the event stream through the
+     * fetch stand-in above (a streamed answer), so a stream from the app's own backend arrives live with the owner's
+     * cookie. It keeps the usual shape: readyState, url, withCredentials, open / message / error and named events,
+     * lastEventId, `retry:` and reconnecting with Last-Event-ID, close(). An answer that is not a 200
+     * text/event-stream ends it (CLOSED) as the browser's own does. Another site's stream uses the browser's own
+     * EventSource, as before. */
+    if (typeof window.EventSource === 'function' && typeof EventTarget === 'function' && typeof TextDecoder === 'function') {
+      const NativeES = window.EventSource, viaShellES = window.fetch;
+      const ES_EVENTS = ['open', 'message', 'error'];
+      class EventSource extends EventTarget {
+        #url = ''; #cred = false; #ready = 0; #stop = null; #last = ''; #retry = 3000; #timer = 0;
+        constructor(url, init) {
+          let u;
+          try { u = new URL(String(url), location.href); } catch (_) { throw new DOMException('Failed to construct \u2018EventSource\u2019: The URL \u2018' + url + '\u2019 is invalid.', 'SyntaxError'); }
+          if (u.origin !== location.origin) return new NativeES(url, init);
+          super();
+          for (const t of ES_EVENTS) {
+            let h = null;
+            Object.defineProperty(this, 'on' + t, { configurable: true, enumerable: true, get: () => h,
+              set: v => { if (h) this.removeEventListener(t, h); h = typeof v === 'function' ? v : null; if (h) this.addEventListener(t, h); } });
+          }
+          this.#url = u.href; this.#cred = !!(init && init.withCredentials);
+          this.#connect();
+        }
+        get url() { return this.#url; }
+        get withCredentials() { return this.#cred; }
+        get readyState() { return this.#ready; }
+        close() { this.#ready = 2; clearTimeout(this.#timer); const stop = this.#stop; this.#stop = null; stop?.abort(); }
+        // Reconnect after the stream ended or the connection dropped (not after close() or a refused answer).
+        #lost(stop) {
+          if (this.#stop !== stop || this.#ready === 2) return;
+          this.#stop = null; this.#ready = 0;
+          this.dispatchEvent(new Event('error'));
+          if (this.#ready === 2) return;
+          this.#timer = setTimeout(() => { if (this.#ready === 0 && !this.#stop) this.#connect(); }, this.#retry);
+        }
+        #fail(stop) { if (this.#stop !== stop) return; this.#stop = null; this.#ready = 2; this.dispatchEvent(new Event('error')); }
+        async #connect() {
+          const stop = new AbortController(); this.#stop = stop;
+          const headers = [['Accept', 'text/event-stream'], ['Cache-Control', 'no-cache']];
+          if (this.#last) headers.push(['Last-Event-ID', this.#last]);
+          let res;
+          try { res = await viaShellES.call(window, this.#url, { headers, credentials: this.#cred ? 'include' : 'same-origin', cache: 'no-store', signal: stop.signal }); } catch (_) { return this.#lost(stop); }
+          if (this.#stop !== stop) { try { res.body?.cancel(); } catch (_) {} return; }
+          const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+          if (res.status !== 200 || type !== 'text/event-stream' || !res.body) { try { res.body?.cancel(); } catch (_) {} return this.#fail(stop); }
+          this.#ready = 1; this.dispatchEvent(new Event('open'));
+          const reader = res.body.getReader(), dec = new TextDecoder();
+          let buf = '', data = '', name = '', idBuf = this.#last, first = true;
+          const line = l => {
+            if (l === '') {
+              this.#last = idBuf;
+              if (data) {
+                const ev = new MessageEvent(name || 'message', { data: data.endsWith('\n') ? data.slice(0, -1) : data, origin: location.origin, lastEventId: this.#last });
+                if (this.#stop === stop) this.dispatchEvent(ev);
+              }
+              data = ''; name = ''; return;
+            }
+            if (l[0] === ':') return;
+            const at = l.indexOf(':'), field = at < 0 ? l : l.slice(0, at);
+            let value = at < 0 ? '' : l.slice(at + 1); if (value[0] === ' ') value = value.slice(1);
+            if (field === 'event') name = value;
+            else if (field === 'data') data += value + '\n';
+            else if (field === 'id') { if (!value.includes('\0')) idBuf = value; }
+            else if (field === 'retry') { if (/^\d+$/.test(value)) this.#retry = Number(value); }
+          };
+          try {
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (this.#stop !== stop) { try { reader.cancel(); } catch (_) {} return; }
+              if (done) break;
+              buf += dec.decode(value, { stream: true });
+              if (first && buf) { if (buf[0] === '\uFEFF') buf = buf.slice(1); first = false; }
+              // Lines end with CRLF, LF or CR; a CR at the very end may still be half of a CRLF.
+              let m;
+              while ((m = /\r\n|\r|\n/.exec(buf)) && !(m[0] === '\r' && m.index === buf.length - 1)) { const l = buf.slice(0, m.index); buf = buf.slice(m.index + m[0].length); line(l); if (this.#stop !== stop) return; }
+            }
+          } catch (_) { /* the connection dropped */ }
+          this.#lost(stop);
+        }
+      }
+      for (const [k, v] of Object.entries({ CONNECTING: 0, OPEN: 1, CLOSED: 2 })) {
+        Object.defineProperty(EventSource, k, { value: v, enumerable: true });
+        Object.defineProperty(EventSource.prototype, k, { value: v, enumerable: true });
+      }
+      try { Object.defineProperty(window, 'EventSource', { configurable: true, writable: true, value: EventSource }); } catch (_) {}
+    }
     /* XMLHttpRequest goes the same way: an async request becomes a fetch through the stand-in above (so a call to this
      * app's own backend goes through the shell, and anything else goes out exactly as the page's own fetch would). The
      * stand-in keeps the usual shape: readyState, status, headers, responseType ('', text, json, arraybuffer, blob,
@@ -366,7 +494,7 @@
   }
   // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
   // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
-  const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
+  const boundaryHooks = () => ({ onNet: d => netNotice(d), onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
     onCapture: d => boundaryCapture.notice(d), onReady: () => { boundaryCapture.hello(); if (boundaryStorage && window.WizBoundaryClient) boundaryStorage.ready(window.WizBoundaryClient); }, keys: () => keyList(document), press: key => keyPress(key) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
