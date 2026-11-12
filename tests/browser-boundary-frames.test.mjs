@@ -350,6 +350,51 @@ test('dictation: a reload, a field typed in meanwhile, or an unadmitted window n
   assert.equal(await sh.B.pinField(f.el), null);
 });
 
+// A rich-text (contenteditable) region in the app document: a focused inner node belongs to its editable root.
+function appRich(html = 'note') {
+  const ev = listeners(), text = { nodeType: 3, data: html };
+  const root = { isConnected: true, isContentEditable: true, innerHTML: html, parentElement: { isContentEditable: false },
+    matches: () => false, closest: () => null, contains: n => n === text || n === root || n === inner,
+    addEventListener: ev.add, removeEventListener: ev.remove, dispatchEvent: e => ev.fire(e.type, e), fire: ev.fire, focus() {} };
+  const inner = { isConnected: true, isContentEditable: true, parentElement: root, matches: () => false, closest: () => null };
+  const range = { startContainer: text, endContainer: text, startOffset: html.length, cloneRange() { return this; } };
+  return { root, inner, text, range };
+}
+function richDoc(f, r, { selection = true, typed = null } = {}) {
+  const d = f.a.document, edits = [];
+  d.body = {};
+  d.getSelection = () => ({ rangeCount: selection ? 1 : 0, getRangeAt: () => r.range, removeAllRanges() {}, addRange() {} });
+  d.execCommand = (cmd, _, t) => { edits.push([cmd, t]); r.text.data += t; r.root.innerHTML = r.text.data; return true; };
+  return edits;
+}
+
+test('dictation: a rich-text region in a sandboxed app is offered and the words land once at the caret', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el); await tick();
+  const { F, top } = shellFields(sh, () => [f.el]);
+  top.activeElement = f.el;
+  const r = appRich('note'), edits = richDoc(f, r);
+  f.a.document.activeElement = r.inner; f.doc.fire('focusin', {}); await tick();
+  assert.equal(f.sent.filter(m => m.data.op === 'field.focus').at(-1).data.editable, true, 'a contenteditable counts as a field');
+  const seal = F.capture();
+  const done = F.insert(seal, 'world'); seal.release();
+  assert.equal(await done, true);
+  assert.deepEqual(edits, [['insertText', ' world']], 'through the browser\'s own editing, with a space against the word');
+  assert.equal(r.root.innerHTML, 'note world');
+  // Changed meanwhile (an editor's own update or typing): stale, nothing lands.
+  const seal2 = F.capture(); await seal2.pin; r.text.data += '!'; r.root.innerHTML = r.text.data;
+  assert.equal(await F.insert(seal2, 'x'), false); assert.equal(r.root.innerHTML, 'note world!');
+  // No caret inside the region: refused at the pin.
+  const r3 = appRich('b'); richDoc(f, r3, { selection: false });
+  f.a.document.activeElement = r3.root; f.doc.fire('focusin', {}); await tick();
+  assert.equal(await sh.B.pinField(f.el), null);
+  // A region that opts out is never offered.
+  const r4 = appRich('c'); r4.root.closest = () => ({}); r4.inner.closest = () => ({});
+  f.a.document.activeElement = r4.inner; f.doc.fire('focusin', {}); await tick();
+  assert.equal(f.sent.filter(m => m.data.op === 'field.focus').at(-1).data.editable, false);
+});
+
 test('dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)', () => {
   assert.match(read('web/app.js'), /const inserted = await FIELDS\.insert\(target, text\);/);
   assert.match(read('web/desktop/desktop.js'), /if \(await fields\(\)\.insert\(target, text\)\)/);
