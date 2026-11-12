@@ -130,3 +130,43 @@ test('skin-host: list({ activity: true }) reads the shell\'s activity list; unre
   assert.deepEqual([...o.recent].map(r => r.id), ['r', 'notif:y']);
   assert.match(host, /list: opts => \{ if \(opts\?\.activity === true && live\(\) && shell\.activityList\) return activityRows\(shell\.activityList\(\{ order: readReadyOrder\(\), older: opts\.older === true \}\)\);/);
 });
+
+// wizard-ux issue 1360: one "waiting on you" rule. The real chanNeeds / attOf / chanUnread from chats.js drive the real
+// Activity grouping, so a Your call (check) thread stays in Ready with its amber marker after it is opened, green leaves
+// Ready on open, Mark done moves amber to Recent, and no row in Recent ever carries the amber marker.
+function realRule() {
+  const line = t => { const i = chats.indexOf('\n  ' + t); assert.ok(i >= 0, t); return chats.slice(i + 1, chats.indexOf('\n', i + 1)); };
+  const read = new Set(), handled = new Set();
+  const c = { console, Date, JSON, String, Object, Array };
+  c.window = c; c.globalThis = c; modelContext(c);
+  Object.assign(c, { document: { documentElement: { dataset: { tweaks: 'wizard/chat-channels' } } }, CHAN_SWITCH: 'wizard/chat-channels',
+    LIVE: { isNew: s => !!s.fresh && !read.has(s.id), handled: s => handled.has(s.id) }, snoozeLast: () => false, deferredOf: s => !!s.deferred });
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
+    'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const attOf ='].map(line).join('\n')
+    + '\nthis.needs = actNeeds; this.unread = actUnread; this.attOf = attOf;', c);
+  return { c, open: id => read.add(id), markDone: id => { handled.add(id); read.add(id); } };
+}
+test('issue 1360: one waiting-on-you rule for Ready and the amber marker; opening never clears amber, only green', () => {
+  const { c, open, markDone } = realRule(), M = c.WizChatsListModel;
+  const done = new Date(NOW - 2 * H).toISOString();
+  const rows = [row('chk', 2, { fresh: true, attention: { state: 'check', ask: 'Try it and say what to tweak' }, lastAssistantAt: done }),
+    row('ny', 3, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' } }), row('apr', 4, { status: 'waiting_for_approval' }),
+    row('grn', 1, { fresh: true, attention: { state: 'done', ask: 'Shipped' } }), row('fyi', 5, { attention: { state: 'fyi', ask: 'FYI' } })];
+  const list = () => M.activityList(groups(rows), { live: { cardAt: s => s.updatedAt, isNew: c.unread }, chats: { activityNeeds: c.needs, activityUnread: c.unread, threadActions: () => [], channelOf: () => 'General', agentLabelOf: () => '' } }, { order: 'newest', now: NOW });
+  const marks = l => Object.fromEntries(['ready', 'recent'].map(k => [k, [...l[k]].map(r => r.id + (r.mark ? ':' + r.mark : ''))]));
+  const noAmberInRecent = l => assert.ok(![...l.recent].some(r => r.mark === 'needs'), 'no amber row sits in Recent');
+  let l = list();
+  assert.deepEqual(marks(l), { ready: ['grn:new', 'chk:needs', 'ny:needs', 'apr:needs'], recent: ['fyi'] });
+  noAmberInRecent(l);
+  for (const id of ['chk', 'ny', 'grn']) open(id); // open each thread and go back
+  l = list();
+  assert.deepEqual(marks(l), { ready: ['chk:needs', 'ny:needs', 'apr:needs'], recent: ['grn', 'fyi'] }, 'Your call and Needs you stay in Ready with amber; green moves to Recent');
+  noAmberInRecent(l);
+  markDone('chk'); markDone('ny');
+  l = list();
+  assert.deepEqual(marks(l), { ready: ['apr:needs'], recent: ['grn', 'chk', 'ny', 'fyi'] }, 'Mark done clears amber and moves the thread to Recent');
+  noAmberInRecent(l);
+  assert.equal(c.attOf(rows[0]), null, 'Mark done clears a Your call status too');
+  c.document.documentElement.dataset.tweaks = '';
+  assert.equal(c.attOf(rows[0])?.state, 'check', 'switch off: the status line is untouched');
+});

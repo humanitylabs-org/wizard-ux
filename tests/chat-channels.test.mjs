@@ -1838,7 +1838,8 @@ test('issue 1331: the Needs you line shows only with Channels on, and brings Mar
   f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/needs-you-in-thread';
   assert.equal(f.line(s), '', 'Channels off: no line, also with the old retired id saved'); assert.equal(f.needsOn(), false); assert.equal(f.canMarkDone(s), false);
   f.env.document.documentElement.dataset.tweaks = NT_ON;
-  assert.equal(f.line({ ...s, attention: { state: 'check', ask: 'See it' } }), '', 'Your call is not Needs you');
+  assert.match(f.line({ ...s, attention: { state: 'check', ask: 'See it' } }), />Your call<\/span>/, 'Your call waits on the owner too (issue 1360), in its own words');
+  assert.equal(f.line({ ...s, attention: { state: 'fyi', ask: 'See it' } }), '', 'FYI never waits on the owner');
   assert.equal(f.line({ ...s, attention: null }), '', 'no ask: nothing');
   assert.equal(f.line({ ...s, archived: true }), '', 'an archived thread');
   assert.match(f.line({ ...s, status: 'running' }), /Needs you/, 'the agent working on a plain owner message keeps it');
@@ -1923,6 +1924,25 @@ test('issue 1331: Reply on the Needs you message clears it; a plain owner messag
     f.env.document.documentElement.dataset.tweaks = CH_OFF;
     s.lastAssistantAt = new Date(NOW).toISOString(); f.mark(sid, s, turns);
     assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), false, kind + ': Channels off: Reply clears nothing');
+  }
+});
+
+// wizard-ux issue 1360: Your call (check) waits on the owner like Needs you, so the thread carries the same amber line
+// (worded Your call) and Reply on that message, or Mark done, clears it (Codex P2 on PR 1369).
+test('issue 1360: a Your call thread shows the line, and Reply on it or Mark done clears it (main and routed)', () => {
+  for (const [kind, agent, , sid] of KINDS_1331) {
+    const own = agent ? { owner: agent } : {}, turns = turnsOf(['u', 1], ['a', 4000]);
+    let s = askRow(sid, { ...own, attention: { state: 'check', ask: 'Try it and say what to tweak' } }), f = needsFixture();
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    assert.match(f.mark(sid, s, turns).html, /<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"><\/i>Your call<\/span><span class="ch-needs-ask">Try it and say what to tweak<\/span>/, kind);
+    assert.equal(f.replied(sid, null), false, kind + ': a plain owner message never clears it');
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), true, kind + ': Reply on that message');
+    assert.equal(f.mark(sid, s, turns).html, '', kind + ': cleared'); assert.equal(f.attOf(s), null, kind + ': Activity too');
+    s = askRow(sid, { ...own, attention: { state: 'check', ask: 'Try it' } }); f = needsFixture();
+    f.env._rowOf = (wid, id) => id === sid ? s : null; f.mark(sid, s, turns);
+    assert.equal(f.markDone('w', sid), true, kind + ': Mark done'); assert.equal(f.attOf(s), null, kind + ': Mark done cleared it');
+    f.env.document.documentElement.dataset.tweaks = CH_OFF;
+    assert.equal(f.line(askRow(sid, { ...own, attention: { state: 'check', ask: 'Try it' } })), '', kind + ': Channels off: no line');
   }
 });
 
