@@ -18,7 +18,7 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const builtin = catalog.defaults[0];
 // The real drop list emptied when its tweaks were removed (wizard-ux issue 1239). The mechanism stays, so these tests
 // serve a stand-in list of kept tweaks in place of catalog `lookOnlyOff`.
-const DROP = ['wizard/failure-reason', 'wizard/cli-install-links', 'miguel/now-playing'];
+const DROP = ['wizard/failure-reason', 'wizard/link-token-repair', 'miguel/now-playing'];
 const served = path => path === 'tweaks/catalog.json' ? { ...catalog, lookOnlyOff: DROP } : JSON.parse(read('web/' + path));
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 
@@ -76,7 +76,7 @@ const mixOn = mix => Object.keys(mix).filter(id => mix[id] === true).sort();
 
 // The tester's old state: shared switches with Send and go plus two drop-list tweaks on; the own skin worn here turns
 // Archive first and Reply summary on, Send and go and the built-in default off, and picks a shell view and a drop item.
-const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/failure-reason': true, 'wizard/cli-install-links': true };
+const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/failure-reason': true, 'wizard/link-token-repair': true };
 const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/orb-shell': true, 'miguel/now-playing': true };
 
 test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; any entry must be a real catalog tweak', () => {
@@ -160,7 +160,7 @@ test('two devices: the device that turns it on carries its skin; a stale second 
   await phone.E.toggle(ID); await mac.E.toggle('miguel/snooze-someday');
   box.race(2); await Promise.all([phone.flush(), mac.flush()]);
   const shared = sharedOn(box.doc());
-  assert.deepEqual(shared, [ID, 'miguel/archive-top', 'miguel/reply-summary', 'wizard/failure-reason', 'wizard/cli-install-links', 'miguel/snooze-someday'].sort(), 'both edits kept');
+  assert.deepEqual(shared, [ID, 'miguel/archive-top', 'miguel/reply-summary', 'wizard/failure-reason', 'wizard/link-token-repair', 'miguel/snooze-someday'].sort(), 'both edits kept');
   assert.equal(box.doc().defaults?.[builtin]?.on, false);
   // Every device catches up, the stale one too: same switches; its own skin (which chose Calm offline) is set aside, nothing carried.
   for (const d of [stale, mac, phone]) { await d.sync.sync(); await tick(); await d.E.whenReady(); }

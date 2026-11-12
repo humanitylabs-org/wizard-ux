@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 
 const root = new URL('../web/tweaks/', import.meta.url);
 const catalog = JSON.parse(readFileSync(new URL('catalog.json', root), 'utf8'));
-const BOX_SWITCHES = ['wizard/update-bug-reports', 'wizard/app-updates-list', 'wizard/link-token-repair', 'wizard/cli-install-links'];
+const BOX_SWITCHES = ['wizard/update-bug-reports', 'wizard/app-updates-list', 'wizard/link-token-repair'];
 
 for (const id of BOX_SWITCHES) {
   test(`${id} is a switch the App Manager accepts, off by default`, () => {
