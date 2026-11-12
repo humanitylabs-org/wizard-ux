@@ -586,6 +586,7 @@ window.WizCore.chats = function createChats(H) {
     return `<span class="ch-jump-arr" aria-hidden="true">${dir === 'up' ? '↑' : '↓'}</span>${nn ? `<span class="ch-jump-k"><i class="ch-chan-dot" aria-hidden="true"></i>${nn} Needs you</span>` : ''}${ng ? `<span class="ch-jump-k"><i class="ch-chan-dot new" aria-hidden="true"></i>${ng} New</span>` : ''}`;
   }
   function paintJump(el, nb) {
+    liftLatest(el);
     const wid = el?.dataset.chats, up = el?.querySelector('[data-chjump="up"]'), dn = el?.querySelector('[data-chjump="down"]');
     if (!wid || !nb || (!up && !dn) || !threadOnScreen(nb)) return;
     const band = jumpBand(nb), m = jumpMarks(wid, nb, band);
@@ -608,13 +609,29 @@ window.WizCore.chats = function createChats(H) {
     };
     set(up, 'up', m.up); set(dn, 'down', m.down);
   }
-  // Issue 1380: the ↓ pill never sits on ↓ Latest (a narrow column, or the phone's shared bottom row): it goes above it.
+  // Issue 1380: the thread's own Mark done · Snooze · Archive buttons, on screen (both bottom controls keep off them).
+  const actBoxes = el => [...(el?.querySelectorAll('.ch-tacts > button') || [])].map(n => n.getBoundingClientRect()).filter(r => r.width && r.height);
+  const meets = (r, o, g) => !(r.left >= o.right + g || r.right <= o.left - g || r.bottom <= o.top - g || r.top >= o.bottom + g);
+  // ↓ Latest in the AI apps column sits in the thread's flow just above the composer, over the sticky action row's band:
+  // when it would cover one of those buttons it rises above the row (--ch-latest-lift, read by the layout's own rule).
+  function liftLatest(el) {
+    const l = el?.querySelector('[data-chlatest]'); if (!l) return;
+    if (l.style.getPropertyValue('--ch-latest-lift')) l.style.removeProperty('--ch-latest-lift');
+    if (l.hidden) return;
+    const r = l.getBoundingClientRect(), hit = actBoxes(el).filter(o => meets(r, o, 0));
+    if (r.height && hit.length) l.style.setProperty('--ch-latest-lift', `${Math.ceil(r.bottom - Math.min(...actBoxes(el).map(o => o.top)) + 8)}px`);
+  }
+  // Issue 1380: the ↓ pill never sits on ↓ Latest (a narrow column, or the phone's shared bottom row) or on the thread's
+  // action row (Mark done beside a wide column's centre): it goes above whichever it would touch.
   function jumpStack(b, latest) {
     if (b.style.bottom) b.style.bottom = '';
-    if (!latest) return;
-    const r = b.getBoundingClientRect(), l = latest.getBoundingClientRect();
-    if (!r.height || !l.height || r.left >= l.right + 8 || r.right <= l.left - 8 || r.bottom <= l.top - 8 || r.top >= l.bottom + 8) return;
-    b.style.bottom = `${Math.round((parseFloat(getComputedStyle(b).bottom) || 0) + r.bottom - l.top + 8)}px`;
+    if (b.hidden) return;
+    const keep = [...(latest ? [latest.getBoundingClientRect()] : []), ...actBoxes(b.closest('[data-chats]') || b.parentElement)].filter(o => o.width && o.height);
+    for (let i = 0; i < 4; i++) {
+      const r = b.getBoundingClientRect(), o = r.height && keep.find(x => meets(r, x, latest && x === keep[0] ? 8 : 4));
+      if (!o) return;
+      b.style.bottom = `${Math.round((parseFloat(getComputedStyle(b).bottom) || 0) + r.bottom - o.top + 8)}px`;
+    }
   }
   // Issue 1380: with markers left above, the ↑ pill comes back at the top: land the target just under it, not behind it.
   function jumpLandGap(nb, m, t) {

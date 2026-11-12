@@ -20,9 +20,9 @@ function harness({ on = true, rows = {}, seen = {} } = {}) {
       seenRecord: s => seen[(s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/` : '') + s.id],
     },
   };
-  ctx.getComputedStyle = el => ({ bottom: el.cssBottom });
+  ctx.getComputedStyle = el => ({ bottom: el.style?.bottom || el.cssBottom });
   vm.createContext(ctx);
-  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel, jumpLandGap, jumpStack };', ctx);
+  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel, jumpLandGap, jumpStack, liftLatest };', ctx);
   return ctx;
 }
 
@@ -103,16 +103,58 @@ test('landing gap: under the ↑ pill only while markers stay above the target',
   assert.equal(jumpLandGap(nb2, { up: [], down: [down] }, down), 8 + 32 + 8, 'a hidden pill falls back to its 32 px height');
 });
 
+// A fake button whose box follows its inline bottom (the pill) or --ch-latest-lift (↓ Latest), like the real layout.
+const rect = (top, left, right, h = 32) => ({ top, bottom: top + h, height: h, left, right, width: right - left });
+const btn = (top, left, right) => ({ getBoundingClientRect: () => rect(top, left, right, 34) });
+const thread = acts => ({ querySelectorAll: q => (q === '.ch-tacts > button' ? acts : []), querySelector: () => null });
+const pill = (top, left, right, acts = []) => { const p = { hidden: false, style: { bottom: '' }, cssBottom: '78px', closest: () => thread(acts) };
+  p.getBoundingClientRect = () => rect(top - ((parseFloat(p.style.bottom) || 78) - 78), left, right); return p; };
+
 test('the ↓ pill goes above ↓ Latest when they would overlap, and back when they do not', () => {
   const { jumpStack } = harness().api;
-  const pill = (top, left, right) => ({ style: { bottom: '' }, cssBottom: '78px', getBoundingClientRect: () => ({ top, bottom: top + 32, height: 32, left, right }) });
-  const latest = { getBoundingClientRect: () => ({ top: 790, bottom: 822, height: 32, left: 300, right: 390 }) };
+  const latest = { getBoundingClientRect: () => rect(790, 300, 390) };
   const a = pill(790, 250, 340); jumpStack(a, latest);
   assert.equal(a.style.bottom, `${78 + 822 - 790 + 8}px`, 'stacked 8 px above Latest');
   const b = pill(790, 20, 200); jumpStack(b, latest);
   assert.equal(b.style.bottom, '', 'side by side with room: left where the skin puts it');
   const c = pill(790, 250, 340); c.style.bottom = '118px'; jumpStack(c, null);
   assert.equal(c.style.bottom, '', 'Latest hidden: back to its own place');
+});
+
+// AI review of #1382: on a wide AI apps column the ↓ pill sat on Mark done (pill 686-842 x 790-822, Mark done 784-914 x 772-806).
+test('the ↓ pill never sits on the thread\'s Mark done · Snooze · Archive row (issue 1380 kick-back)', () => {
+  const { jumpStack } = harness().api;
+  const acts = [btn(772, 784, 914), btn(772, 922, 1030), btn(772, 1038, 1150)];
+  const a = pill(790, 686, 842, acts); jumpStack(a, null);
+  const r = a.getBoundingClientRect();
+  assert.ok(acts.every(o => r.bottom <= o.getBoundingClientRect().top - 4), `pill clear above the row (${r.top}-${r.bottom})`);
+  assert.equal(a.style.bottom, `${78 + 822 - 772 + 8}px`, '8 px above the row');
+  // Latest on the row too: the pill clears both, whichever it meets first.
+  const latest = { getBoundingClientRect: () => rect(740, 700, 790) };
+  const b = pill(790, 686, 842, acts); jumpStack(b, latest);
+  const q = b.getBoundingClientRect();
+  assert.ok(q.bottom <= 740 - 8, `pill above Latest and the row (${q.top}-${q.bottom})`);
+  const c = pill(790, 100, 250, acts); jumpStack(c, null);
+  assert.equal(c.style.bottom, '', 'beside the row with room: stays put');
+});
+
+test('↓ Latest rises above the action row only when it would cover a button (issue 1380 kick-back)', () => {
+  const { liftLatest } = harness().api;
+  const make = (top, left, right, acts, hidden = false) => { const props = {};
+    const l = { hidden, style: { getPropertyValue: k => props[k] || '', setProperty: (k, v) => { props[k] = v; }, removeProperty: k => { delete props[k]; } } };
+    l.getBoundingClientRect = () => rect(top - (parseFloat(props['--ch-latest-lift']) || 0), left, right);
+    return { el: { querySelector: () => l, querySelectorAll: q => (q === '.ch-tacts > button' ? acts : []) }, l, props }; };
+  // Narrow column, review numbers: Latest 952-1039 x 776-808 on Mark done 891-978 / Snooze 986-1094 x 772-806.
+  const acts = [btn(772, 891, 978), btn(772, 986, 1094)];
+  const n = make(776, 952, 1039, acts); liftLatest(n.el);
+  assert.equal(n.props['--ch-latest-lift'], `${808 - 772 + 8}px`);
+  const r = n.l.getBoundingClientRect(); assert.ok(r.bottom <= 772 - 8, 'Latest clear above the row');
+  // Repaint: the old lift is dropped before measuring, so it never adds up.
+  liftLatest(n.el); assert.equal(n.props['--ch-latest-lift'], `${808 - 772 + 8}px`);
+  const w = make(776, 400, 490, acts); liftLatest(w.el);
+  assert.equal(w.props['--ch-latest-lift'], undefined, 'clear of the row: no lift');
+  const h = make(776, 952, 1039, acts, true); h.props['--ch-latest-lift'] = '44px'; liftLatest(h.el);
+  assert.equal(h.props['--ch-latest-lift'], undefined, 'hidden: lift cleared');
 });
 
 // The real watcher from chats.js, with its closure names stubbed: a change made on another device (sort, pin order,

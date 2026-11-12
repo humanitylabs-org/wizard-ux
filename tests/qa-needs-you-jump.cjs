@@ -116,9 +116,18 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps,ai-narro
           assert.equal(over, false, `${stem}: ${what}: the ↑ pill covers it (${at})`); assert.ok(at >= 40 && at <= 56, `${stem}: ${what}: lands just under the ↑ pill (${at})`); };
         // Issue 1380: the ↓ pill and ↓ Latest never overlap, and a tap at Latest's centre hits Latest.
         const noStack = async what => { const r = await page.evaluate(() => { const vis = q => [...document.querySelectorAll(q)].find(x => !x.hidden && x.getClientRects().length); const d = vis('[data-chjump="down"]'), l = vis('[data-chlatest]');
-          if (!d || !l) return { both: false }; const a = d.getBoundingClientRect(), b = l.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-          return { both: true, overlap: a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top, latestHit: !!hit?.closest('[data-chlatest]') }; });
-          entry.steps.push({ name: what + ': ↓ pill vs ↓ Latest', got: r }); if (r.both) { assert.equal(r.overlap, false, `${stem}: ${what}: ↓ pill overlaps ↓ Latest`); assert.equal(r.latestHit, true, `${stem}: ${what}: a tap on ↓ Latest hits the pill`); } return r; };
+          // Issue 1380 kick-back: neither may sit on the thread's Mark done · Snooze · Archive row, and each of those buttons is whole
+          // inside the thread column and takes a tap at its centre.
+          const hits = (x, y) => x.left < y.right && x.right > y.left && x.top < y.bottom && x.bottom > y.top, box = n => n.getBoundingClientRect();
+          const acts = [...document.querySelectorAll('.ch-tacts > button')].filter(n => n.getClientRects().length), col = d?.closest('.ch-thread') || l?.closest('.ch-thread');
+          const cr = col ? box(col) : null, R = n => { const q = box(n); return [q.left, q.top, q.right, q.bottom].map(Math.round).join(','); };
+          const actOver = acts.flatMap(n => [d, l].filter(Boolean).filter(c => hits(box(c), box(n))).map(c => `${c.matches('[data-chlatest]') ? 'Latest' : 'pill'} ${R(c)} on ${n.textContent.trim()} ${R(n)}`));
+          const actCut = acts.filter(n => { const q = box(n); return cr && (q.left < cr.left - 0.5 || q.right > cr.right + 0.5); }).map(n => `${n.textContent.trim()} ${R(n)} col ${cr.left}-${cr.right}`);
+          const actMiss = acts.filter(n => { const q = box(n); return !document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2)?.closest('.ch-tacts > button')?.isSameNode(n); }).map(n => n.textContent.trim());
+          if (!d || !l) return { both: false, acts: acts.length, actOver, actCut, actMiss }; const a = d.getBoundingClientRect(), b = l.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          return { both: true, overlap: a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top, latestHit: !!hit?.closest('[data-chlatest]'), acts: acts.length, actOver, actCut, actMiss }; });
+          entry.steps.push({ name: what + ': ↓ pill vs ↓ Latest', got: r }); if (r.both) { assert.equal(r.overlap, false, `${stem}: ${what}: ↓ pill overlaps ↓ Latest`); assert.equal(r.latestHit, true, `${stem}: ${what}: a tap on ↓ Latest hits the pill`); }
+          assert.deepEqual(r.actOver, [], `${stem}: ${what}: ↓ pill or ↓ Latest sits on the action row`); assert.deepEqual(r.actCut, [], `${stem}: ${what}: an action is cut off by the column edge`); assert.deepEqual(r.actMiss, [], `${stem}: ${what}: a tap on an action hits something else`); return r; };
         if (expectBroken) { await toBottom(); await nap(400); entry.ok = !!(await pills()).up; continue; }
         if (SCEN[sid] === 'green') {
           // Green only: lands on the newest reply (read), the two older unread replies above.
