@@ -6,8 +6,8 @@
  *  - `back`: run WizardApp's own Back (overlays, registered handlers); reply handled / atRoot.
  *  - `theme`: apply the Appearance v1 context (and the skin layer: stylesheet paths + My skin) through WizardApp's own
  *    validator; ack with `theme.applied`.
- *  - `field.pin` / `field.insert` / `field.release`: seal the focused text field, then insert dictated text there only
- *    if nobody typed in it meanwhile.
+ *  - `field.pin` / `field.insert` / `field.release`: seal the focused text field or rich-text (contenteditable) region,
+ *    then insert dictated text there only if nobody typed in it meanwhile.
  * And we tell the shell, as one boolean (`field.focus`), whether a text field has focus, so its orb offers dictation.
  * Desktop keys (`input`): a click here (the shell focuses this window), this window losing focus, and only the shell's
  * keys: Esc, bare ⌥ and the ⌥ codes the shell named (`keys`), never plain typing. Esc and those codes are held back
@@ -55,22 +55,31 @@
   const holds = new Map();   // the app's hold id -> { reason, shell: the shell's id on the current channel, placing }
   const error = (code, message) => Object.assign(new Error(message), { code });
   const send = data => { try { parent.postMessage({ ...data, type: TYPE, version: VERSION, channel }, SHELL); } catch (_) {} };
-  function release(id) { const s = seals.get(id); if (s) { s.el.removeEventListener('input', s.changed); seals.delete(id); } }
+  function release(id) { const s = seals.get(id); if (s) { s.el.removeEventListener('input', s.changed); s.observer?.disconnect(); seals.delete(id); } }
   function clear() {
     for (const id of [...seals.keys()]) release(id);
     for (const wait of requests.values()) { clearTimeout(wait.timer); wait.reject(error('denied', 'App document changed')); }
     requests.clear();
   }
   addEventListener('pagehide', () => { clear(); sticky.clear(); holds.clear(); channel = ''; });
-  const editable = el => !!el?.isConnected && typeof el.matches === 'function'
-    && el.matches('textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input[type=email],input:not([type])')
-    && !el.disabled && !el.readOnly && !el.closest('[inert],[data-no-dictation]') && typeof el.selectionStart === 'number';
+  const PLAIN = 'textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input[type=email],input:not([type])';
+  const plain = el => el.matches(PLAIN);
+  // The dictation target for a focused element: a plain text field, or the root of the rich-text (contenteditable)
+  // region it sits in, the same rule as the shell's own dictation (core/focused-field.js) for a same-origin app.
+  const editable = el => {
+    if (!el?.isConnected || typeof el.matches !== 'function' || el.closest('[inert],[data-no-dictation],[aria-disabled="true"]')) return null;
+    if (plain(el)) return !el.disabled && !el.readOnly && typeof el.selectionStart === 'number' ? el : null;
+    if (el.isContentEditable !== true) return null;
+    let root = el;
+    while (root.parentElement?.isContentEditable) root = root.parentElement;
+    return root;
+  };
   // Only whether a dictation-ready field has focus: never which field, its name or its text.
   // When the shell takes focus (the orb, a key on a shell control) this document's activeElement falls back to <body>,
   // so the last focused field is remembered until focus moves to something else inside this document.
   let fieldSent = null, lastField = null;
   const away = () => typeof document.hasFocus === 'function' && !document.hasFocus();
-  const field = () => (editable(document.activeElement) ? document.activeElement : away() && editable(lastField) ? lastField : null);
+  const field = () => editable(document.activeElement) || (away() && editable(lastField)) || null;
   const reportField = force => {
     if (!channel) return;
     const on = !!field();
@@ -78,15 +87,15 @@
     fieldSent = on; send({ op: 'field.focus', editable: on });
   };
   if (typeof document.addEventListener === 'function') {
-    document.addEventListener('focusin', () => { const el = document.activeElement; lastField = editable(el) ? el : null; reportField(true); }, true);
-    document.addEventListener('focusout', () => setTimeout(() => { if (!away()) lastField = editable(document.activeElement) ? document.activeElement : null; reportField(false); }, 0), true);
+    document.addEventListener('focusin', () => { lastField = editable(document.activeElement); reportField(true); }, true);
+    document.addEventListener('focusout', () => setTimeout(() => { if (!away()) lastField = editable(document.activeElement); reportField(false); }, 0), true);
   }
   // A field that turns read-only, disabled, inert or no-dictation, or leaves the page, without a focus event: say so,
   // so the shell never offers a take that would be refused at the end.
   if (typeof MutationObserver === 'function' && document.documentElement) {
     let queued = false;
     new MutationObserver(() => { if (queued || !fieldSent) return; queued = true; setTimeout(() => { queued = false; reportField(false); }, 0); })
-      .observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['readonly', 'disabled', 'inert', 'data-no-dictation', 'type'] });
+      .observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['readonly', 'disabled', 'inert', 'data-no-dictation', 'type', 'contenteditable', 'aria-disabled'] });
   }
   // Desktop keys and clicks for the shell (see the header). The field flag is only whether a text field has focus.
   const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
@@ -221,7 +230,19 @@
       const el = field();
       if (!el || seals.size >= 4) return reply('refused');
       const id = crypto.randomUUID ? crypto.randomUUID() : 'seal-' + Math.random().toString(36).slice(2);
-      const s = { el, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+      let s;
+      if (plain(el)) s = { el, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+      else {
+        // Rich text: the caret (or selection) must sit inside the region; any change to it before the words land
+        // (typing, an editor's own update) ends the seal, as the shell does for a same-origin contenteditable.
+        const sel = document.getSelection?.(), range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+        if (!range || !el.contains(range.startContainer) || !el.contains(range.endContainer)) return reply('refused');
+        s = { el, rich: true, value: el.innerHTML, range: range.cloneRange() };
+        if (typeof MutationObserver === 'function') {
+          s.observer = new MutationObserver(() => release(id));
+          s.observer.observe(el, { subtree: true, childList: true, characterData: true });
+        }
+      }
       s.changed = () => release(id);
       el.addEventListener('input', s.changed); seals.set(id, s);
       return reply('pinned', { seal: id });
@@ -229,7 +250,9 @@
     if (d.op === 'field.release') { release(d.seal); return; }
     if (d.op === 'field.insert') {
       const s = seals.get(d.seal);
-      if (!s || !editable(s.el) || s.value !== s.el.value || typeof d.text !== 'string' || d.text.length > 100000) { release(d.seal); return reply('stale'); }
+      if (!s || editable(s.el) !== s.el || typeof d.text !== 'string' || d.text.length > 100000) { release(d.seal); return reply('stale'); }
+      if (s.rich) return reply(insertRich(s, d.seal, d.text) ? 'inserted' : 'stale');
+      if (s.value !== s.el.value) { release(d.seal); return reply('stale'); }
       release(d.seal);
       let text = d.text;
       const before = s.value.slice(0, s.start).slice(-1), after = s.value.slice(s.end, s.end + 1);
@@ -240,6 +263,37 @@
       return reply('inserted');
     }
   });
+  // Dictated words into a sealed rich-text region, the way the shell does it for a same-origin app: through the
+  // browser's own editing pipeline (beforeinput + input, so editors and an attached keyboard stay in sync), with a
+  // manual insert only as the fallback. Never if the region changed or the sealed caret left it.
+  function insertRich(s, id, words) {
+    const el = s.el, r = s.range;
+    const ok = s.value === el.innerHTML && el.contains(r.startContainer) && el.contains(r.endContainer);
+    release(id);
+    if (!ok) return false;
+    const selection = document.getSelection?.();
+    if (!selection) return false;
+    let t = words, native = false;
+    const was = document.activeElement;
+    try {
+      // Same neighbour spacing as plain fields; only the caret's own text node counts, so a new line never gains a space.
+      const c = r.startContainer, o = r.startOffset, prev = c.nodeType === 3 ? c : c.childNodes[o - 1];
+      const before = c.nodeType === 3 ? (o ? c.data[o - 1] : '') : prev?.nodeType === 3 ? prev.data.slice(-1) : '';
+      if (before && !/\s/.test(before) && /^[^\s.,;:!?)]/.test(t)) t = ' ' + t;
+      if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
+      selection.removeAllRanges(); selection.addRange(r);
+      native = !!document.execCommand('insertText', false, t);
+    } catch (_) { native = false; }
+    if (was && was !== document.body && !el.contains(was) && was.isConnected) { try { was.focus({ preventScroll: true }); } catch (_) {} }
+    if (native) return true; // the browser already fired input; never add a second
+    try {
+      r.deleteContents();
+      const node = document.createTextNode(t); r.insertNode(node); r.setStartAfter(node); r.collapse(true);
+      selection.removeAllRanges(); selection.addRange(r);
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: words }));
+      return true;
+    } catch (_) { return false; }
+  }
   // Asks the shell for one hold. A reply always comes on the channel that is current when it arrives (the shell drops
   // answers for an old one, and an open request is re-sent with each hello). If the app released the hold meanwhile,
   // the shell's id is let go at once.

@@ -47,7 +47,10 @@ On:
 - Appearance: `appearance-host.js` pushes the Appearance v1 context with `WizBrowserBoundary.theme()`; the window is
   marked `.wz-themed` only after the app acknowledged that revision, and the last context is sent again on reload.
 - Field insertion: `WizBrowserBoundary.pinField(frame)` seals the focused text field of the focused app frame;
-  `insert(text)` puts text there once, and only if nobody typed in it meanwhile.
+  `insert(text)` puts text there once, and only if nobody typed in it meanwhile. A rich-text (contenteditable) region
+  counts too, by the same rule as a same-origin app (`core/focused-field.js`): the app seals the region's root and its
+  caret, and the words go in through the browser's own editing (one input event), never if the region changed. Proof:
+  `tests/qa-browser-boundary-rich-text.cjs`.
 - Desktop keys and clicks: the app side sends a click (the shell focuses that window), its window losing focus (the
   keys guide hides), Esc, bare ⌥ (the keys guide) and the ⌥ codes the shell names with `WizBrowserBoundary.keys()`,
   never plain typing, with one flag for "a text field has focus" (never which field or its text). Exactly those keys
@@ -186,8 +189,8 @@ On:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
-- Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work). The app
-  orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is answered.
+- The app orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is
+  answered.
 - Recording: a hold-to-record press on a touch screen gets the browser's tap only when the finger lifts, so an app
   that starts on touch-down must prepare in an earlier tap (or start on release).
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
