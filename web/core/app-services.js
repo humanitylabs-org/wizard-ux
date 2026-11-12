@@ -121,7 +121,7 @@
   const live = (st, doc) => valid(st, doc) || boundaryLive(st);
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); wsCloseAll(st); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); wsCloseAll(st); mediaRevoke(st); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -396,65 +396,22 @@
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
-      /* Photos and videos an app shows open in Wizard's one media viewer (pinch/double-tap zoom, pan, swipe between
-       * items, Save/Share, Back/Esc closes) above the app, exactly as in Chats (James, 26 Oct 2026). Only this app's
-       * own origin (or its blob: URLs) is opened; relative URLs resolve against the app's document. */
+      // The media viewer (see mediaView): only this app's own origin (or its blob: URLs) is opened; relative URLs
+      // resolve against the app's document.
       media: Object.freeze({ view(items, index = 0) {
         check();
-        if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
-        const base = source.location.href, clean = [], list = items.slice(0, 500), want = Math.floor(+index) || 0;
-        let i = want >= list.length ? Infinity : 0; // past the end (stale index, intake cap) still clamps to the last item
-        for (const [n, it] of list.entries()) {
-          if (n === want) i = clean.length; // the tapped item keeps its place after unsafe entries are dropped
-          let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
+        const base = source.location.href;
+        return mediaView(st, items, index, it => {
+          let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { return null; }
           const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
           const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
-          if (!own && !blob) continue;
-          const kind = it?.kind === 'video' ? 'video' : 'image';
-          clean.push({ url: u.href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
-        }
-        return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
+          return own || blob ? u.href : null;
+        });
       } }),
       nav: Object.freeze({ threadAgents: true, threadDrafts: true,
-      /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
-       * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */
-      back() { check(); if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; },
-      openContextDraft(data) {
-        check();
-        // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
-        // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
-        // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
-        if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
-        if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
-        // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
-        // reference DATA only in the message that is sent (WosChat.reply).
-        return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
-      }, openThread(id, opts) {
-        check();
-        // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).
-        if (!hostedThreadAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
-        // Optional app item that rides beside the thread's draft: keyed to this app, quoted as data when sent.
-        let reply = null;
-        if (opts?.reply != null) {
-          const r = opts.reply, key = String(r?.key || '');
-          if (!key.startsWith(st.appId + ':')) throw fault('Reply context must be keyed to this app');
-          reply = window.WosChat?.reply?.clean({ key, title: r?.title, message: r?.message });
-          if (!reply) throw fault('Invalid reply context');
-        }
-        const agent = opts?.agent;
-        if (agent != null) {
-          const a = typeof agent === 'string' ? window.WosAgents?.get(agent) : null;
-          if (!a || a.status !== 'running' || !window.WosAgents.isOther(agent)) throw fault('Thread agent unavailable');
-        }
-        // Optional trusted owner text stays a draft, separate from the untrusted
-        // reply item. No send/run authority is added by this admission.
-        let draft;
-        if (opts?.draft != null) {
-          if (typeof opts.draft !== 'object' || typeof opts.draft.text !== 'string' || opts.draft.text.length > 8000) throw fault('Invalid thread draft');
-          draft = {text:opts.draft.text};
-        }
-        return st.openThread?.(id, { ...(reply ? { reply } : {}), ...(agent ? { agent } : {}), ...(draft ? {draft} : {}) }) === true;
-      } }),
+      back() { check(); return navBack(st); },
+      openContextDraft(data) { check(); return contextDraft(st, data); },
+      openThread(id, opts) { check(); return threadOpen(st, id, opts, hostedThreadAuthorized(st)); } }),
       share: Object.freeze({ text(data) {
         check();
         if (data?.url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(String(data.url))) {
@@ -763,11 +720,90 @@
     return { accepted: true, request_id: message.request_id };
   }
   // Same list as chats.js HOSTED_APPS: apps whose conversations are the real Chats thread over their window.
-  function hostedThreadAuthorized(st) {
-    if (!st || !window.WizLauncher?.hasHostedThread(st.appId) || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+  // `sandboxed`: a window under the browser boundary, verified by boundaryLive (its document can't be read).
+  function hostedThreadAuthorized(st, sandboxed = false) {
+    if (!st || !window.WizLauncher?.hasHostedThread(st.appId) || !(sandboxed ? boundaryLive(st) : valid(st, st.doc)) || typeof st.openThread !== 'function') return false;
     const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
     try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
   }
+  /* WizardApp.media.view and WizardApp.nav.*, for a same-origin window (services above) and a sandboxed one (the
+   * boundary server below) alike; each caller has verified the window first.
+   * Photos and videos an app shows open in Wizard's one media viewer (pinch/double-tap zoom, pan, swipe between items,
+   * Save/Share, Back/Esc closes) above the app, exactly as in Chats (James, 26 Oct 2026). `url(item)` gives an item's
+   * safe address or null; the tapped item keeps its place after unsafe entries are dropped. */
+  function mediaView(st, items, index, url) {
+    if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
+    const clean = [], list = items.slice(0, 500), want = Math.floor(+index) || 0;
+    let i = want >= list.length ? Infinity : 0; // past the end (stale index, intake cap) still clamps to the last item
+    for (const [n, it] of list.entries()) {
+      if (n === want) i = clean.length;
+      const href = url(it); if (!href) continue;
+      const kind = it?.kind === 'video' ? 'video' : 'image';
+      clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
+    }
+    return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
+  }
+  // The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's own
+  // views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026).
+  function navBack(st) { if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; }
+  function contextDraft(st, data) {
+    // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
+    // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
+    // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
+    if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
+    if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
+    // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
+    // reference DATA only in the message that is sent (WosChat.reply).
+    return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
+  }
+  function threadOpen(st, id, opts, authorized) {
+    // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).
+    if (!authorized || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
+    // Optional app item that rides beside the thread's draft: keyed to this app, quoted as data when sent.
+    let reply = null;
+    if (opts?.reply != null) {
+      const r = opts.reply, key = String(r?.key || '');
+      if (!key.startsWith(st.appId + ':')) throw fault('Reply context must be keyed to this app');
+      reply = window.WosChat?.reply?.clean({ key, title: r?.title, message: r?.message });
+      if (!reply) throw fault('Invalid reply context');
+    }
+    const agent = opts?.agent;
+    if (agent != null) {
+      const a = typeof agent === 'string' ? window.WosAgents?.get(agent) : null;
+      if (!a || a.status !== 'running' || !window.WosAgents.isOther(agent)) throw fault('Thread agent unavailable');
+    }
+    // Optional trusted owner text stays a draft, separate from the untrusted
+    // reply item. No send/run authority is added by this admission.
+    let draft;
+    if (opts?.draft != null) {
+      if (typeof opts.draft !== 'object' || typeof opts.draft.text !== 'string' || opts.draft.text.length > 8000) throw fault('Invalid thread draft');
+      draft = {text:opts.draft.text};
+    }
+    return st.openThread?.(id, { ...(reply ? { reply } : {}), ...(agent ? { agent } : {}), ...(draft ? {draft} : {}) }) === true;
+  }
+  /* The same for a sandboxed window (media.view): its own blob: URLs belong to its opaque origin and the shell can't
+   * read them, so app-client.js sends such an item's bytes (`blob`) and the shell shows them under a blob: URL of its
+   * own (the window's last set is revoked on its next view and when the window goes). Other items must be this host's
+   * own http(s) addresses outside the owner routes; a relative one resolves against the page's address in the app. */
+  const MEDIA_BLOBS = 50;
+  function boundaryMedia(st, args) {
+    if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(args?.items)) return false;
+    let base = st.url; try { if (typeof args.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
+    const made = [];
+    const shown = mediaView(st, args.items, args.index, it => {
+      if (it?.blob != null) {
+        if (!['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(it.blob)) || made.length >= MEDIA_BLOBS) return null;
+        const href = URL.createObjectURL(it.blob); made.push(href); return href;
+      }
+      if (typeof it?.url !== 'string' || !it.url || it.url.length > 8192) return null;
+      let u; try { u = new URL(it.url, base); } catch (_) { return null; }
+      return u.origin === location.origin && /^https?:$/.test(u.protocol) && !u.username && !u.password && !window.WizBrowserBoundary.ownerRoute(u.href) ? u.href : null;
+    });
+    if (!shown) { for (const h of made) URL.revokeObjectURL(h); return false; }
+    mediaRevoke(st); st.mediaUrls = made;
+    return true;
+  }
+  function mediaRevoke(st) { for (const h of st.mediaUrls || []) URL.revokeObjectURL(h); st.mediaUrls = null; }
   function managerAuthorized(st) {
     if (!st || st.appId !== 'wizard-manager' || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
     const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
@@ -1566,6 +1602,12 @@
       if (method === 'ws.open') return boundaryWsOpen(st, args);
       if (method === 'ws.send') return boundaryWsSend(st, args);
       if (method === 'ws.close') return boundaryWsClose(st, args);
+      // The shell's photo viewer and the app's navigation calls (WizardApp.media.view, WizardApp.nav.*), with the
+      // same rules as for a same-origin window (see mediaView). A context draft's receipt stays in the shell.
+      if (method === 'media.view') return boundaryMedia(st, args);
+      if (method === 'nav.back') return navBack(st);
+      if (method === 'nav.openContextDraft') return !!contextDraft(st, args);
+      if (method === 'nav.openThread') return threadOpen(st, args?.id, args?.opts, hostedThreadAuthorized(st, true));
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {

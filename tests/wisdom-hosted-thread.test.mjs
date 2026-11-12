@@ -24,7 +24,8 @@ test('Manager and Wisdom use one synced launcher admission policy in both consum
 test('openThread forwards an app-keyed reply item; foreign keys are refused', () => {
   assert.match(client, /openThread: \(id, opts\) => service\?\.nav\?\.openThread\(id, opts\) === true/);
   assert.match(services, /if \(!key\.startsWith\(st\.appId \+ ':'\)\) throw fault\('Reply context must be keyed to this app'\);/);
-  assert.match(services, /hostedThreadAuthorized\(st\) \|\| st\.isVisible/);
+  assert.match(services, /if \(!authorized \|\| st\.isVisible/);
+  assert.match(services, /threadOpen\(st, id, opts, hostedThreadAuthorized\(st\)\)/);
   // (stock: over the app; a layout placing opens itself, apps.routeOpens, may take it to the main Chats instead)
   for (const src of [app, desktop]) assert.match(src, /openThread: \(sid, opts\) => [^\n]{0,400}?CHATS\.openHosted\(w\.id, f, sid, opts\)/);
 });
@@ -49,7 +50,7 @@ test('agent-aware hosted navigation pins a known running non-main agent before o
   assert.equal(sandbox.openHosted('w',frame,'sid',{agent:'philosopher'}), true);
   assert.deepEqual(effects, [['pin','sid','philosopher'],['open','w','sid']]);
   assert.match(services, /a\.status !== 'running' \|\| !window\.WosAgents\.isOther\(agent\)/);
-  assert.match(client, /get threadAgents\(\) \{ return service\?\.nav\?\.threadAgents === true; \}/);
+  assert.match(client, /get threadAgents\(\) \{ return service\?\.nav\?\.threadAgents === true \|\| shellNav\(\); \}/);
 });
 
 test('native draft admission precedes agent pin/navigation and conflicts do not open a layer',()=>{

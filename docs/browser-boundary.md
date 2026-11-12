@@ -279,14 +279,22 @@ On:
   tap in that focused, visible window; a page alone, or a tap elsewhere in the shell, opens nothing. In-page anchors,
   the app's own pages and same-origin downloads stay the page's; a link aimed at the page's own named frame stays
   there; a form aimed at `_top` / `_parent` stays in its window. Proof: `tests/qa-browser-boundary-links.cjs` (real Chromium, the real link sheet).
+- Photo viewer and navigation: `WizardApp.media.view`, `nav.back`, `nav.openThread` and `nav.openContextDraft` go to the
+  shell as `media.view` / `nav.*` and run on the same rules as for a same-origin app (`core/app-services.js`
+  `mediaView`, `navBack`, `threadOpen`, `contextDraft`: the window in view, hosted threads only for the apps the
+  launcher lists, reply keys of the window's own app id, a running agent). The viewer opens only this host's own
+  http(s) photos outside the owner routes; the page's own `blob:` photos (its opaque origin's) cross as their bytes and
+  show under a shell `blob:` URL, revoked on the window's next view and when it closes. These calls answer at once as
+  they always have, so the page gets `true` (a context draft: an `unsent-draft` receipt) once the request is on its
+  way; a refusal is only logged in the page's console. `threadAgents` / `threadDrafts` read true. Proof:
+  `tests/qa-browser-boundary-media-nav.cjs` (real Chromium).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
-- The app orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed. `WizardApp.media.view` (the
-  shell's photo viewer) and `WizardApp.nav.*` (open a thread, a context draft, finish back) still answer `false` /
-  throw under the boundary (a plain link to a photo or a thread works, above); every other app service is answered.
+- The app orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is
+  answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
 - Each real app still needs checking one by one from an opaque origin (wizard-os#385); `fetch` (also streamed),

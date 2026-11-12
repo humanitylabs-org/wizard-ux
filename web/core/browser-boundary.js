@@ -81,6 +81,9 @@
  *    page's links (core/links.js guardFrame), so app-client.js hands a tapped link that leaves the window (a new tab,
  *    another site, a page outside the window's `home` path, window.open) to the shell, which opens it as it does for
  *    a same-origin app (WizLinks.follow). Only right after a real tap in that focused, visible window (TAPPED).
+ *  - media.view, nav.*: the app's photos in the shell's media viewer, and its navigation calls (Back after a finishing
+ *    action, a thread, a Chats draft with its item), on the same rules as for a same-origin app (core/app-services.js
+ *    mediaView, navBack, threadOpen, contextDraft). The page's own blob: photos cross as their bytes.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -97,7 +100,8 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close', 'link.open'];
+    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close', 'link.open',
+    'media.view', 'nav.back', 'nav.openThread', 'nav.openContextDraft'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
