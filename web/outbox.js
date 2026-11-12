@@ -623,7 +623,9 @@
       if (transcriptionTimedOut(it, e)) { it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.'; }
       // The device lost this recording's bytes: no network retry can fix that, so stop and say so plainly.
       else if (e.localAudio) { it.state = 'failed'; it.nextAt = 0; it.audioUnreadable = true; }
-      else if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      // During a known Agent Service restart (wizard/graceful-restart) the outage lasts seconds: try again soon, with
+      // the same Idempotency-Key (it.id), so the message lands once the service is back instead of minutes later.
+      else if (transient(e)) { it.state = 'waiting'; const wait = BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; it.nextAt = now() + (window.WizReach?.restart?.() ? Math.min(3000, wait) : wait); }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }
@@ -681,6 +683,7 @@
     const dock = document.querySelector('#voice') || document.querySelector('.dbar') || document.querySelector('#voicePill')?.parentElement;
     if (dock && !hosts.length) hosts.push(dock);
     for (const el of document.querySelectorAll('[data-custody-notice]')) if (!hosts.includes(el.parentElement)) el.remove();
+    window.WizReach?.paintRestart?.(hosts); // graceful restart note (wizard/graceful-restart), same hosts
     for (const host of hosts) {
       let el = host.querySelector('[data-custody-notice]');
       if (!text) { el?.remove(); continue; }

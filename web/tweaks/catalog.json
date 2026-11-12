@@ -27,7 +27,8 @@
     "wizard/connector-models",
     "wizard/link-token-repair",
     "wizard/chat-channels",
-    "wizard/narrow-one-app"
+    "wizard/narrow-one-app",
+    "wizard/graceful-restart"
   ],
   "defaults": [
     "wizard/unified-inbox",

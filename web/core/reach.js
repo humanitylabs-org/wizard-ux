@@ -62,6 +62,8 @@
    *  'read'. Only a confirmed-healthy diagnosis differs: a send names the unsent message instead of the connection,
    *  a read stays neutral. Any real outage, or no diagnosis yet, keeps its connection wording for both. */
   function label(operation, { count = 1, diagnosis } = {}) {
+    // Graceful restart (switch wizard/graceful-restart): a send that hit the restart is saved, not refused.
+    if (!diagnosis && operation === 'send' && restartState()) return count > 1 ? `${count} messages saved · send after Wizard restarts` : 'Saved · sends after Wizard restarts';
     const d = diagnosis || window.WizReach.failure();
     if (operation === 'send' && d.layer === 'send') return count > 1 ? `${count} messages not sent · retrying` : 'Message not sent · retrying';
     return d.short;
@@ -270,6 +272,107 @@
     if (!frame || frame.hidden) return;
     try { frame.contentWindow.location.reload(); } catch (_) { const src = frame.getAttribute('src'); if (src) frame.src = src; }
   }
+  /* Graceful Agent Service restart (wizard-ux issue 1362, switch wizard/graceful-restart, off by default; the box
+   * side is wizard-agent-service docs/graceful-restart.md). The only healthy polling here, and only while the switch
+   * is on: /wizard/health carries `restart` while a restarter holds new sends until running chats finish. That read
+   * never renews the restarter's lease (GET /wizard/v1/restart would), so a crashed restarter still loses its hold.
+   * The owner's choice when it is overdue goes back as POST /wizard/v1/restart: wait_s (wait longer) or now. */
+  const RESTART_SWITCH = 'wizard/graceful-restart', RESTART_GRACE = 3 * 60000;
+  const restartOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes(RESTART_SWITCH); } catch (_) { return false; } };
+  let restart = null, restartDownAt = 0, restartTimer = 0, restartAsk = '', restartPolledAt = 0;
+  const restartPick = h => ({ phase: ['waiting', 'ready', 'overdue'].includes(h.phase) ? h.phase : 'waiting',
+    active: Number.isFinite(h.active) ? h.active : null, held: Number(h.held) || 0, oldest: Number(h.oldest_active_s) || 0,
+    waitUntil: typeof h.wait_until === 'string' ? h.wait_until : '', now: h.restart_now === true });
+  /** The restart the shell knows of, or null (switch off, none, or gone for longer than a restart takes). While the
+   *  service is down right after a hold, phase is 'restarting'. */
+  function restartState() {
+    if (!restartOn() || !restart) return null;
+    if (restartDownAt) {
+      if (Date.now() - restartDownAt > RESTART_GRACE) { restart = null; restartDownAt = 0; return null; }
+      return { ...restart, phase: 'restarting' };
+    }
+    return restart;
+  }
+  function restartChanged() {
+    window.dispatchEvent?.(new Event('wizreachchange'));
+    try { window.WosOutbox?.paintNotice?.(); } catch (_) {}
+  }
+  function restartSet(next, downAt) {
+    const before = JSON.stringify([restart, restartDownAt > 0]);
+    restart = next; restartDownAt = downAt;
+    if (JSON.stringify([restart, restartDownAt > 0]) !== before) restartChanged();
+  }
+  async function restartPoll() {
+    clearTimeout(restartTimer); restartTimer = 0; restartPolledAt = Date.now();
+    if (!restartOn()) { if (restart) restartSet(null, 0); return; }
+    if (!document.hidden) {
+      try {
+        const { response, body } = await request('/wizard/health', {}, true);
+        if (!response.ok || !body) throw new Error('health ' + response.status);
+        const h = body.restart;
+        restartSet(h && h.holding === true ? restartPick(h) : null, 0);
+      } catch (_) {
+        // Down right after a hold: the restart itself. Without a hold seen first, a failing read is the ordinary
+        // connection story (failure() below), never a restart.
+        if (restart && !restartDownAt) restartSet(restart, Date.now());
+      }
+    }
+    // Windows and composers open and close between polls: repaint the note where it belongs now.
+    if (restart) try { window.WosOutbox?.paintNotice?.(); } catch (_) {}
+    if (restartOn()) restartTimer = setTimeout(restartPoll, restart ? 5000 : 30000);
+  }
+  async function restartChoose(choice) {
+    if (!restartOn() || !restart || restartAsk) return false;
+    restartAsk = choice; restartChanged();
+    try {
+      const response = await fetch('/wizard/v1/restart', { method: 'POST', cache: 'no-store', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(choice === 'now' ? { now: true } : { wait_s: 600 }) });
+      if (response.ok) { const body = await response.json().catch(() => null); if (body?.holding) restartSet(restartPick(body), 0); }
+      return response.ok;
+    } catch (_) { return false; }
+    finally { restartAsk = ''; restartChanged(); void restartPoll(); }
+  }
+  // Names of the chats still running, from the shell's own list (health carries counts only, never thread ids).
+  function restartRunning() {
+    try {
+      const rows = window.WizLive?.unified?.() || [];
+      return rows.filter(s => s && !s.archived && ['running', 'stopping'].includes(s.status)).map(s => String(s.title || 'Untitled chat'));
+    } catch (_) { return []; }
+  }
+  function restartNoticeHtml() {
+    const st = restartState();
+    if (!st) return '';
+    const n = st.held;
+    const saved = n ? ` · ${n === 1 ? '1 message' : n + ' messages'} saved, sent after the restart` : ' · new messages are saved and sent after the restart';
+    if (st.phase === 'restarting') return `<b>Wizard is restarting</b><span>Messages are saved and send by themselves.</span>`;
+    if (st.now) return `<b>Restarting now</b><span>Chats still running are stopped; your messages are saved.</span>`;
+    if (st.phase !== 'overdue') return `<b>Restarting when chats finish</b><span>${esc(saved.slice(3))}</span>`;
+    const names = restartRunning(), count = st.active ?? names.length;
+    const list = names.slice(0, 3).map(t => `“${esc(t)}”`).join(', ') + (names.length > 3 ? ` and ${names.length - 3} more` : '');
+    const busy = restartAsk ? ' disabled' : '';
+    return `<b>Wizard wants to restart</b><span>${count === 1 ? '1 chat is' : `${count || 'Some'} chats are`} still running${list ? ': ' + list : ''}.</span>`
+      + `<span class="rs-acts"><button type="button" data-restart-choice="wait"${busy}>Wait longer</button><button type="button" data-restart-choice="now"${busy}>Restart now</button></span>`;
+  }
+  /** Called by the outbox's notice painter with the visible composer/voice-dock hosts. */
+  function paintRestart(hosts) {
+    if (!document.body) return;
+    const html = restartNoticeHtml();
+    for (const el of document.querySelectorAll('[data-restart-notice]')) if (!html || !hosts.includes(el.parentElement)) el.remove();
+    if (!html) return;
+    for (const host of hosts) {
+      let el = host.querySelector('[data-restart-notice]');
+      if (!el) {
+        el = document.createElement('div'); el.dataset.restartNotice = ''; el.className = 'ch-restart-notice';
+        el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+        el.addEventListener('click', e => { const b = e.target.closest?.('[data-restart-choice]'); if (b && !b.disabled) void restartChoose(b.dataset.restartChoice); });
+        host.appendChild(el);
+      }
+      if (el.innerHTML !== html) el.innerHTML = html;
+    }
+  }
+  window.addEventListener?.('wos:tweak-choice', () => { setTimeout(() => { void restartPoll(); }, 0); });
+  globalThis.document?.addEventListener?.('visibilitychange', () => { if (!document.hidden && restartOn()) void restartPoll(); });
+  if (restartOn()) void restartPoll();
   window.WizReach = {
     diagnose,
     reloadRepair,
@@ -278,7 +381,14 @@
     checks,
     label,
     directUrl,
+    restart: restartState,
+    restartChoose,
+    paintRestart,
     failure() {
+      // A send or read that fails while the Agent Service restarts says so calmly, without a connection hunt.
+      // A failure during a known hold is most likely the restart itself: look now instead of at the next poll.
+      if (restartState() && !restartDownAt && Date.now() - restartPolledAt > 2000) void restartPoll();
+      if (restartState()?.phase === 'restarting') return result('restarting', 'Wizard is restarting its Agent Service. Messages are saved on this device and send by themselves when it is back.', 'Restarting · messages saved');
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
       return cached || pending;
     },

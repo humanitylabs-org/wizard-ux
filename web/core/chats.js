@@ -1568,6 +1568,7 @@ window.WizCore.chats = function createChats(H) {
     done: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="m7.5 12.3 3 3 6-6.3"/>'),
     fyi: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="M12 11v5.5"/><circle class="kd" cx="12" cy="7.6" r="1.35"/>'),
     deferred: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
+    held: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
     approval: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'),
     failed: svg('<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01"/>'),
     working: '<i class="spin" aria-hidden="true"></i>',
@@ -1575,7 +1576,7 @@ window.WizCore.chats = function createChats(H) {
     none: '<i class="dot" aria-hidden="true"></i>',
   };
   const STI_LAB = { needs: 'Needs you', check: 'Your call', done: 'Done', fyi: 'FYI', deferred: 'Snoozed', approval: 'Needs approval', failed: 'Error' };
-  const STI_TIP = { deferred: 'Snoozed', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
+  const STI_TIP = { deferred: 'Snoozed', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', held: 'Saved · sends after Wizard restarts', none: 'No status' };
   // One status for a thread, shared by its list row and its open header (James, 25 Oct 2026: the open thread shows
   // the same raised hand / tick as its row, so a thread that needs him says so while he reads it).
   function stiKind(s) {
@@ -1585,7 +1586,8 @@ window.WizCore.chats = function createChats(H) {
     // attention/status intact so Restore (or a newer reply) recovers it, including approvals/errors.
     if (snoozeLast() && deferredOf(s) && !working) return 'deferred';
     const def = deferredOf(s) && !working && !needs, at = def ? null : attOf(s);
-    return working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    // A send queued while a graceful restart holds new sends (wizard/graceful-restart) is saved, not working yet.
+    return working ? (s.pend === 'waiting' ? 'offline' : s.status === 'queued' && globalThis.WizReach?.restart?.() ? 'held' : 'working') : s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
   }
   const stiBadge = (s, cls = '') => { const k = stiKind(s); return `<span class="emo sti ${k}${cls}" title="${STI_TIP[k]}" aria-label="${STI_TIP[k]}">${STI[k]}</span>`; };
   // Loading placeholders: quiet rows/bubbles shaped like the real ones, with a soft shimmer.
@@ -3559,7 +3561,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function threadState(s, agent) {
     const working = isWorking(s);
-    const sub = !s ? '' : s.status === 'queued' && s.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : s.archived ? 'Archived' : snoozeLast() && stiKind(s) === 'deferred' ? 'Snoozed' : s.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(agent)}` : `${agentName(agent)} is working`)) : s.status === 'waiting_for_approval' ? 'Waiting for your response' : s.deferred ? 'Snoozed' : `Updated ${ago(s.lastAssistantAt || s.updatedAt)}`;
+    const sub = !s ? '' : s.status === 'queued' && s.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : s.archived ? 'Archived' : snoozeLast() && stiKind(s) === 'deferred' ? 'Snoozed' : s.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s.status === 'stopping' ? 'Stopping…' : working && s.status === 'queued' && globalThis.WizReach?.restart?.() ? 'Saved · sends after Wizard restarts' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(agent)}` : `${agentName(agent)} is working`)) : s.status === 'waiting_for_approval' ? 'Waiting for your response' : s.deferred ? 'Snoozed' : `Updated ${ago(s.lastAssistantAt || s.updatedAt)}`;
     return { working, sub };
   }
   function renderThread(w, el, keep) {
