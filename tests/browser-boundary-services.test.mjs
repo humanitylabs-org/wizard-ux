@@ -19,7 +19,7 @@ class El {
 }
 
 // A sandboxed app frame: its window can be addressed but never read (opaque origin).
-function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true, catalog, attach: att = {} } = {}) {
+function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true, catalog, attach: att = {}, app: appOver = {} } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), counts = {}, taps = [], legacy = [];
   const win = new El('article'), bar = new El('header'); bar.className = 'wbar'; win.append(bar);
   const child = { get location() { throw new Error('SecurityError'); }, get document() { throw new Error('SecurityError'); }, postMessage: m => legacy.push(m) };
@@ -28,7 +28,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
     hasAttribute: n => n === 'sandbox', addEventListener: (t, fn) => { if (t === 'load') loads.push(fn); else (on[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { if (on[t]) on[t] = on[t].filter(x => x !== fn); }, closest: s => (s === '.win' ? win : null) };
   // The src attribute set by the shell (a MutationObserver record), and a document load in the frame.
   class MutationObserver { constructor(fn) { this.fn = fn; } observe(el, o) { if (el === frame && o.attributeFilter?.includes('src')) observers.push(this); } disconnect() { observers.splice(observers.indexOf(this), 1); } }
-  const app = { id, kind: 'wizard', url: '/' + id + '/', name: 'Morning Report', ...(catalog ? { source: catalog } : {}) };
+  const app = { id, kind: 'wizard', url: '/' + id + '/', name: 'Morning Report', ...(catalog ? { source: catalog } : {}), ...appOver };
   const B = { served: null, resets: new Set(), readyNow: ready,
     serve(fn) { if (this.served) return false; this.served = fn; return true; },
     onReset(fn) { this.resets.add(fn); return () => this.resets.delete(fn); },
@@ -749,6 +749,40 @@ test('app backend stream: at most 16 open calls per window; an error mid-stream 
 });
 // wizard-os#133 slice 38: an app's own WebSocket (ws.open / ws.send / ws.close). Real Chromium proof:
 // tests/qa-browser-boundary-websocket.cjs.
+// Slice 50: an own screen (the owner's version of an app at /wizard/views/<id>/, core/own-views.js). Its relative api/…
+// calls go straight to the original app's API folder (the Agent Service's view.api); nothing else under /wizard/.
+const OWN = { url: '/wizard/views/habits/', source: 'apps.json', originalUrl: '/habits/', view: { mode: 'own', url: '/wizard/views/habits/', api: '/habits/api/' } };
+function ownFixture(app = OWN, answer = () => new Response('{"ok":1}', { status: 200 })) {
+  const asked = [];
+  const fetch = async (url, init) => { asked.push({ url, init }); return answer(url, init); };
+  const f = fixture({ id: 'habits', src: 'https://wizard.example/wizard/views/habits/', app, win: { fetch } });
+  f.B.netMax = 1024;
+  return { f, asked };
+}
+test('own screen: its api/ calls go to its app\'s API folder, with method and body; nothing else under /wizard/ is fetched', async () => {
+  const { f, asked } = ownFixture();
+  const v = await f.call('net.fetch', { url: 'https://wizard.example/wizard/views/habits/api/items?day=1', method: 'POST', body: new TextEncoder().encode('{}').buffer });
+  assert.equal(v.net.status, 200);
+  assert.deepEqual(asked.map(a => [a.url, a.init.method]), [['https://wizard.example/habits/api/items?day=1', 'POST']]);
+  for (const url of ['https://wizard.example/wizard/views/habits/app.js', 'https://wizard.example/wizard/views/habits/api/%2e%2e/%2e%2e/wizard/v1/chats',
+    'https://wizard.example/wizard/views/habits/api/../../../wizard/v1/chats', 'https://wizard.example/wizard/views/other/api/x', 'https://wizard.example/wizard/v1/apps',
+    'https://wizard.example/habits/index.html', 'https://elsewhere.example/wizard/views/habits/api/x']) {
+    await assert.rejects(f.call('net.fetch', { url }), err => err.code === 'outside', url);
+  }
+  assert.equal(asked.length, 1);
+});
+test('own screen: an API folder outside the original app, on an owner route or not an own screen is never used', async () => {
+  for (const app of [{ ...OWN, view: { ...OWN.view, api: '/other-app/api/' } }, { ...OWN, originalUrl: '/wizard/x/', view: { ...OWN.view, api: '/wizard/x/api/' } },
+    { ...OWN, view: { ...OWN.view, api: 'https://elsewhere.example/habits/api/' } }, { ...OWN, view: { ...OWN.view, api: '/habits//api/' } },
+    { ...OWN, view: { ...OWN.view, mode: 'original' } }, { ...OWN, source: 'launcher.json' }, { ...OWN, view: { mode: 'own', url: OWN.url } }]) {
+    const { f, asked } = ownFixture(app);
+    await assert.rejects(f.call('net.fetch', { url: 'https://wizard.example/wizard/views/habits/api/items' }), err => err.code === 'outside', JSON.stringify(app));
+    assert.equal(asked.length, 0);
+  }
+  // An answer that lands outside the API folder (a redirect inside the app) gives the page nothing.
+  const moved = ownFixture(OWN, () => { const r = new Response('x'); Object.defineProperty(r, 'url', { value: 'https://wizard.example/habits/settings' }); return r; });
+  await assert.rejects(moved.f.call('net.fetch', { url: 'https://wizard.example/wizard/views/habits/api/items' }), /Redirected outside/);
+});
 function wsFixture() {
   const made = [];
   class FakeWS {

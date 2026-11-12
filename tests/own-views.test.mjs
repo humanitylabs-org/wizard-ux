@@ -79,3 +79,39 @@ test('both renderers use the same frame and marker helpers without a new history
   assert.match(source, /e\.view !== window/);
   assert.match(source, /check\.json\(\)\)\.active !== false/);
 });
+
+// Browser boundary (wizard-os#133): a sandboxed own screen can't be read and speaks from origin `null`.
+function frameHarness({ boundary = true, sandbox = 'allow-scripts allow-forms allow-downloads' } = {}) {
+  const events = new Map(), frameOn = {}, win = { WosSettings:{ register() {}, refresh() {} }, WizCore:{ apps:() => ({ APPS:[{ ...a, view:{ ...a.view } }] }), deeplink:{ route() {} } } };
+  win.top = win; if (boundary) win.WizBrowserBoundary = { enabled:true };
+  const child = {}, note = [];
+  const host = { querySelector:() => null };
+  const frame = { dataset:{ ownApp:'habits' }, isConnected:true, contentWindow:child, attrs:{ src:'/wizard/views/habits/', ...(sandbox ? { sandbox } : {}) },
+    getAttribute(k) { return this.attrs[k] ?? null; }, hasAttribute(k) { return k in this.attrs; },
+    get src() { return this.attrs.src; }, set src(v) { this.attrs.src = v; },
+    get contentDocument() { throw new Error('SecurityError'); },
+    addEventListener:(t, fn) => { frameOn[t] = fn; }, closest:() => host, parentElement:{ insertBefore:p => note.push(p.textContent) } };
+  const document = { currentScript:{ src:'https://box.test/wizard-os-home/core/own-views.js' }, readyState:'complete', body:{},
+    querySelectorAll:q => (q === 'iframe[data-own-app]' ? [frame] : []), addEventListener() {}, createElement:() => ({ setAttribute() {} }) };
+  class MutationObserver { observe() {} }
+  vm.runInNewContext(source, { window:win, document, URL, MutationObserver, location:{ origin:'https://box.test', href:'https://box.test/wizard-os-home/', pathname:'/wizard-os-home/' },
+    addEventListener:(name, fn) => events.set(name, fn), clearTimeout, setTimeout:() => 0,
+    fetch:async () => ({ ok:true, headers:{ get:() => 'text/html' } }) });
+  return { frame, child, note, load:() => frameOn.load(), message:(origin, type, source = child) => events.get('message')({ origin, source, data:{ type, file:'app.js' } }) };
+}
+test('boundary on: a sandboxed own screen is not read on load; its null-origin ready and error messages count', async () => {
+  const h = frameHarness(); await tick();
+  h.load(); assert.equal(h.frame.src, '/wizard/views/habits/', 'an unreadable document is not a failure');
+  h.message('null', 'wizard:own-view:ready'); assert.equal(h.frame.dataset.ownReady, 'true');
+  h.message('null', 'wizard:own-view:ready', {}); // another window: ignored
+  const e = frameHarness(); await tick();
+  e.message('null', 'wizard:own-view:error'); assert.equal(e.frame.src, '/habits/'); assert.match(e.note[0], /couldn’t load app\.js/);
+});
+test('boundary off or a same-origin frame: a null-origin message is ignored and an unreadable document falls back', async () => {
+  for (const opts of [{ boundary:false }, { sandbox:'' }, { sandbox:'allow-scripts allow-same-origin' }]) {
+    const h = frameHarness(opts); await tick();
+    h.message('null', 'wizard:own-view:ready'); assert.equal(h.frame.dataset.ownReady, undefined, JSON.stringify(opts));
+    h.message('null', 'wizard:own-view:error'); assert.equal(h.frame.src, '/wizard/views/habits/', JSON.stringify(opts));
+    h.load(); assert.equal(h.frame.src, '/habits/', JSON.stringify(opts));
+  }
+});

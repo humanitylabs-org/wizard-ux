@@ -35,12 +35,16 @@
       if (host && !old) { const p = document.createElement('p'); p.className = 'own-view-note'; p.setAttribute('role', 'status'); p.textContent = text; f.parentElement.insertBefore(p, f); }
     }
   }
+  // Browser boundary (wizard-os#133): a sandboxed (opaque) own screen can't be read by the shell, and its messages come
+  // from origin `null`. Its readiness is then the Service's answer for the page plus its boot script's ready message.
+  const opaque = f => !!window.WizBrowserBoundary?.enabled && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin');
   async function watch(f) {
     const a = app(f.dataset.ownApp); if (!own(a) || mounted.has(f) || broken.has(a.id)) return;
     mounted.add(f);
     const timer = setTimeout(() => { if (f.isConnected && !f.dataset.ownReady) failure(a.id, 'index.html'); }, 12000);
     f.addEventListener('load', () => {
       if (!f.isConnected || broken.has(a.id)) { clearTimeout(timer); return; }
+      if (opaque(f)) return;
       // HTTP error documents have load events too. A successful own document has
       // the Service's boot script (also required by the readiness watchdog).
       try { if (!f.contentDocument?.querySelector('script[src="/wizard/views/_boot.js"]')) failure(a.id, 'index.html'); } catch (_) { failure(a.id, 'index.html'); }
@@ -67,8 +71,9 @@
     }
   });
   addEventListener('message', e => {
-    if (e.origin !== location.origin || !['wizard:own-view:ready', 'wizard:own-view:error'].includes(e.data?.type)) return;
+    if (!['wizard:own-view:ready', 'wizard:own-view:error'].includes(e.data?.type)) return;
     const f = [...document.querySelectorAll('iframe[data-own-app]')].find(f => f.contentWindow === e.source);
+    if (!f || (e.origin !== location.origin && !(e.origin === 'null' && opaque(f)))) return;
     const a = f && app(f.dataset.ownApp); if (!own(a) || broken.has(a.id) || !f.getAttribute('src')?.startsWith(a.view.url)) return;
     if (e.data.type === 'wizard:own-view:error') failure(a.id, e.data.file);
     else { f.dataset.ownReady = 'true'; clearTimeout(f._ownTimer); }
