@@ -189,7 +189,7 @@
       // A new channel in the same document (the shell saw a load or reattached): seals end, open requests are asked
       // again on the new channel. Only a new document (pagehide) drops them.
       for (const id of [...seals.keys()]) release(id);
-      home = typeof d.home === 'string' && d.home.length <= 512 && /^\/(?:(?!\.\.?\/)[^/?#%\\]+\/)+$/.test(d.home) ? d.home : '';
+      home = typeof d.home === 'string' && d.home.length <= 512 && /^\/(?:(?!\.\.?\/)[^/?#\\]+\/)+$/.test(d.home) && !/%(?:2f|5c|2e|25)/i.test(d.home) ? d.home : '';
       channel = d.channel; appSent = ''; send({ op: 'ready' }); setKeys(d.keys, d.app); reportField(true);
       for (const [id, wait] of requests) {
         // An app's own backend call may already have reached its server on the old channel: never send it twice (a

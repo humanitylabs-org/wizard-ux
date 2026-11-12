@@ -306,13 +306,15 @@
   }
   // The window's own app path (`home`, e.g. /notes/), told to the page in each hello so its links that leave it go to
   // the shell (link.open). The page knows its own address anyway; nothing else about the window crosses.
-  const HOME = /^\/(?:(?!\.\.?\/)[^/?#%\\]+\/)+$/;
+  // Encoded paths as within() allows them (/my%20app/), never an encoded slash, backslash, dot or percent.
+  const HOME = /^\/(?:(?!\.\.?\/)[^/?#\\]+\/)+$/, ENCODED = /%(?:2f|5c|2e|25)/i;
+  const homeOk = h => typeof h === 'string' && h.length <= 512 && HOME.test(h) && !ENCODED.test(h);
   function attach(frame, { home } = {}) {
     if (frame?.tagName === 'IFRAME' && !frame.hasAttribute('sandbox') && !frame.hasAttribute('srcdoc')) return guard(frame);
     if (!opaqueFrame(frame)) return () => {};
-    const had = sessions.get(frame); if (had) { if (typeof home === 'string' && HOME.test(home) && home.length <= 512) had.home = home; return had.detach; }
+    const had = sessions.get(frame); if (had) { if (homeOk(home)) had.home = home; return had.detach; }
     const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0,
-      home: typeof home === 'string' && HOME.test(home) && home.length <= 512 ? home : '' };
+      home: homeOk(home) ? home : '' };
     const hello = () => { revoke(st); st.appSent = appOn(st); send(st, 'hello', helloMsg(st)); };
     st.detach = () => { if (sessions.get(frame) !== st) return; frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
     sessions.set(frame, st);

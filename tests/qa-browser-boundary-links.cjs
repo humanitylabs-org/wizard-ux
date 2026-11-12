@@ -22,7 +22,10 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
 <a id="browse" href="https://example.org/doc" data-wizard-browse>In my browser</a>
 <a id="anchor" href="#later">Anchor</a>
 <a id="inapp" href="b.html">Own page</a>
-<button id="pop">window.open</button>
+<a id="named" href="https://example.com/named" target="report">Named pop-up</a>
+<a id="toinner" href="c.html?inner=1" target="inner">Into my own frame</a>
+<button id="pop">window.open</button> <button id="popnamed">window.open named</button>
+<iframe name="inner" src="about:blank" style="width:120px;height:24px"></iframe>
 <p id="later">later</p>
 <script>
   window.results = {};
@@ -33,6 +36,7 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
     results.ready = true;
   })();
   document.getElementById('pop').onclick = () => { results.pop = window.open('https://example.com/popup', '_blank', 'noopener'); };
+  document.getElementById('popnamed').onclick = () => { results.popnamed = window.open('/notes/report.html', 'report'); };
   window.later = () => setTimeout(() => { window.open('https://example.com/later', '_blank'); results.later = true; }, 300);
 </script></body></html>`;
 const B_PAGE = `<!doctype html><html><head><meta charset="utf-8"><script src="/wizard-os-home/core/app-client.js"></script></head>
@@ -129,6 +133,14 @@ const server = http.createServer((req, res) => {
   const popRet = await frameOf('/notes/').evaluate(() => results.pop);
   ok(s.opened.some(x => x === 'https://example.com/popup') && popRet === null, 'window.open after a tap opens in the owner\'s browser: ' + JSON.stringify(s.opened));
   ok(!s.opened.some(x => x === 'https://example.com/sneaky'), 'window.open without a tap stayed closed');
+  await tap('#named');
+  await tap('#popnamed');
+  s = await shell();
+  ok(s.opened.some(x => x === 'https://example.com/named') && s.routed.some(r => r.href === base + '/notes/report.html'), 'a link or window.open aimed at a new named window opens too: ' + JSON.stringify(s));
+  const routedBefore = s.routed.length;
+  await tap('#toinner');
+  const innerUrl = page.frames().some(fr => /\/notes\/c\.html\?inner=1$/.test(fr.url()));
+  ok(innerUrl && (await shell()).routed.length === routedBefore, 'a link aimed at the page\'s own named frame stays the page\'s: ' + innerUrl);
   // A tap elsewhere in the shell activates the shell too; the app opening a pop-up right then gets nothing.
   await ensure(); await frameOf('/notes/').evaluate(() => later());
   await page.click('#shellbtn');

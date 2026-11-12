@@ -1022,7 +1022,12 @@ test('the hello names the window\'s app path (home); a bad one is never sent', a
   assert.equal(f.a.WizBoundaryClient.home, '/notes/');
   f.load(); await tick();
   assert.equal(f.a.WizBoundaryClient.home, '/notes/', 'every new channel names it again');
-  for (const home of ['/', 'notes/', '/notes', '/a/../b/', '/a%2f/', 'https://evil.example/x/', '/' + 'a'.repeat(600) + '/']) {
+  // An installed app under an encoded path (as within() admits it) is named too.
+  const shE = shell(), e = frame(shE);
+  e.a.WizBoundaryClient.connect({ onBack: () => false });
+  shE.B.attach(e.el, { home: '/my%20app/' }); await tick();
+  assert.equal(e.a.WizBoundaryClient.home, '/my%20app/');
+  for (const home of ['/', 'notes/', '/notes', '/a/../b/', '/a%2f/', '/a%2E%2E/', '/a%25/', 'https://evil.example/x/', '/' + 'a'.repeat(600) + '/']) {
     const sh2 = shell(), g = frame(sh2);
     g.a.WizBoundaryClient.connect({ onBack: () => false });
     sh2.B.attach(g.el, { home }); await tick();

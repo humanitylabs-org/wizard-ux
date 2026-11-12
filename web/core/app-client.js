@@ -57,8 +57,16 @@
   if (opaque) (() => {
     const LEAVE = /^_(blank|top|parent)$/i, IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
     const url = href => { try { const u = new URL(String(href), document.baseURI || location.href); return /^https?:$/.test(u.protocol) ? u : null; } catch (_) { return null; } };
+    // A target that would open a new browsing context: _blank / _top / _parent, or a name no frame in this page has
+    // (the browser would make a pop-up for it). _self and a named frame of the page stay the page's.
+    const pops = target => {
+      const t = String(target ?? '');
+      if (!t || t.toLowerCase() === '_self') return false;
+      if (LEAVE.test(t)) return true;
+      try { return ![...document.querySelectorAll('iframe[name], frame[name], object[name]')].some(f => f.getAttribute('name') === t); } catch (_) { return true; }
+    };
     const leaves = (u, target) => {
-      if (u.origin !== location.origin || LEAVE.test(target || '') || IMAGE.test(u.pathname)) return true;
+      if (u.origin !== location.origin || pops(target) || IMAGE.test(u.pathname)) return true;
       const home = window.WizBoundaryClient?.home || '';
       return !!home && (!u.pathname.startsWith(home) || /%(?:2f|5c|2e|25)/i.test(u.pathname));
     };
@@ -69,7 +77,7 @@
       const u = url(a.getAttribute('href')); if (!u) return;
       if (a.hasAttribute('download') && u.origin === location.origin) return;
       // An in-page anchor stays the page's.
-      if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search && u.hash && !LEAVE.test(a.getAttribute('target') || '')) return;
+      if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search && u.hash && !pops(a.getAttribute('target'))) return;
       if (!leaves(u, a.getAttribute('target'))) return;
       e.preventDefault(); e.stopPropagation();
       hand(u, a.hasAttribute('data-wizard-browse'));
@@ -84,7 +92,7 @@
       const open = window.open;
       window.open = function (href, target, features) {
         const u = href == null || href === '' ? null : url(href);
-        if (u && (target == null || target === '' || LEAVE.test(String(target)))) { hand(u, false); return null; }
+        if (u && (target == null || pops(target) || String(target) === '')) { hand(u, false); return null; }
         return open.call(window, href, target, features);
       };
     } catch (_) {}
