@@ -135,8 +135,11 @@
     // service below fails closed for it on its own (valid() cannot read an opaque document).
     const detachBoundary = window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary.attach(frame) : null;
     const stopNav = detachBoundary ? (st.boundaryNav = true, trackNav(st)) : null;
+    // A sandboxed document that answers on a new channel learns a pending shell update, as a connecting one does.
+    const onBoundaryReady = () => { if (available && boundaryLive(st)) window.WizBrowserBoundary.notice(frame, 'update', { available }); };
+    if (detachBoundary) frame.addEventListener('wizard:boundary-ready', onBoundaryReady);
     const detachServices = st.detach;
-    st.detach = () => { detachReading?.(); stopNav?.(); detachBoundary?.(); detachServices(); queueSweep(); };
+    st.detach = () => { detachReading?.(); stopNav?.(); detachBoundary?.(); if (detachBoundary) frame.removeEventListener('wizard:boundary-ready', onBoundaryReady); detachServices(); queueSweep(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});
@@ -541,7 +544,7 @@
     available = detail;
     for (const st of frames.values()) if (valid(st, st.doc)) {
       try { st.frame.contentWindow.postMessage({ type: 'wizard:app:update', version: VERSION, available: detail }, ORIGIN); } catch (_) {}
-    }
+    } else if (boundaryLive(st)) window.WizBrowserBoundary.notice(st.frame, 'update', { available: detail });
     window.dispatchEvent(new CustomEvent('wizard:app-update', { detail }));
   }
   /* Fresh data (issue 1243): an open app window must not keep old data until it is closed and reopened. The shell asks
@@ -554,17 +557,26 @@
   function freshAsk(st, reason, now = Date.now()) {
     if (!FRESH_REASONS.includes(reason)) return false;
     if (now - (st.freshAt || 0) < FRESH_GAP) { st.freshWant = st.freshWant || reason; return false; }
-    if (!valid(st, st.doc)) return false;
+    if (valid(st, st.doc)) {
+      st.freshAt = now; st.freshWant = null;
+      try { st.frame.contentWindow.postMessage({ type: 'wizard:app:refresh', version: VERSION, reason }, ORIGIN); return true; } catch (_) { return false; }
+    }
+    // A sandboxed app (browser boundary) gets the same ask over its channel; the shell never reads its document.
+    if (!boundaryLive(st)) return false;
     st.freshAt = now; st.freshWant = null;
-    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:refresh', version: VERSION, reason }, ORIGIN); return true; } catch (_) { return false; }
+    return window.WizBrowserBoundary.notice(st.frame, 'refresh', { reason });
   }
+  // The document a fresh-data ask is for: the connected same-origin document, or, for a sandboxed app (browser
+  // boundary), the verified document now answering on its channel (its generation).
+  const freshDocOf = st => st.doc || (boundaryLive(st) ? 'boundary:' + window.WizBrowserBoundary.gen(st.frame) : null);
   function freshTick(now = Date.now()) {
     if (document.hidden) return;
     for (const st of frames.values()) {
-      if (!st.doc) { st.freshDoc = null; continue; }
+      const doc = freshDocOf(st);
+      if (!doc) { st.freshDoc = null; continue; }
       const seen = freshSeen(st), front = seen && freshFront(st);
       // A new document has just read its data: start counting from its load, not from the last one.
-      if (st.freshDoc !== st.doc) { st.freshDoc = st.doc; st.freshAt = now; st.freshWant = null; }
+      if (st.freshDoc !== doc) { st.freshDoc = doc; st.freshAt = now; st.freshWant = null; }
       else if (seen && !st.freshWasSeen) freshAsk(st, 'visible', now);
       else if (front && !st.freshWasFront) freshAsk(st, 'focus', now);
       else if (seen && st.freshWant) freshAsk(st, st.freshWant, now);
@@ -586,7 +598,7 @@
     let asked = 0;
     for (const st of frames.values()) {
       const short = String(st.appId || '').toLowerCase().replace(/^wizard(?:os)?-/, '').replace(/[^a-z0-9]+/g, '_');
-      if (short.length < 3 || !st.doc || !freshSeen(st) || !new RegExp('(^|_)' + short + '(_|$)').test(name)) continue;
+      if (short.length < 3 || !freshDocOf(st) || !freshSeen(st) || !new RegExp('(^|_)' + short + '(_|$)').test(name)) continue;
       freshAsk(st, 'agent', now); asked++;
     }
     return asked;

@@ -49,11 +49,14 @@
     if (window.WizBoundaryClient) return Promise.resolve(window.WizBoundaryClient);
     return boundaryLoad || (boundaryLoad = new Promise(resolve => {
       const s = document.createElement('script'); s.src = '/wizard-os-home/core/browser-boundary-client.js';
-      s.onload = () => { const c = window.WizBoundaryClient || null; c?.connect({ onBack: back, onTheme: applyTheme, onTool: boundaryTool }); resolve(c); };
+      s.onload = () => { const c = window.WizBoundaryClient || null; c?.connect(boundaryHooks()); resolve(c); };
       s.onerror = () => { boundaryLoad = null; resolve(null); };
       (document.head || document.documentElement).appendChild(s);
     }));
   }
+  // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update and
+  // fresh-data notices (the same as wizard:app:update / wizard:app:refresh for a same-origin frame).
+  const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
   const localHolds = new Map();
@@ -581,6 +584,6 @@
       settle: keepId => { if(service) return service.capture.settle(keepId); if(framed) throw new Error('Capture cleanup needs the verified host connection'); return captureModule().settle(standaloneId(),keepId); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
-  if (opaque) { if (window.WizBoundaryClient) window.WizBoundaryClient.connect({ onBack: back, onTheme: applyTheme, onTool: boundaryTool }); else boundaryClient(); }
+  if (opaque) { if (window.WizBoundaryClient) window.WizBoundaryClient.connect(boundaryHooks()); else boundaryClient(); }
   ready();
 })();
