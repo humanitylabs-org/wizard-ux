@@ -33,10 +33,13 @@
  *    `share.ack`), always for the window's own installed app id, where a pending item crosses as its share fields only;
  *    `audio.duck` (lower Wizard Music for that window, restored on its next load); and the fingerprint vault
  *    (`vault.has`, `vault.seal`, `vault.open`, `vault.forget`: the window's own app's secret, only while that window is
- *    in front, back only to the document that asked).
+ *    in front, back only to the document that asked); and Wizard ID (`identity.info`, `identity.sign`,
+ *    `identity.nip44_encrypt`, `identity.nip44_decrypt`, Android: an installed apps.json app only, the phone's own
+ *    approval sheet only while that window is in front, back only to the document that asked).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
- *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
+ *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`, Wizard ID's public info, signed event or
+ *    NIP-44 result), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
  *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
  *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
  *  - notice(frame, kind, data): the shell's own notices to a ready app, on its current channel: `update` (a new
@@ -55,7 +58,8 @@
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
   const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
-    'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget'];
+    'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
+    'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   const TAPPED = ['share.text', 'share.file', 'share.wizard'], INFLIGHT = 4;
@@ -83,6 +87,26 @@
       // The fingerprint vault: the app's own secret (open), or whether one is saved (has, seal, forget).
       if (typeof v.secret === 'string' && v.secret.length <= 4096) return { secret: v.secret };
       if (typeof v.saved === 'boolean') return typeof v.available === 'boolean' ? { available: v.available, saved: v.saved } : { saved: v.saved };
+      return identityShape(v);
+    }
+    return null;
+  }
+  // Wizard ID (docs/WIZARD_ID.md): the owner's public info, a signed event, or a NIP-44 result; nothing else crosses.
+  const HEX = (s, n) => typeof s === 'string' && s.length === n && /^[0-9a-f]+$/.test(s);
+  const short = (s, n) => (typeof s === 'string' && s.length <= n ? s : undefined);
+  function identityShape(v) {
+    for (const k of ['denied', 'cancelled', 'none']) if (v[k] === true) return { [k]: true };
+    if (typeof v.ciphertext === 'string' && v.ciphertext.length <= 200000) return { ciphertext: v.ciphertext };
+    if (typeof v.plaintext === 'string' && v.plaintext.length <= 200000) return { plaintext: v.plaintext };
+    if (HEX(v.sig, 128) && HEX(v.id, 64) && HEX(v.pubkey, 64) && Number.isInteger(v.created_at) && Number.isInteger(v.kind) && typeof v.content === 'string'
+      && Array.isArray(v.tags) && v.tags.every(t => Array.isArray(t) && t.every(x => typeof x === 'string'))) {
+      return { id: v.id, pubkey: v.pubkey, created_at: v.created_at, kind: v.kind, tags: v.tags.map(t => t.slice()), content: v.content, sig: v.sig };
+    }
+    if (HEX(v.pubkey, 64) && typeof v.npub === 'string' && v.npub.length <= 100) {
+      const o = { npub: v.npub, pubkey: v.pubkey };
+      for (const k of ['name', 'picture']) if (short(v[k], 2048) !== undefined) o[k] = v[k];
+      if (typeof v.backed_up === 'boolean') o.backed_up = v.backed_up;
+      return o;
     }
     return null;
   }

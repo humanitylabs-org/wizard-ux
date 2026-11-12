@@ -19,7 +19,7 @@ class El {
 }
 
 // A sandboxed app frame: its window can be addressed but never read (opaque origin).
-function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true } = {}) {
+function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true, catalog } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), counts = {}, taps = [], legacy = [];
   const win = new El('article'), bar = new El('header'); bar.className = 'wbar'; win.append(bar);
   const child = { get location() { throw new Error('SecurityError'); }, get document() { throw new Error('SecurityError'); }, postMessage: m => legacy.push(m) };
@@ -28,7 +28,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
     hasAttribute: n => n === 'sandbox', addEventListener: (t, fn) => { if (t === 'load') loads.push(fn); else (on[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { if (on[t]) on[t] = on[t].filter(x => x !== fn); }, closest: s => (s === '.win' ? win : null) };
   // The src attribute set by the shell (a MutationObserver record), and a document load in the frame.
   class MutationObserver { constructor(fn) { this.fn = fn; } observe(el, o) { if (el === frame && o.attributeFilter?.includes('src')) observers.push(this); } disconnect() { observers.splice(observers.indexOf(this), 1); } }
-  const app = { id, kind: 'wizard', url: '/' + id + '/' };
+  const app = { id, kind: 'wizard', url: '/' + id + '/', name: 'Morning Report', ...(catalog ? { source: catalog } : {}) };
   const B = { served: null, resets: new Set(), readyNow: ready,
     serve(fn) { if (this.served) return false; this.served = fn; return true; },
     onReset(fn) { this.resets.add(fn); return () => this.resets.delete(fn); },
@@ -338,4 +338,47 @@ test('vault: the fingerprint prompt only for the window in front, and the page i
   assert.equal(v.sent.length, 1);
   inFront = false; f.B.readyNow = false;
   assert.throws(() => f.call('vault.open', {}), /not verified/);
+});
+
+// Slice 22: Wizard ID (Android) for a sandboxed app. The phone's device envelope answers identity.*.
+const SIGNED = { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 30078, tags: [['d', 'x']], content: '', sig: 'c'.repeat(128) };
+test('identity: an installed apps.json app asks the phone under the catalog name; the page\'s requester is ignored', async () => {
+  const v = vaultBox({ 'identity.info': { npub: 'npub1x', pubkey: 'b'.repeat(64), name: 'Owner', backed_up: true }, 'identity.sign': SIGNED,
+    'identity.nip44_encrypt': { ciphertext: 'Aq==' }, 'identity.nip44_decrypt': { plaintext: 'hi' } });
+  const f = fixture({ win: v.win, catalog: 'apps.json' });
+  assert.equal((await f.call('identity.info', { requester: 'Bank' })).npub, 'npub1x');
+  assert.equal((await f.call('identity.sign', { event: { kind: 30078, tags: [['d', 'x']], content: '' }, requester: 'Bank' })).sig, 'c'.repeat(128));
+  assert.deepEqual(await f.call('identity.nip44_encrypt', { pubkey: 'd'.repeat(64), plaintext: 'hi', extra: 1 }), { ciphertext: 'Aq==' });
+  assert.deepEqual(await f.call('identity.nip44_decrypt', { pubkey: 'd'.repeat(64), ciphertext: 'Aq==' }), { plaintext: 'hi' });
+  assert.deepEqual(JSON.parse(JSON.stringify(v.sent)), [
+    { method: 'identity.info', params: { requester: 'Morning Report' } },
+    { method: 'identity.sign', params: { requester: 'Morning Report', event: { kind: 30078, tags: [['d', 'x']], content: '' } } },
+    { method: 'identity.nip44_encrypt', params: { requester: 'Morning Report', pubkey: 'd'.repeat(64), plaintext: 'hi' } },
+    { method: 'identity.nip44_decrypt', params: { requester: 'Morning Report', pubkey: 'd'.repeat(64), ciphertext: 'Aq==' } }]);
+  assert.equal(f.legacy.length, 0, 'nothing is posted to an opaque window with the shell origin');
+});
+test('identity: not an apps.json app, not verified, or no phone: the phone is never asked', async () => {
+  const v = vaultBox({ 'identity.info': { none: true } });
+  await assert.rejects(fixture({ win: v.win }).call('identity.info'), /installed app/, 'an owner link or other source');
+  assert.throws(() => fixture({ win: v.win, catalog: 'apps.json', ready: false }).call('identity.sign', { event: {} }), /not verified/);
+  assert.throws(() => fixture({ win: v.win, catalog: 'apps.json', src: 'https://wizard.example/other-app/' }).call('identity.info'), /not verified/);
+  assert.deepEqual(JSON.parse(JSON.stringify(await fixture({ catalog: 'apps.json' }).call('identity.sign', { event: {} }))), { unavailable: true }, 'desktop: no phone');
+  assert.equal(v.sent.length, 0);
+});
+test('identity: the approval sheet only for the window in front; a reloaded or closed window never gets the answer', async () => {
+  let inFront = false;
+  const v = vaultBox({ 'identity.sign': SIGNED });
+  const f = fixture({ win: v.win, catalog: 'apps.json', front: () => inFront });
+  const signed = f.call('identity.sign', { event: { kind: 1, tags: [], content: 'x' } });
+  await new Promise(r => setTimeout(r, 400));
+  assert.equal(v.sent.length, 0, 'behind another window: no sheet yet');
+  inFront = true;
+  assert.equal((await signed).sig, SIGNED.sig);
+  for (const revoke of [g => { g.B.genNow = 2; }, g => { g.B.readyNow = false; }, g => { g.detach(); }]) {
+    let answer; const w = vaultBox({ 'identity.sign': () => new Promise(r => { answer = r; }) });
+    const g = fixture({ win: w.win, catalog: 'apps.json' }), p = g.call('identity.sign', { event: { kind: 1, tags: [], content: 'x' } });
+    for (let i = 0; i < 40 && !answer; i++) await new Promise(r => setTimeout(r, 50));
+    revoke(g); answer(SIGNED);
+    await assert.rejects(p, /installed app/);
+  }
 });
