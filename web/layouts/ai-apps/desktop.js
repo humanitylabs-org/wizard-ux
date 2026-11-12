@@ -1866,6 +1866,9 @@ export default function desktop(api) {
   api.back.surface?.(() => {
     // Shared registry has already offered recording and transient overlays.
     if (panes.get().mode === 'full') {
+      // A channel post's thread full screen: Esc is its "‹ # channel" Back, the feed again and still full screen
+      // (wizard-ux issue 1325: going back never changes the owner's view).
+      if (panes.get().focus === 'chats' && feedBack() && !pane?.el?.contains(doc.activeElement)) { closeChat(); return true; }
       // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
       const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
       // 'pending': a sandboxed app (browser boundary) answers later; at its root full screen ends then.
