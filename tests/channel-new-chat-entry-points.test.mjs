@@ -126,7 +126,7 @@ test('the orb / ⌥S path and New chat keys reach the channel: wiring in desktop
   assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),/);
   assert.match(read('web/core/skin-host.js'), /channelPost: \(\) => live\(\) \? !!shell\.chatChannelPost\?\.\(\) : false,/);
   assert.match(read('web/app.js'), /chatChannelPost: \(\) => \{ const w = W\[desks\[idx\]\?\.focus\]; return w\?\.app === 'chats' && !w\.thread && !!CHATS\.chanCompose\?\.\(w\.id\); \},/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelPost\?\.\(\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box');
+  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelView\?\.\(\) !== 'activity' && \(api\.sessions\.channelPost\?\.\(\) \|\| api\.sessions\.channelNew\?\.\(\)\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box or the new-channel form');
   const aad = read('web/layouts/ai-apps/desktop.js');
   assert.match(aad, /api\.listen\(newBtn, 'click', plus\); api\.listen\(rNew, 'click', plus\);/);
   assert.match(aad, /code === 'KeyN' && !sh\) return once\(plus\)/);

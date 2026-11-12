@@ -158,3 +158,33 @@ test('1311: on the desktop a sent New chat stays open and follows its new thread
   assert.deepEqual(run(vm.runInNewContext(host)), { left: false, thread: '__new__' }, 'no list hop: the column keeps the chat');
   assert.match(chats, /if \(isNew && !left && !opts\.away && it\?\.sessionId && W\[wid\] === w && w\.thread === sid && c\.readNav === navAtSend\) openChat\(wid, it\.sessionId\);/, 'then it follows the new thread id');
 });
+
+// --- 1328: the phone's + (stock Chats list button and the AI apps phone layout) on the Channels list ---
+test('1328: on the phone, + on the Channels list with no channel open opens the new-channel form', () => {
+  const app = read('web/app.js');
+  const pick = name => { const m = app.match(new RegExp(`\\n    ${name}: (\\(\\) => \\{[^\\n]*\\}|\\(\\) => [^\\n]*),\\n`)); assert.ok(m, name); return m[1]; };
+  const shell = ({ focus = { id: 'w1', app: 'chats', thread: null }, made = true, view = 'channels' } = {}) => {
+    const asked = [], ctx = { asked, idx: 0, desks: [{ focus: focus?.id }], W: focus ? { [focus.id]: focus } : {},
+      CHATS: { chanNew: wid => (asked.push(wid), made), chanView: () => view, chanCompose: () => false } };
+    vm.createContext(ctx);
+    return { asked, chanNew: vm.runInContext(`(${pick('chatChannelNew')})`, ctx), view: vm.runInContext(`(${pick('chatChannelView')})`, ctx) };
+  };
+  const s = shell(); assert.equal(s.chanNew(), true); assert.deepEqual(s.asked, ['w1'], 'the phone Chats window asks chats.js chanNew');
+  assert.equal(s.view(), 'channels');
+  assert.equal(shell({ made: false }).chanNew(), false, 'Activity / a channel open: chats.js says no');
+  assert.equal(shell({ focus: { id: 'w1', app: 'chats', thread: 'x' } }).chanNew(), false, 'a thread open: never a channel');
+  assert.equal(shell({ focus: { id: 'a', app: 'frame' } }).chanNew(), false, 'an app in front');
+  assert.equal(shell({ view: '' }).view(), '', 'switch off');
+  // The phone AI apps layout's round +: Activity = New chat; Channels = the open channel's box, else the form, else New chat.
+  const phone = read('web/layouts/ai-apps/layout.js');
+  const line = phone.match(/\n  api\.listen\(newBtn, 'click', (\(\) => \{[^\n]*\})\);\n/)?.[1]; assert.ok(line, 'phone + handler');
+  const plus = ({ view, post = false, made = false }) => {
+    const calls = [], ctx = { calls, closeMenu: () => calls.push('closeMenu'), closeSheet: () => {}, closeDrawer: () => {}, goHome: () => calls.push('newChat'),
+      api: { sessions: { channelView: () => view, channelPost: () => (calls.push('channelPost'), post), channelNew: () => (calls.push('channelNew'), made) } } };
+    vm.createContext(ctx); vm.runInContext(`(${line})`, ctx)(); return calls;
+  };
+  assert.deepEqual(plus({ view: 'channels', made: true }), ['channelPost', 'channelNew', 'closeMenu'], 'Channels list, none open: a new channel');
+  assert.deepEqual(plus({ view: 'channels', post: true }), ['channelPost', 'closeMenu'], 'a channel open: its box');
+  assert.deepEqual(plus({ view: 'activity', post: true, made: true }), ['newChat'], 'Activity: a normal New chat (issue 1310)');
+  assert.deepEqual(plus({ view: '' }), ['channelPost', 'channelNew', 'newChat'], 'switch off: New chat');
+});
