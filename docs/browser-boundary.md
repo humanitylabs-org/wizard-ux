@@ -41,16 +41,27 @@ On:
   marked `.wz-themed` only after the app acknowledged that revision, and the last context is sent again on reload.
 - Field insertion: `WizBrowserBoundary.pinField(frame)` seals the focused text field of the focused app frame;
   `insert(text)` puts text there once, and only if nobody typed in it meanwhile.
+- Desktop keys and clicks: the app side sends a click (the shell focuses that window), its window losing focus (the
+  keys guide hides), Esc, bare ⌥ (the keys guide) and the ⌥ codes the shell names with `WizBrowserBoundary.keys()`,
+  never plain typing, with one flag for "a text field has focus" (never which field or its text). Exactly those keys
+  are held back from the app page, as the shell's own key handler did before; every other ⌥ chord stays the app's
+  alone. `desktop/desktop.js` turns them into its usual `onKey` / keys-guide calls. The shell cannot tell a real key
+  from one the app made up, so the desktop names only keys that move around the owner's own windows (⌥1…9, ⌥`,
+  ⌥[ ], ⌥⇧← →, ⌥F, ⌥T, ⌥− =, ⌥/); keys that speak, send, open or act on a chat, search or pick buttons work again
+  after a click outside the app. The shell takes input only from the focused, visible frame, and a click or a named
+  ⌥ key also needs the browser's transient user activation, so a page that only posts messages cannot press them.
+  Proof: `tests/qa-browser-boundary-keys.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
-- Dictation into a field of a sandboxed app is not wired to `pinField` yet (the orb sees no focused field in a sandboxed app), and the
+- Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
   app services `share.*`, `voice.transcribe`, titlebar, badge and capture are closed under the boundary (only
   `ready` is answered).
-- Desktop: Esc and ⌥ keys typed inside a sandboxed app, click-to-focus and the app kit's live skin layer need
-  postMessage too. Other frames (link sheet, Welcome, Settings embeds, single-app session) are not sandboxed yet.
+- Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
+  (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
+  Other frames (link sheet, Welcome, Settings embeds, single-app session) are not sandboxed yet.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385).
 - Shell pages that run inside a frame (Store, Agents, Setup) send no token; `<img>`/`<video>` loads of
   `/wizard/attachments/…` cannot carry a header.

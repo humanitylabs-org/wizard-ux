@@ -37,11 +37,12 @@ function shell({ on = true } = {}) {
 }
 
 // An app document inside a frame. sandbox: the attribute value (null = no sandbox attribute).
-function frame(sh, { sandbox = 'allow-scripts allow-forms allow-downloads', client = true } = {}) {
+function frame(sh, { sandbox = 'allow-scripts allow-forms allow-downloads', client = true, mac = false } = {}) {
   const app = listeners(), sent = [], win = { cls: classes() };
   const fev = listeners(), doc = listeners();
   const a = { setTimeout, clearTimeout, crypto: globalThis.crypto, JSON, console, Promise, Object, String, Map, Set, Error };
   a.window = a; a.origin = 'null';
+  if (mac) a.navigator = { platform: 'MacIntel' };
   a.location = { origin: ORIGIN, href: ORIGIN + '/notes/' };
   a.addEventListener = app.add; a.removeEventListener = app.remove;
   a.InputEvent = class { constructor(type, init) { this.type = type; Object.assign(this, init); } };
@@ -294,4 +295,89 @@ test('dictation: a reload, a field typed in meanwhile, or an unadmitted window n
 test('dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)', () => {
   assert.match(read('web/app.js'), /const inserted = await FIELDS\.insert\(target, text\);/);
   assert.match(read('web/desktop/desktop.js'), /if \(await fields\(\)\.insert\(target, text\)\)/);
+});
+
+// Desktop keys and clicks from a sandboxed app (Esc, ⌥ chords, click-to-focus).
+function keyEvent(init) {
+  const e = { altKey: false, shiftKey: false, metaKey: false, ctrlKey: false, repeat: false, isComposing: false, keyCode: 0, ...init, prevented: false, stopped: false };
+  e.preventDefault = () => { e.prevented = true; }; e.stopImmediatePropagation = () => { e.stopped = true; };
+  return e;
+}
+async function keyed({ activation = true, mac = false } = {}) {
+  const sh = shell(), f = frame(sh, { mac }), got = [];
+  sh.g.navigator = { userActivation: { isActive: activation } };
+  sh.g.document.activeElement = f.el; sh.g.document.hasFocus = () => true;
+  sh.B.keys(['KeyN', 'KeyW', 'Minus', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'Digit1']);
+  sh.B.onInput((fr, ev) => got.push({ same: fr === f.el, ...ev }));
+  f.a.WizBoundaryClient.connect({});
+  sh.B.attach(f.el); await tick();
+  return { sh, f, got, press: async (init, type = 'keydown') => { const e = keyEvent(init); f.app.fire(type, e); await tick(); await tick(); return e; } };
+}
+
+test('keys: Esc and the named ⌥ codes are taken from the app page and reach the shell; other keys never leave the app', async () => {
+  const { f, got, press } = await keyed();
+  const esc = await press({ key: 'Escape', code: 'Escape' });
+  assert.equal(esc.prevented && esc.stopped, true, 'Esc is the shell\'s Back, as before the boundary');
+  const n = await press({ key: '˜', code: 'KeyN', altKey: true });
+  assert.equal(n.prevented, true, '⌥N is the shell\'s: the app page never types its dead key');
+  const e = await press({ key: '´', code: 'KeyE', altKey: true });
+  assert.equal(e.prevented, false, 'an unnamed ⌥ letter stays the app\'s alone (accents, the app\'s own ⌥ keys)');
+  const plain = await press({ key: 'a', code: 'KeyA' });
+  const cmd = await press({ key: 'w', code: 'KeyW', metaKey: true });
+  assert.equal(plain.prevented || cmd.prevented, false);
+  assert.deepEqual(got.map(x => [x.type, x.code, x.same]), [['keydown', 'Escape', true], ['keydown', 'KeyN', true]]);
+  assert.ok(f.sent.every(m => m.data.op !== 'input' || !['KeyA', 'KeyE', 'KeyW'].includes(m.data.code)), 'plain, unnamed and ⌘ keys are never posted');
+  await press({ key: 'Alt', code: 'AltLeft', altKey: false }, 'keyup');
+  assert.deepEqual(got.at(-1), { same: true, kind: 'key', type: 'keyup', key: 'Alt', code: 'AltLeft', altKey: false, shiftKey: false, metaKey: false, ctrlKey: false, repeat: false, field: false, readOnly: false });
+});
+
+test('keys: word moves and Mac ⌥- in a text field stay the field\'s; the field flag says only that', async () => {
+  const { f, got, press } = await keyed();
+  f.a.document.activeElement = { tagName: 'TEXTAREA', readOnly: false };
+  const left = await press({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true });
+  const sel = await press({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true, shiftKey: true });
+  const up = await press({ key: 'ArrowUp', code: 'ArrowUp', altKey: true });
+  assert.deepEqual([left.prevented, sel.prevented, up.prevented], [false, false, true]);
+  assert.equal((await press({ key: '–', code: 'Minus', altKey: true })).prevented, true, 'off a Mac ⌥- is the shell\'s narrower');
+  assert.deepEqual(got.map(x => x.code), ['ArrowUp', 'Minus'], 'only the keys the shell takes are posted');
+  assert.equal(got.at(-1).field, true);
+  assert.equal(Object.keys(got.at(-1)).some(k => /value|text|name|id/i.test(k)), false);
+  const mac = await keyed({ mac: true });
+  mac.f.a.document.activeElement = { tagName: 'INPUT', type: 'text', readOnly: false };
+  assert.equal((await mac.press({ key: '–', code: 'Minus', altKey: true })).prevented, false, 'on a Mac ⌥- types – in the field');
+  mac.f.a.document.activeElement = { tagName: 'INPUT', type: 'text', readOnly: true };
+  assert.equal((await mac.press({ key: '–', code: 'Minus', altKey: true })).prevented, true, 'a read-only field types nothing');
+  assert.equal(mac.got.at(-1).readOnly, true);
+});
+
+test('keys: without a real keypress (user activation) or focus, posted ⌥ keys and clicks are ignored; Esc and bare ⌥ need focus only', async () => {
+  const { sh, f, got, press } = await keyed({ activation: false });
+  await press({ key: '˜', code: 'KeyN', altKey: true });
+  f.app.fire('pointerdown', {}); await tick(); await tick();
+  assert.deepEqual(got, [], 'a page posting messages cannot drive ⌥N or focus');
+  await press({ key: 'Escape', code: 'Escape' });
+  await press({ key: 'Alt', code: 'AltLeft', altKey: true });
+  assert.deepEqual(got.map(x => x.code), ['Escape', 'AltLeft']);
+  sh.g.navigator.userActivation.isActive = true;
+  f.app.fire('pointerdown', {}); await tick(); await tick();
+  assert.equal(got.at(-1).kind, 'pointer');
+  sh.g.document.activeElement = {};
+  await press({ key: 'Escape', code: 'Escape' });
+  assert.equal(got.at(-1).kind, 'pointer', 'a frame without focus gets no keys');
+  // A forged input from another window, or a ⌘ chord dressed up as a shell key, is dropped.
+  sh.g.document.activeElement = f.el;
+  const channel = f.sent.filter(m => m.data.op === 'ready').at(-1).data.channel;
+  const other = frame(sh, { client: false });
+  sh.ev.fire('message', { source: other.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: 'Escape', code: 'Escape' } });
+  sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: 'w', code: 'KeyW', metaKey: true } });
+  // With activation, a made-up ⌥ chord the shell did not name (⌥V: a new voice chat) is still refused.
+  sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, op: 'input', kind: 'key', event: 'keydown', key: '√', code: 'KeyV', altKey: true } });
+  assert.equal(got.at(-1).kind, 'pointer');
+});
+
+test('keys: the claimed list reaches an app that is already connected', async () => {
+  const { sh, press } = await keyed();
+  assert.equal((await press({ key: 'Ω', code: 'KeyZ', altKey: true })).prevented, false);
+  sh.B.keys(['KeyZ']); await tick();
+  assert.equal((await press({ key: 'Ω', code: 'KeyZ', altKey: true })).prevented, true);
 });

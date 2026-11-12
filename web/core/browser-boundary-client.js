@@ -8,6 +8,10 @@
  *  - `field.pin` / `field.insert` / `field.release`: seal the focused text field, then insert dictated text there only
  *    if nobody typed in it meanwhile.
  * And we tell the shell, as one boolean (`field.focus`), whether a text field has focus, so its orb offers dictation.
+ * Desktop keys (`input`): a click here (the shell focuses this window), this window losing focus, and only the shell's
+ * keys: Esc, bare ⌥ and the ⌥ codes the shell named (`keys`), never plain typing. Esc and those codes are held back
+ * from this page, the way the shell's own key handler took them before the boundary; every other ⌥ chord stays this
+ * page's alone, and so do ⌥ word moves and, on a Mac, ⌥- / ⌥= typed in a text field.
  * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary.
  */
 (() => {
@@ -18,7 +22,7 @@
   const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, serial = 0;
+  let channel = '', back = null, applyTheme = null, serial = 0, claimed = new Set();
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
   const error = (code, message) => Object.assign(new Error(message), { code });
@@ -56,6 +60,37 @@
     new MutationObserver(() => { if (queued || !fieldSent) return; queued = true; setTimeout(() => { queued = false; reportField(false); }, 0); })
       .observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['readonly', 'disabled', 'inert', 'data-no-dictation', 'type'] });
   }
+  // Desktop keys and clicks for the shell (see the header). The field flag is only whether a text field has focus.
+  const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
+  function setKeys(list) { claimed = new Set(Array.isArray(list) ? list.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : []); }
+  const deepActive = () => { let a = document.activeElement; for (let i = 0; i < 4 && a?.shadowRoot?.activeElement; i++) a = a.shadowRoot.activeElement; return a; };
+  const textField = el => !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA)$/.test(el.tagName || '')
+    && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i.test(el.type || '')));
+  // Mirrors the shell's own pass-throughs (desktop onKey): ⌥← / ⌥→ word moves, ⌥⇧ arrows selecting in a field,
+  // and on a Mac ⌥- / ⌥= typing – — ≠ ± in an editable field.
+  function shellTakes(e, field, readOnly) {
+    const c = e.code;
+    if (!claimed.has(c)) return false;
+    if ((c === 'ArrowLeft' || c === 'ArrowRight') && (!e.shiftKey || field)) return false;
+    if ((c === 'ArrowUp' || c === 'ArrowDown') && e.shiftKey && field) return false;
+    if (MAC && field && !readOnly && (c === 'Minus' || c === 'Equal')) return false;
+    return true;
+  }
+  const sendKey = (type, e, field, readOnly) => send({ op: 'input', kind: 'key', event: type, key: String(e.key || '').slice(0, 32), code: String(e.code || '').slice(0, 32),
+    altKey: !!e.altKey, shiftKey: !!e.shiftKey, metaKey: !!e.metaKey, ctrlKey: !!e.ctrlKey, repeat: !!e.repeat, field, readOnly });
+  const bareAlt = e => e.key === 'Alt' && !e.metaKey && !e.ctrlKey;
+  addEventListener('keydown', e => {
+    if (!channel) return;
+    const esc = e.key === 'Escape';
+    if (esc && (e.isComposing || e.keyCode === 229)) return;
+    if (!esc && !bareAlt(e) && !(e.altKey && !e.metaKey && !e.ctrlKey)) return;
+    const el = deepActive(), field = textField(el), readOnly = !!el?.readOnly;
+    if (esc || shellTakes(e, field, readOnly)) { e.preventDefault(); e.stopImmediatePropagation(); } else if (!bareAlt(e)) return;
+    sendKey('keydown', e, field, readOnly);
+  }, true);
+  addEventListener('keyup', e => { if (channel && bareAlt(e)) sendKey('keyup', e, false, false); }, true);
+  addEventListener('blur', () => { if (channel) send({ op: 'input', kind: 'blur' }); });
+  addEventListener('pointerdown', () => { if (channel) send({ op: 'input', kind: 'pointer' }); }, true);
   addEventListener('message', e => {
     const d = e.data;
     if (e.source !== parent || e.origin !== SHELL || !d || typeof d !== 'object' || d.type !== TYPE || d.version !== VERSION) return;
@@ -64,12 +99,13 @@
       // A new channel in the same document (the shell saw a load or reattached): seals end, open requests are asked
       // again on the new channel. Only a new document (pagehide) drops them.
       for (const id of [...seals.keys()]) release(id);
-      channel = d.channel; send({ op: 'ready' }); reportField(true);
+      channel = d.channel; setKeys(d.keys); send({ op: 'ready' }); reportField(true);
       for (const [id, wait] of requests) send({ op: 'service.request', id, method: wait.method, args: wait.args });
       for (const go of [...waiters]) go();
       return;
     }
     if (!channel || d.channel !== channel) return;
+    if (d.op === 'keys') { setKeys(d.keys); return; }
     if (d.op === 'service.reply') {
       const wait = requests.get(d.id); if (!wait) return;
       clearTimeout(wait.timer); requests.delete(d.id);
