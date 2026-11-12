@@ -7,7 +7,7 @@
  * Manager Store/Settings listener on this origin. App paths (/notes/, /troubleshoot/, …) never get it, so no app
  * backend can learn it. Off (no token in the page, the default): the meta is empty and nothing is wrapped.
  *
- * The shell's own pages that run in a frame (Store, Agents, Setup) load this script too: the top-level shell arms
+ * The shell's own pages that run in a frame (Store, Agents, Setup, and Settings › Connections) load this script too: the top-level shell arms
  * their fetch/XHR the same way (armFrame), because a frame load never carries the token. App frames are sandboxed
  * under the boundary (core/browser-boundary.js), so they can't reach armFrame. See docs/browser-boundary.md.
  */
@@ -23,9 +23,9 @@
   // answer changes it: `off` is the shipped value nginx leaves when the switch is off; an empty value (a frame, a
   // warm-up read, the offline copy on a box that is on) leaves it as it is.
   const remember = on => { try { if (on) localStorage.setItem(MARK, '1'); else localStorage.removeItem(MARK); } catch (_) {} };
-  // The shell's own pages that run in a frame (Store, Agents, Setup). They get no token from nginx (a frame load
+  // The shell's own pages that run in a frame (Store, Agents, Setup, Settings › Connections). They get no token from nginx (a frame load
   // never does); the top-level shell arms them instead (armFrame below). Same list as core/browser-boundary.js.
-  const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup)\/(?:index\.html)?$/;
+  const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup|store-install\/_connections)\/(?:index\.html)?$/;
   if (token === 'off') { remember(false); return; }
   let framed = true;
   try { framed = window.top !== window; } catch (_) { framed = true; }

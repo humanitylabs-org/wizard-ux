@@ -120,9 +120,10 @@ function child(top, path, { sameOrigin = true } = {}) {
   return { win, calls, xhrHeaders, nativeFetch: fetch };
 }
 
-test('on: the shell\'s own pages in a frame (Store, Agents, Setup) send owner calls with the token, armed by the top shell', async () => {
+test('on: the shell\'s own pages in a frame (Store, Agents, Setup, Settings › Connections) send owner calls with the token, armed by the top shell', async () => {
   const top = boot();
-  for (const path of ['/wizard-os-home/store/index.html', '/wizard-os-home/agents/index.html', '/wizard-os-home/setup/', '/wizard-ux/store/index.html']) {
+  for (const path of ['/wizard-os-home/store/index.html', '/wizard-os-home/agents/index.html', '/wizard-os-home/setup/', '/wizard-ux/store/index.html',
+    '/wizard-os-home/store-install/_connections/', '/wizard-ux/store-install/_connections/index.html']) {
     const c = child(top, path);
     assert.notEqual(c.win.fetch, c.nativeFetch, path);
     await c.win.fetch('../store-install/_slots/chats', { method: 'POST' });
@@ -139,7 +140,8 @@ test('on: the shell\'s own pages in a frame (Store, Agents, Setup) send owner ca
 
 test('the top shell arms only its own pages in a frame below it, never an app page, another site or the shell itself', () => {
   const top = boot();
-  for (const path of ['/notes/', '/troubleshoot/index.html', '/wizard-os-home/index.html', '/wizard-os-home/store/evil.html', '/wizard-os-home/store/x/index.html', '/pages/store/index.html']) {
+  for (const path of ['/notes/', '/troubleshoot/index.html', '/wizard-os-home/index.html', '/wizard-os-home/store/evil.html', '/wizard-os-home/store/x/index.html', '/pages/store/index.html',
+    '/wizard-os-home/store-install/_connections/api/connections', '/wizard-os-home/store-install/_connections/x.html', '/wizard-os-home/store-install/notes/', '/notes/store-install/_connections/']) {
     const c = child(top, path);
     assert.equal(c.win.fetch, c.nativeFetch, path);
   }
