@@ -163,6 +163,7 @@ test('a send held by the restart is Saved, not Working; nothing changes without 
 
 // The outbox: a send that hits the seconds the service is down is retried soon, with the same Idempotency-Key.
 function outbox(origin, rows, restart) {
+  const state = { restart };
   const timers = new Set();
   const indexedDB = { open() {
     const r = {};
@@ -183,10 +184,11 @@ function outbox(origin, rows, restart) {
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route }, WizConfig: { voicePrompt: () => '' },
-    WizReach: { restart: () => restart },
+    WizReach: { restart: () => state.restart },
+    WosAgents: { isOther: a => !!a, get: () => ({ permissions: {} }) },
   };
   ctx.window = ctx; vm.runInNewContext(outboxSource, ctx);
-  return { api: ctx.WosOutbox, close: () => { for (const t of timers) clearTimeout(t); } };
+  return { api: ctx.WosOutbox, state, close: () => { for (const t of timers) clearTimeout(t); } };
 }
 async function until(fn, tries = 1200) {
   for (let i = 0; i < tries; i++) { const v = fn(); if (v) return v; await new Promise(r => setTimeout(r, 5)); }
@@ -230,6 +232,57 @@ test('without a known restart the ordinary back-off stays', async t => {
   const waiting = await until(() => page.api.get(id)?.state === 'waiting' && page.api.get(id));
   assert.ok(waiting.nextAt - Date.now() > 25000); // BACKOFF[3] = 30 s
 });
+
+// A follow-up typed into a thread that was working goes out as a steer, which has no idempotency ledger: it is never
+// dispatched into a restart. It waits, and after the restart (the run is over) it becomes a same-thread turn once.
+// Main and every routed kind (host-profile, container, restricted) take the same path with their own ?agent=.
+async function steerService(t) {
+  const calls = [];
+  const server = createServer(async (req, res) => {
+    const chunks = []; for await (const c of req) chunks.push(c);
+    calls.push({ path: req.url, method: req.method, key: req.headers['idempotency-key'], body: Buffer.concat(chunks).toString() });
+    const json = (s, v) => { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(v)); };
+    if (req.url.includes('/steer')) return json(409, { error: { code: 'run_not_accepting_steer', message: 'not running' } });
+    if (req.method === 'GET') return json(200, { run_id: 'wizardq_cut', session_id: 'wizard_working', status: 'interrupted' });
+    if (req.url.split('?')[0] === '/wizard/hermes/v1/runs') return json(202, { run_id: 'wizardq_turn', status: 'queued' });
+    json(500, { error: 'unexpected' });
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); });
+  return { origin: `http://127.0.0.1:${server.address().port}`, calls };
+}
+for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box', 'container'], ['locked', 'restricted']]) {
+  for (const phase of ['restarting', 'ready', 'now']) {
+    test(`${kind}: a steer is never dispatched into a restart (${phase}); after it, it lands once as a same-thread turn`, async t => {
+      const f = await steerService(t);
+      const page = outbox(f.origin, new Map(), phase === 'now' ? { phase: 'overdue', now: true } : { phase }); t.after(page.close);
+      await page.api.load();
+      const it = await page.api.enqueue({ kind: 'reply', sessionId: 'wizard_working', steerRunId: 'wizardq_cut', ...(agent ? { agent } : {}),
+        text: 'One more thing', model: 'test-model', provider: 'test-provider' });
+      const waiting = await until(() => page.api.get(it.id)?.state === 'waiting' && page.api.get(it.id));
+      assert.equal(f.calls.length, 0, 'nothing reaches the service while the restart is near');
+      assert.notEqual(waiting.steerDispatch, 'started');
+      assert.ok(waiting.nextAt - Date.now() <= 3000);
+      page.state.restart = null; // the service is back
+      const sent = await until(() => page.api.get(it.id)?.state === 'sent' && page.api.get(it.id));
+      assert.equal(sent.runId, 'wizardq_turn');
+      const aq = agent ? `?agent=${agent}` : '';
+      assert.deepEqual(f.calls.map(c => c.method + ' ' + c.path), [
+        `POST /wizard/hermes/v1/runs/wizardq_cut/steer${aq}`, `GET /wizard/hermes/v1/runs/wizardq_cut${aq}`, `POST /wizard/hermes/v1/runs${aq}`]);
+      assert.equal(f.calls.at(-1).key, it.id);
+      assert.equal(JSON.parse(f.calls.at(-1).body).agent || '', agent);
+    });
+  }
+  test(`${kind}: while turns still run (waiting), a steer reaches the running turn as usual`, async t => {
+    const f = await steerService(t);
+    const page = outbox(f.origin, new Map(), { phase: 'waiting' }); t.after(page.close);
+    await page.api.load();
+    const it = await page.api.enqueue({ kind: 'reply', sessionId: 'wizard_working', steerRunId: 'wizardq_cut', ...(agent ? { agent } : {}),
+      text: 'One more thing', model: 'test-model', provider: 'test-provider' });
+    await until(() => page.api.get(it.id)?.state === 'sent');
+    assert.ok(f.calls[0].path.startsWith('/wizard/hermes/v1/runs/wizardq_cut/steer'));
+  });
+}
 
 test('the switch is listed in the catalog, off by default', () => {
   const catalog = JSON.parse(read('tweaks/catalog.json'));

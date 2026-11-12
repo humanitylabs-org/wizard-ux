@@ -508,6 +508,12 @@
       // Refuse to mutate without a durable dispatch journal, even if audio was uploaded.
       halt(it);
       if (await holdLate(it)) return;
+      // Graceful restart (wizard/graceful-restart): a steer has no idempotency ledger, so never dispatch one into a
+      // restart that is about to happen (ready, or the owner chose Restart now) or is happening (service down). Nothing
+      // left: it waits like any send and, once the service is back, the rejected-steer path below makes it a same-thread
+      // turn under its own Idempotency-Key. While turns still run (waiting/overdue) a steer reaches them as usual.
+      const restartNear = window.WizReach?.restart?.();
+      if (restartNear && (restartNear.phase === 'restarting' || restartNear.phase === 'ready' || restartNear.now)) throw new HttpError(503, 'Saved · sends after Wizard restarts');
       it.steerDispatch = 'started'; admitting.add(it.id); await put(it);
       if (!it.durable) { delete it.steerDispatch; throw new HttpError(409, 'Device save failed · steering not dispatched; original kept'); }
       let receipt;
