@@ -35,11 +35,14 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
     ready: f => f === frame && B.readyNow,
     tool: (f, tid, value) => { taps.push({ f, tid, value }); return true; },
     attach: () => () => {}, enabled: true };
-  const window = { WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}) };
-  vm.runInNewContext(source, { window, location, URL, MutationObserver, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
+  const shared = [], heard = [];
+  const window = { WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}),
+    WosChat: { sharePayload: async p => { shared.push(p); return 'shared'; }, shareFile: async (file, o) => { shared.push({ file, ...o }); return 'shared'; } },
+    WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } } };
+  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: () => true });
-  return { B, frame, bar, counts, taps, legacy, detach, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
+  return { B, frame, bar, counts, taps, legacy, detach, shared, heard, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
     load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
 const box = f => f.bar.children.find(c => c.className === 'wtools');
@@ -90,7 +93,7 @@ test('not ready on its channel, outside its app path, or a shell-owned count: re
     assert.throws(() => f.call('badge.set', { n: 9 })); assert.equal(id in f.counts, false);
   }
   const f = fixture();
-  assert.throws(() => f.call('share.text', { text: 'x' }), /Not available/);
+  assert.throws(() => f.call('share.wizard', { text: 'x' }), /Not available/);
   f.B.readyNow = false;
   assert.throws(() => f.call('badge.set', { n: 1 }), /not verified/, 'a frame whose new document has not answered yet');
 });
@@ -119,4 +122,40 @@ test('relative title-bar links resolve against the page\'s own address and still
   f.call('titlebar.set', { tools: link, base: 'https://wizard.example/other/' });
   assert.equal(box(f).children[0].href, 'https://wizard.example/morning-report/report.pdf');
   assert.throws(() => f.call('titlebar.set', { tools: [{ id: 'up', kind: 'link', label: 'Up', href: '../../other/' }], base: 'https://wizard.example/morning-report/a/' }), /stay inside the app/);
+});
+
+test('share out: the shell\'s own sheet (never direct), only the app\'s text fields, relative links stay in the app', async () => {
+  const f = fixture();
+  assert.equal(await f.call('share.text', { text: 'Buy milk', title: 'Note', url: 'n/7', direct: true, base: 'https://wizard.example/morning-report/a/' }), 'shared');
+  assert.deepEqual({ ...f.shared[0] }, { text: 'Buy milk', title: 'Note', url: 'https://wizard.example/morning-report/a/n/7' });
+  // A base outside the app falls back to the app's entry.
+  await f.call('share.text', { url: 'x', base: 'https://wizard.example/other/' });
+  assert.equal(f.shared[1].url, 'https://wizard.example/morning-report/x');
+  const file = new Blob(['abc']);
+  assert.equal(await f.call('share.file', { file, options: { title: 'T', direct: true } }), 'shared');
+  assert.equal(f.shared[2].file, file); assert.equal(f.shared[2].direct, false); assert.equal(f.shared[2].title, 'T');
+  assert.equal(f.call('share.file', { file: 'not a blob' }), 'unsupported');
+  const off = fixture({ ready: false });
+  assert.throws(() => off.call('share.text', { text: 'x' }), /not verified/);
+});
+
+test('transcription: the box\'s transcriber, within a per-app budget', async () => {
+  const f = fixture();
+  assert.deepEqual({ ...(await f.call('voice.transcribe', { file: new Blob(['abcd']), language: 'en' })) }, { text: 'hi' });
+  assert.equal(f.heard[0].language, 'en');
+  await assert.rejects(f.call('voice.transcribe', { file: 'nope' }), /audio file/);
+  // Two at once per app.
+  const g = fixture({ id: 'recorder' });
+  const real = g.call;
+  const blob = new Blob(['x']);
+  const a = real('voice.transcribe', { file: blob }), b = real('voice.transcribe', { file: blob });
+  assert.throws(() => real('voice.transcribe', { file: blob }), /budget/);
+  await a; await b;
+  // 30 files in 10 minutes (3 used above).
+  let n = 2; for (; n < 40; n++) { try { await real('voice.transcribe', { file: blob }); } catch (e) { assert.match(e.message, /budget/); break; } }
+  assert.equal(n, 30);
+  // Too many bytes at once: 150 MB in 10 minutes.
+  const h = fixture({ id: 'podcasts' });
+  const big = { size: 151 * 1024 * 1024, [Symbol.toStringTag]: 'Blob' };
+  assert.throws(() => h.call('voice.transcribe', { file: big }), /budget/);
 });

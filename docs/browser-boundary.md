@@ -99,14 +99,24 @@ On:
   channel (`WizBrowserBoundary.tool`). Every load clears that window's tools (`onReset`), and the app's client sends its
   last badge and bar again on the new channel. Proof: `tests/qa-browser-boundary-services.cjs` (real Chromium) and
   `tests/browser-boundary-services.test.mjs`.
+- Share out and transcription: a sandboxed app's `WizardApp.share.text`, `WizardApp.share.file` and
+  `WizardApp.voice.transcribe` go over the channel to the same server, with the same window checks. Sharing out also
+  needs the browser's transient user activation (a real tap or key in that app window) and a visible window, and it
+  always opens the shell's own share sheet (never `direct`), so the owner picks where it goes; the app gets only the
+  outcome (`shared`, `copied`, `cancelled`, `unsupported`). Only `text`, `title` and `url` cross; a relative link
+  resolves against the page's own address inside the app. Transcription uses the box's one transcriber within a
+  per-app budget (2 at once, 30 files or 150 MB in any 10 minutes); the app gets only `{ text }` or `{ unavailable }`.
+  An answer is never sent to a newer document in that window (it is dropped when the channel changed), and a window
+  has at most 4 of these open at once. Proof: `tests/qa-browser-boundary-share-transcribe.cjs` (real Chromium).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services `share.*`, `voice.transcribe`, capture, orb, vault, identity, update holds and voice commands are
-  closed under the boundary (only `ready`, `badge.set` and `titlebar.set` are answered).
+  app services `share.wizard`, receiving shares, capture, orb, vault, identity, update holds and voice commands are
+  closed under the boundary (only `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file` and
+  `voice.transcribe` are answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.

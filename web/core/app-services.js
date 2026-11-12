@@ -929,7 +929,20 @@
       return true;
     } catch (_) { done?.(false); return false; }
   }
-  // Under the boundary a sandboxed app sets its own badge and title bar over the boundary channel (browser-boundary.js).
+  // Per app id, over every window of that app: 2 at once, and 30 files or 150 MB in any 10 minutes.
+  const TRANSCRIBE = Object.freeze({ at: 2, calls: 30, bytes: 150 * 1024 * 1024, window: 10 * 60 * 1000 });
+  const transcribeUse = new Map();
+  function transcribeBudget(appId, file, now = Date.now()) {
+    const use = transcribeUse.get(appId) || { running: 0, log: [] };
+    use.log = use.log.filter(e => now - e.at < TRANSCRIBE.window);
+    const size = Number(file?.size) || 0, spent = use.log.reduce((n, e) => n + e.size, 0);
+    if (use.running >= TRANSCRIBE.at || use.log.length >= TRANSCRIBE.calls || spent + size > TRANSCRIBE.bytes) throw fault('Transcription budget for this app is used up for now');
+    use.running++; use.log.push({ at: now, size }); transcribeUse.set(appId, use);
+    let done = false;
+    return () => { if (!done) { done = true; use.running--; } };
+  }
+  // Under the boundary a sandboxed app sets its own badge and title bar, shares out and transcribes over the boundary
+  // channel (browser-boundary.js).
   if (window.WizBrowserBoundary?.serve) {
     window.WizBrowserBoundary.serve((frame, method, args) => {
       const st = frames.get(frame);
@@ -939,6 +952,30 @@
         // The page's own address, only as the base for relative links (each link must still stay inside the app).
         let base = null; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u.href; } } catch (_) {}
         return setTools(st, args?.tools, base);
+      }
+      // Sharing out: browser-boundary.js already checked a real tap in this visible window. The shell's own share
+      // sheet always opens (never `direct`), so the owner picks where it goes; the app gets only the outcome.
+      if (method === 'share.text') {
+        const payload = {};
+        for (const k of ['text', 'title', 'url']) if (typeof args?.[k] === 'string' && args[k]) payload[k] = args[k];
+        if (payload.url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) {
+          // A relative link resolves against the page's own address, which must be inside the app.
+          let base = null; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
+          try { payload.url = new URL(payload.url, base || st.url).href; } catch (_) { return 'unsupported'; }
+        }
+        return window.WosChat?.sharePayload ? window.WosChat.sharePayload(payload) : 'unsupported';
+      }
+      if (method === 'share.file') {
+        const file = args?.file;
+        if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return 'unsupported';
+        const title = typeof args?.options?.title === 'string' ? args.options.title.slice(0, 1024) : undefined;
+        return window.WosChat?.shareFile ? window.WosChat.shareFile(file, { title, direct: false }) : 'unsupported';
+      }
+      // The box's one transcriber, within a per-app budget (an app could otherwise spend the owner's transcription
+      // provider without limit). No microphone or provider credential crosses the frame.
+      if (method === 'voice.transcribe') {
+        const take = transcribeBudget(st.appId, args?.file);
+        return transcribeFile(args?.file, { language: args?.language }).finally(take);
       }
       throw fault('Not available');
     });
