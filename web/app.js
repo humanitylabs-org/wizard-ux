@@ -93,7 +93,7 @@
     return n;
   }
   markLegacyStarters(W, window.WizLauncher?.get('autoOpen'), joinedWorkspaces());
-  // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
+  // Recorder (formerly Mizel.ai) moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
   // Apps from the Agent Service can arrive after first paint (fresh install, cleared cache): a frame window
@@ -2017,7 +2017,7 @@
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
 
-  // Mizel.ai recordings: the bridge opens one "🎙 …" thread per recording; they live in the shade as their own source.
+  // Recorder recordings (formerly Mizel.ai): the bridge opens one "🎙 …" thread per recording; they live in the shade as their own source.
   const isRec = n => /^\s*\u{1F399}/u.test(n?.title || '');
   const REC_WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
   function recState(s) { if (REC_WORKING.has(s.status)) return { k: 'run', g: '⏳', t: 'Follow-ups running' };
@@ -2042,7 +2042,7 @@
   function noteHtml(n, g) {
     const sub = n.status === 'queued' && n.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
     return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
-      <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Mizel.ai' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
+      <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Recorder' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
   }
   function renderInbox() {
     const L = live();

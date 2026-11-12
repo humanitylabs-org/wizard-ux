@@ -1,4 +1,4 @@
-// Mizel.ai inside WizardOS Home: the Mizel desk frame loads the canonical Mizel Live view.
+// Recorder (formerly Mizel.ai) inside WizardOS Home: the Mizel desk frame loads the canonical Mizel Live view.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 let pass = 0, fail = 0;

@@ -20,7 +20,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route',apps:'/wizard/v1/apps'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
-   if(p==='/wizard/v1/apps'&&(process.env.QA_LOCAL_ONLY==='1'||fixture?.voiceReply))return json({apps:fixture?.apps||[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Mizel.ai',url:'/fixture-mizel/'}]});
+   if(p==='/wizard/v1/apps'&&(process.env.QA_LOCAL_ONLY==='1'||fixture?.voiceReply))return json({apps:fixture?.apps||[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Recorder',url:'/fixture-mizel/'}]});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
    if(p.endsWith('/route'))return json({cmd:state.cmd,ms:5});
    if(p==='/wizard/files/upload'){
