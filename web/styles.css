@@ -638,7 +638,7 @@ body {
 /* Capture app pixels without recorder controls or transient shell notices in the picture. */
 .device.capturing-screen :is(#voice, #dock, #toast, #deskLabel) { visibility: hidden !important; }
 
-/* ---------- Mizel.ai recordings: shade source + strip on the Mizel desk ---------- */
+/* ---------- Recorder recordings: shade source + strip on the Mizel desk ---------- */
 .note .ic.rec { background: rgba(63, 224, 255, .14); color: #3fe0ff; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(63, 224, 255, .35); }
 .note .tp .src.mizel { color: #3fe0ff; }
 .mizel-split { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0c0a18; }

@@ -1,6 +1,6 @@
 # Mizel meeting recorder (Android, WizardOS 0.7.0)
 
-Native meeting recording for the Mizel.ai view inside WizardOS (`ai.wizards.os`). The page drives it over
+Native meeting recording for the Recorder view (formerly Mizel.ai) inside WizardOS (`ai.wizards.os`). The page drives it over
 `window.wizardMizelPort`; native owns the microphone, the chunk files, the upload outbox and the base URL.
 
 Source: `android/app/src/main/java/ai/wizards/os/mizel/` · `MicOwner.java` · QA: `tools/qa_mizel.py`.

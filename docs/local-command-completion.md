@@ -1,7 +1,7 @@
 # Complete locally executed voice commands
 
 ## Outcome
-Successful synchronous shell commands (including opening Wisdom or Mizel.ai) finish their audio custody and disappear from Unsent & retained. No agent run or misleading Sent-to-agent event is created. Both phone and desktop callers use the same completion policy.
+Successful synchronous shell commands (including opening Wisdom or Recorder) finish their audio custody and disappear from Unsent & retained. No agent run or misleading Sent-to-agent event is created. Both phone and desktop callers use the same completion policy.
 
 ## Boundaries
 - `WosCommands.completedLocally` identifies synchronous shell navigation. Music/ordering/search/app handoff acceptance is not proof of completion and keeps its recording.
