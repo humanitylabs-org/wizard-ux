@@ -1,0 +1,1 @@
+Evidence for humanitylabs-org/wizard-ux#1338. cmp-*.png: before (main, left) vs after (branch, right), default settings. after-*-saved-orb-apps.png: a device that had saved Orb (desktop) and Apps (phone). Harness: shots1338.cjs (synthetic origin, no owner data).

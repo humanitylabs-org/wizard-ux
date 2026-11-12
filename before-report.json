@@ -1,0 +1,186 @@
+[
+ {
+  "skin": "nebula",
+  "shell": "phone",
+  "state": "default",
+  "layout": "classic",
+  "desktopView": null,
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell",
+   "miguel/apps-home",
+   "miguel/ai-apps"
+  ],
+  "layoutReqs": [],
+  "errors": []
+ },
+ {
+  "skin": "nebula",
+  "shell": "phone",
+  "state": "saved-orb-apps",
+  "layout": "apps",
+  "desktopView": null,
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell",
+   "miguel/apps-home:on",
+   "miguel/ai-apps"
+  ],
+  "layoutReqs": [
+   "layouts/orb/phone-boot.css",
+   "layouts/orb/phone.js",
+   "layouts/orb/styles.js",
+   "layouts/orb/shared.js",
+   "layouts/apps/chrome.js",
+   "layouts/apps/chrome.css",
+   "layouts/orb/phone.css",
+   "layouts/apps/layout.css",
+   "layouts/apps/layout.js",
+   "layouts/apps/desktop.js",
+   "layouts/orb/keys.js"
+  ],
+  "errors": []
+ },
+ {
+  "skin": "nebula",
+  "shell": "desktop",
+  "state": "default",
+  "layout": "ai-apps",
+  "desktopView": "ai-apps",
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell",
+   "miguel/apps-home",
+   "miguel/ai-apps:on"
+  ],
+  "layoutReqs": [
+   "layouts/ai-apps/desktop-boot.css",
+   "layouts/ai-apps/desktop.js",
+   "layouts/apps/chrome.js",
+   "layouts/orb/shared.js",
+   "layouts/orb/keys.js",
+   "layouts/ai-apps/parts.js",
+   "layouts/ai-apps/home.js",
+   "layouts/orb/styles.js",
+   "layouts/ai-apps/desktop.css",
+   "layouts/apps/chrome.css"
+  ],
+  "errors": []
+ },
+ {
+  "skin": "nebula",
+  "shell": "desktop",
+  "state": "saved-orb-apps",
+  "layout": "orb",
+  "desktopView": "orb",
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell:on",
+   "miguel/apps-home",
+   "miguel/ai-apps"
+  ],
+  "layoutReqs": [
+   "layouts/orb/layout.css",
+   "layouts/orb/layout.js",
+   "layouts/orb/styles.js",
+   "layouts/orb/keys.js",
+   "layouts/orb/shared.js",
+   "layouts/orb/phone.js",
+   "layouts/apps/chrome.js",
+   "layouts/apps/chrome.css"
+  ],
+  "errors": []
+ },
+ {
+  "skin": "grove",
+  "shell": "phone",
+  "state": "default",
+  "layout": "classic",
+  "desktopView": null,
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell",
+   "miguel/apps-home",
+   "miguel/ai-apps"
+  ],
+  "layoutReqs": [],
+  "errors": []
+ },
+ {
+  "skin": "grove",
+  "shell": "phone",
+  "state": "saved-orb-apps",
+  "layout": "apps",
+  "desktopView": null,
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell",
+   "miguel/apps-home:on",
+   "miguel/ai-apps"
+  ],
+  "layoutReqs": [
+   "layouts/orb/phone-boot.css",
+   "layouts/orb/phone.js",
+   "layouts/orb/styles.js",
+   "layouts/orb/shared.js",
+   "layouts/apps/chrome.js",
+   "layouts/apps/chrome.css",
+   "layouts/orb/phone.css",
+   "layouts/apps/layout.css",
+   "layouts/apps/layout.js",
+   "layouts/apps/desktop.js",
+   "layouts/orb/keys.js"
+  ],
+  "errors": []
+ },
+ {
+  "skin": "grove",
+  "shell": "desktop",
+  "state": "default",
+  "layout": "ai-apps",
+  "desktopView": "ai-apps",
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell",
+   "miguel/apps-home",
+   "miguel/ai-apps:on"
+  ],
+  "layoutReqs": [
+   "layouts/ai-apps/desktop-boot.css",
+   "layouts/ai-apps/desktop.js",
+   "layouts/apps/chrome.js",
+   "layouts/orb/shared.js",
+   "layouts/orb/keys.js",
+   "layouts/ai-apps/parts.js",
+   "layouts/ai-apps/home.js",
+   "layouts/orb/styles.js",
+   "layouts/ai-apps/desktop.css",
+   "layouts/apps/chrome.css"
+  ],
+  "errors": []
+ },
+ {
+  "skin": "grove",
+  "shell": "desktop",
+  "state": "saved-orb-apps",
+  "layout": "orb",
+  "desktopView": "orb",
+  "expErr": "",
+  "tweaks": [
+   "miguel/orb-shell:on",
+   "miguel/apps-home",
+   "miguel/ai-apps"
+  ],
+  "layoutReqs": [
+   "layouts/orb/layout.css",
+   "layouts/orb/layout.js",
+   "layouts/orb/styles.js",
+   "layouts/orb/keys.js",
+   "layouts/orb/shared.js",
+   "layouts/orb/phone.js",
+   "layouts/apps/chrome.js",
+   "layouts/apps/chrome.css"
+  ],
+  "errors": []
+ }
+]
