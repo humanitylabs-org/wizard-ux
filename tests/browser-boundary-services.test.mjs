@@ -171,10 +171,14 @@ test('share to Wizard: the shell\'s own sheet, sent only while the same document
   assert.deepEqual({ ...f.sheets[0].d }, { files: [], text: 'Buy milk', title: 'Note' }, 'only files, text and title cross');
   assert.deepEqual(holds(), ['Share to Wizard'], 'a shell update waits while the sheet is open');
   f.sheets[0].send(); assert.equal(await p, 'sent'); assert.deepEqual(holds(), []);
+  // The window reloads while the sheet is open: the app's own holds end, the sheet's hold stays until it settles.
+  const o = f.call('share.wizard', { text: 'open' }); f.call('update.hold', { reason: 'Unsaved' });
+  f.reset(); assert.deepEqual(holds(), ['Share to Wizard']);
+  f.sheets.at(-1).send(); await o; assert.deepEqual(holds(), []);
   // The window loaded another document meanwhile: Send does nothing.
-  const q = f.call('share.wizard', { text: 'x' }); f.B.genNow = 2; f.sheets[1].send();
+  const q = f.call('share.wizard', { text: 'x' }); f.B.genNow = 2; f.sheets.at(-1).send();
   assert.equal(await q, 'unsupported');
-  const r = f.call('share.wizard', { text: 'y' }); f.B.readyNow = false; f.sheets[2].send();
+  const r = f.call('share.wizard', { text: 'y' }); f.B.readyNow = false; f.sheets.at(-1).send();
   assert.equal(await r, 'unsupported');
   f.B.readyNow = true;
   assert.throws(() => f.call('share.wizard', { text: '  ' }), /Nothing to share/);

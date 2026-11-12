@@ -112,6 +112,8 @@ const server = http.createServer((req, res) => {
   // The owner moves on to the shell (the new document asks for a sheet on load; without a tap in it, it gets none).
   await page.click('#shellbtn');
   await reload();
+  const kept = await page.evaluate(() => holds());
+  ok(kept.includes('notes:Share to Wizard'), 'the open sheet still holds updates after the window reloaded: ' + JSON.stringify(kept));
   const late = await page.evaluate(() => sheets[1]?.send());
   ok(late === false, 'Send after the window loaded another document does not send');
   // The page that is not its window's installed app: no hold, no sheet, even with a real tap.
