@@ -565,7 +565,7 @@ test('General posts unfiled (no Space); routed host-profile, container and restr
 
 test('voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along', () => {
   // Phone orb: a channel feed is an auto view whose take goes to a new chat ('__new__'), never the cloud router.
-  assert.match(app, /const chan = w\.app === 'chats' && !w\.thread \? CHATS\.chanOpen\?\.\(w\) : null, pin = chan \? \{ kind: 'chat thread', thread: '__new__', channel: chan\.name, space: chan\.general \? '' : chan\.id, box: CHATS\.chanBox\?\.\(id\) \|\| '' \} : \{\};/);
+  assert.match(app, /const chan = w\.app === 'chats' && !w\.thread \? CHATS\.chanOpen\?\.\(w\) : null, pin = chan \? \{ kind: 'chat thread', thread: '__new__', channel: chan\.name, space: chan\.general \? '' : chan\.id, box: CHATS\.chanBox\?\.\(id\) \|\| '', chanAgent: CHATS\.winAgent\(w\) \|\| '' \} : \{\};/);
   assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name:/);
   // A routed agent's channel (host-profile, container, restricted) keeps its agent's own voice path, pinned the same way.
   const viewOf = app.slice(app.indexOf('function viewOf(id)'), app.indexOf('// Unified Chats: a private agent'));
@@ -577,7 +577,7 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   // ...the box of the channel the take STARTED in (Codex P1): phone sealTarget and desktop sealAt carry it.
   assert.match(app, /return \{ wid: V\.replyTo\.wid, sid: V\.replyTo\.sid, box: V\.replyTo\.box \};/);
   assert.match(app, /CHATS\.takeComposer\(sealAt\.wid, sealAt\.sid, sealAt\.box\)/);
-  assert.match(app, /if \(typeof snap\.view\?\.space === 'string' && snap\.route && \(live\?\.agent \|\| ''\) !== \(snap\.route\.agent \|\| ''\)\) return snap\.route;/);
+  assert.match(app, /if \(typeof snap\.view\?\.space === 'string'\) \{\n\s*const want = typeof snap\.view\.chanAgent === 'string' \? snap\.view\.chanAgent : snap\.route\?\.agent \|\| '';/);
   // The box mic records a new chat from this channel; the model label opens the new-chat model menu.
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   assert.match(power, /const boxThread = w => w\?\.thread \|\| \(w && A\.chanOpen\?\.\(w\) \? '__new__' : ''\);/);

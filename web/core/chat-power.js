@@ -621,6 +621,9 @@ window.WosChatPower = function chatPower(A) {
     const sealed = seal === true ? A.takeComposer(wid, sid) : seal || { text: '', files: [], done() {}, putBack() {} };
     const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i); // no count cap (James, 6 Nov 2026)
     const wasHere = !!w && w.thread === sid;
+    // A take pinned to a channel with its route: that route's agent ('' = the main agent), never the agent this window
+    // shows by the time it is saved (wizard-ux issue 1312).
+    const chanAgent = typeof pinned === 'string' && route ? route.agent || '' : nm?.agent || A.winAgent(w);
     if (isNew) c.newModel = null;
     follow(wid);
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
@@ -634,7 +637,7 @@ window.WosChatPower = function chatPower(A) {
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
         instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(typeof pinned === 'string' ? { space: false } : {}), ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(typeof pinned === 'string' ? { space: false } : {}), ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && chanAgent ? { agent: chanAgent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
