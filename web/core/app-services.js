@@ -1094,15 +1094,19 @@
     }
     if (method !== 'capture.start') throw fault('Not available');
     const attaching = args?.attach === true, opts = attaching ? {} : captureOpts(args?.opts);
+    // This document's own preparation, taken out of the list now. Until the recorder uses it, every way out of this
+    // start releases it (an unused preparation keeps an AudioContext and the recorder's hold; Codex P1). The recorder
+    // ignores a release of one it already used.
+    let prep = null;
     if (opts.preparedId !== undefined) {
       const p = c.prepared.get(opts.preparedId);
-      if (!p || p.gen !== gen) delete opts.preparedId; else c.prepared.delete(opts.preparedId);
-      if (p && p.gen === gen && Date.now() - p.at <= PREPARED_MS) opts.tappedAt = p.at;
+      if (p && p.gen === gen) { c.prepared.delete(opts.preparedId); prep = p; } else delete opts.preparedId;
+      if (prep && Date.now() - prep.at > PREPARED_MS) { prep.release(); prep = null; delete opts.preparedId; }
     }
+    const unprepare = () => { if (prep) { try { prep.release(); } catch (_) {} prep = null; } };
     const fresh = !attaching && !opts.resumeId;
-    if (fresh && !ctx?.tapped && !opts.tappedAt) throw fault('Recording needs a tap in the app');
-    delete opts.tappedAt;
-    if (shellVoiceBusy()) throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' });
+    if (fresh && !ctx?.tapped && !prep) { unprepare(); throw fault('Recording needs a tap in the app'); }
+    if (shellVoiceBusy()) { unprepare(); throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' }); }
     // The hold is the recorder's, not the document's: it stays across a reload until the recording stops (onReset keeps
     // sheetHolds).
     const hold = holdFor(st, 'Recording'); (st.sheetHolds ||= new Set()).add(hold);
@@ -1113,9 +1117,10 @@
     let session;
     try {
       session = await (attaching ? R.attach(st.appId) : opts.resumeId && R.resume ? R.resume(st.appId, opts.resumeId, opts) : R.start(st.appId, opts));
-      if (!session) { release(); return out(null); }
+      if (!session) { release(); unprepare(); return out(null); }
       if (!alive()) throw fault('App frame is no longer authorized');
     } catch (err) {
+      unprepare();
       // The microphone prompt can outlive this document: stop and keep the take (a document that attached meanwhile owns it).
       if (session && !session.reattached?.()) { try { await session.stop(); } catch (_) {} }
       release();

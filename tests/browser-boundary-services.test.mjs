@@ -459,3 +459,19 @@ test('capture: events reach only the document that started it; a reload forgets 
   f.emit('wizard-app-capture-state');
   assert.deepEqual(holds(), []);
 });
+test('capture: a preparation the recorder never used is released when the start fails (Codex P1)', async () => {
+  const R = recorder(), f = fixture({ win: { WizAppCapture: R } });
+  const call = (m, a, tapped = false) => f.B.served(f.frame, m, a, { tapped });
+  R.start = async (appId, o) => { R.asked.push(['start', appId, o]); throw Object.assign(new Error('NotAllowedError'), { code: 'denied' }); };
+  const p = (await call('capture.prepare', { opts: {} }, true)).capture.id;
+  await assert.rejects(call('capture.start', { opts: { preparedId: p } }), /NotAllowed/);
+  assert.deepEqual(R.asked.slice(-2).map(x => x[0]), ['start', 'release'], 'the mic was refused: the preparation is let go');
+  assert.deepEqual(plainify(f.services.inspect()[0].holds), [], 'and so is the update hold');
+  // Wizard voice holds the microphone: refused before the recorder, the preparation is let go too.
+  const q = (await call('capture.prepare', { opts: {} }, true)).capture.id;
+  const before = R.asked.length;
+  await assert.rejects(f.B.served(f.frame, 'capture.start', { opts: { preparedId: 'nope' } }, { tapped: false }), /needs a tap/);
+  assert.equal(R.asked.length, before, 'an unknown preparation id is no tap');
+  await call('capture.release', { id: q });
+  assert.deepEqual(R.asked.at(-1), ['release', 'morning-report']);
+});
