@@ -8,7 +8,8 @@
  * backend can learn it. Off (no token in the page, the default): the meta is empty and nothing is wrapped.
  *
  * The shell's own pages that run in a frame (Store, Agents, Setup, and Settings › Connections) load this script too: the top-level shell arms
- * their fetch/XHR the same way (armFrame), because a frame load never carries the token. App frames are sandboxed
+ * their fetch/XHR the same way (armFrame), because a frame load never carries the token. Store, Agents and Setup also
+ * ship the `off` meta, so opened as a top-level tab they get the token from nginx like the shell page and arm themselves. App frames are sandboxed
  * under the boundary (core/browser-boundary.js), so they can't reach armFrame. See docs/browser-boundary.md.
  */
 (() => {

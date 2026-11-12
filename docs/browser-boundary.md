@@ -75,6 +75,9 @@ On:
   ever lands on another same-origin page (none of these pages navigates its frame today), it is reloaded sandboxed
   and attached like any app frame. Proof: `tests/qa-browser-boundary-shell-frames.cjs` (real Store, Agents and
   Setup pages in Chromium) and the unit tests in `tests/shell-token.test.mjs` / `tests/browser-boundary-frames.test.mjs`.
+  Opened as a top-level tab (not in a Wizard window), Store, Agents and Setup are a real page load like the shell page:
+  each ships the same `off` meta, nginx writes the token into it, and `shell-token.js` arms that page itself. A pinned
+  single app never shows them (`WizHomeScreenPolicy.isShell` refuses shell pages), so there is nothing to arm there.
 - Welcome (`core/welcome.js`): the AI provider's sign-in page and the Importer are app pages, so they load sandboxed
   and attached; Esc inside them comes back over the channel and steps the Welcome back. Settings › Connections is the
   App Manager's own view (`store-install/_connections/`, wizard-app-manager `connections_view.py`), owner code like
@@ -95,8 +98,7 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   `ready` is answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
-  Store, Agents or Setup opened as a top-level tab (not in a Wizard window) or
-  as a pinned single app get no token. Pages in the link sheet lose their own storage and pop-ups.
+  Pages in the link sheet lose their own storage and pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). That
   includes the Troubleshooter's own `/troubleshoot/api/` calls (its server needs to answer `Origin: null` from its
   own sandboxed page); until then its direct line is the repair path with the switch on.

@@ -13,7 +13,7 @@ function store(seed = {}) {
   const data = new Map(Object.entries(seed));
   return { getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: k => data.delete(k), data };
 }
-function boot({ token = TOKEN, framed = false, localStorage = store() } = {}) {
+function boot({ token = TOKEN, framed = false, localStorage = store(), path = '/wizard-os-home/' } = {}) {
   const calls = [], xhrHeaders = [];
   let meta = token === null ? null : { content: token, removed: false, getAttribute: () => token, remove() { this.removed = true; } };
   const metaRef = meta;
@@ -22,7 +22,7 @@ function boot({ token = TOKEN, framed = false, localStorage = store() } = {}) {
   class FakeXHR { open(m, u) { this.url = u; } setRequestHeader(n, v) { xhrHeaders.push([this.url, n, v]); } send() {} }
   const window = { fetch, XMLHttpRequest: FakeXHR };
   window.top = framed ? {} : window;
-  const ctx = { window, document, localStorage, location: { href: ORIGIN + '/wizard-os-home/', origin: ORIGIN }, URL, Headers, Request };
+  const ctx = { window, document, localStorage, location: { href: ORIGIN + path, origin: ORIGIN }, URL, Headers, Request };
   vm.runInNewContext(SRC, ctx);
   return { window, calls, xhrHeaders, meta: metaRef, nativeFetch: fetch };
 }
@@ -160,5 +160,28 @@ test('Store, Agents and Setup load shell-token.js as their first script', () => 
   for (const page of ['web/store/index.html', 'web/agents/index.html', 'web/setup/index.html']) {
     const html = read(page);
     assert.equal(html.indexOf('<script'), html.indexOf('<script src="../core/shell-token.js"></script>'), page);
+  }
+});
+
+test('Store, Agents and Setup carry the `off` placeholder, so a top-level tab of them gets the token from nginx', () => {
+  for (const page of ['web/store/index.html', 'web/agents/index.html', 'web/setup/index.html']) {
+    const html = read(page);
+    const metaAt = html.indexOf('<meta name="wizard-shell-token" content="off">');
+    const scriptAt = html.indexOf('<script src="../core/shell-token.js"></script>');
+    assert.ok(metaAt > 0 && scriptAt > metaAt, page);
+  }
+});
+
+test('on: Store, Agents or Setup opened as a top-level tab arm themselves; in a frame they never do', async () => {
+  for (const path of ['/wizard-os-home/store/index.html', '/wizard-os-home/agents/index.html', '/wizard-os-home/setup/']) {
+    const top = boot({ path });
+    await top.window.fetch('/wizard/v1/agents', { method: 'POST' });
+    await top.window.fetch('/notes/api/x');
+    assert.equal(sent(top.calls[0]), TOKEN, path);
+    assert.equal(sent(top.calls[1]), null, path);
+    assert.equal(top.meta.removed, true, path);
+    // In a Wizard window the frame load gets the empty value: nothing armed here (the top shell arms it instead).
+    const framed = boot({ path, token: '', framed: true });
+    assert.equal(framed.window.fetch, framed.nativeFetch, path);
   }
 });
