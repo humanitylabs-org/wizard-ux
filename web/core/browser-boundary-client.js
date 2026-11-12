@@ -4,7 +4,8 @@
  * nothing. The shell (core/browser-boundary.js) never reads this document. It sends `hello` with a per-load channel;
  * we answer `ready` and from then on take, on that channel only, from the parent window only:
  *  - `back`: run WizardApp's own Back (overlays, registered handlers); reply handled / atRoot.
- *  - `theme`: apply the Appearance v1 context through WizardApp's own validator; ack with `theme.applied`.
+ *  - `theme`: apply the Appearance v1 context (and the skin layer: stylesheet paths + My skin) through WizardApp's own
+ *    validator; ack with `theme.applied`.
  *  - `field.pin` / `field.insert` / `field.release`: seal the focused text field, then insert dictated text there only
  *    if nobody typed in it meanwhile.
  * And we tell the shell, as one boolean (`field.focus`), whether a text field has focus, so its orb offers dictation.
@@ -207,7 +208,7 @@
     }
     const reply = (status, extra = {}) => send({ ...extra, op: 'reply', id: d.id, status });
     if (d.op === 'theme') {
-      let ok = false; try { ok = applyTheme?.(d.appearance) === true; } catch (_) {}
+      let ok = false; try { ok = applyTheme?.(d.appearance, d.layer) === true; } catch (_) {}
       if (ok) send({ op: 'theme.applied', revision: d.appearance.revision });
       return;
     }

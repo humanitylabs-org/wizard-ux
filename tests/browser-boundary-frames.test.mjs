@@ -126,6 +126,23 @@ test('hello / ready on a per-load channel; the theme follows and is acked', asyn
   assert.ok(sh.log.includes('appearance-sync'));
 });
 
+test('skin layer: the shell\'s skin stylesheets and My skin travel with the theme, also again after a reload', async () => {
+  const sh = shell(), f = frame(sh);
+  const got = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => false, onTheme: (a, layer) => { got.push(clone(layer)); return true; } });
+  sh.B.attach(f.el);
+  await tick();
+  const layer = { sheets: ['/wizard-os-home/core/skins.css', '/wizard-os-home/skins/grove/skin.css?v=3'], mine: '.wz-btn{border-radius:0}' };
+  sh.B.theme(f.el, { revision: 3, colorScheme: 'dark' }, layer);
+  await tick();
+  assert.deepEqual(got, [layer]);
+  f.load(); await tick();
+  assert.deepEqual(got, [layer, layer], 'a reloaded app gets the same layer with the theme');
+  sh.B.theme(f.el, { revision: 4, colorScheme: 'dark' });
+  await tick();
+  assert.equal(got.at(-1), null, 'no layer sent means none');
+});
+
 test('Back: handled stays in the app, atRoot runs the shell step, a timeout stays put', async () => {
   const sh = shell(), f = frame(sh);
   let canBack = true; const steps = [];

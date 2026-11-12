@@ -320,11 +320,30 @@
   /* Shared kit + skin layer (James, 23 Oct 2026). A hosted app that uses the Wizard UI kit gets the shell's live copy
    * (/wizard-os-home/kit/wizard-ui.css) instead of its vendored snapshot, and every themed app gets the active skin's
    * stylesheets (core/skins.css, loaded skin package css, then My skin) after its own styles, so a skin can restyle
-   * .wz-* components. Same-origin parent only; mirrored on every appearance push, so a skin change follows live. */
+   * .wz-* components. Mirrored on every appearance push, so a skin change follows live. A same-origin app reads the
+   * layer from its parent; a sandboxed one (browser boundary, wizard-os#133) gets it with the theme, as same-origin
+   * stylesheet paths plus My skin's CSS, because it cannot read the shell. */
   const KIT = '/wizard-os-home/kit/wizard-ui.css', KIT_TOKENS = '/wizard-os-home/kit/wizard-tokens.css';
-  function syncSkinLayer() {
-    let pd = null; try { pd = parent.document; } catch (_) { return false; }
-    const head = document.head; if (!pd || !head) return false;
+  function skinSource(layer) {
+    if (typeof opaque !== 'undefined' && opaque) {
+      if (!layer || typeof layer !== 'object' || !Array.isArray(layer.sheets)) return null;
+      const want = [];
+      for (const p of layer.sheets.slice(0, 24)) {
+        if (typeof p !== 'string' || p.length > 512 || !p.startsWith('/')) continue;
+        let u; try { u = new URL(p, location.origin); } catch (_) { continue; }
+        if (u.origin === location.origin && /\.css$/.test(u.pathname) && !want.includes(u.href)) want.push(u.href);
+      }
+      return { want, css: typeof layer.mine === 'string' && layer.mine.length <= 65536 ? layer.mine : '' };
+    }
+    let pd = null; try { pd = parent.document; } catch (_) { return null; }
+    if (!pd) return null;
+    const want = [...pd.querySelectorAll('link[rel="stylesheet"]')].filter(l => /(^|\/)core\/skins\.css(\?|$)/.test(l.getAttribute('href') || '') || l.dataset.skinPkg).filter(l => !l.disabled).map(l => l.href);
+    const mine = pd.getElementById('wosMySkin'), css = mine && !mine.disabled ? String(mine.textContent || '') : '';
+    return { want, css };
+  }
+  function syncSkinLayer(layer) {
+    const src = skinSource(layer), head = document.head; if (!src || !head) return false;
+    const { want, css } = src;
     const vendored = [...head.querySelectorAll('link[rel="stylesheet"]')].find(l => /(^|\/)wizard-ui\.css(\?|$)/.test(l.getAttribute('href') || '') && l.dataset.wzShared !== 'kit');
     if (vendored && !head.querySelector('link[data-wz-shared="kit"]')) {
       // Tokens travel with the kit: older vendored kits carried their own fallbacks and no tokens file.
@@ -334,17 +353,15 @@
       t.addEventListener('load', done, { once: true }); k.addEventListener('load', done, { once: true });
       vendored.after(t, k);
     }
-    const want = [...pd.querySelectorAll('link[rel="stylesheet"]')].filter(l => /(^|\/)core\/skins\.css(\?|$)/.test(l.getAttribute('href') || '') || l.dataset.skinPkg).filter(l => !l.disabled).map(l => l.href);
     const have = new Map([...head.querySelectorAll('link[data-wz-skin-layer]')].map(l => [l.href, l]));
     for (const [href, l] of have) if (!want.includes(href)) l.remove();
     for (const href of want) if (!have.has(href)) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.dataset.wzSkinLayer = ''; head.appendChild(l); }
-    const mine = pd.getElementById('wosMySkin'), css = mine && !mine.disabled ? String(mine.textContent || '') : '';
     let s = head.querySelector('style[data-wz-my-skin]');
     if (css) { if (!s) { s = document.createElement('style'); s.dataset.wzMySkin = ''; } s.textContent = css; head.appendChild(s); }
     else if (s) s.remove();
     return true;
   }
-  function applyTheme(a) {
+  function applyTheme(a, layer) {
     if (!a || a.version !== VERSION || !Number.isSafeInteger(a.revision) || a.revision < 0 || !['window', 'immersive'].includes(a.presentation) || !['light', 'dark'].includes(a.colorScheme) || !/^[a-z0-9-]{1,40}$/.test(a.skin || '') || !a.tokens) return false;
     if (!TOKENS.every(k => typeof a.tokens[k] === 'string' && a.tokens[k].length < 96 && a.tokens[k].length > 0 && !/[;{}]|url\(/i.test(a.tokens[k]) && (!window.CSS?.supports || CSS.supports('color', a.tokens[k])))) return false;
     if (currentTheme && a.revision < currentTheme.revision) return false;
@@ -354,7 +371,7 @@
     root.style.colorScheme = a.colorScheme;
     root.dataset.skin = a.skin; root.dataset.presentation = a.presentation; root.dataset.colorScheme = a.colorScheme;
     root.setAttribute('data-wz-hosted', '');
-    if (framed) { try { syncSkinLayer(); } catch (e) { console.warn('WizardApp skin layer', e); } }
+    if (framed) { try { syncSkinLayer(layer); } catch (e) { console.warn('WizardApp skin layer', e); } }
     currentTheme = Object.freeze({ ...a, tokens: Object.freeze({ ...a.tokens }) });
     notify(themes, currentTheme);
     if (!window.WizardTheme) dispatchEvent(new CustomEvent('wizard:theme', { detail: currentTheme }));
