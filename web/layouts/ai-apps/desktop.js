@@ -818,7 +818,7 @@ export default function desktop(api) {
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
     if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}`);
-    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
+    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; feedFocus = null; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
     if ((s.actions || []).some(k => ACTS.some(([a]) => a === k))) {
@@ -1030,7 +1030,7 @@ export default function desktop(api) {
   function openChat(id, key) {
     if (panes.get().focus !== 'chats') panes.set({ focus: 'chats' });
     if (q) setSearch(false);
-    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); fromFeed = null; api.sessions.open(id);
+    feedFocus = null; railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); fromFeed = null; api.sessions.open(id);
     paintRail(true);
   }
   function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
@@ -1612,13 +1612,21 @@ export default function desktop(api) {
   api.listen(cBack, 'click', () => closeChat());
   // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
   function feedOpened(open) {
-    if (!open) { paintTop(); return; }
+    // the feed closed by its own Back to channels: as Esc, the app it was brought in front of gets the front back
+    if (!open) { feedGone(); paintTop(); return; }
     const h = here(), r = api.route();
     // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
     if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
     else if (h.app) chatThread = FEED;
+    // With an app centred (or full) the feed comes to the front, as opening a chat does; closing the feed gives the
+    // front back to the app, in the same view (wizard-ux issue 1344)
+    const f = panes.get().focus;
+    if (f !== 'chats') { feedFocus = f; panes.set({ focus: 'chats' }); }
     paintTop();
   }
+  let feedFocus = null;
+  // the feed left the column (Esc, ✕, its own Back to channels): the app it was brought in front of gets the front back
+  function feedGone() { if (feedFocus && pane && panes.get().focus === 'chats') panes.set({ focus: feedFocus }); feedFocus = null; }
   api.listen(globalThis, 'wos:channel-feed', e => feedOpened(e?.detail?.open || null));
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
@@ -1647,7 +1655,9 @@ export default function desktop(api) {
     // full stay as they were, so the desk ends as it was before the feed opened (wizard-ux issues 1330, 1325).
     if (panes.get().mode !== 'tiled' && chatThread !== FEED && !feedBack()) windowMode('tiled', 'chats');
     // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
+    if (chatThread === FEED) feedGone(); // (brought in front of a centred app: the app gets the front back, issue 1344)
     if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
+    if (!feedBack()) feedFocus = null; // a plain chat closing: no feed to give the front back from
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
   }
@@ -1840,7 +1850,7 @@ export default function desktop(api) {
     const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && h.note ? stepAt : cc && ids.includes(cc) ? cc : null;
     const nx = cur == null && dir < 0 ? { id: ids[ids.length - 1], wrapped: false } : readyStep(ids, cur, dir); if (!nx) return;
     if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
-    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); fromFeed = null; api.sessions.open(nx.id);
+    feedFocus = null; stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); fromFeed = null; api.sessions.open(nx.id);
   }
   /* Round 21 (Miguel, 4 Nov 2026: the keys as obvious as possible): ⌥ + a mnemonic letter, ⇧ only for the reverse /
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
@@ -2079,7 +2089,7 @@ export default function desktop(api) {
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : feedOn() ? FEED : null);
     // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
     // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
-    else if (chatThread === FEED ? !feedOn() : !chatThread) chatThread = behindThread();
+    else if (chatThread === FEED ? !feedOn() : !chatThread) { if (chatThread === FEED) feedGone(); chatThread = behindThread(); }
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
