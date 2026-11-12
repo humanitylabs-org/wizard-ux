@@ -5,6 +5,7 @@
 //  - The app's registration reaches the shell: the share sheet offers the app (and its person) under Apps / People.
 //  - A tap on the app in the shell's share sheet hands it the text (and a picture as a file); the app places it and
 //    the item is acked (no longer pending).
+//  - 40 shares waiting for an app that registers later all arrive (the boundary hands them over in batches of 32).
 //  - A second sandboxed page that is not the installed app it claims to be can't register or take anything.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-share-receive.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: the checks must fail there.
@@ -15,12 +16,14 @@ const SHOT = process.env.QA_SHOT || '';
 const page_ = (who, appId) => `<!doctype html><html><head><meta charset="utf-8"><script src="/wizard-os-home/core/app-client.js"></script></head>
 <body style="font:14px sans-serif;margin:8px"><b>${who}</b><div id="box" style="border:1px solid #999;min-height:40px;padding:4px;margin-top:4px">(composer)</div><script>
   window.got = [];
-  WizardApp.share.receive({ accepts: ['text', 'url', 'image'], targets: [{ id: '${appId}-ann', name: 'Ann (${who})' }], receive: async it => {
+  // ?late: the app registers only when the test says so (shares wait for it meanwhile).
+  window.go = () => WizardApp.share.receive({ accepts: ['text', 'url', 'image'], targets: [{ id: '${appId}-ann', name: 'Ann (${who})' }], receive: async it => {
     const file = it.file ? { name: it.name, mime: it.mime, size: it.size, bytes: (await it.file.arrayBuffer()).byteLength } : null;
     got.push({ id: it.id, kind: it.kind, text: it.text || '', target: it.target, file, keys: Object.keys(it).sort() });
     document.getElementById('box').textContent = (it.text || '') + (file ? ' [' + file.name + ']' : '');
     return true;
   } });
+  if (!location.search.includes('late')) go();
   WizardApp.ready?.();
 </script></body></html>`;
 const SHELL = `<!doctype html><html><head><meta charset="utf-8">
@@ -94,6 +97,21 @@ const server = http.createServer((req, res) => {
   await page.waitForTimeout(600);
   g = await got('/notes/');
   ok(outcome2 === 'shared' && g?.length === 2 && g[1].kind === 'image' && g[1].file?.name === 'pic.png' && g[1].file.bytes === 7, 'a shared picture reaches the app as a file: ' + JSON.stringify(g?.[1]));
+  // 40 shares wait while the app's window loads and has not registered yet; once it does, all of them arrive.
+  await page.evaluate(() => { document.querySelector('#w1 iframe').src = '/notes/?late=1'; });
+  await page.waitForFunction(() => WizBrowserBoundary.ready(document.querySelector('#w1 iframe')), null, { timeout: 6000 }).catch(() => {});
+  for (let i = 0; i < 40; i++) {
+    const s = page.evaluate(n => WosShareSheet.show({ text: 'batch ' + n }, () => 'native'), i);
+    await page.locator('.wos-share.on .shs-app[data-shs-app="notes"]').click({ timeout: 2000 }).catch(() => {});
+    await Promise.race([s, new Promise(r => setTimeout(r, 1000))]);
+  }
+  const waiting = await page.evaluate(() => WosShareSheet._state().pending.length);
+  await page.waitForTimeout(600); // every "a share is waiting" notice has reached the not-yet-registered app
+  await frameOf('/notes/?late=1').evaluate(() => go());
+  await page.waitForTimeout(1500);
+  const late = await got('/notes/?late=1');
+  ok(waiting === 40 && late?.length === 40 && new Set(late.map(x => x.text)).size === 40, '40 waiting shares all arrive once the app registers: ' + waiting + ' waiting, ' + late?.length + ' arrived');
+  ok((await page.evaluate(() => WosShareSheet._state().pending.length)) === 0, 'and none is left pending');
   // The page outside its window's app path took nothing.
   const evil = await got('/evil/');
   ok(Array.isArray(evil) && evil.length === 0, 'a page outside its app\'s path receives nothing: ' + JSON.stringify(evil));

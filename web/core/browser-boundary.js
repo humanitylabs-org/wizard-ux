@@ -68,7 +68,8 @@
     if (isBlob(x.file)) o.file = x.file;
     return o;
   }
-  // What may cross back to the app: protocol data only, never a shell object.
+  // What may cross back to the app: protocol data only, never a shell object. Shares go in batches of 32; the app's
+  // client (app-client.js pullShares) asks again after a full batch.
   function shape(v) {
     if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
