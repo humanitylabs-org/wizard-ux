@@ -15,7 +15,13 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
 <style>body{font:16px system-ui;margin:16px;background:#111;color:#eee}#ed,#off{border:1px solid #666;border-radius:8px;padding:10px;min-height:60px;margin-bottom:10px}</style></head>
 <body><div id="ed" contenteditable="true"><p>Hello <b>bold</b> end</p></div>
 <div id="off" contenteditable="true" data-no-dictation>private</div>
+<div id="host"></div>
 <script>
+  // An editor inside an open shadow root (document.activeElement is only the host).
+  const sr = document.getElementById('host').attachShadow({ mode: 'open' });
+  sr.innerHTML = '<div id="sed" contenteditable="true" style="border:1px solid #666;padding:6px">Shadow</div>';
+  window.shadowCaret = () => { const ed = sr.getElementById('sed'), r = document.createRange(); r.setStart(ed.firstChild, 6); r.collapse(true); const sel = sr.getSelection ? sr.getSelection() : getSelection(); sel.removeAllRanges(); sel.addRange(r); };
+  window.shadowText = () => sr.getElementById('sed').textContent.replace(/\u00a0/g, ' ');
   window.inputs = 0; document.getElementById('ed').addEventListener('input', () => window.inputs++);
   // Caret right after the text node "Hello " (offset n), or at the end of "end".
   window.caret = (where) => {
@@ -84,7 +90,12 @@ const server = http.createServer((req, res) => {
   // 4. A region that opts out of dictation is never offered.
   await app().click('#off'); await page.waitForTimeout(300);
   r.optOut = await page.evaluate(() => window.dictate('x'));
-  // 5. The note stops being editable without a focus event: the orb stops offering it.
+  // 5. An editor inside an open shadow root (activeElement is its host) is offered too.
+  await app().evaluate(() => { document.getElementById('host').shadowRoot.getElementById('sed').focus(); window.shadowCaret(); });
+  r.shadowOffered = await offered();
+  r.shadow = await page.evaluate(() => window.dictate('words'));
+  r.shadowText = await app().evaluate(() => window.shadowText());
+  // 6. The note stops being editable without a focus event: the orb stops offering it.
   await app().click('#ed'); r.offeredAgain = await offered();
   await app().evaluate(() => { document.getElementById('ed').setAttribute('contenteditable', 'false'); });
   r.dropped = await page.waitForFunction(() => window.fieldPaints.at(-1) === false, null, { timeout: 3000 }).then(() => true, () => false);
@@ -102,6 +113,7 @@ const server = http.createServer((req, res) => {
     if (r.fromOrb !== 'inserted' || r.html2.text !== 'Hello big bold end now') fails.push('take from the orb: ' + r.fromOrb + ' ' + JSON.stringify(r.html2));
     if (r.typedWhile !== 'refused' || r.html3.text !== 'Hello big bold end now!') fails.push('typing meanwhile did not win: ' + JSON.stringify(r.html3));
     if (r.optOut !== 'no-field') fails.push('a data-no-dictation region was offered');
+    if (!r.shadowOffered || r.shadow !== 'inserted' || r.shadowText !== 'Shadow words') fails.push('shadow-root editor: ' + r.shadow + ' ' + r.shadowText);
     if (!r.offeredAgain || !r.dropped) fails.push('a region that stopped being editable was still offered');
   }
   if (errors.length) fails.push('page errors');

@@ -77,9 +77,12 @@
   // Only whether a dictation-ready field has focus: never which field, its name or its text.
   // When the shell takes focus (the orb, a key on a shell control) this document's activeElement falls back to <body>,
   // so the last focused field is remembered until focus moves to something else inside this document.
+  const deepActive = () => { let a = document.activeElement; for (let i = 0; i < 4 && a?.shadowRoot?.activeElement; i++) a = a.shadowRoot.activeElement; return a; };
+  // A region inside an open shadow root keeps its caret in that root's selection (Chromium), else the document's.
+  const selectionOf = el => { const root = el.getRootNode?.(); return (root && root !== document && root.getSelection?.()) || document.getSelection?.() || null; };
   let fieldSent = null, lastField = null;
   const away = () => typeof document.hasFocus === 'function' && !document.hasFocus();
-  const field = () => editable(document.activeElement) || (away() && editable(lastField)) || null;
+  const field = () => editable(deepActive()) || (away() && editable(lastField)) || null;
   const reportField = force => {
     if (!channel) return;
     const on = !!field();
@@ -87,8 +90,8 @@
     fieldSent = on; send({ op: 'field.focus', editable: on });
   };
   if (typeof document.addEventListener === 'function') {
-    document.addEventListener('focusin', () => { lastField = editable(document.activeElement); reportField(true); }, true);
-    document.addEventListener('focusout', () => setTimeout(() => { if (!away()) lastField = editable(document.activeElement); reportField(false); }, 0), true);
+    document.addEventListener('focusin', () => { lastField = editable(deepActive()); reportField(true); }, true);
+    document.addEventListener('focusout', () => setTimeout(() => { if (!away()) lastField = editable(deepActive()); reportField(false); }, 0), true);
   }
   // A field that turns read-only, disabled, inert or no-dictation, or leaves the page, without a focus event: say so,
   // so the shell never offers a take that would be refused at the end.
@@ -128,7 +131,6 @@
   }
   addEventListener('scroll', () => { if (appOn) reportKeys(false); }, { capture: true, passive: true });
   addEventListener('resize', () => { if (appOn) reportKeys(false); });
-  const deepActive = () => { let a = document.activeElement; for (let i = 0; i < 4 && a?.shadowRoot?.activeElement; i++) a = a.shadowRoot.activeElement; return a; };
   const textField = el => !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA)$/.test(el.tagName || '')
     && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i.test(el.type || '')));
   // Mirrors the shell's own pass-throughs (desktop onKey): ⌥← / ⌥→ word moves, ⌥⇧ arrows selecting in a field,
@@ -235,7 +237,7 @@
       else {
         // Rich text: the caret (or selection) must sit inside the region; any change to it before the words land
         // (typing, an editor's own update) ends the seal, as the shell does for a same-origin contenteditable.
-        const sel = document.getSelection?.(), range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+        const sel = selectionOf(el), range = sel?.rangeCount ? sel.getRangeAt(0) : null;
         if (!range || !el.contains(range.startContainer) || !el.contains(range.endContainer)) return reply('refused');
         s = { el, rich: true, value: el.innerHTML, range: range.cloneRange() };
         if (typeof MutationObserver === 'function') {
@@ -271,16 +273,16 @@
     const ok = s.value === el.innerHTML && el.contains(r.startContainer) && el.contains(r.endContainer);
     release(id);
     if (!ok) return false;
-    const selection = document.getSelection?.();
+    const selection = selectionOf(el);
     if (!selection) return false;
     let t = words, native = false;
-    const was = document.activeElement;
+    const was = deepActive();
     try {
       // Same neighbour spacing as plain fields; only the caret's own text node counts, so a new line never gains a space.
       const c = r.startContainer, o = r.startOffset, prev = c.nodeType === 3 ? c : c.childNodes[o - 1];
       const before = c.nodeType === 3 ? (o ? c.data[o - 1] : '') : prev?.nodeType === 3 ? prev.data.slice(-1) : '';
       if (before && !/\s/.test(before) && /^[^\s.,;:!?)]/.test(t)) t = ' ' + t;
-      if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
+      if (!el.contains(deepActive())) el.focus({ preventScroll: true });
       selection.removeAllRanges(); selection.addRange(r);
       native = !!document.execCommand('insertText', false, t);
     } catch (_) { native = false; }
