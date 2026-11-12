@@ -75,6 +75,11 @@ On:
   ever lands on another same-origin page (none of these pages navigates its frame today), it is reloaded sandboxed
   and attached like any app frame. Proof: `tests/qa-browser-boundary-shell-frames.cjs` (real Store, Agents and
   Setup pages in Chromium) and the unit tests in `tests/shell-token.test.mjs` / `tests/browser-boundary-frames.test.mjs`.
+- Welcome (`core/welcome.js`): the AI provider's sign-in page and the Importer are app pages, so they load sandboxed
+  and attached; Esc inside them comes back over the channel and steps the Welcome back. Settings › Connections is the
+  App Manager's own view (`store-install/_connections/`, wizard-app-manager `connections_view.py`), owner code like
+  Store: it stays same-origin, loads `core/shell-token.js` first and is armed the same way (its static files load
+  without the token; its `api/` calls carry it). Proof: `tests/qa-browser-boundary-welcome-settings.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -85,8 +90,8 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   `ready` is answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
-  The Welcome sign-in/importer frames, the Settings Connections embed (both load app pages) and the Troubleshooter
-  recovery frame are not sandboxed yet. Store, Agents or Setup opened as a top-level tab (not in a Wizard window) or
+  The Troubleshooter recovery frame (`core/reach.js`, it reads the repair page to prove it loaded) is not sandboxed
+  yet. Store, Agents or Setup opened as a top-level tab (not in a Wizard window) or
   as a pinned single app get no token. Pages in the link sheet lose their own storage and pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385).
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly

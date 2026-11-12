@@ -63,10 +63,10 @@
     });
   }
   const themedWin = f => f.closest?.('.st-embed') || f.closest?.('.wl-embed') ? null : f.closest?.('.win');
-  // The shell's own pages that run in an app window (Store, Agents, Setup) are shell code, not apps: they stay
+  // The shell's own pages that run in an app window (Store, Agents, Setup, and the App Manager's Connections view in Settings) are shell code, not apps: they stay
   // same-origin so they keep their owner calls, which the top-level shell sends with the token
   // (core/shell-token.js armFrame). Same list as there.
-  const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup)\/(?:index\.html)?$/;
+  const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup|store-install\/_connections)\/(?:index\.html)?$/;
   const shellPage = url => {
     try { const u = new URL(String(url), location.href); return u.origin === location.origin && SHELL_PAGE.test(u.pathname); } catch (_) { return false; }
   };
