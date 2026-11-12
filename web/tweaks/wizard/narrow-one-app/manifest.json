@@ -1,0 +1,14 @@
+{
+  "id": "wizard/narrow-one-app",
+  "name": "Narrow window: one app at a time",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "shells": [
+    "desktop"
+  ],
+  "description": "When the AI apps desktop window is narrow (half or a third of the screen), it shows one app at a time: the app fills the window, the left Chats sidebar goes, and Chats becomes the first row of the right Apps column, set apart by a line. Chats at half width is the list beside the chat; narrower the list, then the chat with Back. Back from the list returns to the app you came from (wizard-ux issue 1314)."
+}
