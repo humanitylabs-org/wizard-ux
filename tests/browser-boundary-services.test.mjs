@@ -789,22 +789,27 @@ test('app socket: the page\'s close runs the handshake; a message too large or a
   // Closing before it opened: it never opens.
   const early = f.call('ws.open', { key: 'ws-e', url: 'wss://wizard.example/morning-report/live' });
   f.call('ws.close', { key: 'ws-e' }); await assert.rejects(early, /Connection failed/);
+  // The limit counts UTF-8 bytes: 3 MB of ASCII text passes, 4 MB + 1 of it does not (Codex P2).
+  const sized = f.call('ws.open', { key: 'ws-t', url: 'wss://wizard.example/morning-report/live' }); made.at(-1).open(); await sized;
+  assert.equal(f.call('ws.send', { key: 'ws-t', data: 'a'.repeat(3 * 1024 * 1024) }), true);
+  assert.equal(f.call('ws.send', { key: 'ws-t', data: '\u00e9'.repeat(2 * 1024 * 1024) + 'x' }), false, '2 bytes per \u00e9');
   // Too large a message from the page: the page hears an abnormal close.
-  const big = f.call('ws.open', { key: 'ws-f', url: 'wss://wizard.example/morning-report/live' }); made[3].open(); await big;
+  const big = f.call('ws.open', { key: 'ws-f', url: 'wss://wizard.example/morning-report/live' }); made.at(-1).open(); await big;
   f.notices.length = 0;
   assert.equal(f.call('ws.send', { key: 'ws-f', data: new ArrayBuffer(5 * 1024 * 1024) }), false);
   assert.deepEqual(f.notices.map(n => [n.event, n.code, n.wasClean]), [['close', 1006, false]]);
-  assert.ok(made[3].closed, 'and the shell closed it');
+  assert.ok(made.at(-1).closed, 'and the shell closed it');
   // A new document: the old one's sockets close and the new page hears nothing of them.
-  const r = f.call('ws.open', { key: 'ws-g', url: 'wss://wizard.example/morning-report/live' }); made[4].open(); await r;
+  const r = f.call('ws.open', { key: 'ws-g', url: 'wss://wizard.example/morning-report/live' }); const g = made.at(-1); g.open(); await r;
   f.notices.length = 0; f.reset(); f.B.genNow = 2;
-  assert.ok(made[4].closed, 'closed with its document');
-  made[4].emit('message', { data: 'late' }); made[4].gone(1000, '', true);
+  assert.ok(g.closed, 'closed with its document');
+  g.emit('message', { data: 'late' }); g.gone(1000, '', true);
   assert.equal(f.notices.length, 0);
   // At most 8 open per window.
+  const first = made.length;
   for (let i = 0; i < 8; i++) f.call('ws.open', { key: 'ws-n' + i, url: 'wss://wizard.example/morning-report/live' }).catch(() => {});
   assert.throws(() => f.call('ws.open', { key: 'ws-n8', url: 'wss://wizard.example/morning-report/live' }), /Too many open/);
   // Closing the window closes every socket it has.
   f.detach();
-  assert.ok(made.slice(5).every(w => w.closed), 'the window\'s sockets close with it');
+  assert.ok(made.slice(first).length === 8 && made.slice(first).every(w => w.closed), 'the window\'s sockets close with it');
 });

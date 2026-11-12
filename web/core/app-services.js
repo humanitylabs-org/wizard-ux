@@ -1350,8 +1350,17 @@
     const h = new URL(u.href); h.protocol = u.protocol === 'wss:' ? 'https:' : 'http:';
     return netTarget(st, h.href) ? u : null;
   };
-  const wsBytes = d => (typeof d === 'string' ? d.length * 3 : d.byteLength);
-  const utf8 = t => { try { return encodeURIComponent(t).replace(/%[0-9A-F]{2}/g, '.').length; } catch (_) { return Infinity; } };
+  // A text message's size as sent: its UTF-8 bytes (a lone surrogate goes as U+FFFD, 3 bytes).
+  const utf8 = t => {
+    let n = 0;
+    for (let i = 0; i < t.length; i++) {
+      const c = t.charCodeAt(i);
+      if (c < 0x80) n++; else if (c < 0x800) n += 2;
+      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length && (t.charCodeAt(i + 1) & 0xfc00) === 0xdc00) { n += 4; i++; } else n += 3;
+    }
+    return n;
+  };
+  const wsBytes = d => (typeof d === 'string' ? utf8(d) : d.byteLength);
   // Every socket of this window closes; no page gets their messages.
   function wsCloseAll(st) { for (const c of [...(st.wsConns?.values() || [])]) c.end(); st.wsConns?.clear(); }
   // A window that went away without a detach (its frame left the page) still closes its sockets (checked every 5 s
@@ -1433,7 +1442,8 @@
     const d = args.data;
     if (typeof d !== 'string' && Object.prototype.toString.call(d) !== '[object ArrayBuffer]') return false;
     // Too large a message, or the server is not reading: the socket fails, as a browser's own does.
-    if (wsBytes(d) > WS_MSG || c.ws.bufferedAmount + wsBytes(d) > WS_BUFFER) { c.fail(); return false; }
+    const n = wsBytes(d);
+    if (n > WS_MSG || c.ws.bufferedAmount + n > WS_BUFFER) { c.fail(); return false; }
     try { c.ws.send(d); } catch (_) { c.fail(); return false; }
     return true;
   }
