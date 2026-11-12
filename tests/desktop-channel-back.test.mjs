@@ -20,13 +20,13 @@ function world() {
   c.feedOn = () => c.open; c.closeChat = () => { c.closed++; return true; };
   vm.createContext(c);
   vm.runInContext(between(js, '  let fromFeed = null;', '  // A channel opened in the sidebar: its feed comes') + `
-    this.t = { feedPost, feedBack, paintBack, get fromFeed() { return fromFeed; }, set chat(v) { chatThread = v; } };`, c);
+    this.t = { feedPost, feedBack, feedTitle, paintBack, get fromFeed() { return fromFeed; }, set chat(v) { chatThread = v; } };`, c);
   // chatThread / docked live in the excerpt's own scope as globals of the context
   const clickOn = (attrsOf, extra = {}) => ({ target: { closest: sel => {
-    if (sel === '[data-chopen], [data-chreply]') return attrsOf ? { dataset: attrsOf } : null;
+    if (sel === '[data-chopen], [data-chreply]') return attrsOf ? { dataset: attrsOf, closest: s => (s === '.ch-post' && extra.title !== undefined ? { dataset: { chtitle: extra.title } } : null) } : null;
     return extra[sel] || null; } } });
   const post = (sid, extra) => listeners.find(l => l.t === c.feedBox).fn(clickOn({ chopen: sid }, extra));
-  const reply = sid => listeners.find(l => l.t === c.feedBox).fn(clickOn({ chreply: sid }));
+  const reply = (sid, extra) => listeners.find(l => l.t === c.feedBox).fn(clickOn({ chreply: sid }, extra));
   const back = () => listeners.find(l => l.t === cBack && l.type === 'click').fn();
   const paint = thread => { c.chatThread = thread; c.t.paintBack(); };
   return { c, cBack, attrs, listeners, post, reply, back, paint };
@@ -50,6 +50,24 @@ test('a post\'s Reply opens with Back too; a link inside a post, or the row shee
   const y = world();
   y.post('s3', { '.ch-post-t a[href]': {} }); y.paint('s3'); assert.equal(y.cBack.hidden, true);
   y.post('s3', { '.ch-sheet': {} }); y.paint('s3'); assert.equal(y.cBack.hidden, true);
+});
+
+// An older post (wizard-ux issue 1329): not in the loaded Activity list, so titleOf finds nothing; the header takes the
+// title the post carried in the feed, on the first paint (no flicker), and only for that post.
+test('an older post opened from the feed shows its own title beside Back', () => {
+  const x = world();
+  x.post('old1', { title: 'Plan the launch' }); x.paint('old1');
+  assert.equal(x.c.t.feedTitle('old1'), 'Plan the launch');
+  assert.equal(x.cBack.textContent, '‹ # WizardOS Apps');
+  assert.equal(x.c.t.feedTitle('other'), '', 'another thread never borrows it');
+  const r = world(); r.reply('old2', { title: 'Old ask' }); r.paint('old2'); assert.equal(r.c.t.feedTitle('old2'), 'Old ask', 'Reply too');
+  const n = world(); n.post('old3'); n.paint('old3'); assert.equal(n.c.t.feedTitle('old3'), '', 'no title on the post: empty, as before');
+  x.paint('a1'); assert.equal(x.c.t.feedTitle('old1'), '', 'spent once another chat is in the column');
+  // the header asks the lists first, then the feed's post; feedTitle is hoisted (paintTop can run before its line)
+  assert.match(js, /chatThread \? titleOf\(chatThread\) \|\| feedTitle\(chatThread\) : '';\n    tt\.textContent = docked \? t : '';/);
+  assert.match(js, /\n  function feedTitle\(sid\) \{/);
+  // the feed's posts carry their title
+  assert.match(read('web/core/chats.js'), /data-chrow="\$\{esc\(chanKey\(s\)\)\}" data-chtitle="\$\{esc\(s\.title \|\| ''\)\}">/);
 });
 
 test('a thread opened from Activity or the sidebar has no Back; another chat spends the post\'s Back', () => {
