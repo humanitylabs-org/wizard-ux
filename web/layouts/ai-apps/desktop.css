@@ -991,7 +991,10 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #
 }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] > .win > :is(.wbody, .wbar) { transition: none; }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) :is(.aad-grip, .aad-pload) { display: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"] :is(.aad-side, .aad-vt, .aad-top, #bar) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"] :is(.aad-vt, .aad-top, #bar) { display: none !important; }
+/* (a chat's Back in full screen shows the list over it, still full screen: James, 12 Nov 2026) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"]:not([data-aad-side="over"]) .aad-side { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"][data-aad-side="over"] .aad-side { left: 0; top: 0; bottom: 0; }
 /* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane in the sidebar (api.sessions.channels).
  * Activity: its tabs over the sidebar's own rows, each row with a muted "# channel" second line (56 px, two lines).
  * Channels and a channel's feed: the pane fills the sidebar in place of the rows; the feed's message box at its foot. */

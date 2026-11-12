@@ -252,7 +252,7 @@ test('Chats paints the side pane only with the switch on: tabs, then the channel
   assert.match(js, /panel\.append\(head, agentsRow, chanBox, scroll, foot\)/);
   assert.match(js, /const paintChan = \(\) => \{ const on = !q && !!api\.sessions\.channels\?\.\(chanBox\);/, 'hidden while the sidebar searches');
   assert.match(js, /if \(s\.channel\) title\.append\(el\('span', 'aad-chan-line', \{ text: `# \$\{s\.channel\}` \}\)\);/);
-  assert.match(js, /else if \(docked\) closeChat\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: a docked thread or feed first');
+  assert.match(js, /else if \(docked\) chatBack\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: a docked thread or feed first');
   // The design change of 11 Nov 2026: the feed is a chat in the column (FEED), Back from a post lands on it, Esc closes it.
   assert.match(js, /if \(!h\.app\) chatThread = h\.thread \|\| \(h\.note \? NOTE : h\.draft \? DRAFT : feedOn\(\) \? FEED : null\);/, 'no thread in the column and a channel open: its feed');
   assert.match(js, /if \(chatThread === FEED\) \{ chatThread = null; anim\('undock'\); api\.sessions\.channelBack\?\.\(\); paintTop\(\); return true; \}/, 'Esc / ✕ on the feed: nothing open');
