@@ -1914,6 +1914,10 @@ test('issue 1331: opening a thread with an open Needs you lands on that message 
   f.env._c.w.readNav = 4; f.land(w, 4); assert.equal(scrolled.length, 2, 'again on the next open');
   f.env.document.documentElement.dataset.tweaks = MD_ON; f.env._c.w.readNav = 5; f.land(w, 5);
   assert.equal(scrolled.length, 2, 'switch off: the thread opens where it always did');
+  // Both opens call it: a fresh history read and a reopen inside the 60-second history cache (Codex P2).
+  const load = src.slice(src.indexOf('  async function loadThread('), src.indexOf('    // Every read owns a captured thread AND navigation generation.'));
+  assert.match(load, /if \(fresh && !force\) \{\n      c\.loadedNav = nav;[^\n]*\n      if \(typeof needsLand === 'function'\) needsLand\(w, nav\);/);
+  assert.match(src, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
 });
 
 test('issue 1331: the real turnHtml draws the line right above the reply bubble, and only there', () => {

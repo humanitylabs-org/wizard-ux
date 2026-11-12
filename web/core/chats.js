@@ -3808,6 +3808,7 @@ window.WizCore.chats = function createChats(H) {
     }
     if (fresh && !force) {
       c.loadedNav = nav; // still current for this open: the reading place can trust it
+      if (typeof needsLand === 'function') needsLand(w, nav); // issue 1331: a cached reopen lands on the Needs you message too
       // Reopening inside the cache window skips the read, so retire sends this transcript already shows here too.
       if (c.loadedFor === sid && retireLanded(sid, c.turns || [])) { const el = elOf(w.id); if (el) renderLive(w, el); }
       // Reopening a cached quiet transcript still refreshes rename/retry metadata,
