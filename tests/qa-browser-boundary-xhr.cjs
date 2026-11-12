@@ -121,7 +121,7 @@ const server = http.createServer((req, res) => {
     'a JSON POST reaches the app server with its own headers, and its status, headers and body come back: ' + JSON.stringify(post));
   // 3. An upload (FormData) arrives as multipart and reports upload progress.
   const up = await xhr({ method: 'POST', url: 'api/upload', form: true, type: 'json' });
-  ok(up.r?.multipart && up.r?.has && up.status === 200, 'a FormData upload arrives as multipart: ' + JSON.stringify(up));
+  ok(up.r?.multipart && up.r?.has && up.status === 200 && up.up.join() === 'loadstart,progress,load,loadend', 'a FormData upload arrives as multipart, with its upload events: ' + JSON.stringify(up));
   const upBytes = await xhr({ method: 'POST', url: 'api/save', body: '{"text":"x"}', type: 'json' });
   ok(upBytes.up.join() === 'loadstart,progress,load,loadend', 'upload events fire for a body: ' + JSON.stringify(upBytes.up));
   // 4. Binary, a Blob, a document, 204 and HEAD.

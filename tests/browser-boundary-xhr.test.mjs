@@ -18,7 +18,7 @@ class ProgressEvent extends Event {
 function load(fetch) {
   const native = class NativeXHR { constructor() { this.native = true; } };
   const g = { location: { href: 'https://box.example.com/notes/' }, fetch, XMLHttpRequest: native, EventTarget, Event, ProgressEvent, DOMException,
-    URL, Blob, Headers, Response, TextDecoder, AbortController, setTimeout, clearTimeout, Promise, Object, JSON, Math, Number, String, Error };
+    URL, URLSearchParams, FormData, Blob, Headers, Response, TextDecoder, AbortController, setTimeout, clearTimeout, Promise, Object, JSON, Math, Number, String, Error };
   g.window = g;
   vm.createContext(g);
   vm.runInContext(`(() => {\n${BLOCK}\n})();`, g);
@@ -90,4 +90,17 @@ test('XMLHttpRequest stand-in: binary, text and bad JSON answers; GET drops a bo
   const get = await run(g.XMLHttpRequest, x => { x.open('GET', 'api/echo'); x.send('ignored'); });
   assert.equal(get.x.responseText, 'body was null');
   assert.throws(() => { const x = new g.XMLHttpRequest(); x.send(); }, e => e.name === 'InvalidStateError', 'send before open');
+});
+
+test('XMLHttpRequest stand-in: upload events fire for any body, FormData too (Codex P2)', async () => {
+  const { g } = load(async () => new Response('ok'));
+  for (const body of [() => { const f = new FormData(); f.append('file', new Blob(['figs']), 'figs.txt'); return f; }, () => new URLSearchParams('a=1'), () => 'text']) {
+    const up = [];
+    const done = await run(g.XMLHttpRequest, x => {
+      for (const t of ['loadstart', 'progress', 'load', 'loadend']) x.upload.addEventListener(t, () => up.push(t));
+      x.open('POST', 'api/upload'); x.send(body());
+    });
+    assert.equal(done.x.status, 200);
+    assert.deepEqual(up, ['loadstart', 'progress', 'load', 'loadend'], body().constructor.name);
+  }
 });

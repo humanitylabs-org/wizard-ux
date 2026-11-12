@@ -308,23 +308,24 @@
         const gen = s.gen, stop = new AbortController(); s.stop = stop;
         if (s.method === 'GET' || s.method === 'HEAD') body = null;
         else if (typeof Document === 'function' && body instanceof Document) body = new XMLSerializer().serializeToString(body);
-        const size = body == null ? 0 : typeof body === 'string' ? new Blob([body]).size : body.size ?? body.byteLength ?? 0;
+        // Upload events fire for any body (FormData and URLSearchParams too, whose size is only known once encoded).
+        const upload = body != null, size = !upload ? 0 : typeof body === 'string' ? new Blob([body]).size : body.size ?? body.byteLength ?? 0;
         const live = () => s.gen === gen && s.stop === stop;
         let timer = 0, why = '';
         const end = (type, loaded, total) => {
           clearTimeout(timer); if (!live()) return; s.stop = null; s.sent = false;
           if (type !== 'load') { s.status = 0; s.statusText = ''; s.resHeaders = null; s.raw = null; s.text = ''; }
           s.ready = 4; this.dispatchEvent(new Event('readystatechange'));
-          if (type !== 'load' && size && this.upload) { this.upload.dispatchEvent(progress(type, 0, 0)); this.upload.dispatchEvent(progress('loadend', 0, 0)); }
+          if (type !== 'load' && upload) { this.upload.dispatchEvent(progress(type, 0, 0)); this.upload.dispatchEvent(progress('loadend', 0, 0)); }
           this.dispatchEvent(progress(type, loaded, total)); this.dispatchEvent(progress('loadend', loaded, total));
         };
         this.dispatchEvent(progress('loadstart', 0, 0));
-        if (size) this.upload.dispatchEvent(progress('loadstart', 0, size));
+        if (upload) this.upload.dispatchEvent(progress('loadstart', 0, size));
         if (s.timeout) timer = setTimeout(() => { why = 'timeout'; stop.abort(); }, s.timeout);
         stop.signal.addEventListener('abort', () => { if (!why) why = 'abort'; end(why, 0, 0); }, { once: true });
         viaShell.call(window, s.url, { method: s.method, headers: s.headers, body, credentials: s.cred ? 'include' : 'same-origin', signal: stop.signal }).then(async res => {
           if (!live()) return;
-          if (size) { this.upload.dispatchEvent(progress('progress', size, size)); this.upload.dispatchEvent(progress('load', size, size)); this.upload.dispatchEvent(progress('loadend', size, size)); }
+          if (upload) { this.upload.dispatchEvent(progress('progress', size, size)); this.upload.dispatchEvent(progress('load', size, size)); this.upload.dispatchEvent(progress('loadend', size, size)); }
           s.status = res.status; s.statusText = res.statusText; s.resHeaders = [...res.headers]; s.url2 = res.url || s.url;
           s.ready = 2; this.dispatchEvent(new Event('readystatechange'));
           const raw = await res.arrayBuffer(); if (!live()) return;
