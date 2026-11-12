@@ -143,6 +143,7 @@ window.WosChatPower = function chatPower(A) {
   function paintLatest(el, nb) {
     const b = el.querySelector('[data-chlatest]'), hidden = bottomGap(nb) < 160;
     if (b && onScreen(nb) && b.hidden !== hidden) b.hidden = hidden;
+    A.paintJump?.(el, nb); // the jump-to-Needs-you pills (wizard-ux issue 1359) follow every scroll and repaint
   }
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
