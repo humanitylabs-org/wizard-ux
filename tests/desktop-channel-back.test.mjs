@@ -183,6 +183,7 @@ test('Esc in full screen: a post from the feed goes back to the feed and keeps f
     return c;
   };
   const post = run({}); assert.equal(post.ok, true); assert.deepEqual(post.calls, ['closeChat'], 'the feed again, still full screen');
+  assert.deepEqual(run({ inApp: true }).calls, ['closeChat'], 'a stale focus in the hidden app frame does not win');
   assert.deepEqual(run({ back: false }).calls, ['mode:tiled'], 'a plain chat or the feed: Esc leaves full screen');
   assert.deepEqual(run({ focus: 'app', inApp: true }).calls, ['mode:tiled'], 'the app full screen: unchanged');
 });
