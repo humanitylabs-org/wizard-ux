@@ -101,9 +101,9 @@ test('wiring: the Back sits left of the title, every sidebar open clears it, the
   assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /aad-cback|fromFeed/, 'the phone is unchanged');
 });
 
-// Esc on an app desk keeps the owner's view (wizard-ux issue 1330; see 1325): a post's thread back to its feed, and the
-// feed closed, leave 50/50 / centred / full as they were; only a plain chat closing from them goes back to tiled.
-test('closeChat: channel steps keep the view mode; a plain chat still goes back to tiled', () => {
+// Esc on an app desk keeps the owner's view (wizard-ux issues 1330, 1325): a post's thread back to its feed, the feed
+// closed and a plain chat closed all leave 50/50 / centred / full as they were.
+test('closeChat: channel steps and a plain chat closing keep the view mode', () => {
   const src = between(js, '  function closeChat() {', '  function setWide(on) {');
   const run = ({ thread, fromFeed = false, mode = 'pair' }) => {
     const c = { FEED: '__feed__', docked: true, chatThread: thread, noteWant: false, draftWant: false, calls: [], mode, feedFocus: null, pane: null,
@@ -119,9 +119,10 @@ test('closeChat: channel steps keep the view mode; a plain chat still goes back 
     const post = run({ thread: 'qa-p12', fromFeed: true, mode });
     assert.equal(post.mode, mode, `a post's thread back to its feed keeps ${mode}`); assert.deepEqual(post.calls, ['newChat']);
     const plain = run({ thread: 'qa-g1', mode });
-    assert.equal(plain.mode, 'tiled', `a plain chat closing from ${mode}: tiled, as before`);
+    assert.equal(plain.mode, mode, `a plain chat closing keeps ${mode}`); assert.deepEqual(plain.calls, ['newChat'], 'a new chat takes the chat slot');
+    assert.equal(plain.after, null);
   }
-  assert.equal(run({ thread: '__feed__', mode: 'tiled' }).calls.includes('mode:tiled:chats'), false);
+  for (const thread of ['__feed__', 'qa-g1']) assert.equal(run({ thread, mode: 'tiled' }).calls.some(x => x.startsWith('mode:')), false);
 });
 
 // A channel opened with an app centred (wizard-ux issue 1344): its feed comes to the front the way a chat does (the
@@ -173,8 +174,8 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
 // does; anything else in full screen (an app, a plain chat, the feed itself) still leaves full screen first.
 test('Esc in full screen: a post from the feed goes back to the feed and keeps full screen', () => {
   const src = between(js, '  api.back.surface?.(() => {', '    const a = doc.activeElement;');
-  const run = ({ focus = 'chats', back = true, inApp = false }) => {
-    const act = {}, c = { calls: [], doc: { activeElement: act }, lastSurface: focus === 'chats' ? 'chat' : 'app', globalThis: {},
+  const run = ({ focus = 'chats', back = true, inApp = false, fullFrom = 'tiled' }) => {
+    const act = {}, c = { calls: [], fullFrom, doc: { activeElement: act }, lastSurface: focus === 'chats' ? 'chat' : 'app', globalThis: {},
       pane: { el: { contains: n => inApp && n === act, querySelector: () => null } }, chatsEl: () => ({ contains: n => !inApp && n === act }),
       panes: { get: () => ({ mode: 'full', focus }) }, feedBack: () => (back ? { id: 'launch', name: 'Launch' } : null),
       closeChat: () => { c.calls.push('closeChat'); return true; }, windowMode: m => c.calls.push('mode:' + m),
@@ -186,4 +187,9 @@ test('Esc in full screen: a post from the feed goes back to the feed and keeps f
   assert.deepEqual(run({ inApp: true }).calls, ['closeChat'], 'a stale focus in the hidden app frame does not win');
   assert.deepEqual(run({ back: false }).calls, ['mode:tiled'], 'a plain chat or the feed: Esc leaves full screen');
   assert.deepEqual(run({ focus: 'app', inApp: true }).calls, ['mode:tiled'], 'the app full screen: unchanged');
+  // full screen entered from 50/50 or centred: leaving it goes back to that view, not tiled
+  for (const fullFrom of ['pair', 'centre']) {
+    assert.deepEqual(run({ back: false, fullFrom }).calls, ['mode:' + fullFrom], `a plain chat: Esc back to ${fullFrom}`);
+    assert.deepEqual(run({ focus: 'app', inApp: true, fullFrom }).calls, ['mode:' + fullFrom], `the app: Esc back to ${fullFrom}`);
+  }
 });

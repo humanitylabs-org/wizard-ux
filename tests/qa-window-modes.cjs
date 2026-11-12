@@ -43,7 +43,8 @@ const report={cases:[]};
   await clickMode('chat','full');assert.equal((await box('chat')).x,0);assert.equal((await box('chat')).width,1440);await shot('full-chat');
   // Escape closes the transient guide FIRST, not fullscreen.
   await p.keyboard.press('Alt+KeyS');await p.waitForFunction(()=>!document.getElementById('dsettings').hidden);await p.keyboard.press('Escape');await settle();assert.equal((await model()).mode,'full');
-  await p.keyboard.press('Escape');await settle();assert.equal((await model()).mode,'tiled');
+  // Esc leaves full screen for the view it came from (centred here; wizard-ux issue 1325), then the tiled control.
+  await p.keyboard.press('Escape');await settle();assert.equal((await model()).mode,'centre');await clickMode('chat','tiled');assert.equal((await model()).mode,'tiled');
   await p.evaluate(()=>__wux.openApp(WizCore.apps('desktop').APP['app-store']));const field=p.frameLocator('iframe[src*="/store/index.html"]').locator('input');await field.waitFor();const docId=await field.evaluate(()=>window.documentId);await settle();
   await p.evaluate(()=>WizCore.panes.set({ratio:'1/3'}));await settle();const tiled={chat:await box('chat'),app:await box('app')};
   await clickMode('app','pair');await shot('side-by-side');assert.equal((await box('chat')).x+(await box('chat')).width,(await box('app')).x);

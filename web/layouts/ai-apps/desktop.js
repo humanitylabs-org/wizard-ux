@@ -331,9 +331,13 @@ export default function desktop(api) {
   function windowMode(mode, slot = panes.get().focus) {
     // narrow desktop (ONE): one app at a time, no arrangements; the saved one stays as it is for the wide window
     if (typeof one === 'function' && one()) return;
+    // Full screen remembers the view it came from: Esc there goes back to it, never to tiled (wizard-ux issue 1325)
+    const was = panes.get().mode; if (mode === 'full' && was !== 'full') fullFrom = was;
     // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
     flip([dockEl, pane?.el, secondEl], () => panes.set({ mode, focus: slot }));
   }
+  // (in memory only: after a reload in full screen, Esc goes to tiled)
+  var fullFrom = 'tiled';
   function modeBar(slot) {
     const bar = el('span', 'aad-modes', { role: 'group', 'aria-label': 'Window arrangement' });
     const nav = el('button', 'aad-ib aad-mode-chats', { type: 'button', 'aria-label': 'Chats list', title: 'Chats list' }); nav.append(icon('side'));
@@ -1743,9 +1747,9 @@ export default function desktop(api) {
   // the chat column goes: Home (a new chat); the app panel (if any) stays
   function closeChat() {
     if (!docked) return false;
-    // A channel step (a post's thread back to its feed, the feed closed) keeps the owner's view: 50/50, centred or
-    // full stay as they were, so the desk ends as it was before the feed opened (wizard-ux issues 1330, 1325).
-    if (panes.get().mode !== 'tiled' && chatThread !== FEED && !feedBack()) windowMode('tiled', 'chats');
+    // Closing never changes the owner's view (wizard-ux issues 1330, 1325; James: "going back shouldn't change the
+    // user's selected view"): a post's thread back to its feed, the feed closed and a plain chat closed all leave 50/50,
+    // centred or full as they were; the new chat takes the chat slot.
     // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
     if (chatThread === FEED) feedGone(); // (brought in front of a centred app: the app gets the front back, issue 1344)
     if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
@@ -1878,9 +1882,10 @@ export default function desktop(api) {
       // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
       const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
       // 'pending': a sandboxed app (browser boundary) answers later; at its root full screen ends then.
-      const r = frame ? globalThis.WizAppServices?.back?.(frame, () => windowMode('tiled')) : null;
+      // Leaving full screen goes back to the view it came from (50/50, centred or tiled; wizard-ux issue 1325).
+      const r = frame ? globalThis.WizAppServices?.back?.(frame, () => windowMode(fullFrom)) : null;
       if (r === 'handled' || (r === 'pending' && globalThis.WizBrowserBoundary?.owns(frame))) return true;
-      windowMode('tiled'); return true;
+      windowMode(fullFrom); return true;
     }
     const a = doc.activeElement;
     // A mixed Chats/app desk can have a focused iframe without an AI-apps pane.
