@@ -2140,6 +2140,13 @@
   }
   // New chat (⌘N, ⌥Enter, the palette, a layout's +) with a channel's feed in front: that feed's own box, never General.
   function chanPost() { const c = chanFront(); return !!c && c.sid === '__new__' && !!CHATS.chanCompose?.(c.wid); }
+  /* + / ⌥N on the Channels list with no channel open: the new-channel name form (wizard-ux issue 1308). AI apps: the
+   * sidebar's Channels pane on screen with no feed in the main column; else the Chats window in front showing that list. */
+  function chanNew() {
+    if (CHATS.chanView?.() !== 'channels') return false;
+    if (ownsChatList) return !feedOpen() && !!sideHost?.isConnected && !sideHost.closest('[hidden]') && !!CHATS.chanNew?.(sideMain().id + '::side');
+    const f = focused(); return f?.app === 'chats' && !CHATS.chanOpen?.(f) && !!CHATS.chanNew?.(f.id + '::list');
+  }
   // A take started in a channel (wizard/chat-channels) re-reads its model at Send but keeps the agent it started with:
   // another agent's channel in front by then never re-routes it (its chat is filed into the starting channel).
   const chanRoute = (read, start) => () => { const r = read(), s = start(); return s && (r?.agent || '') !== (s.agent || '') ? s : r; };
@@ -2820,7 +2827,7 @@
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     // ⌥N: a New chat on this desk. Reuses this desk's Chats window, else opens one beside the window in front (like Reply).
-    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); chanPost() || newChat(); });
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); chanPost() || chanNew() || newChat(); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) chanPost() || newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
 
@@ -3213,6 +3220,7 @@
     chatFeedOpen: () => { const o = feedOpen(); return o ? { id: o.id, name: o.name } : null; },
     // Back: the main column's feed closes first; then (a feed the earlier design left in the sidebar) the sidebar's own.
     chatChannelPost: () => chanPost(),
+    chatChannelNew: () => chanNew(),
     chatChannelBack: () => {
       if (feedBase && feedOpen()) { const ok = !!CHATS.channelBack(listWin(feedBase.id, 'side')); if (ok) feedOpened(feedBase.id + '::side'); return ok; }
       const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side'));

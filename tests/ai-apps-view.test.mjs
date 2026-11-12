@@ -965,7 +965,7 @@ test('Home apps: open first (badged first), then the rest installed, real apps o
 });
 test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every key on its target, no app letters, no legend', () => {
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  for (const [code, what] of [['KeyS', 'settings'], ['KeyN', 'newOrPost'], ['KeyL', 'toggleSide'], ['KeyR', 'toggleTabs'], ['KeyA', 'openAll'], ['KeyT', 'openTidy']])
+  for (const [code, what] of [['KeyS', 'settings'], ['KeyN', 'plus'], ['KeyL', 'toggleSide'], ['KeyR', 'toggleTabs'], ['KeyA', 'openAll'], ['KeyT', 'openTidy']])
     assert.match(js, new RegExp(`if \\(code === '${code}' && !sh\\) return once\\(${what}\\);`), `⌥${code.slice(3)} = ${what}`);
   assert.match(js, /if \(code === 'KeyK' && !sh\) return once\(\(\) => setSearch\(true\)\);/, '⌥K search');
   assert.match(js, /if \(code === 'Space' && !sh\) return once\(\(\) => api\.voice\.talk\(\)\);/, '⌥Space talks (the orb)');
