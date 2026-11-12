@@ -263,12 +263,13 @@ html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-ms
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main :is(.ch-swrow, .ch-latest) { width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin-left: auto; margin-right: auto; }
 /* ↓ Latest (round 6): never on the composer however tall it grows: in the thread's flow just above it, centred */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-thread > .ch-latest {
-  position: relative !important; inset: auto !important; transform: none !important; flex: none; align-self: center; width: auto; margin: -46px auto 14px !important; z-index: 3;
+  position: relative !important; inset: auto !important; transform: none !important; flex: none; align-self: center; width: auto; margin: calc(-46px - var(--ch-latest-lift, 0px)) auto calc(14px + var(--ch-latest-lift, 0px)) !important; z-index: 3;
 }
+/* issue 1380: chats.js sets --ch-latest-lift when ↓ Latest would sit on Mark done · Snooze · Archive; it rises above that row */
 /* Snooze / Archive (round 6, Miguel: they peeked half-hidden behind the composer's top edge when it grew): a clean row
  * right above the composer, right-aligned, that stays there (sticky) when the composer grows or the chat scrolls */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs > .ch-tacts {
-  position: sticky; bottom: 0; z-index: 2; margin: 4px 0 0; padding: 12px 0 4px; background: linear-gradient(to top, var(--aad-main) 62%, transparent);
+  position: sticky; bottom: 0; z-index: 2; margin: 4px 0 0; padding: 12px 0 4px; background: linear-gradient(to top, var(--aad-main) 62%, transparent); flex-wrap: wrap; row-gap: 8px;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose {
   width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin: 0 auto 24px; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important;

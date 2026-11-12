@@ -951,7 +951,7 @@ test('round 6: a tidy composer: the model chip is a control on the right (never 
     assert.match(rule('.ch-row2::after'), /grid-area: orb;/, `${file}: the orb's slot`);
     assert.ok(css.includes(P + ' .ch-row2 > .ch-mic { display: none !important; }'), `${file}: the orb replaces the mic`);
     assert.match(rule('.ch-msgs > .ch-tacts'), /position: sticky; bottom: 0;/, `${file}: Snooze / Archive: a row right above the composer, never half under it`);
-    assert.match(rule('.ch-thread > .ch-latest'), /position: relative !important; inset: auto !important;[^}]*margin: -46px/, `${file}: ↓ Latest just above the composer, never on it`);
+    assert.match(rule('.ch-thread > .ch-latest'), /position: relative !important; inset: auto !important;[^}]*margin: (?:calc\()?-46px/, `${file}: ↓ Latest just above the composer, never on it`);
   }
 });
 
