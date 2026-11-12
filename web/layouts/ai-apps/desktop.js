@@ -1687,7 +1687,8 @@ export default function desktop(api) {
     if (!fromFeed || !docked || chatThread !== fromFeed.sid) return null;
     const open = feedOn(); return open && open.id === fromFeed.id ? open : null;
   }
-  // the title of the post opened from the feed, for a thread the lists do not hold (an older post of the channel)
+  // the title of the post opened from the feed: an older post is in no list, and the lists match by id alone (a routed
+  // agent's post may share its id with a main chat), so the post the owner clicked names it first
   function feedTitle(sid) { return fromFeed && fromFeed.sid === sid ? fromFeed.title || '' : ''; }
   function paintBack() {
     // another chat (or none) in the column: that post's Back is spent; the feed itself keeps it for a reopen
@@ -2185,7 +2186,7 @@ export default function desktop(api) {
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     const fresh = chatThread !== FEED && !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
-    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? titleOf(chatThread) || feedTitle(chatThread) : '';
+    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? feedTitle(chatThread) || titleOf(chatThread) : '';
     tt.textContent = docked ? t : ''; tt.title = t; paintBack();
     cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : chatThread === FEED ? 'Close the channel (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();

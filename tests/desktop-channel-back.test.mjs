@@ -63,8 +63,9 @@ test('an older post opened from the feed shows its own title beside Back', () =>
   const r = world(); r.reply('old2', { title: 'Old ask' }); r.paint('old2'); assert.equal(r.c.t.feedTitle('old2'), 'Old ask', 'Reply too');
   const n = world(); n.post('old3'); n.paint('old3'); assert.equal(n.c.t.feedTitle('old3'), '', 'no title on the post: empty, as before');
   x.paint('a1'); assert.equal(x.c.t.feedTitle('old1'), '', 'spent once another chat is in the column');
-  // the header asks the lists first, then the feed's post; feedTitle is hoisted (paintTop can run before its line)
-  assert.match(js, /chatThread \? titleOf\(chatThread\) \|\| feedTitle\(chatThread\) : '';\n    tt\.textContent = docked \? t : '';/);
+  // the header takes the clicked post's title first (lists match by id alone: a routed post may share a main chat's
+  // id), then the lists; feedTitle is hoisted (paintTop can run before its line)
+  assert.match(js, /chatThread \? feedTitle\(chatThread\) \|\| titleOf\(chatThread\) : '';\n    tt\.textContent = docked \? t : '';/);
   assert.match(js, /\n  function feedTitle\(sid\) \{/);
   // the feed's posts carry their title
   assert.match(read('web/core/chats.js'), /data-chrow="\$\{esc\(chanKey\(s\)\)\}" data-chtitle="\$\{esc\(s\.title \|\| ''\)\}">/);
