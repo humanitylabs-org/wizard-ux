@@ -25,6 +25,9 @@
  * The shell's notices come as `notice`: `update` (a new shell is ready: { version } or null, onUpdate) and `refresh`
  * (read your data again, with the reason: onRefresh) and `share` (a share is waiting: onShare pulls it), the same
  * signals a same-origin app gets as wizard:app:update / wizard:app:refresh / wizard:app:share.
+ * App keys (data-wz-key): while the shell's layout presses app keys (`app` in hello / keys), this page reports its live
+ * ⌥ keys as `keys.app` (key, label, box in this window), holds back ⌥ + one of them and sends it as `input`, and on
+ * `keys.press` WizardApp presses that control itself (only a key that is live here now).
  * Recording (`capture.*`): the shell's one recorder records for this window's app; preparing or starting a new
  * recording needs a real tap here. Its events come as `notice` `capture` (onCapture), and onReady runs after every
  * hello so WizardApp can read the recorder's state again and reattach its sessions on the new channel.
@@ -41,6 +44,9 @@
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, serial = 0, claimed = new Set();
+  // App keys (data-wz-key): WizardApp's own live list and press (core/app-client.js keys), used only while the shell's
+  // layout presses app keys (`app` in hello / keys).
+  let appKeys = null, appPress = null, appOn = false, appSent = '', appQueued = false, appKeyNow = [];
   const CAPTURE_EVENTS = ['level', 'pcm', 'chunk', 'state', 'warn', 'info', 'current'];
   const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
@@ -83,7 +89,35 @@
   }
   // Desktop keys and clicks for the shell (see the header). The field flag is only whether a text field has focus.
   const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
-  function setKeys(list) { claimed = new Set(Array.isArray(list) ? list.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : []); }
+  function setKeys(list, app) {
+    claimed = new Set(Array.isArray(list) ? list.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : []);
+    const was = appOn; appOn = app === true;
+    if (appOn !== was) { appSent = ''; appKeyNow = []; }
+    reportKeys(true);
+  }
+  /* App keys for the shell: which of this page's ⌥ keys are live and where each control sits in this window (only key,
+   * a short label and a box; never the control itself). Sent when the page changes, scrolls or resizes, and on ⌥. */
+  const APP_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
+  const appKeyOf = code => { const m = /^Key([A-Z])$/.exec(String(code || '')); return m ? m[1].toLowerCase() : APP_PUNCT[code] || ''; };
+  function reportKeys(now) {
+    if (!channel || (!appOn && !appSent)) return;
+    if (!now) { if (!appQueued) { appQueued = true; setTimeout(() => { appQueued = false; reportKeys(true); }, 60); } return; }
+    let list = [];
+    if (appOn && typeof appKeys === 'function') {
+      try { list = appKeys() || []; } catch (_) { list = []; }
+      list = [...list].slice(0, 24).map(t => { const r = t.el.getBoundingClientRect(); return { key: t.key, label: String(t.label || '').slice(0, 64), x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) }; })
+        .filter(t => t.w > 0 && t.h > 0 && t.y + t.h > 0 && t.x + t.w > 0 && t.y < (globalThis.innerHeight || Infinity) && t.x < (globalThis.innerWidth || Infinity));
+    }
+    appKeyNow = list.map(t => t.key);
+    const sig = JSON.stringify(list); if (sig === appSent) return;
+    appSent = list.length ? sig : ''; send({ op: 'keys.app', keys: list });
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => { if (appOn) reportKeys(false); }).observe(document.documentElement, { subtree: true, childList: true, attributes: true,
+      attributeFilter: ['data-wz-key', 'data-wz-key-label', 'aria-label', 'hidden', 'disabled', 'aria-disabled', 'inert', 'aria-hidden', 'aria-modal', 'open', 'class', 'style'] });
+  }
+  addEventListener('scroll', () => { if (appOn) reportKeys(false); }, { capture: true, passive: true });
+  addEventListener('resize', () => { if (appOn) reportKeys(false); });
   const deepActive = () => { let a = document.activeElement; for (let i = 0; i < 4 && a?.shadowRoot?.activeElement; i++) a = a.shadowRoot.activeElement; return a; };
   const textField = el => !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA)$/.test(el.tagName || '')
     && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i.test(el.type || '')));
@@ -97,6 +131,14 @@
     if (MAC && field && !readOnly && (c === 'Minus' || c === 'Equal')) return false;
     return true;
   }
+  // ⌥ + one of this page's live app keys while the shell presses them: the shell presses it (and may first take the
+  // key back for Wizard), as before the boundary. ⇧ is never an app key; on a Mac ⌥E/U/I in a field stay accents.
+  function appTakes(e, field) {
+    if (!appOn || e.shiftKey || !e.altKey || e.metaKey || e.ctrlKey) return false;
+    if (MAC && field && /^(KeyE|KeyU|KeyI)$/.test(e.code)) return false;
+    reportKeys(true);
+    return appKeyNow.includes(appKeyOf(e.code));
+  }
   const sendKey = (type, e, field, readOnly) => send({ op: 'input', kind: 'key', event: type, key: String(e.key || '').slice(0, 32), code: String(e.code || '').slice(0, 32),
     altKey: !!e.altKey, shiftKey: !!e.shiftKey, metaKey: !!e.metaKey, ctrlKey: !!e.ctrlKey, repeat: !!e.repeat, field, readOnly });
   const bareAlt = e => e.key === 'Alt' && !e.metaKey && !e.ctrlKey;
@@ -106,7 +148,8 @@
     if (esc && (e.isComposing || e.keyCode === 229)) return;
     if (!esc && !bareAlt(e) && !(e.altKey && !e.metaKey && !e.ctrlKey)) return;
     const el = deepActive(), field = textField(el), readOnly = !!el?.readOnly;
-    if (esc || shellTakes(e, field, readOnly)) { e.preventDefault(); e.stopImmediatePropagation(); } else if (!bareAlt(e)) return;
+    if (bareAlt(e)) reportKeys(true);   // the shell's keys guide is about to show: where the keys sit now
+    if (esc || shellTakes(e, field, readOnly) || appTakes(e, field)) { e.preventDefault(); e.stopImmediatePropagation(); } else if (!bareAlt(e)) return;
     sendKey('keydown', e, field, readOnly);
   }, true);
   addEventListener('keyup', e => { if (channel && bareAlt(e)) sendKey('keyup', e, false, false); }, true);
@@ -120,7 +163,7 @@
       // A new channel in the same document (the shell saw a load or reattached): seals end, open requests are asked
       // again on the new channel. Only a new document (pagehide) drops them.
       for (const id of [...seals.keys()]) release(id);
-      channel = d.channel; setKeys(d.keys); send({ op: 'ready' }); reportField(true);
+      channel = d.channel; appSent = ''; send({ op: 'ready' }); setKeys(d.keys, d.app); reportField(true);
       for (const [id, wait] of requests) send({ op: 'service.request', id, method: wait.method, args: wait.args });
       for (const go of [...waiters]) go();
       // Holds: the shell dropped them with the old channel. One still being placed is re-sent above with the requests.
@@ -132,7 +175,14 @@
       return;
     }
     if (!channel || d.channel !== channel) return;
-    if (d.op === 'keys') { setKeys(d.keys); return; }
+    if (d.op === 'keys') { setKeys(d.keys, d.app); return; }
+    if (d.op === 'keys.press') {
+      // Only a key this page has live now; WizardApp presses its own control (a field as the target takes focus).
+      if (!appOn || typeof d.key !== 'string' || typeof appPress !== 'function') return;
+      reportKeys(true);
+      if (appKeyNow.includes(d.key)) { try { appPress(d.key); } catch (_) {} }
+      return;
+    }
     if (d.op === 'tool') {
       if (typeof d.tool !== 'string' || d.tool.length > 32 || (d.value !== undefined && typeof d.value !== 'string')) return;
       try { onTool?.({ id: d.tool, value: d.value }); } catch (_) {}
@@ -226,7 +276,8 @@
   }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello } = {}) {
+    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, keys: listKeys, press } = {}) {
+      appKeys = typeof listKeys === 'function' ? listKeys : null; appPress = typeof press === 'function' ? press : null;
       onCapture = typeof recording === 'function' ? recording : null; onReady = typeof hello === 'function' ? hello : null;
       back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;
       onTool = typeof tap === 'function' ? tap : null;

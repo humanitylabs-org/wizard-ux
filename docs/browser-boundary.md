@@ -154,6 +154,15 @@ On:
   (on every channel and with the events). A recording holds shell updates from before the microphone prompt until it
   stops, also across a reload. Only plain data, Blobs (audio) and binary PCM cross. Proof:
   `tests/qa-browser-boundary-capture.cjs` (real Chromium).
+- App keys (`data-wz-key`, docs/ai-apps-view.md › App keys): while the AI apps view runs it calls
+  `WizBrowserBoundary.pressAppKeys(frameFn)` with its app in front. Only that sandboxed app (other app windows keep
+  their own ⌥ shortcuts) reports its live ⌥ keys (`keys.app`: the key, a
+  short label and the control's box in its own window; never the control) whenever its page changes, scrolls or resizes,
+  hold back ⌥ + one of those keys and forward it like the shell's own keys (a real keypress, the focused window).
+  `appKeys(frame)` gives the view stand-ins: the hold-⌥ guide puts the keycap on the control's box, and a press sends
+  `keys.press` (the key only), so the app presses its own control (a field as the target takes focus). Wizard's own
+  letters (H W S D V C) are never app keys, ⌥⇧ is never one, and on a Mac ⌥E/U/I in a text field stay accents. In the Classic
+  desktop (no app keys) nothing is reported and ⌥ keys stay the page's. Proof: `tests/qa-browser-boundary-app-keys.cjs`.
 - Voice commands stay closed under the boundary: an app's `voice.commands` claim must answer synchronously while the
   shell parses a held-orb command, which a message channel can't do, and no installed app registers one (apps declare
   spoken words as data, `voice_routes`, which the shell opens itself and which work as before).
@@ -166,8 +175,7 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is answered.
 - Recording: a hold-to-record press on a touch screen gets the browser's tap only when the finger lifts, so an app
   that starts on touch-down must prepare in an earlier tap (or start on release).
-- Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
-  (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
+- Desktop: the AI apps view's own ⌥ keys (⌥H, ⌥K, ⌥\) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
