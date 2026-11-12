@@ -95,6 +95,11 @@ export const TIDY_EVERY = 3600e3;
  * from app-declared shortcuts so plain ⌥←/→ remain native word navigation, not a Wizard action. */
 export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
   'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
+/** Browser boundary (wizard-os#133): the view's own ⌥ keys that also come across from a sandboxed app that has the
+ * keyboard, as they do from a same-origin one: ⌥H Home, ⌥K search, ⌥L / ⌥R fold a side, ⌥O workspaces, ⌥A add an app
+ * and ⌥0 the tenth row. Like the desktop's list, only keys that move around the owner's own windows or open the view's
+ * own panels; ⌥N, ⌥S, ⌥W, ⌥↑/↓, ⌥E/X/Z/B, ⌥P and the voice keys stay the app's while it has the keyboard. */
+export const FRAME_KEYS = Object.freeze(['KeyH', 'KeyK', 'KeyL', 'KeyR', 'KeyO', 'KeyA', 'Digit0']);
 /** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
  * never e.key (macOS ⌥ turns letters into symbols): KeyJ → 'j', Slash → '/'; '' for anything else. */
 const APP_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
@@ -2120,6 +2125,7 @@ export default function desktop(api) {
   // under the browser boundary only the sandboxed app in front reports and holds back its ⌥ keys, while this view runs
   // (a var: paintTop can run before this line, during setup)
   var offAppKeys = globalThis.WizBrowserBoundary?.pressAppKeys?.(() => (appFront() ? paneFrame() : null)) || null;
+  const offFrameKeys = globalThis.WizBrowserBoundary?.layoutKeys?.(FRAME_KEYS) || null;
   const appTarget = k => { const f = k ? paneFrame() : null; return f ? frameKeys(f).find(t => t.key === k) || null : null; };
   function pressApp(t) {
     const n = t.el;
@@ -2267,6 +2273,7 @@ export default function desktop(api) {
 
   return () => {
     offAppKeys?.();
+    offFrameKeys?.();
     offPanes(); for (const v of paneVars) root.style.removeProperty(v);
     for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode']) delete root.dataset[k];
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
