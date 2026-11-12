@@ -7,6 +7,7 @@
  *  - `theme`: apply the Appearance v1 context through WizardApp's own validator; ack with `theme.applied`.
  *  - `field.pin` / `field.insert` / `field.release`: seal the focused text field, then insert dictated text there only
  *    if nobody typed in it meanwhile.
+ * And we tell the shell, as one boolean (`field.focus`), whether a text field has focus, so its orb offers dictation.
  * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary.
  */
 (() => {
@@ -32,6 +33,22 @@
   const editable = el => !!el?.isConnected && typeof el.matches === 'function'
     && el.matches('textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input[type=email],input:not([type])')
     && !el.disabled && !el.readOnly && !el.closest('[inert],[data-no-dictation]') && typeof el.selectionStart === 'number';
+  // Only whether a dictation-ready field has focus: never which field, its name or its text.
+  // When the shell takes focus (the orb, a key on a shell control) this document's activeElement falls back to <body>,
+  // so the last focused field is remembered until focus moves to something else inside this document.
+  let fieldSent = null, lastField = null;
+  const away = () => typeof document.hasFocus === 'function' && !document.hasFocus();
+  const field = () => (editable(document.activeElement) ? document.activeElement : away() && editable(lastField) ? lastField : null);
+  const reportField = force => {
+    if (!channel) return;
+    const on = !!field();
+    if (!force && on === fieldSent) return;
+    fieldSent = on; send({ op: 'field.focus', editable: on });
+  };
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('focusin', () => { const el = document.activeElement; lastField = editable(el) ? el : null; reportField(false); }, true);
+    document.addEventListener('focusout', () => setTimeout(() => { if (!away()) lastField = editable(document.activeElement) ? document.activeElement : null; reportField(false); }, 0), true);
+  }
   addEventListener('message', e => {
     const d = e.data;
     if (e.source !== parent || e.origin !== SHELL || !d || typeof d !== 'object' || d.type !== TYPE || d.version !== VERSION) return;
@@ -40,7 +57,7 @@
       // A new channel in the same document (the shell saw a load or reattached): seals end, open requests are asked
       // again on the new channel. Only a new document (pagehide) drops them.
       for (const id of [...seals.keys()]) release(id);
-      channel = d.channel; send({ op: 'ready' });
+      channel = d.channel; send({ op: 'ready' }); reportField(true);
       for (const [id, wait] of requests) send({ op: 'service.request', id, method: wait.method, args: wait.args });
       for (const go of [...waiters]) go();
       return;
@@ -64,8 +81,8 @@
       return reply(did ? 'handled' : 'atRoot');
     }
     if (d.op === 'field.pin') {
-      const el = document.activeElement;
-      if (!editable(el) || seals.size >= 4) return reply('refused');
+      const el = field();
+      if (!el || seals.size >= 4) return reply('refused');
       const id = crypto.randomUUID ? crypto.randomUUID() : 'seal-' + Math.random().toString(36).slice(2);
       const s = { el, value: el.value, start: el.selectionStart, end: el.selectionEnd };
       s.changed = () => release(id);

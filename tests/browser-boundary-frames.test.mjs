@@ -8,6 +8,7 @@ import vm from 'node:vm';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SHELL_SRC = read('web/core/browser-boundary.js');
 const CLIENT_SRC = read('web/core/browser-boundary-client.js');
+const FIELD_SRC = read('web/core/focused-field.js');
 const ORIGIN = 'https://box.example.ts.net';
 const tick = () => new Promise(r => setTimeout(r, 0));
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -38,13 +39,13 @@ function shell({ on = true } = {}) {
 // An app document inside a frame. sandbox: the attribute value (null = no sandbox attribute).
 function frame(sh, { sandbox = 'allow-scripts allow-forms allow-downloads', client = true } = {}) {
   const app = listeners(), sent = [], win = { cls: classes() };
-  const fev = listeners();
+  const fev = listeners(), doc = listeners();
   const a = { setTimeout, clearTimeout, crypto: globalThis.crypto, JSON, console, Promise, Object, String, Map, Set, Error };
   a.window = a; a.origin = 'null';
   a.location = { origin: ORIGIN, href: ORIGIN + '/notes/' };
   a.addEventListener = app.add; a.removeEventListener = app.remove;
   a.InputEvent = class { constructor(type, init) { this.type = type; Object.assign(this, init); } };
-  a.document = { activeElement: null };
+  a.document = { activeElement: null, addEventListener: doc.add };
   // App -> shell. Origin is opaque, so the shell sees 'null'; the client must address the shell's real origin.
   a.parent = { postMessage(data, target) {
     sent.push({ data: clone(data), target });
@@ -66,7 +67,7 @@ function frame(sh, { sandbox = 'allow-scripts allow-forms allow-downloads', clie
     getClientRects: () => [1],
   };
   if (client) vm.runInContext(CLIENT_SRC, a);
-  return { a, el, app, sent, win, load: () => fev.fire('load', {}) };
+  return { a, el, app, sent, win, doc, load: () => fev.fire('load', {}) };
 }
 
 test('off: without the box switch nothing is defined and frames are untouched', () => {
@@ -217,4 +218,80 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
   const client = read('web/core/app-client.js');
   assert.match(client, /const opaque = framed && globalThis\.origin === 'null';/);
   assert.match(client, /\/wizard-os-home\/core\/browser-boundary-client\.js/);
+});
+
+// A text input inside the app document (the fake client document).
+function appInput(value = 'hello', at = value.length) {
+  const ev = listeners();
+  return { isConnected: true, value, selectionStart: at, selectionEnd: at, disabled: false, readOnly: false,
+    matches: () => true, closest: () => null, addEventListener: ev.add, removeEventListener: ev.remove,
+    setRangeText(t, s, e) { this.value = this.value.slice(0, s) + t + this.value.slice(e); }, dispatchEvent: e => ev.fire(e.type, e), fire: ev.fire };
+}
+// The shell's shared dictation (core/focused-field.js) wired to the boundary, the way app.js / desktop.js create it.
+function shellFields(sh, frames, admit = () => true) {
+  vm.runInContext(FIELD_SRC, sh.g);
+  const top = { activeElement: null, location: { href: 'https://box/' }, addEventListener() {},
+    defaultView: { addEventListener() {}, MutationObserver: class { observe() {} } } };
+  sh.g.document = top;
+  const changes = [];
+  const F = sh.g.WizCore.focusedField.create({ document: top, frames, admit, onChange: c => changes.push(!!c), boundary: () => sh.B });
+  return { F, top, changes };
+}
+
+test('dictation: a sandboxed app reports field focus as one boolean; the orb offers dictation and the words land', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el); await tick();
+  const { F, top, changes } = shellFields(sh, () => [f.el]);
+  top.activeElement = f.el;
+  assert.equal(F.refresh(), null, 'no field focused in the app yet');
+  const el = appInput('note'); f.a.document.activeElement = el;
+  f.doc.fire('focusin', {}); await tick();
+  const report = f.sent.filter(m => m.data.op === 'field.focus').at(-1).data;
+  assert.deepEqual(Object.keys(report).sort(), ['channel', 'editable', 'op', 'type', 'version'], 'only a boolean leaves the app');
+  assert.equal(report.editable, true);
+  assert.equal(changes.at(-1), true, 'the shell repainted on the app report');
+  assert.equal(F.current.remote, true);
+  // The orb takes the press (keyboard focus on a shell control): the remembered field still counts.
+  const seal = F.capture();
+  assert.ok(seal && seal.remote);
+  const done = F.insert(seal, 'world');
+  seal.release(); // callers release right after insert; a sandboxed insert finishes first
+  assert.equal(await done, true);
+  assert.equal(el.value, 'note world');
+  assert.equal(await F.insert(seal, 'again'), false, 'one insert per seal');
+});
+
+test('dictation: a reload, a field typed in meanwhile, or an unadmitted window never gets the words', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el); await tick();
+  let admitted = true;
+  const { F, top } = shellFields(sh, () => [f.el], () => admitted);
+  top.activeElement = f.el;
+  let el = appInput('a'); f.a.document.activeElement = el; f.doc.fire('focusin', {}); await tick();
+  // Typed in meanwhile: stale.
+  let seal = F.capture(); await seal.pin; el.value = 'ab'; el.fire('input', {});
+  assert.equal(await F.insert(seal, 'x'), false); assert.equal(el.value, 'ab');
+  // The app document reloads: the seal belongs to the old document.
+  el = appInput('c'); f.a.document.activeElement = el; f.doc.fire('focusin', {}); await tick();
+  seal = F.capture(); f.load(); await tick();
+  assert.equal(await F.insert(seal, 'x'), false); assert.equal(el.value, 'c');
+  // Another window has focus now (admit says no).
+  f.doc.fire('focusin', {}); await tick();
+  seal = F.capture(); admitted = false;
+  assert.equal(await F.insert(seal, 'x'), false); assert.equal(el.value, 'c');
+  admitted = true;
+  // Focus left the app's field: nothing to dictate into.
+  f.a.document.activeElement = null; f.doc.fire('focusin', {}); await tick();
+  assert.equal(F.refresh(), null);
+  // Another frame has the focus: it never borrows this frame's field.
+  f.a.document.activeElement = el; f.doc.fire('focusin', {}); await tick();
+  top.activeElement = { tagName: 'IFRAME' };
+  assert.equal(await sh.B.pinField(f.el), null);
+});
+
+test('dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)', () => {
+  assert.match(read('web/app.js'), /const inserted = await FIELDS\.insert\(target, text\);/);
+  assert.match(read('web/desktop/desktop.js'), /if \(await fields\(\)\.insert\(target, text\)\)/);
 });
