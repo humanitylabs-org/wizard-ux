@@ -115,10 +115,26 @@ test('the ↓ pill goes above ↓ Latest when they would overlap, and back when 
   assert.equal(c.style.bottom, '', 'Latest hidden: back to its own place');
 });
 
-test('the shells redraw the channel list when the box\'s channels change (issue 1380)', () => {
-  const at = src.indexOf('let chanListSig');
-  assert.ok(at > 0, 'chats.js watches the store list');
-  const tail = src.slice(at, at + 600);
-  assert.match(tail, /LIVE\?\.onChange\?\.\(/);
-  assert.match(tail, /chanReadPaint/);
+// The real watcher from chats.js, with its closure names stubbed: a change made on another device (sort, pin order,
+// a new channel such as Alerts) schedules one repaint of the lists on screen; an unchanged list schedules none.
+function watcher() {
+  const at = src.indexOf('  let chanListSig'), end = src.indexOf('  /* How far the owner has read a feed', at);
+  assert.ok(at > 0 && end > at, 'chats.js watches the store list');
+  let fn = null, paints = 0, st = null, on = true;
+  const ctx = { LIVE: { onChange: f => { fn = f; } }, channelsOn: () => on, chanStore: () => st, chanReadPaint: () => { paints++; }, chanReadPaintT: 0,
+    clearTimeout: () => {}, setTimeout: f => { f(); return 1; } };
+  vm.createContext(ctx);
+  vm.runInContext(src.slice(at, end), ctx);
+  return { tick: s => { st = s; fn(); return paints; }, off: () => { on = false; } };
+}
+const ch1 = (id, extra = {}) => ({ id, agent: 'hermes', name: id, order: 0, createdAt: '', archived: false, pinned: false, count: 0, ...extra });
+test('the channel lists repaint when the box\'s channels change, from this or another device (issue 1380)', () => {
+  const w = watcher(), a = [ch1('launch'), ch1('voice')];
+  assert.equal(w.tick(null), 0, 'store not answering yet: nothing to repaint');
+  assert.equal(w.tick({ rev: 1, sort: 'az', channels: [ch1('alerts', { pinned: true, pinOrder: 0, kind: 'alerts' }), ...a] }), 1, 'first answer brings Alerts');
+  assert.equal(w.tick({ rev: 2, sort: 'az', channels: [ch1('alerts', { pinned: true, pinOrder: 0, kind: 'alerts' }), ...a] }), 1, 'same list: no repaint');
+  assert.equal(w.tick({ rev: 3, sort: 'za', channels: [ch1('alerts', { pinned: true, pinOrder: 0, kind: 'alerts' }), ...a] }), 2, 'another device chose Z-A');
+  const pinned = [ch1('alerts', { pinned: true, pinOrder: 1, kind: 'alerts' }), ch1('launch', { pinned: true, pinOrder: 0 }), a[1]];
+  assert.equal(w.tick({ rev: 4, sort: 'za', channels: pinned }), 3, 'another device pinned Launch');
+  assert.equal(w.tick({ rev: 5, sort: 'za', channels: pinned.map(c => c.id === 'launch' ? { ...c, pinOrder: 1 } : c.id === 'alerts' ? { ...c, pinOrder: 0 } : c) }), 4, 'another device reordered the pins');
 });

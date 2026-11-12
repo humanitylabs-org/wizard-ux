@@ -954,7 +954,8 @@ window.WizCore.chats = function createChats(H) {
   let chanListSig = '';
   LIVE?.onChange?.(() => {
     if (!channelsOn()) { chanListSig = ''; return; }
-    const st = chanStore(), sig = st ? st.channels.map(c => [c.agent, c.id, c.name, c.archived, c.pinned].join(':')).join('|') : '';
+    // every field the list shows or sorts by (another device's sort, pin order or reorder too, Codex P2)
+    const st = chanStore(), sig = st ? JSON.stringify([st.sort, st.channels]) : '';
     if (sig === chanListSig) return;
     chanListSig = sig; clearTimeout(chanReadPaintT); chanReadPaintT = setTimeout(chanReadPaint, 120);
   });
