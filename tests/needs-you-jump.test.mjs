@@ -20,8 +20,9 @@ function harness({ on = true, rows = {}, seen = {} } = {}) {
       seenRecord: s => seen[(s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/` : '') + s.id],
     },
   };
+  ctx.getComputedStyle = el => ({ bottom: el.cssBottom });
   vm.createContext(ctx);
-  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel };', ctx);
+  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel, jumpLandGap, jumpStack };', ctx);
   return ctx;
 }
 
@@ -85,4 +86,55 @@ test('the pills are wired: markup after ↓ Latest, the tap, the open and every 
   assert.ok(src.includes('chanOpen, paintJump, chanSpaceOf,'));
   const power = fs.readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   assert.ok(power.includes('A.paintJump?.(el, nb);'));
+});
+
+// Issue 1380: the target lands just under the ↑ pill while markers are left above it (else 8 px under the header).
+const box = (top, h = 32, extra = {}) => ({ getBoundingClientRect: () => ({ top, bottom: top + h, height: h, left: 0, right: 100 }), ...extra });
+test('landing gap: under the ↑ pill only while markers stay above the target', () => {
+  const { jumpLandGap } = harness().api;
+  const up = box(70, 32, { hidden: false }), nb = { parentElement: { querySelector: () => up }, querySelectorAll: () => [] };
+  const t = { n: {}, y: -300 }, other = { n: {}, y: -900 };
+  assert.equal(jumpLandGap(nb, { up: [t], down: [] }, t), 8, 'nothing left above: just under the header');
+  assert.equal(jumpLandGap(nb, { up: [t, other], down: [] }, t), 8 + 32 + 8, 'one left above: under the pill');
+  assert.equal(jumpLandGap(nb, { up: [t, { n: {}, y: -100 }], down: [] }, t), 8, 'a nearer marker below the target is no reason');
+  // An amber line on screen now is above the target once the thread scrolls down to it.
+  const line = box(200), down = { n: {}, y: 1400 };
+  const nb2 = { parentElement: { querySelector: () => ({ hidden: true }) }, querySelectorAll: () => [line] };
+  assert.equal(jumpLandGap(nb2, { up: [], down: [down] }, down), 8 + 32 + 8, 'a hidden pill falls back to its 32 px height');
+});
+
+test('the ↓ pill goes above ↓ Latest when they would overlap, and back when they do not', () => {
+  const { jumpStack } = harness().api;
+  const pill = (top, left, right) => ({ style: { bottom: '' }, cssBottom: '78px', getBoundingClientRect: () => ({ top, bottom: top + 32, height: 32, left, right }) });
+  const latest = { getBoundingClientRect: () => ({ top: 790, bottom: 822, height: 32, left: 300, right: 390 }) };
+  const a = pill(790, 250, 340); jumpStack(a, latest);
+  assert.equal(a.style.bottom, `${78 + 822 - 790 + 8}px`, 'stacked 8 px above Latest');
+  const b = pill(790, 20, 200); jumpStack(b, latest);
+  assert.equal(b.style.bottom, '', 'side by side with room: left where the skin puts it');
+  const c = pill(790, 250, 340); c.style.bottom = '118px'; jumpStack(c, null);
+  assert.equal(c.style.bottom, '', 'Latest hidden: back to its own place');
+});
+
+// The real watcher from chats.js, with its closure names stubbed: a change made on another device (sort, pin order,
+// a new channel such as Alerts) schedules one repaint of the lists on screen; an unchanged list schedules none.
+function watcher() {
+  const at = src.indexOf('  let chanListSig'), end = src.indexOf('  /* How far the owner has read a feed', at);
+  assert.ok(at > 0 && end > at, 'chats.js watches the store list');
+  let fn = null, paints = 0, st = null, on = true;
+  const ctx = { LIVE: { onChange: f => { fn = f; } }, channelsOn: () => on, chanStore: () => st, chanReadPaint: () => { paints++; }, chanReadPaintT: 0,
+    clearTimeout: () => {}, setTimeout: f => { f(); return 1; } };
+  vm.createContext(ctx);
+  vm.runInContext(src.slice(at, end), ctx);
+  return { tick: s => { st = s; fn(); return paints; }, off: () => { on = false; } };
+}
+const ch1 = (id, extra = {}) => ({ id, agent: 'hermes', name: id, order: 0, createdAt: '', archived: false, pinned: false, count: 0, ...extra });
+test('the channel lists repaint when the box\'s channels change, from this or another device (issue 1380)', () => {
+  const w = watcher(), a = [ch1('launch'), ch1('voice')];
+  assert.equal(w.tick(null), 0, 'store not answering yet: nothing to repaint');
+  assert.equal(w.tick({ rev: 1, sort: 'az', channels: [ch1('alerts', { pinned: true, pinOrder: 0, kind: 'alerts' }), ...a] }), 1, 'first answer brings Alerts');
+  assert.equal(w.tick({ rev: 2, sort: 'az', channels: [ch1('alerts', { pinned: true, pinOrder: 0, kind: 'alerts' }), ...a] }), 1, 'same list: no repaint');
+  assert.equal(w.tick({ rev: 3, sort: 'za', channels: [ch1('alerts', { pinned: true, pinOrder: 0, kind: 'alerts' }), ...a] }), 2, 'another device chose Z-A');
+  const pinned = [ch1('alerts', { pinned: true, pinOrder: 1, kind: 'alerts' }), ch1('launch', { pinned: true, pinOrder: 0 }), a[1]];
+  assert.equal(w.tick({ rev: 4, sort: 'za', channels: pinned }), 3, 'another device pinned Launch');
+  assert.equal(w.tick({ rev: 5, sort: 'za', channels: pinned.map(c => c.id === 'launch' ? { ...c, pinOrder: 1 } : c.id === 'alerts' ? { ...c, pinOrder: 0 } : c) }), 4, 'another device reordered the pins');
 });
