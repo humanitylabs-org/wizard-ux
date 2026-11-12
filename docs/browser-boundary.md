@@ -128,15 +128,23 @@ On:
   share fields cross (`id`, `kind`, `text`, `url`, `title`, `target`, and for a file `file`, `name`, `mime`, `size`).
   No tap is needed: the owner already chose the app in the shell's sheet. Proof:
   `tests/qa-browser-boundary-share-receive.cjs` (real Chromium, the real share sheet).
+- Wizard Music and the fingerprint vault: `WizardApp.audio.duck` lowers Wizard Music for that window (`audio.duck`);
+  the window owns the duck, so a new document or closing the window restores the music. `WizardApp.vault.*` (Android)
+  answers `vault.has`, `vault.seal`, `vault.open` and `vault.forget` for the window's installed app id (the page never
+  names one). The fingerprint prompt shows only while that window is steadily in front, as for a same-origin app, and
+  the secret goes back only to the document that asked (`gen`); a reloaded, navigated or closed window gets
+  `vault:cancelled`. Only `{ secret }` (up to 4096 characters) or `{ available, saved }` cross; native error codes cross
+  as `vault:<code>`. Proof: `tests/qa-browser-boundary-duck-vault.cjs` (real Chromium).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services capture, orb, vault, identity and voice commands are closed under the boundary (only `ready`,
+  app services capture, orb, identity and voice commands are closed under the boundary (only `ready`,
   `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`, `voice.transcribe`, `update.hold`,
-  `update.release` and receiving shares are answered, and the update, fresh-data and share notices are sent).
+  `update.release`, receiving shares, `audio.duck` and the vault are answered, and the update, fresh-data and share
+  notices are sent).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.

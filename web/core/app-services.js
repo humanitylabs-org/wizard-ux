@@ -954,11 +954,33 @@
     return () => { if (!done) { done = true; use.running--; } };
   }
   // Under the boundary a sandboxed app sets its own badge and title bar, shares out (also to Wizard), receives shares,
-  // transcribes and holds shell updates over the boundary channel (browser-boundary.js).
+  // transcribes, holds shell updates, ducks Wizard Music and uses its fingerprint vault over the boundary channel
+  // (browser-boundary.js).
   function holdFor(st, reason) {
     if (st.holds.size >= 64) throw fault('Too many update holds');
     const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
     return id;
+  }
+  // The fingerprint vault (Android) for a sandboxed app: the same per-app secret, always under the window's installed
+  // app id (vaultCall adds it; the page never names one). The prompt shows only while that window is steadily in front,
+  // and a secret goes back only to the same document that asked (gen), so a reload or another page in the window never
+  // gets it. Errors cross as `vault:<code>` (app-client turns them back into error.code).
+  async function boundaryVault(st, frame, method, args) {
+    const B = window.WizBrowserBoundary, gen = B.gen(frame), alive = () => boundaryLive(st) && B.gen(frame) === gen;
+    const fail = code => fault('vault:' + (/^[a-z_]{1,32}$/.test(String(code)) ? code : 'failed'));
+    const text = (v, n) => (typeof v === 'string' && v.length <= n ? v : undefined);
+    const extra = {};
+    if (method === 'seal') { extra.secret = text(args?.secret, 4096); if (!extra.secret) throw fail('invalid'); }
+    if (method === 'seal' || method === 'open') {
+      const title = text(args?.title, 200); if (title !== undefined) extra.title = title;
+      try { await whenInFront(st, alive); } catch (e) { throw fail(e.code || 'failed'); }
+      if (!alive()) throw fail('cancelled');
+      if (!inFront(st)) throw fail('not_in_front');
+    }
+    let result;
+    try { result = await vaultCall(st.appId, method, extra); } catch (e) { throw fail(e.code || 'failed'); }
+    if (!alive()) throw fail('cancelled'); // no secret to a reloaded, navigated or closed document
+    return result;
   }
   if (window.WizBrowserBoundary?.serve) {
     window.WizBrowserBoundary.serve((frame, method, args) => {
@@ -1018,11 +1040,16 @@
       if (method === 'share.targets') return !!shareOps?.setTargets(st.appId, args?.targets);
       if (method === 'share.pending') return shareOps?.pending(st.appId, { owner: st, alive: () => boundaryLive(st) }) || [];
       if (method === 'share.ack') return typeof args?.id === 'string' && !!shareOps?.ack(st.appId, args.id);
+      // Lower Wizard Music while this app plays a short sound. The window owns the duck: a new document or closing the
+      // window restores the music (onReset, reset).
+      if (method === 'audio.duck') return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, args?.on === true) : false;
+      if (method === 'vault.has' || method === 'vault.seal' || method === 'vault.open' || method === 'vault.forget') return boundaryVault(st, frame, method.slice(6), args);
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {
       const st = frames.get(frame); if (!st) return;
       if (st.tools) setTools(st, null);
+      window.WizBackgroundAudio?.duck?.(st, false); // the old document's duck ends with it
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

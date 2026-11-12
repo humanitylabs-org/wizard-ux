@@ -621,3 +621,28 @@ test('receiving shares: served methods, item fields only, and a share notice tha
   f.load(); // a new channel: the old document's notice target is gone until it answers again
   assert.equal(sh.B.notice(f.el, 'share'), false, 'not ready on the new channel yet: nothing');
 });
+
+// Slice 21: Wizard Music ducking and the fingerprint vault cross as protocol data only; vault codes reach the app.
+test('duck and vault: served methods, only a secret or saved flags cross back, vault errors keep their code', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el);
+  await tick(); await tick();
+  const calls = [];
+  sh.B.serve((el, method, args) => {
+    calls.push(method);
+    if (method === 'audio.duck') return Promise.resolve(args.on === true);
+    if (method === 'vault.has') return Promise.resolve({ available: true, saved: true, appId: 'other', path: '/x' });
+    if (method === 'vault.open') return args.title === 'no' ? Promise.reject(new Error('vault:cancelled')) : Promise.resolve({ secret: 'fixture-secret', key: 'k' });
+    if (method === 'vault.seal') return Promise.resolve({ secret: 'x'.repeat(4097), saved: true });
+    return Promise.resolve({ saved: false, extra: 1 });
+  });
+  const req = (m, a) => f.a.WizBoundaryClient.request(m, a, 2000);
+  assert.equal(await req('audio.duck', { on: true }), true);
+  assert.deepEqual(clone(await req('vault.has', {})), { available: true, saved: true });
+  assert.deepEqual(clone(await req('vault.open', { title: 'Unlock' })), { secret: 'fixture-secret' }, 'only the secret crosses back');
+  assert.deepEqual(clone(await req('vault.seal', { secret: 's' })), { saved: true }, 'an over-long secret never crosses');
+  assert.deepEqual(clone(await req('vault.forget', {})), { saved: false });
+  await assert.rejects(req('vault.open', { title: 'no' }), e => e.message === 'vault:cancelled');
+  assert.deepEqual(calls, ['audio.duck', 'vault.has', 'vault.open', 'vault.seal', 'vault.forget', 'vault.open']);
+});

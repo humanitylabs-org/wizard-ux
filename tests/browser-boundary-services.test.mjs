@@ -19,7 +19,7 @@ class El {
 }
 
 // A sandboxed app frame: its window can be addressed but never read (opaque origin).
-function fixture({ id = 'morning-report', src, ready = true, boundary = true } = {}) {
+function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), counts = {}, taps = [], legacy = [];
   const win = new El('article'), bar = new El('header'); bar.className = 'wbar'; win.append(bar);
   const child = { get location() { throw new Error('SecurityError'); }, get document() { throw new Error('SecurityError'); }, postMessage: m => legacy.push(m) };
@@ -42,11 +42,12 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
     wizard: (d, authorize) => new Promise(resolve => sheets.push({ d, authorize, send: () => resolve(authorize() ? 'sent' : 'unsupported') })) };
   const window = { WizShareWizard, WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}),
     WosChat: { sharePayload: async p => { shared.push(p); return 'shared'; }, shareFile: async (file, o) => { shared.push({ file, ...o }); return 'shared'; } },
-    WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } } };
+    WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } }, ...extra };
+  if (extra.WizCore) window.WizCore = { ...extra.WizCore, apps: () => ({ APPS: [app] }) };
   const globalOn = {};
   vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
-  const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: () => true });
+  const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: front });
   return { B, frame, bar, notices, emit: (t, detail) => { for (const fn of globalOn[t] || []) fn({ detail }); }, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
     load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
@@ -273,4 +274,68 @@ test('a share claimed by a sandboxed window is released when that window is no l
   assert.equal(g.call('share.pending').length, 0, 'a second window of the app does not place the same share');
   f.B.readyNow = false;
   assert.equal(g.call('share.pending').length, 1, 'the first window is gone: the second one may take it');
+});
+
+// Slice 21: Wizard Music ducking and the fingerprint vault for a sandboxed app.
+test('a sandboxed app ducks Wizard Music for its own window; a new document or closing the window restores it', async () => {
+  const ducks = [];
+  const WizBackgroundAudio = { duck: async (owner, on) => { ducks.push([owner, on]); return on; } };
+  const f = fixture({ win: { WizBackgroundAudio } });
+  assert.equal(await f.call('audio.duck', { on: true }), true);
+  assert.equal(await f.call('audio.duck', { on: 'yes' }), false, 'only a real true ducks');
+  const owner = ducks[0][0];
+  f.reset(); assert.deepEqual(ducks.at(-1), [owner, false], 'a new document: the old one\'s duck ends');
+  f.call('audio.duck', { on: true }); f.detach(); assert.deepEqual(ducks.at(-1), [owner, false], 'closing the window restores it');
+  const off = fixture({ ready: false, win: { WizBackgroundAudio } });
+  assert.throws(() => off.call('audio.duck', { on: true }), /not verified/);
+  assert.equal(await fixture().call('audio.duck', { on: true }), false, 'no music app: nothing to duck');
+});
+
+// The phone's device envelope (core/bridge.js) answers vault.* for the app id the shell adds.
+function vaultBox(answers = {}) {
+  const sent = [];
+  const WizCore = { bridge: { call: async (method, params) => { sent.push({ method, params }); const a = answers[method]; if (a instanceof Error) throw a; return typeof a === 'function' ? a(params) : a; } } };
+  return { sent, win: { WizCore, wizardDevicePort: { postMessage() {} } } };
+}
+test('vault: the window\'s own app id, never one the page names; the secret goes back only to the asking document', async () => {
+  const v = vaultBox({ 'vault.has': { available: true, saved: false }, 'vault.seal': { saved: true }, 'vault.open': { secret: 'fixture-secret' }, 'vault.forget': { saved: false } });
+  const f = fixture({ win: v.win });
+  assert.deepEqual(await f.call('vault.has', { appId: 'messenger' }), { available: true, saved: false });
+  assert.deepEqual(await f.call('vault.seal', { secret: 'fixture-secret', title: 'Unlock', appId: 'messenger' }), { saved: true });
+  assert.deepEqual(await f.call('vault.open', { title: 'Unlock' }), { secret: 'fixture-secret' });
+  assert.deepEqual(await f.call('vault.forget'), { saved: false });
+  assert.deepEqual(v.sent.map(x => [x.method, x.params.appId]), [['vault.has', 'morning-report'], ['vault.seal', 'morning-report'], ['vault.open', 'morning-report'], ['vault.forget', 'morning-report']]);
+  assert.equal(v.sent[1].params.secret, 'fixture-secret'); assert.equal(v.sent[1].params.title, 'Unlock');
+  await assert.rejects(f.call('vault.seal', { secret: 'x'.repeat(4097) }), /vault:invalid/);
+  await assert.rejects(f.call('vault.seal', { secret: 42 }), /vault:invalid/);
+  assert.equal(f.legacy.length, 0, 'nothing is posted to an opaque window with the shell origin');
+});
+test('vault: a reloaded or closed window never gets a late secret; native error codes cross as vault:<code>', async () => {
+  for (const revoke of [f => { f.B.genNow = 2; }, f => { f.B.readyNow = false; }, f => { f.detach(); }]) {
+    let answer; const v = vaultBox({ 'vault.open': () => new Promise(r => { answer = r; }) });
+    const f = fixture({ win: v.win }), opened = f.call('vault.open', { title: 'Unlock' });
+    for (let i = 0; i < 40 && !answer; i++) await new Promise(r => setTimeout(r, 50));
+    revoke(f); answer({ secret: 'fixture-secret' });
+    await assert.rejects(opened, /vault:cancelled/);
+  }
+  const denied = fixture({ win: vaultBox({ 'vault.open': Object.assign(new Error('cancelled'), { code: 'cancelled' }) }).win });
+  await assert.rejects(denied.call('vault.open', {}), /^Error: vault:cancelled$/);
+  const odd = fixture({ win: vaultBox({ 'vault.forget': new Error('Not A Code <b>') }).win });
+  await assert.rejects(odd.call('vault.forget'), /^Error: vault:failed$/);
+  const none = fixture();
+  assert.deepEqual(JSON.parse(JSON.stringify(await none.call('vault.has'))), { available: false, saved: false }, 'no phone: no vault');
+  await assert.rejects(none.call('vault.forget'), /vault:unavailable/);
+});
+test('vault: the fingerprint prompt only for the window in front, and the page is never asked to prove it', async () => {
+  let inFront = false;
+  const v = vaultBox({ 'vault.open': { secret: 's' } });
+  const f = fixture({ win: v.win, front: () => inFront });
+  const opened = f.call('vault.open', { title: 'Unlock' });
+  await new Promise(r => setTimeout(r, 400));
+  assert.equal(v.sent.length, 0, 'behind another window: no prompt yet');
+  inFront = true;
+  assert.deepEqual(await opened, { secret: 's' });
+  assert.equal(v.sent.length, 1);
+  inFront = false; f.B.readyNow = false;
+  assert.throws(() => f.call('vault.open', {}), /not verified/);
 });
