@@ -1869,6 +1869,41 @@ test('issue 1331: the line sits on the agent\'s newest reply; Mark done there cl
   }
 });
 
+test('issue 1331: Mark done (and Reply) repaints the open thread on the tap, so its line and Mark done buttons go at once', () => {
+  // AI review of 1331: the toast showed and the lists cleared, but the open thread kept the amber line and both Mark
+  // done buttons until a reopen. Every window showing that thread repaints in the same tap, already reading handled.
+  for (const [kind, agent, , sid] of KINDS_1331) {
+    const s = askRow(sid, agent ? { owner: agent } : {}), f = needsFixture();
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    const turns = turnsOf(['u', 1], ['a', 4000]), painted = [];
+    f.env.CH = { w: {}, other: {} }; f.w.thread = sid;
+    f.env.renderThreadNow = x => painted.push([x.id, f.mark(sid, s, turns).html, !!(vm.runInContext('needsAsk', f.env)(s) && vm.runInContext('canMarkDone', f.env)(s))]);
+    f.mark(sid, s, turns);
+    assert.equal(vm.runInContext('markDone', f.env)('w', sid, true), true, kind);
+    assert.deepEqual(painted, [['w', '', false]], kind + ': the open thread repainted, with no line and no Mark done button');
+    // Reply on that message: the same repaint.
+    Object.assign(s, { lastAssistantAt: new Date(NOW - H).toISOString() }); painted.length = 0;
+    assert.match(f.mark(sid, s, turns).html, /Needs you/, kind + ': a new ask');
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), true, kind);
+    assert.deepEqual(painted.map(p => p.slice(0, 2)), [['w', '']], kind + ': Reply repaints it too');
+    // Another thread in the window: nothing to repaint.
+    painted.length = 0; f.w.thread = 'zz'; Object.assign(s, { lastAssistantAt: new Date(NOW - 0.5 * H).toISOString() });
+    vm.runInContext('markDone', f.env)('w', sid, true); assert.deepEqual(painted, [], kind + ': a window on another thread stays');
+    // Codex P2: another window on the same id but another agent's row (a routed thread) is left alone.
+    const other = { id: 'other', thread: sid }, wins = { w: f.w, other }, alt = { ...s };
+    f.env.W = new Proxy({}, { get: (_, id) => wins[id] }); f.w.thread = sid; painted.length = 0;
+    f.env._rowOf = (wid, id) => id === sid ? (wid === 'other' ? alt : s) : null;
+    Object.assign(s, { lastAssistantAt: new Date(NOW - 0.25 * H).toISOString() });
+    vm.runInContext('markDone', f.env)('w', sid, true);
+    assert.deepEqual(painted.map(p => p[0]), ['w'], kind + ': only the window showing that row');
+    f.env._rowOf = (wid, id) => id === sid ? s : null; painted.length = 0;
+    Object.assign(s, { lastAssistantAt: new Date(NOW - 0.2 * H).toISOString() });
+    vm.runInContext('markDone', f.env)('w', sid, true);
+    assert.deepEqual(painted.map(p => p[0]), ['w', 'other'], kind + ': a second window on the same row repaints too');
+    f.w.thread = null;
+  }
+});
+
 test('issue 1331: Reply on the Needs you message clears it; a plain owner message or a reply to another message does not', () => {
   for (const [kind, agent, , sid] of KINDS_1331) {
     const s = askRow(sid, agent ? { owner: agent } : {}), f = needsFixture();
@@ -1908,16 +1943,28 @@ test('issue 1331: the agent\'s next status line that drops the ask clears it; on
 
 test('issue 1331: opening a thread with an open Needs you lands on that message once per open', () => {
   const s = askRow('b'), f = needsFixture();
-  const scrolled = [], line = { scrollIntoView: o => scrolled.push(o) };
+  // A phone: the document scrolls and the thread's header (56px) is fixed over it. The line starts 900px down.
+  const doc = { scrollTop: 0, scrollTo(o) { scrolled.push(o); this.scrollTop = o.top; } };
+  const head = { getBoundingClientRect: () => ({ bottom: 56 }) }, thread = { querySelector: q => q === '.ch-head' ? head : null };
+  const nb = { getBoundingClientRect: () => ({ top: 56 - doc.scrollTop }), closest: q => q === '.ch-thread' ? thread : null };
+  const scrolled = [], line = { isConnected: true, getBoundingClientRect: () => ({ top: 900 - doc.scrollTop }), closest: q => q === '.ch-msgs' ? nb : q === '.ch-thread' ? thread : null, scrollIntoView: o => scrolled.push(o) };
   f.env.requestAnimationFrame = fn => fn();
+  f.env.scrollBox = () => doc; f.env.threadViewportTop = (_, base) => base;
   f.env.elOf = () => ({ querySelector: q => q === '.ch-msgs [data-needs-line]' ? line : null });
   const w = { id: 'w', thread: 'b' }; f.env._c.w = { readNav: 3 };
   f.mark('b', s, turnsOf(['u', 1], ['a', 2]));
   f.land(w, 3); f.land(w, 3);
-  assert.deepEqual(JSON.parse(JSON.stringify(scrolled)), [{ block: 'start' }], 'once, the amber line at the top');
-  f.env._c.w.readNav = 4; f.land(w, 4); assert.equal(scrolled.length, 2, 'again on the next open');
+  assert.deepEqual(JSON.parse(JSON.stringify(scrolled)), [{ top: 836, behavior: 'auto' }], 'once, the amber line just under the header');
+  assert.equal(line.getBoundingClientRect().top, 64, 'AI review of 1331: the line is on screen, 8px under the fixed header, not hidden above it');
+  doc.scrollTop = 0; f.env._c.w.readNav = 4; f.land(w, 4); assert.equal(scrolled.length, 2, 'again on the next open');
+  // Desktop: the messages box scrolls itself; the line lands 8px under the box's top, so the whole ask shows.
+  const box = { scrollTop: 0, scrollTo(o) { scrolled.push(o); this.scrollTop = o.top; }, getBoundingClientRect: () => ({ top: 120 }), closest: nb.closest };
+  const head2 = { getBoundingClientRect: () => ({ bottom: 131 }) }; thread.querySelector = q => q === '.ch-head' ? head2 : null;
+  line.closest = q => q === '.ch-msgs' ? box : q === '.ch-thread' ? thread : null; line.getBoundingClientRect = () => ({ top: 700 - box.scrollTop });
+  f.env.scrollBox = n => n; f.env._c.w.readNav = 6; f.land(w, 6);
+  assert.equal(line.getBoundingClientRect().top, 139, 'under whichever is lower: the box top or the header (it overlapped by 11px)');
   f.env.document.documentElement.dataset.tweaks = MD_ON; f.env._c.w.readNav = 5; f.land(w, 5);
-  assert.equal(scrolled.length, 2, 'switch off: the thread opens where it always did');
+  assert.equal(scrolled.length, 3, 'switch off: the thread opens where it always did');
   // Both opens call it: a fresh history read and a reopen inside the 60-second history cache (Codex P2).
   const load = src.slice(src.indexOf('  async function loadThread('), src.indexOf('    // Every read owns a captured thread AND navigation generation.'));
   assert.match(load, /if \(fresh && !force\) \{\n      c\.loadedNav = nav;[^\n]*\n      if \(typeof needsLand === 'function'\) needsLand\(w, nav\);/);
