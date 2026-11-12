@@ -2174,7 +2174,7 @@
       vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
       dictationFinishing = true; // model options may not have loaded while an app is foreground
       try {
-        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '');
+        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '', forceNew ? undefined : vBox || undefined);
         vRoute = vConversation ? null : resolveRoute(); vRouteAt = vConversation ? null : resolveRoute; // re-read at Send (wizard-ux#1218)
         if (vRouteAt && typeof vSpace === 'string') vRouteAt = chanRoute(resolveRoute, () => vRoute); // a channel take keeps its agent
         if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
@@ -2269,7 +2269,7 @@
     strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
     dictationFinishing = true;
     const box = sid === '__new__' ? CHATS.chanBox?.(wid) || '' : '';
-    try { vRouteAt = () => CHATS.modelRoute(wid,sid); vRoute = vRouteAt(); if (box) vRouteAt = chanRoute(vRouteAt, () => vRoute); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
+    try { vRouteAt = () => CHATS.modelRoute(wid,sid,box || undefined); vRoute = vRouteAt(); if (box) vRouteAt = chanRoute(vRouteAt, () => vRoute); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();

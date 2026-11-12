@@ -2520,7 +2520,7 @@
     parking=true;
     try{
       if(V.files.some(f=>f.uploading)||CHATS.composerBusy(V.replyTo.wid,V.replyTo.sid))throw Error('Wait for attachments before borrowing');
-      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
+      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid,V.replyTo.box||undefined);
       if(!(V.snap.route?.model&&V.snap.route?.provider)){V.snap.route=null;throw Error('Choose a model before parking the reply');}
       let parkedNativeId=null;
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
@@ -2808,7 +2808,7 @@
       const agent = snap.route?.agent || '';
       return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
     }
-    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid, pin.box || undefined) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__', snap.view?.box || undefined); // a channel take: the box it started in (issue 1309)
     // A take pinned to a channel keeps that channel's agent: another agent's channel in front by Send never re-routes it.
     if (typeof snap.view?.space === 'string' && snap.route && (live?.agent || '') !== (snap.route.agent || '')) return snap.route;
     return live;

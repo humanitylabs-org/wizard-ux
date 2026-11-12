@@ -9,7 +9,7 @@ const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
 const phone = read('app.js'), chats = read('core/chats.js'), models = read('core/chat-models.js');
 const section = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); return s.slice(i, s.indexOf(b, i)); };
 const voice = section(phone, '  function sealTarget() {', '  // A take that sends nothing') + section(phone, '  function finishVoice() {', '  async function cancelVoice(');
-const modelRoute = section(chats, 'modelRoute: (wid, sid) => ', ', winAgent,').replace('modelRoute: ', '');
+const modelRoute = section(chats, 'modelRoute: (wid, sid, box) => ', ', winAgent,').replace('modelRoute: ', '');
 
 const SONNET = 'claude-sonnet-5-5', OPUS = 'claude-opus-5-5';
 const KINDS = ['host-profile', 'container', 'restricted'];
@@ -27,7 +27,7 @@ async function world() {
   vm.runInNewContext(models, {window, fetch, AbortSignal, console});
   await window.WosModels.load();
   const store = {}, W = {};
-  const ctx = {window, W, ch: wid => (store[wid] ||= {}), winAgent: w => w?.agent || '', PW: {newModel: c => c.newModel || null}, chanDraftKey: () => '', chanModel: () => null}; // no channel box open (issue 1309)
+  const ctx = {window, W, ch: wid => (store[wid] ||= {}), winAgent: w => w?.agent || '', PW: {newModel: c => c.newModel || null}, chanDraftKey: () => '', chanModel: () => null, boxModel: () => null}; // no channel box open (issue 1309)
   vm.createContext(ctx);
   const route = vm.runInContext('(' + modelRoute + ')', ctx);
   return {M: window.WosModels, W, store, route};

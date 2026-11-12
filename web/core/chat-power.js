@@ -273,10 +273,10 @@ window.WosChatPower = function chatPower(A) {
     return M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null;
   }
   // The chip in the thread header: the model this thread (or this new chat) runs on. Tap to change it.
-  // pick: a route that overrides the window's (a channel box's own pick, wizard-ux issue 1309).
-  function modelChip(w, s, pick = null) {
+  // pick (a channel box, wizard-ux issue 1309): its own route, null = the default; never the window's New chat pick.
+  function modelChip(w, s, pick) {
     if (!M) return '';
-    const cur = pick || (w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null);
+    const cur = pick !== undefined ? pick || newModel({}, w) : w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     // A new chat in the main Chats on a Private model belongs to that private agent (unified Chats).
     const AG = window.WosAgents;
     const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
@@ -289,7 +289,7 @@ window.WosChatPower = function chatPower(A) {
   }
   /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
    * Tapping it opens the compact model menu over the right side, just above it. */
-  function modelLabel(w, s, pick = null) {
+  function modelLabel(w, s, pick) {
     const chip = modelChip(w, s, pick); if (!chip) return '';
     return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
   }
@@ -600,9 +600,11 @@ window.WosChatPower = function chatPower(A) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = capturedRunId ?? (A.isWorking(s) && s.runId ? s.runId : '');
-    const nm = route || (isNew ? (A.chanBox?.(wid) && !w?.thread ? A.chanModel?.(wid) : c.newModel) || null : null);
     // The channel this take started in: carried by the take (survives a reload), else pinned by the box mic's tap.
     const pins = typeof boxSpace !== 'undefined' ? boxSpace : null, pinned = !isNew ? undefined : typeof space === 'string' ? space : pins?.get(wid); pins?.delete(wid);
+    // A channel's take: its box's own pick (issue 1309), and the window's New chat pick is left alone.
+    const chanTake = isNew && (typeof pinned === 'string' || (!!A.chanBox?.(wid) && !w?.thread));
+    const nm = route || (isNew ? (chanTake ? A.chanModel?.(wid) : c.newModel) || null : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
@@ -610,7 +612,7 @@ window.WosChatPower = function chatPower(A) {
     const sealed = seal === true ? A.takeComposer(wid, sid) : seal || { text: '', files: [], done() {}, putBack() {} };
     const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i); // no count cap (James, 6 Nov 2026)
     const wasHere = !!w && w.thread === sid;
-    if (isNew) c.newModel = null;
+    if (isNew && !chanTake) c.newModel = null;
     follow(wid);
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
@@ -626,7 +628,7 @@ window.WosChatPower = function chatPower(A) {
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(typeof pinned === 'string' ? { space: false } : {}), ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
-      if (isNew && nm) c.newModel = nm;
+      if (isNew && nm && !chanTake) c.newModel = nm;
       sealed.putBack();
       if (left) left.restore();
       throw e;

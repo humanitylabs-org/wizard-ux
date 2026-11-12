@@ -35,7 +35,7 @@ function harness({ pane = 'win::side', thread = null } = {}) {
     winAgent: () => '', chanOpen: x => (!x.thread ? { id: 'launch', name: 'Launch' } : null), chanSpaceOf: x => (!x.thread ? 'launch' : null), spaceMember() {},
     chanBox: box, chanModel: id => (box(id) ? picks.get(box(id)) || null : null), setChanModel: (id, r) => { if (!box(id)) return false; picks.set(box(id), r); return true; } });
   const click = (sel, data = {}) => api.click({ target: { closest: s => (s === sel ? { dataset: data } : null) } }, pane);
-  const label = () => api.modelLabel({ ...paneWin, thread: '__new__' }, null, picks.get('chan::launch') || null);
+  const label = () => api.modelLabel({ ...paneWin, thread: '__new__' }, null, picks.get('chan::launch') || null); // a box: null = its default
   return { api, w, sent, toasts, threadSets, state, picks, paints, click, label };
 }
 
@@ -51,8 +51,10 @@ for (const [where, pane] of [['AI apps feed pane', 'win::side'], ['classic list 
     assert.equal(h.state.newModel, undefined, 'the window\'s New chat pick is untouched');
     assert.match(h.toasts.at(-1), /Opus/);
     h.click('[data-chmodel]'); assert.equal(h.paints.at(-1).model, 'claude-opus', 'reopened, the menu ticks the pick');
+    h.state.newModel = { model: 'claude-sonnet', provider: 'anthropic' }; // a separate New chat pick on the window
     await h.api.sendVoiceTo(pane, '__new__', new Blob(['a']), [], false); // the box mic, no route handed in
     assert.equal(h.sent[0].model, 'claude-opus'); assert.equal(h.sent[0].provider, 'anthropic');
+    assert.equal(h.state.newModel?.model, 'claude-sonnet', 'a channel take never clears the window\'s New chat pick (review)');
   });
 }
 
@@ -62,6 +64,13 @@ test('classic: a pick in the list pane\'s channel box never changes the thread o
   await new Promise(r => setImmediate(r));
   assert.deepEqual(h.threadSets, [], 'no thread model change');
   assert.equal(h.picks.get('chan::launch')?.model, 'claude-opus');
+});
+
+test('with no box pick the label shows the default, never the window\'s New chat pick (review)', () => {
+  const h = harness();
+  h.state.newModel = { model: 'claude-opus', provider: 'anthropic' };
+  assert.match(h.label(), />Sonnet</);
+  h.click('[data-chmodel]'); assert.equal(h.paints.at(-1).model, 'claude-sonnet', 'the menu ticks the same default');
 });
 
 test('a New chat\'s pick still goes to the window, never into a channel box', () => {
@@ -78,7 +87,7 @@ function channels() {
   const ctx = { W: wins, CH: { win: {}, 'win::side': {} }, ch: () => c, chanOpen: () => open.cur, chanArchived: () => false, winAgent: () => '', elOf: id => ({ id }), renderChatList: (x, el) => painted.push(el.id),
     KIT: { drafts: { get: () => ({ text: '', files: [] }), set() {} } }, PREVIEW: {}, fileUrl: String, CLIP_SVG: '', esc: String, hasContent: () => false, attachTray: () => '',
     PW: { ensureModels() {}, modelLabel: (w, s, pick) => `<b class="ch-mlabel">${pick ? pick.model : 'default'}</b>`, micBtn: () => '' }, Map };
-  vm.createContext(ctx); vm.runInContext(chats.slice(a, b) + ';this.api={chanDraftKey,chanModel,setChanModel,chanComposer};', ctx);
+  vm.createContext(ctx); vm.runInContext(chats.slice(a, b) + ';this.api={chanDraftKey,boxModel,chanModel,setChanModel,chanComposer};', ctx);
   return { ...ctx.api, wins, open, painted, c };
 }
 
@@ -97,9 +106,27 @@ test('the channel box pick is kept per channel, repaints every box of that chann
   assert.equal(f.chanModel(f.wins.win), null, 'a different agent\'s channel of the same id is its own box');
 });
 
+test('a take keeps the box it started in: modelRoute by box key, whatever channel is in front by Send (review)', () => {
+  const f = channels();
+  f.setChanModel('win', { model: 'claude-opus', provider: 'anthropic' }); // #Launch
+  f.open.cur = { id: 'voice', name: 'Voice' }; f.setChanModel('win', { model: 'claude-haiku', provider: 'anthropic' }); // #Voice in front by Send
+  assert.equal(f.boxModel('chan::launch')?.model, 'claude-opus');
+  assert.equal(f.boxModel('chan::voice')?.model, 'claude-haiku');
+  f.setChanModel('win', { model: 'p', provider: 'p', agent: 'restricted' }); assert.equal(f.boxModel('chan::voice')?.model, 'claude-haiku', 'never another agent\'s model');
+  assert.match(chats, /modelRoute: \(wid, sid, box\) => \{ const nm = sid !== '__new__' \? null : box \? boxModel\(box\)/);
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  assert.match(app, /CHATS\.modelRoute\(pin\.wid, pin\.sid, pin\.box \|\| undefined\)/); assert.match(app, /CHATS\.modelRoute\(V\.replyTo\.wid,V\.replyTo\.sid,V\.replyTo\.box\|\|undefined\)/);
+  assert.match(desk, /forceNew \? undefined : vBox \|\| undefined\);/); assert.match(desk, /CHATS\.modelRoute\(wid,sid,box \|\| undefined\)/);
+});
+
+test('a typed channel post leaves the window\'s New chat pick alone (review)', () => {
+  assert.match(chats, /const chanPost = isNew && typeof opts\.space === 'string';[^\n]*\n    if \(nm && !chanPost\) c\.newModel = null;/);
+  assert.match(chats, /if \(nm && !chanPost\) c\.newModel = nm;/);
+});
+
 test('Send and the orb read the box\'s pick (source contract)', () => {
   assert.match(chats, /const route = chanModel\(w\);\n/, 'channelSend: the box pick');
-  assert.match(chats, /modelRoute: \(wid, sid\) => \{ const nm = sid !== '__new__' \? null : chanDraftKey\(W\[wid\]\) \? chanModel\(W\[wid\]\) : PW\?\.newModel\(ch\(wid\)\);/, 'the orb / ⌥V route');
+  assert.match(chats, /box \? boxModel\(box\) : chanDraftKey\(W\[wid\]\) \? chanModel\(W\[wid\]\) : PW\?\.newModel\(ch\(wid\)\);/, 'the orb / ⌥V route');
   assert.match(chats, /PW\.modelLabel\(\{ \.\.\.w, thread: '__new__' \}, null, chanModel\(w\)\)/, 'the label');
   // The whole export is one line: a // comment inside it would silently drop every later entry.
   const exp = chats.slice(chats.indexOf('  return { beforeNavigate'), chats.indexOf('\n', chats.indexOf('  return { beforeNavigate')));
