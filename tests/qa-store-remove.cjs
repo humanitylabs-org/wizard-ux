@@ -177,6 +177,8 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
    assert.match(await f.locator('#toast').innerText(),/Ledger removed/);
    // Confirmed removal: Ledger's data on this device is gone, Cards keeps its own.
    assert.deepEqual(await page.evaluate(readAppData),{settings:['cards'],dbs:['cards'],rows:['cards']},'removed app data is deleted');
+   const note=await page.evaluate(()=>JSON.parse(localStorage.getItem('wos.app-removed.v1')||'{}'));
+   assert.deepEqual(Object.keys(note),['ledger']); assert.equal(note.ledger.pending,undefined,'settled'); assert.ok(Date.now()-note.ledger.at<120000);
    assert.equal(await f.locator('.row[data-app^="ledger|"] [data-get]').innerText(),'Get');
    assert.ok((await page.evaluate(()=>window.changed)).includes('ledger'));
    await shot('after-remove-list'); await noOverflow('after remove');

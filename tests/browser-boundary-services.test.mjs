@@ -585,6 +585,29 @@ test('saved settings: storage.load / storage.save always use the window\'s own a
   assert.equal(calls.length, 2, 'a window that is not the verified app saves nothing');
 });
 
+// Slice 40: the Store removed the app (web/store/store-remove.js markRemoved) after this window opened. The window
+// stays until the shell's app list refreshes, but it never writes the app's data again, so the deleted data stays deleted.
+test('a window of an app the Store removed after it opened never writes its saved settings or databases again', async () => {
+  const m = new Map(), localStorage = { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) };
+  const writes = [];
+  const f = fixture({ win: { localStorage } });
+  f.B.appStorage = { load: () => ({ store: new Map() }), save: (id, ops) => { writes.push(['save', id]); return true; } };
+  f.B.appIdb = { load: async () => ({ idb: null }), list: async () => ({ idb: [] }), commit: async id => { writes.push(['commit', id]); return { idb: { rev: 1 } }; }, drop: async id => { writes.push(['drop', id]); return true; } };
+  assert.equal(f.call('storage.save', { ops: [{ k: 'a', v: 'b' }] }), true, 'before: saves');
+  // Another app's note changes nothing; an old note (from before this window opened, e.g. an earlier removal) neither.
+  m.set('wos.app-removed.v1', JSON.stringify({ 'other-app': { at: Date.now() + 5 }, 'morning-report': { at: 1 } }));
+  assert.equal(f.call('storage.save', { ops: [{ k: 'a', v: 'c' }] }), true);
+  assert.deepEqual(await f.call('idb.commit', { name: 'db', ops: [{ o: 'version', v: 1 }], base: 0 }), { idb: { rev: 1 } });
+  m.set('wos.app-removed.v1', JSON.stringify({ 'morning-report': { at: Date.now() + 5, pending: true } }));
+  assert.equal(f.call('storage.save', { ops: [{ k: 'a', v: 'd' }] }), false, 'after removal: refused');
+  assert.equal(await f.call('idb.commit', { name: 'db', ops: [{ o: 'version', v: 1 }], base: 1 }), false, 'after removal: refused');
+  assert.equal(await f.call('idb.drop', { name: 'db' }), true, 'deleting stays allowed');
+  assert.deepEqual(writes.map(w => w.join(':')), ['save:morning-report', 'save:morning-report', 'commit:morning-report', 'drop:morning-report']);
+  // A broken note never blocks a live app.
+  m.set('wos.app-removed.v1', '{not json');
+  assert.equal(f.call('storage.save', { ops: [{ k: 'a', v: 'e' }] }), true);
+});
+
 // Slice 35: a sandboxed app's own backend calls (net.fetch). The shell makes them only inside the window's own app path.
 function netFixture(answer = () => new Response('{"ok":1}', { status: 200, headers: { 'content-type': 'application/json', 'x-v': '7' } })) {
   const asked = [];

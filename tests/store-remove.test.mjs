@@ -1,7 +1,7 @@
 // Store "Remove app": the exact-identity request, its outcomes and the confirmation contents. Fixture fetches only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetAppData} from '../web/store/store-remove.js';
+import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetAppData, markRemoved, settleRemoved, pendingForgets, forgetRemoved} from '../web/store/store-remove.js';
 const A='a'.repeat(40), B='b'.repeat(40);
 const base=new URL('https://box.example/wizard-os-home/');
 const esc=s=>String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -127,4 +127,26 @@ test('forgetAppData never creates the shell database, refuses bad ids and report
  // Without IndexedDB (an old browser) the settings still go.
  const only=fakeStorage({'wos.app-storage.v1.ledger':'1'});
  assert.equal(await forgetAppData('ledger',{storage:only,idb:undefined,keyRange}),true); assert.equal(only.m.size,0);
+});
+
+function memStorage(){const m=new Map();return {m,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)};}
+test('the removed-apps note: marked before deleting, settled after, pending again after a failed delete, kept 30 days',async()=>{
+ const storage=memStorage(), now=1_800_000_000_000, note=()=>JSON.parse(storage.getItem('wos.app-removed.v1'));
+ storage.setItem('wos.app-storage.v1.ledger','{"a":"1"}');
+ assert.equal(await forgetRemoved('ledger',{storage,now,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(note(),{ledger:{at:now}}); assert.equal(storage.getItem('wos.app-storage.v1.ledger'),null);
+ assert.deepEqual(pendingForgets({storage,now}),[]);
+ // Both tries fail: the note stays pending, so the Store tries again on its next load.
+ const fail=fakeIdb({failTx:true});
+ assert.equal(await forgetRemoved('cards',{storage,now:now+1,idb:fail,keyRange}),false);
+ assert.equal(fail.log.opened,2,'one more try');
+ assert.deepEqual(pendingForgets({storage,now:now+2}),['cards']);
+ // A retry never moves `at` (the windows opened since are not blocked by an old removal).
+ assert.equal(await forgetRemoved('cards',{retry:true,storage,now:now+50,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(note().cards,{at:now+1}); assert.deepEqual(pendingForgets({storage,now:now+51}),[]);
+ // Old notes and junk drop out; bad ids are refused.
+ storage.setItem('wos.app-removed.v1',JSON.stringify({ledger:{at:now},'Bad Id':{at:now},x:{at:'soon'}}));
+ assert.equal(markRemoved('fresh',{storage,now:now+31*864e5}),true);
+ assert.deepEqual(note(),{fresh:{at:now+31*864e5,pending:true}});
+ assert.equal(markRemoved('../x',{storage,now}),false); assert.equal(settleRemoved('nope',{storage,now}),false);
 });

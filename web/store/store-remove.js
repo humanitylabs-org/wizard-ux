@@ -79,6 +79,39 @@ export async function forgetAppData(id, { storage = globalThis.localStorage, idb
   return ok;
 }
 
+/* The Store's note of the apps it removed on this device (`wos.app-removed.v1`: { id: { at, pending? } }, kept 30
+ * days). core/app-services.js reads it: a window of the app that was open before `at` never writes the app's data
+ * again (its frame lives on until the shell's app list refreshes). `pending` = its data here is not deleted yet; the
+ * Store tries again on its next load while the app is still gone (retryForget). */
+const REMOVED = 'wos.app-removed.v1', KEEP = 30 * 864e5;
+function removedNotes(storage, now) {
+  let o = {}; try { o = JSON.parse(storage?.getItem?.(REMOVED) || '{}') || {}; } catch (_) {}
+  const out = {};
+  if (typeof o === 'object' && !Array.isArray(o)) for (const [k, v] of Object.entries(o)) if (ID.test(k) && Number.isFinite(v?.at) && now - v.at < KEEP) out[k] = v.pending === true ? { at: v.at, pending: true } : { at: v.at };
+  return out;
+}
+function saveNotes(storage, o) { try { if (Object.keys(o).length) storage.setItem(REMOVED, JSON.stringify(o)); else storage.removeItem(REMOVED); return true; } catch (_) { return false; } }
+// Before deleting: from now on no open window of the app writes its data. Pending until forgetAppData succeeds.
+export function markRemoved(id, { storage = globalThis.localStorage, now = Date.now() } = {}) {
+  if (!ID.test(id || '')) return false;
+  const o = removedNotes(storage, now); o[id] = { at: now, pending: true };
+  return saveNotes(storage, o);
+}
+export function settleRemoved(id, { storage = globalThis.localStorage, now = Date.now() } = {}) {
+  const o = removedNotes(storage, now); if (!o[id]) return false;
+  o[id] = { at: o[id].at }; return saveNotes(storage, o);
+}
+// The removed apps whose data on this device is still waiting to be deleted.
+export const pendingForgets = ({ storage = globalThis.localStorage, now = Date.now() } = {}) => Object.entries(removedNotes(storage, now)).filter(([, v]) => v.pending).map(([k]) => k);
+// Mark (not again on a retry), delete (one more try on failure), settle. True when the data here is gone; false
+// leaves it pending.
+export async function forgetRemoved(id, { retry = false, ...opts } = {}) {
+  if (!retry) markRemoved(id, opts);
+  const ok = await forgetAppData(id, opts) || await forgetAppData(id, opts);
+  if (ok) settleRemoved(id, opts);
+  return ok;
+}
+
 // Only an exact App Manager install (repository and full commit), under its own registry id, that is not part of
 // Wizard. The server decides again.
 export function canRemove(installed, complete) {
