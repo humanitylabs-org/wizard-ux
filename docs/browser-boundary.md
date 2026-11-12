@@ -91,7 +91,10 @@ On:
 - Badge and title bar: a sandboxed app sets its own unread count (`WizardApp.badge.set`) and its own window-bar tools
   (`WizardApp.titlebar.set`) over the channel. `core/app-services.js` is the one server (`WizBrowserBoundary.serve`);
   it gets only the frame element and accepts it when the element is still the registered app window, its `src` is
-  inside that installed app's path and the frame answered `ready` on its current channel. The app id is the window's,
+  inside that installed app's path, the document in it is one the shell loaded (a page that navigated its own frame,
+  e.g. a link to another app, is refused until the shell loads the window again, since `src` keeps the old URL) and
+  the frame answered `ready` on its current channel. Relative title-bar links resolve against the page's own address
+  (sent by its client) and must still stay inside the app. The app id is the window's,
   never the page's word; tools are the same validated data as before. A tap goes back as `tool` on the current
   channel (`WizBrowserBoundary.tool`). Every load clears that window's tools (`onReset`), and the app's client sends its
   last badge and bar again on the new channel. Proof: `tests/qa-browser-boundary-services.cjs` (real Chromium) and

@@ -168,6 +168,8 @@
     request(method, args, timeout = 15000) {
       if (!METHODS.includes(method)) return Promise.reject(error('unavailable', 'Not available inside the browser boundary yet'));
       if (requests.size + waiters.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
+      // The shell can't read this page's address; relative title-bar links resolve against it (and are still checked).
+      if (method === 'titlebar.set') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
       if (STICKY.includes(method)) sticky.set(method, args);
       const id = 'wbs-' + (++serial);
       return new Promise((resolve, reject) => {

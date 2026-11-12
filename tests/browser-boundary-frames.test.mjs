@@ -235,7 +235,9 @@ test('badge and title bar: served by the one registered server; taps come back; 
   await tick(); await tick();
   assert.deepEqual(resets, [true]);
   assert.deepEqual(calls.map(c => c[1]).sort(), ['badge.set', 'titlebar.set']);
-  assert.deepEqual(calls.find(c => c[1] === 'titlebar.set')[2], { bad: true }, 'the last title bar the app asked for');
+  const again = calls.find(c => c[1] === 'titlebar.set')[2];
+  assert.equal(again.bad, true, 'the last title bar the app asked for');
+  assert.equal(again.base, 'https://box.example.ts.net/notes/', 'with the page\'s own address as the base for relative links');
   // A detached frame gets no taps.
   sh.B.attach(f.el)(); assert.equal(sh.B.tool(f.el, 'older'), false);
 });

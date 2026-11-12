@@ -23,8 +23,11 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
   const location = new URL('https://wizard.example/wizard-os-home/'), counts = {}, taps = [], legacy = [];
   const win = new El('article'), bar = new El('header'); bar.className = 'wbar'; win.append(bar);
   const child = { get location() { throw new Error('SecurityError'); }, get document() { throw new Error('SecurityError'); }, postMessage: m => legacy.push(m) };
+  const loads = [], observers = [];
   const frame = { tagName: 'IFRAME', src: src || 'https://wizard.example/' + id + '/', isConnected: true, contentWindow: child,
-    hasAttribute: n => n === 'sandbox', addEventListener() {}, removeEventListener() {}, closest: s => (s === '.win' ? win : null) };
+    hasAttribute: n => n === 'sandbox', addEventListener: (t, fn) => { if (t === 'load') loads.push(fn); }, removeEventListener() {}, closest: s => (s === '.win' ? win : null) };
+  // The src attribute set by the shell (a MutationObserver record), and a document load in the frame.
+  class MutationObserver { constructor(fn) { this.fn = fn; } observe(el, o) { if (el === frame && o.attributeFilter?.includes('src')) observers.push(this); } disconnect() { observers.splice(observers.indexOf(this), 1); } }
   const app = { id, kind: 'wizard', url: '/' + id + '/' };
   const B = { served: null, resets: new Set(), readyNow: ready,
     serve(fn) { if (this.served) return false; this.served = fn; return true; },
@@ -33,10 +36,11 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
     tool: (f, tid, value) => { taps.push({ f, tid, value }); return true; },
     attach: () => () => {}, enabled: true };
   const window = { WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}) };
-  vm.runInNewContext(source, { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
+  vm.runInNewContext(source, { window, location, URL, MutationObserver, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: () => true });
-  return { B, frame, bar, counts, taps, legacy, detach, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); } };
+  return { B, frame, bar, counts, taps, legacy, detach, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
+    load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
 const box = f => f.bar.children.find(c => c.className === 'wtools');
 const tools = [{ id: 'older', kind: 'button', icon: 'prev', label: 'Older' }, { id: 'date', kind: 'select', label: 'Date', value: 'a', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }];
@@ -89,4 +93,30 @@ test('not ready on its channel, outside its app path, or a shell-owned count: re
   assert.throws(() => f.call('share.text', { text: 'x' }), /Not available/);
   f.B.readyNow = false;
   assert.throws(() => f.call('badge.set', { n: 1 }), /not verified/, 'a frame whose new document has not answered yet');
+});
+
+test('a page that navigated its own frame (src still says the app) gets nothing until the shell loads the window', () => {
+  const f = fixture();
+  f.load(); // the first load of the window
+  assert.equal(f.call('badge.set', { n: 1 }), true);
+  f.load(); // a load the shell did not start: a link or location change inside the frame
+  assert.throws(() => f.call('badge.set', { n: 2 }), /not verified/);
+  assert.throws(() => f.call('titlebar.set', { tools }), /not verified/);
+  assert.equal(f.counts['morning-report'], 1);
+  f.setSrc(); f.load(); // the shell set src (reload, route)
+  assert.equal(f.call('titlebar.set', { tools }), true);
+  f.load(); assert.throws(() => f.call('badge.set', { n: 3 }), /not verified/);
+  f.services.expectLoad(f.frame); f.load(); // the shell's own location.replace (route change)
+  assert.equal(f.call('badge.set', { n: 3 }), true);
+});
+
+test('relative title-bar links resolve against the page\'s own address and still stay inside the app', () => {
+  const f = fixture();
+  const link = [{ id: 'pdf', kind: 'link', text: 'PDF', label: 'PDF', href: 'report.pdf' }];
+  f.call('titlebar.set', { tools: link, base: 'https://wizard.example/morning-report/2026/11/' });
+  assert.equal(box(f).children[0].href, 'https://wizard.example/morning-report/2026/11/report.pdf');
+  // A base outside the app is ignored (the app's entry is used); a link that leaves the app is refused either way.
+  f.call('titlebar.set', { tools: link, base: 'https://wizard.example/other/' });
+  assert.equal(box(f).children[0].href, 'https://wizard.example/morning-report/report.pdf');
+  assert.throws(() => f.call('titlebar.set', { tools: [{ id: 'up', kind: 'link', label: 'Up', href: '../../other/' }], base: 'https://wizard.example/morning-report/a/' }), /stay inside the app/);
 });

@@ -439,7 +439,7 @@
     const f = winEl(w.id)?.querySelector('iframe'); if (!f) { render(); return true; }
     let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
     // (replace: a page change never adds a Back step of its own)
-    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(appOf(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(appOf(w), rel) || rel; try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
     return true;
   }
   function closeWorkflow(w) {

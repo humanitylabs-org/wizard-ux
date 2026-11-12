@@ -88,6 +88,12 @@ const server = http.createServer((req, res) => {
   const barLog = await page.evaluate(() => barLog);
   ok(barLog.includes(0), 'a reload clears the old document\'s tools: ' + JSON.stringify(barLog));
   ok(barLog.at(-1) === 2 && (await bar()).length === 2, 'the new document\'s tools come back');
+  // The app page navigates its own frame to another page (src still says /notes/): that document gets nothing.
+  await page.frames().find(fr => fr.url().includes('/notes/')).evaluate(() => { location.href = '/evil/?nav=1'; });
+  let nav = null;
+  for (let i = 0; i < 40 && !(nav && 'bar' in nav); i++) { await page.waitForTimeout(100); const fr = frameOf('/evil/?nav=1'); nav = fr ? await fr.evaluate(() => results).catch(() => null) : null; }
+  const counts3 = await page.evaluate(() => counts), navBar = await bar();
+  ok(nav && nav.badge === false && nav.bar === false && counts3.notes === 3 && navBar.length === 0, 'a page the app navigated to by itself sets nothing in its window: ' + JSON.stringify({ nav, counts3, navBar }));
   // The second window's page is not the installed app it claims to be.
   const evil = await frameOf('/evil/').evaluate(() => results);
   const counts2 = await page.evaluate(() => counts);
