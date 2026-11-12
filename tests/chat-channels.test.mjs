@@ -1805,3 +1805,166 @@ test('issue 1317: a second device gets the handled mark through the seen record;
     box.state = null; a.L.seen = null; b.L.seen = null; a.store.clear(); b.store.clear();
   }
 });
+
+// wizard-ux issue 1331: Needs you in the thread (switch wizard/needs-you-in-thread, with Channels on). The agent's reply
+// whose status line said needs_you gets the feed's amber Needs you line above its bubble, with Mark done beside it. It
+// clears on Mark done, on Reply to that message, or when the agent's next status line drops the ask; a plain owner
+// message never clears it. One marker state (attOf), so the thread, feed, Activity and channel line agree.
+const NT_ON = 'wizard/desktop-chats wizard/chat-channels wizard/needs-you-in-thread';
+function needsFixture(opts = {}) {
+  const f = doneFixture(opts);
+  f.env.document.documentElement.dataset.tweaks = NT_ON;
+  const fn = name => vm.runInContext(name, f.env);
+  Object.assign(f, { line: s => fn('needsLineHtml')(s), mark: (sid, s, turns) => fn('needsMark')('w', sid, s, turns), replied: (sid, reply) => fn('needsReplied')('w', sid, reply),
+    land: (w, nav) => fn('needsLand')(w, nav), replyStd: a => fn('replyStd')(a), needsOn: () => fn('needsThreadOn')() });
+  return f;
+}
+const askRow = (sid, extra = {}) => row(sid, 2, { fresh: true, messageCount: 4, attention: { state: 'needs_you', ask: 'Pick the boot logo' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString(), ...extra });
+const turnsOf = (...ats) => ats.map(([who, at]) => who === 'u' ? { u: { text: 'q', at }, a: null } : { u: null, a: { text: 'a', at } });
+const KINDS_1331 = [['main', '', 'launch', 'b'], ['host-profile', 'host', 'host-ops', 'h1'], ['container', 'container', 'box', 'k1'], ['restricted', 'restricted', 'locked', 'r1']];
+
+test('issue 1331: the Needs you line shows only with its switch and Channels on, and brings Mark done with it', () => {
+  const s = askRow('b'), f = needsFixture({ sessions: { b: s } });
+  const html = f.line(s);
+  assert.match(html, /^<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"><\/i>Needs you<\/span><span class="ch-needs-ask">Pick the boot logo<\/span><button type="button" class="ch-needs-done" data-chmarkdone><svg[^]*<\/svg>Mark done<\/button><\/div>$/);
+  assert.equal(f.canMarkDone(s), true, 'Mark done is in the menus with this switch alone (no wizard/mark-done)');
+  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/chat-channels';
+  assert.equal(f.line(s), '', 'switch off: no line'); assert.equal(f.canMarkDone(s), false);
+  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/needs-you-in-thread';
+  assert.equal(f.line(s), '', 'Channels off: no line either'); assert.equal(f.needsOn(), false);
+  f.env.document.documentElement.dataset.tweaks = NT_ON;
+  assert.equal(f.line({ ...s, attention: { state: 'check', ask: 'See it' } }), '', 'Your call is not Needs you');
+  assert.equal(f.line({ ...s, attention: null }), '', 'no ask: nothing');
+  assert.equal(f.line({ ...s, archived: true }), '', 'an archived thread');
+  assert.match(f.line({ ...s, status: 'running' }), /Needs you/, 'the agent working on a plain owner message keeps it');
+  assert.match(f.line({ ...s, attention: { state: 'needs_you', ask: '<b>x</b>' } }), /&lt;b>x&lt;\/b>/, 'the ask is text');
+});
+
+test('issue 1331: the line sits on the agent\'s newest reply; Mark done there clears it in the thread, feed, Activity and channel line (main and routed)', async () => {
+  for (const [kind, agent, cid, sid] of KINDS_1331) {
+    const s = askRow(sid, agent ? { owner: agent } : {}), rows = [s, row('a', 3, { messageCount: 2 })];
+    const f = needsFixture({ history: { [(agent ? agent + '|' : '') + sid]: [{ role: 'user', text: 'q' }, { role: 'assistant', text: 'pick', at: NOW - 2 * H }] } });
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    const turns = turnsOf(['u', 1], ['a', 2], ['u', 3], ['a', 4], ['u', 5]); // an owner message after it: still that reply
+    let m = f.mark(sid, s, turns);
+    assert.equal(m.k, 3, kind + ': the newest agent reply'); assert.match(m.html, /Pick the boot logo/);
+    assert.equal(f.env._c.w.needsAt, 4); assert.equal(f.env._c.w.needsFor, sid);
+    f.openChannel(f.w, cid); f.channelFeed(f.w, f.chanOpen(f.w), rows); await settle();
+    assert.match(f.channelFeed(f.w, f.chanOpen(f.w), rows), /ch-post-st needs/, kind + ': the post is amber too');
+    // The thread's own Mark done (also while the agent works on a plain owner message).
+    s.status = 'running';
+    assert.equal(vm.runInContext('markDone', f.env)('w', sid, true), true, kind);
+    s.status = 'completed';
+    m = f.mark(sid, s, turns);
+    assert.equal(m.k, -1, kind + ': the line is gone'); assert.equal(f.env._c.w.needsFor, '');
+    assert.equal(f.attOf(s), null, kind + ': Activity\'s Needs you is clear');
+    assert.doesNotMatch(f.channelFeed(f.w, f.chanOpen(f.w), rows), /ch-post-st needs/, kind + ': the feed post is clear');
+    f.channelBack(f.w); f.w.focus = null;
+    assert.doesNotMatch(lineOf(f, rows, cid), /aria-label="Needs you"/, kind + ': the channel line is clear');
+    assert.equal(s.archived, undefined, kind + ': never archived'); assert.deepEqual(f.ops, [], kind + ': never moved');
+  }
+});
+
+test('issue 1331: Reply on the Needs you message clears it; a plain owner message or a reply to another message does not', () => {
+  for (const [kind, agent, , sid] of KINDS_1331) {
+    const s = askRow(sid, agent ? { owner: agent } : {}), f = needsFixture();
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    const turns = turnsOf(['u', 1], ['a', 2], ['u', 3], ['a', 4000]);
+    f.mark(sid, s, turns);
+    assert.equal(f.replied(sid, null), false, kind + ': a plain owner message');
+    assert.equal(f.replied(sid, { key: 'n', title: 'Notifications' }), false, kind + ': an app item reply');
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 2 } }), false, kind + ': a reply to an older agent message');
+    assert.equal(f.replied(sid, { quote: { role: 'user', at: 4000 } }), false, kind + ': a reply to the owner\'s own message');
+    assert.equal(f.replied('other', { quote: { role: 'assistant', at: 4000 } }), false, kind + ': another thread');
+    assert.match(f.mark(sid, s, turns).html, /Needs you/, kind + ': still there after all of those');
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000, message_id: '9' } }), true, kind + ': Reply on that message');
+    assert.equal(f.mark(sid, s, turns).html, '', kind + ': cleared'); assert.equal(f.attOf(s), null);
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), false, kind + ': nothing left to clear');
+    f.env.document.documentElement.dataset.tweaks = MD_ON;
+    s.lastAssistantAt = new Date(NOW).toISOString(); f.mark(sid, s, turns);
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), false, kind + ': switch off: Reply clears nothing');
+  }
+});
+
+test('issue 1331: the agent\'s next status line that drops the ask clears it; one that asks again brings it back', () => {
+  for (const [kind, agent, , sid] of KINDS_1331) {
+    const s = askRow(sid, agent ? { owner: agent } : {}), f = needsFixture();
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    assert.match(f.line(s), /Needs you/);
+    // The owner's message resolved it: the agent's next reply's status line no longer lists it.
+    Object.assign(s, { attention: { state: 'done', ask: 'Logo shipped' }, lastAssistantAt: new Date(NOW - H).toISOString() });
+    assert.equal(f.line(s), '', kind + ': dropped by the agent'); assert.equal(f.mark(sid, s, turnsOf(['a', 1], ['a', 2])).k, -1);
+    // After a Mark done, a later reply that asks again is a new Needs you.
+    Object.assign(s, { attention: { state: 'needs_you', ask: 'Which size?' } });
+    vm.runInContext('markDone', f.env)('w', sid, true); assert.equal(f.line(s), '', kind);
+    s.lastAssistantAt = new Date(NOW - 0.5 * H).toISOString();
+    assert.match(f.line(s), /Which size\?/, kind + ': back after a new reply that asks');
+  }
+});
+
+test('issue 1331: opening a thread with an open Needs you lands on that message once per open', () => {
+  const s = askRow('b'), f = needsFixture();
+  const scrolled = [], line = { scrollIntoView: o => scrolled.push(o) };
+  f.env.requestAnimationFrame = fn => fn();
+  f.env.elOf = () => ({ querySelector: q => q === '.ch-msgs [data-needs-line]' ? line : null });
+  const w = { id: 'w', thread: 'b' }; f.env._c.w = { readNav: 3 };
+  f.mark('b', s, turnsOf(['u', 1], ['a', 2]));
+  f.land(w, 3); f.land(w, 3);
+  assert.deepEqual(JSON.parse(JSON.stringify(scrolled)), [{ block: 'start' }], 'once, the amber line at the top');
+  f.env._c.w.readNav = 4; f.land(w, 4); assert.equal(scrolled.length, 2, 'again on the next open');
+  f.env.document.documentElement.dataset.tweaks = MD_ON; f.env._c.w.readNav = 5; f.land(w, 5);
+  assert.equal(scrolled.length, 2, 'switch off: the thread opens where it always did');
+});
+
+test('issue 1331: the real turnHtml draws the line right above the reply bubble, and only there', () => {
+  const lines = src.split('\n'), pick = t => lines.find(l => l.startsWith(t)) + '\n';
+  const ctx = { getComputedStyle: () => ({ getPropertyValue: () => '' }), document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Wizard' }, WosSkinHost: {} }, KIT: { time: { full: String, stamp: String } },
+    esc: s => String(s), md: s => `<p>${s}</p>`, PW: null, replyCard: () => '', msgIds: () => '', quoteBtn: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
+  vm.createContext(ctx);
+  vm.runInContext(['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(pick).join('')
+    + src.slice(src.indexOf('  function turnHtml('), src.indexOf('  const turnAt = ')) + 'this.turnHtml = turnHtml;', ctx);
+  const tn = { u: { text: 'Which logo?', at: 1 }, a: { text: 'Pick one', at: 2 }, media: [], notes: [], steers: [], steps: 0 };
+  const need = '<div class="ch-needs-line" data-needs-line>N</div>';
+  const html = ctx.turnHtml({ texts: [] }, tn, true, false, null, null, true, need);
+  assert.match(html, /<div class="msg u"[^]*<\/div><div class="ch-needs-line" data-needs-line>N<\/div><div class="msg a"/, 'between the owner\'s message and the reply');
+  assert.equal(ctx.turnHtml({ texts: [] }, tn, true, false, null, null, true), html.replace(need, ''), 'without it the turn is unchanged');
+});
+
+test('issue 1331: Reply on any message is standard for the main agent; the Thread tracker strip and dots retire', () => {
+  const f = needsFixture();
+  assert.equal(f.replyStd(''), true); assert.equal(f.replyStd('hermes'), true);
+  for (const a of ['host', 'container', 'restricted']) assert.equal(f.replyStd(a), false, a + ': as with the tracker, the main agent only');
+  f.env.document.documentElement.dataset.tweaks = MD_ON; assert.equal(f.replyStd(''), false, 'switch off');
+  // msgIds / quoteBtn follow the switch too (turnHtml's tt says which agent).
+  const lines = src.split('\n'), pick = t => lines.find(l => l.includes(t));
+  const c = vm.createContext({ esc: String, isFinite, WosThreadTracker: { on: () => false }, needsThreadOn: () => true });
+  vm.runInContext(pick('const msgIds =') + '\n' + pick('const quoteBtn =') + '\nthis.f = { msgIds, quoteBtn };', c);
+  assert.match(c.f.quoteBtn(true), /data-mquote/); assert.match(c.f.msgIds({ id: 4, at: 5 }), /data-mid="4" data-mat="5"/);
+  assert.equal(c.f.quoteBtn(false), '', 'another agent\'s bubbles: none');
+  // The tracker itself is off while this switch and Channels are on (strip, dropdown, chats-list dots).
+  const tt = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8').split('\n');
+  const onOf = tweaks => { const x = vm.createContext({ document: { documentElement: { dataset: { tweaks } } } }); vm.runInContext(tt.find(l => l.includes("const ID = 'wizard/thread-tracker'")) + '\n' + tt.find(l => l.includes('const RETIRED_BY')) + '\n' + tt.find(l => l.includes('const on = ()')) + '\nthis.on = on;', x); return x.on(); };
+  assert.equal(onOf('wizard/thread-tracker'), true);
+  assert.equal(onOf('wizard/thread-tracker wizard/chat-channels'), true);
+  assert.equal(onOf('wizard/thread-tracker wizard/needs-you-in-thread'), true, 'without Channels the switch does nothing');
+  assert.equal(onOf('wizard/thread-tracker wizard/chat-channels wizard/needs-you-in-thread'), false, 'retired');
+  // Its Reply and the thread's Mark done are handled by Chats.
+  assert.match(src, /if \(typeof replyStd === 'function' && replyStd\(LIVE\.agentOf && w\.thread \? LIVE\.agentOf\(w\.thread\) : ''\)\) \{ const mq = e\.target\.closest\('\[data-mquote\]'\); if \(mq\) \{ quoteMessage\(w, mq\.closest\('\.msg'\)\); return true; \} \}/);
+  assert.match(src, /if \(e\.target\.closest\('\[data-chmarkdone\]'\) && w\.thread\) \{ markDone\(id, w\.thread, true\); return true; \}/);
+  assert.match(src, /if \(!isNew && reply && typeof needsReplied === 'function'\) needsReplied\(wid, sid, reply\);/);
+});
+
+test('issue 1331: Archive turns quiet; Mark done is the strong button, only while a Needs you is open', () => {
+  const css = readFileSync(new URL('../web/tweaks/wizard/needs-you-in-thread/tweak.css', import.meta.url), 'utf8');
+  const S = 'html[data-tweaks~="wizard/needs-you-in-thread"][data-tweaks~="wizard/chat-channels"]';
+  assert.match(css, new RegExp(S.replace(/[[\]~"/.]/g, '\\$&') + ' \\.ch-tacts button\\[data-chact="done"\\] \\{ color: var\\(--wz-text-secondary\\); border-color: var\\(--wz-border\\); background: transparent;'), 'Archive: neutral ink, no accent fill');
+  assert.match(css, /\.ch-tacts button\.ch-tact-md \{[^}]*background: var\(--wz-accent\); color: var\(--wz-base\);/, 'Mark done: the accent fill');
+  for (const rule of css.split('\n').filter(l => l.includes('{'))) assert.ok(rule.startsWith(S), 'scoped: ' + rule.slice(0, 60));
+  const ta = src.indexOf('    const tacts = NV ?'), tacts = src.slice(ta, src.indexOf('    clearReading(w.id);', ta));
+  assert.match(tacts, /typeof needsAsk === 'function' && needsAsk\(s\) && canMarkDone\(s\) \? `<button type="button" class="ch-tact-md" data-chmarkdone/);
+  const s = askRow('b'), f = needsFixture();
+  assert.ok(vm.runInContext('needsAsk', f.env)(s) && f.canMarkDone(s), 'shown on an open Needs you');
+  assert.equal(vm.runInContext('needsAsk', f.env)({ ...s, attention: { state: 'fyi', ask: 'x' } }), null, 'nothing prominent otherwise');
+  const cat = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  assert.ok(cat.tweaks.includes('wizard/needs-you-in-thread') && !cat.defaults.includes('wizard/needs-you-in-thread'), 'listed, off by default');
+});

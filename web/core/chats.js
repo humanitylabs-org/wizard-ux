@@ -452,12 +452,16 @@ window.WizCore.chats = function createChats(H) {
    * (LIVE.markHandled). It never archives or moves the thread; a later reply brings the markers back. An approval
    * gate is not a marker: it stays until it is answered. */
   const MARK_DONE = 'wizard/mark-done', MARK_DONE_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-  const markDoneOn = () => { try { return channelsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(MARK_DONE); } catch (_) { return false; } };
+  // Needs you in the thread (issue 1331, below) brings Mark done with it: the same action, built once.
+  const NEEDS_THREAD = 'wizard/needs-you-in-thread';
+  const markDoneOn = () => { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return channelsOn() && (t.includes(MARK_DONE) || t.includes(NEEDS_THREAD)); } catch (_) { return false; } };
   const handledNow = s => !!s && markDoneOn() && !!LIVE.handled?.(s);
   // Offered while there is a marker to clear: not handled through its newest reply yet, or marked unread again since.
   const canMarkDone = s => !!s && markDoneOn() && !!LIVE.markHandled && !isWorking(s) && !s.archived && (!handledNow(s) || !!LIVE.isNew?.(s));
-  function markDone(wid, sid) {
-    const s = (wid && W[owner(wid)] ? rowOf(owner(wid), sid) : null) || LIVE.session(sid); if (!canMarkDone(s)) return false;
+  // inThread: the thread's own Mark done beside its Needs you line, also while the agent works on a plain owner message.
+  function markDone(wid, sid, inThread = false) {
+    const s = (wid && W[owner(wid)] ? rowOf(owner(wid), sid) : null) || LIVE.session(sid);
+    if (!(inThread ? !!needsAsk(s) && !!LIVE.markHandled : canMarkDone(s))) return false;
     vib(8);
     // The row the window shows (a routed post can share its id with a main thread), as openChat's markSeen does.
     void LIVE.markHandled(s);
@@ -466,6 +470,44 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || attOf(s)?.state === 'needs_you');
+  /* Needs you in the thread (wizard-ux issue 1331, switch wizard/needs-you-in-thread, with Channels on). The agent's
+   * reply whose status line said needs_you gets the feed's amber Needs you line right above its bubble, with the ask
+   * and Mark done beside it. One marker state for every surface: attOf (the row's status line; Mark done's handled
+   * mark clears it). It clears on Mark done, on Reply to that message, or when the agent's next status line no longer
+   * lists the ask; a plain owner message never clears it. The switch also gives Mark done (the menus), Reply on any
+   * message in the main agent's threads, and retires the Thread tracker strip and dots (thread-tracker.js on()). */
+  const needsThreadOn = () => { try { return channelsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(NEEDS_THREAD); } catch (_) { return false; } };
+  const needsAsk = s => { if (!s || s.archived || s.status === 'waiting_for_approval' || !needsThreadOn()) return null; const a = attOf(s); return a?.state === 'needs_you' ? a : null; };
+  // Reply on any message (the quote above the composer) is standard for the main agent's threads with this switch.
+  const replyStd = agent => needsThreadOn() && (!agent || agent === 'hermes');
+  function needsLineHtml(s) {
+    const a = needsAsk(s); if (!a) return '';
+    return `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span><span class="ch-needs-ask">${esc(a.ask)}</span>${LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}</div>`;
+  }
+  // Which reply carries the line: the agent's newest reply in the thread (its status line is the row's attention).
+  // Remembered per window so Reply on that message (needsReplied) and the opening place (needsLand) find it.
+  function needsMark(wid, sid, s, turns) {
+    const c = ch(wid), html = sid && sid !== '__new__' ? needsLineHtml(s) : '';
+    const k = html ? turns.map(tn => !!tn.a && isFinite(tn.a.at)).lastIndexOf(true) : -1;
+    if (k >= 0) { c.needsFor = sid; c.needsAt = turns[k].a.at; } else if (c.needsFor === sid) { c.needsFor = ''; c.needsAt = NaN; }
+    return { k, html: k >= 0 ? html : '' };
+  }
+  // Reply on the needs-you message (3a): handled through the reply it shows, once the owner's message is saved.
+  function needsReplied(wid, sid, reply) {
+    const c = ch(wid), q = reply?.quote;
+    if (!needsThreadOn() || !q || q.role !== 'assistant' || !sid || c.needsFor !== sid || !(Math.abs((+q.at || 0) - c.needsAt) < 1500)) return false;
+    const s = rowOf(owner(wid), sid) || LIVE.session(sid); if (!needsAsk(s) || !LIVE.markHandled) return false;
+    void LIVE.markHandled(s); paintListsNow(); chanSeenPaint();
+    return true;
+  }
+  // Opening a thread with an open Needs you lands on that message (once per open), its amber line at the top.
+  function needsLand(w, nav) {
+    const c = ch(w.id); if (!needsThreadOn() || c.needsLandNav === nav) return;
+    c.needsLandNav = nav;
+    const go = n => { const line = c.readNav === nav && c.needsFor === w.thread ? elOf(w.id)?.querySelector('.ch-msgs [data-needs-line]') : null;
+      if (line) line.scrollIntoView({ block: 'start' }); else if (n > 0) requestAnimationFrame(() => go(n - 1)); };
+    requestAnimationFrame(() => go(4));
+  }
   function chanPrefs() {
     const st = typeof chanStore === 'function' ? chanStore() : null;
     if (st) return chanStorePrefs(st);
@@ -2576,9 +2618,11 @@ window.WizCore.chats = function createChats(H) {
   }
   // Thread tracker: every message carries its row id and time so a tracker row or a quote can find it again.
   // Main builder agent only: turnHtml passes tt (onFor the thread's agent), so other agents' bubbles carry neither.
-  const msgIds = (m, at, tt = true) => (tt && globalThis.WosThreadTracker?.on() && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
-  const quoteBtn = (tt = true) => (tt && globalThis.WosThreadTracker?.on() ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
-  function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true) {
+  // Issue 1331: Needs you in the thread makes Reply standard (turnHtml's tt: main agent) and retires the tracker itself.
+  const msgIds = (m, at, tt = true) => (tt && (globalThis.WosThreadTracker?.on() || (typeof needsThreadOn === 'function' && needsThreadOn())) && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
+  const quoteBtn = (tt = true) => (tt && (globalThis.WosThreadTracker?.on() || (typeof needsThreadOn === 'function' && needsThreadOn())) ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
+  // needs: the amber Needs you line (issue 1331) drawn right above this turn's reply bubble.
+  function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = '') {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
@@ -2618,7 +2662,7 @@ window.WizCore.chats = function createChats(H) {
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
       // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
       const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
-      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn(tt)}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;
@@ -3273,12 +3317,13 @@ window.WizCore.chats = function createChats(H) {
       const rns = (s?.renames || []).map(r => ({ ...r, ms: r.at * 1000 })).filter(r => from === 0 || !(r.ms < firstAt)).sort((a, b) => a.ms - b.ms);
       const rnHtml = r => `<div class="ch-renamed"><span>${r.by === 'you' ? 'You renamed this from' : 'Renamed from'} “${esc(r.from)}”</span></div>`;
       const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
+      const need = typeof needsMark === 'function' && !isNew && s ? needsMark(w.id, w.thread, s, shown) : { k: -1, html: '' }; // issue 1331
       msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
         + shown.map((tn, k, arr) => {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect || !!runErr, !!globalThis.WosThreadTracker?.onFor?.(TAG));
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect || !!runErr, !!globalThis.WosThreadTracker?.onFor?.(TAG) || (typeof replyStd === 'function' && replyStd(TAG)), k === need.k ? need.html : '');
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
         + (refused ? `<div class="appr" role="status" data-chrefused><b>Reply not sent</b><p>${esc(window.WosModels.refusal(s))}</p>${['failed', 'interrupted'].includes(s?.status) ? '<div class="appr-b"><button type="button" class="no" data-chdismiss>Dismiss</button></div>' : ''}</div>`
@@ -3319,7 +3364,7 @@ window.WizCore.chats = function createChats(H) {
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = NV ? (NQ ? '' : noteTactsHtml(NV, false))
-      : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
+      : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${typeof needsAsk === 'function' && needsAsk(s) && canMarkDone(s) ? `<button type="button" class="ch-tact-md" data-chmarkdone aria-label="Mark done: clear Needs you" title="Mark done">${MARK_DONE_SVG}<span>Mark done</span></button>` : ''}${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
@@ -3799,6 +3844,7 @@ window.WizCore.chats = function createChats(H) {
       if (retireLanded(w.thread, turns)) changed = true;
       // Current answers paint before optional detail and approval metadata.
       if (changed) { const el = elOf(w.id); if (el && current()) renderLive(w, el); }
+      if (typeof needsLand === 'function' && current()) needsLand(w, nav); // issue 1331: land on the Needs you message
       changed = false;
       const detail = LIVE.session(sid)?.detailNeeded ? LIVE.sessionInfo(sid).then(() => {
         if (current()) { c.detailNav = nav; changed = true; }
@@ -4089,6 +4135,7 @@ window.WizCore.chats = function createChats(H) {
       it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
         instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(reply ? { reply } : {}), wid: here ? wid : '', how, source: 'chat', space: false, ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
       trackerSeen?.commit(); // synchronize Seen only once the message/steer has durable custody
+      if (!isNew && reply && typeof needsReplied === 'function') needsReplied(wid, sid, reply); // Reply on the Needs you message clears it (issue 1331)
     } catch (e) {
       trackerSeen?.cancel(); // a failed save must put the green rows back with the draft
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
@@ -4201,6 +4248,9 @@ window.WizCore.chats = function createChats(H) {
       if (globalThis.WosThreadTracker.click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a), resume })) return true;
       const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; }
     }
+    // Issue 1331: Reply on any message in the main agent's threads, and the thread's own Mark done.
+    if (typeof replyStd === 'function' && replyStd(LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '')) { const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; } }
+    if (e.target.closest('[data-chmarkdone]') && w.thread) { markDone(id, w.thread, true); return true; }
     const qj = e.target.closest('[data-ttjump]'); if (qj) { jumpToMessage(id, { message_id: qj.dataset.ttjump || null, at: +qj.dataset.ttjumpAt || 0 }); return true; }
     const hc = e.target.closest('[data-helper-continue]');
     if (hc) {
