@@ -27,7 +27,7 @@ async function world() {
   vm.runInNewContext(models, {window, fetch, AbortSignal, console});
   await window.WosModels.load();
   const store = {}, W = {};
-  const ctx = {window, W, ch: wid => (store[wid] ||= {}), winAgent: w => w?.agent || '', PW: {newModel: c => c.newModel || null}};
+  const ctx = {window, W, ch: wid => (store[wid] ||= {}), winAgent: w => w?.agent || '', PW: {newModel: c => c.newModel || null}, chanDraftKey: () => '', chanModel: () => null}; // no channel box open (issue 1309)
   vm.createContext(ctx);
   const route = vm.runInContext('(' + modelRoute + ')', ctx);
   return {M: window.WosModels, W, store, route};
