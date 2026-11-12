@@ -104,6 +104,22 @@ const report = { web, on: ON, cases: [] };
         await page.click('.aad-onelist');
         await page.waitForFunction(() => document.documentElement.dataset.aadOne === 'app');
         await shot('7-back-to-app');
+        if (W === 960) {
+          // resizing across every width (Codex review): the chat alone with Back at 640, the column folded at 500,
+          // today's layout again from 1024
+          await page.click('.aad-vt .aad-vchats'); await page.waitForFunction(() => document.documentElement.dataset.aadOne === 'chats');
+          await page.evaluate(() => __wux.openThread('qa-b')); await settle();
+          await page.setViewportSize({ width: 640, height: 760 }); await settle();
+          assert.ok(await box(page, '.aad-oneback'), stem + ': Back appears after shrinking to 640');
+          assert.equal(await box(page, '.aad-side'), null, stem + ': the chat alone after shrinking');
+          await page.setViewportSize({ width: 500, height: 760 }); await settle();
+          assert.equal((await ds()).aadTabs, 'rail', stem + ': the column folds below 560');
+          await shot('8-resized-500');
+          await page.setViewportSize({ width: 1200, height: 760 }); await settle();
+          const wideDs = await ds();
+          assert.equal(wideDs.aadOne, undefined, stem + ': wide again = today'); assert.equal(wideDs.aadTabs, 'open'); assert.ok(await box(page, '.aad-side'));
+          assert.equal(await box(page, '.aad-vt .aad-vchats'), null, stem + ': no Chats row when wide');
+        }
       }
       assert.deepEqual(errors, [], stem + ': page errors');
       entry.writes = writes;

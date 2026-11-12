@@ -2888,7 +2888,12 @@ test('desktop narrow one-app: switch on below 1024 px = one thing at a time; off
     const chat = d();
     w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
     const app = { ...d(), appW: parseFloat(w.html.style.getPropertyValue('--aad-pane-app-width')), mainW: parseFloat(w.html.style.getPropertyValue('--aad-pane-main-width')), sideW: parseFloat(w.html.style.getPropertyValue('--aad-pane-side-width')) };
-    return { chat, app };
+    // the arrangement keys / buttons do nothing while narrow: the saved wide-window arrangement is kept (Codex review)
+    const mode0 = JSON.stringify(globalThis.WizCore.panes.get());
+    for (const b of w.html.querySelectorAll?.('.aad-mode[data-mode="pair"]') || []) b.dispatchEvent(new FakePointerEvent('click'));
+    const modeKept = JSON.stringify(globalThis.WizCore.panes.get()) === mode0;
+    globalThis.WizCore.panes.set({ mode: 'tiled' });
+    return { chat, app, modeKept };
   };
   try {
     const off = await run(880, false);
@@ -2899,6 +2904,7 @@ test('desktop narrow one-app: switch on below 1024 px = one thing at a time; off
     assert.equal(on.app.chat, undefined, 'on: no chat docked beside the app'); assert.equal(on.app.wide, '', 'on: the app fills the main area');
     assert.equal(on.app.sideW, 0); assert.equal(on.app.appW, on.app.mainW, 'the app is as wide as the main area');
     assert.equal(on.chat.one, 'chats'); assert.equal(on.chat.side, 'open', 'on at 880 px: the list beside the chat');
+    assert.equal(on.modeKept, true, 'on: Side by side does not rewrite the saved arrangement'); assert.equal(off.modeKept, false, 'off: Side by side works as before');
     const narrow = await run(640, true);
     assert.equal(narrow.chat.side, 'none', 'on at 640 px: the open chat alone (Back to the list)');
     assert.equal(narrow.app.side, 'none');

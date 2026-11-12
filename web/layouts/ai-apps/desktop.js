@@ -315,6 +315,8 @@ export default function desktop(api) {
   api.listen(sTop, 'mousedown', e => e.preventDefault()); // like the app bar: never takes the keyboard itself
   const modeBars = [];
   function windowMode(mode, slot = panes.get().focus) {
+    // narrow desktop (ONE): one app at a time, no arrangements; the saved one stays as it is for the wide window
+    if (one()) return;
     // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
     flip([dockEl, pane?.el, secondEl], () => panes.set({ mode, focus: slot }));
   }
@@ -1530,7 +1532,10 @@ export default function desktop(api) {
     // narrow desktop (ONE): the app in front fills the main area (as ⤢ Wider); the chat stays open behind it, not beside
     if (pane) oneLast = { id: pane.id, desk: Number(pane.desk) };
     const oneFront = one() && !!pane;
-    if (oneFront && !wide) { oneWide = true; setWide(true); } else if (oneWide && !oneFront) { oneWide = false; if (wide && !wideAuto) setWide(false); }
+    if (oneFront && !wide) { oneWide = true; setWide(true); } else if (oneWide && !oneFront) {
+      // (an app showing its companion keeps the width it wants wide, as autoWide would have given it: Codex review)
+      oneWide = false; if (pane && paneWins() > 1) wideAuto = true; else if (wide && !wideAuto) setWide(false);
+    }
     const model = paneModel(), floating = model.mode !== 'tiled';
     const chat = pane || chatOn || floating ? chatsEl() : null; dockEl = chat;
     // (the app's desk or the Chats desk not on the stage yet, the shell draws a desk on its first visit: look again
@@ -2092,6 +2097,7 @@ export default function desktop(api) {
   function paintOne(h) {
     const on = one();
     if (on !== oneWas) { oneWas = on; oneList = true; oneSeen = chatThread; if (!on) paintVt(true); }
+    oneSig = oneNow();
     // a chat opened (from the list, a notification, a key) shows that chat
     if (on && !h.app && chatThread !== oneSeen) { if (chatThread) oneList = false; oneSeen = chatThread; }
     const v = on ? (pane ? 'app' : 'chats') : '';
@@ -2104,9 +2110,13 @@ export default function desktop(api) {
     if (a) { const n = appName(a.id) || 'the app'; oneLB.textContent = `‹ ${n}`; oneLB.title = `Back to ${n}`; oneLB.setAttribute('aria-label', `Back to ${n}`); }
     paintOneChats();
   }
-  // the window crossing ONE.from, or the switch turned on or off
-  api.listen(globalThis, 'resize', () => { if (one() !== oneWas) paintTop(); });
-  const oneMo = globalThis.MutationObserver ? new MutationObserver(() => { if (one() !== oneWas) paintTop(); }) : null;
+  // the window crossing any of ONE's widths (one app, the list beside the chat, the folded column), or the switch
+  // turned on or off: all of it again (Codex review: not only ONE.from)
+  const oneNow = () => `${one()}|${oneSplit()}|${(globalThis.innerWidth || 1440) < ONE.rail}`;
+  let oneSig = '';
+  const oneCheck = () => { if (oneNow() !== oneSig) paintTop(); };
+  api.listen(globalThis, 'resize', oneCheck);
+  const oneMo = globalThis.MutationObserver ? new MutationObserver(oneCheck) : null;
   oneMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
   /* round 21 (Miguel, 4 Nov 2026): one left/right model for every open the shell starts by itself. An app (a
    * notification's Open, the launcher, a command) or a link an app owns = that app in the right panel, its one window
