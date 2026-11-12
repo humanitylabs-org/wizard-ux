@@ -156,7 +156,9 @@
     keepThreadOpen: true,
     // A new chat sent from the Chats window a layout docks beside an app (AI apps: Resolve this on a notification) stays
     // in that column, never the list / Home laid out full width under the app panel (James, 6 Nov 2026).
-    keepNewOpen: id => !homeOpen && !!globalThis.WosSkinHost?.routeShows?.(wsOf(id)),
+    // Every New chat sent on the desktop stays open in its new thread (wizard-ux issue 1311, James 12 Nov 2026), in the
+    // classic desks and the AI apps column alike (it used to leave to the list, which AI apps draws as its background).
+    keepNewOpen: () => true,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
@@ -2128,7 +2130,8 @@
     const post = (sid, open) => real(sid) && CHATS.channelOf?.(LIVE.session(sid)) === open.name;
     const mine = f?.app === 'chats' ? CHATS.chanOpen?.(f) : null;
     if (mine) return !f.thread ? { wid: f.id, sid: '__new__' } : post(f.thread, mine) ? { wid: f.id, sid: f.thread } : null;
-    const open = feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
+    // The AI apps sidebar's tab decides (wizard-ux issue 1310): on Activity a feed left in the main column is not in front.
+    const open = CHATS.chanView?.() === 'activity' ? null : feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
     if (feedHost?.isConnected && feedHost.dataset.chats === feedBase.id + '::side' && !feedHost.closest('[hidden]')) return { wid: feedBase.id + '::side', sid: '__new__' };
     return f && post(f.thread, open) ? { wid: f.id, sid: f.thread } : null;
   }
@@ -3221,6 +3224,7 @@
     // Back: the main column's feed closes first; then (a feed the earlier design left in the sidebar) the sidebar's own.
     chatChannelPost: () => chanPost(),
     chatChannelNew: () => chanNew(),
+    chatChannelView: () => CHATS.chanView?.() || '',
     chatChannelBack: () => {
       if (feedBase && feedOpen()) { const ok = !!CHATS.channelBack(listWin(feedBase.id, 'side')); if (ok) feedOpened(feedBase.id + '::side'); return ok; }
       const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side'));

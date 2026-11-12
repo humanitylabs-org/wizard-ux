@@ -966,6 +966,8 @@
         channelPost: () => live() ? !!shell.chatChannelPost?.() : false,
         // + / ⌥N on the Channels list with no channel open (wizard-ux issue 1308): the new-channel form opens (true).
         channelNew: () => live() ? !!shell.chatChannelNew?.() : false,
+        // The Chats list's tab: 'activity' or 'channels' ('' with the switch off). It decides what + does (issue 1310).
+        channelView: () => live() ? shell.chatChannelView?.() || '' : '',
       }),
       /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
        * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
