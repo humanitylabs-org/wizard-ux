@@ -2393,7 +2393,7 @@
       const text = it?.text || '';
       if (!text) { toast('🎙', 'Transcription failed · recording kept below', 2600); return 'retained'; }
       window.__wuxLastDictation = text;
-      if (fields().insert(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
+      if (await fields().insert(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
       try {
         await navigator.clipboard.writeText(text);
         if (it.durable) O.remove(it.id);

@@ -14,6 +14,8 @@
  *  - theme(frame, appearance): the Appearance v1 context, pushed on change and again on every `ready`.
  *  - pinField(frame): the focused field in the focused app frame is sealed once; insert(text) puts text there only if
  *    the field did not change in between, release() lets it go.
+ *  - field.focus: the app says (a boolean, nothing else) whether a text field has focus, so the shell's dictation
+ *    (core/focused-field.js) can offer the orb for a sandboxed app; fieldState(frame) and onField(fn) expose it.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -22,8 +24,9 @@
   if (!window.WizShellBoundary?.on) return;
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
-  const sessions = new Map(), pending = new Map();
+  const sessions = new Map(), pending = new Map(), fieldListeners = new Set();
   let serial = 0;
+  const fieldChanged = () => { for (const fn of [...fieldListeners]) { try { fn(); } catch (_) {} } };
   const newChannel = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
   const opaqueFrame = f => !!f && f.tagName === 'IFRAME' && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin') && !f.hasAttribute('srcdoc');
   const connected = st => !!st && st.frame.isConnected && sessions.get(st.frame) === st;
@@ -36,6 +39,8 @@
   function revoke(st) {
     for (const [id, wait] of pending) if (wait.st === st) { clearTimeout(wait.timer); pending.delete(id); wait.resolve({ status: 'stale' }); }
     st.channel = newChannel(); st.ready = false; st.backPending = false;
+    // A new document: whatever field it had focused is gone, and old dictation seals no longer match (gen).
+    st.gen = (st.gen || 0) + 1; if (st.field) { st.field = false; fieldChanged(); }
     themedWin(st.frame)?.classList.remove('wz-themed');
   }
   // One question to the app; the answer comes back as `reply` with the same id (or `timeout`).
@@ -52,7 +57,7 @@
   function attach(frame) {
     if (!opaqueFrame(frame)) return () => {};
     const had = sessions.get(frame); if (had) return had.detach;
-    const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false };
+    const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0 };
     const hello = () => { revoke(st); send(st, 'hello'); };
     st.detach = () => { if (sessions.get(frame) !== st) return; frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
     sessions.set(frame, st);
@@ -73,6 +78,12 @@
       st.ready = true;
       if (st.appearance) send(st, 'theme', { appearance: st.appearance });
       try { window.WizAppearance?.sync?.(); } catch (_) {}
+      return;
+    }
+    if (d.op === 'field.focus') {
+      // Every report repaints: focus coming back into the frame from the shell changes nothing here but the shell's
+      // own focus, which the shell cannot observe inside the frame.
+      st.field = d.editable === true; fieldChanged();
       return;
     }
     if (d.op === 'theme.applied') {
@@ -115,10 +126,18 @@
       });
       return 'pending';
     },
+    // Dictation: whether the app reported a focused text field (never which one, never its text), and the document
+    // generation a seal belongs to. null = not attached or not ready.
+    fieldState(frame) { const st = sessions.get(frame); return connected(st) && st.ready ? Object.freeze({ focused: st.field, gen: st.gen }) : null; },
+    onField(fn) { if (typeof fn !== 'function') return () => {}; fieldListeners.add(fn); return () => fieldListeners.delete(fn); },
     theme(frame, appearance) { const st = sessions.get(frame); if (!st || !appearance) return; st.appearance = appearance; if (st.ready) send(st, 'theme', { appearance }); },
     async pinField(frame) {
       const st = sessions.get(frame);
-      if (!connected(st) || document.activeElement !== frame || !visible(frame)) return null;
+      // The frame has focus, or the app still reports its focused field while a shell control (the orb) is pressed.
+      // Another focused frame never lends its focus.
+      if (!connected(st) || !visible(frame)) return null;
+      const active = document.activeElement;
+      if (active !== frame && (!st.field || active?.tagName === 'IFRAME')) return null;
       const channel = st.channel, result = await ask(st, 'field.pin');
       if (!connected(st) || st.channel !== channel || result.status !== 'pinned' || !result.seal) return null;
       let used = false;

@@ -2879,7 +2879,7 @@
       }
       const text = words.filter(Boolean).join(' ');
       if (!text) { recDone(nid); target?.release(); V.field = null; setVoice('idle'); txHide(); toast('◌', 'No speech detected · nothing inserted'); return; }
-      const inserted = FIELDS.insert(target, text);
+      const inserted = await FIELDS.insert(target, text);
       target?.release(); V.field = null;
       if (!inserted) {
         // Never re-resolve a lost field or use the agent outbox as an audio recovery mechanism.

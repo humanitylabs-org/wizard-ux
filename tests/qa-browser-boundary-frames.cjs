@@ -1,7 +1,8 @@
 // Browser QA for the browser owner boundary's sandboxed app frames (wizard-os#133).
 // Real Chromium: a shell page with the boundary on (WizShellBoundary set the way shell-token.js does), the real
 // core/browser-boundary.js and core/appearance-host.js, and an app page in a sandboxed frame that loads the real
-// core/app-client.js. Checks the app is opaque and cannot reach the shell, and that Back and appearance still work.
+// core/app-client.js. Checks the app is opaque and cannot reach the shell, and that Back, appearance and dictation into
+// the app's focused field (the real core/focused-field.js, as the orb uses it) still work.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-frames.cjs
 const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -24,11 +25,16 @@ const SHELL = `<!doctype html><html data-skin="nebula"><head><meta charset="utf-
 <script>window.WizShellBoundary = Object.freeze({ on: true, header: 'X-Wizard-Shell-Token' });</script>
 <script src="/wizard-os-home/core/browser-boundary.js"></script>
 <script>window.WizCore = { apps: () => ({ APPS: [{ id: 'notes', url: '/notes/' }] }) };</script>
-<script src="/wizard-os-home/core/appearance-host.js"></script></head>
-<body><div class="win" data-win="w1"><iframe class="appframe" sandbox="${'allow-scripts allow-forms allow-downloads'}" src="/notes/"></iframe></div>
+<script src="/wizard-os-home/core/appearance-host.js"></script>
+<script src="/wizard-os-home/core/focused-field.js"></script></head>
+<body><button id="orb">orb</button><div class="win" data-win="w1"><iframe class="appframe" sandbox="${'allow-scripts allow-forms allow-downloads'}" src="/notes/"></iframe></div>
 <script>window.secretInShell = 'shell-only'; localStorage.setItem('shell', 'private');
   const f = document.querySelector('iframe'); WizBrowserBoundary.attach(f); window.rootSteps = [];
   window.backOnce = () => WizBrowserBoundary.back(f, () => rootSteps.push('shell-step'));
+  window.fieldPaints = [];
+  const FIELDS = WizCore.focusedField.create({ frames: () => [f], controls: el => el?.id === 'orb', onChange: c => fieldPaints.push(!!c) });
+  // The orb's dictation path: capture at the start of the take, insert the words at the end, release right after.
+  window.dictate = async words => { const seal = FIELDS.capture(); if (!seal) return 'no-field'; const p = FIELDS.insert(seal, words); seal.release(); return (await p) ? 'inserted' : 'refused'; };
 </script></body></html>`;
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -56,9 +62,23 @@ const server = http.createServer((req, res) => {
   const r2 = await page.evaluate(() => window.backOnce());
   await new Promise(r => setTimeout(r, 300));
   const steps = await app().evaluate(() => window.steps);
+  // Dictation: tap into the app's field (focus stays in the app), then the orb inserts the words at the cursor.
+  const before = await page.evaluate(() => window.dictate('nothing'));
+  await app().click('#f'); await app().evaluate(() => { const i = document.getElementById('f'); i.setSelectionRange(5, 5); });
+  await page.waitForFunction(() => window.fieldPaints.at(-1) === true, null, { timeout: 4000 });
+  const dictated = await page.evaluate(() => window.dictate('world'));
+  // Keyboard on the orb (focus moves to a shell control): the field the take started in still gets the words.
+  await app().click('#f'); await app().evaluate(() => { const i = document.getElementById('f'); i.setSelectionRange(0, 0); });
+  await page.waitForTimeout(100); await page.focus('#orb');
+  const fromOrb = await page.evaluate(() => window.dictate('Say'));
+  const fieldValue = await app().evaluate(() => document.getElementById('f').value);
+  // The focused field turns read-only without a focus event: the shell stops offering dictation.
+  await app().click('#f'); await page.waitForFunction(() => window.fieldPaints.at(-1) === true, null, { timeout: 4000 });
+  await app().evaluate(() => { document.getElementById('f').readOnly = true; });
+  const readOnlyDropped = await page.waitForFunction(() => window.fieldPaints.at(-1) === false, null, { timeout: 4000 }).then(() => true, () => false);
   const rootSteps = await page.evaluate(() => window.rootSteps);
   const ownerCall = seen.find(s => s.path === '/wizard/v1/threads');
-  const result = { probe, back: [r1, r2], steps, rootSteps, ownerCall, errors };
+  const result = { probe, back: [r1, r2], steps, rootSteps, ownerCall, dictation: { before, dictated, fromOrb, fieldValue, readOnlyDropped }, errors };
   console.log(JSON.stringify(result, null, 1));
   const fails = [];
   if (probe.origin !== 'null') fails.push('app origin is not opaque');
@@ -69,8 +89,11 @@ const server = http.createServer((req, res) => {
   if (r1 !== 'pending' || r2 !== 'pending') fails.push('back result');
   if (!steps.includes('app-back')) fails.push('app Back did not run');
   if (rootSteps.join() !== 'shell-step') fails.push('shell step at root did not run once');
+  if (before !== 'no-field') fails.push('dictation offered with no field focused');
+  if (dictated !== 'inserted' || fromOrb !== 'inserted' || fieldValue !== 'Say hello world') fails.push('dictation into the sandboxed field');
+  if (!readOnlyDropped) fails.push('a read-only field still offered dictation');
   if (errors.length) fails.push('page errors');
   await browser.close(); server.close();
   if (fails.length) { console.error('FAIL', fails); process.exit(1); }
-  console.log('PASS: sandboxed app is opaque, cannot reach the shell; Back and appearance work by postMessage');
+  console.log('PASS: sandboxed app is opaque, cannot reach the shell; Back, appearance and dictation work by postMessage');
 })().catch(e => { console.error(e); process.exit(1); });
