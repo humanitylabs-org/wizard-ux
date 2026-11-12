@@ -2523,7 +2523,7 @@
     parking=true;
     try{
       if(V.files.some(f=>f.uploading)||CHATS.composerBusy(V.replyTo.wid,V.replyTo.sid))throw Error('Wait for attachments before borrowing');
-      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
+      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid,V.replyTo.box||undefined);
       if(!(V.snap.route?.model&&V.snap.route?.provider)){V.snap.route=null;throw Error('Choose a model before parking the reply');}
       let parkedNativeId=null;
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
@@ -2811,7 +2811,7 @@
       const agent = snap.route?.agent || '';
       return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
     }
-    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
+    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid, pin.box || undefined) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__', snap.view?.box || undefined); // a channel take: the box it started in (issue 1309)
     // A take pinned to a channel goes to that channel's agent ('' = the main agent: General with no agent picked),
     // on the model picked for it. Another agent's channel in front by Send, or a model or agent left over from another
     // agent's thread at the start of the take, never re-routes it (wizard-ux issue 1312).
@@ -2819,7 +2819,8 @@
       const want = typeof snap.view.chanAgent === 'string' ? snap.view.chanAgent : snap.route?.agent || '';
       if (live && (live.agent || '') === want) return live;
       if (snap.route && (snap.route.agent || '') === want) return snap.route;
-      const nm = CHATS.PW?.newModel?.(CHATS.ch?.(pin?.wid || snap.view.id) || {});
+      // The box's own pick (wizard-ux issue 1309), never the window's New chat pick.
+      const box = pin ? pin.box : snap.view.box, nm = box ? CHATS.boxModel?.(box) || null : null;
       return window.WosModels.snapshot('', nm && (nm.agent || '') === want ? nm : null, want);
     }
     return live;
