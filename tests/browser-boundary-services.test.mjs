@@ -520,6 +520,20 @@ test('capture: a start on touch-down is held until the finger lifts; the page ge
   for (const fn of R.active.l.chunk) fn({ seq: 0 });
   assert.deepEqual(plainify(await call('capture.call', { id: 't2', method: 'stop' }, { lifted: true })), { capture: { id: 't2', durationMs: 7 } });
   assert.deepEqual(plainify(f.notices.filter(n => n.id === 't2').map(n => n.event)), ['chunk']);
+  // The finger lifts while the start is still on its way (a slow microphone prompt): the start confirms itself (Codex P2).
+  let go; const slow = R.start; R.start = async (appId, o) => { await new Promise(r => { go = r; }); return slow(appId, o); };
+  const pending = call('capture.start', { opts: {}, press: true });
+  for (let i = 0; i < 20 && !go; i++) await settle();
+  assert.deepEqual(plainify(await call('capture.confirm', {}, { lifted: true })), { capture: false });
+  go(); const landed = plainify(await pending); R.start = slow;
+  assert.equal(landed.capture.held, undefined, 'confirmed as it lands');
+  for (const fn of R.active.l.level) fn(0.9);
+  assert.equal(plainify(f.notices.at(-1)).value, 0.9);
+  await call('capture.call', { id: landed.capture.id, method: 'stop' });
+  // A lift from before this start began confirms nothing.
+  await call('capture.confirm', {}, { lifted: true }); await new Promise(r => setTimeout(r, 5));
+  assert.equal(plainify(await call('capture.start', { opts: {}, press: true })).capture.held, true);
+  await call('capture.call', { id: 't4', method: 'cancel' });
 });
 test('capture: a held take stopped without a tap, or left by its document, is discarded; a page never gets it later', async () => {
   const R = pressRecorder(), ls = store(), f = fixture({ win: { WizAppCapture: R, localStorage: ls } });

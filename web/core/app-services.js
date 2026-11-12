@@ -1120,6 +1120,9 @@
       return out({ id: p.id });
     }
     if (method === 'capture.confirm') {
+      // A lift while this document's press start is still on its way (a slow microphone prompt outlives the tap): the
+      // start confirms itself when it lands (Codex P2).
+      if (ctx?.lifted) c.lift = { gen, at: Date.now() };
       const e = c.sessions.get(args?.id);
       if (!e || e.gen !== gen || !e.held || !ctx?.lifted) return out(!!(e && e.gen === gen && !e.held));
       captureConfirm(e); return out(true);
@@ -1169,7 +1172,7 @@
     const release = () => { if (released) return; released = true; removeEventListener('wizard-app-capture-state', onState); st.sheetHolds.delete(hold); if (st.holds.delete(hold)) changed(); };
     const onState = () => { if (R.getState?.().active === false) release(); };
     addEventListener('wizard-app-capture-state', onState);
-    let session;
+    let session; const t0 = Date.now();
     try {
       session = await (attaching ? R.attach(st.appId) : opts.resumeId && R.resume ? R.resume(st.appId, opts.resumeId, opts) : R.start(st.appId, opts));
       if (!session) { release(); unprepare(); return out(null); }
@@ -1199,6 +1202,7 @@
     if (old?.held) { clearTimeout(old.held.timer); holdUntil(old.held.until); old.held = null; }
     else if (press) { heldMark(session.id, true); holdUntil(Date.now() + PRESS_MS); }
     c.sessions.set(session.id, e);
+    if (e.held && c.lift?.gen === gen && c.lift.at >= t0) captureConfirm(e);
     // Events go to this document only. Levels come many times a second; the session info rides along at most once a second.
     e.deliver = (event, value) => {
       if (c.sessions.get(session.id) !== e || !alive()) return;

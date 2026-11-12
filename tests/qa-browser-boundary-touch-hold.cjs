@@ -8,6 +8,7 @@
 //    when the finger lifts the app's Stop gives the take, with the audio recorded during the hold.
 //  - A page alone never gets audio: an app that stops a held take itself while the finger is still down (no tap ever
 //    came) gets no take, no audio and no pending take; the recording is discarded.
+//  - A slow start (the microphone prompt outlives the lift's 5 s activation): the lift still confirms the take.
 //  - Press to start: after the finger lifts, the app hears the recording live.
 //  - A start with no finger down and no tap is still refused, and the recorder is never asked.
 // Playwright's evaluate counts as a user gesture (it activates the page), so nothing is evaluated from just before a
@@ -76,6 +77,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
     prepare: (appId, o) => { shellLog.asked.push(['prepare', appId]); const id = 'prep-' + preps.size; preps.set(id, appId); return Object.freeze({ id, release: () => preps.delete(id) }); },
     start: async (appId, o) => {
       shellLog.asked.push(['start', appId, o.preparedId || null, typeof o.onPcm]);
+      if (window.slowStart) await new Promise(r => setTimeout(r, window.slowStart)); // a slow microphone prompt
       if (o.preparedId && preps.get(o.preparedId) !== appId) throw new Error('prepared for another app');
       preps.delete(o.preparedId);
       const s = { id: 'take-' + (shellLog.asked.length), appId, at: Date.now(), ms: 0, phase: 'recording', meta: o.meta || {}, l: { level: new Set(), pcm: new Set(), chunk: new Set(), state: new Set(), warn: new Set() } };
@@ -158,6 +160,18 @@ const server = http.createServer((req, res) => {
   const still = await page.evaluate(() => WizAppCapture.getState().active);
   ok(/^take-/.test(o.started) && /^error:.*tap/.test(o.take) && o.pcm.length === 0 && o.chunks.length === 0 && o.pending === 0 && still === false && /discarded/.test(o.warns.join(' ')),
     'a held take the page stops without a tap is discarded; the page gets no audio: ' + JSON.stringify({ started: o.started, take: o.take, pcm: o.pcm.length, chunks: o.chunks.length, pending: o.pending, active: still, warns: o.warns }));
+  // A slow microphone prompt: the finger lifts while the start is still on its way; the take lands after the lift's
+  // activation has expired, and the lift still confirms it (Codex P2).
+  await app().evaluate(() => reset());
+  await page.evaluate(() => { window.slowStart = 6500; });
+  await quiet();
+  await touch('touchStart', h); await page.waitForTimeout(400); await touch('touchEnd', h);
+  await page.waitForTimeout(8000);
+  o = await out();
+  await page.evaluate(() => { window.slowStart = 0; });
+  ok(/^take-/.test(o.started) && o.take && o.take.id === o.started && o.take.blob && o.warns.length === 0,
+    'a lift during a slow start still confirms the take: ' + JSON.stringify({ started: o.started, take: o.take, warns: o.warns }));
+  await app().evaluate(() => out.take && out.take.id && WizardApp.capture.ack(out.take.id)).catch(() => {});
   // Press to record: the finger lifts at once, the recording goes on and the app hears it live.
   await app().evaluate(() => reset());
   const p = await spot('#press');
