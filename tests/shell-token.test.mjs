@@ -105,3 +105,58 @@ test('the device remembers the box\'s boundary (never the token): set on, cleare
   const broken = boot({ localStorage: { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() { throw new Error('denied'); } } });
   assert.equal(broken.window.WizShellBoundary.on, true, 'storage that throws never stops the shell');
 });
+
+// A framed shell page (Store, Agents, Setup) inside the top-level shell: its own fetch/XHR, armed by the top.
+function child(top, path, { sameOrigin = true } = {}) {
+  const calls = [], xhrHeaders = [];
+  function fetch(input, init) { calls.push({ input, init }); return Promise.resolve('ok'); }
+  class FakeXHR { open(m, u) { this.url = u; } setRequestHeader(n, v) { xhrHeaders.push([this.url, n, v]); } send() {} }
+  const href = (sameOrigin ? ORIGIN : 'https://evil.example') + path;
+  const u = new URL(href);
+  const win = { fetch, XMLHttpRequest: FakeXHR, Headers, Request, location: { href, origin: u.origin, pathname: u.pathname } };
+  win.top = top.window; win.parent = top.window;
+  const document = { querySelector: () => null };
+  vm.runInNewContext(SRC, { window: win, document, localStorage: store(), location: win.location, URL, Headers, Request });
+  return { win, calls, xhrHeaders, nativeFetch: fetch };
+}
+
+test('on: the shell\'s own pages in a frame (Store, Agents, Setup) send owner calls with the token, armed by the top shell', async () => {
+  const top = boot();
+  for (const path of ['/wizard-os-home/store/index.html', '/wizard-os-home/agents/index.html', '/wizard-os-home/setup/', '/wizard-ux/store/index.html']) {
+    const c = child(top, path);
+    assert.notEqual(c.win.fetch, c.nativeFetch, path);
+    await c.win.fetch('../store-install/_slots/chats', { method: 'POST' });
+    await c.win.fetch('/wizard/v1/agents');
+    await c.win.fetch('/notes/api/list');
+    await c.win.fetch(new Request(ORIGIN + '/api/system/devices'));
+    assert.deepEqual(c.calls.map(sent), [TOKEN, TOKEN, null, TOKEN], path);
+    const x = new c.win.XMLHttpRequest(); x.open('POST', '/wizard/attachments'); x.send();
+    const y = new c.win.XMLHttpRequest(); y.open('GET', '/troubleshoot/api/x'); y.send();
+    assert.deepEqual(c.xhrHeaders, [['/wizard/attachments', 'X-Wizard-Shell-Token', TOKEN]], path);
+    assert.equal(c.win.WizShellBoundary, undefined, 'the framed page gets no handle of its own');
+  }
+});
+
+test('the top shell arms only its own pages in a frame below it, never an app page, another site or the shell itself', () => {
+  const top = boot();
+  for (const path of ['/notes/', '/troubleshoot/index.html', '/wizard-os-home/index.html', '/wizard-os-home/store/evil.html', '/wizard-os-home/store/x/index.html', '/pages/store/index.html']) {
+    const c = child(top, path);
+    assert.equal(c.win.fetch, c.nativeFetch, path);
+  }
+  const other = child(top, '/wizard-os-home/store/index.html', { sameOrigin: false });
+  assert.equal(other.win.fetch, other.nativeFetch, 'another origin');
+  assert.equal(top.window.WizShellBoundary.armFrame(top.window), false, 'not itself');
+  const stranger = { top: {}, location: { origin: ORIGIN, pathname: '/wizard-os-home/store/index.html' } };
+  assert.equal(top.window.WizShellBoundary.armFrame(stranger), false, 'a frame under another top');
+  // Off: nothing to arm, a framed shell page stays the browser's own.
+  const off = boot({ token: 'off' });
+  const c = child(off, '/wizard-os-home/store/index.html');
+  assert.equal(c.win.fetch, c.nativeFetch);
+});
+
+test('Store, Agents and Setup load shell-token.js as their first script', () => {
+  for (const page of ['web/store/index.html', 'web/agents/index.html', 'web/setup/index.html']) {
+    const html = read(page);
+    assert.equal(html.indexOf('<script'), html.indexOf('<script src="../core/shell-token.js"></script>'), page);
+  }
+});

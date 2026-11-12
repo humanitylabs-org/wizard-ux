@@ -63,7 +63,45 @@
     });
   }
   const themedWin = f => f.closest?.('.st-embed') || f.closest?.('.wl-embed') ? null : f.closest?.('.win');
+  // The shell's own pages that run in an app window (Store, Agents, Setup) are shell code, not apps: they stay
+  // same-origin so they keep their owner calls, which the top-level shell sends with the token
+  // (core/shell-token.js armFrame). Same list as there.
+  const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup)\/(?:index\.html)?$/;
+  const shellPage = url => {
+    try { const u = new URL(String(url), location.href); return u.origin === location.origin && SHELL_PAGE.test(u.pathname); } catch (_) { return false; }
+  };
+  // Backstop for such a frame: if it ever lands on a same-origin page that is not one of the shell's own (none of
+  // them navigates its frame elsewhere today), it is reloaded sandboxed like any app page. Another site's page can't
+  // reach the shell, so it is left alone and checked again on its next load.
+  const guarded = new WeakMap();
+  function guard(frame) {
+    if (guarded.has(frame)) return guarded.get(frame);
+    const check = () => {
+      if (!frame.isConnected || frame.hasAttribute('sandbox')) return;
+      let href = '';
+      try {
+        const l = frame.contentWindow.location;
+        if (l.href === 'about:blank' || (l.origin === location.origin && SHELL_PAGE.test(l.pathname))) return;
+        if (l.origin !== location.origin) return;
+        href = l.href;
+      } catch (_) { return; }
+      frame.setAttribute('sandbox', SANDBOX);
+      attach(frame);
+      frame.src = href;
+    };
+    // The window's own disposer (app-services) also ends a session the guard started later.
+    const dispose = () => {
+      frame.removeEventListener('load', check);
+      guarded.delete(frame);
+      sessions.get(frame)?.detach();
+    };
+    guarded.set(frame, dispose);
+    frame.addEventListener('load', check);
+    check();
+    return dispose;
+  }
   function attach(frame) {
+    if (frame?.tagName === 'IFRAME' && !frame.hasAttribute('sandbox') && !frame.hasAttribute('srcdoc')) return guard(frame);
     if (!opaqueFrame(frame)) return () => {};
     const had = sessions.get(frame); if (had) return had.detach;
     const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0 };
@@ -141,7 +179,9 @@
     enabled: true,
     sandbox: SANDBOX,
     // The attributes every app frame gets while the boundary is on (no allow-same-origin, ever).
-    frameAttributes: () => `sandbox="${SANDBOX}"`,
+    // The shell's own pages (shellPage) are the one exception: they stay same-origin (see guard above).
+    frameAttributes: url => (url !== undefined && shellPage(url) ? '' : `sandbox="${SANDBOX}"`),
+    shellPage,
     owns: frame => sessions.has(frame),
     attach,
     // Shell-side admission for a later bounded app service: registered element + its WindowProxy + current channel.

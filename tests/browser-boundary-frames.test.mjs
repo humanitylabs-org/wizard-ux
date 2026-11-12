@@ -26,7 +26,7 @@ function classes() { const s = new Set(); return { add: c => s.add(c), remove: c
 function shell({ on = true } = {}) {
   const ev = listeners(), log = [];
   const g = { setTimeout, clearTimeout, crypto: globalThis.crypto, JSON, console, Promise, Object, String, Map, Set };
-  g.window = g; g.top = g;
+  g.window = g; g.top = g; g.URL = URL; g.location = { href: ORIGIN + '/wizard-os-home/', origin: ORIGIN };
   g.WizShellBoundary = on ? { on: true } : undefined;
   g.addEventListener = ev.add; g.removeEventListener = ev.remove;
   g.document = { activeElement: null };
@@ -62,7 +62,7 @@ function frame(sh, { sandbox = 'allow-scripts allow-forms allow-downloads', clie
   const attrs = new Map(sandbox === null ? [] : [['sandbox', sandbox]]);
   const el = {
     tagName: 'IFRAME', isConnected: true, contentWindow: a,
-    hasAttribute: n => attrs.has(n), getAttribute: n => attrs.get(n) ?? null,
+    hasAttribute: n => attrs.has(n), getAttribute: n => attrs.get(n) ?? null, setAttribute: (n, v) => attrs.set(n, v),
     addEventListener: fev.add, removeEventListener: fev.remove,
     closest: sel => (sel === '.win' ? { classList: win.cls } : null),
     getClientRects: () => [1],
@@ -89,11 +89,15 @@ test('on: frames are sandboxed without same-origin, and only such frames attach'
   assert.equal(sh.B.enabled, true);
   assert.match(sh.B.frameAttributes(), /^sandbox="[^"]*allow-scripts[^"]*"$/);
   assert.doesNotMatch(sh.B.frameAttributes(), /allow-same-origin|allow-top-navigation|allow-popups-to-escape/);
-  for (const sandbox of [null, 'allow-scripts allow-same-origin']) {
-    const f = frame(sh, { sandbox, client: false });
-    sh.B.attach(f.el);
-    assert.equal(sh.B.owns(f.el), false, String(sandbox));
-  }
+  const same = frame(sh, { sandbox: 'allow-scripts allow-same-origin', client: false });
+  sh.B.attach(same.el);
+  assert.equal(sh.B.owns(same.el), false, 'a same-origin sandbox is no boundary: not attached');
+  // An unsandboxed app page (not one of the shell's own pages) is reloaded sandboxed, then attached.
+  const bare = frame(sh, { sandbox: null, client: false });
+  bare.a.location.pathname = '/notes/';
+  sh.B.attach(bare.el);
+  assert.equal(bare.el.getAttribute('sandbox'), 'allow-scripts allow-forms allow-downloads');
+  assert.equal(sh.B.owns(bare.el), true);
   const f = frame(sh, { client: false });
   sh.B.attach(f.el);
   assert.equal(sh.B.owns(f.el), true);
@@ -210,9 +214,9 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
     assert.ok(t > 0 && b > t, page);
     assert.ok(b < html.indexOf('<script src="core/appearance-host.js"></script>') && b < html.indexOf('<script src="core/app-services.js"></script>'), page);
   }
-  const gate = "${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes() : ''}";
-  assert.ok(read('web/app.js').includes('<iframe class="appframe"' + gate), 'phone app frames');
-  assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate), 'desktop app frames');
+  const gate = v => "${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(" + v + ") : ''}";
+  assert.ok(read('web/app.js').includes('<iframe class="appframe"' + gate('frameUrl')), 'phone app frames');
+  assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate('url')), 'desktop app frames');
   const services = read('web/core/app-services.js');
   assert.match(services, /if \(window\.WizBrowserBoundary\?\.owns\(frame\)\) return window\.WizBrowserBoundary\.back\(frame, onRoot\);/);
   assert.match(services, /window\.WizBrowserBoundary\?\.enabled \? window\.WizBrowserBoundary\.attach\(frame\) : null/);
@@ -380,4 +384,59 @@ test('keys: the claimed list reaches an app that is already connected', async ()
   assert.equal((await press({ key: 'Ω', code: 'KeyZ', altKey: true })).prevented, false);
   sh.B.keys(['KeyZ']); await tick();
   assert.equal((await press({ key: 'Ω', code: 'KeyZ', altKey: true })).prevented, true);
+});
+
+test('on: the shell\'s own pages (Store, Agents, Setup) stay same-origin; every other frame is sandboxed', () => {
+  const sh = shell();
+  for (const url of ['/wizard-os-home/store/index.html', '/wizard-os-home/store/index.html?app=notes', '/wizard-os-home/agents/index.html', '/wizard-os-home/setup/index.html', '/wizard-ux/setup/'])
+    assert.equal(sh.B.frameAttributes(url), '', url);
+  for (const url of ['/notes/', '/troubleshoot/', '/wizard-os-home/index.html', '/wizard-os-home/store/evil.html', 'https://evil.example/wizard-os-home/store/index.html', '/pages/store/index.html', undefined])
+    assert.match(sh.B.frameAttributes(url), /^sandbox="allow-scripts allow-forms allow-downloads"$/, String(url));
+});
+
+test('on: an unsandboxed shell frame that lands on any other same-origin page is reloaded sandboxed', () => {
+  const sh = shell();
+  const listeners = new Map(), attrs = new Map();
+  const loc = { href: 'about:blank', origin: 'null', pathname: 'blank' };
+  const el = {
+    tagName: 'IFRAME', isConnected: true, src: '/wizard-os-home/store/index.html',
+    contentWindow: { get location() { return loc; }, postMessage() {} },
+    hasAttribute: n => attrs.has(n), getAttribute: n => attrs.get(n) ?? null, setAttribute: (n, v) => attrs.set(n, v),
+    addEventListener: (n, fn) => listeners.set(n, (listeners.get(n) || []).concat(fn)), removeEventListener() {},
+    closest: () => null, getClientRects: () => [1],
+  };
+  const fire = () => { for (const fn of listeners.get('load') || []) fn({}); };
+  const origin = sh.g.location.origin;
+  sh.B.attach(el);
+  assert.equal(attrs.has('sandbox'), false, 'about:blank is left alone');
+  Object.assign(loc, { href: origin + '/wizard-os-home/store/index.html', origin, pathname: '/wizard-os-home/store/index.html' }); fire();
+  assert.equal(attrs.has('sandbox'), false, 'the Store stays same-origin');
+  Object.assign(loc, { href: 'https://other.example/x', origin: 'https://other.example', pathname: '/x' }); fire();
+  assert.equal(attrs.has('sandbox'), false, 'another site cannot reach the shell: left alone');
+  Object.assign(loc, { href: origin + '/notes/', origin, pathname: '/notes/' }); fire();
+  assert.equal(attrs.get('sandbox'), 'allow-scripts allow-forms allow-downloads');
+  assert.equal(el.src, origin + '/notes/', 'reloaded, now sandboxed');
+  assert.equal(sh.B.owns(el), true, 'and on the boundary channel like any app frame');
+});
+
+test('on: the disposer of a guarded shell window also ends the session the guard started later', () => {
+  const sh = shell();
+  const attrs = new Map(), listeners = new Set();
+  const origin = sh.g.location.origin;
+  const loc = { href: origin + '/wizard-os-home/agents/index.html', origin, pathname: '/wizard-os-home/agents/index.html' };
+  const el = {
+    tagName: 'IFRAME', isConnected: true, src: loc.href,
+    contentWindow: { get location() { return loc; }, postMessage() {} },
+    hasAttribute: n => attrs.has(n), getAttribute: n => attrs.get(n) ?? null, setAttribute: (n, v) => attrs.set(n, v),
+    addEventListener: (n, fn) => listeners.add(fn), removeEventListener: (n, fn) => listeners.delete(fn),
+    closest: () => null, getClientRects: () => [1],
+  };
+  const dispose = sh.B.attach(el);
+  assert.equal(sh.B.attach(el), dispose, 'one guard per window');
+  Object.assign(loc, { href: origin + '/notes/', pathname: '/notes/' });
+  for (const fn of [...listeners]) fn({});
+  assert.equal(sh.B.owns(el), true);
+  dispose();
+  assert.equal(sh.B.owns(el), false, 'closing the window lets go of its session');
+  assert.equal(listeners.size, 0, 'and of every load listener');
 });
