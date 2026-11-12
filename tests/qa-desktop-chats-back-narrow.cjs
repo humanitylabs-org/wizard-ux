@@ -91,6 +91,7 @@ const report = { origin, web, cases: [] };
         await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const startUrl = page.url(), hist = await page.evaluate(() => history.length);
+        await page.evaluate(() => { window.__qaSameDocument = true; }); // a real navigation (Back leaving Wizard) drops it
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const side = () => page.evaluate(() => document.documentElement.dataset.aadSide || '');
         const back = () => page.evaluate(() => { const b = document.querySelector('.aad-cback'); return b && !b.hidden && b.getClientRects().length ? b.textContent : ''; });
@@ -158,7 +159,9 @@ const report = { origin, web, cases: [] };
         if (!listBeside) assert.equal(s.side, 'over', 'the channel list over the page');
         for (let i = 0; i < 4; i++) { await page.keyboard.press('Escape'); await nap(200); }
         assert.equal(page.url(), startUrl, 'root Back stays in Wizard');
-        assert.equal(await page.evaluate(() => history.length), hist, 'no history steps');
+        // (the shell arms one guard entry on the first tap, app-services.js, so the browser's Back never leaves Wizard)
+        assert.ok(await page.evaluate(() => history.length) <= hist + 1, 'no history steps beyond the shell\'s own guard');
+        assert.equal(await page.evaluate(() => window.__qaSameDocument === true), true, 'the page never navigated');
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); }
