@@ -123,8 +123,25 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
           const inSec = k => page.locator(`.ch-list .ch-sec[data-sec="${k}"] [data-chopen]`).evaluateAll(n => [...new Set(n.map(x => x.dataset.chopen))]);
           entry.ready = await inSec('ready'); assert.deepEqual(entry.ready.slice().sort(), ['qa-c1', 'qa-g1', 'qa-y1']);
           entry.recent = await inSec('recent'); assert.deepEqual(entry.recent, ['qa-r1', 'qa-r2']);
-          entry.sorts = (await page.locator('.ch-act-sort button').filter({ visible: true }).allInnerTexts()).map(t => t.trim());
+          // wizard-ux issue 1354: the sort is one compact menu on Ready's header line, not a row of pills
+          entry.sorts = await vis('.ch-sec[data-sec="ready"] .ch-sec-hl select[data-chactorder]').evaluate(s => [...s.options].map(o => o.textContent.trim()));
           assert.deepEqual(entry.sorts, ['Newest first', 'Oldest first', 'Needs you first']);
+          assert.equal(await vis('[data-chactorder]').inputValue(), 'newest', 'Newest first by default');
+          entry.sortLine = await page.evaluate(() => { const r = e => document.querySelector(e).getBoundingClientRect(), h = r('.ch-sec[data-sec="ready"] .ch-sec-h'), s = r('[data-chactorder]');
+            return { headH: Math.round(h.height), sortH: Math.round(s.height), sameLine: s.top >= h.top - 4 && s.bottom <= h.bottom + 4 }; });
+          assert.ok(entry.sortLine.sameLine, 'the menu sits on the header line: ' + JSON.stringify(entry.sortLine));
+          assert.equal(await page.locator('.ch-sec[data-sec="ready"] :is(.ch-rdy-bar, [role="radio"])').filter({ visible: true }).count(), 0, 'no pill row');
+          // Nothing covers the Archived row's arrow (the floating New chat button sat on it at 1440x900)
+          entry.archArrow = await page.evaluate(() => { const a = document.querySelector('.ch-list .ch-sec[data-sec="archived"] .ch-sec-h i')?.getBoundingClientRect(), f = document.querySelector('.ch-list .ch-fab')?.getBoundingClientRect();
+            if (!a || !f) return { missing: !a ? 'arrow' : 'fab' }; const hit = document.elementFromPoint(a.left + a.width / 2, a.top + a.height / 2);
+            return { overlap: !(a.right <= f.left || a.left >= f.right || a.bottom <= f.top || a.top >= f.bottom), top: hit?.closest('.ch-sec-h') ? 'header' : hit?.className || hit?.tagName }; });
+          assert.ok(!entry.archArrow.overlap && entry.archArrow.top === 'header', 'the Archived arrow is clear: ' + JSON.stringify(entry.archArrow));
+          // Picking from the menu re-sorts Ready and keeps the choice on the header line
+          await vis('[data-chactorder]').selectOption('priority'); await nap(300);
+          entry.readyPriority = await inSec('ready'); assert.equal(entry.readyPriority[0], 'qa-y1', 'Needs you first puts amber on top');
+          assert.equal(await vis('[data-chactorder]').inputValue(), 'priority');
+          assert.equal(await page.evaluate(() => localStorage.getItem('wos.chats.readyOrder.v1')), 'priority');
+          await vis('[data-chactorder]').selectOption('newest'); await nap(300);
           entry.claudeLine = (await vis('.ch-list [data-chopen="qa-c1"]').innerText()).replace(/\s+/g, ' ');
           assert.match(entry.claudeLine, /# General · Claude/);
           entry.marks = await page.locator('.ch-list .ch-sec[data-sec="ready"] .ch-row').evaluateAll(n => n.map(x => [x.dataset.chopen, x.querySelector('.ch-act-ind i')?.getAttribute('aria-label') || '', x.querySelector('time') ? getComputedStyle(x.querySelector('time')).color : '']));
