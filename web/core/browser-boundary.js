@@ -23,6 +23,11 @@
  *    windows. onInput(fn) gets them for the focused, visible frame only; a click and a named ⌥ key also need the
  *    browser's transient user activation (a real click or key in the frame activates the shell too), so a page that
  *    only posts messages cannot press them at all.
+ *  - service.request: the bounded app services the shell answers under the boundary: `ready`, and the ones that act
+ *    only on the app's own window, `badge.set` and `titlebar.set`, handed to the one server core/app-services.js
+ *    registers (serve(fn)), which checks the frame against the installed app list and validates the data. A title-bar
+ *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
+ *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -35,7 +40,8 @@
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
-  let serial = 0, claimed = [];
+  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set'];
+  let serial = 0, claimed = [], server = null;
   const fieldChanged = () => { for (const fn of [...fieldListeners]) { try { fn(); } catch (_) {} } };
   const newChannel = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
   const opaqueFrame = f => !!f && f.tagName === 'IFRAME' && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin') && !f.hasAttribute('srcdoc');
@@ -52,6 +58,8 @@
     // A new document: whatever field it had focused is gone, and old dictation seals no longer match (gen).
     st.gen = (st.gen || 0) + 1; if (st.field) { st.field = false; fieldChanged(); }
     themedWin(st.frame)?.classList.remove('wz-themed');
+    // Whatever the old document put in its window (title-bar tools) goes with it; the client sends it again.
+    for (const fn of [...resetListeners]) { try { fn(st.frame); } catch (_) {} }
   }
   // One question to the app; the answer comes back as `reply` with the same id (or `timeout`).
   function ask(st, op, data = {}) {
@@ -166,10 +174,14 @@
       return;
     }
     if (d.op === 'service.request' && typeof d.id === 'string' && d.id.length <= 96) {
-      // The one service this slice answers. Every other app service stays closed under the boundary.
-      const value = d.method === 'ready' ? { version: VERSION, hosted: true } : undefined;
-      send(st, 'service.reply', { id: d.id, ...(value ? { value } : { error: { code: 'unavailable', message: 'Not available inside the browser boundary yet' } }) });
-      return;
+      // `ready`, and the services that act only on the app's own window (SERVED). Every other app service stays
+      // closed under the boundary. The answer is protocol data only (a boolean), never a shell object.
+      const answer = (value, code, message) => send(st, 'service.reply', { id: d.id, ...(code ? { error: { code, message } } : { value }) });
+      if (d.method === 'ready') return answer({ version: VERSION, hosted: true });
+      if (!st.ready || !server || !SERVED.includes(d.method)) return answer(undefined, 'unavailable', 'Not available inside the browser boundary yet');
+      let value;
+      try { value = server(st.frame, d.method, d.args); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
+      return answer(typeof value === 'boolean' ? value : null);
     }
     if (d.op === 'reply' && typeof d.id === 'string') {
       const wait = pending.get(d.id);
@@ -215,6 +227,18 @@
       for (const st of sessions.values()) if (st.ready) send(st, 'keys', { keys: claimed });
     },
     onInput(fn) { if (typeof fn !== 'function') return () => {}; inputListeners.add(fn); return () => inputListeners.delete(fn); },
+    // App services (core/app-services.js): one server, registered once, answers SERVED for a ready frame; it gets the
+    // frame element (never the app's window) and must check it. onReset(fn) runs on every new channel of a frame.
+    serve(fn) { if (server || typeof fn !== 'function') return false; server = fn; return true; },
+    onReset(fn) { if (typeof fn !== 'function') return () => {}; resetListeners.add(fn); return () => resetListeners.delete(fn); },
+    // A tap on one of the app's own title-bar tools, back to that frame on its current channel.
+    tool(frame, id, value) {
+      const st = sessions.get(frame);
+      if (!connected(st) || !st.ready || typeof id !== 'string' || !/^[a-z0-9-]{1,32}$/.test(id)) return false;
+      if (value !== undefined && (typeof value !== 'string' || value.length > 64)) return false;
+      send(st, 'tool', value === undefined ? { tool: id } : { tool: id, value });
+      return true;
+    },
     theme(frame, appearance) { const st = sessions.get(frame); if (!st || !appearance) return; st.appearance = appearance; if (st.ready) send(st, 'theme', { appearance }); },
     async pinField(frame) {
       const st = sessions.get(frame);

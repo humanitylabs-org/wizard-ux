@@ -91,6 +91,15 @@
       return !!w && !st.frame.hasAttribute('srcdoc') && within(new URL(st.frame.src), st.url) && w.location.origin === ORIGIN && within(new URL(w.location.href), st.url) && (!doc || w.document === doc);
     } catch (_) { return false; } // off-origin resources fail closed: current path cannot be verified
   }
+  // Browser owner boundary (wizard-os#133): a sandboxed app frame cannot be read, so it is verified by what the shell
+  // itself controls: the registered element, still connected, its src inside the installed app's path, and a ready
+  // answer on the frame's current boundary channel. Only window-local services (badge, title bar) accept it.
+  function boundaryLive(st) {
+    if (!st || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st) || st.frame.hasAttribute('srcdoc')) return false;
+    if (window.WizBrowserBoundary?.ready?.(st.frame) !== true) return false;
+    try { return within(new URL(st.frame.src), st.url); } catch (_) { return false; }
+  }
+  const live = (st, doc) => valid(st, doc) || boundaryLive(st);
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
   function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
@@ -173,7 +182,7 @@
   // dispatch. A layout-owned slot is not a clone of Classic's titlebar.
   const toolSlots = new WeakMap();
   function renderTools(frame, box) {
-    const st = frames.get(frame), owner = st && valid(st, st.doc) ? st : null;
+    const st = frames.get(frame), owner = st && live(st, st.doc) ? st : null;
     if (!toolSlots.has(box)) {
       toolSlots.set(box, { owner: null, key: '' });
       // Own the gesture: a tap here is never a title-bar double tap, a drag or a window action.
@@ -205,9 +214,10 @@
   }
   function dispatchTool(box, id, value) {
     const held = toolSlots.get(box), st = held?.owner;
-    if (!st || !valid(st, held.doc)) return false;
+    if (!st || !live(st, held.doc)) return false;
     const tool = st.tools?.find(x => x.id === id);
     if (!tool || tool.disabled || (value === undefined ? tool.kind !== 'button' : tool.kind !== 'select' || !tool.options.some(o => o.value === value))) return false;
+    if (!valid(st, held.doc)) return window.WizBrowserBoundary.tool(st.frame, id, value);
     try { st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); return true; } catch (_) { return false; }
   }
   /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
@@ -906,6 +916,17 @@
       Promise.resolve(claim.handler.receive(claim.text, claim.meta)).then(ok => done?.(ok === true), () => done?.(false));
       return true;
     } catch (_) { done?.(false); return false; }
+  }
+  // Under the boundary a sandboxed app sets its own badge and title bar over the boundary channel (browser-boundary.js).
+  if (window.WizBrowserBoundary?.serve) {
+    window.WizBrowserBoundary.serve((frame, method, args) => {
+      const st = frames.get(frame);
+      if (!boundaryLive(st)) throw fault('App window not verified');
+      if (method === 'badge.set') { setBadge(st.appId, args?.n, args?.more === true); st.badged = true; return true; }
+      if (method === 'titlebar.set') return setTools(st, args?.tools);
+      throw fault('Not available');
+    });
+    window.WizBrowserBoundary.onReset(frame => { const st = frames.get(frame); if (st?.tools) setTools(st, null); });
   }
   window.WizAppServices = Object.freeze({ fresh: Object.freeze({ tick: freshTick, tool: freshTool }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     titlebar: Object.freeze({ render: renderTools }),

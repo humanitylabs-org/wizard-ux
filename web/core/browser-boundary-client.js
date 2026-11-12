@@ -12,17 +12,20 @@
  * keys: Esc, bare ⌥ and the ⌥ codes the shell named (`keys`), never plain typing. Esc and those codes are held back
  * from this page, the way the shell's own key handler took them before the boundary; every other ⌥ chord stays this
  * page's alone, and so do ⌥ word moves and, on a Mac, ⌥- / ⌥= typed in a text field.
- * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary.
+ * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary:
+ * `ready`, `badge.set` and `titlebar.set`. The last badge and title bar are sent again on every new channel (the shell
+ * clears the title bar on each load), and a title-bar tap comes back as `tool` (onTool).
  */
 (() => {
   'use strict';
   if (window.WizBoundaryClient) return;
   let framed = false; try { framed = parent !== window; } catch (_) { framed = true; }
   if (!framed || globalThis.origin !== 'null') return;
-  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready'];
+  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, serial = 0, claimed = new Set();
+  let channel = '', back = null, applyTheme = null, onTool = null, serial = 0, claimed = new Set();
+  const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
   const error = (code, message) => Object.assign(new Error(message), { code });
@@ -33,7 +36,7 @@
     for (const wait of requests.values()) { clearTimeout(wait.timer); wait.reject(error('denied', 'App document changed')); }
     requests.clear();
   }
-  addEventListener('pagehide', () => { clear(); channel = ''; });
+  addEventListener('pagehide', () => { clear(); sticky.clear(); channel = ''; });
   const editable = el => !!el?.isConnected && typeof el.matches === 'function'
     && el.matches('textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input[type=email],input:not([type])')
     && !el.disabled && !el.readOnly && !el.closest('[inert],[data-no-dictation]') && typeof el.selectionStart === 'number';
@@ -102,10 +105,18 @@
       channel = d.channel; setKeys(d.keys); send({ op: 'ready' }); reportField(true);
       for (const [id, wait] of requests) send({ op: 'service.request', id, method: wait.method, args: wait.args });
       for (const go of [...waiters]) go();
+      for (const [method, args] of sticky) {
+        if (![...requests.values()].some(w => w.method === method)) send({ op: 'service.request', id: 'wbs-' + (++serial), method, args });
+      }
       return;
     }
     if (!channel || d.channel !== channel) return;
     if (d.op === 'keys') { setKeys(d.keys); return; }
+    if (d.op === 'tool') {
+      if (typeof d.tool !== 'string' || d.tool.length > 32 || (d.value !== undefined && typeof d.value !== 'string')) return;
+      try { onTool?.({ id: d.tool, value: d.value }); } catch (_) {}
+      return;
+    }
     if (d.op === 'service.reply') {
       const wait = requests.get(d.id); if (!wait) return;
       clearTimeout(wait.timer); requests.delete(d.id);
@@ -148,14 +159,16 @@
   });
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme } = {}) {
+    connect({ onBack, onTheme, onTool: tap } = {}) {
       back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;
+      onTool = typeof tap === 'function' ? tap : null;
       try { parent.postMessage({ type: TYPE, version: VERSION, op: 'boot' }, SHELL); } catch (_) {}
     },
     get ready() { return !!channel; },
     request(method, args, timeout = 15000) {
       if (!METHODS.includes(method)) return Promise.reject(error('unavailable', 'Not available inside the browser boundary yet'));
       if (requests.size + waiters.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
+      if (STICKY.includes(method)) sticky.set(method, args);
       const id = 'wbs-' + (++serial);
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => { waiters.delete(go); requests.delete(id); reject(error('timeout', 'Shared app request timed out')); }, timeout);

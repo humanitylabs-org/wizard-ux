@@ -207,6 +207,39 @@ test('client requests: only ready, and it waits for the first hello', async () =
   assert.deepEqual(clone(await r), { version: 1, hosted: true });
 });
 
+test('badge and title bar: served by the one registered server; taps come back; a reload clears and the app re-sends', async () => {
+  const sh = shell(), f = frame(sh);
+  const taps = [], calls = [], resets = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => false, onTool: d => taps.push(clone(d)) });
+  sh.B.attach(f.el);
+  await tick();
+  // No server yet: closed like any other service.
+  await assert.rejects(f.a.WizBoundaryClient.request('badge.set', { n: 1 }, 2000), e => e.code === 'unavailable');
+  assert.equal(sh.B.serve((el, method, args) => { calls.push([el === f.el, method, clone(args)]); if (args?.bad) throw new Error('Invalid title-bar tool'); return method === 'titlebar.set' ? true : { leak: 1 }; }), true);
+  assert.equal(sh.B.serve(() => true), false, 'only one server, registered once');
+  sh.B.onReset(el => resets.push(el === f.el));
+  assert.equal(await f.a.WizBoundaryClient.request('badge.set', { n: 3 }, 2000), null, 'only a boolean ever crosses back');
+  assert.equal(await f.a.WizBoundaryClient.request('titlebar.set', { tools: [{ id: 'older', kind: 'button' }] }, 2000), true);
+  await assert.rejects(f.a.WizBoundaryClient.request('titlebar.set', { bad: true }, 2000), e => e.code === 'refused' && /Invalid/.test(e.message));
+  await assert.rejects(f.a.WizBoundaryClient.request('share.text', {}, 2000), e => e.code === 'unavailable');
+  assert.deepEqual(calls.map(c => c.slice(0, 2)), [[true, 'badge.set'], [true, 'titlebar.set'], [true, 'titlebar.set']]);
+  // A tap: only to this frame, only on its current channel, only a tool id (and a picker value).
+  assert.equal(sh.B.tool(f.el, 'older'), true);
+  assert.equal(sh.B.tool(f.el, 'date', 'b'), true);
+  assert.equal(sh.B.tool(f.el, 'Not An Id'), false);
+  await tick();
+  assert.deepEqual(taps, [{ id: 'older' }, { id: 'date', value: 'b' }]);
+  // A reload: the shell clears that window's tools (reset) and the app sends its last badge and title bar again.
+  calls.length = 0; resets.length = 0;
+  f.load();
+  await tick(); await tick();
+  assert.deepEqual(resets, [true]);
+  assert.deepEqual(calls.map(c => c[1]).sort(), ['badge.set', 'titlebar.set']);
+  assert.deepEqual(calls.find(c => c[1] === 'titlebar.set')[2], { bad: true }, 'the last title bar the app asked for');
+  // A detached frame gets no taps.
+  sh.B.attach(f.el)(); assert.equal(sh.B.tool(f.el, 'older'), false);
+});
+
 test('wiring: pages load the boundary right after shell-token.js; app frames get the sandbox only when it is on', () => {
   for (const page of ['web/index.html', 'web/desktop.html']) {
     const html = read(page);
