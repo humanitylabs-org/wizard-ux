@@ -163,21 +163,24 @@ test('switch painted after load (reload, phone, second device): the watch starts
   }
 });
 
-test('overdue names every chat the Chats list counts as working, and a run this device just sent', async () => {
+test('overdue names every chat the Chats list counts as working and a run this device just sent, never a held send', async () => {
   const model = { isListWorking: s => ['submitting', 'queued', 'running', 'stopping'].includes(s.status) || !!s.background };
   const rows = [
-    { id: 'a', title: 'Queued one', status: 'queued' },
+    { id: 'a', title: 'Helper at work', status: 'completed', background: 'helper' },
+    { id: 'q', title: 'Saved send', status: 'queued' },
+    { id: 'q2', title: 'Saved new chat', status: 'submitting' },
     { id: 'b', title: 'Live run', status: 'completed', runId: 'run_b', lastRunStatus: 'running' },
     { id: 'c', title: 'Just sent', status: 'completed' },
     { id: 'd', title: 'Finished', status: 'completed' },
     { id: 'e', title: 'Archived', status: 'running', archived: true },
   ];
-  const h = reach({ rows, model, live: { pendingRun: sid => sid === 'c' ? 'run_c' : '' }, health: () => holding({ phase: 'overdue', active: 3 }) });
+  const h = reach({ rows, model, live: { pendingRun: sid => ['c', 'q'].includes(sid) ? 'run_' + sid : '' }, health: () => holding({ phase: 'overdue', active: 3 }) });
   await h.settle(); await h.settle();
   h.api.paintRestart(h.hosts);
   const html = h.hosts[0].children[0].innerHTML;
-  assert.match(html, /3 chats are still running: “Queued one”, “Live run”, “Just sent”/);
-  assert.doesNotMatch(html, /Finished|Archived/);
+  assert.match(html, /3 chats are still running: “Helper at work”, “Live run”, “Just sent”/);
+  // A send the restart holds is saved, not running (Codex P2): never listed beside the chats that block the restart.
+  assert.doesNotMatch(html, /Finished|Archived|Saved send|Saved new chat/);
 });
 
 test('Restart now shows as restarting now once the gate carries the choice', async () => {

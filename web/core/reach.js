@@ -333,14 +333,15 @@
     finally { restartAsk = ''; restartChanged(); void restartPoll(); }
   }
   // Names of the chats still running, from the shell's own list (health carries counts only, never thread ids).
-  // A chat counts as running the way the Chats list's Working does (submitting/queued too, a live run id, a helper),
-  // or when this device sent it a run the list has not caught up with yet (the thread then shows “Replying…”).
-  const RESTART_BUSY = ['submitting', 'queued', 'running', 'stopping'];
+  // A chat counts as running the way the Chats list's Working does (a live run id, a helper), or when this device sent
+  // it a run the list has not caught up with yet (the thread then shows “Replying…”). A send the restart holds
+  // (queued / not yet submitted) is saved, not running, as the Chats list shows it during a restart (chats.js 'held').
+  const RESTART_BUSY = ['running', 'stopping'], RESTART_SAVED = ['queued', 'submitting'];
   function restartRunning() {
     try {
       const L = window.WizLive, rows = L?.unified?.() || [], model = window.WizChatsListModel;
-      const busy = s => (model?.isListWorking ? model.isListWorking(s) : RESTART_BUSY.includes(s.status))
-        || (!!s.runId && RESTART_BUSY.includes(s.lastRunStatus)) || !!L?.pendingRun?.(s.id);
+      const busy = s => !RESTART_SAVED.includes(s.status) && ((model?.isListWorking ? model.isListWorking(s) : RESTART_BUSY.includes(s.status))
+        || (!!s.runId && RESTART_BUSY.includes(s.lastRunStatus)) || !!L?.pendingRun?.(s.id));
       return rows.filter(s => s && !s.archived && !s.hidden && busy(s)).map(s => String(s.title || 'Untitled chat'));
     } catch (_) { return []; }
   }
