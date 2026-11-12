@@ -45,7 +45,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
     WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } }, ...extra };
   if (extra.WizCore) window.WizCore = { ...extra.WizCore, apps: () => ({ APPS: [app] }) };
   const globalOn = {};
-  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, Headers, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { globalOn[t] = (globalOn[t] || []).filter(x => x !== fn); }, setInterval() {}, setTimeout, clearTimeout,
+  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, Headers, AbortController, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { globalOn[t] = (globalOn[t] || []).filter(x => x !== fn); }, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: front });
   return { B, frame, bar, notices, emit: (t, detail) => { for (const fn of globalOn[t] || []) fn({ detail }); }, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
@@ -635,4 +635,20 @@ test('app backend: the shell\'s owner route list is the same in shell-token.js a
   const a = readFileSync(new URL('../web/core/shell-token.js', import.meta.url), 'utf8').match(re)?.[1];
   const b = readFileSync(new URL('../web/core/browser-boundary.js', import.meta.url), 'utf8').match(re)?.[1];
   assert.ok(a && a === b, 'OWNER differs: ' + a + ' vs ' + b);
+});
+test('app backend: only GET and HEAD follow a redirect; a POST\'s redirect is never followed; net.abort stops the window\'s own call', async () => {
+  const { f, asked } = netFixture((url, init) => {
+    if (url.endsWith('/moved')) { const r = new Response(null, { status: 200 }); Object.defineProperty(r, 'type', { value: 'opaqueredirect' }); return r; }
+    if (url.endsWith('/slow')) return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+    return new Response('ok');
+  });
+  await f.call('net.fetch', { url: 'https://wizard.example/morning-report/a' });
+  await f.call('net.fetch', { url: 'https://wizard.example/morning-report/a', method: 'POST', body: new ArrayBuffer(1) });
+  assert.deepEqual(asked.map(a => a.init.redirect), ['follow', 'manual']);
+  await assert.rejects(f.call('net.fetch', { url: 'https://wizard.example/morning-report/moved', method: 'PUT' }), /not followed/);
+  const slow = f.call('net.fetch', { key: 'nf-1', url: 'https://wizard.example/morning-report/slow' });
+  assert.equal(f.call('net.abort', { key: 'nf-2' }), false, 'only a call this window has open');
+  assert.equal(f.call('net.abort', { key: 'nf-1' }), true);
+  await assert.rejects(slow, /aborted/);
+  assert.equal(f.call('net.abort', { key: 'nf-1' }), false);
 });

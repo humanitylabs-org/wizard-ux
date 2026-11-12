@@ -168,13 +168,21 @@
       const signal = req.signal;
       if (signal?.aborted) return Promise.reject(signal.reason ?? abortError());
       const self = this, spare = req.clone();
+      // An abort before the call reaches the shell stops it from being sent at all; one after it asks the shell to stop
+      // (net.abort, by this call's own key), so it no longer runs on or holds one of the window's slots.
+      const key = 'nf-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      let sent = null;
+      const cancel = () => { if (sent) sent.request('net.abort', { key }, 5000).catch(() => {}); };
+      signal?.addEventListener('abort', cancel, { once: true });
       const run = (async () => {
         const body = req.method === 'GET' || req.method === 'HEAD' ? null : await req.arrayBuffer();
         const c = await channel();
+        if (signal?.aborted) throw signal.reason ?? abortError();
         if (!c) return native.call(self, spare);
         let v;
         try {
-          v = await c.request('net.fetch', { url: req.url, method: req.method, headers: [...req.headers], body, credentials: req.credentials, cache: req.cache }, 300000);
+          sent = c;
+          v = await c.request('net.fetch', { key, url: req.url, method: req.method, headers: [...req.headers], body, credentials: req.credentials, cache: req.cache }, 300000);
         } catch (err) {
           if (err?.code === 'outside' || err?.code === 'unavailable') return native.call(self, spare);
           throw new TypeError('Failed to fetch');
@@ -183,7 +191,7 @@
         const res = new Response(NULL_BODY.includes(r.status) || req.method === 'HEAD' ? null : r.body, { status: r.status, statusText: r.statusText || '', headers: r.headers || [] });
         try { Object.defineProperty(res, 'url', { value: r.url || req.url }); Object.defineProperty(res, 'redirected', { value: r.redirected === true }); } catch (_) {}
         return res;
-      })();
+      })().finally(() => { sent = null; signal?.removeEventListener('abort', cancel); });
       if (!signal) return run;
       return new Promise((resolve, reject) => {
         const stop = () => reject(signal.reason ?? abortError());

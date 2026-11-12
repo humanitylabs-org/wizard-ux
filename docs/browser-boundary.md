@@ -213,8 +213,10 @@ On:
   host through the shell (`net.fetch`) and gives the page a normal `Response` (status, headers, body, `url`,
   `redirected`; `AbortSignal` works). `core/app-services.js` makes the call only inside the window's own app path (the
   same rule as its links), never to an owner route (`WizBrowserBoundary.ownerRoute`, the same list as
-  `core/shell-token.js`, so the token is never added), drops a page's `X-Wizard-Shell-Token` header, and refuses a
-  redirect that ends outside the path. At most 8 at once per window, apart from the other services, and 32 MB each
+  `core/shell-token.js`, so the token is never added) and drops a page's `X-Wizard-Shell-Token` header. The browser
+  hides where a redirect goes until it has followed it, so only GET and HEAD follow one (an answer from outside the
+  path is refused); any other method's redirect is never followed, so a POST is never sent on to another app. An abort
+  stops the call in the shell too (`net.abort`, the window's own open call only). At most 8 at once per window, apart from the other services, and 32 MB each
   way. A call open when the window gets a new channel fails instead of running twice. An address outside the path
   (another app, an owner route) gets the page's own fetch unchanged, so it still goes out with `Origin: null`, no cookie
   and no token. Not covered: `XMLHttpRequest`, `EventSource`, `WebSocket` and streamed answers (the body arrives

@@ -1225,8 +1225,9 @@
   }
   /* An app's own backend call under the boundary (net.fetch, docs/browser-boundary.md): the page's fetch to this host
    * is made here, with the shell's credentials for this host, but only inside the window's own app path (within(), the
-   * same rule as its links) and never to an owner route, so the shell token is never added. A redirect that ends
-   * outside that path is refused. An address outside the path answers `outside`: the page's own fetch then goes out
+   * same rule as its links) and never to an owner route, so the shell token is never added. The browser hides where a
+   * redirect goes until it has followed it, so only GET and HEAD follow one (and an answer from outside the path is
+   * refused); a POST or any other method is never sent on to a redirect's address, which may be another app. An address outside the path answers `outside`: the page's own fetch then goes out
    * unchanged (Origin: null), as before. */
   const NET_METHOD = /^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/, NET_CACHE = ['default', 'no-store', 'reload', 'no-cache', 'force-cache'];
   const NET_DROP = /^(?:x-wizard-shell-token|cookie|cookie2|host|origin|referer)$/i;
@@ -1252,11 +1253,22 @@
       if (Object.prototype.toString.call(args.body) !== '[object ArrayBuffer]' || args.body.byteLength > MAX) throw fault('Request too large');
       if (method !== 'GET' && method !== 'HEAD') body = args.body;
     }
-    const gen = B.gen(st.frame);
-    const res = await window.fetch(u.href, { method, headers, body, credentials: args.credentials === 'omit' ? 'omit' : 'same-origin', redirect: 'follow',
-      cache: NET_CACHE.includes(args.cache) ? args.cache : 'default', referrerPolicy: 'no-referrer' });
-    // A redirect may not leave the app's path (another app, an owner route): its answer stays with the shell.
-    if (!netTarget(st, res.url || u.href)) { try { res.body?.cancel(); } catch (_) {} throw fault('Redirected outside this app'); }
+    const gen = B.gen(st.frame), safe = method === 'GET' || method === 'HEAD';
+    // The page can stop its own call (net.abort with this call's key): one key per open call, this window's only.
+    const key = typeof args.key === 'string' && args.key.length <= 64 ? args.key : '';
+    const stop = new AbortController(); st.netCalls ||= new Map();
+    if (key) { if (st.netCalls.has(key)) throw fault('Bad request'); st.netCalls.set(key, stop); }
+    try {
+      const res = await window.fetch(u.href, { method, headers, body, credentials: args.credentials === 'omit' ? 'omit' : 'same-origin', redirect: safe ? 'follow' : 'manual',
+        cache: NET_CACHE.includes(args.cache) ? args.cache : 'default', referrerPolicy: 'no-referrer', signal: stop.signal });
+      if (res.type === 'opaqueredirect') throw fault('Redirect not followed for ' + method);
+      // A redirect may not leave the app's path (another app, an owner route): its answer stays with the shell.
+      if (!netTarget(st, res.url || u.href)) { try { res.body?.cancel(); } catch (_) {} throw fault('Redirected outside this app'); }
+      return await netAnswer(st, res, u, method, gen, MAX);
+    } finally { if (key && st.netCalls.get(key) === stop) st.netCalls.delete(key); }
+  }
+  async function netAnswer(st, res, u, method, gen, MAX) {
+    const B = window.WizBrowserBoundary;
     let out = null;
     if (res.body && method !== 'HEAD') {
       const reader = res.body.getReader(), parts = []; let n = 0;
@@ -1341,6 +1353,7 @@
       if (method === 'storage.load') return window.WizBrowserBoundary.appStorage.load(st.appId);
       if (method === 'storage.save') return window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
       if (method === 'net.fetch') return boundaryNet(st, args);
+      if (method === 'net.abort') { const c = typeof args?.key === 'string' ? st.netCalls?.get(args.key) : null; if (!c) return false; c.abort(); st.netCalls.delete(args.key); return true; }
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {
@@ -1348,6 +1361,8 @@
       if (st.tools) setTools(st, null);
       window.WizBackgroundAudio?.duck?.(st, false); // the old document's duck ends with it
       captureForget(st, window.WizBrowserBoundary.gen(frame)); // its recording events and preparations end; the recorder keeps going
+      for (const c of st.netCalls?.values() || []) c.abort(); // the old document's backend calls stop; no page gets their answers
+      st.netCalls?.clear();
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

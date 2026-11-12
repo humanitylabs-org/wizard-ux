@@ -63,8 +63,9 @@
  *  - net: an opaque page's own fetch to its app's backend goes out with `Origin: null` and no cookies, and the browser
  *    hides the answer (CORS), so app-client.js sends a `fetch` to this host as `net.fetch` and the shell makes it.
  *    core/app-services.js makes it only inside the window's own app path (the same rule as its links), never to an
- *    owner route (ownerRoute, the same list as core/shell-token.js, so no token is ever added), and refuses a redirect
- *    that ends outside that path. At most NET_INFLIGHT at once per window, apart from the other services, and
+ *    owner route (ownerRoute, the same list as core/shell-token.js, so no token is ever added). Only GET and HEAD
+ *    follow a redirect, and only to an answer inside that path; any other method's redirect is never followed.
+ *    `net.abort` stops one of the window's own open calls. At most NET_INFLIGHT at once per window, apart from the other services, and
  *    NET_MAX bytes each way. What crosses back is the status, the headers the browser shows a page and the body.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
@@ -82,7 +83,7 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch'];
+    'storage.load', 'storage.save', 'net.fetch', 'net.abort'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server

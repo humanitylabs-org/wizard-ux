@@ -41,7 +41,8 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   };
 </script></body></html>`;
 const html = (res, body) => { res.setHeader('content-type', 'text/html'); res.end(body); };
-const seen = [];   // what each backend call carried: path, method, Origin, cookie, token header
+const seen = [];
+let slowCut = 0;   // slow calls whose connection closed before the server answered (the app aborted them)   // what each backend call carried: path, method, Origin, cookie, token header
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const chunks = []; req.on('data', c => chunks.push(c));
@@ -55,7 +56,9 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/notes/api/save' && req.method === 'POST') return json({ saved: JSON.parse(body.toString() || 'null') }, 201);
     if (u.pathname === '/notes/api/upload' && req.method === 'POST') return json({ multipart: /multipart\/form-data/.test(req.headers['content-type'] || ''), bytes: body.length, has: body.includes('figs.txt') });
     if (u.pathname === '/notes/api/empty') { res.statusCode = 204; return res.end(); }
-    if (u.pathname === '/notes/api/slow') return setTimeout(() => json({ slow: true }), 1500);
+    if (u.pathname === '/notes/api/slow') { let done = false; res.on('close', () => { if (!done) slowCut++; }); return setTimeout(() => { done = true; json({ slow: true }); }, 1500); }
+    if (u.pathname === '/notes/api/post-out' && req.method === 'POST') { res.statusCode = 307; res.setHeader('location', '/other/api/act'); return res.end(); }
+    if (u.pathname === '/other/api/act') return json({ acted: true });
     if (u.pathname === '/notes/api/bytes') { res.setHeader('content-type', 'application/octet-stream'); return res.end(Buffer.from([0, 1, 2, 250, 255])); }
     if (u.pathname === '/notes/api/in') { res.statusCode = 302; res.setHeader('location', '/notes/api/notes'); return res.end(); }
     if (u.pathname === '/notes/api/out') { res.statusCode = 302; res.setHeader('location', '/other/api/secret'); return res.end(); }
@@ -103,6 +106,10 @@ const server = http.createServer((req, res) => {
   ok(inside.redirected === true && inside.url.endsWith('/notes/api/notes') && inside.who === 'owner', 'a redirect inside the app is followed: ' + JSON.stringify(inside));
   const out = await f.evaluate(() => fetch('api/out').then(r => r.text()).then(t => 'read:' + t, e => e.name));
   ok(out === 'TypeError', 'a redirect out of the app gives the app nothing: ' + out);
+  // A POST is never sent on to a redirect's address (it may be another app): the other app never sees it.
+  seen.length = 0;
+  const postOut = await f.evaluate(() => fetch('api/post-out', { method: 'POST', body: 'x' }).then(r => 'status:' + r.status, e => e.name));
+  ok(postOut === 'TypeError' && !seen.some(s => s.path === '/other/api/act'), 'a POST redirected to another app is not sent there: ' + postOut + ' ' + JSON.stringify(seen.map(s => s.path)));
   // 5. Another app's backend and an owner route: still no answer, and they never see the owner's cookie or a token.
   seen.length = 0;
   const other = await f.evaluate(() => fetch('/other/api/secret').then(r => r.text()).then(t => 'read:' + t, e => e.name));
@@ -111,7 +118,8 @@ const server = http.createServer((req, res) => {
   ok(seen.every(s => !s.cookie && !s.token && s.origin === 'null'), 'those calls went out as before: Origin null, no cookie, no token: ' + JSON.stringify(seen.map(s => [s.path, s.origin, s.cookie, s.token])));
   // 6. Abort: the app's AbortController ends its call at once.
   const aborted = await f.evaluate(() => { const c = new AbortController(); const p = fetch('api/slow', { signal: c.signal }).then(() => 'done', e => e.name); setTimeout(() => c.abort(), 100); return p; });
-  ok(aborted === 'AbortError', 'abort ends the call: ' + aborted);
+  await page.waitForTimeout(300);
+  ok(aborted === 'AbortError' && slowCut === 1, 'abort ends the call, also at the server (connection closed: ' + slowCut + '): ' + aborted);
   ok(!errors.length, 'no shell page errors ' + (errors.length ? JSON.stringify(errors) : ''));
   await browser.close(); server.close();
   if (process.env.QA_EXPECT === 'broken') {
