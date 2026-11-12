@@ -35,7 +35,9 @@
  *    (`vault.has`, `vault.seal`, `vault.open`, `vault.forget`: the window's own app's secret, only while that window is
  *    in front, back only to the document that asked); and Wizard ID (`identity.info`, `identity.sign`,
  *    `identity.nip44_encrypt`, `identity.nip44_decrypt`, Android: an installed apps.json app only, the phone's own
- *    approval sheet only while that window is in front, back only to the document that asked).
+ *    approval sheet only while that window is in front, back only to the document that asked); and recording
+ *    (`capture.*`: the shell's one recorder, for the window's own app; preparing or starting a new recording needs a
+ *    real tap in that window, events stream back as `notice` `capture`).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
  *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`, Wizard ID's public info, signed event or
@@ -44,7 +46,8 @@
  *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
  *  - notice(frame, kind, data): the shell's own notices to a ready app, on its current channel: `update` (a new
  *    shell is ready; only its version string crosses), `refresh` (read your data again; only the reason crosses) and
- *    `share` (a share was handed to this app: pull it; nothing else crosses).
+ *    `share` (a share was handed to this app: pull it; nothing else crosses) and `capture` (a recording event or this
+ *    app's current recording, plain data and audio only).
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -59,10 +62,13 @@
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
   const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
-    'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'];
+    'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
+    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
-  const TAPPED = ['share.text', 'share.file', 'share.wizard'], INFLIGHT = 4;
+  // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
+  // with the tap it is handed (a fresh tap, or a recording this window prepared on one).
+  const TAPPED = ['share.text', 'share.file', 'share.wizard', 'capture.prepare'], INFLIGHT = 4;
   const NOTICE_REASONS = ['visible', 'focus', 'poll', 'agent'];
   // A share handed to this app (share.pending): only the item's own share fields, never the shell's record of it.
   const SHARE_KINDS = ['text', 'url', 'image', 'file'], SHARE_FIELDS = [['text', 200000], ['url', 8192], ['title', 1024], ['name', 255], ['mime', 255], ['target', 160]];
@@ -78,6 +84,9 @@
   // What may cross back to the app: protocol data only, never a shell object. Shares go in batches of 32; the app's
   // client (app-client.js pullShares) asks again after a full batch.
   function shape(v) {
+    // Recording (capture.*): the shell's recorder's own data for this app (session info, takes with their audio, chunk
+    // lists), as plain data and audio only.
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && 'capture' in v) return { capture: plain(v.capture) };
     if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
     if (typeof v === 'string') return v.length <= 32 ? v : null;
@@ -91,6 +100,23 @@
     }
     return null;
   }
+  // Plain data only: JSON values, Blobs (recorded audio) and binary PCM. No functions, no shell objects, bounded size.
+  const BINARY = v => Object.prototype.toString.call(v) === '[object ArrayBuffer]' || ArrayBuffer.isView(v);
+  function plain(v, depth = 0) {
+    if (v === null || typeof v === 'boolean') return v;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    if (typeof v === 'string') return v.length <= 200000 ? v : v.slice(0, 200000);
+    if (typeof v !== 'object' || depth > 8) return undefined;
+    if (isBlob(v) || BINARY(v)) return v;
+    if (Array.isArray(v)) return v.slice(0, 4096).map(x => plain(x, depth + 1)).filter(x => x !== undefined);
+    // A plain object only (its prototype is Object.prototype, or none): never a class instance or a host object.
+    const proto = Object.getPrototypeOf(v);
+    if (proto !== null && Object.getPrototypeOf(proto) !== null) return undefined;
+    const o = {};
+    for (const k of Object.keys(v).slice(0, 256)) { if (k === '__proto__') continue; const x = plain(v[k], depth + 1); if (x !== undefined) o[k] = x; }
+    return o;
+  }
+  const CAPTURE_EVENTS = ['level', 'pcm', 'chunk', 'state', 'warn', 'info', 'current'];
   // Wizard ID (docs/WIZARD_ID.md): the owner's public info, a signed event, or a NIP-44 result; nothing else crosses.
   const HEX = (s, n) => typeof s === 'string' && s.length === n && /^[0-9a-f]+$/.test(s);
   const short = (s, n) => (typeof s === 'string' && s.length <= n ? s : undefined);
@@ -251,10 +277,12 @@
       if (!st.ready || !server || !SERVED.includes(d.method)) return answer(undefined, 'unavailable', 'Not available inside the browser boundary yet');
       // The tap must be in this window: a tap or key elsewhere in the shell also activates the shell, but then this
       // frame no longer has focus (a click or key in the frame gives it focus).
-      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', 'Share needs a tap in the app');
+      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', d.method.startsWith('capture.') ? 'Recording needs a tap in the app' : 'Share needs a tap in the app');
       if ((st.inflight || 0) >= INFLIGHT) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
-      try { value = server(st.frame, d.method, d.args); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
+      // Whether this request came right after a real tap or key in this focused, visible window (see TAPPED).
+      const tapped = activated() && visible(st.frame) && focusedFrame(st.frame);
+      try { value = server(st.frame, d.method, d.args, Object.freeze({ tapped })); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
       if (!value || typeof value.then !== 'function') return answer(shape(value));
       st.inflight = (st.inflight || 0) + 1;
       Promise.resolve(value).then(v => answer(shape(v)), err => answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)))
@@ -328,6 +356,15 @@
         send(st, 'notice', { kind, reason: data.reason }); return true;
       }
       if (kind === 'share') { send(st, 'notice', { kind }); return true; } // a share is waiting: pull it (share.pending)
+      if (kind === 'capture') {
+        // Recording: an event of a session this document started or attached (level, pcm, chunk, state, warn, info), or
+        // what this app's recorder holds now (current). Plain data and audio only.
+        if (!CAPTURE_EVENTS.includes(data?.event)) return false;
+        const out = { kind, event: data.event };
+        if (typeof data.id === 'string' && data.id.length <= 128) out.id = data.id;
+        for (const k of ['value', 'info']) { const x = plain(data[k]); if (x !== undefined) out[k] = x; }
+        send(st, 'notice', out); return true;
+      }
       if (kind === 'update') {
         const v = data?.available, version = typeof v?.version === 'string' ? v.version.slice(0, 128) : '';
         send(st, 'notice', { kind, available: v ? { version } : null }); return true;

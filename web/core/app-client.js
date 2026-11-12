@@ -59,7 +59,8 @@
   }
   // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
   // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
-  const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares() });
+  const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
+    onCapture: d => boundaryCapture.notice(d), onReady: () => boundaryCapture.hello() });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
   const localHolds = new Map();
@@ -452,6 +453,69 @@
     try { if (navigator.share && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], ...(title ? { title } : {}) }); return 'shared'; } } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
     return 'unsupported';
   }
+  /* Recording under the browser owner boundary (wizard-os#133): the shell's one recorder (core/app-capture.js) records
+   * for this window's app, as for a same-origin app, and its sessions come over the boundary channel. The API stays the
+   * same: current(), capabilities() and getInfo() answer from what the shell last sent (on every channel and with the
+   * session's events), prepare() answers at once and asks the shell in the background (call it in the tap, as before),
+   * and a new start() needs that tap (or a recording prepared on it in the last minute). */
+  const boundaryCapture = (() => {
+    const caps = { value: null }, sessions = new Map(), prepared = new Map();
+    let current = null, synced = null, serialPrep = 0;
+    const KEYS = ['kind', 'mime', 'audio', 'pcm', 'chunkMs', 'maxMs', 'maxBytes', 'systemAudio', 'meta', 'seqBase', 'offsetMs', 'preparedId', 'resumeId'];
+    const value = v => v?.capture;
+    const ask = (method, args, timeout = 60000) => request(method, args, timeout).then(value);
+    function opts(o) {
+      if (['auto', 'command'].includes(o?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata');
+      const out = {}; if (o && typeof o === 'object') for (const k of KEYS) if (o[k] !== undefined && typeof o[k] !== 'function') out[k] = o[k];
+      return out;
+    }
+    function sync() { return synced = ask('capture.sync', {}, 15000).then(c => { if (c) { current = c.current || null; caps.value = c.caps || null; } }, () => {}); }
+    function session(id, info) {
+      const s = sessions.get(id) || { listeners: { level: new Set(), pcm: new Set(), chunk: new Set(), state: new Set(), warn: new Set() } };
+      if (info) { s.info = info; s.at = Date.now(); }
+      sessions.set(id, s);
+      const on = key => fn => { if (typeof fn !== 'function') throw new TypeError('A capture listener is required'); s.listeners[key].add(fn); return () => s.listeners[key].delete(fn); };
+      const call = (method, args, timeout) => ask('capture.call', { id, method, args }, timeout);
+      const finish = method => () => call(method, undefined, 180000).then(r => { sessions.delete(id); return r; });
+      return Object.freeze({ id, reattached: () => false,
+        // The shell's last info; a running recording's length keeps counting between its updates.
+        getInfo() {
+          const i = s.info ? JSON.parse(JSON.stringify(s.info)) : {};
+          if (i.phase === 'recording' && !i.paused && typeof i.durationMs === 'number') i.durationMs += Math.min(Date.now() - s.at, 1500);
+          return i;
+        },
+        onLevel: on('level'), onPcm: on('pcm'), onChunk: on('chunk'), onState: on('state'), onWarn: on('warn'),
+        chunks: () => call('chunks').then(v => (Array.isArray(v) ? v : [])), setSystemAudio: v => call('setSystemAudio', { on: !!v }),
+        pause: () => call('pause'), resume: () => call('resume'), stop: finish('stop'), cancel: finish('cancel') });
+    }
+    const opened = c => (c?.id ? session(c.id, c.info) : null);
+    return {
+      notice(d) {
+        if (d.event === 'current') { current = d.value || null; return; }
+        const s = sessions.get(d.id); if (!s) return;
+        if (d.info) { s.info = d.info; s.at = Date.now(); }
+        for (const fn of [...(s.listeners[d.event] || [])]) { try { fn(d.value); } catch (e) { console.warn('WizardApp capture listener', e); } }
+      },
+      // A new channel: read the recorder again; a session this document still follows is attached again on it.
+      hello() { sync(); if (sessions.size) ask('capture.start', { attach: true }, 60000).then(c => { if (c?.id && !sessions.has(c.id)) sessions.clear(); if (c?.id) session(c.id, c.info); }, () => {}); },
+      current: () => (current ? JSON.parse(JSON.stringify(current)) : null),
+      capabilities: o => { const v = caps.value?.[(o?.kind === 'meeting' ? 'meeting' : 'audio') + (o?.pcm === true ? '-pcm' : '')]; return v ? { ...v } : {}; },
+      prepare(o) {
+        const local = 'prepared-' + (++serialPrep) + '-' + Math.random().toString(36).slice(2), p = ask('capture.prepare', { opts: opts(o) }, 15000).then(c => c?.id || null, () => null);
+        prepared.set(local, p);
+        return Object.freeze({ id: local, release() { if (!prepared.delete(local)) return; p.then(id => { if (id) ask('capture.release', { id }).catch(() => {}); }); } });
+      },
+      async start(o) {
+        const args = opts(o);
+        if (args.preparedId !== undefined) { const p = prepared.get(args.preparedId); prepared.delete(args.preparedId); const id = p ? await p : null; if (id) args.preparedId = id; else delete args.preparedId; }
+        return opened(await ask('capture.start', { opts: args }, 180000));
+      },
+      attach: async () => { await synced; return opened(await ask('capture.start', { attach: true }, 180000)); },
+      settle: async keepId => { await synced; const v = await ask('capture.settle', { keepId: typeof keepId === 'string' ? keepId : null }, 120000); await sync(); return Array.isArray(v) ? v : []; },
+      pending: async () => { await synced; const v = await ask('capture.pending', {}, 60000); return Array.isArray(v) ? v : []; },
+      ack: async id => { await ask('capture.ack', { id }, 60000); },
+    };
+  })();
   function captureModule() { if (!window.WizAppCapture) throw new Error('Load shared app-capture.js before app-client.js for standalone capture'); return window.WizAppCapture; }
   // A fallback owner is generated, not a raw pathname (capture IDs cannot contain
   // slashes). Capture it once so ordinary in-app route changes do not change owner.
@@ -584,13 +648,13 @@
     attachChip: Object.freeze({ node: chipNode, paint: (el, c) => window.WizAttachChip?.paint(el, c), ready: () => chipModule().then(m => !!m) }),
     composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
-    capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
-      prepare: opts => { if(service) return service.capture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },
-      capabilities: opts => { if(service) return service.capture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
-      attach: () => { if(service) return service.capture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
-      current: () => { if(service) return service.capture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
-      settle: keepId => { if(service) return service.capture.settle(keepId); if(framed) throw new Error('Capture cleanup needs the verified host connection'); return captureModule().settle(standaloneId(),keepId); },
-      pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
+    capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (opaque) return boundaryCapture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
+      prepare: opts => { if(service) return service.capture.prepare(opts); if(opaque) return boundaryCapture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },
+      capabilities: opts => { if(service) return service.capture.capabilities(opts); if(opaque) return boundaryCapture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
+      attach: () => { if(service) return service.capture.attach(); if(opaque) return boundaryCapture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
+      current: () => { if(service) return service.capture.current(); if(opaque) return boundaryCapture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
+      settle: keepId => { if(service) return service.capture.settle(keepId); if(opaque) return boundaryCapture.settle(keepId); if(framed) throw new Error('Capture cleanup needs the verified host connection'); return captureModule().settle(standaloneId(),keepId); },
+      pending: async () => service ? service.capture.pending() : opaque ? boundaryCapture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : opaque ? boundaryCapture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
   if (opaque) { if (window.WizBoundaryClient) window.WizBoundaryClient.connect(boundaryHooks()); else boundaryClient(); }
   ready();

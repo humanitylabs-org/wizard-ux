@@ -141,16 +141,31 @@ On:
   opens only while that window is steadily in front, and the answer goes back only to the document that asked (`gen`).
   Only the owner's public info, a well-formed signed event, `{ ciphertext }`, `{ plaintext }` or `denied`/`cancelled`/
   `none` cross. Desktop answers `{ unavailable: true }`, as before. Proof: `tests/qa-browser-boundary-identity.cjs`.
+- Recording (`WizardApp.capture.*`): the shell's one recorder (`core/app-capture.js`) records for the window's
+  installed app id, as for a same-origin app, and a sandboxed app gets its sessions over the channel (`capture.sync`,
+  `capture.prepare`, `capture.release`, `capture.start`, `capture.call`, `capture.settle`, `capture.pending`,
+  `capture.ack`), with the same window checks. A NEW recording needs a real tap in that focused, visible window (the
+  same tap as share), or a recording this document prepared on such a tap in the last minute (`prepare()` in the tap,
+  as apps already do, then `start({ preparedId })` after the app's own work). Reattaching (`attach()`) or resuming
+  (`resumeId`) the app's own take needs none, so a reload never loses a meeting. Only data options reach the recorder
+  (no page callback). Levels, PCM, chunks, state and warnings come as `notice` `capture` only to the document that
+  started or attached the session; a new document hears nothing until it attaches, and a reload never stops the
+  recorder. The app's sync calls (`current()`, `capabilities()`, `getInfo()`) answer from what the shell last sent
+  (on every channel and with the events). A recording holds shell updates from before the microphone prompt until it
+  stops, also across a reload. Only plain data, Blobs (audio) and binary PCM cross. Proof:
+  `tests/qa-browser-boundary-capture.cjs` (real Chromium).
+- Voice commands stay closed under the boundary: an app's `voice.commands` claim must answer synchronously while the
+  shell parses a held-orb command, which a message channel can't do, and no installed app registers one (apps declare
+  spoken words as data, `voice_routes`, which the shell opens itself and which work as before).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
-- Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services capture, orb and voice commands are closed under the boundary (only `ready`,
-  `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`, `voice.transcribe`, `update.hold`,
-  `update.release`, receiving shares, `audio.duck`, the vault and Wizard ID are answered, and the update, fresh-data
-  and share notices are sent).
+- Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work). The app
+  orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is answered.
+- Recording: a hold-to-record press on a touch screen gets the browser's tap only when the finger lifts, so an app
+  that starts on touch-down must prepare in an earlier tap (or start on release).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.
