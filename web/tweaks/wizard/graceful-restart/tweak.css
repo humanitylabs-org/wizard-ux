@@ -1,0 +1,7 @@
+/* Calm Agent Service restarts (wizard-ux issue 1362): the restart note beside the message box and a held send's status. */
+html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 2px 0; font-size: .82rem; line-height: 1.35; color: var(--ink-2); }
+html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice b { font-weight: 600; color: var(--ink); }
+html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice .rs-acts { display: inline-flex; gap: 6px; }
+html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice button { font: inherit; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice button:disabled { opacity: .5; cursor: default; }
+html[data-tweaks~="wizard/graceful-restart"] :is(.ch-row, .ch-head) .emo.sti.held { color: var(--ink-2); }

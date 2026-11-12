@@ -363,6 +363,18 @@
       "kind": "write",
       "note": "Channel read watermarks on the box (wizard-agent-service issue 471): read and written only while the off-by-default wizard/chat-channels switch is on, which none of the three flows turn on; tests/chat-channels.test.mjs (issue 471) covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/health": {
+      "status": "not-exercised",
+      "source": "web/core/reach.js",
+      "kind": "read",
+      "note": "Graceful restart watch (wizard-ux issue 1362): read only while the off-by-default wizard/graceful-restart switch is on, which none of the three flows turn on; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/restart": {
+      "status": "not-exercised",
+      "source": "web/core/reach.js",
+      "kind": "write",
+      "note": "The owner's Wait longer / Restart now on an overdue graceful restart (wizard-ux issue 1362): only with the off-by-default wizard/graceful-restart switch on and a tap; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/ui-preferences": {
       "status": "catalogued",
       "source": "web/core/chat-pins.js",
