@@ -1,0 +1,2 @@
+/* Updates wait for running work: a box-side switch read by the App Manager (feature_switches.is_on), which then
+ * says `waits_for_work` in its update status. The shell changes nothing while it is on. */

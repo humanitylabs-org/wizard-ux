@@ -44,6 +44,16 @@
  *   WosUpdates.load(force)  → refresh the status (cached 60 s here; the App Manager caches stable ~10 min)
  *   WosUpdates.popup()      → show / hide the Home pop-up now
  *
+ * Wizard for Mac (App Manager `by_host`: the Mac saves a copy of WizardOS before every update and starts it):
+ * core/os-update-flow.js owns the notices (the top-bar update banner, the confirm and heads-up sheets, one
+ * "Updating WizardOS" panel, the result). Here the card says "WizardOS x is ready" / "Updating WizardOS…", Update now
+ * opens that flow's confirm sheet, and the Home pop-up stays away. Other boxes are unchanged.
+ *
+ * Updates that wait for running work (App Manager `waits_for_work`: always on a Mac, elsewhere the off-by-default
+ * switch wizard/os-update-waits, read by the App Manager): Install can answer `waiting` with what Wizard is working on;
+ * the flow's sheet names it and offers Update when it finishes / Update anyway, and while that request waits the card
+ * says so, with Options. Without `waits_for_work` the card is as before (a `waiting` answer still gets the sheet).
+ *
  * Home pop-up: when the card says Update, Try again or Reload, Home shows the same words and the same button in a
  * small card clear of the dock, with a ×. × hides it for that exact state (keyed by the release or the web build)
  * until something new arrives. It replaces the old "Interface updated · Reload" banner (core/web-update.js asks
@@ -62,8 +72,18 @@
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
+  const mac = () => st?.by_host === true;
+  const waits = () => mac() || st?.waits_for_work === true;
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
+  // A status check that brings nothing new must not redraw Settings: a redraw resets its scroll, and a Mac's Wizard
+  // checks every few seconds while it updates (core/os-update-flow.js).
+  let lastSig = '';
+  function changedIfNew() {
+    const sig = JSON.stringify([st, issue, off]);
+    if (sig === lastSig) { try { popup(); } catch (_) {} return; }
+    lastSig = sig; changed();
+  }
 
   /* ---- Apps (wizard-ux#1191, behind the off-by-default switch wizard/app-updates-list) ----
    * Every installed app: installed version, latest Store version and a plain status, read from the same Runtipi
@@ -234,7 +254,12 @@
     if (inflight) return inflight;
     inflight = (async () => {
       try {
-        const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
+        // A time limit: a request on a dead connection must fail, or `inflight` never settles and the update status
+        // (and the Mac's Updating panel) freezes on the last answer.
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        const limit = ctl ? setTimeout(() => ctl.abort(), 20e3) : 0;
+        const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) })
+          .finally(() => { if (limit) clearTimeout(limit); });
         const d = r.ok ? await r.json().catch(() => null) : null;
         if (valid(d)) {
           st = d; off = false; issue = '';
@@ -246,7 +271,7 @@
         }
         else { off = true; issue = r.status === 404 ? 'Update controls are not available on this Wizard.' : r.status === 401 || r.status === 403 ? 'Sign in as this Wizard’s owner to manage server updates.' : 'Could not check server updates.'; }
       } catch (_) { off = true; issue = 'Could not reach server updates.'; }
-      at = Date.now(); inflight = null; changed(); return st;
+      at = Date.now(); inflight = null; changedIfNew(); return st;
     })();
     return inflight;
   }
@@ -267,10 +292,13 @@
       return { ...c, line: s.reason || c.line, label: s.rescuing ? 'Saving…' : s.checking ? 'Getting ready…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : c.label, disabled: !!(s.rescuing || s.checking || s.going) };
     }
     if (!st || issue) return null;
+    if (mac()) return window.WosUpdateFlow?.card?.() ?? null;
     const auto = isAuto();
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
     if (st.installing) return { state: 'building', title: `Updating ${OS()}…`, line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
+    // "Update when it finishes" is waiting for Wizard's work (core/os-update-flow.js): Options asks again.
+    if (waits() && st.when_idle && window.WosUpdateFlow) return { state: 'waiting', title: `${OS()} update waiting`, line: 'Updates when Wizard finishes', action: 'waitopts', label: 'Options', disabled: !!busy };
     // WizardOS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
     if (st.interrupted) return { state: 'failed', title: `${OS()} update didn’t finish`, line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
@@ -278,7 +306,7 @@
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
-    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
+    return `<div class="osu-card" data-osu-card="${c.state}"${mac() ? ' data-osu-stack' : ''} role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.action ? `<button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>` : ''}${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
   }
   const seg = (name, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(name)}">${items.map(([key, text, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(text)}</button>`).join('')}</div>`;
   // Always retain the installed server version, including when an update card is present.
@@ -300,7 +328,7 @@
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.`}</p></div>` : '';
     // Automatic / Ask me (wizard-app-manager#483). The 0.3.107 App Manager (always_auto) would not keep Ask me: no choice there.
     const choice = st.always_auto === true ? '' : seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]]);
-    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
+    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${mac() ? (auto ? 'Install by themselves at night (1–5 am), after a 5-minute heads-up you can stop. Never during a chat.' : 'Nothing installs until you tap Update now. You’ll see when an update is ready.') : auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}${appsHtml()}</div>`;
   }
   function pick(chan, ctx) {
@@ -333,20 +361,38 @@
     if (what === 'ask' && st.always_auto === true) return true;   // that App Manager would answer Automatic anyway
     if ((what === 'auto' || what === 'ask') && what === (isAuto() ? 'auto' : 'ask') && (st.chosen || st.always_auto === true)) return true;
     if (what === 'apply' && card()?.disabled) return true;
+    if (what === 'apply' && mac() && window.WosUpdateFlow) { window.WosUpdateFlow.confirm(); return true; }
+    if (what === 'waitopts') { window.WosUpdateFlow?.options?.(); return true; }
+    if (what === 'apply') { apply({}, ctx); return true; }
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
-    const body = what === 'apply' ? { action: 'apply' } : { mode: what };
-    post(body).then(d => {
-      if (what === 'apply') {
-        if (d.started) { const quick = d.quick === true || (d.quick !== false && st.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating ${OS()} · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); }
-        else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
-      } else {
-        st = valid(d) ? d : { ...st, mode: what, chosen: true };
-        ctx?.toast?.('✓', st.mode === 'ask' ? 'Updates: Ask me' : 'Updates: Automatic', 1800);
-      }
+    post({ mode: what }).then(d => {
+      st = valid(d) ? d : { ...st, mode: what, chosen: true };
+      ctx?.toast?.('✓', st.mode === 'ask' ? 'Updates: Ask me' : 'Updates: Automatic', 1800);
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
-      .finally(() => { busy = ''; changed(); if (what === 'apply') setTimeout(() => load(true), 1500); });
+      .finally(() => { busy = ''; changed(); });
     return true;
+  }
+  const shellCtx = () => { const H = window.__wos || window.__wux; return { toast: (...a) => { try { H?.toast?.(...a); } catch (_) {} } }; };
+  // Install / Try again (and the flow's Update anyway on a box that isn't a Mac: extra = { anyway: true }).
+  function apply(extra = {}, ctx = shellCtx()) {
+    if (busy || !st) return;
+    busy = 'apply'; ctx?.render?.(); ctx?.haptic?.(8);
+    post({ action: 'apply', ...extra }).then(d => { applied(d, ctx); at = Date.now(); })
+      .catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
+      .finally(() => { busy = ''; changed(); setTimeout(() => load(true), 1500); });
+  }
+  // What the App Manager said to an apply. `waiting`: Wizard is working on something the update would stop. Never a
+  // silent no-op or "Already up to date": the flow's sheet names the work, or a plain line does.
+  function applied(d, ctx = shellCtx()) {
+    if (d?.started) { const quick = d.quick === true || (d.quick !== false && st?.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating ${OS()} · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); return; }
+    if (d?.waiting) {
+      if (valid(d)) st = d;
+      if (window.WosUpdateFlow?.waiting) { window.WosUpdateFlow.waiting(st?.latest, d); return; }
+      const names = (Array.isArray(d.waiting_for) ? d.waiting_for : []).map(w => String(w?.name || '')).filter(Boolean);
+      ctx?.toast?.('!', `Wizard is still working${names.length ? ' on ' + names.slice(0, 2).join(', ') : ''} · update when it’s done`, 3200); return;
+    }
+    ctx?.toast?.('!', d?.note || d?.error || 'Already up to date', 2600);
   }
   /* ---- Home pop-up ---- */
   const POP_STATES = ['behind', 'reload', 'failed'], DISMISS = 'wos.osu.dismissed';
@@ -378,6 +424,7 @@
   }
   function popup() {
     if (typeof document === 'undefined' || !document.body) return;
+    if (mac()) { if (popEl) { popEl.remove(); popEl = null; } popShown = ''; clearInterval(popTimer); popTimer = 0; return; }   // core/os-update-flow.js
     const c = card(), k = popKey(c), show = !!k && k !== store.get() && homeInView();
     const was = popShown; popShown = show ? k : '';
     if (!show) { if (popEl) { popEl.remove(); popEl = null; } }
@@ -404,7 +451,8 @@
     clearInterval(popTimer); popTimer = 0;
     if (k && k !== store.get() && typeof setInterval === 'function') { popTimer = setInterval(popup, 1000); popTimer?.unref?.(); }
   }
-  window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, appRows, loadApps, get state() { return st; } };
+  window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, appRows, loadApps, post, changed, apply, applied,
+    get state() { return st; }, get issue() { return issue; }, set state(d) { if (valid(d)) { st = d; at = Date.now(); } } };
   // Turning wizard/app-updates-list on or off repaints Settings (and reads the apps the first time).
   try { window.addEventListener?.('wos:tweak-choice', () => changed()); } catch (_) {}
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
@@ -412,7 +460,9 @@
   // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
   // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.
   const IDLE = 10 * FRESH;
-  const tick = () => { if (!st || document.hidden) return; if (st.installing || Date.now() - at >= IDLE) load(true); };
+  // A Mac's Wizard looks every minute (the heads-up is 5 minutes; core/os-update-flow.js polls faster while updating).
+  // An update waiting for Wizard's work looks every minute too, so the card and the 6-hour ask follow it.
+  const tick = () => { if (!st || document.hidden) return; if (st.installing || mac() || (waits() && st.when_idle) || Date.now() - at >= IDLE) load(true); };
   const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });

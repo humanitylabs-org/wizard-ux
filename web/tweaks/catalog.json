@@ -25,6 +25,7 @@
     "wizard/failure-reason",
     "wizard/skins-look-only",
     "wizard/app-updates-list",
+    "wizard/os-update-waits",
     "wizard/update-bug-reports",
     "wizard/connector-models",
     "wizard/link-token-repair",
