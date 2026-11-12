@@ -486,6 +486,17 @@
       const out = {}; if (o && typeof o === 'object') for (const k of KEYS) if (o[k] !== undefined && typeof o[k] !== 'function') out[k] = o[k];
       return out;
     }
+    // Hold to record on a touch screen: the browser counts a touch as a tap only when the finger lifts. A start while a
+    // finger is down is sent as `press`; the shell then records at once but holds the take back until the finger lifts
+    // (a real tap here confirms it, `capture.confirm`). See app-services.js boundaryCapture.
+    let pressing = 0;
+    const confirmHeld = () => { for (const [id, s] of sessions) if (s.held) ask('capture.confirm', { id }, 15000).then(v => { if (v === true) s.held = false; }, () => {}); };
+    if (typeof opaque !== 'undefined' && opaque) {
+      addEventListener('pointerdown', e => { if (e.isPrimary && e.pointerType !== 'mouse') pressing = performance.now(); }, true);
+      const lift = e => { if (e.pointerType === 'mouse') return; pressing = 0; confirmHeld(); };
+      addEventListener('pointerup', lift, true); addEventListener('touchend', lift, true);
+      addEventListener('pointercancel', e => { if (e.pointerType !== 'mouse') pressing = 0; }, true);
+    }
     function sync() { return synced = ask('capture.sync', {}, 15000).then(c => { if (c) { current = c.current || null; caps.value = c.caps || null; } }, () => {}); }
     function session(id, info) {
       const s = sessions.get(id) || { listeners: { level: new Set(), pcm: new Set(), chunk: new Set(), state: new Set(), warn: new Set() } };
@@ -525,7 +536,10 @@
       async start(o) {
         const args = opts(o);
         if (args.preparedId !== undefined) { const p = prepared.get(args.preparedId); prepared.delete(args.preparedId); const id = p ? await p : null; if (id) args.preparedId = id; else delete args.preparedId; }
-        return opened(await ask('capture.start', { opts: args }, 180000));
+        const press = pressing;
+        const c = await ask('capture.start', { opts: args, ...(press ? { press: true } : {}) }, 180000), s = opened(c);
+        if (s && c.held === true) { sessions.get(s.id).held = true; if (pressing !== press) confirmHeld(); } // lifted meanwhile
+        return s;
       },
       attach: async () => { await synced; return opened(await ask('capture.start', { attach: true }, 180000)); },
       settle: async keepId => { await synced; const v = await ask('capture.settle', { keepId: typeof keepId === 'string' ? keepId : null }, 120000); await sync(); return Array.isArray(v) ? v : []; },
