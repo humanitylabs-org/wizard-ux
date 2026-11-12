@@ -4297,7 +4297,7 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
-    /* Layouts on the phone (the Orbs view's Home, layouts/orb/phone.js): the apps (the same rows and kinds as the
+    /* Layouts on the phone (skin layout API; the Orb and Apps views that used most of it went in issue 1338): the apps (the same rows and kinds as the
      * desktop's), opening one (its desk, or a new one), what is running (the app on each desk, one per app: the Orbs
      * satellites), the Home desk's section and the dock orb's box. */
     apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
@@ -4355,6 +4355,4 @@
     if (!w?.appId || sheet || menuFor || CHATS.isHosted(f)) return null;
     return track.querySelector(`.win[data-win="${f}"] iframe.appframe`);
   }
-  // An app's claim shows whenever the active layout draws an agent orb (it wears it while that app is in front).
-  window.WizAppServices?.orb?.presenter(() => document.documentElement.dataset.layout === 'two-orb');
 })();

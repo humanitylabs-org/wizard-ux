@@ -176,7 +176,7 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   await d.clear(); assert.equal(d.host.layout, 'classic'); assert.ok(!d.doc.head.children.some(l => /layouts\//.test(l.href || '')));
   const host = read('web/core/skin-host.js');
   assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
-  assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
+  assert.match(host, /const VIEW_LAYOUTS = new Set\(\['ai-apps'\]\);/);
   assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
 });
 
@@ -2420,8 +2420,8 @@ test('round 21 phone: an app (or its link) opens full screen on its own desk, ta
   assert.equal(p.st.backs.length, 0, 'left the chat: released');
 });
 
-test('round 21: the views keep the open model to themselves: Desks, Orb and Apps never hold it; the stock paths stay in core', () => {
-  for (const f of ['web/layouts/orb/layout.js', 'web/layouts/orb/phone.js', 'web/layouts/apps/layout.js', 'web/layouts/apps/desktop.js', 'web/layouts/apps/chrome.js'])
+test('round 21: the views keep the open model to themselves: the shared chrome never holds it; the stock paths stay in core', () => {
+  for (const f of ['web/layouts/apps/chrome.js'])
     assert.ok(!read(f).includes('routeOpens'), `${f} leaves every open stock`);
   for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /api\.apps\.routeOpens\?\.\(\{/);
 });

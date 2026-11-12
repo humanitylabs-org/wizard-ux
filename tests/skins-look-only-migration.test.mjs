@@ -75,9 +75,10 @@ const sharedOn = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[i
 const mixOn = mix => Object.keys(mix).filter(id => mix[id] === true).sort();
 
 // The tester's old state: shared switches with Send and go plus two drop-list tweaks on; the own skin worn here turns
-// Archive first and Reply summary on, Send and go and the built-in default off, and picks a shell view and a drop item.
+// Archive first and Reply summary on, Send and go and the built-in default off, and picks a drop item. (Its phone shell
+// view, the Orb view, went in wizard-ux issue 1338; no phone view is left to pick.)
 const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/failure-reason': true, 'wizard/link-token-repair': true };
-const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/orb-shell': true, 'miguel/now-playing': true };
+const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/now-playing': true };
 
 test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; any entry must be a real catalog tweak', () => {
   assert.deepEqual(catalog.lookOnlyOff, []);
@@ -87,7 +88,7 @@ test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; a
 
 test('switch off (today): nothing changes, the skin still decides and drop-list tweaks still run', async () => {
   const d = device(null, { mix: OLD_MIX, recipe: OLD_RECIPE }); await d.E.refresh();
-  assert.deepEqual(d.running(), ['miguel/archive-top', 'miguel/now-playing', 'miguel/orb-shell', 'miguel/reply-summary']);
+  assert.deepEqual(d.running(), ['miguel/archive-top', 'miguel/now-playing', 'miguel/reply-summary']);
   assert.ok(d.E.state.tweaks.some(t => t.id === 'wizard/failure-reason'), 'drop items still offered');
   assert.equal(d.saved().recipeCarried, undefined);
 });
@@ -106,14 +107,13 @@ test('turning it on: an old tester device comes up matching the shared switches,
   assert.deepEqual(d.events.find(e => e.id === builtin), { id: builtin, on: false, scope: 'default' });
   assert.equal(d.updates.length, 0); assert.deepEqual({ ...d.own.tweaks }, OLD_RECIPE);
   // Views and drop-list items are not carried; drop-list tweaks are off and not offered, their saved choice kept.
-  assert.ok(!d.events.some(e => e.id === 'miguel/orb-shell' || DROP.includes(e.id)));
+  assert.ok(!d.events.some(e => DROP.includes(e.id)));
   for (const id of DROP) { assert.ok(!d.running().includes(id), id); assert.ok(!d.E.state.tweaks.some(t => t.id === id), id); }
   assert.equal(mix['wizard/failure-reason'], true, 'nothing deleted');
   assert.equal(d.saved().recipeCarried, true);
-  assert.ok(!d.running().includes('miguel/orb-shell'), 'the skin\'s view is not worn either');
-  // Off again: the skin decides again, its drop-list pick and view included.
+  // Off again: the skin decides again, its drop-list pick included.
   await d.E.toggle(ID);
-  assert.ok(d.running().includes('miguel/now-playing') && d.running().includes('miguel/orb-shell'));
+  assert.ok(d.running().includes('miguel/now-playing'));
 });
 
 test('once per device: off and on again never re-applies the old recipe over a newer shared choice', async () => {

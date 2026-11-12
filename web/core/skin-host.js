@@ -24,17 +24,13 @@
    * names that shell's own entry instead (css '' = none), so a shell never downloads another shell's layout code. */
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
-    Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
-    // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
-    // phone = the same orb scene on Home only (layouts/orb/phone.js).
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: 'phone-boot.css', js: 'phone.js' }) }) }),
-    // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
-    Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
     Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true, files: Object.freeze({ desktop: Object.freeze({ css: 'desktop-boot.css', js: 'desktop.js' }) }) }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
   ]);
-  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
+  // The Orb, Apps and Two orbs layouts were removed (wizard-ux issue 1338): a stored 'orb', 'apps' or 'two-orb' is unknown,
+  // so boot treats it as Classic (phone) or the standard AI apps view (desktop).
+  const VIEW_LAYOUTS = new Set(['ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutFile = (L, kind) => { const f = L.files?.[env().shell]; return f ? f[kind] || '' : kind === 'css' ? 'layout.css' : 'layout.js'; };
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;

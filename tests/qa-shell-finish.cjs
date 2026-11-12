@@ -1,7 +1,7 @@
 'use strict';
 // James, 6 Nov 2026: finish the desktop shell rebuild and trim what each shell loads.
 // Real shells on a synthetic origin only (synthetic notifications, every write refused, /v1/runs aborted, no sockets).
-// Per shell (AI apps desktop, Classic desktop, phone, phone Orb) on two skins: the first-party JS/CSS requests and bytes
+// Per shell (AI apps desktop, Classic desktop, phone) on two skins: the first-party JS/CSS requests and bytes
 // the page actually fetched, and an in-shell screenshot. QA_TAG=after also asserts the trim and the AI apps placement
 // (an app beside the chat, Resolve this on a notification stays in the chat column).
 //   QA_WEB=<web dir> QA_OUT=<dir> QA_TAG=before|after node tests/qa-shell-finish.cjs
@@ -16,7 +16,6 @@ const SHELLS = [
   { name: 'desktop-ai-apps', page: 'desktop.html', viewport: { width: 1440, height: 960 }, seed: { 'wos.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps' } },
   { name: 'desktop-classic', page: 'desktop.html', viewport: { width: 1440, height: 960 }, seed: { 'wos.shell': 'desktop', 'wos.desktop-view.v1': 'classic' } },
   { name: 'phone', page: 'index.html', viewport: { width: 390, height: 844 }, mobile: true, seed: { 'wos.shell': 'phone' } },
-  { name: 'phone-orb', page: 'index.html', viewport: { width: 390, height: 844 }, mobile: true, seed: { 'wos.shell': 'phone', 'wos.layout': 'orb' } },
 ];
 const report = { tag, root, shells: [] };
 (async () => {
@@ -56,7 +55,6 @@ const report = { tag, root, shells: [] };
       await p.waitForFunction(d => (d ? window.__wux : window.WosSkinHost) && document.readyState === 'complete' && !window.WosWelcome?.active, desk, { timeout: 30000 });
       if (desk) await p.waitForFunction(() => document.querySelector('.ch-compose'), null, { timeout: 30000 });
       if (S.name === 'desktop-ai-apps') await p.waitForFunction(() => document.documentElement.dataset.aiApps === 'desktop' && !document.documentElement.hasAttribute('data-layout-booting'));
-      if (S.name === 'phone-orb') await p.waitForFunction(() => document.documentElement.dataset.layout === 'orb');
       await p.waitForLoadState('networkidle').catch(() => {}); await settle(); await p.waitForTimeout(800);
       const boot = { requests: files.length, bytes: files.reduce((t, f) => t + f.bytes, 0), layout: files.filter(f => f.rel.startsWith('layouts/')).map(f => f.rel) };
       const shot = path.join(out, `${skin}-${S.name}.png`); await p.screenshot({ path: shot });
@@ -81,12 +79,11 @@ const report = { tag, root, shells: [] };
         if (S.name === 'desktop-ai-apps') { assert.ok(!boot.layout.some(f => /^layouts\/ai-apps\/layout\.(js|css)$/.test(f)), 'AI apps desktop never loads the phone layout'); assert.ok(boot.layout.includes('layouts/ai-apps/desktop.js') && boot.layout.includes('layouts/ai-apps/desktop-boot.css')); }
         if (S.name === 'desktop-classic') assert.deepEqual(boot.layout, [], 'Classic loads no layout code');
         if (S.name === 'phone') { assert.deepEqual(boot.layout, []); assert.ok(!row.files.includes('core/pane-layout.js'), 'the phone never loads pane geometry'); }
-        if (S.name === 'phone-orb') assert.ok(!boot.layout.some(f => /^layouts\/orb\/layout\.(js|css)$/.test(f)) && boot.layout.includes('layouts/orb/phone.js'), 'phone Orb loads its phone entry only');
       }
       await c.close();
     }
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
     for (const r of report.shells) console.log(tag, r.skin, r.shell.padEnd(16), 'req', r.requests, 'bytes', r.bytes, 'layout', r.layout.join(',') || '-', r.errors.length ? 'ERR ' + r.errors.join(' | ') : '');
-    console.log('PASS shell-finish', tag, 'nebula + sepia; AI apps desktop, Classic desktop, phone, phone Orb; synthetic only');
+    console.log('PASS shell-finish', tag, 'nebula + sepia; AI apps desktop, Classic desktop, phone; synthetic only');
   } catch (e) { await p?.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {}); fs.writeFileSync(path.join(out, 'partial-report.json'), JSON.stringify(report, null, 2)); throw e; } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

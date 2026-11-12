@@ -10,26 +10,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { fixture } from './fixtures/tweaks.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
-const settle = () => new Promise(r => setTimeout(r, 15));
 const app = read('web/app.js');
-const plain = o => (o ? JSON.parse(JSON.stringify(o)) : o);
 
 // app.js's own decision, run as written: 'stock' = the dock's own swipe, null = nothing, 'home' = Home.
 const act = vm.runInNewContext(`(${app.match(/function orbSwipeAct\(g\) \{[\s\S]*?\n  \}/)[0]})`, {});
 const ORB = { up: 'home', side: null, down: null };
-// the fixture's own tweak importer, with the layout module replaced by `layout`
-function withLayout(f, layout) {
-  f.host._test.setImporter(async url => {
-    if (url.includes('/layouts/')) return { default: layout };
-    const src = read('web/tweaks/' + url.split('/tweaks/')[1].split('?')[0]);
-    return vm.runInNewContext(`(() => { ${src.replace('export default function setup', 'function setup')} ; return { default: setup }; })()`, f.ctx);
-  });
-}
-
 test('per-view orb swipe map: Desks = every stock swipe; Apps / Orb = up Home, sideways and down nothing', () => {
   // Desks (no layout map): every swipe is the stock one, distraction-free included
   for (const g of [{ mode: 'h', dy: 0 }, { mode: 'v', dy: -90 }, { mode: 'v', dy: 30 }]) assert.equal(act({ ...g, swipes: null }), 'stock', JSON.stringify(g));
@@ -71,42 +59,18 @@ test('tap and hold are identical in all three views: the press, tap and hold pat
   assert.match(end, /if \(V\.state === 'idle'\) return window\.WosSkinHost\?\.orbTap\?\.\(\) \? undefined : startOrbVoice\(\);/);
 });
 
-test('skin-host: a worn layout declares its orb swipes (api.phone.swipes), released on teardown; Desks declares nothing', async () => {
-  for (const id of ['miguel/apps-home', 'miguel/orb-shell']) {
-    const f = fixture({ shell: 'phone' });
-    let given = null;
-    // the layout module itself, reduced to what chrome.js does with the real layout API
-    withLayout(f, api => { given = api; const off = api.phone.swipes({ up: 'home', side: null, down: null }); return () => off(); });
-    assert.equal(f.host.orbSwipes(), null, 'Desks: stock');
-    await f.mount(id); await settle();
-    assert.ok(given, `${id} wears a layout`);
-    assert.deepEqual(plain(f.host.orbSwipes()), { up: 'home', side: null, down: null }, id);
-    assert.ok(Object.isFrozen(f.host.orbSwipes()));
-    await f.clear(); await settle();
-    assert.equal(f.host.orbSwipes(), null, `${id} off: the stock swipes are back`);
-    // sanitised: only 'home' for up; anything unknown = nothing; 'stock' / left out = stock
-    const off = given.phone.swipes({ up: 'zen', side: 'stock', down: 'desks' });
-    assert.equal(f.host.orbSwipes(), null, 'a dead layout declares nothing');
-    off();
-  }
-  const f = fixture({ shell: 'phone' });
-  withLayout(f, api => { api.phone.swipes({ up: 'zen', side: 'stock', down: 'desks', other: 'home' }); return () => {}; });
-  await f.mount('miguel/apps-home'); await settle();
-  assert.deepEqual(plain(f.host.orbSwipes()), { up: null, down: null });
-  await f.clear(); assert.equal(f.host.orbSwipes(), null, 'teardown releases it even without the layout calling off');
+test('skin-host: the orb swipe map stays generic (no view names in core); the shared chrome declares the dock swipes on the phone only', () => {
+  // The phone Apps and Orb views that wore a swipe map went in wizard-ux issue 1338; the generic api.phone.swipes stays.
   const host = read('web/core/skin-host.js');
   assert.ok(!/miguel|orb-shell|apps-home/.test(host.slice(host.indexOf('function orbSwipeMap'), host.indexOf('function orbSwipeMap') + 400)), 'core stays generic');
   // the desktop Apps orb is the layout's own button: chrome.js only declares the dock swipes on the phone
   assert.match(read('web/layouts/apps/chrome.js'), /const offSwipes = shell === 'phone' && api\.phone\?\.swipes \? api\.phone\.swipes\(swipes \|\| ORB_SWIPES\) : null;/, 'the views\' swipes, or a view\'s own (AI apps: up = a New chat to type in)');
 });
 
-test('no round Back button in any view; the desktop Apps orb: drag up = Home, sideways does nothing', async () => {
-  const files = ['web/layouts/apps/chrome.js', 'web/layouts/apps/chrome.css', 'web/layouts/apps/layout.js', 'web/layouts/apps/layout.css', 'web/layouts/apps/desktop.js', 'web/layouts/orb/phone.js', 'web/layouts/orb/phone.css'];
+test('no round Back button in the shared view chrome; its orb swipes: up = Home, sideways and down nothing', async () => {
+  const files = ['web/layouts/apps/chrome.js', 'web/layouts/apps/chrome.css'];
   for (const f of files) assert.ok(!/vc-back|paintBack|chrome\.back/.test(read(f)), `${f}: Back is gone`);
   const { ORB_SWIPES } = await import(new URL('web/layouts/apps/chrome.js', root));
   assert.deepEqual({ ...ORB_SWIPES }, ORB);
-  const dj = read('web/layouts/apps/desktop.js').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.ok(!/function step\(|step\(dx/.test(dj), 'no desk stepping on the desktop Apps orb');
-  assert.match(dj, /if \(dy < 0 && -dy > Math\.abs\(dx\) && !api\.route\(\)\.home\) api\.desk\.home\(\);/);
   for (const f of files.filter(f => f.endsWith('.js'))) assert.ok(!/Math\.random/.test(read(f)), f);
 });
