@@ -22,7 +22,7 @@ function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q =
     W: wins, channelsOn: () => true, chanOpen: () => open, norm: s => String(s || '').trim().toLowerCase(), ch: () => ({ q }),
     elOf: () => ({ querySelector: () => null }), focusAgents: () => agents, focusOf: () => null, focusedAgent: () => focused, AGS: () => ({ defaultId: () => 'hermes' }),
     channelsFor: (w, o = {}) => o.archived ? archived : [{ id: 'b', name: 'Beta' }, { id: '__general__', name: 'General', general: true }],
-    channelLine: c => `<div class="ch-chan" data-chchan="${c.id}"></div>`, chanPruned: () => false, chanElsewhere: () => false, H: {}, chanStore: () => null,
+    channelLine: c => `<div class="ch-chan" data-chchan="${c.id}"></div>`, chanGenAgent: () => '', chanPruned: () => false, chanElsewhere: () => false, H: {}, chanStore: () => null,
     openSpacePicker: (w, a, tab, o) => { calls.push(['picker', w.id, a, j(o)]); ctx.spacePicker = { o }; }, spacePicker: null,
   };
   vm.createContext(ctx);
