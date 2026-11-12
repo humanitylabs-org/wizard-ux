@@ -126,6 +126,8 @@ const report = { origin, web, cases: [] };
           await page.keyboard.press('Escape'); await nap(700);
           s = await step('list-thread-full-esc', { mode: await page.evaluate(() => document.documentElement.dataset.aadMode || '') });
           assert.equal(s.side, 'over', 'the list over the page'); assert.equal(s.mode, 'full', 'still full screen');
+          const box = await vis(`.aad-side .aad-rw[data-sid="qa-g1"] .aad-row`).boundingBox();
+          assert.ok(box && box.height > 20 && box.width > 150, 'the list really shows: ' + JSON.stringify(box));
           await page.keyboard.press('Escape'); await nap(500);
           assert.notEqual(await side(), 'over', 'Esc again closes the list');
           await vis('.aad-ctop [data-mode="full"]').click().catch(() => {}); await nap(400);
