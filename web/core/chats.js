@@ -530,6 +530,96 @@ window.WizCore.chats = function createChats(H) {
       if (line) { place(line); requestAnimationFrame(() => settle(line, 6)); } else if (n > 0) requestAnimationFrame(() => go(n - 1)); };
     requestAnimationFrame(() => go(4));
   }
+  /* Jump to Needs you (wizard-ux issue 1359, part of the Channels switch): the Thread tracker's dropdown is gone, so a
+   * thread shows one pill at the top centre while an open Needs you (amber) or a reply that was unread when the thread
+   * opened (green) sits above what the owner sees, and a matching pill at the bottom for ones below (unless ↓ Latest
+   * already points at it). One tap scrolls to the closest one, amber first. Green counts only until it has been on
+   * screen; amber stays until Mark done (which repaints the thread, so the pill follows on the same frame). */
+  // Before openChat marks the thread read: replies newer than the read record are this open's green ones.
+  function jumpOpened(wid, sid, r) {
+    const c = ch(wid); c.jumpFor = sid; c.jumpSeen = new Set(); c.jumpSince = NaN; c.jumpTo = null;
+    if (!needsThreadOn() || !sid || sid === '__new__') return;
+    const s = r && typeof r === 'object' ? r : LIVE.session(sid);
+    if (!s || !LIVE.isNew?.(s)) return;
+    const rec = LIVE.seenRecord?.(s), a = Date.parse(rec?.assistantActivityAt ?? '');
+    c.jumpSince = isFinite(a) ? a : isFinite(rec?.seenAt) ? +rec.seenAt : NaN;
+  }
+  const jumpPillsHtml = () => needsThreadOn() ? '<button type="button" class="ch-jump up" data-chjump="up" hidden></button><button type="button" class="ch-jump down" data-chjump="down" hidden></button>' : '';
+  // The thread's visible band: under its header (the phone's document scroll has a fixed header and composer).
+  function jumpBand(nb) {
+    const sc = scrollBox(nb), doc = sc !== nb, th = nb.closest('.ch-thread'), head = th?.querySelector('.ch-head');
+    const top = threadViewportTop(nb, Math.max(doc ? 0 : nb.getBoundingClientRect().top, head ? head.getBoundingClientRect().bottom : 0));
+    let bottom = doc ? (window.visualViewport?.height || window.innerHeight) : nb.getBoundingClientRect().bottom;
+    const comp = doc ? th?.querySelector('.ch-compose') : null, cr = comp?.getBoundingClientRect();
+    if (cr && cr.height) bottom = Math.min(bottom, cr.top);
+    return { sc, top, bottom };
+  }
+  // Every marker in the open thread, split into above / below the band. Green replies seen on screen drop out.
+  function jumpMarks(wid, nb, band) {
+    const c = ch(wid), w = W[wid], out = { up: [], down: [] }, now = Date.now(); c.jumpSeen = c.jumpSeen || new Set();
+    const skip = c.jumpTo && now < c.jumpTo.until ? c.jumpTo.n : null, live = threadOnScreen(nb);
+    const add = (n, kind, key) => {
+      const r = n.getBoundingClientRect(); if (!r.height) return;
+      if (n === skip) { if (r.bottom > band.top + 1 && r.top < band.bottom - 1) c.jumpTo = null; else return; } // reached: counts normally again
+      if (r.bottom <= band.top + 1) out.up.push({ n, kind, y: r.top });
+      else if (r.top >= band.bottom - 1) out.down.push({ n, kind, y: r.top });
+      else if (key && live) c.jumpSeen.add(key);
+    };
+    nb.querySelectorAll('[data-needs-line]').forEach(n => add(n, 'needs'));
+    if (w && c.jumpFor === w.thread && isFinite(c.jumpSince)) {
+      nb.querySelectorAll('.msg.a[data-morph-key^="a"]').forEach(n => {
+        const key = n.dataset.morphKey, at = +key.slice(1);
+        // the message under an amber line counts once, as amber
+        if (at > c.jumpSince && !c.jumpSeen.has(key) && !n.previousElementSibling?.matches?.('[data-needs-line]')) add(n, 'new', key);
+      });
+    }
+    return out;
+  }
+  // amber first, then the nearest one in that direction
+  function jumpTarget(list, dir) {
+    const pick = list.filter(m => m.kind === 'needs').length ? list.filter(m => m.kind === 'needs') : list;
+    return pick.reduce((b, m) => !b || (dir === 'up' ? m.y > b.y : m.y < b.y) ? m : b, null);
+  }
+  function jumpLabel(dir, list) {
+    const nn = list.filter(m => m.kind === 'needs').length, ng = list.length - nn;
+    return `<span class="ch-jump-arr" aria-hidden="true">${dir === 'up' ? '↑' : '↓'}</span>${nn ? `<span class="ch-jump-k"><i class="ch-chan-dot" aria-hidden="true"></i>${nn} Needs you</span>` : ''}${ng ? `<span class="ch-jump-k"><i class="ch-chan-dot new" aria-hidden="true"></i>${ng} New</span>` : ''}`;
+  }
+  function paintJump(el, nb) {
+    const wid = el?.dataset.chats, up = el?.querySelector('[data-chjump="up"]'), dn = el?.querySelector('[data-chjump="down"]');
+    if (!wid || !nb || (!up && !dn) || !threadOnScreen(nb)) return;
+    const band = jumpBand(nb), m = jumpMarks(wid, nb, band);
+    // ↓ Latest already covers a marker that its jump to the end would bring on screen.
+    const latest = el.querySelector('[data-chlatest]'), sc = band.sc;
+    const end = (sc === nb ? nb.getBoundingClientRect().top : 0) - sc.scrollTop + sc.scrollHeight;
+    const covered = latest && !latest.hidden && m.down.every(x => end - x.y <= band.bottom - band.top);
+    const set = (b, dir, list) => {
+      if (!b) return;
+      const show = !!list.length && !(dir === 'down' && covered), html = show ? jumpLabel(dir, list) : '';
+      if (b.dataset.sig !== html) { b.innerHTML = html; b.dataset.sig = html; }
+      if (show) {
+        const n = list.filter(x => x.kind === 'needs').length, g = list.length - n;
+        b.setAttribute('aria-label', `Jump ${dir} to ${[n ? `${n} Needs you` : '', g ? `${g} new ${g === 1 ? 'reply' : 'replies'}` : ''].filter(Boolean).join(' and ')}`);
+        // the top pill sits just under the header (fixed on the phone's document scroll, else inside the thread)
+        if (dir === 'up') { const p = b.offsetParent; b.style.top = `${Math.round(band.top + 8 - (p ? p.getBoundingClientRect().top : 0))}px`; }
+      }
+      if (b.hidden === show) b.hidden = !show;
+    };
+    set(up, 'up', m.up); set(dn, 'down', m.down);
+  }
+  function jumpGo(wid, dir) {
+    const el = elOf(wid), nb = el?.querySelector('.ch-msgs'); if (!nb || !needsThreadOn()) return false;
+    const band = jumpBand(nb), m = jumpMarks(wid, nb, band), t = jumpTarget(m[dir === 'down' ? 'down' : 'up'], dir);
+    if (!t) { paintJump(el, nb); return false; }
+    vib(6);
+    const c = ch(wid), off = t.n.getBoundingClientRect().top - band.top - 8;
+    if (t.kind === 'new') c.jumpSeen?.add(t.n.dataset.morphKey);
+    c.jumpTo = { n: t.n, until: Date.now() + 1500 }; // the pill counts it as reached on the tap's frame
+    paintJump(el, nb);
+    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (typeof band.sc.scrollTo === 'function') band.sc.scrollTo({ top: band.sc.scrollTop + off, behavior: smooth ? 'smooth' : 'auto' });
+    else t.n.scrollIntoView({ block: 'start' });
+    return true;
+  }
   function chanPrefs() {
     const st = typeof chanStore === 'function' ? chanStore() : null;
     if (st) return chanStorePrefs(st);
@@ -3523,7 +3613,7 @@ window.WizCore.chats = function createChats(H) {
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
-      ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
+      ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}${s && !isNew && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${!isNew && window.WosModels?.foreignApp?.(s) ? `This chat lives in ${esc(window.WosModels.foreignApp(s))} · reply there` : working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
@@ -4055,6 +4145,7 @@ window.WizCore.chats = function createChats(H) {
     PW?.opened(wid, sid);
     if (sid === '__new__' && w.thread !== '__new__') c.newAt = Date.now(); // a fresh new chat: nothing older shows in it
     w.thread = sid; save(); loadDraft(w);
+    if (typeof jumpOpened === 'function') jumpOpened(wid, sid, typeof chanSeenRow === 'function' && sid !== '__new__' ? chanSeenRow(wid, sid) : null); // issue 1359: green = unread when opened
     if (sid !== '__new__') { LIVE.markSeen(typeof chanSeenRow === 'function' ? chanSeenRow(wid, sid) : sid); if (typeof chanSeenPaint === 'function') chanSeenPaint(); }
     renderChats(w); applyLayout(deskOf(wid));
   }
@@ -4403,6 +4494,7 @@ window.WizCore.chats = function createChats(H) {
     // Issue 1331: Reply on any message in the main agent's threads, and the thread's own Mark done.
     if (typeof replyStd === 'function' && replyStd(LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '')) { const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; } }
     if (e.target.closest('[data-chmarkdone]') && w.thread) { markDone(id, w.thread, true); return true; }
+    const jp = e.target.closest('[data-chjump]'); if (jp && w.thread && typeof jumpGo === 'function') { jumpGo(id, jp.dataset.chjump); return true; } // issue 1359
     const qj = e.target.closest('[data-ttjump]'); if (qj) { jumpToMessage(id, { message_id: qj.dataset.ttjump || null, at: +qj.dataset.ttjumpAt || 0 }); return true; }
     const hc = e.target.closest('[data-helper-continue]');
     if (hc) {
@@ -4679,7 +4771,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, chanSpaceOf, spaceMember, chanOwnPost }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, paintJump, chanSpaceOf, spaceMember, chanOwnPost }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';

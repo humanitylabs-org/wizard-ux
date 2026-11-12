@@ -145,6 +145,17 @@ html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][d
 html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { background: transparent; }
 html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:has(.ch-act-ind)::after { content: none; }
 html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-sec-m { margin-left: 6px; font-size: .75rem; opacity: .6; }
+/* Jump to Needs you (wizard-ux issue 1359): the pill at the top centre of a thread (and at the bottom for markers below),
+ * mirroring ↓ Latest. Opaque: the raised surface laid over the base colour. Its top is set from the header's bottom. */
+html[data-tweaks~="wizard/chat-channels"] .ch-jump { --ch-new: var(--green); position: absolute; left: 50%; top: 64px; z-index: 7; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); height: 32px; padding: 0 14px; border-radius: 16px; border: 1px solid var(--wz-border); background-color: var(--wz-base); background-image: linear-gradient(var(--wz-surface-raised), var(--wz-surface-raised)); color: var(--wz-text); font-size: 0.8125rem; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: 0 6px 18px color-mix(in srgb, var(--wz-base) 70%, transparent); }
+@supports (color: oklch(from red l c h)) { html[data-tweaks~="wizard/chat-channels"] .ch-jump { --ch-new: oklch(from var(--green) l c 150); } }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump[hidden] { display: none; }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump.down { top: auto; bottom: 78px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump-k { display: inline-flex; align-items: center; gap: 6px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump-arr { font-size: 0.9375rem; line-height: 1; }
+html[data-tweaks~="wizard/chat-channels"] .ch-thread:has(.ch-reply.ch-reply-q) .ch-jump.down { bottom: 142px; }
+html[data-tweaks~="wizard/chat-channels"].wos-doc-scroll .wos-doc-thread .ch-jump { position: fixed; z-index: 51; }
+html[data-tweaks~="wizard/chat-channels"].wos-doc-scroll .wos-doc-thread .ch-jump.down { bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + max(var(--safe-b, 0px), var(--wos-doc-bottom, 0px)) + 12px); }
 /* Needs you in the thread (wizard-ux issue 1331, part of Channels since issue 1358): the amber line above the message that asks, with Mark done beside
  * it; Mark done is the strong button only where a Needs you is open, and Archive turns quiet (a rare action now). */
 html[data-tweaks~="wizard/chat-channels"] .ch-needs-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 6px; padding: 4px 0 4px 10px; border-left: 2px solid var(--amber); font-size: 0.8125rem; line-height: 1.35; }
