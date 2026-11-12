@@ -14,23 +14,25 @@
  * page's alone, and so do ⌥ word moves and, on a Mac, ⌥- / ⌥= typed in a text field.
  * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary:
  * `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard` (the shell opens its own sheet, and
- * only right after a real tap in this page), `voice.transcribe` and `update.hold` / `update.release`. Holds are this
+ * only right after a real tap in this page), `voice.transcribe`, `update.hold` / `update.release` and receiving shares
+ * (`share.receive`, `share.targets`, `share.pending`, `share.ack`, for this window's own app only). Holds are this
  * document's: the shell drops them with each channel, so they are placed again on every new channel (the id the app
  * gets stays the same). The last badge and title bar are sent again on every
  * new channel (the shell clears the title bar on each load), and a title-bar tap comes back as `tool` (onTool).
  * The shell's notices come as `notice`: `update` (a new shell is ready: { version } or null, onUpdate) and `refresh`
- * (read your data again, with the reason: onRefresh), the same signals a same-origin app gets as wizard:app:update /
- * wizard:app:refresh.
+ * (read your data again, with the reason: onRefresh) and `share` (a share is waiting: onShare pulls it), the same
+ * signals a same-origin app gets as wizard:app:update / wizard:app:refresh / wizard:app:share.
  */
 (() => {
   'use strict';
   if (window.WizBoundaryClient) return;
   let framed = false; try { framed = parent !== window; } catch (_) { framed = true; }
   if (!framed || globalThis.origin !== 'null') return;
-  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release'], STICKY = ['badge.set', 'titlebar.set'];
+  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
+    'share.receive', 'share.targets', 'share.pending', 'share.ack'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, serial = 0, claimed = new Set();
+  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, serial = 0, claimed = new Set();
   const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
@@ -128,6 +130,7 @@
     }
     if (d.op === 'notice') {
       if (d.kind === 'refresh' && ['visible', 'focus', 'poll', 'agent'].includes(d.reason)) { try { onRefresh?.(d.reason); } catch (_) {} }
+      if (d.kind === 'share') { try { onShare?.(); } catch (_) {} }
       if (d.kind === 'update' && (d.available === null || (d.available && typeof d.available === 'object' && typeof d.available.version === 'string'))) {
         try { onUpdate?.(d.available ? Object.freeze({ version: d.available.version.slice(0, 128) }) : null); } catch (_) {}
       }
@@ -210,10 +213,11 @@
   }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh } = {}) {
+    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared } = {}) {
       back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;
       onTool = typeof tap === 'function' ? tap : null;
       onUpdate = typeof upd === 'function' ? upd : null; onRefresh = typeof fresh === 'function' ? fresh : null;
+      onShare = typeof shared === 'function' ? shared : null;
       try { parent.postMessage({ type: TYPE, version: VERSION, op: 'boot' }, SHELL); } catch (_) {}
     },
     get ready() { return !!channel; },

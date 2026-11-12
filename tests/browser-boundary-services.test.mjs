@@ -43,10 +43,11 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
   const window = { WizShareWizard, WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}),
     WosChat: { sharePayload: async p => { shared.push(p); return 'shared'; }, shareFile: async (file, o) => { shared.push({ file, ...o }); return 'shared'; } },
     WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } } };
-  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
+  const globalOn = {};
+  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: () => true });
-  return { B, frame, bar, notices, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
+  return { B, frame, bar, notices, emit: (t, detail) => { for (const fn of globalOn[t] || []) fn({ detail }); }, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
     load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
 const box = f => f.bar.children.find(c => c.className === 'wtools');
@@ -232,4 +233,44 @@ test('a sandboxed app is asked to read its data again (fresh data) over its chan
   assert.equal(f.notices.length, 2);
   f.B.readyNow = false; f.services.fresh.tick(t0 + 400000); assert.equal(f.notices.length, 2, 'not ready: nothing');
   assert.equal(f.legacy.length, 0);
+});
+
+// Slice 20: receiving shares (docs/SHARE-SHEET.md) for a sandboxed app, always for its window's own installed app id.
+function shareOps() {
+  const calls = [], items = [];
+  const ops = { register: (appId, o) => { calls.push(['register', appId, o]); return !!o?.accepts?.length; },
+    setTargets: (appId, list) => { calls.push(['targets', appId, list]); return true; },
+    pending: (appId, claimant) => items.filter(x => x.appId === appId && (!x.claim || x.claim.owner === claimant.owner || !x.claim.alive())).map(x => { x.claim = claimant; return { id: x.id, ...x.payload, target: x.target }; }),
+    ack: (appId, id) => { const i = items.findIndex(x => x.appId === appId && x.id === id); if (i < 0) return false; items.splice(i, 1); return true; } };
+  return { ops, calls, items };
+}
+test('a sandboxed app receives shares for its own app id only, and hears that one is waiting over its channel', () => {
+  const f = fixture(), s = shareOps();
+  assert.equal(f.services.claimShare(s.ops), true);
+  assert.equal(f.call('share.receive', { accepts: ['text', 'image'], targets: [{ id: 'p1', name: 'Ann' }], appId: 'messenger' }), true);
+  assert.deepEqual(s.calls[0].slice(0, 2), ['register', 'morning-report'], 'the window\'s app id, never one the page names');
+  assert.equal(f.call('share.targets', { targets: [{ id: 'p2', name: 'Bo' }] }), true);
+  assert.deepEqual(s.calls[1].slice(0, 2), ['targets', 'morning-report']);
+  s.items.push({ id: 'sh-1', appId: 'morning-report', payload: { kind: 'text', text: 'hello' }, target: 'p1' }, { id: 'sh-2', appId: 'messenger', payload: { kind: 'text', text: 'not yours' }, target: null });
+  f.emit('wizard:share-pending', { appId: 'morning-report' });
+  assert.deepEqual(f.notices, [{ kind: 'share' }]);
+  f.emit('wizard:share-pending', { appId: 'messenger' }); assert.equal(f.notices.length, 1, 'another app\'s share: no notice');
+  assert.deepEqual(f.call('share.pending').map(x => x.id), ['sh-1']);
+  assert.equal(f.call('share.ack', { id: 'sh-2' }), false, 'another app\'s item cannot be acked');
+  assert.equal(f.call('share.ack', { id: 'sh-1' }), true);
+  assert.deepEqual(f.call('share.pending'), []);
+  assert.equal(f.legacy.length, 0, 'nothing is posted to an opaque window with the shell origin');
+  const off = fixture({ ready: false }); off.services.claimShare(s.ops);
+  assert.throws(() => off.call('share.pending'), /not verified/);
+  const moved = fixture({ src: 'https://wizard.example/other-app/' }); moved.services.claimShare(s.ops);
+  assert.throws(() => moved.call('share.receive', { accepts: ['text'] }), /not verified/, 'outside its app path: refused');
+});
+test('a share claimed by a sandboxed window is released when that window is no longer the verified app', () => {
+  const f = fixture(), g = fixture(), s = shareOps();
+  f.services.claimShare(s.ops); g.services.claimShare(s.ops);
+  s.items.push({ id: 'sh-1', appId: 'morning-report', payload: { kind: 'text', text: 'x' }, target: null });
+  assert.equal(f.call('share.pending').length, 1);
+  assert.equal(g.call('share.pending').length, 0, 'a second window of the app does not place the same share');
+  f.B.readyNow = false;
+  assert.equal(g.call('share.pending').length, 1, 'the first window is gone: the second one may take it');
 });
