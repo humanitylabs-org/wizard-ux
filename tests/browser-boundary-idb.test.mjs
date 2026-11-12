@@ -38,12 +38,14 @@ function shell() {
   s.request = async (method, args) => {
     calls.push({ method, args: structuredClone(args) });
     if (s.hold) await s.hold;
-    if (method === 'idb.load') { const d = dbs.get(args.name); return { idb: d ? structuredClone({ version: d.version, stores: [...d.stores].map(([n, x]) => [n, { keyPath: x.keyPath, autoIncrement: x.autoIncrement, next: x.next, indexes: x.indexes }]), rows: [...d.stores].map(([n, x]) => [n, x.rows]) }) : null }; }
+    if (method === 'idb.load') { const d = dbs.get(args.name); return { idb: d ? structuredClone({ version: d.version, rev: d.rev, stores: [...d.stores].map(([n, x]) => [n, { keyPath: x.keyPath, autoIncrement: x.autoIncrement, next: x.next, indexes: x.indexes }]), rows: [...d.stores].map(([n, x]) => [n, x.rows]) }) : null }; }
     if (method === 'idb.list') return { idb: [...dbs].map(([name, d]) => ({ name, version: d.version })) };
     if (method === 'idb.drop') { dbs.delete(args.name); return true; }
     if (method === 'idb.commit') {
       if (s.full) return false;
-      const d = structuredClone(dbs.get(args.name) || { version: 0, stores: new Map() });
+      const d = structuredClone(dbs.get(args.name) || { version: 0, rev: 0, stores: new Map() });
+      if (d.rev !== args.base) return 'stale';
+      d.rev++;
       for (const op of args.ops) {
         const x = d.stores.get(op.s);
         if (op.o === 'version') d.version = op.v;
@@ -56,7 +58,7 @@ function shell() {
         else if (op.o === 'clear') x.rows = [];
       }
       dbs.set(args.name, d);
-      return true;
+      return { idb: { rev: d.rev } };
     }
     throw new Error('unexpected ' + method);
   };
@@ -94,7 +96,7 @@ test('IndexedDB stand-in: replaces the refused one; an upgrade and a put go to t
   await tick(30);
   assert.deepEqual(log, [], 'complete waits until the shell has written the change');
   const commit = fake.calls.filter(c => c.method === 'idb.commit').at(-1);
-  assert.deepEqual(commit.args, { name: 'notes', ops: [{ o: 'put', s: 'notes', k: 'n1', v: { id: 'n1', slug: 'figs', text: 'Buy figs' } }] });
+  assert.deepEqual(commit.args, { name: 'notes', base: 1, ops: [{ o: 'put', s: 'notes', k: 'n1', v: { id: 'n1', slug: 'figs', text: 'Buy figs' } }] });
   fake.hold = null; release();
   await tick(30);
   assert.deepEqual(log, ['complete']);
@@ -144,6 +146,24 @@ test('IndexedDB stand-in: another window\'s change makes the page read the datab
   assert.deepEqual((await req(dbB.transaction('notes').objectStore('notes').getAll())).map(x => x.id), ['n9']);
   b.g.__notice('other-db'); // a database this page never opened: nothing to read
   assert.equal(fake.calls.filter(c => c.method === 'idb.load' && c.args.name === 'other-db').length, 0);
+});
+
+test('IndexedDB stand-in: a commit made on a copy another window has changed since is refused, aborts, and the page reads again', async () => {
+  const fake = shell();
+  const a = load({ fake }), b = load({ fake });
+  const dbA = await openNotes(a.idb), dbB = await openNotes(b.idb);
+  let tx = dbA.transaction('notes', 'readwrite');
+  tx.objectStore('notes').put({ id: 'n1', slug: 'figs' });
+  assert.equal(await end(tx), 'complete');
+  // B never heard about it (no notice yet): its change would have been made without seeing n1.
+  tx = dbB.transaction('notes', 'readwrite');
+  tx.objectStore('notes').put({ id: 'n2', slug: 'figs' });
+  assert.equal(await end(tx), 'abort UnknownError');
+  assert.deepEqual(fake.dbs.get('notes').stores.get('notes').rows.map(([k]) => k), ['n1'], 'the unique slug was not written twice');
+  assert.deepEqual((await req(dbB.transaction('notes').objectStore('notes').getAll())).map(x => x.id), ['n1'], 'B read the database again');
+  tx = dbB.transaction('notes', 'readwrite');
+  tx.objectStore('notes').put({ id: 'n2', slug: 'dates' });
+  assert.equal(await end(tx), 'complete', 'and its next change goes through');
 });
 
 test('IndexedDB stand-in: outside a Wizard window (no shell channel) open fails with an error event, never a throw', async () => {

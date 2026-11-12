@@ -525,24 +525,28 @@
         const r = idbStoreRows(id, name, s), [keys, vals] = await Promise.all([idbReq(os.getAllKeys(r)), idbReq(os.getAll(r))]);
         rows.push([s, keys.map((k, i) => [k[3], vals[i].v])]);
       }
-      return { idb: { version: m.version, stores: m.stores.map(([s, x]) => [s, { keyPath: x.keyPath, autoIncrement: x.autoIncrement, next: x.next, indexes: x.indexes }]), rows } };
+      return { idb: { version: m.version, rev: m.rev || 0, stores: m.stores.map(([s, x]) => [s, { keyPath: x.keyPath, autoIncrement: x.autoIncrement, next: x.next, indexes: x.indexes }]), rows } };
     });
   }
   // The changes of one transaction, in order: { o: 'version', v }, { o: 'store', s, keyPath, autoIncrement },
   // { o: 'unstore', s }, { o: 'index', s, i, keyPath, unique, multiEntry }, { o: 'unindex', s, i }, { o: 'next', s, n },
-  // { o: 'put', s, k, v }, { o: 'del', s, k }, { o: 'clear', s }. True when all were written; false (nothing written)
-  // when a change is not acceptable or the space is full.
-  function idbCommit(id, name, ops) {
-    if (!idbOk(id, name) || !Array.isArray(ops) || !ops.length || ops.length > IDB_OPS) return Promise.resolve(false);
+  // { o: 'put', s, k, v }, { o: 'del', s, k }, { o: 'clear', s }, made on the page's copy at revision `base`.
+  // { idb: { rev } } (the new revision) when all were written; 'stale' (nothing written) when another window of the app
+  // committed since `base`, so the page never overwrites a change it did not see; false (nothing written) when a change
+  // is not acceptable or the space is full.
+  function idbCommit(id, name, ops, base) {
+    if (!idbOk(id, name) || !Array.isArray(ops) || !ops.length || ops.length > IDB_OPS || !Number.isSafeInteger(base)) return Promise.resolve(false);
     return idbSerial(id, () => new Promise(done => {
-      let tx = null;
-      const stop = () => { try { tx?.abort(); } catch (_) {} done(false); };
+      let tx = null, rev = 0;
+      const stop = (why = false) => { done(why); try { tx?.abort(); } catch (_) {} };
       idbHome().then(async d => {
         tx = d.transaction(['dbs', 'rows'], 'readwrite');
-        tx.oncomplete = () => done(true);
+        tx.oncomplete = () => done({ idb: { rev } });
         tx.onabort = () => done(false);
         const dbs = tx.objectStore('dbs'), rows = tx.objectStore('rows');
-        const m = (await idbReq(dbs.get([id, name]))) || { version: 0, stores: [], size: 0 };
+        const m = (await idbReq(dbs.get([id, name]))) || { version: 0, rev: 0, stores: [], size: 0 };
+        if ((m.rev || 0) !== base) return stop('stale');
+        rev = m.rev = (m.rev || 0) + 1;
         const stores = new Map(m.stores);
         const info = s => { const x = typeof s === 'string' && stores.get(s); if (!x) throw new Error('no such store'); return x; };
         for (const op of ops) {
@@ -568,7 +572,7 @@
         keys.forEach((k, i) => { if (k[0] === id && k[1] === name) return; total += all[i]?.size || 0; if (k[0] === id) app += all[i]?.size || 0; });
         if (app + m.size > IDB_APP || total + m.size > IDB_ALL) return stop();
         dbs.put(m, [id, name]);
-      }).catch(stop);
+      }).catch(() => stop());
     }));
   }
   function idbDrop(id, name) {

@@ -171,6 +171,16 @@ const server = http.createServer((req, res) => {
   ok(api.dup === 'ConstraintError' && api.tx2 === 'abort ConstraintError' && api.count === 4, 'a unique index refuses a duplicate and its whole transaction is undone: ' + JSON.stringify([api.dup, api.tx2, api.count]));
   ok(api.byDue === 'c,a,d' && api.home === 'a,c' && api.slug === 3 && api.prev === '5:d,3:a,2:c,1:b' && api.keysOnly === '3,10', 'index ranges, multiEntry, cursors both ways: ' + JSON.stringify([api.byDue, api.home, api.slug, api.prev, api.keysOnly]));
   ok(api.after === 'a3,b8' && api.next?.join() === '1,2', 'cursor update/delete and delete by range: ' + JSON.stringify([api.after, api.next]));
+  // 5b. An upgrade whose handler throws is not kept: the open fails, and the next open upgrades again from scratch.
+  const mig = await f2.evaluate(async () => {
+    const first = await new Promise(y => { const r = indexedDB.open('mig', 1); r.onupgradeneeded = () => { r.result.createObjectStore('half'); throw new Error('migration failed'); }; r.onsuccess = () => y('opened'); r.onerror = () => y(r.error.name); });
+    let old = null;
+    const d = await new Promise(y => { const r = indexedDB.open('mig', 1); r.onupgradeneeded = e => { old = e.oldVersion; r.result.createObjectStore('whole'); }; r.onsuccess = () => y(r.result); r.onerror = () => y(null); });
+    const out = { first, old, stores: d ? [...d.objectStoreNames].join() : null }; d?.close();
+    await new Promise(y => { const r = indexedDB.deleteDatabase('mig'); r.onsuccess = r.onerror = y; });
+    return out;
+  }).catch(e => ({ error: caught(e) }));
+  ok(mig.first === 'AbortError' && mig.old === 0 && mig.stores === 'whole', 'an upgrade that throws is undone and runs again on the next open: ' + JSON.stringify(mig));
   // 6. Over the app's space (64 MB): the transaction aborts with QuotaExceededError and nothing of it is kept.
   const quota = await f2.evaluate(async () => {
     const d = await new Promise((y, n) => { const r = indexedDB.open('trackhunt-offline-v1'); r.onsuccess = () => y(r.result); r.onerror = () => n(r.error); });
@@ -194,7 +204,7 @@ const server = http.createServer((req, res) => {
   });
   ok(gone.dbs === 'trackhunt-offline-v1', 'deleteDatabase removes it: ' + (gone.error || gone.dbs));
   ok(gone.cookie === 'theme=dark', 'the page reads back the cookies it set, without an error: ' + JSON.stringify(gone.cookie));
-  ok(!errors.length, 'no page errors: ' + JSON.stringify(errors));
+  ok(!errors.filter(e => !e.includes('migration failed')).length, 'no page errors: ' + JSON.stringify(errors));
   await browser.close(); server.close();
   if (process.env.QA_EXPECT === 'broken') {
     console.log(fails.length ? `EXPECTED: ${fails.length} checks fail on this build` : 'UNEXPECTED: every check passed');

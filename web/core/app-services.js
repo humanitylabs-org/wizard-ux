@@ -1531,9 +1531,10 @@
       if (method === 'idb.list') return window.WizBrowserBoundary.appIdb.list(st.appId);
       if (method === 'idb.commit' || method === 'idb.drop') {
         const B = window.WizBrowserBoundary, name = args?.name;
-        return (method === 'idb.commit' ? B.appIdb.commit(st.appId, name, args?.ops) : B.appIdb.drop(st.appId, name)).then(ok => {
-          if (ok === true) for (const o of frames.values()) if (o !== st && o.appId === st.appId && boundaryLive(o)) B.notice(o.frame, 'idb', { name });
-          return ok === true;
+        return (method === 'idb.commit' ? B.appIdb.commit(st.appId, name, args?.ops, args?.base) : B.appIdb.drop(st.appId, name)).then(v => {
+          const ok = v === true || !!v?.idb;
+          if (ok) for (const o of frames.values()) if (o !== st && o.appId === st.appId && boundaryLive(o)) B.notice(o.frame, 'idb', { name });
+          return v;
         });
       }
       if (method === 'net.fetch') return boundaryNet(st, args);

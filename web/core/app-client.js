@@ -652,6 +652,26 @@
           set(fn) { if (this[k]) this.removeEventListener(t, this[k].l); this[k] = null; if (typeof fn === 'function') { const l = e => fn.call(this, e); this[k] = { fn, l }; this.addEventListener(t, l); } } });
       }
     }
+    /* A listener that throws aborts the transaction, as in the browser (dispatchEvent only reports the exception, so
+     * each listener is wrapped and notes it; the exception is still reported). */
+    const WRAPS = new WeakMap();
+    class Target extends EventTarget {
+      addEventListener(type, fn, opts) {
+        if (!fn || (typeof fn !== 'function' && typeof fn.handleEvent !== 'function')) return super.addEventListener(type, fn, opts);
+        const cap = typeof opts === 'boolean' ? opts : !!opts?.capture, key = type + '|' + cap, self = this;
+        let mine = WRAPS.get(this); if (!mine) WRAPS.set(this, mine = new WeakMap());
+        let m = mine.get(fn); if (!m) mine.set(fn, m = new Map());
+        let w = m.get(key);
+        if (!w) { w = function (e) { try { return typeof fn === 'function' ? fn.call(this, e) : fn.handleEvent(e); } catch (x) { S.get(self).threw = true; throw x; } }; m.set(key, w); }
+        return super.addEventListener(type, w, opts);
+      }
+      removeEventListener(type, fn, opts) {
+        const cap = typeof opts === 'boolean' ? opts : !!opts?.capture;
+        return super.removeEventListener(type, (fn && WRAPS.get(this)?.get(fn)?.get(type + '|' + cap)) || fn, opts);
+      }
+    }
+    // Dispatch; true when a listener threw.
+    const fire = (t, ev) => { const s = S.get(t); s.threw = false; t.dispatchEvent(ev); const threw = s.threw; s.threw = false; return threw; };
     const nameList = list => { const a = [...list].sort(); return Object.freeze(Object.assign(a, { item: i => a[i] ?? null, contains: n => a.includes(n) })); };
     const validPath = p => (typeof p === 'string' ? p === '' || p.split('.').every(x => /^[$A-Za-z_][$\w]*$/.test(x)) : Array.isArray(p) && p.length > 0 && p.every(x => typeof x === 'string' && x !== '' && validPath(x)));
     function pathValue(v, p) {
@@ -680,7 +700,7 @@
     function model(name) {
       let m = models.get(name);
       if (m) return m;
-      m = { name, version: 0, stores: new Map(), queue: [], running: null, conns: new Set(), loaded: false };
+      m = { name, version: 0, rev: 0, stores: new Map(), queue: [], running: null, conns: new Set(), loaded: false };
       models.set(name, m);
       enqueue(m, { start: done => load(m).then(done, done) });
       return m;
@@ -689,9 +709,9 @@
     function load(m) {
       return call('idb.load', { name: m.name }).then(v => {
         const d = v?.idb;
-        m.stores = new Map(); m.version = 0;
+        m.stores = new Map(); m.version = 0; m.rev = 0;
         if (d && typeof d === 'object') {
-          m.version = Number(d.version) || 0;
+          m.version = Number(d.version) || 0; m.rev = Number(d.rev) || 0;
           for (const [s, info] of d.stores || []) m.stores.set(s, storeOf(info));
           for (const [s, rows] of d.rows || []) { const st = m.stores.get(s); if (st) st.rows = rows.map(([k, x]) => ({ k, v: x })).sort((a, b) => cmp(a.k, b.k)); }
         }
@@ -730,7 +750,7 @@
       }
     }
 
-    class IDBRequest extends EventTarget {
+    class IDBRequest extends Target {
       constructor(source, tx) { super(); S.set(this, { source, tx, result: undefined, error: null, done: false }); }
       get result() { const s = S.get(this); if (!s.done) throw fail('InvalidStateError', 'The request has not finished.'); return s.result; }
       get error() { const s = S.get(this); if (!s.done) throw fail('InvalidStateError', 'The request has not finished.'); return s.error; }
@@ -746,7 +766,7 @@
     }
     const settle = (req, result, error) => { const s = S.get(req); s.done = true; s.result = error ? undefined : result; s.error = error || null; };
 
-    class IDBTransaction extends EventTarget {
+    class IDBTransaction extends Target {
       constructor(db, names, mode) {
         super();
         const m = S.get(db).model;
@@ -792,11 +812,11 @@
         let result, error = null;
         try { result = r.op(); } catch (e) { error = e instanceof DOMException ? e : fail('UnknownError', String(e?.message || e)); }
         settle(r.req, result, error);
-        if (!error) r.req.dispatchEvent(new Event('success'));
+        if (!error) { if (fire(r.req, new Event('success')) && s.state === 'active') return txAbort(tx, fail('AbortError', 'A success handler threw.')); }
         else {
           const ev = new Event('error', { bubbles: true, cancelable: true });
-          r.req.dispatchEvent(ev);
-          let kept = ev.defaultPrevented;
+          const threw = fire(r.req, ev);
+          let kept = ev.defaultPrevented && !threw;
           if (!kept && s.state === 'active') { const e2 = new Event('error', { cancelable: true }); tx.dispatchEvent(e2); kept = e2.defaultPrevented; }
           if (!kept && s.state === 'active') { const e3 = new Event('error', { cancelable: true }); s.db.dispatchEvent(e3); kept = e3.defaultPrevented; }
           if (!kept && s.state === 'active') return txAbort(tx, error);
@@ -810,8 +830,12 @@
       s.state = 'committing';
       const complete = () => { s.state = 'done'; s.before = null; later(() => { tx.dispatchEvent(new Event('complete')); s.onEnd?.(true); s.done?.(); }); };
       if (s.mode === 'readonly' || !s.ops.length) return complete();
-      call('idb.commit', { name: s.m.name, ops: s.ops }).then(ok => {
-        if (ok === true) return complete();
+      // `base`: the shell's revision this page's copy is at. If another window of the app committed since, the shell
+      // refuses (`stale`): this transaction aborts and the page reads the database again, so it never overwrites a
+      // change it did not see (a key generator's number, a unique index).
+      call('idb.commit', { name: s.m.name, ops: s.ops, base: s.m.rev }).then(v => {
+        if (v && typeof v === 'object' && Number.isSafeInteger(v.idb?.rev)) { s.m.rev = v.idb.rev; return complete(); }
+        if (v === 'stale') { s.m.queue.unshift({ reload: true, start: d => load(s.m).then(d, d) }); return txAbort(tx, fail('UnknownError', 'Another window of this app changed the database; try again.'), true); }
         txAbort(tx, fail('QuotaExceededError', 'This app\u2019s storage in Wizard is full.'), true);
       }, () => txAbort(tx, fail('UnknownError', 'Wizard could not save this change.'), true));
     }
@@ -834,7 +858,7 @@
     // A transaction aborted before its turn: it leaves the queue.
     function enqueueDrop(s) { const i = s.m.queue.indexOf(s.item); if (i >= 0) s.m.queue.splice(i, 1); }
 
-    class IDBDatabase extends EventTarget {
+    class IDBDatabase extends Target {
       constructor(m) { super(); S.set(this, { model: m, version: m.version, closed: false, upgrade: null }); }
       get name() { return S.get(this).model.name; }
       get version() { return S.get(this).version; }
@@ -1098,8 +1122,10 @@
             settle(req, undefined, fail('AbortError', 'The upgrade was aborted.')); req.dispatchEvent(new Event('error', { cancelable: true }));
           };
           settle(req, db); S.get(req).done = true;
-          req.dispatchEvent(new IDBVersionChangeEvent('upgradeneeded', { oldVersion: old, newVersion: want }));
+          const threw = fire(req, new IDBVersionChangeEvent('upgradeneeded', { oldVersion: old, newVersion: want }));
           txRun(tx, done);
+          // The app's upgrade threw: nothing of it is kept and the open fails, so the next open upgrades again.
+          if (threw && ts.state === 'active') txAbort(tx, fail('AbortError', 'The upgradeneeded handler threw.'));
         } });
         return req;
       }
@@ -1111,7 +1137,7 @@
           for (const o of m.conns) o.dispatchEvent(new IDBVersionChangeEvent('versionchange', { oldVersion: old, newVersion: null }));
           call('idb.drop', { name }).then(ok => {
             if (ok !== true) throw fail('UnknownError', 'Wizard could not delete the database.');
-            m.stores = new Map(); m.version = 0;
+            m.stores = new Map(); m.version = 0; m.rev = 0;
             settle(req, undefined); req.dispatchEvent(new IDBVersionChangeEvent('success', { oldVersion: old, newVersion: null }));
           }).catch(e => { settle(req, undefined, e instanceof DOMException ? e : fail('UnknownError', String(e?.message || e))); req.dispatchEvent(new Event('error', { cancelable: true })); }).finally(done);
         } });
