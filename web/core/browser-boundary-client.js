@@ -132,10 +132,10 @@
     return true;
   }
   // ⌥ + one of this page's live app keys while the shell presses them: the shell presses it (and may first take the
-  // key back for Wizard), as before the boundary. ⇧ is never an app key; a Mac's accent keys stay the field's.
+  // key back for Wizard), as before the boundary. ⇧ is never an app key; on a Mac ⌥E/U/I in a field stay accents.
   function appTakes(e, field) {
     if (!appOn || e.shiftKey || !e.altKey || e.metaKey || e.ctrlKey) return false;
-    if (field && /^(KeyE|KeyU|KeyI)$/.test(e.code)) return false;
+    if (MAC && field && /^(KeyE|KeyU|KeyI)$/.test(e.code)) return false;
     reportKeys(true);
     return appKeyNow.includes(appKeyOf(e.code));
   }

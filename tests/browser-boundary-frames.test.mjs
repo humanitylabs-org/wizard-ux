@@ -721,7 +721,7 @@ test('app keys: only while a layout presses them does the app report, hold back 
   assert.equal((await press({ key: '∆', code: 'KeyJ', altKey: true })).prevented, false);
   assert.equal(sh.B.appKeys(f.el).length, 0);
   assert.equal(f.sent.some(m => m.data.op === 'keys.app'), false);
-  const off = sh.B.pressAppKeys(); await tick(); await tick();
+  const off = sh.B.pressAppKeys(() => f.el); await tick(); await tick();
   const keys = sh.B.appKeys(f.el);
   assert.deepEqual(clone(keys.map(t => [t.key, t.label])), [['j', 'Next note']]);
   const r = keys[0].el.getBoundingClientRect();
@@ -742,7 +742,7 @@ test('app keys: only while a layout presses them does the app report, hold back 
 
 test('app keys: forged or reserved keys are dropped; a press only reaches a key that is live now; a reload clears them', async () => {
   const { sh, f, got, press, pressed, setLive } = await appKeyed();
-  sh.B.pressAppKeys(); await tick(); await tick();
+  sh.B.pressAppKeys(() => f.el); await tick(); await tick();
   const channel = f.sent.filter(m => m.data.op === 'ready').at(-1).data.channel;
   const post = data => sh.ev.fire('message', { source: f.a, origin: 'null', data: { type: 'wizard:boundary', version: 1, channel, ...data } });
   post({ op: 'keys.app', keys: [{ key: 'h', label: 'Home', x: 0, y: 0, w: 10, h: 10 }, { key: 'v', x: 0, y: 0, w: 10, h: 10 }, { key: 'q', x: 0, y: 0, w: 0, h: 10 }, { key: 'm', x: 'a', y: 0, w: 10, h: 10 }, { key: 'k', label: 'x'.repeat(300), x: 1, y: 2, w: 3, h: 4 }] });
@@ -766,8 +766,34 @@ test('app keys: forged or reserved keys are dropped; a press only reaches a key 
 
 test('app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\'s keys from the boundary', () => {
   const layout = read('web/layouts/ai-apps/desktop.js'), client = read('web/core/app-client.js');
-  assert.match(layout, /const offAppKeys = globalThis\.WizBrowserBoundary\?\.pressAppKeys\?\.\(\) \|\| null;/);
+  assert.match(layout, /var offAppKeys = globalThis\.WizBrowserBoundary\?\.pressAppKeys\?\.\(\(\) => \(appFront\(\) \? paneFrame\(\) : null\)\) \|\| null;/);
+  assert.match(layout, /offAppKeys\?\.sync\?\.\(\);/, 'the app in front is synced on every repaint');
   assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);/, 'the view lets go when it is torn down');
   assert.match(layout, /if \(B\?\.owns\?\.\(f\)\) \{ try \{ return B\.appKeys\(f\)\.filter\(t => t && t\.el && isAppKey\(t\.key\)\);/);
   assert.match(client, /keys: \(\) => keyList\(document\), press: key => keyPress\(key\)/, 'WizardApp hands its own key list and press to the boundary client');
+});
+
+test('app keys: only the app in front holds back its ⌥ keys; another app window keeps its own shortcuts', async () => {
+  const { sh, f, press, pressed } = await appKeyed();
+  let front = null;
+  const view = sh.B.pressAppKeys(() => front); await tick(); await tick();
+  assert.equal((await press({ key: '∆', code: 'KeyJ', altKey: true })).prevented, false, 'not the app in front: ⌥J stays its own');
+  assert.equal(sh.B.appKeys(f.el).length, 0);
+  front = f.el; view.sync(); await tick(); await tick();
+  assert.equal((await press({ key: '∆', code: 'KeyJ', altKey: true })).prevented, true, 'in front: the view presses it');
+  sh.B.appKeys(f.el)[0].el.click(); await tick(); await tick();
+  assert.deepEqual(pressed, ['j']);
+  front = null; view.sync(); await tick(); await tick();
+  assert.equal((await press({ key: '∆', code: 'KeyJ', altKey: true })).prevented, false, 'another app came to the front: ⌥J is this page\'s again');
+  assert.equal(sh.B.appKeys(f.el).length, 0);
+});
+
+test('app keys: ⌥E/U/I in a text field stay accents on a Mac only', async () => {
+  for (const mac of [true, false]) {
+    const k = await keyed({ mac });
+    k.f.a.WizBoundaryClient.connect({ keys: () => [{ el: { getBoundingClientRect: () => ({ left: 1, top: 1, width: 9, height: 9 }) }, key: 'e', label: 'Edit' }], press: () => true });
+    k.sh.B.pressAppKeys(() => k.f.el); await tick(); await tick();
+    k.f.a.document.activeElement = { tagName: 'INPUT', type: 'text', readOnly: false };
+    assert.equal((await k.press({ key: '´', code: 'KeyE', altKey: true })).prevented, !mac, mac ? 'Mac: an accent' : 'elsewhere: the app key');
+  }
 });

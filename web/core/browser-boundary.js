@@ -138,7 +138,8 @@
     }
     return null;
   }
-  let serial = 0, claimed = [], server = null, appPressers = 0;
+  let serial = 0, claimed = [], server = null;
+  const appPressers = new Set();   // layouts that press app keys, each with the one frame it presses them in (its app in front)
   /* App keys (data-wz-key, docs/ai-apps-view.md › App keys): the app reports which of its controls carry an ⌥ key
    * (the key, a short label and where it sits in its own window), and the layout that presses app keys (pressAppKeys)
    * shows keycaps there and asks the app to press one (`keys.press`, by key only). The app can only ever press its own
@@ -156,7 +157,18 @@
     }
     return out;
   }
-  const keysMsg = () => ({ keys: claimed, app: appPressers > 0 });
+  // Only the frame a layout presses app keys in (its app in front) reports and holds back its ⌥ keys; any other app
+  // window keeps its own ⌥ shortcuts.
+  const appOn = st => { for (const p of appPressers) { try { if (p() === st.frame) return true; } catch (_) {} } return false; };
+  const keysMsg = st => ({ keys: claimed, app: appOn(st) });
+  function syncAppKeys() {
+    for (const st of sessions.values()) {
+      const on = appOn(st);
+      if (!on) st.appKeys = [];
+      if (st.ready && on !== !!st.appSent) send(st, 'keys', keysMsg(st));
+      st.appSent = on;
+    }
+  }
   const fieldChanged = () => { for (const fn of [...fieldListeners]) { try { fn(); } catch (_) {} } };
   const newChannel = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
   const opaqueFrame = f => !!f && f.tagName === 'IFRAME' && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin') && !f.hasAttribute('srcdoc');
@@ -229,7 +241,7 @@
     if (!opaqueFrame(frame)) return () => {};
     const had = sessions.get(frame); if (had) return had.detach;
     const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0 };
-    const hello = () => { revoke(st); send(st, 'hello', keysMsg()); };
+    const hello = () => { revoke(st); st.appSent = appOn(st); send(st, 'hello', keysMsg(st)); };
     st.detach = () => { if (sessions.get(frame) !== st) return; frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
     sessions.set(frame, st);
     frame.addEventListener('load', hello); hello();
@@ -253,7 +265,7 @@
       metaKey: d.metaKey === true, ctrlKey: d.ctrlKey === true, repeat: d.repeat === true, field: d.field === true, readOnly: d.readOnly === true };
     const esc = ev.key === 'Escape', bareAlt = ev.key === 'Alt' && !ev.metaKey && !ev.ctrlKey;
     // Only the shell's keys: Esc, ⌥ itself (the keys guide) and the named ⌥ codes (⌘ and Ctrl stay the app's and the browser's).
-    const appKey = appPressers > 0 && ev.altKey && !ev.metaKey && !ev.ctrlKey && !ev.shiftKey && st.appKeys.some(t => t.key === appKeyOf(ev.code));
+    const appKey = appOn(st) && ev.altKey && !ev.metaKey && !ev.ctrlKey && !ev.shiftKey && st.appKeys.some(t => t.key === appKeyOf(ev.code));
     if (!esc && !bareAlt && !appKey && !(ev.altKey && !ev.metaKey && !ev.ctrlKey && claimed.includes(ev.code))) return;
     // Esc is never an activation in browsers (it can only ask for the Back the app could already ask for), and bare ⌥
     // only shows the keys guide; a named ⌥ key needs one.
@@ -267,7 +279,7 @@
     const st = [...sessions.values()].find(s => s.frame.contentWindow === e.source);
     if (!connected(st)) return;
     // A client that loaded after our hello asks for one; it gets a fresh hello on the current channel.
-    if (d.op === 'boot') { if (!st.ready) send(st, 'hello', keysMsg()); return; }
+    if (d.op === 'boot') { if (!st.ready) { st.appSent = appOn(st); send(st, 'hello', keysMsg(st)); } return; }
     if (d.channel !== st.channel) return;
     if (d.op === 'ready') {
       st.ready = true;
@@ -285,7 +297,7 @@
       return;
     }
     if (d.op === 'input') { input(st, d); return; }
-    if (d.op === 'keys.app') { st.appKeys = appPressers > 0 ? appKeyList(d.keys) : []; return; }
+    if (d.op === 'keys.app') { st.appKeys = appOn(st) ? appKeyList(d.keys) : []; return; }
     if (d.op === 'theme.applied') {
       if (st.appearance && d.revision === st.appearance.revision) themedWin(st.frame)?.classList.add('wz-themed');
       return;
@@ -354,23 +366,23 @@
     // Desktop keys: which ⌥ codes the shell takes (the app then keeps them from its page), and the input it forwards.
     keys(codes) {
       claimed = Array.isArray(codes) ? codes.filter(c => typeof c === 'string' && c.length <= 24).slice(0, 64) : [];
-      for (const st of sessions.values()) if (st.ready) send(st, 'keys', keysMsg());
+      for (const st of sessions.values()) if (st.ready) { st.appSent = appOn(st); send(st, 'keys', keysMsg(st)); }
     },
     onInput(fn) { if (typeof fn !== 'function') return () => {}; inputListeners.add(fn); return () => inputListeners.delete(fn); },
-    // A layout that presses app keys (the AI apps view) says so while it runs; only then do apps report and hold back
-    // their ⌥ keys (the Classic desktop has no app keys, so there they stay the page's own).
-    pressAppKeys() {
-      appPressers++; let done = false;
-      const tell = () => { for (const st of sessions.values()) { if (!appPressers) st.appKeys = []; if (st.ready) send(st, 'keys', keysMsg()); } };
-      tell();
-      return () => { if (done) return; done = true; appPressers--; tell(); };
+    // A layout that presses app keys (the AI apps view) says so while it runs, with frameFn() = the frame of its app in
+    // front (null: none). Only that frame reports and holds back its ⌥ keys (the Classic desktop has no app keys, and
+    // other app windows keep theirs). The returned off() lets go; off.sync() is called when the app in front changes.
+    pressAppKeys(frameFn) {
+      if (typeof frameFn !== 'function') return Object.assign(() => {}, { sync: () => {} });
+      const p = () => frameFn(); appPressers.add(p); syncAppKeys();
+      return Object.assign(() => { if (appPressers.delete(p)) syncAppKeys(); }, { sync: syncAppKeys });
     },
     // The app keys this frame's document reported (none when it is not ready or nobody presses them), as stand-ins the
     // keys guide can place a keycap on (its box in the shell's viewport comes from the frame's offset, like a
     // same-origin node) and a layout can press: click() asks the app to press that key in its own page.
     appKeys(frame) {
       const st = sessions.get(frame);
-      if (!connected(st) || !st.ready || !appPressers || !visible(frame)) return [];
+      if (!connected(st) || !st.ready || !appOn(st) || !visible(frame)) return [];
       const channel = st.channel;
       return st.appKeys.map(t => {
         const r = Object.freeze({ left: t.x, top: t.y, right: t.x + t.w, bottom: t.y + t.h, width: t.w, height: t.h, x: t.x, y: t.y });

@@ -34,7 +34,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   // The AI apps view stand-in: presses the app in front's keys (appKeyOf: KeyJ -> j, Slash -> /).
   const keyOf = code => { const m = /^Key([A-Z])$/.exec(code); return m ? m[1].toLowerCase() : ({ Slash: '/' })[code] || ''; };
   const pressKey = (code, from) => { const t = B.appKeys(f).find(t => t.key === keyOf(code)); shellGot.push(from + ':' + code + (t ? ':pressed' : ':none')); if (t) t.el.click(); return !!t; };
-  window.view = { off: B.pressAppKeys() };
+  window.view = { off: B.pressAppKeys(() => f) };
   B.onInput((fr, ev) => { if (ev.kind === 'key' && ev.type === 'keydown' && ev.altKey) pressKey(ev.code, 'frame'); });
   addEventListener('keydown', e => { if (e.altKey && /^Key|Slash/.test(e.code) && pressKey(e.code, 'shell')) e.preventDefault(); });
   // A keycap where the guide would draw it: the stand-in's box moved by the frame's offset (desktop.js chip()).

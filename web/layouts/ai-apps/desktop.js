@@ -2117,8 +2117,9 @@ export default function desktop(api) {
    * SDK copy: the same rules read here), only the keys an app may have (isAppKey: a letter or / , . ; not Wizard's);
    * its keycap reads the letter in capitals. */
   const appFront = () => !!pane && !focusOn();
-  // under the browser boundary a sandboxed app reports and holds back its ⌥ keys only while this view presses them
-  const offAppKeys = globalThis.WizBrowserBoundary?.pressAppKeys?.() || null;
+  // under the browser boundary only the sandboxed app in front reports and holds back its ⌥ keys, while this view runs
+  // (a var: paintTop can run before this line, during setup)
+  var offAppKeys = globalThis.WizBrowserBoundary?.pressAppKeys?.(() => (appFront() ? paneFrame() : null)) || null;
   const appTarget = k => { const f = k ? paneFrame() : null; return f ? frameKeys(f).find(t => t.key === k) || null : null; };
   function pressApp(t) {
     const n = t.el;
@@ -2197,7 +2198,7 @@ export default function desktop(api) {
     paintWs(); paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     paintHome(); paintOne(h);
-    syncOrb(); macHoles?.soon();
+    syncOrb(); macHoles?.soon(); offAppKeys?.sync?.();
   }
   /* narrow desktop (ONE): which one thing shows (data-aad-one = app | chats), the sidebar for it (none beside an app;
    * at half width the list beside the chat; narrower the list or the chat), and the two Backs */

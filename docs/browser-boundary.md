@@ -155,12 +155,13 @@ On:
   stops, also across a reload. Only plain data, Blobs (audio) and binary PCM cross. Proof:
   `tests/qa-browser-boundary-capture.cjs` (real Chromium).
 - App keys (`data-wz-key`, docs/ai-apps-view.md › App keys): while the AI apps view runs it calls
-  `WizBrowserBoundary.pressAppKeys()`. Only then does a sandboxed app report its live ⌥ keys (`keys.app`: the key, a
+  `WizBrowserBoundary.pressAppKeys(frameFn)` with its app in front. Only that sandboxed app (other app windows keep
+  their own ⌥ shortcuts) reports its live ⌥ keys (`keys.app`: the key, a
   short label and the control's box in its own window; never the control) whenever its page changes, scrolls or resizes,
   hold back ⌥ + one of those keys and forward it like the shell's own keys (a real keypress, the focused window).
   `appKeys(frame)` gives the view stand-ins: the hold-⌥ guide puts the keycap on the control's box, and a press sends
   `keys.press` (the key only), so the app presses its own control (a field as the target takes focus). Wizard's own
-  letters (H W S D V C) are never app keys, ⌥⇧ is never one, and ⌥E/U/I in a text field stay accents. In the Classic
+  letters (H W S D V C) are never app keys, ⌥⇧ is never one, and on a Mac ⌥E/U/I in a text field stay accents. In the Classic
   desktop (no app keys) nothing is reported and ⌥ keys stay the page's. Proof: `tests/qa-browser-boundary-app-keys.cjs`.
 - Voice commands stay closed under the boundary: an app's `voice.commands` claim must answer synchronously while the
   shell parses a held-orb command, which a message channel can't do, and no installed app registers one (apps declare
