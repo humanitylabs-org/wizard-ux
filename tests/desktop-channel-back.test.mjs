@@ -81,3 +81,26 @@ test('wiring: the Back sits left of the title, every sidebar open clears it, the
   assert.match(css, /\.aad-cback\[hidden\] \{ display: none; \}/);
   assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /aad-cback|fromFeed/, 'the phone is unchanged');
 });
+
+// Esc on an app desk keeps the owner's view (wizard-ux issue 1330; see 1325): a post's thread back to its feed, and the
+// feed closed, leave 50/50 / centred / full as they were; only a plain chat closing from them goes back to tiled.
+test('closeChat: channel steps keep the view mode; a plain chat still goes back to tiled', () => {
+  const src = between(js, '  function closeChat() {', '  function setWide(on) {');
+  const run = ({ thread, fromFeed = false, mode = 'pair' }) => {
+    const c = { FEED: '__feed__', docked: true, chatThread: thread, noteWant: false, draftWant: false, calls: [], mode,
+      panes: { get: () => ({ mode: c.mode }) }, feedBack: () => (fromFeed ? { id: 'launch', name: 'Launch' } : null),
+      windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
+      api: { sessions: { channelBack: () => { c.calls.push('channelBack'); return true; }, newChat: () => c.calls.push('newChat') } } };
+    vm.createContext(c); vm.runInContext(`${src}\nthis.ok = closeChat(); this.after = chatThread;`, c);
+    return c;
+  };
+  for (const mode of ['pair', 'centre', 'full']) {
+    const feed = run({ thread: '__feed__', mode });
+    assert.equal(feed.mode, mode, `the feed closed keeps ${mode}`); assert.deepEqual(feed.calls, ['channelBack', 'paint']);
+    const post = run({ thread: 'qa-p12', fromFeed: true, mode });
+    assert.equal(post.mode, mode, `a post's thread back to its feed keeps ${mode}`); assert.deepEqual(post.calls, ['newChat']);
+    const plain = run({ thread: 'qa-g1', mode });
+    assert.equal(plain.mode, 'tiled', `a plain chat closing from ${mode}: tiled, as before`);
+  }
+  assert.equal(run({ thread: '__feed__', mode: 'tiled' }).calls.includes('mode:tiled:chats'), false);
+});

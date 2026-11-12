@@ -1643,7 +1643,9 @@ export default function desktop(api) {
   // the chat column goes: Home (a new chat); the app panel (if any) stays
   function closeChat() {
     if (!docked) return false;
-    if (panes.get().mode !== 'tiled') windowMode('tiled', 'chats');
+    // A channel step (a post's thread back to its feed, the feed closed) keeps the owner's view: 50/50, centred or
+    // full stay as they were, so the desk ends as it was before the feed opened (wizard-ux issues 1330, 1325).
+    if (panes.get().mode !== 'tiled' && chatThread !== FEED && !feedBack()) windowMode('tiled', 'chats');
     // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
     if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
