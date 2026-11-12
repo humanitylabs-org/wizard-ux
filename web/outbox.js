@@ -628,12 +628,16 @@
       await put(it);
     }
   }
+  // WizardOS is updating (core/os-update-flow.js shows its Updating panel): every send waits here, whatever started
+  // it (the composer, a voice take, Welcome, Share). The message stays saved and goes once the update is over.
+  const osUpdating = () => { try { return !!window.WosUpdateFlow?.paused; } catch (_) { return false; } };
   async function pump() {
     if (pumping) return; pumping = true;
     try {
       await load();
       for (const it of items.values()) if (it.storageError || !it.durable) await put(it);
       for (;;) {
+        if (osUpdating()) break;
         const due = [...items.values()].filter(it => eligible(it, ['queued', 'waiting']) && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
         if (!due) break;
         if (await holdLate(due)) continue;
@@ -650,6 +654,7 @@
       if ([...items.values()].some(it => eligible(it, ['queued']))) next.push(now());
       if (!next.length) return;
       ms = Math.max(0, Math.min(...next) - now());
+      if (osUpdating()) ms = Math.max(ms, 5000);   // held while WizardOS updates; look again (and on wos:sending-paused)
     }
     timer = setTimeout(pump, ms);
   }
@@ -955,6 +960,7 @@
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
+  addEventListener('wos:sending-paused', e => { if (!e.detail?.paused) wake(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.WosOutbox = api;
   load().then(() => schedule(0));

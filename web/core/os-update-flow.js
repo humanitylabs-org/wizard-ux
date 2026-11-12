@@ -24,6 +24,14 @@
  *   WosUpdateFlow.card()     the Settings card (core/os-updates.js asks on a Mac)
  *   WosUpdateFlow.confirm()  the confirm sheet (Settings' Update now)
  *   WosUpdateFlow.updating   {target, phase} while updating, else null
+ *   WosUpdateFlow.paused     true while sending is paused (the Updating panel is up); WosOutbox holds delivery
+ *
+ * Waiting for running work (App Manager `waits_for_work`, true on a Mac and, elsewhere, with the off-by-default
+ * switch wizard/os-update-waits): the "Wizard is still working on …" sheet (Update when it finishes / Update anyway)
+ * and the 6-hour ask work on every box that says it. Everything else here (the banner, heads-up, Updating panel,
+ * backup step) stays Mac only; elsewhere Install and Update anyway go through core/os-updates.js as before.
+ *   WosUpdateFlow.waiting(target, answer)  the sheet for an apply that answered `waiting`
+ *   WosUpdateFlow.options()                 the waiting update's options (Update now / Stop reminding me / Cancel)
  */
 (() => {
   'use strict';
@@ -32,6 +40,7 @@
   const U = () => window.WosUpdates;
   const st = () => U()?.state || null;
   const mac = () => st()?.by_host === true;
+  const waits = () => mac() || st()?.waits_for_work === true;
   const OS = 'WizardOS';
   const TAKES = 'Usually 5–15 minutes';
   const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1', WAITING = 'wos.osu.waiting.v1';
@@ -84,13 +93,19 @@
       ls.set(FLOW, null); ls.set(WAITING, { target: f.target, since: f.since }); f = null;
     }
     let u = null;
-    if (h && ACTIVE.includes(h.phase)) u = { target: h.target, phase: h.phase, since: h.at * 1000 };
+    if (h && ACTIVE.includes(h.phase)) {
+      u = { target: h.target, phase: h.phase, since: h.at * 1000 };
+      // Started on another device (or by Automatic, or a waiting request): remember it here too, so this device
+      // lands (reloads into the new interface) when it ends, like the device that tapped.
+      if (!f || f.target !== h.target) { f = { target: h.target, since: h.at * 1000, id: h.id || '', reload: reloads(s) }; ls.set(FLOW, f); }
+      else if (h.id && !f.id) { f = { ...f, id: h.id }; ls.set(FLOW, f); }
+    }
     // A request that waits for Wizard to finish (when_idle) isn't an update yet: Wizard stays usable meanwhile.
     else if (s.host_pending && !s.host_pending.when_idle) u = { target: s.host_pending.target || s.latest, phase: 'pending' };
     else if (s.installing) u = { target: s.latest, phase: 'updating' };
     if (f) {
-      const ended = h && h.phase === 'done' && h.target === f.target && h.at * 1000 >= f.since - 120e3;
-      if (ended) { ls.set(FLOW, null); landed(h); return null; }
+      const ended = h && h.phase === 'done' && (f.id && h.id ? h.id === f.id : h.target === f.target && h.at * 1000 >= f.since - 120e3);
+      if (ended) { ls.set(FLOW, null); landed(h, f); return null; }
       if (!U()?.issue && s.installed === f.target && !s.installing && !u) { ls.set(FLOW, null); return null; }
       u = u || { target: f.target, phase: 'pending' };
       u.since = Math.min(u.since || Infinity, f.since);
@@ -112,10 +127,12 @@
     if (Date.now() - h.at * 1000 > 24 * 3600e3) return null;
     return h;
   }
-  // The device that watched the update reloads into the new interface; the result banner greets it there.
+  // Every device that watched the update reloads into the new interface; the result banner greets it there. Only when
+  // the interface changed: the App Manager's impact says `reload: false` for a release that leaves it as it was.
+  const reloads = s => s?.impact?.reload !== false;
   let reloading = false;
-  function landed(h) {
-    if (h.result !== 'ok' || reloading) return;
+  function landed(h, f) {
+    if (h.result !== 'ok' || reloading || f?.reload === false) return;
     reloading = true;
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 1200);
   }
@@ -164,19 +181,20 @@
       const d = await U().post({ action: 'apply', when_idle: true });
       if (d && typeof d === 'object' && 'update_available' in d) U().state = d;
       if (d?.host_pending || d?.when_idle) toast('✓', `${OS} ${t} updates when Wizard has finished`);
-      else if (d?.host_pending === null && !d?.waiting) start(t);       // it finished meanwhile
+      else if (!mac() && (d?.started || d?.waiting)) U().applied?.(d);     // it finished meanwhile: the update started
+      else if (mac() && d?.host_pending === null && !d?.waiting) start(t);  // it finished meanwhile
       else toast('!', d?.note || d?.error || 'Couldn’t ask for the update');
     } catch (e) { toast('!', e?.message || 'Couldn’t reach the App Manager'); }
-    render();
+    render(); U()?.changed?.();
   }
   function answerWait(action, text) {
     U().post({ action }).then(d => { if (d && 'update_available' in d) U().state = d; toast('✓', text); })
-      .catch(e => toast('!', e?.message || 'Couldn’t reach the App Manager')).finally(render);
+      .catch(e => toast('!', e?.message || 'Couldn’t reach the App Manager')).finally(() => { render(); U()?.changed?.(); });
   }
   // Asked again after 6 hours of waiting (once per request): the owner's three answers.
   function askAgainSheet(force = false) {
     const s = st(), w = s?.when_idle;
-    if (!w || updating() || (!force && (!w.asked || ls.get(ASKED) === w.requested_at))) return;
+    if (!w || !waits() || s.installing || updating() || (!force && (!w.asked || ls.get(ASKED) === w.requested_at))) return;
     ls.set(ASKED, w.requested_at);
     const names = work(s);
     ask({ title: `Wizard is still busy`,
@@ -200,7 +218,8 @@
       yes: 'Update now', no: 'Cancel', onYes: () => start(t) });
   }
   async function start(target, extra = {}) {
-    ls.set(FLOW, { target, since: Date.now() }); ls.set(LATER, null);
+    if (!mac()) { U().apply?.(extra); return; }        // not a Mac: os-updates.js installs as before (Update anyway)
+    ls.set(FLOW, { target, since: Date.now(), reload: reloads(st()) }); ls.set(LATER, null);
     maxStep = 0; stepFor = target; render();
     try {
       const d = await U().post({ action: 'apply', ...extra });
@@ -293,10 +312,11 @@
     const root = document.documentElement;
     if (!u) {
       el?.remove();
-      if (root.dataset.wosUpdating) { delete root.dataset.wosUpdating; placeholders(false); }
+      if (root.dataset.wosUpdating) { delete root.dataset.wosUpdating; placeholders(false); tellPaused(false); }
       return;
     }
-    root.dataset.wosUpdating = '1'; placeholders(true);
+    if (!root.dataset.wosUpdating) { root.dataset.wosUpdating = '1'; tellPaused(true); }
+    placeholders(true);
     if (sheet && !reloading) { /* a ready/confirm sheet left open is stale now */ }
     if (!el) {
       el = document.createElement('div'); el.id = 'wosUpdating'; el.className = 'osu-busy';
@@ -325,6 +345,9 @@
     }
   }
   const paused = () => document.documentElement.dataset.wosUpdating === '1';
+  // Sends that skip the composer (a voice take finishing, Welcome, Share) are held where every message goes: WosOutbox
+  // reads WosUpdateFlow.paused and keeps them queued, then sends them when this event says the pause is over.
+  const tellPaused = on => { try { window.dispatchEvent(new CustomEvent('wos:sending-paused', { detail: { paused: on } })); } catch (_) {} };
   function stop(e) { e.preventDefault(); e.stopImmediatePropagation(); toast('◌', `${PAUSED} · your draft is kept`); }
   window.addEventListener('submit', e => { if (paused() && e.target.closest?.('form[data-chform], [data-part="composer"]')) stop(e); }, true);
   window.addEventListener('keydown', e => {
@@ -338,7 +361,7 @@
   function fastPoll() { clearTimeout(fastT); fastT = setTimeout(() => { if (updating() || flow()) U()?.load(true).finally(() => { render(); fastPoll(); }); }, 4000); }
   function render() {
     if (!U() || !st()) return;
-    if (!mac()) { renderPanel(null); renderBanner(); return; }
+    if (!mac()) { renderPanel(null); renderBanner(); if (waits()) askAgainSheet(); return; }
     const u = updating();
     renderPanel(u); renderBanner(); headsUpSheet(); askAgainSheet();
     if (u && !fastT) fastPoll();
@@ -360,6 +383,13 @@
   window.WosUpdateFlow = {
     confirm, render,
     get updating() { return updating(); },
+    get paused() { return paused(); },
+    // An apply answered `waiting` (core/os-updates.js): name the work, or say it plainly if the answer named nothing.
+    waiting(target, d) {
+      const names = work(d), t = target || st()?.latest || '';
+      if (names.length) busySheet(t, names); else toast('!', 'Wizard is still working · update when it’s done');
+    },
+    options() { askAgainSheet(true); },
     card() {
       const s = st(); if (!s) return null;
       // Nothing to tap while it runs: no button, so the words get the card's width.

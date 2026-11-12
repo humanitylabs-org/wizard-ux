@@ -1,0 +1,11 @@
+{
+  "id": "wizard/os-update-waits",
+  "name": "Updates wait for running work",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Before a WizardOS update, Wizard checks what it is working on and waits only for work the update would stop. Update now names that work and offers Update when it finishes or Update anyway. The App Manager reads this switch on the box; Wizard for Mac always works this way."
+}
