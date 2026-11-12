@@ -115,7 +115,8 @@ export async function forgetRemoved(id, { retry = false, ...opts } = {}) {
 /* Apps removed some other way (the agent, the box command, the Store on another device): this device only learns it
  * from the box's app list (core/apps.js calls sweepGone after each fresh read). A list can miss an app for a moment
  * (a broken recipe, an update in between), and deleting is final, so an app the Store removed here goes at once, but
- * any other app with data here goes only once 2 reads, 24 hours apart or more, both missed it (`wos.app-gone.v1`:
+ * any other app with data here (also one the Store removed that came back since) goes only once 2 reads, 24 hours
+ * apart or more, both missed it (`wos.app-gone.v1`:
  * { id: { at, reads } }, the first miss). Back in a list: its note goes. Resolves the ids whose data was deleted. */
 const GONE = 'wos.app-gone.v1', GONE_WAIT = 24 * 36e5, GONE_READS = 2, PREFIX = 'wos.app-storage.v1.';
 // The app ids this device keeps data for: saved settings, and databases (shell IndexedDB, never created here).
@@ -147,7 +148,8 @@ export async function sweepGone(listed, { storage = globalThis.localStorage, now
   let notes = {}; try { notes = JSON.parse(storage?.getItem?.(GONE) || '{}') || {}; } catch (_) {}
   const next = {}, done = [];
   for (const id of new Set([...kept, ...pending])) {
-    if (keep.has(id)) continue;
+    // Listed again (reinstalled): a removal still pending here is over; a later miss starts the day's wait anew.
+    if (keep.has(id)) { if (pending.has(id)) settleRemoved(id, o); continue; }
     const n = notes[id], first = Number.isFinite(n?.at) && n.at <= now && Number.isSafeInteger(n?.reads) && n.reads > 0 ? n : { at: now, reads: 0 };
     const seen = { at: first.at, reads: first.reads + 1 };
     if ((pending.has(id) || (seen.reads >= GONE_READS && now - seen.at >= GONE_WAIT)) && await forgetRemoved(id, { ...o, retry: pending.has(id) })) { done.push(id); continue; }

@@ -197,12 +197,18 @@ test('sweepGone: an empty list deletes nothing; an app the Store removed here go
  const storage=listStorage({'wos.app-storage.v1.ledger':'1'});
  assert.deepEqual(await sweepGone([],{storage,now,idb:sweepIdb(),keyRange}),[]);
  assert.equal(storage.getItem('wos.app-gone.v1'),null); assert.equal(storage.getItem('wos.app-storage.v1.ledger'),'1');
- // The Store removed cards here but its delete failed (pending): still listed (reinstalled) = kept; gone = deleted now.
+ // The Store removed cards here but its delete failed (pending): the next read without it deletes it at once.
  markRemoved('cards',{storage,now}); storage.setItem('wos.app-storage.v1.cards','1');
- assert.deepEqual(await sweepGone(['cards','ledger'],{storage,now:now+1,idb:sweepIdb(),keyRange}),[]);
- assert.equal(storage.getItem('wos.app-storage.v1.cards'),'1');
  assert.deepEqual(await sweepGone(['ledger'],{storage,now:now+2,idb:sweepIdb(),keyRange}),['cards']);
  assert.equal(storage.getItem('wos.app-storage.v1.cards'),null);
  assert.deepEqual(JSON.parse(storage.getItem('wos.app-removed.v1')),{cards:{at:now}},'a retry keeps the first removal time');
  assert.equal(storage.getItem('wos.app-gone.v1'),null);
+ // Same, but the app is listed again first (reinstalled): the pending removal is over, so a later miss of the
+ // reinstalled app waits the day like any other.
+ markRemoved('notes',{storage,now:now+3}); storage.setItem('wos.app-storage.v1.notes','new');
+ assert.deepEqual(await sweepGone(['notes','ledger'],{storage,now:now+4,idb:sweepIdb(),keyRange}),[]);
+ assert.deepEqual(pendingForgets({storage,now:now+5}),[]);
+ assert.deepEqual(await sweepGone(['ledger'],{storage,now:now+5,idb:sweepIdb(),keyRange}),[]);
+ assert.equal(storage.getItem('wos.app-storage.v1.notes'),'new');
+ assert.deepEqual(JSON.parse(storage.getItem('wos.app-gone.v1')),{notes:{at:now+5,reads:1}});
 });
