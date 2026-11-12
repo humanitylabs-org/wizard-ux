@@ -23,9 +23,10 @@
   const ID = 'wizard/thread-tracker';
   const BASE = '/wizard/v1/thread-items';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Retired while Needs you in the thread is on (wizard-ux issue 1331, with Channels): the Needs you line sits on the
-  // message itself, so no strip, dropdown or list dots; Reply on any message stays (chats.js replyStd).
-  const RETIRED_BY = ['wizard/needs-you-in-thread', 'wizard/chat-channels'];
+  // Retired while Channels are on (Needs you in the thread, wizard-ux issue 1331, part of Channels since issue 1358):
+  // the Needs you line sits on the message itself, so no strip, dropdown or list dots; Reply on any message stays
+  // (chats.js replyStd).
+  const RETIRED_BY = ['wizard/chat-channels'];
   const on = () => { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes(ID) && !RETIRED_BY.every(x => t.includes(x)); } catch (_) { return false; } };
   // The main builder agent's threads only (James, 9 Nov 2026: "This is for our builder agent, which wouldn't apply to
   // all agents"). Philosopher and every other agent's threads and rows render exactly as with the tweak off.

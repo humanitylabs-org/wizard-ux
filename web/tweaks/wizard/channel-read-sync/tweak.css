@@ -1,3 +1,0 @@
-/* Channels read on every device (wizard-agent-service issue 471): no styles; core/chats.js reads
- * html[data-tweaks~="wizard/channel-read-sync"] to share each channel's read point with the box. */
-html[data-tweaks~="wizard/channel-read-sync"] .ch-chan-list { --ch-read-sync: 1; }

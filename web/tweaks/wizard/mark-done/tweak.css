@@ -1,3 +1,0 @@
-/* Mark done in Channels (wizard-ux issue 1317): no styles; core/chats.js reads
- * html[data-tweaks~="wizard/mark-done"] to offer Mark done in the post and row menu. */
-html[data-tweaks~="wizard/mark-done"] .ch-list { --ch-mark-done: 1; }

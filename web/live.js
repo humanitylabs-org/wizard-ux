@@ -1021,7 +1021,7 @@
   /* ---- channel reads (wizard-agent-service issue 471) ----
    * Each channel's read watermark on the box (GET/PUT /wizard/v1/channels/read, the Agent Service's
    * WIZARD_CHANNEL_READ_SYNC switch), so reading a channel to the bottom on one device clears it on the owner's others.
-   * Chats asks for it only while its wizard/channel-read-sync switch is on. marks() is the box's marks (key -> ms) or
+   * Chats asks for it only while its wizard/chat-channels switch is on (issue 1358). marks() is the box's marks (key -> ms) or
    * null (unknown yet, switch off on the box, older service: the device's own marks stay the only ones; asked again
    * every few minutes). The box keeps every mark forward only, and so does this copy: a read that answers late never
    * moves a mark back. */
@@ -2017,6 +2017,17 @@
       applyLocal(s); return s;
     } });
   L.chanReads = channelReads({ req, emit: () => L.emit() });
+  /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
+   * right after it flips ask the box again a few times (the Look file write and the service's 3 s read take a moment)
+   * instead of waiting out the store's 5-minute off interval. */
+  try {
+    let chanFlip = [];
+    window.addEventListener('wos:tweak-choice', e => {
+      if (e?.detail?.id !== 'wizard/chat-channels') return;
+      chanFlip.forEach(clearTimeout);
+      chanFlip = [1500, 5000, 12000].map(ms => setTimeout(() => { L.chanStore.fresh(); L.chanStore.pull(); L.chanReads.fresh(); L.chanReads.pull(); Promise.resolve(L.refresh()).catch(() => {}); }, ms));
+    });
+  } catch (e) {}
   try { addEventListener('focus', () => { L.chanStore.fresh(); L.chanReads.fresh(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { L.chanStore.fresh(); L.chanReads.fresh(); } }); } catch (e) {}
 
   window.WizLive = L;

@@ -447,14 +447,14 @@ window.WizCore.chats = function createChats(H) {
   let chanView = (() => { try { return localStorage.getItem(CHAN_VIEW_KEY) === 'channels' ? 'channels' : 'activity'; } catch (_) { return 'activity'; } })();
   const chanExpanded = new Set(), chanMore = new Set();
   let chanArchOpen = false;
-  /* Mark done (wizard-ux issue 1317, switch wizard/mark-done, with Channels on): the post and row menu clears a thread's
+  /* Mark done (wizard-ux issue 1317, part of the Channels switch since issue 1358): the post and row menu clears a thread's
    * amber Needs you and green New reply in the feed, Activity and the Channels list, through the synced seen record
    * (LIVE.markHandled). It never archives or moves the thread; a later reply brings the markers back. An approval
    * gate is not a marker: it stays until it is answered. */
-  const MARK_DONE = 'wizard/mark-done', MARK_DONE_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-  // Needs you in the thread (issue 1331, below) brings Mark done with it: the same action, built once.
-  const NEEDS_THREAD = 'wizard/needs-you-in-thread';
-  const markDoneOn = () => { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return channelsOn() && (t.includes(MARK_DONE) || t.includes(NEEDS_THREAD)); } catch (_) { return false; } };
+  const MARK_DONE_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  // One Channels switch (wizard-ux issue 1358): Mark done, Needs you in the thread and the shared read point used to
+  // have their own switches; Channels in Chats now turns them all on, so testers get exactly what James runs.
+  const markDoneOn = () => channelsOn();
   const handledNow = s => !!s && markDoneOn() && !!LIVE.handled?.(s);
   // Offered while there is a marker to clear: not handled through its newest reply yet, or marked unread again since.
   const canMarkDone = s => !!s && markDoneOn() && !!LIVE.markHandled && !isWorking(s) && !s.archived && (!handledNow(s) || !!LIVE.isNew?.(s));
@@ -470,13 +470,13 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || attOf(s)?.state === 'needs_you');
-  /* Needs you in the thread (wizard-ux issue 1331, switch wizard/needs-you-in-thread, with Channels on). The agent's
+  /* Needs you in the thread (wizard-ux issue 1331, part of the Channels switch since issue 1358). The agent's
    * reply whose status line said needs_you gets the feed's amber Needs you line right above its bubble, with the ask
    * and Mark done beside it. One marker state for every surface: attOf (the row's status line; Mark done's handled
    * mark clears it). It clears on Mark done, on Reply to that message, or when the agent's next status line no longer
-   * lists the ask; a plain owner message never clears it. The switch also gives Mark done (the menus), Reply on any
+   * lists the ask; a plain owner message never clears it. Channels also give Mark done (the menus), Reply on any
    * message in the main agent's threads, and retires the Thread tracker strip and dots (thread-tracker.js on()). */
-  const needsThreadOn = () => { try { return channelsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(NEEDS_THREAD); } catch (_) { return false; } };
+  const needsThreadOn = () => channelsOn();
   const needsAsk = s => { if (!s || s.archived || s.status === 'waiting_for_approval' || !needsThreadOn()) return null; const a = attOf(s); return a?.state === 'needs_you' ? a : null; };
   // Reply on any message (the quote above the composer) is standard for the main agent's threads with this switch.
   const replyStd = agent => needsThreadOn() && (!agent || agent === 'hermes');
@@ -770,13 +770,13 @@ window.WizCore.chats = function createChats(H) {
    * (chanUnread), passive only: it never moves the opening, the line or the channel's state.
    * The mark lives on this device (localStorage). A channel never read here counts as read up to when this device first
    * kept marks (since), so nothing old comes back as new. A move forward is written at most once per CHAN_READ_MS.
-   * With the wizard/channel-read-sync switch on (wizard-agent-service issue 471, off by default) the marks are also
+   * With Channels on (the read point had its own switch until wizard-ux issue 1358; wizard-agent-service issue 471) the marks are also
    * kept on the box (LIVE.chanReads, /wizard/v1/channels/read), so every device of the owner reads the newer of its
    * own mark and the box's: reading a channel to the bottom on the desktop clears it on the phone. */
-  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/channel-read-sync', CHAN_READ_UP_MS = 30e3, chanActs = {};
+  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/chat-channels', CHAN_READ_UP_MS = 30e3, chanActs = {};
   let chanReadDoc = null, chanReadT = 0, chanReadPaintT = 0;
   let chanReadUpAt = -Infinity;
-  // The box's marks (key -> ms) while the sync switch is on and the box keeps them, else null.
+  // The box's marks (key -> ms) while Channels are on and the box keeps them, else null.
   const chanReadBox = () => {
     try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CHAN_READ_SYNC)) return null; } catch (_) { return null; }
     const box = (typeof LIVE !== 'undefined' && LIVE.chanReads?.marks?.()) || null;
