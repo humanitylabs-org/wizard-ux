@@ -644,6 +644,25 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
+  // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
+  // it is a visible one the form can take (a hidden agent's list gets no row: never filed under another agent).
+  const chanNewAgent = w => {
+    const ags = typeof focusAgents === 'function' ? focusAgents() : []; if (!ags.length) return ''; // (tests slice the list without the agents)
+    const a = focusedAgent(focusOf(w)) || AGS()?.defaultId() || 'hermes';
+    return ags.some(x => x.id === a) ? a : '';
+  };
+  // + New channel (wizard-ux issue 1308): the existing name form, opened straight on its input; Esc or outside cancels.
+  function chanNewForm(w, tab = null) {
+    const a = w && chanNewAgent(w); if (!a) return false;
+    openSpacePicker(w, a, tab, { naming: true, from: w.id, direct: true });
+    return !!spacePicker;
+  }
+  /* The shell's + / ⌥N on the Channels list with no channel open starts a new channel (issue 1308): true when this
+   * window shows that list (channels on, Channels tab, no feed, no search) and the form opened; else false. */
+  function chanNew(wid) {
+    const w = W[wid]; if (!channelsOn() || !w || chanView !== 'channels' || chanOpen(w) || norm(ch(wid).q)) return false;
+    return chanNewForm(w, elOf(wid)?.querySelector('[data-chchannew]') || null);
+  }
   function channelsBody(w, rows) {
     if (typeof chanCarry === 'function' && !chanCarried && Date.now() >= chanCarryAfter && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
@@ -651,7 +670,10 @@ window.WizCore.chats = function createChats(H) {
     const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '';
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
     const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur)).join('')}</div>` : ''}</section>` : '';
-    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur)).join('')}${archSec}</div>`;
+    // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
+    // existing name form (openSpacePicker naming) for the agent this list shows.
+    const add = chanNewAgent(w) ? '<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>New channel</b></button>' : '';
+    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur)).join('')}${add}${archSec}</div>`;
   }
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
@@ -956,6 +978,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chchanarch]')) { chanArchOpen = !chanArchOpen; renderChatList(w, elOf(id)); return true; }
     const x = e.target.closest('[data-chchanx]'); if (x) { const k = x.dataset.chchanx; if (chanExpanded.has(k)) chanExpanded.delete(k); else chanExpanded.add(k); renderChatList(w, elOf(id)); return true; }
     const c0 = e.target.closest('[data-chchan]'); if (c0) { openChannel(w, c0.dataset.chchan); return true; }
+    const nc = e.target.closest('[data-chchannew]'); if (nc) { chanNewForm(w, nc); return true; }
     if (e.target.closest('[data-chchanback]')) { channelBack(w); return true; }
     const fl = e.target.closest('[data-chchanf]'); if (fl) { ch(owner(id)).chanFilter = fl.dataset.chchanf; renderChatList(w, elOf(id)); return true; }
     // Reply under an agent's post: its thread opens with the composer ready, so the reply continues that thread.
@@ -1839,10 +1862,10 @@ window.WizCore.chats = function createChats(H) {
     if (old.tab?.isConnected) old.tab.focus({ preventScroll: true });
     return true;
   }
-  function openSpacePicker(w, agent, tab, { naming = false, sid = '' } = {}) {
+  function openSpacePicker(w, agent, tab, { naming = false, sid = '', from = '', direct = false } = {}) {
     if (!focusAgents().some(a => a.id === agent)) return;
     closeSpacePicker();
-    spacePicker = { wid: owner(w.id), agent, tab, naming, sid, busy: false, error: '', name: '' };
+    spacePicker = { wid: owner(w.id), from, direct, agent, tab, naming, sid, busy: false, error: '', name: '' };
     renderSpacePicker();
   }
   function renderSpacePicker() {
@@ -1858,9 +1881,9 @@ window.WizCore.chats = function createChats(H) {
     const pickTitle = SPACE.ch ? 'Move to channel' : p.sid && spacesOf(p.sid).length ? `Move to ${SPACE.one}` : `Add to a ${SPACE.one}`;
     const wrap = document.createElement('div'); wrap.dataset.chspacepicker = '';
     wrap.className = 'ch-space-shade';
-    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? pickTitle : esc(a.label) + (SPACE.ch ? ' channels' : ' Spaces')}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? pickTitle : esc(a.label)}</b><button type="button" data-spclose aria-label="Close ${SPACE.ch ? 'channels' : 'Spaces'}">×</button></header><div class="ch-space-rows">${p.sid ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${rows.map(o => { const on = p.sid ? spaceContains(o.key, p.sid) : f?.kind === 'space' && f.key === o.key; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${on}"><span>${esc(o.label)}</span><small>${o.unread || ''}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}${gen}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">${SPACE.ch ? 'New channel' : 'New space'}</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="${SPACE.ch ? 'Channel name' : 'Space name'}" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>' + (SPACE.ch ? '+ New channel' : '+ New space') + '</button>'}</div>`;
+    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? pickTitle : esc(a.label) + (SPACE.ch ? ' channels' : ' Spaces')}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? pickTitle : p.direct ? 'New channel' : esc(a.label)}</b><button type="button" data-spclose aria-label="Close ${SPACE.ch ? 'channels' : 'Spaces'}">×</button></header><div class="ch-space-rows">${p.sid || p.direct ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${(p.direct ? [] : rows).map(o => { const on = p.sid ? spaceContains(o.key, p.sid) : f?.kind === 'space' && f.key === o.key; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${on}"><span>${esc(o.label)}</span><small>${o.unread || ''}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}${gen}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">${SPACE.ch ? 'New channel' : 'New space'}</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="${SPACE.ch ? 'Channel name' : 'Space name'}" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>' + (SPACE.ch ? '+ New channel' : '+ New space') + '</button>'}</div>`;
     document.body.appendChild(wrap);
-    const card = wrap.firstElementChild, strip = p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
+    const card = wrap.firstElementChild, strip = p.direct ? null : p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
     if (r?.height && r.top > 0 && r.top < innerHeight) { card.style.bottom = `${Math.max(8, innerHeight - r.top + 8)}px`; if (innerWidth > 640) card.style.left = `${Math.max(8, Math.min(tr?.left || r.left, innerWidth - 296))}px`; }
     // Wide screens with no strip to sit on (a feed's or an Activity row's Move to channel…): a card in the middle, not a
     // full-width bar along the bottom; the phone keeps its bottom sheet.
@@ -1880,7 +1903,7 @@ window.WizCore.chats = function createChats(H) {
     wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
     wrap.querySelector('form')?.addEventListener('submit', e => { e.preventDefault(); createPickerSpace(p); });
     wrap.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy && !p.direct) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
       if (e.target.tagName === 'INPUT' && e.key !== 'Tab') return;
       const items = [...wrap.querySelectorAll('button:not(:disabled),input:not(:disabled)')], i = items.indexOf(document.activeElement);
       if (['Tab', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowUp' || e.shiftKey ? -1 : 1) + items.length) % items.length; items[next]?.focus(); }
@@ -1891,7 +1914,7 @@ window.WizCore.chats = function createChats(H) {
     if (p !== spacePicker || p.busy) return;
     const name = p.name.trim();
     if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
-    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name))) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
+    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name)) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
     // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.
     const onStore = typeof chanStore === 'function' && !!chanStore();
     if (onStore ? spaces().filter(s => spaceAgent(s) === p.agent).length >= CHAN_STORE_MAX : spaces().length >= 50) { p.error = onStore ? `Maximum ${CHAN_STORE_MAX} channels` : SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }
@@ -1903,6 +1926,9 @@ window.WizCore.chats = function createChats(H) {
     if (spacePicker === p) closeSpacePicker();
     if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
     const w = W[p.wid]; if (!w) return;
+    // Channels (wizard-ux issue 1308): the new channel's empty feed opens with its box focused, where the list was
+    // (the AI apps sidebar's opens in the main column). No "Fill my new Space" agent chat: that stays for classic Spaces.
+    if (SPACE.ch) { const t = chanTarget(W[p.from] || w); if (t && openChannel(t, space.id)) { chanToEnd(t.id, true); setTimeout(() => chanToEnd(t.id, true), 150); } return; }
     setFocus(w, { kind: 'space', key: space.id });
     const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with your Spaces tool, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
     if (!it) toast('!', `${SPACE.ch ? 'Channel' : 'Space'} created; fill message wasn’t saved. Ask the agent to fill it from a new chat.`, 5000);
@@ -2161,7 +2187,9 @@ window.WizCore.chats = function createChats(H) {
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     // A channel's feed has its message box instead (wizard-ux issue 1258); an archived one takes no new posts (Restore
     // first), as its sheet offers no New post.
-    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
+    // On the Channels list (none open) the list's own + starts a new channel too (wizard-ux issue 1308).
+    const fabNew = chanOn && chanView === 'channels' && !n && !F && typeof chanNewAgent === 'function' && !!chanNewAgent(w);
+    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" ${fabNew ? 'data-chchannew' : 'data-chnew'} data-chfab aria-label="${fabNew ? 'New channel' : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
     // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
@@ -4324,7 +4352,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, moveToChannel, chanSpaceOf, chanCompose, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

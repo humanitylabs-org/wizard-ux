@@ -13,6 +13,12 @@ html[data-tweaks~="wizard/chat-channels"] .ch-chan-r:hover { background: color-m
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px 0 12px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: .9375rem; text-align: left; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-open b { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 500; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-hash { color: var(--ink-3); font-weight: 400; margin-right: 2px; }
+/* + New channel (wizard-ux issue 1308): the list's last row, one line like a channel, in the skin's accent (an action) */
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-add { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--wz-accent, var(--violet-2)); font: inherit; font-size: .9375rem; text-align: left; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-add:hover { background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 10%, transparent); }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-add:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: -2px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-add .ch-chan-hash { color: inherit; font-weight: 600; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-add b { font-weight: 600; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-open .ch-spin, html[data-tweaks~="wizard/chat-channels"] .ch-chan-post .ch-spin { flex: none; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-x { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; }

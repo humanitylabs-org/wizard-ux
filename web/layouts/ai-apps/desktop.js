@@ -624,7 +624,9 @@ export default function desktop(api) {
   const settings = () => { unpeek(); api.desk.settings(); };
   // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
   const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
-  api.listen(newBtn, 'click', newOrPost); api.listen(rNew, 'click', newOrPost);
+  // + / ⌥N on the Channels list with no channel open start a new channel (wizard-ux issue 1308).
+  const plus = () => { if (!feedOn() && api.sessions.channelNew?.()) { closeMenu(); return; } newOrPost(); };
+  api.listen(newBtn, 'click', plus); api.listen(rNew, 'click', plus);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
   // the cog's count (System notices set to Badge, …): WosBell.attention, as on the stock desktop's cog and the phone's gear
   const setCounts = [setBtn, rSet].map(b => { const c = el('b', 'aad-count aad-setn', { 'aria-hidden': 'true' }); c.hidden = true; b.append(c); return c; });
@@ -1824,7 +1826,7 @@ export default function desktop(api) {
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
     if ((code === 'KeyH' || code === 'Backquote') && !sh) return once(() => (focusOn() && focusStash ? focusOut : focusIn)());
     if (code === 'KeyS' && !sh) return once(settings);
-    if (code === 'KeyN' && !sh) return once(newOrPost);
+    if (code === 'KeyN' && !sh) return once(plus);
     if (code === 'KeyK' && !sh) return once(() => setSearch(true));
     if (code === 'KeyL' && !sh) return once(toggleSide);
     if (code === 'KeyR' && !sh) return once(toggleTabs);
