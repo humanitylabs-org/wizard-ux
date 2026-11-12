@@ -1561,7 +1561,7 @@ export default function desktop(api) {
   api.listen(vChats, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); oneChats(); } });
   /** the app last in front, while its desk is still open (Back from the chats list goes there) */
   const oneApp = () => oneLast && desks().some(d => d.desk === oneLast.desk && d.id === oneLast.id) ? oneLast : null;
-  api.listen(oneBack, 'click', () => { if (!one()) return; oneList = true; paintTop(); });
+  api.listen(oneBack, 'click', () => { if (!one()) return; if (chatThread === FEED) closeChat(); oneList = true; paintTop(); });
   function toggleTabs() { focusLeave(); vtFolded = !vtFolded; api.storage.set('tabsFolded', vtFolded); flip([top, orbBox, ...shownDesks()], () => paintVt(true)); retileSoon(); }
   api.listen(vtTog, 'click', toggleTabs);
   /** a tab: its app as the panel; the one in front again hides the panel (the desk stays open) */
@@ -1812,7 +1812,8 @@ export default function desktop(api) {
   function chatBack() {
     const up = listBack();
     // one app at a time: the list fills the window again; the chat stays open behind it (Chats as it was)
-    if (one() && up) { oneList = true; paintTop(); return true; }
+    // (a channel's feed closes, as wide: one level up from it is the channel list; a chat stays open behind its list)
+    if (one() && up) { if (chatThread === FEED) closeChat(); oneList = true; paintTop(); return true; }
     if (!closeChat()) return false;
     if (up && !peek && peekable()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); paintSide(); }
     return true;
