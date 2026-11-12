@@ -82,7 +82,11 @@ On:
   each ships the same `off` meta, nginx writes the token into it, and `shell-token.js` arms that page itself. A pinned
   single app never shows them (`WizHomeScreenPolicy.isShell` refuses shell pages), so there is nothing to arm there.
 - Welcome (`core/welcome.js`): the AI provider's sign-in page and the Importer are app pages, so they load sandboxed
-  and attached; Esc inside them comes back over the channel and steps the Welcome back. Settings › Connections is the
+  and attached; Esc inside them comes back over the channel and steps the Welcome back. Each is attached as its
+  installed app's window (`WizAppServices.attach` with that app's id and path, and its saved settings in the frame's
+  name), so its calls to its own backend, saved settings and IndexedDB go through the shell as in any app window and
+  signing in finishes; leaving the step or closing the Welcome lets the window go. Proof:
+  `tests/qa-browser-boundary-welcome-signin.cjs`. Settings › Connections is the
   App Manager's own view (`store-install/_connections/`, wizard-app-manager `connections_view.py`), owner code like
   Store: it stays same-origin, loads `core/shell-token.js` first and is armed the same way (its static files load
   without the token; its `api/` calls carry it). Proof: `tests/qa-browser-boundary-welcome-settings.cjs`.
