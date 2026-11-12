@@ -20,8 +20,9 @@ function harness({ on = true, rows = {}, seen = {} } = {}) {
       seenRecord: s => seen[(s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/` : '') + s.id],
     },
   };
+  ctx.getComputedStyle = el => ({ bottom: el.cssBottom });
   vm.createContext(ctx);
-  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel };', ctx);
+  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel, jumpLandGap, jumpStack };', ctx);
   return ctx;
 }
 
@@ -85,4 +86,39 @@ test('the pills are wired: markup after ↓ Latest, the tap, the open and every 
   assert.ok(src.includes('chanOpen, paintJump, chanSpaceOf,'));
   const power = fs.readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   assert.ok(power.includes('A.paintJump?.(el, nb);'));
+});
+
+// Issue 1380: the target lands just under the ↑ pill while markers are left above it (else 8 px under the header).
+const box = (top, h = 32, extra = {}) => ({ getBoundingClientRect: () => ({ top, bottom: top + h, height: h, left: 0, right: 100 }), ...extra });
+test('landing gap: under the ↑ pill only while markers stay above the target', () => {
+  const { jumpLandGap } = harness().api;
+  const up = box(70, 32, { hidden: false }), nb = { parentElement: { querySelector: () => up }, querySelectorAll: () => [] };
+  const t = { n: {}, y: -300 }, other = { n: {}, y: -900 };
+  assert.equal(jumpLandGap(nb, { up: [t], down: [] }, t), 8, 'nothing left above: just under the header');
+  assert.equal(jumpLandGap(nb, { up: [t, other], down: [] }, t), 8 + 32 + 8, 'one left above: under the pill');
+  assert.equal(jumpLandGap(nb, { up: [t, { n: {}, y: -100 }], down: [] }, t), 8, 'a nearer marker below the target is no reason');
+  // An amber line on screen now is above the target once the thread scrolls down to it.
+  const line = box(200), down = { n: {}, y: 1400 };
+  const nb2 = { parentElement: { querySelector: () => ({ hidden: true }) }, querySelectorAll: () => [line] };
+  assert.equal(jumpLandGap(nb2, { up: [], down: [down] }, down), 8 + 32 + 8, 'a hidden pill falls back to its 32 px height');
+});
+
+test('the ↓ pill goes above ↓ Latest when they would overlap, and back when they do not', () => {
+  const { jumpStack } = harness().api;
+  const pill = (top, left, right) => ({ style: { bottom: '' }, cssBottom: '78px', getBoundingClientRect: () => ({ top, bottom: top + 32, height: 32, left, right }) });
+  const latest = { getBoundingClientRect: () => ({ top: 790, bottom: 822, height: 32, left: 300, right: 390 }) };
+  const a = pill(790, 250, 340); jumpStack(a, latest);
+  assert.equal(a.style.bottom, `${78 + 822 - 790 + 8}px`, 'stacked 8 px above Latest');
+  const b = pill(790, 20, 200); jumpStack(b, latest);
+  assert.equal(b.style.bottom, '', 'side by side with room: left where the skin puts it');
+  const c = pill(790, 250, 340); c.style.bottom = '118px'; jumpStack(c, null);
+  assert.equal(c.style.bottom, '', 'Latest hidden: back to its own place');
+});
+
+test('the shells redraw the channel list when the box\'s channels change (issue 1380)', () => {
+  const at = src.indexOf('let chanListSig');
+  assert.ok(at > 0, 'chats.js watches the store list');
+  const tail = src.slice(at, at + 600);
+  assert.match(tail, /LIVE\?\.onChange\?\.\(/);
+  assert.match(tail, /chanReadPaint/);
 });

@@ -604,15 +604,31 @@ window.WizCore.chats = function createChats(H) {
         if (dir === 'up') { const p = b.offsetParent; b.style.top = `${Math.round(band.top + 8 - (p ? p.getBoundingClientRect().top : 0))}px`; }
       }
       if (b.hidden === show) b.hidden = !show;
+      if (dir === 'down') jumpStack(b, show && latest && !latest.hidden ? latest : null);
     };
     set(up, 'up', m.up); set(dn, 'down', m.down);
+  }
+  // Issue 1380: the ↓ pill never sits on ↓ Latest (a narrow column, or the phone's shared bottom row): it goes above it.
+  function jumpStack(b, latest) {
+    if (b.style.bottom) b.style.bottom = '';
+    if (!latest) return;
+    const r = b.getBoundingClientRect(), l = latest.getBoundingClientRect();
+    if (!r.height || !l.height || r.left >= l.right + 8 || r.right <= l.left - 8 || r.bottom <= l.top - 8 || r.top >= l.bottom + 8) return;
+    b.style.bottom = `${Math.round((parseFloat(getComputedStyle(b).bottom) || 0) + r.bottom - l.top + 8)}px`;
+  }
+  // Issue 1380: with markers left above, the ↑ pill comes back at the top: land the target just under it, not behind it.
+  function jumpLandGap(nb, m, t) {
+    const above = [...m.up, ...m.down].some(x => x.n !== t.n && x.y < t.y) || [...nb.querySelectorAll('[data-needs-line]')].some(n => n !== t.n && n.getBoundingClientRect().top < t.y);
+    if (!above) return 8;
+    const up = nb.parentElement?.querySelector('[data-chjump="up"]'), h = up && !up.hidden ? up.getBoundingClientRect().height : 0;
+    return 8 + (h || 32) + 8;
   }
   function jumpGo(wid, dir) {
     const el = elOf(wid), nb = el?.querySelector('.ch-msgs'); if (!nb || !needsThreadOn()) return false;
     const band = jumpBand(nb), m = jumpMarks(wid, nb, band), t = jumpTarget(m[dir === 'down' ? 'down' : 'up'], dir);
     if (!t) { paintJump(el, nb); return false; }
     vib(6);
-    const c = ch(wid), off = t.n.getBoundingClientRect().top - band.top - 8;
+    const c = ch(wid), off = t.n.getBoundingClientRect().top - band.top - jumpLandGap(nb, m, t);
     if (t.kind === 'new') c.jumpSeen?.add(t.n.dataset.morphKey);
     c.jumpTo = { n: t.n, until: Date.now() + 1500 }; // the pill counts it as reached on the tap's frame
     paintJump(el, nb);
@@ -933,6 +949,15 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   function chanReadPaint() { if (!channelsOn()) return; for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); } }
+  // Issue 1380: the box's channel list changed (right after Channels turns on, its first answer brings Alerts): the
+  // lists on screen show it at once, also one the shells' Live repaint skips while focus sits inside it.
+  let chanListSig = '';
+  LIVE?.onChange?.(() => {
+    if (!channelsOn()) { chanListSig = ''; return; }
+    const st = chanStore(), sig = st ? st.channels.map(c => [c.agent, c.id, c.name, c.archived, c.pinned].join(':')).join('|') : '';
+    if (sig === chanListSig) return;
+    chanListSig = sig; clearTimeout(chanReadPaintT); chanReadPaintT = setTimeout(chanReadPaint, 120);
+  });
   /* How far the owner has read a feed: every post whose top is above the bottom of his view, but never past a post of
    * the channel that changed and he has not seen: one still below the view, or one the feed's filter (Open, Needs you)
    * leaves out (the mark is a time and the feed is in posting order: a new reply on an old post must not read a newer

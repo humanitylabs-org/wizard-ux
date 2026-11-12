@@ -4,7 +4,7 @@
 // tap lands on the nearest (amber first), the count drops, and the pill goes when none are left; Mark done drops the
 // amber count at once; a marker below gets the bottom pill. Main (Archimedes) and routed (Claude) threads. Phone
 // 412x915 (browser and the APK's WizardOS-DocScroll document scroll) and desktop 1440x900 (Classic and AI apps),
-// Nebula + Grove, Channels on. Routed threads cover each kind: Claude, a host profile, a container and a restricted agent. Synthetic transport only; writes are answered in memory.
+// Nebula + Grove, Channels on; ai-narrow = AI apps at 820 px, a narrow thread column (issue 1380: ↓ pill vs ↓ Latest). Routed threads cover each kind: Claude, a host profile, a container and a restricted agent. Synthetic transport only; writes are answered in memory.
 // QA_WEB=<main>/web QA_EXPECT=broken runs the baseline (no pill); QA_OUT=<dir> keeps the screenshots.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -48,14 +48,14 @@ LONG.push({ role: 'user', content: 'What do you need from me?', timestamp: now /
 const repAt = i => iso((now / 1000 - 8990 + i * 600) * 1000); // reply i of LONG (0..7), then the asking one
 // Read through reply 5: replies 6 and 7 are green on open (the asking reply counts once, as amber).
 const SEEN = { initializedAt: 1, threads: Object.fromEntries([['qa-y1', ''], ['qa-g1', ''], ['qa-h1', 'agent/host/'], ['qa-k1', 'agent/container/'], ['qa-x1', 'agent/restricted/']].map(([id, k]) => [k + 'direct:' + id, { messageCount: 2, status: 'completed', updatedAt: repAt(5), assistantActivityAt: repAt(5), seenAt: now - 864e5 }]).concat(['direct:qa-r1', 'direct:qa-r2', 'agent/claude/direct:qa-c1'].map(id => [id, { messageCount: 2, status: 'completed', updatedAt: iso(now), assistantActivityAt: iso(now), seenAt: now }]))) };
-const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(','), expectBroken = process.env.QA_EXPECT === 'broken';
+const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps,ai-narrow').split(','), expectBroken = process.env.QA_EXPECT === 'broken';
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
     for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const sid of (process.env.QA_THREADS || Object.keys(SCEN).join(',')).split(',')) {
-      const phone = shell.startsWith('phone'), ai = shell === 'ai-apps', stem = `${shell}-${skin}-${sid}`, entry = { stem, errors: [], writes: [], steps: [] }; report.push(entry);
+      const phone = shell.startsWith('phone'), ai = shell.startsWith('ai-'), stem = `${shell}-${skin}-${sid}`, entry = { stem, errors: [], writes: [], steps: [] }; report.push(entry);
       const ua = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' + (shell === 'phone-doc' ? ' WizardOS-DocScroll' : '');
-      const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', reducedMotion: 'reduce', ...(phone ? { userAgent: ua } : {}) });
+      const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: shell === 'ai-narrow' ? 820 : 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', reducedMotion: 'reduce', ...(phone ? { userAgent: ua } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
         const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
@@ -109,11 +109,21 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
         const tapUp = async () => { await vis('[data-chjump="up"]').click(); await nap(400); };
         // The tapped marker is on screen just under the header.
         const landedOn = sel => page.evaluate(sel => { const n = [...document.querySelectorAll(sel)].find(x => x.getClientRects().length); const nb = n.closest('.ch-msgs'), head = n.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect(); const own = nb.scrollHeight > nb.clientHeight + 1; const top = Math.max(head.bottom, own ? nb.getBoundingClientRect().top : 0); const r = n.getBoundingClientRect(); return Math.round(r.top - top); }, sel);
+        // Issue 1380: with markers left above, the ↑ pill is back at the top; the target sits just under it, never behind it.
+        const pillOver = sel => page.evaluate(sel => { const n = [...document.querySelectorAll(sel)].find(x => x.getClientRects().length), b = [...document.querySelectorAll('[data-chjump="up"]')].find(x => !x.hidden && x.getClientRects().length);
+          if (!b) return false; const r = n.getBoundingClientRect(), p = b.getBoundingClientRect(); return p.bottom > r.top && p.top < r.bottom; }, sel);
+        const under = async (sel, what) => { const at = await landedOn(sel), over = await pillOver(sel); await page.screenshot({ path: path.join(out, `${stem}-landed-under-pill.png`) }); entry.steps.push({ name: what + ' (gap, pill over it)', got: [at, over] });
+          assert.equal(over, false, `${stem}: ${what}: the ↑ pill covers it (${at})`); assert.ok(at >= 40 && at <= 56, `${stem}: ${what}: lands just under the ↑ pill (${at})`); };
+        // Issue 1380: the ↓ pill and ↓ Latest never overlap, and a tap at Latest's centre hits Latest.
+        const noStack = async what => { const r = await page.evaluate(() => { const vis = q => [...document.querySelectorAll(q)].find(x => !x.hidden && x.getClientRects().length); const d = vis('[data-chjump="down"]'), l = vis('[data-chlatest]');
+          if (!d || !l) return { both: false }; const a = d.getBoundingClientRect(), b = l.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          return { both: true, overlap: a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top, latestHit: !!hit?.closest('[data-chlatest]') }; });
+          entry.steps.push({ name: what + ': ↓ pill vs ↓ Latest', got: r }); if (r.both) { assert.equal(r.overlap, false, `${stem}: ${what}: ↓ pill overlaps ↓ Latest`); assert.equal(r.latestHit, true, `${stem}: ${what}: a tap on ↓ Latest hits the pill`); } return r; };
         if (expectBroken) { await toBottom(); await nap(400); entry.ok = !!(await pills()).up; continue; }
         if (SCEN[sid] === 'green') {
           // Green only: lands on the newest reply (read), the two older unread replies above.
           await step('opened', { up: '↑ 2 New', down: '' });
-          await tapUp(); const k7 = await landedOn(`.ch-msgs .msg.a[data-morph-key="a${Date.parse(repAt(7))}"]`); assert.ok(Math.abs(k7 - 8) <= 3, `${stem}: first tap lands on the nearer reply (${k7})`);
+          await tapUp(); await under(`.ch-msgs .msg.a[data-morph-key="a${Date.parse(repAt(7))}"]`, 'first tap lands on the nearer reply');
           await step('after one tap', { up: '↑ 1 New', down: '' });
           await tapUp(); const k6 = await landedOn(`.ch-msgs .msg.a[data-morph-key="a${Date.parse(repAt(6))}"]`); assert.ok(Math.abs(k6 - 8) <= 3, `${stem}: second tap lands on the other reply (${k6})`);
           await step('after two taps', { up: '', down: '' });
@@ -123,7 +133,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
           await step('opened on the line', { up: '↑ 2 New', down: '' });
           await toBottom(); await step('scrolled to the end', { up: '↑ 1 Needs you 2 New', down: '' });
           await page.screenshot({ path: path.join(out, `${stem}-pill.png`) });
-          await tapUp(); const ln = await landedOn('.ch-msgs [data-needs-line]'); assert.ok(Math.abs(ln - 8) <= 3, `${stem}: the tap lands on the amber line (${ln})`);
+          await tapUp(); await under('.ch-msgs [data-needs-line]', 'the tap lands on the amber line');
           await step('amber first', { up: '↑ 2 New', down: '' });
           await toBottom(); await step('end again', { up: '↑ 1 Needs you 2 New', down: '' });
           // Mark done in the thread's action row: the pill updates on the next frame.
@@ -136,6 +146,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
           await toBottom(); await step('end', { up: '↑ 1 Needs you', down: '' });
           await tapUp(); await step('tapped', { up: '', down: '' });
           await toTop(); await step('top: the line is below', { up: '', down: '↓ 1 Needs you' });
+          await page.screenshot({ path: path.join(out, `${stem}-down-pill.png`) }); entry.stack = await noStack('top');
           await vis('[data-chjump="down"]').click(); await nap(400); await step('tapped down', { up: '', down: '' });
           await page.screenshot({ path: path.join(out, `${stem}-landed.png`) });
         }
