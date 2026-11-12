@@ -206,11 +206,29 @@ window.WosChatPower = function chatPower(A) {
     paintLatest(el, nb);
     return true;
   }
+  /* A thread that opens on something to act on (issue 1331: the Needs you line) makes that its reading place. The
+   * opening restore and settle (and later repaints) then keep it there instead of pulling back to the saved spot or
+   * the bottom (second AI review of 1331: settleTo won the race against the landing). Anchored on the message the
+   * node sits on, at its current offset, the same record shape capture() saves (plus `landed`). */
+  function landAt(wid, node) {
+    const w = H.win(wid), c = w && ch(wid), nb = node?.closest?.('.ch-msgs');
+    if (!c || !nb || !w.thread || w.thread === '__new__' || !onScreen(nb)) return false;
+    let m = node; while (m && !m.dataset?.morphKey) m = m.nextElementSibling;
+    if (!m) return false;
+    const key = m.dataset.morphKey, nth = [...nb.querySelectorAll('[data-morph-key]')].filter(e => e.dataset.morphKey === key).indexOf(m);
+    if (nth < 0) return false;
+    RP.save(c.eyeRec = { sessionId: w.thread, messageId: c.lid || '', anchor: { key, nth, off: relTop(nb, m) }, shown: c.show,
+      scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: false, landed: true, working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
+    c.unreadOpen = ''; c.pinUntil = 0; c.seenH = contentH(nb);
+    return true;
+  }
   // Opening settles onto its place while images/history arrive, but a reply streaming in during those first seconds
   // is still growth below: it keeps the view where it is and shows ↓ Latest (review of this fix).
   function settleTo(c, nb, sid) {
     const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
-    if (!grew || !A.isWorking?.(LIVE.session?.(sid))) restore(nb, RP.read(sid));
+    // A landing (landAt) is anchored on its message, so growth below cannot move it: it is kept also while working (Codex P2).
+    const p = RP.read(sid);
+    if (!grew || !A.isWorking?.(LIVE.session?.(sid)) || p?.landed) restore(nb, p);
     c.seenH = contentH(nb);
     const el = nb.closest('[data-chats]'); if (el) paintLatest(el, nb);
   }
@@ -833,6 +851,6 @@ window.WosChatPower = function chatPower(A) {
     await pickModel(m, { wid, sid, alive: sameTarget, mode: sid ? 'thread' : 'new' });
     return sameTarget() ? tweakModel(wid) : null;
   }
-  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, landAt, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, sheetOpen: () => !!sheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };
