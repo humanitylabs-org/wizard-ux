@@ -26,7 +26,7 @@ function mount({ boundary = true, fetch = async (u, o) => (o.method === 'HEAD' ?
     fetch };
   if (boundary) context.WizBrowserBoundary = { enabled: true, frameAttributes: () => `sandbox="${SANDBOX}"`, attach(f) { attached.push(f); return () => {}; }, ready: () => ready, owns: f => attached.includes(f) };
   context.window = context; vm.runInNewContext(source, context);
-  return { context, root, frame, direct, timers, handlers, attached, answer() { ready = true; handlers['wizard:boundary-ready']?.(); }, mount: () => context.WizReach.mountRecovery(root, '/troubleshoot/') };
+  return { context, root, frame, direct, timers, handlers, attached, answer() { ready = true; handlers['wizard:boundary-ready']?.(); }, ready(v) { ready = v; }, mount: () => context.WizReach.mountRecovery(root, '/troubleshoot/') };
 }
 const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
 const fire = (h, ms) => { for (const [k, t] of [...h.timers]) if (t.ms === ms) { h.timers.delete(k); t.fn(); } };
@@ -77,4 +77,26 @@ test('switch off: the loaded document is still the proof, read as before', async
   h.handlers.load();
   assert.equal(h.frame.hidden, false);
   assert.deepEqual(h.attached, []);
+});
+
+test('switch on: after it once answered, a later load that never answers (an error page) still falls back', async () => {
+  const h = mount();
+  h.mount(); fire(h, 0); await flush();
+  h.handlers.load(); h.answer();
+  assert.equal(h.frame.hidden, false);
+  h.ready(false); h.handlers.load(); // the boundary renewed the channel on this load; nothing answers now
+  fire(h, 8000);
+  assert.equal(h.frame.hidden, true, 'the error page is not left on screen as the repair page');
+  assert.equal(h.direct.hidden, false);
+});
+
+test('switch on: ↻ reloads the sandboxed repair page from its address (the shell cannot call its reload)', () => {
+  const h = mount();
+  const frame = { hidden: false, src: '', getAttribute: k => (k === 'src' ? '/troubleshoot/?x=1' : null),
+    contentWindow: { get location() { return { get reload() { throw new Error('SecurityError'); } }; } } };
+  h.context.WizReach.reloadRepair(frame);
+  assert.equal(frame.src, '/troubleshoot/?x=1');
+  let reloaded = 0;
+  h.context.WizReach.reloadRepair({ hidden: false, contentWindow: { location: { reload() { reloaded++; } } } });
+  assert.equal(reloaded, 1, 'switch off (readable page): reloaded where it is');
 });

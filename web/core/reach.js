@@ -198,8 +198,9 @@
     frame.addEventListener('load', () => {
       if (!frame.getAttribute('src')) return; // initial about:blank is not a failed repair-page load
       if (sealed) {
-        // Loaded but not answered yet: give it the rest of the usual 8 s, then offer local help and the direct line.
-        if (remoteReady || boundary().ready(frame)) return;
+        // Every load is a new document that must answer again (the channel was just renewed), also after the page
+        // once answered: a reload or in-frame step that lands on an error page never answers. 8 s, then local help.
+        if (boundary().ready(frame)) return;
         clearTimeout(readyTimer);
         readyTimer = setTimeout(() => { if (connected() && !boundary().ready(frame)) failed('The repair page didn’t load. Local connection help is still available.'); }, 8000);
         return;
@@ -263,8 +264,15 @@
       if (!recoveries.size && cached && cached.layer !== 'send') diagnose(0);
     });
   }
+  // ↻ on the Troubleshooter window: reload the repair page where it is. A sandboxed page can't be read or told to
+  // reload by the shell, so it is loaded again from its address.
+  function reloadRepair(frame) {
+    if (!frame || frame.hidden) return;
+    try { frame.contentWindow.location.reload(); } catch (_) { const src = frame.getAttribute('src'); if (src) frame.src = src; }
+  }
   window.WizReach = {
     diagnose,
+    reloadRepair,
     recoveryHtml,
     mountRecovery,
     checks,

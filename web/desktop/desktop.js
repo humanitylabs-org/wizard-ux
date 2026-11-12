@@ -1390,7 +1390,7 @@
   function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
-    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return true; }
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); window.WizReach?.reloadRepair(el.querySelector('iframe')); return true; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       refreshData().then(() => {
         if (!W[id]) return;

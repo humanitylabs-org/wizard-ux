@@ -78,8 +78,20 @@ const check = (ok, what) => { console.log((ok ? 'PASS ' : 'FAIL ') + what); if (
     const call = seen.filter(s => s.path === '/wizard/v1/threads').slice(before);
     check(call.length === 1 && call[0].token === '' && call[0].origin === 'null', 'its owner call went out with Origin null and no token');
 
-    // An error page at the repair address never answers, so it is never shown as the repair page.
+    // ↻ on the window reloads the sandboxed page from its address; a fresh answer keeps it on screen.
+    const loadsBefore = seen.filter(s => s.path === '/troubleshoot/').length;
+    await page.evaluate(() => window.WizReach.reloadRepair(document.querySelector('[data-recovery] iframe')));
+    await page.waitForTimeout(9000);
+    const again = await page.evaluate(() => ({ hidden: document.querySelector('[data-recovery] iframe').hidden, ready: document.querySelector('[data-recovery]').classList.contains('repair-ready') }));
+    check(seen.filter(s => s.path === '/troubleshoot/').length > loadsBefore && !again.hidden && again.ready, `↻ reloads the repair page and it stays shown: ${JSON.stringify(again)}`);
+    // The same reload landing on an error page: it never answers, so local help comes back.
     repairBroken = true;
+    await page.evaluate(() => window.WizReach.reloadRepair(document.querySelector('[data-recovery] iframe')));
+    await page.waitForTimeout(9500);
+    const gone = await page.evaluate(() => ({ hidden: document.querySelector('[data-recovery] iframe').hidden, help: document.querySelector('details').open }));
+    check(gone.hidden && gone.help, `a reload that lands on an error page brings local help back: ${JSON.stringify(gone)}`);
+
+    // An error page at the repair address never answers, so it is never shown as the repair page.
     const broken = await browser.newPage();
     await broken.goto(base + '/');
     await broken.waitForTimeout(9500);

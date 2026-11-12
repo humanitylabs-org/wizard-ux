@@ -2120,7 +2120,7 @@
    * list and open thread, app frames reload where they are, built-in views remount. Nothing closes or moves. */
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
-    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return; }
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); window.WizReach?.reloadRepair(el.querySelector('iframe')); return; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       window.WizCore.refreshApps?.();
       Promise.resolve(LIVE?.refresh?.()).catch(() => {}).then(() => {
