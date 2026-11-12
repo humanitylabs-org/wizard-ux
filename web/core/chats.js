@@ -446,6 +446,24 @@ window.WizCore.chats = function createChats(H) {
   let chanView = (() => { try { return localStorage.getItem(CHAN_VIEW_KEY) === 'channels' ? 'channels' : 'activity'; } catch (_) { return 'activity'; } })();
   const chanExpanded = new Set(), chanMore = new Set();
   let chanArchOpen = false;
+  /* Mark done (wizard-ux issue 1317, switch wizard/mark-done, with Channels on): the post and row menu clears a thread's
+   * amber Needs you and green New reply in the feed, Activity and the Channels list, through the synced seen record
+   * (LIVE.markHandled). It never archives or moves the thread; a later reply brings the markers back. An approval
+   * gate is not a marker: it stays until it is answered. */
+  const MARK_DONE = 'wizard/mark-done', MARK_DONE_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  const markDoneOn = () => { try { return channelsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(MARK_DONE); } catch (_) { return false; } };
+  const handledNow = s => !!s && markDoneOn() && !!LIVE.handled?.(s);
+  // Offered while there is a marker to clear: not handled through its newest reply yet, or marked unread again since.
+  const canMarkDone = s => !!s && markDoneOn() && !!LIVE.markHandled && !isWorking(s) && !s.archived && (!handledNow(s) || !!LIVE.isNew?.(s));
+  function markDone(wid, sid) {
+    const s = (wid && W[owner(wid)] ? rowOf(owner(wid), sid) : null) || LIVE.session(sid); if (!canMarkDone(s)) return false;
+    vib(8);
+    // The row the window shows (a routed post can share its id with a main thread), as openChat's markSeen does.
+    void LIVE.markHandled(s);
+    paintListsNow(); chanSeenPaint();
+    toast('✓', 'Cleared', 1400);
+    return true;
+  }
   const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || attOf(s)?.state === 'needs_you');
   function chanPrefs() {
     const st = typeof chanStore === 'function' ? chanStore() : null;
@@ -677,7 +695,7 @@ window.WizCore.chats = function createChats(H) {
   const chanReadAt = key => { const own = chanReadOwn(key); return key.startsWith('general|') ? Math.max(own, chanReadOwn('general')) : own; };
   const chanGenAgent = w => { try { return focusAgentId(W[owner(w.id)] || w) || ''; } catch (_) { return ''; } };
   // Changed after the mark. A working post waits for its reply; a Done or snoozed-last one is not new (Activity's rule).
-  const chanChanged = (s, mark) => !isWorking(s) && !s.archived && !(snoozeLast() && deferredOf(s)) && chanAt(s) > mark;
+  const chanChanged = (s, mark) => !isWorking(s) && !s.archived && !(snoozeLast() && deferredOf(s)) && chanAt(s) > mark && !(typeof handledNow === 'function' && handledNow(s));
   const chanNewCount = (c, rows, gAg = '') => { const mark = chanReadAt(chanReadKey(c, gAg)); return rows.filter(s => chanChanged(s, mark)).length; };
   // Only ever forward. The channel lists on screen (the phone's list, the desktop's sidebar pane) show it at once.
   function chanReadTo(key, t) {
@@ -1024,6 +1042,7 @@ window.WizCore.chats = function createChats(H) {
     const p = chanPrefs(), pinned = p.pins.includes(cid), arch = !!p.archived[cid], name = sp ? sp.name : 'General';
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Channel actions"><div class="ch-sheet-b"><div class="ch-sheet-t"># ${esc(name)}</div>
       ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
+      ${typeof markDoneOn === 'function' && markDoneOn() ? `<button type="button" data-rschread>${MARK_DONE_SVG}Mark channel read</button>` : ''}
       ${arch ? '' : `<button type="button" data-rschnew><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New post</button>`}</div></div>`);
     rowSheet = { wid, chan: cid, trigger };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
@@ -1038,6 +1057,19 @@ window.WizCore.chats = function createChats(H) {
       <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="submit" class="go">Save</button></div></form></div>`);
     rowSheet = { wid, chan: cid, rename: true };
     const inp = el.querySelector('.ch-rename input'); if (inp) { inp.focus(); inp.select(); }
+  }
+  /* Mark channel read (issue 1317, with Mark done): the channel's read point moves to now (issue 1316) and its posts'
+   * green New reply words clear (LIVE.markSeen of the posts that have one). Amber Needs you is cleared only per thread. */
+  function chanMarkRead(w, cid) {
+    if (!w || !markDoneOn()) return false;
+    const sp = cid !== CHAN_GENERAL && spaces().find(x => x.id === cid), c = sp ? { id: cid, name: sp.name, agent: spaceAgent(sp) } : { id: CHAN_GENERAL, name: 'General', general: true };
+    const ag = !c.general && AGS()?.isOther?.(c.agent) ? c.agent : winAgent(W[owner(w.id)] || w), rows = (LIVE.sessionsFor ? LIVE.sessionsFor(ag || '') : LIVE.unified()).filter(s => !s.hidden);
+    const mine = rows.filter(s => !s.archived && inChannel(c, s)), unread = mine.filter(chanUnread);
+    chanReadTo(chanReadKey(c, c.general ? chanGenAgent(w) : ''), Date.now());
+    if (unread.length) LIVE.markSeen(unread);
+    clearTimeout(chanReadPaintT); chanReadPaint(); paintListsNow();
+    toast('✓', `# ${c.name} read`, 1400);
+    return true;
   }
   function chanRepaintAll() { for (const id of Object.keys(CH)) { const x = W[id]; if (x && !x.thread) rerenderList(x); } }
   // One item edit (spaces/<id>/name), never this device's whole list (live.js prefOps).
@@ -1063,6 +1095,7 @@ window.WizCore.chats = function createChats(H) {
       if (arch) { p.archived[cid] = new Date().toISOString(); p.pins = p.pins.filter(x => x !== cid); } else delete p.archived[cid];
       chanPrefEdit(p, { id: cid, archived: arch, ...(arch && wasPinned ? { pinned: false } : {}) }); closeRowSheet(); chanRepaintAll(); toast('✓', `${arch ? 'Archived' : 'Restored'} # ${name}`, 1800); return true;
     }
+    if (e.target.closest('[data-rschread]')) { closeRowSheet(); chanMarkRead(w, cid); return true; }
     if (e.target.closest('[data-rschnew]')) { closeRowSheet(); const t = w && chanTarget(w); if (t && openChannel(t, cid)) chanToEnd(t.id, true); return true; }
     return false;
   }
@@ -1234,7 +1267,7 @@ window.WizCore.chats = function createChats(H) {
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const attOf = s => (s.attention && (!isWorking(s) || ['needs_you', 'check'].includes(s.attention.state)) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
+  const attOf = s => (s.attention && (!isWorking(s) || ['needs_you', 'check'].includes(s.attention.state)) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') && !(s.attention.state === 'needs_you' && typeof handledNow === 'function' && handledNow(s)) ? s.attention : null;
   const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
   const STI = {
     needs: svg('<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
@@ -2697,7 +2730,7 @@ window.WizCore.chats = function createChats(H) {
   }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
-    const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
+    const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (a === 'markdone') { markDone(wid, sid); return; } if (!s || !ACT[a]) return;
     const w = W[wid];
     vib(8);
     if (a === 'unread') {
@@ -2770,6 +2803,7 @@ window.WizCore.chats = function createChats(H) {
     const acts = nid ? ['done', ...(s.read ? ['unread'] : ['snooze'])] : rowActions(s);
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? grp && grp.length > 1 ? `${noteSrcName(s)} · ${grp.length}` : notePlain(s.title) || 'Alert' : s.title)}</div>
       ${nid ? '<button type="button" data-rsopen><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Open</button>' : ''}
+      ${!nid && typeof canMarkDone === 'function' && canMarkDone(s) ? `<button type="button" data-rsmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}
       ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       ${PIN.on?.() !== false ? `<button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>` : ''}
       <button type="button" data-rsspacepicker>${PIN_SVG}${SPACE.ch ? 'Move to channel…' : spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
@@ -4281,6 +4315,7 @@ window.WizCore.chats = function createChats(H) {
     }
     const rsSpace = e.target.closest('[data-rsspace]');
     if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet, add = rsSpace.dataset.add === 'true', name = spaces().find(x => x.id === rsSpace.dataset.rsspace)?.name || (SPACE.ch ? 'channel' : SPACE.one); const rag = typeof chanRowAgent === 'function' ? chanRowAgent(rowSheet.wid, sid) : undefined; closeRowSheet(); if (spaceMember(rsSpace.dataset.rsspace, sid, add, rag)) toast('✓', `${add ? 'Added to' : 'Removed from'} ${name}`, 2000); return true; }
+    if (e.target.closest('[data-rsmarkdone]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet; closeRowSheet(); markDone(rw, sid); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
@@ -4455,5 +4490,5 @@ window.WizCore.chats = function createChats(H) {
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
   return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
-    registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
+    registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts, canMarkDone, markDone };
 };

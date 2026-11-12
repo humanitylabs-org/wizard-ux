@@ -39,6 +39,8 @@ export const ICON = {
   dn: ['M12 5v14', 'm6 13 6 6 6-6'],
   unpin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7', 'M4 4l16 16'],
   hide: ['M6 12h12'],
+  // Mark done (wizard-ux issue 1317): a plain tick
+  markdone: ['M5 12.5l4.5 4.5L19 7.5'],
   // the app panel wider / back to a third (round 7, the Orb desktop's panel)
   expand: ['M14 4h6v6', 'M20 4l-7 7', 'M10 20H4v-6', 'M4 20l7-7'],
   shrink: ['M4 14h6v6', 'M10 14l-6 6', 'M20 10h-6V4', 'M14 10l6-6'],
@@ -50,7 +52,7 @@ export const ICON = {
 };
 /* The row menu (long press on the phone, ⋯ or right click on the desktop), in the order they use (Pin, Rename, …, the
  * filing action last), Wizard's words. */
-export const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['unread', 'Mark unread'], ['move', 'Move to channel…'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
+export const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['markdone', 'Mark done'], ['unread', 'Mark unread'], ['move', 'Move to channel…'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
 /** An outline icon from ICON as an <svg> of the given class. */
 export function svgIcon(doc, name, cls) {
   const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', cls);
