@@ -1,7 +1,7 @@
 'use strict';
 // wizard-ux issue 1331 (second AI review) in a real browser: opening a thread with an open Needs you lands with the
 // amber line fully on screen under the header, and it STAYS there through the opening settle (the reading-place
-// restore used to pull it back). Phone 412x915 (browser and the APK's WizardOS-DocScroll document scroll) and desktop
+// restore used to pull it back). Main (Archimedes) and routed (Claude) threads. Phone 412x915 (browser and the APK's WizardOS-DocScroll document scroll) and desktop
 // 1440x900 (Classic and AI apps), Nebula + Grove, Channels on. Synthetic transport only; writes are answered in memory.
 // QA_WEB=<main>/web QA_EXPECT=broken runs the baseline; QA_OUT=<dir> keeps the screenshots.
 const assert = require('node:assert/strict');
@@ -27,7 +27,7 @@ const ROWS = [
   { id: 'qa-r2', title: 'Store listing', at: now - 2 * 864e5 },
   { id: 'qa-a1', title: 'Old idea', at: now - 3 * 864e5, archived: true },
 ].map(shape);
-const CLAUDE = [{ id: 'qa-c1', title: 'Essay outline', at: now - 30 * 6e4, preview: 'Outline ready.' }].map(shape);
+const CLAUDE = [{ id: 'qa-c1', title: 'Essay outline', at: now - 30 * 6e4, attention: { state: 'needs_you', ask: 'Pick a title' }, preview: 'Which title?' }].map(shape);
 const READ = ['qa-y1', 'qa-r1', 'qa-r2'];
 const para = n => Array.from({ length: n }, (_, i) => `Paragraph ${i + 1}: the launch needs a date, a venue and a short list of people to invite before we can print anything.`).join('\n\n');
 const LONG = [];
@@ -37,8 +37,8 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of ['nebula', 'grove']) {
-      const phone = shell.startsWith('phone'), ai = shell === 'ai-apps', stem = `${shell}-${skin}`, entry = { stem, errors: [], writes: [] }; report.push(entry);
+    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const sid of ['qa-y1', 'qa-c1']) {
+      const phone = shell.startsWith('phone'), ai = shell === 'ai-apps', stem = `${shell}-${skin}-${sid === 'qa-y1' ? 'main' : 'routed'}`, entry = { stem, errors: [], writes: [] }; report.push(entry);
       const ua = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' + (shell === 'phone-doc' ? ' WizardOS-DocScroll' : '');
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: ua } : {}) });
       try {
@@ -72,7 +72,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
           if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: u.searchParams.get('agent') === 'claude' ? CLAUDE : ROWS, has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
           if (m) { const s = [...ROWS, ...CLAUDE].find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: {} });
-            return r.fulfill({ json: m[2] ? { messages: s.id === 'qa-y1' ? LONG : [{ role: 'user', content: 'Ask for ' + s.title, timestamp: now / 1000 - 600 }, { role: 'assistant', content: s.preview, timestamp: now / 1000 - 590 }] } : { session: s } }); }
+            return r.fulfill({ json: m[2] ? { messages: ['qa-y1', 'qa-c1'].includes(s.id) ? LONG : [{ role: 'user', content: 'Ask for ' + s.title, timestamp: now / 1000 - 600 }, { role: 'assistant', content: s.preview, timestamp: now / 1000 - 590 }] } : { session: s } }); }
           return r.fulfill({ json: ownerRead(p) });
         });
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
@@ -84,7 +84,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
         else await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
-        await vis(ai ? '.aad-rw[data-sid="qa-y1"] .aad-row' : '[data-chopen="qa-y1"]').click();
+        await vis(ai ? `.aad-rw[data-sid="${sid}"] .aad-row` : `[data-chopen="${sid}"]`).click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-msgs [data-needs-line]')].some(n => n.getClientRects().length), null, { timeout: 15000 });
         // Where the line is against the header and the visible thread, sampled through the opening settle (about 3.5 s).
         const where = () => page.evaluate(() => {

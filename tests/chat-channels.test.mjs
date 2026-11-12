@@ -1992,6 +1992,26 @@ test('issue 1331: opening a thread with an open Needs you lands on that message 
   assert.match(src, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
 });
 
+test('issue 1331: the landing becomes the reading place for main and routed threads alike (second AI review)', () => {
+  // chat-power's opening settle restored the saved spot over the landing. needsLand now hands the placed line to
+  // PW.landAt for the window showing the thread, whichever agent owns its row (tests/needs-you-landing.test.mjs runs
+  // landAt itself through the real settle).
+  for (const [kind, agent, , sid] of KINDS_1331) {
+    const s = askRow(sid, agent ? { owner: agent } : {}), f = needsFixture(), lands = [];
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    const doc = { scrollTop: 0, scrollTo(o) { this.scrollTop = o.top; } }, thread = { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 56 }) }) };
+    const nb = { getBoundingClientRect: () => ({ top: 56 - doc.scrollTop }), closest: q => q === '.ch-thread' ? thread : null };
+    const line = { isConnected: true, getBoundingClientRect: () => ({ top: 900 - doc.scrollTop }), closest: q => q === '.ch-msgs' ? nb : q === '.ch-thread' ? thread : null };
+    Object.assign(f.env, { requestAnimationFrame: fn => fn(), scrollBox: () => doc, threadViewportTop: (_, base) => base, PW: { landAt: (wid, n) => { lands.push([wid, n === line]); return true; } },
+      elOf: () => ({ querySelector: q => q === '.ch-msgs [data-needs-line]' ? line : null }) });
+    const w = { id: 'w', thread: sid }; f.env._c.w = { readNav: 7 };
+    f.mark(sid, s, turnsOf(['u', 1], ['a', 2]));
+    f.land(w, 7);
+    assert.deepEqual(lands[0], ['w', true], kind + ': the landed line is handed to the reading place');
+    assert.equal(line.getBoundingClientRect().top, 64, kind);
+  }
+});
+
 test('issue 1331: the real turnHtml draws the line right above the reply bubble, and only there', () => {
   const lines = src.split('\n'), pick = t => lines.find(l => l.startsWith(t)) + '\n';
   const ctx = { getComputedStyle: () => ({ getPropertyValue: () => '' }), document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Wizard' }, WosSkinHost: {} }, KIT: { time: { full: String, stamp: String } },
