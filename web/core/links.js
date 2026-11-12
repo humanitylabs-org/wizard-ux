@@ -161,6 +161,9 @@
       <div class="ls-body"><i class="ls-load"></i><iframe class="ls-frame" title="Link" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe></div></div>`;
     (parent || document.body).appendChild(el);
     const frame = el.querySelector('iframe'), bar = el.querySelector('.ls-bar'), panel = el.querySelector('.ls-panel');
+    // Browser owner boundary (wizard-os#133, box switch): every page in the sheet runs sandboxed (opaque origin), so an
+    // app page or upload opened here cannot reach the shell. The sheet then treats it like any other-site page.
+    if (window.WizBrowserBoundary?.enabled) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
     let stack = [], open = false, popping = false, hideT = 0;
 
     const cur = () => stack[stack.length - 1] || null;

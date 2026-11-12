@@ -863,7 +863,9 @@
     if (warmingVoice || !document.createElement || !document.body) return;
     warmingVoice = true;
     try {
-    const wanted = new Map(apps().filter(a => a.provides?.includes('voice-commands')).slice(0, 64).map(a => [a.id, a]));
+    // Browser owner boundary (wizard-os#133, box switch): no hidden app frames. They would run app code unsandboxed and
+    // out of sight, and voice commands need same-origin access; any already warmed are removed.
+    const wanted = window.WizBrowserBoundary?.enabled ? new Map() : new Map(apps().filter(a => a.provides?.includes('voice-commands')).slice(0, 64).map(a => [a.id, a]));
     for (const [id, entry] of voiceFrames) if (!wanted.has(id) || wanted.get(id).url !== entry.url) { entry.detach(); entry.frame.remove(); voiceFrames.delete(id); }
     for (const [id, app] of wanted) {
       if (voiceFrames.has(id)) continue;

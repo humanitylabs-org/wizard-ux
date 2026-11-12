@@ -27,7 +27,10 @@
 (() => {
   'use strict';
   if (window.WizBrowserBoundary) return;
-  if (!window.WizShellBoundary?.on) return;
+  // On with this page's shell token (core/shell-token.js), or, without one (a shell or pinned app opened from the
+  // offline copy), when this device saw the box turn the boundary on and has not seen it turn off since.
+  const remembered = () => { try { return localStorage.getItem('wos.browser-boundary.v1') === '1'; } catch (_) { return false; } };
+  if (!window.WizShellBoundary?.on && !remembered()) return;
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
