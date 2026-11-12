@@ -2928,8 +2928,7 @@ window.WizCore.chats = function createChats(H) {
       toast(msg[0], msg[1], 1600);
     // Same frame as the tap (James, 7 Nov 2026, reported again): LIVE patches its list synchronously and only then awaits
     // the write, so start it, paint every list now (open sheet / swipe / long-press holds must not defer it), reconcile after.
-    const write = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid);
-    archiving = write;
+    const write = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid); archiving = write;
     paintListsNow();
     const ok = await write;
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
