@@ -225,10 +225,11 @@
     if (n < LIFT_MIN || n < 3 * String(a.text).length) return;
     const k = t.notes.lastIndexOf(long.text);
     if (k >= 0) t.notes.splice(k, 1);
-    // Both messages number their inline images from wizard-inline-0: give the earlier one's markers their own names.
+    // Both messages number their inline images from wizard-inline-0: give the earlier one's markers their own names
+    // (trailing dashes, as helm does, so md's MEDIA_IMAGE still places them).
     let text = String(long.text); const media = { ...(a.inlineMedia || {}) };
     for (const [m, url] of Object.entries(long.inlineMedia || {})) {
-      let k2 = m; while (k2 in media || String(a.text).includes(`"${k2}"`)) k2 += 'p';
+      let k2 = m; while (k2 in media || String(a.text).includes(`"${k2}"`) || (k2 !== m && text.includes(`"${k2}"`))) k2 += '-';
       if (k2 !== m) text = text.split(`"${m}")`).join(`"${k2}")`);
       media[k2] = url;
     }

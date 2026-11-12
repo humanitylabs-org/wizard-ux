@@ -55,3 +55,49 @@ test('commentary is never lifted into the reply', () => {
     { role: 'assistant', timestamp: 4, content: ps }]);
   assert.equal(t.a.text, ps);
 });
+
+test('inline images of both messages stay placed when their markers collide', () => {
+  const env = (id) => `<helm_attachments>${JSON.stringify({ inline: true, items: [{ id, name: 'shot.png', mime: 'image/png' }] })}</helm_attachments>`;
+  const idA = 'a'.repeat(32), idB = 'b'.repeat(32);
+  const t = turn([{ role: 'assistant', timestamp: 2, content: `${answer}\n\n${env(idA)}`, tool_calls: call },
+    { role: 'tool', timestamp: 3, tool_call_id: 'c1', content: 'ok' },
+    { role: 'assistant', timestamp: 4, content: `${ps}\n\n${env(idB)}` }]);
+  const media = { ...t.a.inlineMedia };
+  assert.equal(Object.keys(media).length, 2);
+  assert.deepEqual(new Set(Object.values(media)), new Set([`/wizard/attachments/${idA}`, `/wizard/attachments/${idB}`]));
+  const placed = [];
+  KIT.md(t.a.text, (url, marker) => { if (t.a.inlineMedia[marker] === url) placed.push(url); return ''; });
+  assert.equal(placed.length, 2, 'both images placed inline');
+});
+
+// Agent chat parity (AGENTS.md; wizard-agent-service qa/agent-parity/features.json "chat-answer-postscript"): the same
+// history in a main thread and in host-profile, container and restricted routed threads shows the same answer.
+const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
+  container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
+const chats = read('web/core/chats.js');
+const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
+const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexOf(end, a); assert.ok(a >= 0 && b > a, `${start} .. ${end}`); return chats.slice(a, b); };
+function turnHtml(tn) {
+  const c = { getComputedStyle: () => ({ getPropertyValue: () => '' }), document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Fixture' } },
+    KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null, replyCard: () => '', msgIds: () => '', quoteBtn: () => '',
+    userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
+  modelContext(c);
+  vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, c);
+  return c.turnHtml({ texts: [] }, tn, true, false, null, null);
+}
+test('parity: main and routed threads (host-profile, container, restricted) show the answer, not only the postscript', () => {
+  const seen = new Map();
+  for (const [kind, [sid, agent]] of Object.entries(ROUTES)) {
+    const history = [{ role: 'user', timestamp: 1, content: 'Tell me' }, { role: 'assistant', timestamp: 2, content: answer, tool_calls: call },
+      { role: 'tool', timestamp: 3, tool_call_id: 'c1', content: 'ok' }, { role: 'assistant', timestamp: 4, content: ps }]
+      .map(r => ({ ...r, session_id: sid, ...(agent ? { agent } : {}) }));
+    const tn = KIT.parseRows(history).at(-1);
+    const html = turnHtml(tn);
+    const log = (html.match(/<details class="steps[\s\S]*?<\/details>/) || [''])[0];
+    assert.ok(html.includes('point399'), `${kind}: answer rendered`);
+    assert.ok(!log.includes('point399'), `${kind}: answer not in the work log`);
+    assert.ok(html.indexOf('point399') < html.indexOf('stands as written'), `${kind}: postscript under the answer`);
+    seen.set(kind, html);
+  }
+  assert.equal(new Set(seen.values()).size, 1, 'byte-identical turn for every runtime kind');
+});
