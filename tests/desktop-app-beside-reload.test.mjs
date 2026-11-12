@@ -24,7 +24,7 @@ function boot(saved, { desks = [{ desk: 0, id: 'chats' }, { desk: 1, id: 'wizard
     'var painted = 0; var paintTop = () => { painted++; };',
     block('  let besideWant = api.storage.get(', '  function paintSplit(chatOn) {'),
     // paintSplit's own two lines around the panel check, as in the real function
-    'this.paint = h => { if (besideWant && !pane) restoreBeside(h); if (!besideWant) keepBeside(); return pane; };',
+    'this.paint = h => { if (besideWant) { if (pane) besideWant = null; else restoreBeside(h); } if (!besideWant) keepBeside(); return pane; };',
     'this.setPane = p => { pane = p; }; this.paints = () => painted;',
   ].join('\n'), ctx);
   return ctx;
@@ -79,6 +79,15 @@ test('a moved desk is found by its app, and a damaged saved value is ignored, ne
     const x = boot(bad);
     assert.equal(x.paint(onChats), null, JSON.stringify(bad));
   }
+});
+
+test('another app opened before the restore lands wins, and is the one saved', () => {
+  const x = boot({ id: 'wizard-music', desk: 1 }, { desks: [{ desk: 0, id: 'chats' }, { desk: 1, id: 'wizard-music' }, { desk: 2, id: 'pages' }], drawn: [0, 2] });
+  assert.equal(x.paint(onChats), null, 'the saved desk is not drawn yet');
+  x.setPane({ id: 'pages', el: {}, desk: 2 }); x.paint({ app: 'pages', r: { desk: 2 } });
+  assert.equal(x.data.beside, JSON.stringify({ id: 'pages', desk: 2 }));
+  x.drawn.push(1); x.paint(onChats);
+  assert.equal(x.data.beside, JSON.stringify({ id: 'pages', desk: 2 }), 'the old app never comes back over it');
 });
 
 test('gives up after a few tries when the desk is never drawn', () => {

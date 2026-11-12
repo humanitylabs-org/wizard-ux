@@ -1606,7 +1606,8 @@ export default function desktop(api) {
       want = null;
     }
     if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; const generation = focusGeneration; api.after(60, () => focusFrame(0, generation)); }
-    if (besideWant && !pane) restoreBeside(h);
+    // (another panel already in front wins over a pending restore: Codex review)
+    if (besideWant) { if (pane) besideWant = null; else restoreBeside(h); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!besideWant) keepBeside();
     if (!pane && wide) setWide(false);
