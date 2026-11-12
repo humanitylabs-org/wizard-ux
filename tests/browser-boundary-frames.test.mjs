@@ -1014,6 +1014,54 @@ test('app backend (net.fetch): its own budget beside the other services, only th
   await Promise.allSettled(slowSvc);
 });
 
+// Slice 49: a backend call the page makes just as its window finishes loading (Outline asks for its config at once) used
+// to reach the shell on the channel the load had just ended. The shell dropped it and the page got "Failed to fetch".
+test('app backend (net.fetch): a call the shell never took goes again on the new channel, exactly once', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el);
+  await tick();
+  const calls = [], later = [];
+  sh.B.serve((el, method, args) => {
+    if (method !== 'net.fetch') return true;
+    calls.push(args.url);
+    if (args.url.endsWith('/slow')) return new Promise(r => later.push(r));
+    return Promise.resolve({ net: { status: 200, statusText: 'OK', headers: [], body: new ArrayBuffer(0), url: args.url, redirected: false } });
+  });
+  // The page's call is on its way (a message not yet delivered) when the frame's load gives the window a new channel.
+  const early = f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/api/config' }, 2000);
+  f.load();
+  const got = await early;
+  assert.equal(got.net.status, 200);
+  assert.deepEqual(calls, ['https://box.example.ts.net/notes/api/config'], 'sent to the server once, on the new channel');
+  const hellos = sh.log.filter(x => x.op === 'hello');
+  assert.ok(hellos.length >= 2);
+  // A call the page stopped (net.abort) before the new hello came is never sent again (Codex P2).
+  const stoppedCall = f.a.WizBoundaryClient.request('net.fetch', { key: 'k-stop', url: 'https://box.example.ts.net/notes/api/save', method: 'POST' }, 2000);
+  f.load();
+  f.a.WizBoundaryClient.request('net.abort', { key: 'k-stop' }, 2000).catch(() => {});
+  await assert.rejects(stoppedCall, e => e.code === 'failed');
+  await tick(); await tick();
+  assert.deepEqual(calls, ['https://box.example.ts.net/notes/api/config'], 'the stopped POST never reached the server');
+  // A call the shell did take is never sent twice: a new load fails it, as before, and so does attaching the frame again.
+  const slow = f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/slow', method: 'POST' }, 2000);
+  await tick(); await tick();
+  assert.equal(calls.length, 2);
+  f.load();
+  await assert.rejects(slow, e => e.code === 'failed');
+  await tick();
+  assert.equal(calls.length, 2, 'the taken POST was not sent again');
+  const slow2 = f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/slow', method: 'POST' }, 2000);
+  await tick(); await tick();
+  assert.equal(calls.length, 3);
+  const off = sh.B.attach(f.el); off();
+  sh.B.attach(f.el);
+  await assert.rejects(slow2, e => e.code === 'failed');
+  await tick();
+  assert.equal(calls.length, 3, 'attaching the frame again does not send the taken call twice');
+  for (const r of later) r({ net: { status: 200, headers: [], body: new ArrayBuffer(0) } });
+});
+
 // Slice 43: the window's own app path reaches the page in each hello, so its links that leave it go to the shell.
 test('the hello names the window\'s app path (home); a bad one is never sent', async () => {
   const sh = shell(), f = frame(sh);

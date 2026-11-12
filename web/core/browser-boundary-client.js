@@ -67,6 +67,8 @@
   const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
+  // Backend calls the page has stopped (net.abort, by key): such a call is never sent again on a new channel.
+  const stopped = new Set();
   const holds = new Map();   // the app's hold id -> { reason, shell: the shell's id on the current channel, placing }
   const error = (code, message) => Object.assign(new Error(message), { code });
   const send = data => { try { parent.postMessage({ ...data, type: TYPE, version: VERSION, channel }, SHELL); } catch (_) {} };
@@ -192,10 +194,18 @@
       for (const id of [...seals.keys()]) release(id);
       home = typeof d.home === 'string' && d.home.length <= 512 && /^\/(?:(?!\.\.?\/)[^/?#\\]+\/)+$/.test(d.home) && !/%(?:2f|5c|2e|25)/i.test(d.home) ? d.home : '';
       channel = d.channel; appSent = ''; send({ op: 'ready' }); setKeys(d.keys, d.app); reportField(true);
+      // The backend calls the shell had taken on the old channel and not answered yet (`took`, ids only).
+      const took = Array.isArray(d.took) ? new Set(d.took.slice(0, 256).filter(x => typeof x === 'string')) : null;
       for (const [id, wait] of requests) {
         // An app's own backend call may already have reached its server on the old channel: never send it twice (a
         // POST would run twice). It fails like a dropped connection, and the app retries if it wants to.
         // A socket's open and its messages likewise: the shell closed its sockets with the old channel.
+        // A backend call the shell says it never took (it came after the shell had moved on, e.g. one the page made while
+        // it was still loading, before the shell's load hello) never reached the server, so it goes again on the new channel.
+        if (took && wait.method === 'net.fetch' && !took.has(id) && !stopped.has(String(wait.args?.key))) {
+          send({ op: 'service.request', id, method: wait.method, args: wait.args });
+          continue;
+        }
         if (wait.method === 'net.fetch' || wait.method.startsWith('ws.')) { clearTimeout(wait.timer); requests.delete(id); wait.reject(error('failed', 'Connection to the app server was interrupted')); continue; }
         send({ op: 'service.request', id, method: wait.method, args: wait.args });
       }
@@ -386,6 +396,7 @@
       // The shell can't read this page's address; relative title-bar links resolve against it (and are still checked).
       if (method === 'titlebar.set' || method === 'share.text' || method === 'link.open' || method === 'media.view') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
       if (STICKY.includes(method)) sticky.set(method, args);
+      if (method === 'net.abort' && args?.key) { stopped.add(String(args.key)); if (stopped.size > 256) stopped.delete(stopped.values().next().value); }
       return send1(method, args, timeout);
     },
   });

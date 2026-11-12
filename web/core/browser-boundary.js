@@ -245,6 +245,8 @@
   const newChannel = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
   const opaqueFrame = f => !!f && f.tagName === 'IFRAME' && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin') && !f.hasAttribute('srcdoc');
   const connected = st => !!st && st.frame.isConnected && sessions.get(st.frame) === st;
+  // Per frame: the backend calls its current channel took and has not answered yet (hello `took`).
+  const tooks = new WeakMap(), tookOf = f => { let t = tooks.get(f); if (!t) tooks.set(f, t = new Set()); return t; };
   function send(st, op, data = {}) {
     if (!connected(st)) return;
     // An opaque origin can only be addressed with '*'. Nothing sent here carries a credential: admission is the
@@ -319,7 +321,10 @@
     const had = sessions.get(frame); if (had) { if (homeOk(home)) had.home = home; return had.detach; }
     const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0,
       home: homeOk(home) ? home : '' };
-    const hello = () => { revoke(st); st.appSent = appOn(st); send(st, 'hello', helloMsg(st)); };
+    // `took`: the backend calls (net.fetch) the old channel accepted and has not answered. One the page sent that is
+    // not listed never reached the app's server (it came on a channel this load had already ended), so the page sends it
+    // again. Kept per frame, not per session, so a frame attached again still lists what its old session took.
+    const hello = () => { const took = [...tookOf(frame)]; revoke(st); tooks.set(frame, new Set()); st.appSent = appOn(st); send(st, 'hello', { ...helloMsg(st), took }); };
     st.detach = () => { if (sessions.get(frame) !== st) return; frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
     sessions.set(frame, st);
     frame.addEventListener('load', hello); hello();
@@ -393,7 +398,14 @@
       // `ready` and the bounded services (SERVED, see the header). Every other app service stays closed under the
       // boundary. The answer is protocol data only (shape), and only on the channel the request came in on.
       const channel = st.channel;
-      const answer = (value, code, message) => { if (connected(st) && st.channel === channel) send(st, 'service.reply', { id: d.id, ...(code ? { error: { code, message } } : { value }) }); };
+      // A backend call taken on this channel stays listed until it is answered (see hello's `took`).
+      const took = d.method === 'net.fetch';
+      if (took) tookOf(st.frame).add(d.id);
+      const answer = (value, code, message) => {
+        if (!connected(st) || st.channel !== channel) return;
+        if (took) tookOf(st.frame).delete(d.id);
+        send(st, 'service.reply', { id: d.id, ...(code ? { error: { code, message } } : { value }) });
+      };
       if (d.method === 'ready') return answer({ version: VERSION, hosted: true });
       if (!st.ready || !server || !SERVED.includes(d.method)) return answer(undefined, 'unavailable', 'Not available inside the browser boundary yet');
       // The tap must be in this window: a tap or key elsewhere in the shell also activates the shell, but then this
