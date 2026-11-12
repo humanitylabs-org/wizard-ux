@@ -17,6 +17,39 @@ public class DownloadsPolicyTest {
         return it;
     }
 
+    @Test public void serverNameWinsOverTheUrlsRandomId() { // issue 1342: Messenger's header carried the real name
+        // Messenger web.py for a long or non-ASCII name: a safe ASCII filename plus the real one in filename*.
+        String h = "attachment; filename=\"R_sum_long.pdf\"; filename*=UTF-8''R%C3%A9sum%C3%A9%20long.pdf";
+        assertEquals("Résumé long.pdf", DownloadsPolicy.dispositionName(h));
+        assertEquals("report.pdf", DownloadsPolicy.dispositionName("attachment; filename=\"report.pdf\""));
+        assertEquals("report.pdf", DownloadsPolicy.dispositionName("inline; filename=report.pdf"));
+        assertEquals("a;b.pdf", DownloadsPolicy.dispositionName("attachment; filename=\"a;b.pdf\""));
+        assertEquals("x\"y.pdf", DownloadsPolicy.dispositionName("attachment; FILENAME=\"x\\\"y.pdf\""));
+        assertEquals("caf\u00e9.txt", DownloadsPolicy.dispositionName("attachment; filename*=iso-8859-1'en'caf%E9.txt"));
+        // unreadable filename* falls back to filename; no name at all is null (Android's guess then applies)
+        assertEquals("plain.pdf", DownloadsPolicy.dispositionName("attachment; filename*=UTF-8''bad%G1; filename=\"plain.pdf\""));
+        assertEquals("plain.pdf", DownloadsPolicy.dispositionName("attachment; filename*=KOI8-R''x; filename=plain.pdf"));
+        assertEquals(null, DownloadsPolicy.dispositionName("attachment"));
+        assertEquals(null, DownloadsPolicy.dispositionName(null));
+        assertEquals(null, DownloadsPolicy.dispositionName("attachment; filename=\"\""));
+    }
+
+    @Test public void savedNamesAreSafeOnDisk() {
+        assertEquals("a_b_c.pdf", DownloadsPolicy.saveName("a:b?c.pdf"));
+        assertEquals("evil.txt", DownloadsPolicy.saveName("../../evil.txt"));
+        assertEquals("_profile", DownloadsPolicy.saveName(".profile"));
+        assertEquals("Résumé.pdf", DownloadsPolicy.saveName("Résumé.pdf"));
+        assertEquals("download", DownloadsPolicy.saveName(null));
+    }
+
+    @Test public void downloadsSkipAndroidsPopUpWhenWizardShowsThem() throws Exception { // issue 1342
+        String main = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/java/ai/wizards/os/MainActivity.java")), "UTF-8");
+        assertTrue(main.contains("shellShows ? android.app.DownloadManager.Request.VISIBILITY_HIDDEN"));
+        assertTrue(main.contains("DownloadsPolicy.dispositionName(disposition)"));
+        String manifest = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/AndroidManifest.xml")), "UTF-8");
+        assertTrue(manifest.contains("android.permission.DOWNLOAD_WITHOUT_NOTIFICATION")); // VISIBILITY_HIDDEN throws without it
+    }
+
     @Test public void namesAreSafeToShow() {
         assertEquals("report.pdf", DownloadsPolicy.displayName("/sdcard/Download/report.pdf"));
         assertEquals("evil.txt", DownloadsPolicy.displayName("..\\..\\evil.txt"));

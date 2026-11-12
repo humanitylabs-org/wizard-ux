@@ -73,6 +73,79 @@ public final class DownloadsPolicy {
         return n;
     }
 
+    /**
+     * The file name a server gave in Content-Disposition (attachment or inline), or null when it gave none.
+     * RFC 6266: filename* (RFC 5987, e.g. UTF-8''R%C3%A9sum%C3%A9.pdf) wins over filename. Android's own
+     * URLUtil.guessFileName only reads a lone `attachment; filename="x"`, so Messenger's header (which adds filename*
+     * for long or non-ASCII names) fell back to the URL's random media id (wizard-ux issue 1342).
+     */
+    public static String dispositionName(String disposition) {
+        if (disposition == null) return null;
+        String star = null, plain = null;
+        for (String part : splitParams(disposition)) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+            String key = part.substring(0, eq).trim().toLowerCase(Locale.ROOT);
+            String val = part.substring(eq + 1).trim();
+            if (key.equals("filename*") && star == null) star = extValue(val);
+            else if (key.equals("filename") && plain == null) plain = unquote(val);
+        }
+        String n = star != null && !star.trim().isEmpty() ? star : plain;
+        return n == null || n.trim().isEmpty() ? null : n;
+    }
+
+    /** A name safe to save under Downloads: displayName, plus no characters Android's file systems refuse. */
+    public static String saveName(String raw) {
+        String n = displayName(raw).replaceAll("[\\\\/:*?\"<>|]", "_");
+        while (n.startsWith(".")) n = "_" + n.substring(1); // never a hidden file
+        return n;
+    }
+
+    private static List<String> splitParams(String h) {
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < h.length(); i++) {
+            char c = h.charAt(i);
+            if (c == '"') quoted = !quoted;
+            else if (c == '\\' && quoted && i + 1 < h.length()) { cur.append(c).append(h.charAt(++i)); continue; }
+            if (c == ';' && !quoted) { out.add(cur.toString()); cur.setLength(0); }
+            else cur.append(c);
+        }
+        out.add(cur.toString());
+        return out;
+    }
+
+    private static String unquote(String v) {
+        if (v.length() >= 2 && v.startsWith("\"") && v.endsWith("\"")) v = v.substring(1, v.length() - 1).replaceAll("\\\\(.)", "$1");
+        return v;
+    }
+
+    /** RFC 5987 ext-value: charset'lang'pct-encoded. Only UTF-8 and ISO-8859-1 are read; anything else is ignored. */
+    private static String extValue(String v) {
+        v = unquote(v);
+        int a = v.indexOf('\''), b = a < 0 ? -1 : v.indexOf('\'', a + 1);
+        if (b < 0) return null;
+        String cs = v.substring(0, a).trim().toUpperCase(Locale.ROOT);
+        java.nio.charset.Charset charset;
+        if (cs.equals("UTF-8")) charset = java.nio.charset.StandardCharsets.UTF_8;
+        else if (cs.equals("ISO-8859-1")) charset = java.nio.charset.StandardCharsets.ISO_8859_1;
+        else return null;
+        String enc = v.substring(b + 1);
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        for (int i = 0; i < enc.length(); i++) {
+            char c = enc.charAt(i);
+            if (c == '%') {
+                if (i + 2 >= enc.length()) return null;
+                int hi = Character.digit(enc.charAt(i + 1), 16), lo = Character.digit(enc.charAt(i + 2), 16);
+                if (hi < 0 || lo < 0) return null;
+                bytes.write(hi * 16 + lo); i += 2;
+            } else if (c > 0x7f) return null;
+            else bytes.write(c);
+        }
+        return new String(bytes.toByteArray(), charset);
+    }
+
     static String knownStatus(String s) {
         switch (s == null ? "" : s) {
             case "pending": case "running": case "paused": case "done": case "failed": case "gone": return s;

@@ -523,11 +523,18 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         Uri u = Uri.parse(url);
         if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
         try {
-            String name = android.webkit.URLUtil.guessFileName(url, disposition, mime);
+            // The server's own name first (filename* included); Android's guess reads only a lone attachment; filename="x"
+            // and otherwise names the file after the URL, e.g. Messenger's long random media id (issue 1342).
+            String given = ai.wizards.os.downloads.DownloadsPolicy.dispositionName(disposition);
+            String name = ai.wizards.os.downloads.DownloadsPolicy.saveName(given != null ? given : android.webkit.URLUtil.guessFileName(url, disposition, mime));
+            // When the shell's Downloads port is live, Wizard's own banner and sheet show the download: Android's heads-up
+            // notification over the app only duplicates it (issue 1342). Otherwise (no shell listening) keep Android's.
+            boolean shellShows = downloadsReply != null && downloadsReplyEpoch == downloadsEpoch;
             android.app.DownloadManager.Request r = new android.app.DownloadManager.Request(u)
                     .setMimeType(mime)
                     .setTitle(name)
-                    .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setNotificationVisibility(shellShows ? android.app.DownloadManager.Request.VISIBILITY_HIDDEN
+                            : android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name);
             if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
             String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
