@@ -469,7 +469,11 @@ window.WizCore.chats = function createChats(H) {
     toast('✓', 'Cleared', 1400);
     return true;
   }
-  const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || attOf(s)?.state === 'needs_you');
+  /* The one "waiting on the owner" rule with Channels on (wizard-ux issue 1360): Ready membership, the Activity row's
+   * amber marker, the channel line and the feed post all read it. A status line of needs_you or check ("Your call":
+   * the owner's judgment is the missing piece) waits on him until Mark done, Reply to it, or a newer status line;
+   * opening the thread never clears it (only green, unread, clears on open). */
+  const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || ['needs_you', 'check'].includes(attOf(s)?.state));
   /* Needs you in the thread (wizard-ux issue 1331, part of the Channels switch since issue 1358). The agent's
    * reply whose status line said needs_you gets the feed's amber Needs you line right above its bubble, with the ask
    * and Mark done beside it. One marker state for every surface: attOf (the row's status line; Mark done's handled
@@ -1403,7 +1407,7 @@ window.WizCore.chats = function createChats(H) {
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const attOf = s => (s.attention && (!isWorking(s) || ['needs_you', 'check'].includes(s.attention.state)) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') && !(s.attention.state === 'needs_you' && typeof handledNow === 'function' && handledNow(s)) ? s.attention : null;
+  const attOf = s => (s.attention && (!isWorking(s) || ['needs_you', 'check'].includes(s.attention.state)) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') && !(['needs_you', 'check'].includes(s.attention.state) && typeof handledNow === 'function' && handledNow(s)) ? s.attention : null;
   const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
   const STI = {
     needs: svg('<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
