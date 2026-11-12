@@ -27,9 +27,6 @@
     "wizard/connector-models",
     "wizard/link-token-repair",
     "wizard/chat-channels",
-    "wizard/channel-read-sync",
-    "wizard/mark-done",
-    "wizard/needs-you-in-thread",
     "wizard/narrow-one-app"
   ],
   "defaults": [

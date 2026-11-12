@@ -256,14 +256,15 @@ test('A–Z / Z–A sort, pinned channels on top in pin order, General always la
   assert.equal(f.toasts.at(-1), 'Pinned');
 });
 
-test('long-press sheet on a channel: Pin, Rename, Archive channel, New post; General gets New post only', () => {
+test('long-press sheet on a channel: Pin, Rename, Archive channel, Mark channel read, New post; General gets Mark channel read and New post', () => {
   const f = fixture();
   f.openChannelSheet('w', 'launch');
   assert.match(f.sheets.at(-1), /aria-label="Channel actions"[^]*# Launch/);
-  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Archive channel', 'New post']);
+  // Mark channel read comes with Channels since wizard-ux issue 1358 (it had its own switch).
+  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Archive channel', 'Mark channel read', 'New post']);
   assert.doesNotMatch(f.sheets.at(-1), /Delete/i);
   f.openChannelSheet('w', '__general__');
-  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['New post']);
+  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Mark channel read', 'New post']);
   // New post opens the channel with its message box ready (wizard-ux issue 1258), never a separate New chat draft.
   f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rschnew': '' }), 'w', f.w);
   assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'voice' }); assert.deepEqual(f.drafts, []);
@@ -295,7 +296,7 @@ test('Archive: an archived channel moves to a folded Archive section, Restore br
   // The channel's chat stays where it is (Activity's # line still names it).
   assert.equal(f.chanName(row('d', 1)), 'Voice');
   // Archived sheet: Restore, no New post.
-  f.openChannelSheet('w', 'voice'); assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Restore']);
+  f.openChannelSheet('w', 'voice'); assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Restore', 'Mark channel read']);
   // Pruning: newest chat 40 days old and archived 31 days ago → gone from Archive (the Space itself is untouched).
   assert.equal(f.CHAN_ARCHIVE_PRUNE_DAYS, 30);
   const p = JSON.parse(f.store.get('wos.chats.channel-prefs.v1')); p.archived.voice = new Date(NOW - 31 * 24 * H).toISOString(); f.store.set('wos.chats.channel-prefs.v1', JSON.stringify(p));
@@ -1544,7 +1545,7 @@ test('issue 1316 review: an agent-focused General has its own mark; reading it n
   focus.ag = 'host'; assert.equal(f.chanReadAt('general|host'), NOW + H / 2, 'reading All reads each focused General too');
 });
 
-// wizard-agent-service issue 471: with wizard/channel-read-sync on, the watermark is also kept on the box
+// wizard-agent-service issue 471: with Channels on (its own wizard/channel-read-sync switch until wizard-ux issue 1358), the watermark is also kept on the box
 // (/wizard/v1/channels/read, forward only), so reading a channel on one device clears it on the owner's others.
 // The real LIVE.chanReads (web/live.js channelReads) runs against a fake box shared by two fixtures.
 const liveSrc = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
@@ -1560,11 +1561,11 @@ function fakeBox({ on = true } = {}) {
   };
   return box;
 }
-async function syncDevice(box, opts = {}, sync = true) {
+async function syncDevice(box, opts = {}) {
   const f = fixture({ spacesList: [], marksAt: readTo(50), ...opts });
   const ctx = vm.createContext({}); vm.runInContext(readsBlock + ';this.channelReads=channelReads;', ctx);
   f.env.LIVE.chanReads = ctx.channelReads({ req: box.req, emit() {} });
-  if (sync) f.env.document.documentElement.dataset.tweaks += ' wizard/channel-read-sync';
+  assert.ok(f.env.document.documentElement.dataset.tweaks.split(' ').includes('wizard/chat-channels'), 'Channels alone turn the sync on (issue 1358)');
   f.chanReadAt('general'); await settle(); await settle();       // the first look asks the box
   return f;
 }
@@ -1589,12 +1590,14 @@ test('issue 471: reading General to the bottom on the desktop clears it on the p
   assert.match(generalLine(desktop, rows), /aria-label="1 unread"/);
 });
 
-test('issue 471: switch off, or a box without the read sync (404): each device keeps its own mark and nothing is sent', async () => {
+test('issue 471: a box without the read sync (404): each device keeps its own mark and nothing is sent', async () => {
   const rows = generalRows(10);
-  const box = fakeBox(), desktop = await syncDevice(box), off = await syncDevice(box, {}, false);
-  assert.ok(!off.env.LIVE.chanReads.off && box.calls.length === 1, 'a device with the switch off never asks the box');
-  desktop.openChannel(desktop.w, '__general__'); readToEnd(desktop, rows); await settle();
-  assert.match(generalLine(off, rows), /aria-label="10 unread"/, 'switch off: the other device is unchanged (per device, as before)');
+  // Channels off: no channel, so no read point is asked for (issue 1358: the sync has no switch of its own any more).
+  const box = fakeBox(), off = fixture({ spacesList: [], marksAt: readTo(50) });
+  off.env.LIVE.chanReads = { marks() { box.calls.push(['GET']); return null; } };
+  off.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats';
+  off.chanReadAt('general'); await settle();
+  assert.deepEqual(box.calls, [], 'Channels off: the box is never asked');
   const old = fakeBox({ on: false }), a = await syncDevice(old);
   assert.equal(a.env.LIVE.chanReads.off, true);
   a.openChannel(a.w, '__general__'); readToEnd(a, rows); await settle();
@@ -1626,7 +1629,7 @@ test('issue 471: marks read on a device before the switch go to the box once, th
   assert.equal(f.chanReadAt('hermes|launch'), NOW - 3 * H, 'the device reads the newer of its own and the box\'s');
 });
 
-test('issue 471 review: a mark whose write failed, or one read while the switch was off, still reaches the box later', async () => {
+test('issue 471 review: a mark whose write failed, or one read before the box kept marks, still reaches the box later', async () => {
   const box = fakeBox(), rows = generalRows(10), f = await syncDevice(box);
   box.offline = true;
   f.openChannel(f.w, '__general__'); readToEnd(f, rows); await settle();
@@ -1637,11 +1640,12 @@ test('issue 471 review: a mark whose write failed, or one read while the switch 
   const puts = box.calls.filter(c => c[0] === 'PUT').length;
   f.env._now = NOW + 62e3; f.chanReadAt('general'); await settle();
   assert.equal(box.calls.filter(c => c[0] === 'PUT').length, puts, 'nothing more once the box has it');
-  // Read with the switch off, then turned on: the mark goes up.
-  const box2 = fakeBox(), g = await syncDevice(box2, {}, false);
+  // Read while the box had no read sync yet (Channels just turned on, the service not caught up), then it answers:
+  // the mark goes up.
+  const box2 = fakeBox({ on: false }), g = await syncDevice(box2);
   g.openChannel(g.w, '__general__'); readToEnd(g, rows); await settle();
-  assert.deepEqual(box2.calls, [], 'switch off: nothing sent');
-  g.env.document.documentElement.dataset.tweaks += ' wizard/channel-read-sync';
+  assert.deepEqual(box2.calls.map(c => c[0]), ['GET'], 'the box said 404: nothing sent');
+  box2.on = true; g.env.LIVE.chanReads.fresh();
   g.chanReadAt('general'); await settle(); await settle(); g.chanReadAt('general'); await settle();
   assert.equal(box2.at.general, NOW - H);
 });
@@ -1649,7 +1653,7 @@ test('issue 471 review: a mark whose write failed, or one read while the switch 
 // wizard-ux issue 1317: Mark done (switch wizard/mark-done, with Channels on) in the post and row menu clears a thread's
 // amber Needs you and green New reply in the feed, Activity and the channel row, never archives or moves it, and a
 // later reply brings the markers back. The chats side here; the synced seen record (web/live.js) below.
-const MD_ON = 'wizard/desktop-chats wizard/chat-channels wizard/mark-done';
+const MD_ON = 'wizard/desktop-chats wizard/chat-channels'; // Mark done comes with Channels (issue 1358)
 const realAttOf = src.match(/\n  const attOf = (s => [^\n]+);\n/)[1];
 function doneFixture(opts = {}) {
   const f = fixture({ marksAt: readTo(2.5), ...opts });
@@ -1669,16 +1673,14 @@ function doneFixture(opts = {}) {
 }
 const lineOf = (f, rows, id) => f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes(`data-chchan="${id}"`));
 
-test('issue 1317: Mark done is offered only with its switch and Channels on, on a settled thread not already handled', () => {
+test('issue 1317: Mark done is offered only with Channels on, on a settled thread not already handled', () => {
   const s = row('b', 2, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() });
   const f = doneFixture({ sessions: { b: s } });
-  assert.equal(f.canMarkDone(s), true);
-  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/chat-channels';
-  assert.equal(f.canMarkDone(s), false, 'switch off: no menu item');
-  assert.equal(f.markDone('w', 'b'), false, 'and the action does nothing');
-  assert.equal(f.attOf(s)?.state, 'needs_you', 'switch off: the status is untouched');
+  assert.equal(f.canMarkDone(s), true, 'Channels alone bring Mark done (issue 1358: no wizard/mark-done switch any more)');
   f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/mark-done';
-  assert.equal(f.canMarkDone(s), false, 'Channels off: no menu item either');
+  assert.equal(f.canMarkDone(s), false, 'Channels off: no menu item, also with the old retired id saved');
+  assert.equal(f.markDone('w', 'b'), false, 'and the action does nothing');
+  assert.equal(f.attOf(s)?.state, 'needs_you', 'Channels off: the status is untouched');
   f.env.document.documentElement.dataset.tweaks = MD_ON;
   assert.equal(f.canMarkDone({ ...s, status: 'running' }), false, 'a working thread');
   assert.equal(f.canMarkDone({ ...s, archived: true }), false, 'an archived thread');
@@ -1748,9 +1750,9 @@ test('issue 1317: Mark channel read moves the channel\'s read point to now and c
   const launch = lineOf(f, rows, 'launch');
   assert.doesNotMatch(launch, /^ unread"|ch-chan-dot new/, 'no green');
   assert.match(launch, /aria-label="Needs you"/, 'amber is cleared only per thread');
-  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/chat-channels';
-  f.openChannelSheet('w', 'launch');
-  assert.doesNotMatch(f.sheets.at(-1), /data-rschread/, 'switch off: not offered');
+  assert.equal(vm.runInContext('markDoneOn', f.env)(), true, 'Channels alone offer it (issue 1358)');
+  f.env.document.documentElement.dataset.tweaks = CH_OFF;
+  assert.equal(vm.runInContext('markDoneOn', f.env)(), false, 'Channels off: not offered');
 });
 
 // The synced half: the real seen record writer in web/live.js (LIVE.markHandled / LIVE.handled).
@@ -1814,7 +1816,8 @@ test('issue 1317: a second device gets the handled mark through the seen record;
 // whose status line said needs_you gets the feed's amber Needs you line above its bubble, with Mark done beside it. It
 // clears on Mark done, on Reply to that message, or when the agent's next status line drops the ask; a plain owner
 // message never clears it. One marker state (attOf), so the thread, feed, Activity and channel line agree.
-const NT_ON = 'wizard/desktop-chats wizard/chat-channels wizard/needs-you-in-thread';
+const NT_ON = 'wizard/desktop-chats wizard/chat-channels'; // Needs you in the thread comes with Channels (issue 1358)
+const CH_OFF = 'wizard/desktop-chats';
 function needsFixture(opts = {}) {
   const f = doneFixture(opts);
   f.env.document.documentElement.dataset.tweaks = NT_ON;
@@ -1827,15 +1830,13 @@ const askRow = (sid, extra = {}) => row(sid, 2, { fresh: true, messageCount: 4, 
 const turnsOf = (...ats) => ats.map(([who, at]) => who === 'u' ? { u: { text: 'q', at }, a: null } : { u: null, a: { text: 'a', at } });
 const KINDS_1331 = [['main', '', 'launch', 'b'], ['host-profile', 'host', 'host-ops', 'h1'], ['container', 'container', 'box', 'k1'], ['restricted', 'restricted', 'locked', 'r1']];
 
-test('issue 1331: the Needs you line shows only with its switch and Channels on, and brings Mark done with it', () => {
+test('issue 1331: the Needs you line shows only with Channels on, and brings Mark done with it', () => {
   const s = askRow('b'), f = needsFixture({ sessions: { b: s } });
   const html = f.line(s);
   assert.match(html, /^<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"><\/i>Needs you<\/span><span class="ch-needs-ask">Pick the boot logo<\/span><button type="button" class="ch-needs-done" data-chmarkdone><svg[^]*<\/svg>Mark done<\/button><\/div>$/);
-  assert.equal(f.canMarkDone(s), true, 'Mark done is in the menus with this switch alone (no wizard/mark-done)');
-  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/chat-channels';
-  assert.equal(f.line(s), '', 'switch off: no line'); assert.equal(f.canMarkDone(s), false);
+  assert.equal(f.canMarkDone(s), true, 'Mark done is in the menus with Channels alone (issue 1358)');
   f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/needs-you-in-thread';
-  assert.equal(f.line(s), '', 'Channels off: no line either'); assert.equal(f.needsOn(), false);
+  assert.equal(f.line(s), '', 'Channels off: no line, also with the old retired id saved'); assert.equal(f.needsOn(), false); assert.equal(f.canMarkDone(s), false);
   f.env.document.documentElement.dataset.tweaks = NT_ON;
   assert.equal(f.line({ ...s, attention: { state: 'check', ask: 'See it' } }), '', 'Your call is not Needs you');
   assert.equal(f.line({ ...s, attention: null }), '', 'no ask: nothing');
@@ -1919,9 +1920,9 @@ test('issue 1331: Reply on the Needs you message clears it; a plain owner messag
     assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000, message_id: '9' } }), true, kind + ': Reply on that message');
     assert.equal(f.mark(sid, s, turns).html, '', kind + ': cleared'); assert.equal(f.attOf(s), null);
     assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), false, kind + ': nothing left to clear');
-    f.env.document.documentElement.dataset.tweaks = MD_ON;
+    f.env.document.documentElement.dataset.tweaks = CH_OFF;
     s.lastAssistantAt = new Date(NOW).toISOString(); f.mark(sid, s, turns);
-    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), false, kind + ': switch off: Reply clears nothing');
+    assert.equal(f.replied(sid, { quote: { role: 'assistant', at: 4000 } }), false, kind + ': Channels off: Reply clears nothing');
   }
 });
 
@@ -1989,20 +1990,19 @@ test('issue 1331: Reply on any message is standard for the main agent; the Threa
   const f = needsFixture();
   assert.equal(f.replyStd(''), true); assert.equal(f.replyStd('hermes'), true);
   for (const a of ['host', 'container', 'restricted']) assert.equal(f.replyStd(a), false, a + ': as with the tracker, the main agent only');
-  f.env.document.documentElement.dataset.tweaks = MD_ON; assert.equal(f.replyStd(''), false, 'switch off');
+  f.env.document.documentElement.dataset.tweaks = CH_OFF; assert.equal(f.replyStd(''), false, 'Channels off');
   // msgIds / quoteBtn follow the switch too (turnHtml's tt says which agent).
   const lines = src.split('\n'), pick = t => lines.find(l => l.includes(t));
   const c = vm.createContext({ esc: String, isFinite, WosThreadTracker: { on: () => false }, needsThreadOn: () => true });
   vm.runInContext(pick('const msgIds =') + '\n' + pick('const quoteBtn =') + '\nthis.f = { msgIds, quoteBtn };', c);
   assert.match(c.f.quoteBtn(true), /data-mquote/); assert.match(c.f.msgIds({ id: 4, at: 5 }), /data-mid="4" data-mat="5"/);
   assert.equal(c.f.quoteBtn(false), '', 'another agent\'s bubbles: none');
-  // The tracker itself is off while this switch and Channels are on (strip, dropdown, chats-list dots).
+  // The tracker itself is off while Channels are on (strip, dropdown, chats-list dots; issue 1358: no separate switch).
   const tt = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8').split('\n');
   const onOf = tweaks => { const x = vm.createContext({ document: { documentElement: { dataset: { tweaks } } } }); vm.runInContext(tt.find(l => l.includes("const ID = 'wizard/thread-tracker'")) + '\n' + tt.find(l => l.includes('const RETIRED_BY')) + '\n' + tt.find(l => l.includes('const on = ()')) + '\nthis.on = on;', x); return x.on(); };
   assert.equal(onOf('wizard/thread-tracker'), true);
-  assert.equal(onOf('wizard/thread-tracker wizard/chat-channels'), true);
-  assert.equal(onOf('wizard/thread-tracker wizard/needs-you-in-thread'), true, 'without Channels the switch does nothing');
-  assert.equal(onOf('wizard/thread-tracker wizard/chat-channels wizard/needs-you-in-thread'), false, 'retired');
+  assert.equal(onOf('wizard/thread-tracker wizard/needs-you-in-thread'), true, 'the old retired id alone does nothing');
+  assert.equal(onOf('wizard/thread-tracker wizard/chat-channels'), false, 'retired by Channels alone');
   // Its Reply and the thread's Mark done are handled by Chats.
   assert.match(src, /if \(typeof replyStd === 'function' && replyStd\(LIVE\.agentOf && w\.thread \? LIVE\.agentOf\(w\.thread\) : ''\)\) \{ const mq = e\.target\.closest\('\[data-mquote\]'\); if \(mq\) \{ quoteMessage\(w, mq\.closest\('\.msg'\)\); return true; \} \}/);
   assert.match(src, /if \(e\.target\.closest\('\[data-chmarkdone\]'\) && w\.thread\) \{ markDone\(id, w\.thread, true\); return true; \}/);
@@ -2010,8 +2010,10 @@ test('issue 1331: Reply on any message is standard for the main agent; the Threa
 });
 
 test('issue 1331: Archive turns quiet; Mark done is the strong button, only while a Needs you is open', () => {
-  const css = readFileSync(new URL('../web/tweaks/wizard/needs-you-in-thread/tweak.css', import.meta.url), 'utf8');
-  const S = 'html[data-tweaks~="wizard/needs-you-in-thread"][data-tweaks~="wizard/chat-channels"]';
+  // Moved into the Channels package (issue 1358); the rules come after its Needs you comment.
+  const all = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  const css = all.slice(all.indexOf('/* Needs you in the thread (wizard-ux issue 1331'));
+  const S = 'html[data-tweaks~="wizard/chat-channels"]';
   assert.ok(css.includes(S + ' .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent;'), 'Archive: neutral ink, no accent fill');
   assert.match(css, /\.ch-tacts button\.ch-tact-md \{[^}]*background: var\(--wz-accent\); color: var\(--wz-base\);/, 'Mark done: the accent fill');
   for (const rule of css.split('\n').filter(l => l.includes('{'))) assert.ok(rule.startsWith(S), 'scoped: ' + rule.slice(0, 60));
@@ -2021,7 +2023,8 @@ test('issue 1331: Archive turns quiet; Mark done is the strong button, only whil
   assert.ok(vm.runInContext('needsAsk', f.env)(s) && f.canMarkDone(s), 'shown on an open Needs you');
   assert.equal(vm.runInContext('needsAsk', f.env)({ ...s, attention: { state: 'fyi', ask: 'x' } }), null, 'nothing prominent otherwise');
   const cat = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
-  assert.ok(cat.tweaks.includes('wizard/needs-you-in-thread') && !cat.defaults.includes('wizard/needs-you-in-thread'), 'listed, off by default');
+  assert.ok(cat.tweaks.includes('wizard/chat-channels') && !cat.defaults.includes('wizard/chat-channels'), 'Channels listed, off by default');
+  for (const gone of ['wizard/needs-you-in-thread', 'wizard/mark-done', 'wizard/channel-read-sync']) assert.ok(!cat.tweaks.includes(gone), gone + ': one visible toggle (issue 1358)');
 });
 
 /* Issue 1336: Activity as a short what-needs-me list, behind the same switch. The real Channels block helpers (Needs you,
@@ -2181,4 +2184,25 @@ test('issue 1336 (Codex P2): Undo waits for the archive still in flight, then re
   restoreOk = false; order.length = 0;
   assert.equal(await actFn(f, 'actRestore')('b', Promise.reject(new Error('offline'))), false, 'a failed archive still lets Undo try');
   assert.deepEqual(order, ['restore:b', 'paint']); assert.equal(f.toasts.at(-1), 'Couldn’t undo · still archived');
+});
+
+// wizard-ux issue 1358: one Channels switch. Right after Channels turn on, Chats asks the box again a few times (the
+// Agent Service reads the same switch from the synced Look file); turning them off asks for nothing.
+test('issue 1358: turning Channels on re-reads the box a few times; turning them off reads nothing', () => {
+  const a = liveSrc.indexOf('  /* One Channels switch (wizard-ux issue 1358)'), b = liveSrc.indexOf("  try { addEventListener('focus'", a);
+  assert.ok(a > 0 && b > a);
+  const timers = [], calls = [], listeners = {};
+  const L = { chanStore: { fresh: () => calls.push('store.fresh'), pull: () => calls.push('store.pull') }, chanReads: { fresh: () => calls.push('reads.fresh'), pull: () => calls.push('reads.pull') }, refresh: () => { calls.push('refresh'); return Promise.resolve(); } };
+  const ctx = vm.createContext({ L, Promise, window: { addEventListener: (n, fn) => { listeners[n] = fn; } },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length - 1; }, clearTimeout: i => { if (timers[i]) timers[i].live = false; } });
+  vm.runInContext(liveSrc.slice(a, b), ctx);
+  const flip = (id, on) => listeners['wos:tweak-choice']({ detail: { id, on } });
+  flip('wizard/desktop-chats', true);
+  assert.equal(timers.length, 0, 'another switch: nothing');
+  flip('wizard/chat-channels', true);
+  assert.deepEqual(timers.map(t => t.ms), [1500, 5000, 12000]);
+  timers[0].fn();
+  assert.deepEqual(calls, ['store.fresh', 'store.pull', 'reads.fresh', 'reads.pull', 'refresh']);
+  flip('wizard/chat-channels', false);
+  assert.equal(timers.filter(t => t.live).length, 0, 'off: pending re-reads are cancelled and none are added');
 });
