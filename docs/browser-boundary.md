@@ -65,6 +65,16 @@ On:
   no longer follows the page's own link clicks or title. Hidden voice-command frames (`core/app-services.js`) are not
   loaded at all, so apps' voice commands are off while the boundary is on. Proof: `tests/qa-browser-boundary-other-frames.cjs`
   (real Chromium) and `tests/browser-boundary-other-frames.test.mjs`.
+- The shell's own pages in an app window (Store, Agents, Setup: `/wizard-os-home/` or `/wizard-ux/` +
+  `store|agents|setup/`) are shell code, not apps. `WizBrowserBoundary.frameAttributes(url)` gives them no sandbox,
+  so they stay same-origin, and each loads `core/shell-token.js` first: in a frame it asks the top-level shell
+  (`WizShellBoundary.armFrame(window)`) to wrap that page's `fetch`/`XMLHttpRequest` the same way, so their owner
+  calls carry the token without the token ever being written into the page. `armFrame` arms only a same-origin frame
+  under this top-level shell whose path is one of those pages; a sandboxed app frame cannot reach it, and any
+  same-origin frame could already call the shell's own `fetch`, so it opens nothing new. Backstop: if such a window
+  ever lands on another same-origin page (none of these pages navigates its frame today), it is reloaded sandboxed
+  and attached like any app frame. Proof: `tests/qa-browser-boundary-shell-frames.cjs` (real Store, Agents and
+  Setup pages in Chromium) and the unit tests in `tests/shell-token.test.mjs` / `tests/browser-boundary-frames.test.mjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -75,9 +85,10 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   `ready` is answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
-  Shell pages in frames (Welcome, Settings embeds, Store) and the Troubleshooter recovery frame are not sandboxed yet:
-  they need owner calls through the shell first. Pages in the link sheet lose their own storage and pop-ups.
+  The Welcome sign-in/importer frames, the Settings Connections embed (both load app pages) and the Troubleshooter
+  recovery frame are not sandboxed yet. Store, Agents or Setup opened as a top-level tab (not in a Wizard window) or
+  as a pinned single app get no token. Pages in the link sheet lose their own storage and pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385).
-- Shell pages that run inside a frame (Store, Agents, Setup) send no token; `<img>`/`<video>` loads of
-  `/wizard/attachments/…` cannot carry a header.
+- `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly
+  those browser-marked loads through without the token (wizard-agent-service#479).
 - Native bridges (Android/Mac) still reach every frame (wizard-os#387).

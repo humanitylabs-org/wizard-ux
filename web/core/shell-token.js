@@ -7,8 +7,9 @@
  * Manager Store/Settings listener on this origin. App paths (/notes/, /troubleshoot/, …) never get it, so no app
  * backend can learn it. Off (no token in the page, the default): the meta is empty and nothing is wrapped.
  *
- * The token only becomes a real boundary once app frames are sandboxed (next slice): until then a same-origin app
- * frame can still reach into the shell. Never turn the box switch on alone (wizard-app-manager docs/browser-boundary.md).
+ * The shell's own pages that run in a frame (Store, Agents, Setup) load this script too: the top-level shell arms
+ * their fetch/XHR the same way (armFrame), because a frame load never carries the token. App frames are sandboxed
+ * under the boundary (core/browser-boundary.js), so they can't reach armFrame. See docs/browser-boundary.md.
  */
 (() => {
   'use strict';
@@ -22,50 +23,79 @@
   // answer changes it: `off` is the shipped value nginx leaves when the switch is off; an empty value (a frame, a
   // warm-up read, the offline copy on a box that is on) leaves it as it is.
   const remember = on => { try { if (on) localStorage.setItem(MARK, '1'); else localStorage.removeItem(MARK); } catch (_) {} };
+  // The shell's own pages that run in a frame (Store, Agents, Setup). They get no token from nginx (a frame load
+  // never does); the top-level shell arms them instead (armFrame below). Same list as core/browser-boundary.js.
+  const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup)\/(?:index\.html)?$/;
   if (token === 'off') { remember(false); return; }
+  let framed = true;
+  try { framed = window.top !== window; } catch (_) { framed = true; }
+  if (framed) {
+    // A shell page in a frame: ask the top-level shell (same origin, so it is reachable) to send this page's owner
+    // calls with the token. A sandboxed (opaque) frame cannot reach `top` at all, so an app page never gets here.
+    try { window.top.WizShellBoundary?.armFrame?.(window); } catch (_) {}
+    return;
+  }
   if (!/^[a-f0-9]{64}$/.test(token)) return;
-  // Only the top-level shell document. A shell page loaded in a frame never gets a token from nginx anyway.
-  try { if (window.top !== window) return; } catch (_) { return; }
   remember(true);
   const HEADER = 'X-Wizard-Shell-Token';
   // Owner routes on this origin: the Agent Service (everything it serves that is not a static shell file) and the
   // App Manager listener mounted beside the shell.
   const OWNER = /^\/(?:wizard\/|api\/|v1\/|wizard-os-home\/(?:api|store-install)\/|wizard-ux\/(?:api|store-install)\/)/;
-  const owner = url => {
+  const owner = (url, base) => {
     try {
-      const u = new URL(String(url), location.href);
+      const u = new URL(String(url), base);
       return u.origin === location.origin && OWNER.test(u.pathname) && !u.pathname.includes('//');
     } catch (_) { return false; }
   };
-  const native = window.fetch;
-  if (typeof native === 'function') {
-    const wrapped = function fetch(input, init) {
-      try {
-        const isRequest = typeof Request === 'function' && input instanceof Request;
-        if (owner(isRequest ? input.url : input)) {
-          const headers = new Headers((init && init.headers) || (isRequest ? input.headers : undefined));
-          if (!headers.has(HEADER)) {
-            headers.set(HEADER, token);
-            const next = { ...(init || {}), headers };
-            return isRequest ? native.call(this, new Request(input, next)) : native.call(this, input, next);
+  // Wraps fetch and XMLHttpRequest of one window: this shell page, or one of its own pages in a frame.
+  const armed = new WeakSet();
+  function wrap(win) {
+    if (armed.has(win)) return;
+    armed.add(win);
+    const base = () => { try { return win.location.href; } catch (_) { return location.href; } };
+    const native = win.fetch;
+    if (typeof native === 'function') {
+      const W = win.Headers || Headers, R = win.Request || (typeof Request === 'function' ? Request : null);
+      const wrapped = function fetch(input, init) {
+        try {
+          const isRequest = !!R && input instanceof R;
+          if (owner(isRequest ? input.url : input, base())) {
+            const headers = new W((init && init.headers) || (isRequest ? input.headers : undefined));
+            if (!headers.has(HEADER)) {
+              headers.set(HEADER, token);
+              const next = { ...(init || {}), headers };
+              return isRequest ? native.call(this, new R(input, next)) : native.call(this, input, next);
+            }
           }
-        }
-      } catch (_) { /* fall through: the call goes out unchanged and the server refuses it */ }
-      return native.call(this, input, init);
-    };
-    window.fetch = wrapped;
+        } catch (_) { /* fall through: the call goes out unchanged and the server refuses it */ }
+        return native.call(this, input, init);
+      };
+      win.fetch = wrapped;
+    }
+    const XHR = win.XMLHttpRequest && win.XMLHttpRequest.prototype;
+    if (XHR && typeof XHR.open === 'function' && typeof XHR.send === 'function') {
+      const open = XHR.open, send = XHR.send, marked = new WeakSet();
+      XHR.open = function (method, url, ...rest) {
+        if (owner(url, base())) marked.add(this); else marked.delete(this);
+        return open.call(this, method, url, ...rest);
+      };
+      XHR.send = function (...args) {
+        if (marked.has(this)) { try { this.setRequestHeader(HEADER, token); } catch (_) {} }
+        return send.apply(this, args);
+      };
+    }
   }
-  const XHR = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
-  if (XHR && typeof XHR.open === 'function' && typeof XHR.send === 'function') {
-    const open = XHR.open, send = XHR.send, marked = new WeakSet();
-    XHR.open = function (method, url, ...rest) {
-      if (owner(url)) marked.add(this); else marked.delete(this);
-      return open.call(this, method, url, ...rest);
-    };
-    XHR.send = function (...args) {
-      if (marked.has(this)) { try { this.setRequestHeader(HEADER, token); } catch (_) {} }
-      return send.apply(this, args);
-    };
+  wrap(window);
+  // One of the shell's own pages (SHELL_PAGE) in a frame below this shell asks to be armed. Only a same-origin frame
+  // can reach this function, and a same-origin frame can already call this page's own fetch, so this gives nothing
+  // new to a frame that could call it; app frames are sandboxed (opaque) under the boundary and never reach it.
+  function armFrame(win) {
+    try {
+      if (!win || win === window || win.top !== window) return false;
+      if (win.location.origin !== location.origin || !SHELL_PAGE.test(win.location.pathname)) return false;
+      wrap(win);
+      return true;
+    } catch (_) { return false; }
   }
-  window.WizShellBoundary = Object.freeze({ on: true, header: HEADER });
+  window.WizShellBoundary = Object.freeze({ on: true, header: HEADER, armFrame });
 })();
