@@ -316,7 +316,7 @@ export default function desktop(api) {
   const modeBars = [];
   function windowMode(mode, slot = panes.get().focus) {
     // narrow desktop (ONE): one app at a time, no arrangements; the saved one stays as it is for the wide window
-    if (one()) return;
+    if (typeof one === 'function' && one()) return;
     // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
     flip([dockEl, pane?.el, secondEl], () => panes.set({ mode, focus: slot }));
   }
