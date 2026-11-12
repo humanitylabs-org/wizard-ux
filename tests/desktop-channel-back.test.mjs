@@ -89,7 +89,7 @@ test('closeChat: channel steps keep the view mode; a plain chat still goes back 
   const run = ({ thread, fromFeed = false, mode = 'pair' }) => {
     const c = { FEED: '__feed__', docked: true, chatThread: thread, noteWant: false, draftWant: false, calls: [], mode, feedFocus: null, pane: null,
       panes: { get: () => ({ mode: c.mode }) }, feedBack: () => (fromFeed ? { id: 'launch', name: 'Launch' } : null),
-      windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
+      windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'), feedGone: () => {},
       api: { sessions: { channelBack: () => { c.calls.push('channelBack'); return true; }, newChat: () => c.calls.push('newChat') } } };
     vm.createContext(c); vm.runInContext(`${src}\nthis.ok = closeChat(); this.after = chatThread;`, c);
     return c;
@@ -109,6 +109,7 @@ test('closeChat: channel steps keep the view mode; a plain chat still goes back 
 // chat slot takes the focus), and closing the feed gives the front back to the app, in the same view.
 test('feedOpened brings the feed to the front; closing the feed gives it back to the app', () => {
   const opened = between(js, '  function feedOpened(open) {', "  api.listen(globalThis, 'wos:channel-feed'");
+  assert.match(opened, /function feedGone\(\)/, 'the hand-back helper sits with feedOpened');
   const close = between(js, '  function closeChat() {', '  function setWide(on) {');
   const desk = ({ mode = 'centre', focus = 'app', app = 'pages', fromFeed = false } = {}) => {
     const c = { FEED: '__feed__', docked: true, chatThread: null, noteWant: false, draftWant: false, calls: [], mode, focus, pane: app ? { id: app } : null,
@@ -117,7 +118,7 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
       windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
       api: { route: () => ({ view: 'thread', thread: '__new__' }), sessions: { channelBack: () => true, newChat: () => c.calls.push('newChat') } } };
     vm.createContext(c);
-    vm.runInContext(`${opened}\n${close}\nthis.open = () => feedOpened({ id: 'launch' }); this.close = () => closeChat();
+    vm.runInContext(`${opened}\n${close}\nthis.open = () => feedOpened({ id: 'launch' }); this.closeEvent = () => feedOpened(null); this.close = () => closeChat();
       Object.defineProperty(this, 'thread', { get: () => chatThread, set: v => { chatThread = v; } });`, c);
     return c;
   };
@@ -137,6 +138,13 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
   viaPost.thread = '__feed__'; viaPost.close(); assert.equal(viaPost.focus, 'app', 'then the feed closed: the app');
   // a plain chat closing forgets the feed's app (no stale hand-back later)
   post.close(); post.focus = 'chats'; post.thread = '__feed__'; post.close(); assert.equal(post.focus, 'chats');
+  // the feed's own Back to channels (wos:channel-feed with no channel open): the app gets the front back, as on Esc
+  const own = desk(); own.open(); assert.equal(own.focus, 'chats'); own.closeEvent();
+  assert.equal(own.focus, 'app', 'Back to channels gives the front back'); assert.equal(own.mode, 'centre');
+  // opening a chat from the sidebar, the rail or ⌥↓ forgets the feed's app: that chat keeps the front
+  for (const re of [/noteWant = !!s\.note; feedFocus = null; stepAt = s\.id;/, /feedFocus = null; railLast = key; stepAt = id;/, /feedFocus = null; stepAt = nx\.id;/]) assert.match(js, re);
+  // the feed gone on a repaint (its channel closed while it was in the column): the same hand-back
+  assert.match(js, /else if \(chatThread === FEED \? !feedOn\(\) : !chatThread\) \{ if \(chatThread === FEED\) feedGone\(\); chatThread = behindThread\(\); \}/);
   // no app open: nothing to give the front back to
   const bare = desk({ app: '' }); bare.pane = null; bare.open(); bare.close(); assert.equal(bare.focus, 'chats');
 });

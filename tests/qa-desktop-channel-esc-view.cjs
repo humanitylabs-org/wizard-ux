@@ -144,6 +144,15 @@ const report = { origin, web, cases: [] };
         assert.equal(entry.firstEsc.view, view, 'the first Esc keeps the view');
         assert.deepEqual(entry.secondEsc, entry.start, 'the second Esc leaves the desk as it was before the feed opened');
         assert.equal(page.url(), startUrl, 'Esc never leaves Wizard');
+        if (view === 'centre') {
+          // the feed's own Back to channels gives the front back to the app too (Codex, PR 1346)
+          await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').click();
+          await vis('.aad-feed .ch-post-b[data-chopen="qa-p12"]').waitFor({ timeout: 8000 });
+          // (the button is hidden in the AI apps column, whose header has ✕; the click still runs the same channelBack)
+          assert.ok(await page.evaluate(() => { const b = document.querySelector('.aad-feed [data-chchanback]'); b?.click(); return !!b; }), 'the feed has its Back');
+          await nap(1200);
+          entry.ownBack = await layout(); assert.deepEqual(entry.ownBack, entry.start, 'Back to channels leaves the desk as it was');
+        }
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); }
