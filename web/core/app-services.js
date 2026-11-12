@@ -111,8 +111,11 @@
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
     frames.set(frame, st); frame.addEventListener('load', load);
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
+    // Browser owner boundary (wizard-os#133): a sandboxed frame gets its Back/appearance/field channel. Every legacy
+    // service below fails closed for it on its own (valid() cannot read an opaque document).
+    const detachBoundary = window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary.attach(frame) : null;
     const detachServices = st.detach;
-    st.detach = () => { detachReading?.(); detachServices(); queueSweep(); };
+    st.detach = () => { detachReading?.(); detachBoundary?.(); detachServices(); queueSweep(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});
@@ -483,8 +486,10 @@
       try { st.frame.contentWindow.postMessage({ type: 'wizard:app:share', version: VERSION }, ORIGIN); } catch (_) {}
     }
   });
-  function back(frame) {
+  // onRoot: the shell's own next step, run later when a sandboxed app (browser boundary) answers that it is at its root.
+  function back(frame, onRoot) {
     const st = frames.get(frame); if (!st || !registered(st) || !frame.isConnected) return 'notReady';
+    if (window.WizBrowserBoundary?.owns(frame)) return window.WizBrowserBoundary.back(frame, onRoot);
     if (st.url.origin !== ORIGIN) {
       // A registered off-origin frame can only be asked to navigate, never access resources.
       if (st.pendingBack) return 'stay';

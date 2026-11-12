@@ -1571,7 +1571,7 @@
   function renderFrameCore(w, a) {
     if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
+    return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes() : ''} ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
@@ -1647,6 +1647,8 @@
         try { if (f.contentWindow.location.href !== 'about:blank') unveil(); } catch (e) { unveil(); }
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
         window.__frameLog = (window.__frameLog || []).concat(why).slice(-40); // bounded: the shell may run for weeks
+        // Browser boundary: a sandboxed app is never readable, so unreadable is not refused. It talks by postMessage.
+        if (window.WizBrowserBoundary?.enabled && f.hasAttribute('sandbox')) { wrap?.classList.remove('blocked'); return; }
         if (why === 'about:blank') {
           // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
           // popstate fires). That press belongs to the shell: take the step and restore the app in place.
@@ -3875,7 +3877,8 @@
   window.WosBack = Object.freeze({ names: phoneBack.names, escape(e) { e.preventDefault?.(); e.stopImmediatePropagation?.(); if (!e.repeat && !e.isComposing) return onBack(); } });
   function hostedBack(f) {
     const frame = winEl(f.id)?.querySelector('iframe');
-    const result = window.WizAppServices?.back(frame);
+    // A sandboxed app (browser boundary) answers later; at its root the shell's next Back step runs then.
+    const result = window.WizAppServices?.back(frame, () => backStep(f.id));
     return result || 'notReady';
   }
   function backStep(skipHosted, { outside = false } = {}) {
