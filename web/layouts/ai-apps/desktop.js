@@ -623,8 +623,9 @@ export default function desktop(api) {
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
   const settings = () => { unpeek(); api.desk.settings(); };
   // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
-  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
-  // + / ⌥N on the Channels list with no channel open start a new channel (wizard-ux issue 1308).
+  // The sidebar's tab decides (wizard-ux issues 1308, 1310): Activity, a blank new chat (a feed left in the column closes);
+  // Channels with a channel open, its box; the Channels list with none open, + / ⌥N start a new channel.
+  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelView?.() !== 'activity' && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
   const plus = () => { if (!feedOn() && api.sessions.channelNew?.()) { closeMenu(); return; } newOrPost(); };
   api.listen(newBtn, 'click', plus); api.listen(rNew, 'click', plus);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);

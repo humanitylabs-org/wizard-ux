@@ -1,7 +1,8 @@
-// Channels (wizard/chat-channels): + New channel (wizard-ux issue 1308). James, 12 Nov 2026: "When I hit the plus
-// button, while I'm on the channel view, I guess I would intuitively expect this to create a new channel or maybe at the
-// bottom of the channels list we can have a different color that says new channel or add channel". The shipped source
-// runs here; only the shell around it is stubbed.
+// Channels (wizard/chat-channels): + New channel (wizard-ux issue 1308), the sidebar tab deciding + / ⌥N / the voice
+// key (issue 1310) and a desktop New chat staying open after its send (issue 1311). James, 12 Nov 2026: "When I hit the
+// plus button, while I'm on the channel view, I guess I would intuitively expect this to create a new channel"; "when
+// I'm in the activity view and I hit the plus button … I would expect it to create a new thread"; "when I hit send …
+// it closed the chat and just showed my background". The shipped source runs here; only the shell around it is stubbed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -103,25 +104,57 @@ test('1308: + / ⌥N on the Channels list (AI apps sidebar or a classic Chats wi
   assert.equal(shellNew({ owns: false, focused: { id: 'w7', app: 'chats' }, open: { id: 'b' } }).chanNew(), false, 'classic with a channel open: its box (chanPost) instead');
   assert.equal(shellNew({ owns: false, focused: { id: 'a', app: 'frame' } }).chanNew(), false);
   assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| chanNew\(\) \|\| newChat\(\); \}\);/, '⌥N: channel box, else new channel, else New chat');
-  assert.match(desktop, /chatChannelNew: \(\) => chanNew\(\),/);
+  assert.match(desktop, /chatChannelNew: \(\) => chanNew\(\),\n    chatChannelView: \(\) => CHATS\.chanView\?\.\(\) \|\| '',/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /channelNew: \(\) => live\(\) \? !!shell\.chatChannelNew\?\.\(\) : false,/);
+  assert.match(host, /channelView: \(\) => live\(\) \? shell\.chatChannelView\?\.\(\) \|\| '' : '',/);
 });
 
-// --- the AI apps sidebar's + (layouts/ai-apps/desktop.js) ---
-function aiPlus({ feed = null, thread = null, post = true, made = true }) {
+// --- the AI apps sidebar's + (layouts/ai-apps/desktop.js): its tab decides ---
+function aiPlus({ view, feed = null, thread = null, post = true, made = true }) {
   const calls = [];
   const ctx = { calls, FEED: '__feed__', chatThread: thread, feedOn: () => feed, closeMenu: () => calls.push('closeMenu'), newChat: () => calls.push('newChat'),
-    api: { sessions: { channelPost: () => (calls.push('channelPost'), post), channelNew: () => (calls.push('channelNew'), made) } } };
+    api: { sessions: { channelView: () => view, channelPost: () => (calls.push('channelPost'), post), channelNew: () => (calls.push('channelNew'), made) } } };
   vm.createContext(ctx);
   vm.runInContext(cut(aad, '  const newOrPost = () =>', '  api.listen(newBtn') + '\nthis.plus = plus;', ctx);
   ctx.plus(); return calls;
 }
 
-test('1308: the AI apps + / ⌥N: a new channel on the Channels list, the channel\'s box with one open, else New chat', () => {
-  assert.deepEqual(aiPlus({}), ['channelNew', 'closeMenu'], 'Channels list, none open: a new channel');
-  assert.deepEqual(aiPlus({ feed: { id: '__general__' }, thread: '__feed__' }), ['channelPost', 'closeMenu'], 'a channel open: its box (issue 1291)');
-  assert.deepEqual(aiPlus({ made: false }), ['channelNew', 'newChat'], 'not on the Channels list: New chat');
-  assert.match(aad, /api\.listen\(newBtn, 'click', plus\); api\.listen\(rNew, 'click', plus\);/);
-  assert.match(aad, /if \(code === 'KeyN' && !sh\) return once\(plus\);/);
+test('1310: the AI apps + follows the sidebar tab, not a feed left in the main column', () => {
+  const FEED = '__feed__', general = { id: '__general__', name: 'General' };
+  assert.deepEqual(aiPlus({ view: 'activity', feed: general, thread: FEED }), ['newChat'], 'Activity: a blank new chat (newChat closes the feed), never General\'s box');
+  assert.deepEqual(aiPlus({ view: 'channels', feed: general, thread: FEED }), ['channelPost', 'closeMenu'], 'Channels › General: its box');
+  assert.deepEqual(aiPlus({ view: 'channels' }), ['channelNew', 'closeMenu'], 'Channels list, none open: a new channel');
+  assert.deepEqual(aiPlus({ view: 'activity', made: false }), ['channelNew', 'newChat'], 'Activity with nothing open: New chat');
+  assert.match(aad, /const newChat = \(\) => \{[^\n]*if \(chatThread === FEED \|\| feedOn\(\)\) \{ chatThread = null; api\.sessions\.channelBack\?\.\(\); \}/, 'newChat closes the leftover feed first');
+});
+
+// --- the voice key with a leftover feed (desktop.js chanFront) ---
+test('1310: the voice key on Activity starts a new chat even with a feed left in the column; on Channels it posts there', () => {
+  const front = cut(desktop, '  function chanFront() {', '  // A voice take into the channel in front');
+  const run = view => {
+    const ctx = { focused: () => ({ id: 'main', app: 'chats', thread: '__new__' }), feedBase: { id: 'feed-1' }, feedOpen: () => ({ id: '__general__', name: 'General' }),
+      feedHost: { isConnected: true, dataset: { chats: 'feed-1::side' }, closest: () => null }, LIVE: { session: id => ({ id }) },
+      CHATS: { chanView: () => view, chanOpen: () => null, channelOf: () => '' } };
+    vm.createContext(ctx); vm.runInContext(front + '\nthis.chanFront = chanFront;', ctx);
+    return j(ctx.chanFront());
+  };
+  assert.equal(run('activity'), null, 'Activity: no channel in front');
+  assert.deepEqual(run('channels'), { wid: 'feed-1::side', sid: '__new__' });
+});
+
+// --- 1311: a desktop New chat stays open in its thread after its send ---
+test('1311: on the desktop a sent New chat stays open and follows its new thread (AI apps column and classic desks)', () => {
+  const src = cut(chats, '  function leaveAfterSend(', '  /* One send carries');
+  const run = keepNewOpen => {
+    const w = { id: 'w1', thread: '__new__' };
+    const ctx = { W: { w1: w }, hosted: new Map(), H: { keepThreadOpen: true, keepNewOpen }, keepThreadOpen: () => true, PHONE: () => false,
+      ch: () => ({ readNav: 0, trail: [] }), threadBack() {}, save() {}, openChat() {} };
+    vm.createContext(ctx); vm.runInContext(src + '\nthis.leaveAfterSend = leaveAfterSend;', ctx);
+    return { left: ctx.leaveAfterSend('w1', '__new__', true, 'typing'), thread: w.thread };
+  };
+  const host = desktop.match(/keepNewOpen: (.+),\n/)?.[1]; assert.ok(host, 'desktop host keepNewOpen');
+  assert.equal(host, '() => true', 'every desktop New chat, whether Home (AI apps panel mode) is open or not');
+  assert.deepEqual(run(vm.runInNewContext(host)), { left: false, thread: '__new__' }, 'no list hop: the column keeps the chat');
+  assert.match(chats, /if \(isNew && !left && !opts\.away && it\?\.sessionId && W\[wid\] === w && w\.thread === sid && c\.readNav === navAtSend\) openChat\(wid, it\.sessionId\);/, 'then it follows the new thread id');
 });
