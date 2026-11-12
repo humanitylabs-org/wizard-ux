@@ -1241,6 +1241,45 @@
     onCapture: d => boundaryCapture.notice(d), onReady: () => { boundaryCapture.hello(); if (boundaryStorage && window.WizBoundaryClient) boundaryStorage.ready(window.WizBoundaryClient); }, keys: () => keyList(document), press: key => keyPress(key) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
+  /* The photo viewer and navigation under the boundary (WizardApp.media.view, WizardApp.nav.*): the shell can't be
+   * reached from this window, so each call goes to it as a request (app-services.js mediaView, navBack, threadOpen,
+   * contextDraft, on the same rules as for a same-origin app). These calls answer at once, as they always have, so the
+   * answer is true once the request is on its way; a refusal the shell sends back is only logged. */
+  const shellNav = () => opaque && !service && transportReady;
+  function shellAsk(op, args) {
+    request(op, args).then(v => { if (v !== true) console.warn('WizardApp ' + op + ': not opened'); }, e => console.warn('WizardApp ' + op, e?.message || e));
+    return true;
+  }
+  // Pictures: this host's own addresses go as they are; the page's own blob: pictures (its opaque origin's, which the shell
+  // can't read) go as their bytes. Anything else is left out, and its place kept so the tapped item stays the one shown.
+  function shellMedia(items, index) {
+    if (!Array.isArray(items)) return false;
+    let any = false;
+    const list = items.slice(0, 500).map(it => {
+      let u; try { u = new URL(String(it?.url || ''), location.href); } catch (_) { return {}; }
+      const o = { kind: it?.kind === 'video' ? 'video' : 'image', name: String(it?.name || '').slice(0, 200), ...(it?.mime ? { mime: String(it.mime).slice(0, 100) } : {}) };
+      if (u.protocol === 'blob:') { any = true; return fetch(u.href).then(r => r.blob()).then(blob => ({ ...o, blob }), () => ({})); }
+      if (!/^https?:$/.test(u.protocol) || u.origin !== location.origin) return {};
+      any = true; return { ...o, url: u.href };
+    });
+    if (!any) return false;
+    Promise.all(list).then(all => shellAsk('media.view', { items: all, index: Math.floor(+index) || 0 }));
+    return true;
+  }
+  function shellThread(id, opts) {
+    if (typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw new Error('Thread navigation unavailable');
+    const o = {}, r = opts?.reply;
+    if (r != null) o.reply = { key: String(r?.key || ''), title: r?.title == null ? undefined : String(r.title), message: r?.message == null ? undefined : String(r.message) };
+    if (opts?.agent != null) o.agent = typeof opts.agent === 'string' ? opts.agent : '';
+    if (opts?.draft != null) o.draft = typeof opts.draft === 'object' ? { text: opts.draft.text } : opts.draft;
+    return shellAsk('nav.openThread', { id, opts: o });
+  }
+  function shellDraft(data) {
+    if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw new Error('Invalid app context');
+    shellAsk('nav.openContextDraft', { id: data.id, title: data.title, message: data.message });
+    // The shell keeps the draft's own id; nothing is ever sent from here.
+    return Object.freeze({ kind: 'unsent-draft', id: null, sent: false });
+  }
   const localHolds = new Map();
   const notify = (set, value) => { for (const fn of set) try { fn(value); } catch (e) { console.warn('WizardApp subscriber', e); } };
   function request(op, args, timeout = 15000, onAdmitted) {
@@ -1806,14 +1845,15 @@
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true), onRefresh }),
-    nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, get threadDrafts() { return service?.nav?.threadDrafts === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
+    nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true || shellNav(); }, get threadDrafts() { return service?.nav?.threadDrafts === true || shellNav(); }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true || shellNav() && shellThread(id, opts),
       // Call after a finishing action (dismiss, archive, delete, save-and-close): returns the owner to the screen before the app.
-      back: () => { try { return service?.nav?.back?.() === true; } catch (_) { return false; } }, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
+      back: () => { try { return service?.nav?.back?.() === true || shellNav() && shellAsk('nav.back'); } catch (_) { return false; } }, openContextDraft: data => { if (shellNav()) return shellDraft(data); if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
     // Wizard's media viewer for the app's photos/videos ([{url, kind: 'image'|'video', name}], start index). Opened on
     // its own (no Wizard around it) the photo opens in a browser tab, which zooms natively.
     media: Object.freeze({ view: (items, index = 0) => {
       try { if (service?.media?.view) return service.media.view(items, index) === true; } catch (_) {}
+      if (shellNav()) return shellMedia(items, index);
       if (framed) return false;
       const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
       if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;

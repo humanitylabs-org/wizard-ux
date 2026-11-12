@@ -19,7 +19,7 @@ class El {
 }
 
 // A sandboxed app frame: its window can be addressed but never read (opaque origin).
-function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true, catalog } = {}) {
+function fixture({ id = 'morning-report', src, ready = true, boundary = true, win: extra = {}, front = () => true, catalog, attach: att = {} } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), counts = {}, taps = [], legacy = [];
   const win = new El('article'), bar = new El('header'); bar.className = 'wbar'; win.append(bar);
   const child = { get location() { throw new Error('SecurityError'); }, get document() { throw new Error('SecurityError'); }, postMessage: m => legacy.push(m) };
@@ -34,7 +34,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
     onReset(fn) { this.resets.add(fn); return () => this.resets.delete(fn); },
     ready: f => f === frame && B.readyNow,
     tool: (f, tid, value) => { taps.push({ f, tid, value }); return true; },
-    attach: () => () => {}, enabled: true, genNow: 1, gen: f => (f === frame ? B.genNow : null),
+    attach: () => () => {}, enabled: true, ownerRoute: u => /^\/(?:wizard|api|v1)\//.test(new URL(u).pathname), genNow: 1, gen: f => (f === frame ? B.genNow : null),
     notice: (f, kind, data) => { if (f !== frame || !B.readyNow) return false; notices.push({ kind, ...data }); return true; } };
   const shared = [], heard = [], sheets = [];
   // The shell's Send to <agent> sheet: records what it shows and whether it may still send when the owner taps Send.
@@ -47,7 +47,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
   const globalOn = {};
   vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, Headers, AbortController, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { globalOn[t] = (globalOn[t] || []).filter(x => x !== fn); }, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
-  const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: front });
+  const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: front, ...att });
   return { B, frame, bar, notices, emit: (t, detail) => { for (const fn of globalOn[t] || []) fn({ detail }); }, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
     load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
@@ -866,4 +866,111 @@ test('link.open: a window that is not verified, or a shell without its link shee
   assert.equal(followed.length, 0);
   const g = fixture();
   assert.equal(g.call('link.open', { href: 'https://example.com/' }), false);
+});
+
+// Slice 44: the shell's photo viewer and the app's navigation calls (WizardApp.media.view, WizardApp.nav.*).
+test('media.view: the window\'s own photos open in the shell viewer; another site, an owner route or a bad address is left out', () => {
+  const opened = [];
+  const WosChat = { viewer: { open: (items, i) => { opened.push({ items, i }); return true; } } };
+  const f = fixture({ win: { WosChat } });
+  assert.equal(f.call('media.view', { items: [
+    { url: 'https://example.com/x.jpg' }, // another site: left out
+    { url: 'photo/2.jpg', name: 'Two', kind: 'image' },
+    { url: '/wizard/hermes/api/media/secret.png' }, // an owner route: left out
+    { url: 'https://wizard.example/files-app/clip.mp4', kind: 'video' },
+    { url: 'javascript:alert(1)' }, { url: 'https://u:p@wizard.example/morning-report/p.jpg' }, {}, { url: '' }, { url: 42 }],
+    index: 3, base: 'https://wizard.example/morning-report/day/index.html' }), true);
+  assert.equal(opened.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(opened[0].items)), [
+    { url: 'https://wizard.example/morning-report/day/photo/2.jpg', kind: 'image', name: 'Two', mime: 'image/jpeg' },
+    { url: 'https://wizard.example/files-app/clip.mp4', kind: 'video', name: '', mime: 'video/mp4' }]);
+  assert.equal(opened[0].i, 1, 'the tapped item stays the one shown');
+  // A base outside the app is ignored: relative addresses resolve against the window's own app path.
+  f.call('media.view', { items: [{ url: 'a.jpg' }], base: 'https://wizard.example/other-app/' });
+  assert.equal(opened.at(-1).items[0].url, 'https://wizard.example/morning-report/a.jpg');
+  // Nothing safe to show, or not a list: nothing opens.
+  assert.equal(f.call('media.view', { items: [{ url: 'https://example.com/a.jpg' }] }), false);
+  assert.equal(f.call('media.view', { items: 'x' }), false);
+  assert.equal(opened.length, 2);
+});
+
+test('media.view: the page\'s own blob photos open under a shell blob: URL, revoked on the next view, a new document and when the window goes', () => {
+  const opened = [], made = [], revoked = [];
+  const WosChat = { viewer: { open: items => { opened.push(items); return true; } } };
+  const f = fixture({ win: { WosChat } });
+  const create = URL.createObjectURL, revoke = URL.revokeObjectURL;
+  URL.createObjectURL = b => { const u = 'blob:https://wizard.example/' + made.length; made.push(b); return u; };
+  URL.revokeObjectURL = u => revoked.push(u);
+  try {
+    const pic = new Blob(['x'], { type: 'image/png' });
+    assert.equal(f.call('media.view', { items: [{ blob: pic, name: 'p' }, { blob: 'not a blob' }, { blob: {} }] }), true);
+    assert.deepEqual([...opened[0].map(x => x.url)], ['blob:https://wizard.example/0']);
+    assert.equal(made[0], pic);
+    assert.deepEqual(revoked, []);
+    f.call('media.view', { items: [{ blob: pic }] });
+    assert.deepEqual(revoked, ['blob:https://wizard.example/0']);
+    // The viewer refused: the new URLs go at once, the shown ones stay.
+    WosChat.viewer.open = () => false;
+    assert.equal(f.call('media.view', { items: [{ blob: pic }] }), false);
+    assert.deepEqual(revoked, ['blob:https://wizard.example/0', 'blob:https://wizard.example/2']);
+    // A new document in the window (Codex P2): its pictures' shell copies go too.
+    WosChat.viewer.open = items => { opened.push(items); return true; };
+    f.call('media.view', { items: [{ blob: pic }] });
+    f.reset();
+    assert.deepEqual(revoked.at(-1), 'blob:https://wizard.example/3');
+    f.call('media.view', { items: [{ blob: pic }] });
+    f.detach();
+    assert.deepEqual(revoked.at(-1), 'blob:https://wizard.example/4');
+  } finally { URL.createObjectURL = create; URL.revokeObjectURL = revoke; }
+});
+
+test('media.view: a window not in view, or not verified, opens nothing', () => {
+  const opened = [];
+  const WosChat = { viewer: { open: items => { opened.push(items); return true; } } };
+  assert.equal(fixture({ win: { WosChat }, front: () => false }).call('media.view', { items: [{ url: 'a.jpg' }] }), false);
+  assert.throws(() => fixture({ win: { WosChat }, src: 'https://wizard.example/elsewhere/' }).call('media.view', { items: [{ url: 'a.jpg' }] }), /not verified/);
+  assert.equal(opened.length, 0);
+});
+
+test('nav.back takes the window\'s own Back step, only while the window is in view', () => {
+  let backs = 0, inView = true;
+  const f = fixture({ front: () => inView, attach: { back: () => { backs++; return true; } } });
+  assert.equal(f.call('nav.back'), true);
+  inView = false;
+  assert.equal(f.call('nav.back'), false);
+  assert.equal(backs, 1);
+});
+
+test('nav.openContextDraft opens a main Chats draft keyed to the window\'s own app id; the page never names it', () => {
+  const drafts = [];
+  const f = fixture({ attach: { openContextDraft: (key, item) => { drafts.push({ key, item }); return { kind: 'unsent-draft', id: 'new:1', sent: false }; } } });
+  assert.equal(f.call('nav.openContextDraft', { id: 'day-1', title: 'Monday', message: 'The report', app: 'wizard-mail' }), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(drafts)), [{ key: 'morning-report:day-1', item: { title: 'Monday', message: 'The report' } }]);
+  for (const bad of [null, { id: 'a b', title: '', message: '' }, { id: 'x', title: 1, message: '' }, { id: 'x', title: '', message: 'm'.repeat(32001) }])
+    assert.throws(() => f.call('nav.openContextDraft', bad), /Invalid app context/);
+  // A window with no Chats to open: refused.
+  const h = fixture();
+  assert.throws(() => h.call('nav.openContextDraft', { id: 'x', title: '', message: '' }), /Context draft unavailable/);
+  assert.equal(drafts.length, 1);
+});
+
+test('nav.openThread: only an app the launcher lets open hosted threads, its own reply keys, and a running agent', () => {
+  const opened = [];
+  const WizLauncher = { hasHostedThread: id => id === 'wisdom' };
+  const WosAgents = { get: id => (id === 'philosopher' ? { status: 'running' } : null), isOther: id => id !== 'hermes' };
+  const WosChat = { reply: { clean: r => (r.key && typeof r.title === 'string' ? { ...r } : null) } };
+  const openThread = (sid, o) => { opened.push({ sid, o }); return true; };
+  const f = fixture({ id: 'wisdom', win: { WizLauncher, WosAgents, WosChat }, attach: { openThread } });
+  assert.equal(f.call('nav.openThread', { id: 'sid-1', opts: { reply: { key: 'wisdom:q1', title: 'Q', message: 'M' }, agent: 'philosopher', draft: { text: 'hi' } } }), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(opened)), [{ sid: 'sid-1', o: { reply: { key: 'wisdom:q1', title: 'Q', message: 'M' }, agent: 'philosopher', draft: { text: 'hi' } } }]);
+  assert.throws(() => f.call('nav.openThread', { id: 'sid-1', opts: { reply: { key: 'mail:q1', title: 'Q' } } }), /keyed to this app/);
+  assert.throws(() => f.call('nav.openThread', { id: 'sid-1', opts: { agent: 'unknown' } }), /Thread agent unavailable/);
+  for (const id of ['', 'a b', '__new__', 'x'.repeat(513), 7]) assert.throws(() => f.call('nav.openThread', { id }), /Thread navigation unavailable/);
+  // An app the launcher does not list, or a window not verified: refused.
+  const g = fixture({ win: { WizLauncher, WosAgents, WosChat }, attach: { openThread } });
+  assert.throws(() => g.call('nav.openThread', { id: 'sid-1' }), /Thread navigation unavailable/);
+  const h = fixture({ id: 'wisdom', win: { WizLauncher, WosAgents, WosChat }, attach: { openThread } });
+  h.B.readyNow = false;
+  assert.throws(() => h.call('nav.openThread', { id: 'sid-1' }), /not verified/);
+  assert.equal(opened.length, 1);
 });
