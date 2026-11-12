@@ -1525,6 +1525,18 @@
       // app id, never one the page names.
       if (method === 'storage.load') return window.WizBrowserBoundary.appStorage.load(st.appId);
       if (method === 'storage.save') return window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
+      // Its IndexedDB (the stand-in in core/app-client.js), the same way. After a change, the app's other windows read
+      // that database again before their next transaction.
+      if (method === 'idb.load') return window.WizBrowserBoundary.appIdb.load(st.appId, args?.name);
+      if (method === 'idb.list') return window.WizBrowserBoundary.appIdb.list(st.appId);
+      if (method === 'idb.commit' || method === 'idb.drop') {
+        const B = window.WizBrowserBoundary, name = args?.name;
+        return (method === 'idb.commit' ? B.appIdb.commit(st.appId, name, args?.ops, args?.base) : B.appIdb.drop(st.appId, name)).then(v => {
+          const ok = v === true || !!v?.idb;
+          if (ok) for (const o of frames.values()) if (o !== st && o.appId === st.appId && boundaryLive(o)) B.notice(o.frame, 'idb', { name });
+          return v;
+        });
+      }
       if (method === 'net.fetch') return boundaryNet(st, args);
       if (method === 'net.abort') { const c = typeof args?.key === 'string' ? st.netCalls?.get(args.key) : null; if (!c) return false; c.abort(); st.netCalls.delete(args.key); return true; }
       // How much of a streamed answer the page has taken (see netPump): the shell may read on.

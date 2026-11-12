@@ -621,6 +621,558 @@
       try { Object.defineProperty(window, 'WebSocket', { configurable: true, writable: true, value: WebSocket }); } catch (_) {}
     }
   })();
+  /* IndexedDB under the boundary: the browser refuses IndexedDB to an opaque origin (open throws), so the page gets a
+   * stand-in with the same classes, requests and events (Music keeps its offline clips there, Files its video frames).
+   * The shell keeps the app's databases (browser-boundary.js appIdb, under this window's installed app id only).
+   * Opening one reads it whole from the shell once (`idb.load`); requests then run on this page's copy, in order, one
+   * transaction at a time. A readwrite transaction's changes go to the shell together when it ends (`idb.commit`), and
+   * `complete` fires only once the shell has written them; if it could not (the app's space is full), `abort` fires with
+   * QuotaExceededError and nothing changed. When another window of the same app commits, this page reads the database
+   * again before its next transaction (`idb` notice). Keys compare with the browser's own `indexedDB.cmp`, ranges are
+   * the browser's own IDBKeyRange, and values are copies (structuredClone), as in the real one. A page that is not in a
+   * Wizard window gets an `error` on open. */
+  let idbNotice = () => {};
+  if (opaque && typeof window.indexedDB?.cmp === 'function' && typeof structuredClone === 'function') (() => {
+    const real = window.indexedDB, KeyRange = window.IDBKeyRange;
+    try { const r = real.open('\u0000wz-probe'); r.onsuccess = () => { try { r.result.close(); real.deleteDatabase('\u0000wz-probe'); } catch (_) {} }; return; } catch (_) {}
+    const cmp = (a, b) => real.cmp(a, b);
+    const fail = (name, message) => new DOMException(message || name, name);
+    const validKey = k => { try { cmp(k, k); return true; } catch (_) { return false; } };
+    const clone = v => { try { return structuredClone(v); } catch (e) { throw fail('DataCloneError', String(e?.message || 'The value could not be cloned.')); } };
+    const S = new WeakMap(); // each stand-in object's own state
+    const later = fn => setTimeout(fn, 0);
+    const channel = () => boundaryClient().then(async c => { for (let i = 0; c && !c.ready && i < 100; i++) await new Promise(r => setTimeout(r, 100)); return c && c.ready ? c : null; });
+    const call = (method, args, timeout = 60000) => channel().then(c => { if (!c) throw fail('UnknownError', 'IndexedDB works when this app is open inside Wizard.'); return c.request(method, args, timeout); });
+    // on<type> handler properties, kept as event listeners (so the order and preventDefault work as in the browser).
+    function handlers(C, types) {
+      for (const t of types) {
+        const k = Symbol(t);
+        Object.defineProperty(C.prototype, 'on' + t, { configurable: true, enumerable: true,
+          get() { return this[k]?.fn ?? null; },
+          set(fn) { if (this[k]) this.removeEventListener(t, this[k].l); this[k] = null; if (typeof fn === 'function') { const l = e => fn.call(this, e); this[k] = { fn, l }; this.addEventListener(t, l); } } });
+      }
+    }
+    /* A listener that throws aborts the transaction, as in the browser (dispatchEvent only reports the exception, so
+     * each listener is wrapped and notes it; the exception is still reported). */
+    const WRAPS = new WeakMap();
+    class Target extends EventTarget {
+      addEventListener(type, fn, opts) {
+        if (!fn || (typeof fn !== 'function' && typeof fn.handleEvent !== 'function')) return super.addEventListener(type, fn, opts);
+        const cap = typeof opts === 'boolean' ? opts : !!opts?.capture, key = type + '|' + cap, self = this;
+        let mine = WRAPS.get(this); if (!mine) WRAPS.set(this, mine = new WeakMap());
+        let m = mine.get(fn); if (!m) mine.set(fn, m = new Map());
+        let w = m.get(key);
+        if (!w) { w = function (e) { try { return typeof fn === 'function' ? fn.call(this, e) : fn.handleEvent(e); } catch (x) { S.get(self).threw = true; throw x; } }; m.set(key, w); }
+        return super.addEventListener(type, w, opts);
+      }
+      removeEventListener(type, fn, opts) {
+        const cap = typeof opts === 'boolean' ? opts : !!opts?.capture;
+        return super.removeEventListener(type, (fn && WRAPS.get(this)?.get(fn)?.get(type + '|' + cap)) || fn, opts);
+      }
+    }
+    // Dispatch; true when a listener threw.
+    const fire = (t, ev) => { const s = S.get(t); s.threw = false; t.dispatchEvent(ev); const threw = s.threw; s.threw = false; return threw; };
+    const nameList = list => { const a = [...list].sort(); return Object.freeze(Object.assign(a, { item: i => a[i] ?? null, contains: n => a.includes(n) })); };
+    const validPath = p => (typeof p === 'string' ? p === '' || p.split('.').every(x => /^[$A-Za-z_][$\w]*$/.test(x)) : Array.isArray(p) && p.length > 0 && p.every(x => typeof x === 'string' && x !== '' && validPath(x)));
+    function pathValue(v, p) {
+      if (Array.isArray(p)) { const out = []; for (const x of p) { const k = pathValue(v, x); if (k === undefined) return undefined; out.push(k); } return out; }
+      if (p === '') return v;
+      let cur = v;
+      for (const part of p.split('.')) { if (cur === null || (typeof cur !== 'object' && typeof cur !== 'string') || !(part in Object(cur))) return undefined; cur = cur[part]; }
+      return cur;
+    }
+    function inject(v, p, key) {
+      const parts = p.split('.'), last = parts.pop();
+      let cur = v;
+      for (const part of parts) { if (cur[part] === undefined) cur[part] = {}; cur = cur[part]; if (cur === null || typeof cur !== 'object') throw fail('DataError', 'The key path does not lead to an object.'); }
+      cur[last] = key;
+    }
+    const range = (q, need) => {
+      if (q === undefined || q === null) { if (need) throw fail('DataError', 'No key or key range was given.'); return null; }
+      if (q instanceof KeyRange) return q;
+      if (!validKey(q)) throw fail('DataError', 'The parameter is not a valid key.');
+      return KeyRange.only(q);
+    };
+    const inRange = (r, k) => !r || r.includes(k);
+    // One database in this page: its stores (rows sorted by key) and its queue: loading it, opening it, and the
+    // transactions, run one after another.
+    const models = new Map();
+    function model(name) {
+      let m = models.get(name);
+      if (m) return m;
+      m = { name, version: 0, rev: 0, stores: new Map(), queue: [], running: null, conns: new Set(), loaded: false };
+      models.set(name, m);
+      enqueue(m, { start: done => load(m).then(done, done) });
+      return m;
+    }
+    function storeOf(info) { return { keyPath: info.keyPath ?? null, autoIncrement: info.autoIncrement === true, next: Number(info.next) || 1, indexes: new Map((info.indexes || []).map(([n, x]) => [n, { keyPath: x.keyPath, unique: x.unique === true, multiEntry: x.multiEntry === true }])), rows: [] }; }
+    function load(m) {
+      return call('idb.load', { name: m.name }).then(v => {
+        const d = v?.idb;
+        m.stores = new Map(); m.version = 0; m.rev = 0;
+        if (d && typeof d === 'object') {
+          m.version = Number(d.version) || 0; m.rev = Number(d.rev) || 0;
+          for (const [s, info] of d.stores || []) m.stores.set(s, storeOf(info));
+          for (const [s, rows] of d.rows || []) { const st = m.stores.get(s); if (st) st.rows = rows.map(([k, x]) => ({ k, v: x })).sort((a, b) => cmp(a.k, b.k)); }
+        }
+        m.loaded = true; m.error = null;
+      }, e => { m.loaded = false; m.error = e; });
+    }
+    function enqueue(m, item) { m.queue.push(item); pump(m); }
+    function pump(m) {
+      if (m.running || !m.queue.length) return;
+      const item = m.running = m.queue.shift();
+      later(() => item.start(() => { m.running = null; pump(m); }));
+    }
+    // Another window of this app changed the database: read it again before the next transaction here.
+    idbNotice = name => {
+      const m = models.get(name);
+      if (m && !m.queue.some(x => x.reload)) enqueue(m, { reload: true, start: done => load(m).then(done, done) });
+    };
+    const find = (rows, k) => { let lo = 0, hi = rows.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (cmp(rows[mid].k, k) < 0) lo = mid + 1; else hi = mid; } return lo; };
+    // The entries a store or index reads, sorted: { key, pk, v }.
+    function entries(st, ix) {
+      if (!ix) return st.rows.map(r => ({ key: r.k, pk: r.k, v: r.v }));
+      const out = [];
+      for (const r of st.rows) {
+        const k = pathValue(r.v, ix.keyPath);
+        if (k === undefined) continue;
+        if (ix.multiEntry && Array.isArray(k)) { const seen = []; for (const e of k) if (validKey(e) && !seen.some(x => cmp(x, e) === 0)) { seen.push(e); out.push({ key: e, pk: r.k, v: r.v }); } }
+        else if (validKey(k)) out.push({ key: k, pk: r.k, v: r.v });
+      }
+      return out.sort((a, b) => cmp(a.key, b.key) || cmp(a.pk, b.pk));
+    }
+    const indexKeys = (ix, v) => { const k = pathValue(v, ix.keyPath); if (k === undefined) return []; if (ix.multiEntry && Array.isArray(k)) return k.filter(validKey); return validKey(k) ? [k] : []; };
+    function unique(st, v, pk) {
+      for (const [, ix] of st.indexes) {
+        if (!ix.unique) continue;
+        for (const k of indexKeys(ix, v)) for (const r of st.rows) if (cmp(r.k, pk) !== 0 && indexKeys(ix, r.v).some(x => cmp(x, k) === 0)) throw fail('ConstraintError', 'A unique index already has this key.');
+      }
+    }
+
+    class IDBRequest extends Target {
+      constructor(source, tx) { super(); S.set(this, { source, tx, result: undefined, error: null, done: false }); }
+      get result() { const s = S.get(this); if (!s.done) throw fail('InvalidStateError', 'The request has not finished.'); return s.result; }
+      get error() { const s = S.get(this); if (!s.done) throw fail('InvalidStateError', 'The request has not finished.'); return s.error; }
+      get source() { return S.get(this).source; }
+      get transaction() { return S.get(this).tx; }
+      get readyState() { return S.get(this).done ? 'done' : 'pending'; }
+    }
+    handlers(IDBRequest, ['success', 'error']);
+    class IDBOpenDBRequest extends IDBRequest {}
+    handlers(IDBOpenDBRequest, ['upgradeneeded', 'blocked']);
+    class IDBVersionChangeEvent extends Event {
+      constructor(type, init = {}) { super(type, init); this.oldVersion = init.oldVersion ?? 0; this.newVersion = init.newVersion ?? null; }
+    }
+    const settle = (req, result, error) => { const s = S.get(req); s.done = true; s.result = error ? undefined : result; s.error = error || null; };
+
+    class IDBTransaction extends Target {
+      constructor(db, names, mode) {
+        super();
+        const m = S.get(db).model;
+        S.set(this, { db, m, names, mode, queue: [], state: 'active', error: null, ops: [], before: null, started: false });
+        const s = S.get(this);
+        if (mode !== 'readonly') s.before = new Map([...m.stores].map(([n, st]) => [n, { ...st, indexes: new Map(st.indexes), rows: st.rows.slice() }]));
+        if (mode === 'versionchange') s.beforeVersion = m.version;
+      }
+      get db() { return S.get(this).db; }
+      get mode() { return S.get(this).mode; }
+      get durability() { return 'default'; }
+      get error() { return S.get(this).error; }
+      get objectStoreNames() { const s = S.get(this); return nameList(s.mode === 'versionchange' ? s.m.stores.keys() : s.names); }
+      objectStore(name) {
+        const s = S.get(this);
+        if (s.state === 'done') throw fail('InvalidStateError', 'The transaction has finished.');
+        if ((s.mode !== 'versionchange' && !s.names.includes(name)) || !s.m.stores.has(name)) throw fail('NotFoundError', 'No object store named ' + name + '.');
+        return new IDBObjectStore(this, name);
+      }
+      abort() {
+        const s = S.get(this);
+        if (s.state === 'done' || s.state === 'committing') throw fail('InvalidStateError', 'The transaction has finished.');
+        txAbort(this, null);
+      }
+      commit() { const s = S.get(this); if (s.state !== 'active') throw fail('InvalidStateError', 'The transaction is not active.'); }
+    }
+    handlers(IDBTransaction, ['complete', 'error', 'abort']);
+    // Queue a request in the transaction; `op` runs when its turn comes and returns the result (or throws).
+    function queueRequest(tx, source, op, req) {
+      const s = S.get(tx);
+      if (s.state !== 'active') throw fail('TransactionInactiveError', 'The transaction is not active.');
+      req = req || new IDBRequest(source, tx);
+      s.queue.push({ req, op });
+      return req;
+    }
+    function txRun(tx, done) {
+      const s = S.get(tx);
+      s.done = done; s.started = true;
+      const step = () => {
+        if (s.state !== 'active') return;
+        const r = s.queue.shift();
+        if (!r) return txFinish(tx);
+        let result, error = null;
+        try { result = r.op(); } catch (e) { error = e instanceof DOMException ? e : fail('UnknownError', String(e?.message || e)); }
+        settle(r.req, result, error);
+        if (!error) { if (fire(r.req, new Event('success')) && s.state === 'active') return txAbort(tx, fail('AbortError', 'A success handler threw.')); }
+        else {
+          const ev = new Event('error', { bubbles: true, cancelable: true });
+          const threw = fire(r.req, ev);
+          let kept = ev.defaultPrevented && !threw;
+          if (!kept && s.state === 'active') { const e2 = new Event('error', { cancelable: true }); tx.dispatchEvent(e2); kept = e2.defaultPrevented; }
+          if (!kept && s.state === 'active') { const e3 = new Event('error', { cancelable: true }); s.db.dispatchEvent(e3); kept = e3.defaultPrevented; }
+          if (!kept && s.state === 'active') return txAbort(tx, error);
+        }
+        later(step);
+      };
+      later(step);
+    }
+    function txFinish(tx) {
+      const s = S.get(tx);
+      s.state = 'committing';
+      const complete = () => { s.state = 'done'; s.before = null; later(() => { tx.dispatchEvent(new Event('complete')); s.onEnd?.(true); s.done?.(); }); };
+      if (s.mode === 'readonly' || !s.ops.length) return complete();
+      // `base`: the shell's revision this page's copy is at. If another window of the app committed since, the shell
+      // refuses (`stale`): this transaction aborts and the page reads the database again, so it never overwrites a
+      // change it did not see (a key generator's number, a unique index).
+      call('idb.commit', { name: s.m.name, ops: s.ops, base: s.m.rev }).then(v => {
+        if (v && typeof v === 'object' && Number.isSafeInteger(v.idb?.rev)) { s.m.rev = v.idb.rev; return complete(); }
+        if (v === 'stale') { s.m.queue.unshift({ reload: true, start: d => load(s.m).then(d, d) }); return txAbort(tx, fail('UnknownError', 'Another window of this app changed the database; try again.'), true); }
+        txAbort(tx, fail('QuotaExceededError', 'This app\u2019s storage in Wizard is full.'), true);
+      }, () => txAbort(tx, fail('UnknownError', 'Wizard could not save this change.'), true));
+    }
+    function txAbort(tx, error, committing) {
+      const s = S.get(tx);
+      if (s.state === 'done' || (s.state === 'committing' && !committing)) return;
+      s.state = 'done'; s.error = error;
+      if (s.before) s.m.stores = s.before;
+      if (s.mode === 'versionchange') s.m.version = s.beforeVersion;
+      const pending = s.queue.splice(0);
+      later(() => {
+        for (const r of pending) { settle(r.req, undefined, fail('AbortError', 'The transaction was aborted.')); r.req.dispatchEvent(new Event('error', { bubbles: true, cancelable: true })); }
+        tx.dispatchEvent(new Event('abort', { bubbles: true }));
+        s.db.dispatchEvent(new Event('abort'));
+        s.onEnd?.(false);
+        if (s.started) s.done?.();
+      });
+      if (!s.started) enqueueDrop(s);
+    }
+    // A transaction aborted before its turn: it leaves the queue.
+    function enqueueDrop(s) { const i = s.m.queue.indexOf(s.item); if (i >= 0) s.m.queue.splice(i, 1); }
+
+    class IDBDatabase extends Target {
+      constructor(m) { super(); S.set(this, { model: m, version: m.version, closed: false, upgrade: null }); }
+      get name() { return S.get(this).model.name; }
+      get version() { return S.get(this).version; }
+      get objectStoreNames() { return nameList(S.get(this).model.stores.keys()); }
+      close() { const s = S.get(this); s.closed = true; s.model.conns.delete(this); }
+      transaction(names, mode = 'readonly') {
+        const s = S.get(this);
+        if (s.closed) throw fail('InvalidStateError', 'The database connection is closing.');
+        if (s.upgrade && S.get(s.upgrade).state !== 'done') throw fail('InvalidStateError', 'A version change transaction is running.');
+        if (mode !== 'readonly' && mode !== 'readwrite') throw new TypeError('The transaction mode must be readonly or readwrite.');
+        const list = [...new Set(typeof names === 'string' ? [names] : Array.from(names || [], String))];
+        if (!list.length) throw fail('InvalidAccessError', 'The transaction needs at least one object store.');
+        for (const n of list) if (!s.model.stores.has(n)) throw fail('NotFoundError', 'No object store named ' + n + '.');
+        const tx = new IDBTransaction(this, list, mode), ts = S.get(tx);
+        // Requests may be placed until this task ends; the transaction starts in its turn.
+        ts.item = { start: done => { if (ts.state === 'done') return done(); txRun(tx, done); } };
+        enqueue(s.model, ts.item);
+        return tx;
+      }
+      createObjectStore(name, opts = {}) {
+        const tx = upgrading(this); name = String(name);
+        const keyPath = opts?.keyPath ?? null, autoIncrement = opts?.autoIncrement === true;
+        if (keyPath !== null && !validPath(keyPath)) throw fail('SyntaxError', 'The key path is not valid.');
+        const m = S.get(this).model;
+        if (m.stores.has(name)) throw fail('ConstraintError', 'An object store named ' + name + ' already exists.');
+        if (autoIncrement && (keyPath === '' || Array.isArray(keyPath))) throw fail('InvalidAccessError', 'An auto-increment store needs a simple key path.');
+        const kp = Array.isArray(keyPath) ? [...keyPath] : keyPath;
+        m.stores.set(name, storeOf({ keyPath: kp, autoIncrement }));
+        S.get(tx).ops.push({ o: 'store', s: name, keyPath: kp, autoIncrement });
+        return new IDBObjectStore(tx, name);
+      }
+      deleteObjectStore(name) {
+        const tx = upgrading(this), m = S.get(this).model; name = String(name);
+        if (!m.stores.has(name)) throw fail('NotFoundError', 'No object store named ' + name + '.');
+        m.stores.delete(name);
+        S.get(tx).ops.push({ o: 'unstore', s: name });
+      }
+    }
+    handlers(IDBDatabase, ['abort', 'close', 'error', 'versionchange']);
+    function upgrading(db) {
+      const tx = S.get(db).upgrade;
+      if (!tx || S.get(tx).state !== 'active') throw fail('InvalidStateError', 'Object stores change only while the database upgrades.');
+      return tx;
+    }
+
+    class IDBObjectStore {
+      constructor(tx, name) { S.set(this, { tx, name }); }
+      get name() { return S.get(this).name; }
+      get transaction() { return S.get(this).tx; }
+      get keyPath() { const p = this._st().keyPath; return Array.isArray(p) ? [...p] : p; }
+      get autoIncrement() { return this._st().autoIncrement; }
+      get indexNames() { return nameList(this._st().indexes.keys()); }
+      _st() { const s = S.get(this), st = S.get(s.tx).m.stores.get(s.name); if (!st) throw fail('InvalidStateError', 'The object store was deleted.'); return st; }
+      _write() { const ts = S.get(S.get(this).tx); if (ts.mode === 'readonly') throw fail('ReadOnlyError', 'The transaction is read-only.'); if (ts.state !== 'active') throw fail('TransactionInactiveError', 'The transaction is not active.'); return ts; }
+      put(value, key) { return this._put(value, key, false); }
+      add(value, key) { return this._put(value, key, true); }
+      _put(value, key, add, req) {
+        const ts = this._write(), st = this._st(), name = S.get(this).name;
+        const v = clone(value);
+        let k;
+        if (st.keyPath !== null) {
+          if (key !== undefined) throw fail('DataError', 'This store uses in-line keys: no key argument.');
+          k = pathValue(v, st.keyPath);
+          if (k === undefined) { if (!st.autoIncrement) throw fail('DataError', 'The value has no key at the key path.'); }
+          else if (!validKey(k)) throw fail('DataError', 'The key at the key path is not valid.');
+          else k = clone(k);
+        } else if (key !== undefined) { if (!validKey(key)) throw fail('DataError', 'The key is not valid.'); k = clone(key); }
+        else if (!st.autoIncrement) throw fail('DataError', 'This store needs a key.');
+        return queueRequest(S.get(this).tx, this, () => {
+          const cur = this._st();
+          if (k === undefined) {
+            if (cur.next > 9007199254740992) throw fail('ConstraintError', 'The key generator is used up.');
+            k = cur.next++;
+            if (cur.keyPath !== null) inject(v, cur.keyPath, k);
+            ts.ops.push({ o: 'next', s: name, n: cur.next });
+          } else if (cur.autoIncrement && typeof k === 'number' && k >= cur.next) { cur.next = Math.floor(k) + 1; ts.ops.push({ o: 'next', s: name, n: cur.next }); }
+          const i = find(cur.rows, k), has = i < cur.rows.length && cmp(cur.rows[i].k, k) === 0;
+          if (add && has) throw fail('ConstraintError', 'A record with this key already exists.');
+          unique(cur, v, k);
+          if (has) cur.rows[i] = { k, v }; else cur.rows.splice(i, 0, { k, v });
+          ts.ops.push({ o: 'put', s: name, k, v });
+          return clone(k);
+        }, req);
+      }
+      delete(query) {
+        const ts = this._write(), r = range(query, true), name = S.get(this).name;
+        return queueRequest(S.get(this).tx, this, () => {
+          const cur = this._st();
+          cur.rows = cur.rows.filter(row => { if (!r.includes(row.k)) return true; ts.ops.push({ o: 'del', s: name, k: row.k }); return false; });
+        });
+      }
+      clear() {
+        const ts = this._write(), name = S.get(this).name;
+        return queueRequest(S.get(this).tx, this, () => { this._st().rows = []; ts.ops.push({ o: 'clear', s: name }); });
+      }
+      _list() { return entries(this._st(), null); }
+      get(query) { return read(this, query, true, l => (l[0] ? clone(l[0].v) : undefined)); }
+      getKey(query) { return read(this, query, true, l => (l[0] ? clone(l[0].pk) : undefined)); }
+      getAll(query, count) { return read(this, query, false, l => l.slice(0, count > 0 ? count : undefined).map(e => clone(e.v))); }
+      getAllKeys(query, count) { return read(this, query, false, l => l.slice(0, count > 0 ? count : undefined).map(e => clone(e.pk))); }
+      count(query) { return read(this, query, false, l => l.length); }
+      openCursor(query, direction) { return openCursor(this, query, direction, false); }
+      openKeyCursor(query, direction) { return openCursor(this, query, direction, true); }
+      index(name) {
+        const ts = S.get(S.get(this).tx);
+        if (ts.state === 'done') throw fail('InvalidStateError', 'The transaction has finished.');
+        if (!this._st().indexes.has(name)) throw fail('NotFoundError', 'No index named ' + name + '.');
+        return new IDBIndex(this, name);
+      }
+      createIndex(name, keyPath, opts = {}) {
+        const tx = S.get(this).tx, ts = S.get(tx);
+        if (ts.mode !== 'versionchange' || ts.state !== 'active') throw fail('InvalidStateError', 'Indexes change only while the database upgrades.');
+        const st = this._st(); name = String(name);
+        if (st.indexes.has(name)) throw fail('ConstraintError', 'An index named ' + name + ' already exists.');
+        if (!validPath(keyPath)) throw fail('SyntaxError', 'The key path is not valid.');
+        if (opts?.multiEntry === true && Array.isArray(keyPath)) throw fail('InvalidAccessError', 'A multi-entry index needs a simple key path.');
+        const ix = { keyPath: Array.isArray(keyPath) ? [...keyPath] : keyPath, unique: opts?.unique === true, multiEntry: opts?.multiEntry === true };
+        st.indexes.set(name, ix);
+        ts.ops.push({ o: 'index', s: S.get(this).name, i: name, ...ix });
+        // Records already in the store that break a unique index abort the upgrade, as in the browser.
+        if (ix.unique) { const l = entries(st, ix); for (let i = 1; i < l.length; i++) if (cmp(l[i - 1].key, l[i].key) === 0) { later(() => txAbort(tx, fail('ConstraintError', 'Existing records break the unique index ' + name + '.'))); break; } }
+        return new IDBIndex(this, name);
+      }
+      deleteIndex(name) {
+        const ts = S.get(S.get(this).tx);
+        if (ts.mode !== 'versionchange' || ts.state !== 'active') throw fail('InvalidStateError', 'Indexes change only while the database upgrades.');
+        const st = this._st();
+        if (!st.indexes.delete(name)) throw fail('NotFoundError', 'No index named ' + name + '.');
+        ts.ops.push({ o: 'unindex', s: S.get(this).name, i: name });
+      }
+    }
+    class IDBIndex {
+      constructor(store, name) { S.set(this, { store, name }); }
+      get name() { return S.get(this).name; }
+      get objectStore() { return S.get(this).store; }
+      get keyPath() { const p = this._ix().keyPath; return Array.isArray(p) ? [...p] : p; }
+      get unique() { return this._ix().unique; }
+      get multiEntry() { return this._ix().multiEntry; }
+      _ix() { const s = S.get(this), ix = s.store._st().indexes.get(s.name); if (!ix) throw fail('InvalidStateError', 'The index was deleted.'); return ix; }
+      _list() { return entries(S.get(this).store._st(), this._ix()); }
+      get(query) { return read(this, query, true, l => (l[0] ? clone(l[0].v) : undefined)); }
+      getKey(query) { return read(this, query, true, l => (l[0] ? clone(l[0].pk) : undefined)); }
+      getAll(query, count) { return read(this, query, false, l => l.slice(0, count > 0 ? count : undefined).map(e => clone(e.v))); }
+      getAllKeys(query, count) { return read(this, query, false, l => l.slice(0, count > 0 ? count : undefined).map(e => clone(e.pk))); }
+      count(query) { return read(this, query, false, l => l.length); }
+      openCursor(query, direction) { return openCursor(this, query, direction, false); }
+      openKeyCursor(query, direction) { return openCursor(this, query, direction, true); }
+    }
+    const txOf = src => (src instanceof IDBIndex ? S.get(S.get(src).store).tx : S.get(src).tx);
+    function read(src, query, need, pick) {
+      const r = range(query, need);
+      return queueRequest(txOf(src), src, () => pick(src._list().filter(e => inRange(r, e.key))));
+    }
+
+    class IDBCursor {
+      constructor(src, req, r, direction, keyOnly) { S.set(this, { src, req, r, direction, keyOnly, pos: null, got: false }); }
+      get source() { return S.get(this).src; }
+      get request() { return S.get(this).req; }
+      get direction() { return S.get(this).direction; }
+      get key() { const p = S.get(this).pos; return p ? clone(p.key) : undefined; }
+      get primaryKey() { const p = S.get(this).pos; return p ? clone(p.pk) : undefined; }
+      _again(fn) {
+        const s = S.get(this);
+        if (S.get(txOf(s.src)).state !== 'active') throw fail('TransactionInactiveError', 'The transaction is not active.');
+        if (!s.got) throw fail('InvalidStateError', 'The cursor is moving or has finished.');
+        s.got = false; S.get(s.req).done = false;
+        queueRequest(txOf(s.src), s.src, () => fn(), s.req);
+      }
+      advance(n) { n = Number(n); if (!(n >= 1) || !Number.isInteger(n)) throw new TypeError('advance() needs a positive whole number.'); this._again(() => cursorStep(this, n)); }
+      continue(key) {
+        if (key !== undefined && !validKey(key)) throw fail('DataError', 'The key is not valid.');
+        const s = S.get(this), prev = s.direction.startsWith('prev');
+        if (key !== undefined && s.pos && (prev ? cmp(key, s.pos.key) >= 0 : cmp(key, s.pos.key) <= 0)) throw fail('DataError', 'The key is not past the cursor.');
+        this._again(() => cursorStep(this, 1, key));
+      }
+      continuePrimaryKey(key, pk) {
+        if (!validKey(key) || !validKey(pk)) throw fail('DataError', 'The key is not valid.');
+        this._again(() => cursorStep(this, 1, key, pk));
+      }
+      update(value) {
+        const s = S.get(this);
+        if (s.keyOnly) throw fail('InvalidStateError', 'This cursor has no value.');
+        if (!s.got) throw fail('InvalidStateError', 'The cursor is moving or has finished.');
+        const store = s.src instanceof IDBIndex ? S.get(s.src).store : s.src, st = store._st(), v = clone(value);
+        if (st.keyPath !== null) { const k = pathValue(v, st.keyPath); if (k === undefined || !validKey(k) || cmp(k, s.pos.pk) !== 0) throw fail('DataError', 'The new value\u2019s key does not match the cursor.'); return store._put(v, undefined, false); }
+        return store._put(v, s.pos.pk, false);
+      }
+      delete() {
+        const s = S.get(this);
+        if (s.keyOnly) throw fail('InvalidStateError', 'This cursor has no value.');
+        if (!s.got) throw fail('InvalidStateError', 'The cursor is moving or has finished.');
+        const store = s.src instanceof IDBIndex ? S.get(s.src).store : s.src;
+        return store.delete(s.pos.pk);
+      }
+    }
+    class IDBCursorWithValue extends IDBCursor {
+      get value() { const p = S.get(this).pos; return p ? clone(p.v) : undefined; }
+    }
+    const DIRECTIONS = ['next', 'nextunique', 'prev', 'prevunique'];
+    function openCursor(src, query, direction = 'next', keyOnly) {
+      if (!DIRECTIONS.includes(direction)) throw new TypeError('Unknown cursor direction ' + direction + '.');
+      const r = range(query, false), req = new IDBRequest(src, txOf(src));
+      const c = keyOnly ? new IDBCursor(src, req, r, direction, true) : new IDBCursorWithValue(src, req, r, direction, false);
+      return queueRequest(txOf(src), src, () => cursorStep(c, 1), req);
+    }
+    // Move the cursor n entries in its direction (past `key` / `pk` when given), reading the store as it is now.
+    function cursorStep(c, n, key, pk) {
+      const s = S.get(c), prev = s.direction.startsWith('prev'), uniq = s.direction.endsWith('unique');
+      let list = s.src._list().filter(e => inRange(s.r, e.key));
+      if (prev) list = list.reverse();
+      const after = e => {
+        if (!s.pos) return true;
+        const d = cmp(e.key, s.pos.key) * (prev ? -1 : 1);
+        if (uniq) return d > 0;
+        return d > 0 || (d === 0 && cmp(e.pk, s.pos.pk) * (prev ? -1 : 1) > 0);
+      };
+      const reach = e => {
+        if (key === undefined) return true;
+        const d = cmp(e.key, key) * (prev ? -1 : 1);
+        if (pk === undefined) return d >= 0;
+        return d > 0 || (d === 0 && cmp(e.pk, pk) * (prev ? -1 : 1) >= 0);
+      };
+      let found = null;
+      for (let i = 0; i < list.length && n > 0; i++) {
+        let e = list[i];
+        if (!after(e) || !reach(e)) continue;
+        // prevunique stops on each key's first record (the lowest primary key), as the browser does.
+        if (uniq && prev) { let j = i; while (j + 1 < list.length && cmp(list[j + 1].key, e.key) === 0) j++; e = list[j]; i = j; }
+        n--; s.pos = e;
+        if (!n) found = e;
+      }
+      if (!found) { s.pos = null; s.got = false; return null; }
+      s.got = true;
+      return c;
+    }
+
+    class IDBFactory {
+      open(name, version) {
+        if (arguments.length < 1) throw new TypeError('open() needs a name.');
+        name = String(name);
+        if (version !== undefined) { version = Number(version); if (!Number.isInteger(version) || version < 1 || version > 9007199254740991) throw new TypeError('The version must be a positive whole number.'); }
+        const req = new IDBOpenDBRequest(null, null), m = model(name);
+        enqueue(m, { start: done => {
+          if (!m.loaded) { settle(req, undefined, m.error instanceof DOMException ? m.error : fail('UnknownError', 'IndexedDB works when this app is open inside Wizard.')); req.dispatchEvent(new Event('error', { cancelable: true })); m.queue.unshift({ start: d2 => load(m).then(d2, d2) }); return done(); }
+          const old = m.version, want = version ?? (old || 1);
+          if (want < old) { settle(req, undefined, fail('VersionError', 'The database is already at version ' + old + '.')); req.dispatchEvent(new Event('error', { cancelable: true })); return done(); }
+          const db = new IDBDatabase(m);
+          m.conns.add(db);
+          if (want === old) { settle(req, db); req.dispatchEvent(new Event('success')); return done(); }
+          // Upgrade: other connections here hear about it; a versionchange transaction runs the app's upgradeneeded.
+          for (const o of m.conns) if (o !== db) o.dispatchEvent(new IDBVersionChangeEvent('versionchange', { oldVersion: old, newVersion: want }));
+          const tx = new IDBTransaction(db, [], 'versionchange'), ts = S.get(tx);
+          S.get(db).upgrade = tx;
+          m.version = want; S.get(db).version = want;
+          ts.ops.push({ o: 'version', v: want });
+          S.get(req).tx = tx;
+          ts.onEnd = ok => {
+            S.get(req).tx = null;
+            if (ok) { settle(req, db); req.dispatchEvent(new Event('success')); return; }
+            S.get(db).version = old; db.close();
+            settle(req, undefined, fail('AbortError', 'The upgrade was aborted.')); req.dispatchEvent(new Event('error', { cancelable: true }));
+          };
+          settle(req, db); S.get(req).done = true;
+          const threw = fire(req, new IDBVersionChangeEvent('upgradeneeded', { oldVersion: old, newVersion: want }));
+          txRun(tx, done);
+          // The app's upgrade threw: nothing of it is kept and the open fails, so the next open upgrades again.
+          if (threw && ts.state === 'active') txAbort(tx, fail('AbortError', 'The upgradeneeded handler threw.'));
+        } });
+        return req;
+      }
+      deleteDatabase(name) {
+        name = String(name);
+        const req = new IDBOpenDBRequest(null, null), m = model(name);
+        enqueue(m, { start: done => {
+          const old = m.version;
+          for (const o of m.conns) o.dispatchEvent(new IDBVersionChangeEvent('versionchange', { oldVersion: old, newVersion: null }));
+          call('idb.drop', { name }).then(ok => {
+            if (ok !== true) throw fail('UnknownError', 'Wizard could not delete the database.');
+            m.stores = new Map(); m.version = 0; m.rev = 0;
+            settle(req, undefined); req.dispatchEvent(new IDBVersionChangeEvent('success', { oldVersion: old, newVersion: null }));
+          }).catch(e => { settle(req, undefined, e instanceof DOMException ? e : fail('UnknownError', String(e?.message || e))); req.dispatchEvent(new Event('error', { cancelable: true })); }).finally(done);
+        } });
+        return req;
+      }
+      databases() { return call('idb.list', {}).then(v => (Array.isArray(v?.idb) ? v.idb.map(x => ({ name: String(x.name), version: Number(x.version) || 0 })) : [])); }
+      cmp(a, b) { return cmp(a, b); }
+    }
+    const factory = new IDBFactory();
+    try { Object.defineProperty(window, 'indexedDB', { configurable: true, enumerable: true, get: () => factory }); } catch (_) { return; }
+    // The classes too, so a library's `instanceof IDBRequest` (idb, Dexie) sees the stand-ins.
+    for (const [k, v] of Object.entries({ IDBFactory, IDBRequest, IDBOpenDBRequest, IDBDatabase, IDBTransaction, IDBObjectStore, IDBIndex, IDBCursor, IDBCursorWithValue, IDBVersionChangeEvent })) {
+      try { Object.defineProperty(window, k, { configurable: true, writable: true, value: v }); } catch (_) {}
+    }
+  })();
+  /* document.cookie under the boundary: an opaque page may not read or write cookies (both throw SecurityError), which
+   * stops a script that only checks one. The page gets a jar of its own for this document: what it writes it reads back;
+   * nothing reaches its server or the shell, and the owner's sign-in cookies stay out of its reach (its calls to its own
+   * backend carry them through the shell, above). */
+  if (opaque) (() => {
+    try { void document.cookie; return; } catch (_) {}
+    const jar = new Map();
+    try {
+      Object.defineProperty(document, 'cookie', { configurable: true, enumerable: true,
+        get: () => [...jar].map(([k, v]) => (k ? k + '=' + v : v)).join('; '),
+        set: text => {
+          const [pair, ...attrs] = String(text).split(';'), i = pair.indexOf('=');
+          const k = (i < 0 ? '' : pair.slice(0, i)).trim(), v = (i < 0 ? pair : pair.slice(i + 1)).trim();
+          let gone = false;
+          for (const a of attrs) { const j = a.indexOf('='), n = (j < 0 ? a : a.slice(0, j)).trim().toLowerCase(), x = j < 0 ? '' : a.slice(j + 1).trim(); if ((n === 'max-age' && Number(x) <= 0) || (n === 'expires' && Date.parse(x) <= Date.now())) gone = true; }
+          if (gone) jar.delete(k);
+          else if (k.length + v.length <= 4096 && (jar.has(k) || jar.size < 180)) jar.set(k, v);
+        } });
+    } catch (_) {}
+  })();
   let boundaryLoad = null;
   function boundaryClient() {
     if (!opaque) return Promise.resolve(null);
@@ -634,7 +1186,7 @@
   }
   // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
   // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
-  const boundaryHooks = () => ({ onNet: d => netNotice(d), onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
+  const boundaryHooks = () => ({ onNet: d => netNotice(d), onIdb: n => idbNotice(n), onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
     onCapture: d => boundaryCapture.notice(d), onReady: () => { boundaryCapture.hello(); if (boundaryStorage && window.WizBoundaryClient) boundaryStorage.ready(window.WizBoundaryClient); }, keys: () => keyList(document), press: key => keyPress(key) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
