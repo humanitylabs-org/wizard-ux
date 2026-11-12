@@ -376,7 +376,8 @@ window.WosChatPower = function chatPower(A) {
     if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     // A channel's box keeps its own pick, painted in every box of that channel on this frame (wizard-ux issue 1309).
-    if (sh.mode === 'new' && sh.chan && A.setChanModel?.(sh.pane, { model: o.value, provider: o.provider, agent: o.agent })) { toast('◇', `New posts here on ${o.name}`, 1400); return; }
+    // Never falls through to the window's New chat pick: a model the channel refuses (another agent's) changes nothing.
+    if (sh.mode === 'new' && sh.chan) { if (A.setChanModel?.(sh.pane, { model: o.value, provider: o.provider, agent: o.agent })) toast('◇', `New posts here on ${o.name}`, 1400); return; }
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) (w.thread ? A.renderThreadNow(w) : A.renderChats(w)); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
@@ -742,7 +743,7 @@ window.WosChatPower = function chatPower(A) {
     const cur = chan ? chanCur(pane) : mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
-    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && w.thread && M.privateOptions ? M.privateOptions() : null; // a channel's box stays with its agent
+    const priv = !chan && !agent && !A.winAgent(w) && mode !== 'retry' && w.thread && M.privateOptions ? M.privateOptions() : null; // a channel's box stays with its agent
     openSheet({ type: 'model', pane, wid, sid, mode, chan, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if visible choices or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.

@@ -13,8 +13,8 @@ const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'ut
 const OPTS = [{ value: 'claude-opus', provider: 'anthropic', name: 'Opus' }, { value: 'claude-sonnet', provider: 'anthropic', name: 'Sonnet', isGlobalDefault: true }];
 
 // pane: the id the box is drawn in; thread: what the window behind it has open on its right (classic desktop).
-function harness({ pane = 'win::side', thread = null } = {}) {
-  const sent = [], toasts = [], threadSets = [], state = {}, picks = new Map(), paints = [];
+function harness({ pane = 'win::side', thread = null, refuse = false } = {}) {
+  const sent = [], toasts = [], threadSets = [], state = {}, picks = new Map(), paints = [], sheets = [];
   const w = { id: 'win', app: 'chats', thread, chan: { id: 'launch' } };
   const paneWin = pane === 'win' ? w : { id: pane, get thread() { return null; } };
   const box = id => (id === pane ? 'chan::launch' : id === 'win' && !w.thread ? 'chan::launch' : '');
@@ -22,10 +22,10 @@ function harness({ pane = 'win::side', thread = null } = {}) {
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) }, addEventListener() {},
     WizCore: { esc: String, clip: s => s }, WizConfig: { agent: () => 'Fixture' }, WizLive: { session: id => (id === 't1' ? { id: 't1', status: 'completed' } : null) },
     WosAgents: { isOther: a => !!a && a !== 'hermes', get: id => ({ id }), isPrivate: () => false },
-    WosModels: { ready: true, options: OPTS, load: async () => {}, currentRoute: () => ({ model: 'claude-sonnet', provider: 'anthropic' }), privateOptions: () => [],
+    WosModels: { ready: true, options: OPTS, load: async () => {}, currentRoute: () => ({ model: 'claude-sonnet', provider: 'anthropic' }), privateOptions: () => [{ value: 'p-model', provider: 'p', name: 'Private', agent: 'private-agent', private: true }],
       defaultOption: () => OPTS[1], name: v => v, short: v => (OPTS.find(o => o.value === v) || {}).name || v, ours: () => false,
       setThreadModel: async (sid, o) => { threadSets.push([sid, o.value]); return { model: o.value, provider: o.provider }; },
-      sheetHtml: opt => { paints.push(opt.cur); return { list: OPTS, html: '' }; } },
+      sheetHtml: opt => { paints.push(opt.cur); sheets.push(opt); return { list: OPTS, html: '' }; } },
     WosOutbox: { unsent: () => [], enqueue: async it => { sent.push(it); return { ...it, sessionId: 'wizard_new_' + sent.length, durable: true }; } } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(kit, ctx); vm.runInContext(power, ctx);
   const H = { root: () => ({ querySelectorAll: () => [] }), win: id => (id === 'win' ? w : id === pane ? paneWin : null), recordReply: () => 'recording', recordingFor: () => '', viewContext: () => '', overlay() {} };
@@ -33,10 +33,10 @@ function harness({ pane = 'win::side', thread = null } = {}) {
     owner: id => String(id).replace(/::(list|side)$/, ''), elOf: () => ({ querySelectorAll: () => [], querySelector: () => null, insertAdjacentHTML() {}, classList: { remove() {}, add() {} }, style: { removeProperty() {}, setProperty() {} } }),
     MIC_SVG: '<svg ', closeRowSheet() {}, vib() {}, isWorking: () => false, takeComposer: () => ({ text: '', files: [], done() {}, putBack() {} }), leaveAfterSend: () => false, openChat() {},
     winAgent: () => '', chanOpen: x => (!x.thread ? { id: 'launch', name: 'Launch' } : null), chanSpaceOf: x => (!x.thread ? 'launch' : null), spaceMember() {},
-    chanBox: box, chanModel: id => (box(id) ? picks.get(box(id)) || null : null), setChanModel: (id, r) => { if (!box(id)) return false; picks.set(box(id), r); return true; } });
+    chanBox: box, chanModel: id => (box(id) ? picks.get(box(id)) || null : null), setChanModel: (id, r) => { if (!box(id) || refuse) return false; picks.set(box(id), r); return true; } });
   const click = (sel, data = {}) => api.click({ target: { closest: s => (s === sel ? { dataset: data } : null) } }, pane);
   const label = () => api.modelLabel({ ...paneWin, thread: '__new__' }, null, picks.get('chan::launch') || null); // a box: null = its default
-  return { api, w, sent, toasts, threadSets, state, picks, paints, click, label };
+  return { api, w, sent, toasts, threadSets, state, picks, paints, sheets, click, label };
 }
 
 for (const [where, pane] of [['AI apps feed pane', 'win::side'], ['classic list pane', 'win::list'], ['phone (the window itself)', 'win']]) {
@@ -64,6 +64,16 @@ test('classic: a pick in the list pane\'s channel box never changes the thread o
   await new Promise(r => setImmediate(r));
   assert.deepEqual(h.threadSets, [], 'no thread model change');
   assert.equal(h.picks.get('chan::launch')?.model, 'claude-opus');
+});
+
+test('classic: the channel box menu lists no private models, and a refused pick never lands on the window (review #1396)', () => {
+  const h = harness({ pane: 'win::list', thread: 't1' });
+  h.click('[data-chmodel]');
+  assert.ok(!h.sheets.at(-1).priv?.length, 'no private models in a channel box menu');
+  const r = harness({ pane: 'win::list', thread: 't1', refuse: true });
+  r.click('[data-chmodel]'); r.click('[data-mpick]', { mpick: '0' });
+  assert.equal(r.state.newModel, undefined, 'the window\'s New chat pick is untouched');
+  assert.equal(r.picks.size, 0);
 });
 
 test('with no box pick the label shows the default, never the window\'s New chat pick (review)', () => {
