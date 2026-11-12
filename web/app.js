@@ -1632,7 +1632,8 @@
   function watchFrames(root) {
     $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el, W[el.closest('.win')?.dataset.win]?.url));
     $$('iframe.appframe', root).forEach(f => {
-      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden) bridgeFrame(f); }); } return; }
+      // A sandboxed repair page (browser boundary) is never read: core/reach.js talks to it over the boundary channel.
+      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden && !(window.WizBrowserBoundary?.owns(f) && f.hasAttribute('sandbox'))) bridgeFrame(f); }); } return; }
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
@@ -2119,7 +2120,7 @@
    * list and open thread, app frames reload where they are, built-in views remount. Nothing closes or moves. */
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
-    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return; }
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); window.WizReach?.reloadRepair(el.querySelector('iframe')); return; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       window.WizCore.refreshApps?.();
       Promise.resolve(LIVE?.refresh?.()).catch(() => {}).then(() => {

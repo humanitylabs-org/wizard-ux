@@ -7,7 +7,8 @@
  *
  * The shell then never reads an app document. Back, appearance and field insertion go through postMessage:
  *  - attach(frame) gives the frame a fresh random channel on every load and says `hello`; the app's
- *    core/browser-boundary-client.js answers `ready` on that channel. Origin `null` is never an identity: a message is
+ *    core/browser-boundary-client.js answers `ready` on that channel (ready(frame), and a `wizard:boundary-ready`
+ *    event on the frame element). Origin `null` is never an identity: a message is
  *    admitted only from the registered frame's own contentWindow with the current channel.
  *  - back(frame, onRoot): asks the app to go back one step. `handled` = the app did it; `atRoot` = onRoot() runs the
  *    shell's own next step. No answer (timeout) stays put, because a late answer may already have moved the app.
@@ -146,6 +147,9 @@
     if (d.channel !== st.channel) return;
     if (d.op === 'ready') {
       st.ready = true;
+      // The shell's own proof that an app document answered on this load (the Troubleshooter window waits on it,
+      // core/reach.js). Only this frame's own window, on the current channel, can raise it.
+      try { st.frame.dispatchEvent(new Event('wizard:boundary-ready')); } catch (_) {}
       if (st.appearance) send(st, 'theme', { appearance: st.appearance });
       try { window.WizAppearance?.sync?.(); } catch (_) {}
       return;
@@ -183,6 +187,8 @@
     frameAttributes: url => (url !== undefined && shellPage(url) ? '' : `sandbox="${SANDBOX}"`),
     shellPage,
     owns: frame => sessions.has(frame),
+    // Whether the app document now in this frame answered on its current channel (`wizard:boundary-ready` fires then).
+    ready: frame => { const st = sessions.get(frame); return !!(connected(st) && st.ready); },
     attach,
     // Shell-side admission for a later bounded app service: registered element + its WindowProxy + current channel.
     admits(frame, source, channel) { const st = sessions.get(frame); return !!(connected(st) && st.ready && frame.contentWindow === source && st.channel === channel); },
