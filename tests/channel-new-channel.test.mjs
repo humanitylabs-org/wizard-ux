@@ -14,12 +14,12 @@ const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 // --- the list row and the form it opens (chats.js) ---
-function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q = '', archived = [] } = {}) {
+function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q = '', archived = [], focused = '' } = {}) {
   const calls = [], wins = { w1: { id: 'w1', thread: null }, 'w1::side': { id: 'w1::side', thread: null } };
   const ctx = {
     calls, esc, chanView: view, chanArchOpen: false, chanCarried: true, chanCarryAfter: 0,
     W: wins, channelsOn: () => true, chanOpen: () => open, norm: s => String(s || '').trim().toLowerCase(), ch: () => ({ q }),
-    elOf: () => ({ querySelector: () => null }), focusAgents: () => agents, focusOf: () => null, focusedAgent: () => '',
+    elOf: () => ({ querySelector: () => null }), focusAgents: () => agents, focusOf: () => null, focusedAgent: () => focused, AGS: () => ({ defaultId: () => 'hermes' }),
     channelsFor: (w, o = {}) => o.archived ? archived : [{ id: 'b', name: 'Beta' }, { id: '__general__', name: 'General', general: true }],
     channelLine: c => `<div class="ch-chan" data-chchan="${c.id}"></div>`, chanPruned: () => false, chanElsewhere: () => false, H: {}, chanStore: () => null,
     openSpacePicker: (w, a, tab, o) => { calls.push(['picker', w.id, a, j(o)]); ctx.spacePicker = { o }; }, spacePicker: null,
@@ -35,6 +35,13 @@ test('1308: the Channels list ends with an accent + New channel row after Genera
   assert.ok(gen >= 0 && add > gen && arch > add, 'General, then + New channel, then Archive');
   assert.match(html, /<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog">[^]*New channel<\/b><\/button>/);
   assert.doesNotMatch(list({ agents: [] }).channelsBody({ id: 'w1' }, []), /data-chchannew/, 'no agent to own a channel: no row');
+  // A list still on an agent that is hidden now gets no row: its channel is never filed under another agent (Codex P1).
+  const hidden = list({ agents: [{ id: 'hermes' }, { id: 'pi' }], focused: 'philosopher' });
+  assert.doesNotMatch(hidden.channelsBody(hidden.W.w1, []), /data-chchannew/); assert.equal(hidden.chanNew('w1'), false);
+  const pi = list({ agents: [{ id: 'hermes' }, { id: 'pi' }], focused: 'pi' }); assert.equal(pi.chanNew('w1'), true); assert.equal(pi.calls[0][2], 'pi', 'the list\'s own agent');
+  // The list's own + (phone, classic) on the Channels list starts a new channel as well (Codex P2).
+  assert.match(chats, /const fabNew = chanOn && chanView === 'channels' && !n && !F && typeof chanNewAgent === 'function' && !!chanNewAgent\(w\);/);
+  assert.match(chats, /class="ch-fab" \$\{fabNew \? 'data-chchannew' : 'data-chnew'\} data-chfab aria-label="\$\{fabNew \? 'New channel' :/);
   const css = read('web/tweaks/wizard/chat-channels/tweak.css');
   assert.match(css, /\.ch-chan-add \{[^}]*min-height: 44px;[^}]*color: var\(--wz-accent/, 'one line high like the channels, in the skin accent');
 });
@@ -72,7 +79,7 @@ test('1308: creating a channel opens its empty feed with the box focused and sen
   assert.deepEqual(on, [['create', 'Test', 'hermes'], ['close'], ['target', 'w1::side'], ['open', 'feed::side', 'ch-new'], ['end', 'feed::side', true], ['end', 'feed::side', true]]);
   assert.ok(!on.some(c => c[0] === 'sendChat'), 'no "Fill my new Space" chat with channels on');
   // General is always a channel (wizard-ux issue 1308): its name is taken.
-  assert.match(chats, /norm\(s\.name\) === norm\(name\)\) \|\| \(SPACE\.ch && norm\(name\) === 'general'\)\) \{ p\.error = SPACE\.ch \? 'Already a channel'/);
+  assert.match(chats, /norm\(s\.name\) === norm\(name\)\) \|\| \(norm\(name\) === 'general' && SPACE\.ch\)\) \{ p\.error = SPACE\.ch \? 'Already a channel'/);
   const off = await create(false);
   assert.deepEqual(off.at(-1), ['sendChat', 'Fill my new Space “T'], 'classic Spaces (switch off) keep their auto-fill');
 });

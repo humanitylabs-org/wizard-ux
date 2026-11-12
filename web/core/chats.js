@@ -644,8 +644,13 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
-  // The agent a new channel from this list belongs to: the Focus's agent, else the first agent with channels.
-  const chanNewAgent = w => { const ags = typeof focusAgents === 'function' ? focusAgents() : [], a = ags.length ? focusedAgent(focusOf(w)) : ''; return ags.some(x => x.id === a) ? a : ags[0]?.id || ''; }; // (tests slice the list without the agents)
+  // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
+  // it is a visible one the form can take (a hidden agent's list gets no row: never filed under another agent).
+  const chanNewAgent = w => {
+    const ags = typeof focusAgents === 'function' ? focusAgents() : []; if (!ags.length) return ''; // (tests slice the list without the agents)
+    const a = focusedAgent(focusOf(w)) || AGS()?.defaultId() || 'hermes';
+    return ags.some(x => x.id === a) ? a : '';
+  };
   // + New channel (wizard-ux issue 1308): the existing name form, opened straight on its input; Esc or outside cancels.
   function chanNewForm(w, tab = null) {
     const a = w && chanNewAgent(w); if (!a) return false;
@@ -1909,7 +1914,7 @@ window.WizCore.chats = function createChats(H) {
     if (p !== spacePicker || p.busy) return;
     const name = p.name.trim();
     if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
-    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name)) || (SPACE.ch && norm(name) === 'general')) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
+    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name)) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
     // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.
     const onStore = typeof chanStore === 'function' && !!chanStore();
     if (onStore ? spaces().filter(s => spaceAgent(s) === p.agent).length >= CHAN_STORE_MAX : spaces().length >= 50) { p.error = onStore ? `Maximum ${CHAN_STORE_MAX} channels` : SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }
@@ -2182,7 +2187,9 @@ window.WizCore.chats = function createChats(H) {
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     // A channel's feed has its message box instead (wizard-ux issue 1258); an archived one takes no new posts (Restore
     // first), as its sheet offers no New post.
-    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${feed ? esc(`New post in # ${feed.name}`) : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
+    // On the Channels list (none open) the list's own + starts a new channel too (wizard-ux issue 1308).
+    const fabNew = chanOn && chanView === 'channels' && !n && !F && typeof chanNewAgent === 'function' && !!chanNewAgent(w);
+    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" ${fabNew ? 'data-chchannew' : 'data-chnew'} data-chfab aria-label="${fabNew ? 'New channel' : AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
     // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
