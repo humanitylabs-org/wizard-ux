@@ -1712,6 +1712,9 @@ test('issue 1317: Mark done clears amber and green in the feed, Activity and the
     f.channelBack(f.w); f.w.focus = null;
     assert.doesNotMatch(lineOf(f, rows, cid), /^ unread"|ch-chan-ind/, kind + ': the channel line is clear');
     assert.equal(f.canMarkDone(s), false, kind + ': nothing left to clear');
+    // Mark unread after Mark done: green is back, and Mark done is offered again to clear it (Codex P2).
+    s.fresh = true; assert.equal(f.canMarkDone(s), true, kind + ': offered again after Mark unread');
+    assert.equal(f.markDone('w', sid), true); assert.equal(s.fresh, false, kind + ': and it reads the thread');
     // A later reply: green and amber come back as normal.
     Object.assign(s, { fresh: true, at: NOW - 0.5 * H, lastAssistantAt: new Date(NOW - 0.5 * H).toISOString() });
     assert.match(lineOf(f, rows, cid), /^ unread"[^]*aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="1 unread">/, kind + ': back after a new reply');

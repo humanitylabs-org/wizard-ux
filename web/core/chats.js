@@ -453,7 +453,8 @@ window.WizCore.chats = function createChats(H) {
   const MARK_DONE = 'wizard/mark-done', MARK_DONE_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
   const markDoneOn = () => { try { return channelsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(MARK_DONE); } catch (_) { return false; } };
   const handledNow = s => !!s && markDoneOn() && !!LIVE.handled?.(s);
-  const canMarkDone = s => !!s && markDoneOn() && !!LIVE.markHandled && !isWorking(s) && !s.archived && !handledNow(s);
+  // Offered while there is a marker to clear: not handled through its newest reply yet, or marked unread again since.
+  const canMarkDone = s => !!s && markDoneOn() && !!LIVE.markHandled && !isWorking(s) && !s.archived && (!handledNow(s) || !!LIVE.isNew?.(s));
   function markDone(wid, sid) {
     const s = (wid && W[owner(wid)] ? rowOf(owner(wid), sid) : null) || LIVE.session(sid); if (!canMarkDone(s)) return false;
     vib(8);
