@@ -1020,9 +1020,16 @@
   //  - Events (level, PCM, chunks, state, warnings) go only to the document that started or attached the session; a
   //    new document gets none until it attaches. A reload never stops the recorder (as same-origin).
   //  - The recorder is held for a shell update from before the microphone prompt until it stops, also across a reload.
+  //  - Hold to record on a touch screen: the browser counts a touch as a tap only when the finger lifts, so a start on
+  //    touch-down has no tap yet. The client marks such a start `press` (a finger is down in it now). The recorder
+  //    starts at once, in front only and without computer audio, but the take is HELD: nothing of it (no level, audio,
+  //    chunks) reaches the page until a real tap in this visible window confirms it (`lifted` from browser-boundary.js:
+  //    a finger lifting after a long press activates the frame without focusing it). The client then asks
+  //    `capture.confirm`, or the app's own Stop comes right then. Unconfirmed within PRESS_MS, stopped without a tap, or
+  //    its document gone: the take is discarded, so a page alone never gets audio.
   const CAPTURE_OPTS = ['kind', 'mime', 'audio', 'pcm', 'chunkMs', 'maxMs', 'maxBytes', 'systemAudio', 'meta', 'seqBase', 'offsetMs', 'preparedId', 'resumeId'];
   const CAPTURE_CALLS = ['stop', 'cancel', 'pause', 'resume', 'setSystemAudio', 'chunks', 'info'];
-  const PREPARED_MS = 60000;
+  const PREPARED_MS = 60000, PRESS_MS = 120000, PRESS_QUEUE = 4000;
   function captureOpts(opts) {
     const o = {};
     if (opts && typeof opts === 'object') for (const k of CAPTURE_OPTS) if (opts[k] !== undefined && typeof opts[k] !== 'function') o[k] = opts[k];
@@ -1055,17 +1062,51 @@
   // itself keeps going.
   function captureForget(st, gen) {
     const c = st.bcap; if (!c) return;
-    for (const [id, e] of c.sessions) if (e.gen !== gen) { for (const off of e.offs) { try { off(); } catch (_) {} } c.sessions.delete(id); }
+    for (const [id, e] of c.sessions) if (e.gen !== gen) { if (e.held) captureDrop(st, e); for (const off of e.offs) { try { off(); } catch (_) {} } c.sessions.delete(id); }
     for (const [id, p] of c.prepared) if (p.gen !== gen) { c.prepared.delete(id); try { p.release(); } catch (_) {} }
     c.said = undefined;
+  }
+  // Held takes not yet confirmed, kept in the shell's own storage (a page can't reach it): a take still held when the
+  // shell itself reloads is never handed to the app afterwards (pending, attach, resume); it is discarded instead.
+  const HELD_KEY = 'wos.capture.held.v1';
+  const heldIds = () => { try { const v = JSON.parse(window.localStorage.getItem(HELD_KEY) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (_) { return []; } };
+  const heldMark = (id, on) => {
+    try {
+      const ids = heldIds().filter(x => x !== id); if (on) ids.push(id);
+      if (ids.length) window.localStorage.setItem(HELD_KEY, JSON.stringify(ids.slice(-20))); else window.localStorage.removeItem(HELD_KEY);
+    } catch (_) {}
+  };
+  // A held take (see the header) that was never confirmed: discard it; none of it ever reached the page.
+  function captureDrop(st, e, frame) {
+    const h = e.held; if (!h) return; e.held = null; clearTimeout(h.timer);
+    const id = e.session.id; st.bcap?.unconfirmed.add(id);
+    for (const off of e.offs) { try { off(); } catch (_) {} }
+    if (st.bcap?.sessions.get(id) === e) st.bcap.sessions.delete(id);
+    Promise.resolve().then(() => e.session.cancel()).catch(() => {}).finally(() => { e.release(); heldMark(id, false); st.bcap?.unconfirmed.delete(id); });
+    if (frame) { try { window.WizBrowserBoundary.notice(frame, 'capture', { id, event: 'warn', value: 'Recording needs a tap in the app. It was discarded.' }); } catch (_) {} }
+  }
+  function captureConfirm(e) {
+    const h = e.held; if (!h) return; e.held = null; clearTimeout(h.timer); heldMark(e.session.id, false);
+    for (const [event, value] of h.queue) e.deliver(event, value);
+  }
+  // Takes held when the shell reloaded: discarded, never listed.
+  async function heldStale(R, appId, takes) {
+    const stale = new Set(heldIds()); if (!stale.size) return takes;
+    const keep = [];
+    for (const t of takes) {
+      if (!stale.has(t?.id)) { keep.push(t); continue; }
+      try { await R.ack(appId, t.id); } catch (_) {}
+      heldMark(t.id, false);
+    }
+    return keep;
   }
   async function boundaryCapture(st, frame, method, args, ctx) {
     const B = window.WizBrowserBoundary, R = window.WizAppCapture, gen = B.gen(frame), alive = () => boundaryLive(st) && B.gen(frame) === gen;
     if (!R) throw fault('Shared capture unavailable');
-    if (!st.bcap) { st.bcap = { sessions: new Map(), prepared: new Map(), said: undefined }; (st.captureOffs ||= new Set()).add(() => captureForget(st, null)); }
+    if (!st.bcap) { st.bcap = { sessions: new Map(), prepared: new Map(), said: undefined, unconfirmed: new Set() }; (st.captureOffs ||= new Set()).add(() => captureForget(st, null)); }
     const c = st.bcap, out = value => ({ capture: value === undefined ? null : value });
     if (method === 'capture.sync') { const current = captureCurrent(st); c.said = JSON.stringify(current); return out({ current, caps: captureCaps() }); }
-    if (method === 'capture.pending') { const takes = await R.pending(st.appId); return out(takes); }
+    if (method === 'capture.pending') { const takes = await R.pending(st.appId); return out(Array.isArray(takes) ? await heldStale(R, st.appId, takes) : takes); }
     if (method === 'capture.ack') { if (typeof args?.id !== 'string') throw fault('Invalid capture id'); await R.ack(st.appId, args.id); return out(true); }
     if (method === 'capture.settle') { const keep = typeof args?.keepId === 'string' ? args.keepId : null; return out(await R.settle(st.appId, keep)); }
     if (method === 'capture.release') { const p = c.prepared.get(args?.id); if (p && p.gen === gen) { c.prepared.delete(args.id); p.release(); } return out(true); }
@@ -1078,10 +1119,25 @@
       c.prepared.set(p.id, { gen, at: Date.now(), release: p.release });
       return out({ id: p.id });
     }
+    if (method === 'capture.confirm') {
+      // A lift while this document's press start is still on its way (a slow microphone prompt outlives the tap): the
+      // start confirms itself when it lands (Codex P2).
+      if (ctx?.lifted) c.lift = { gen, at: Date.now() };
+      const e = c.sessions.get(args?.id);
+      if (!e || e.gen !== gen || !e.held || !ctx?.lifted) return out(!!(e && e.gen === gen && !e.held));
+      captureConfirm(e); return out(true);
+    }
     if (method === 'capture.call') {
       const e = c.sessions.get(args?.id), what = args?.method;
       if (!e || e.gen !== gen) throw fault('This recording is not this page\'s');
       if (!CAPTURE_CALLS.includes(what)) throw fault('Capture method unavailable');
+      if (e.held) {
+        // The finger lifting is the tap that confirms a held take (the app's Stop usually comes right then).
+        if (ctx?.lifted) captureConfirm(e);
+        else if (what === 'stop') { captureDrop(st, e, frame); throw fault('Recording needs a tap in the app'); }
+        else if (what === 'chunks' || what === 'setSystemAudio') throw fault('Recording needs a tap in the app');
+        else if (what === 'cancel') { captureDrop(st, e); return out(null); }
+      }
       if (what === 'info') return out(captureInfo(e.session));
       if (what === 'stop' || what === 'cancel') {
         // Stop and Discard are distinct intents; the recorder arbitrates their race (as same-origin).
@@ -1105,7 +1161,9 @@
     }
     const unprepare = () => { if (prep) { try { prep.release(); } catch (_) {} prep = null; } };
     const fresh = !attaching && !opts.resumeId;
-    if (fresh && !ctx?.tapped && !prep) { unprepare(); throw fault('Recording needs a tap in the app'); }
+    // A start on touch-down (see the header): only while this window is in front, one at a time, no computer audio.
+    const press = fresh && !ctx?.tapped && !prep && args?.press === true && !opts.systemAudio && inFront(st) && ![...c.sessions.values()].some(x => x.held);
+    if (fresh && !ctx?.tapped && !prep && !press) { unprepare(); throw fault('Recording needs a tap in the app'); }
     if (shellVoiceBusy()) { unprepare(); throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' }); }
     // The hold is the recorder's, not the document's: it stays across a reload until the recording stops (onReset keeps
     // sheetHolds).
@@ -1114,7 +1172,7 @@
     const release = () => { if (released) return; released = true; removeEventListener('wizard-app-capture-state', onState); st.sheetHolds.delete(hold); if (st.holds.delete(hold)) changed(); };
     const onState = () => { if (R.getState?.().active === false) release(); };
     addEventListener('wizard-app-capture-state', onState);
-    let session;
+    let session; const t0 = Date.now();
     try {
       session = await (attaching ? R.attach(st.appId) : opts.resumeId && R.resume ? R.resume(st.appId, opts.resumeId, opts) : R.start(st.appId, opts));
       if (!session) { release(); unprepare(); return out(null); }
@@ -1131,21 +1189,39 @@
       throw err;
     }
     const old = c.sessions.get(session.id);
+    // A held take is never handed to anyone but the document that pressed it, and stays held for it. One held when the
+    // shell reloaded has nobody to confirm it: it is discarded.
+    if (c.unconfirmed.has(session.id) || (old?.held && old.gen !== gen)) { release(); return out(null); }
+    if (!press && !old?.held && heldIds().includes(session.id)) {
+      try { await session.cancel(); } catch (_) {}
+      heldMark(session.id, false); release(); return out(null);
+    }
     if (old) for (const off of old.offs) { try { off(); } catch (_) {} }
-    const e = { session, gen, offs: [], finished: {}, release, infoAt: 0 };
+    const e = { session, gen, offs: [], finished: {}, release, infoAt: 0, held: null };
+    const holdUntil = until => { e.held = { queue: old?.held?.queue || [], until, timer: setTimeout(() => captureDrop(st, e, frame), Math.max(0, until - Date.now())) }; };
+    if (old?.held) { clearTimeout(old.held.timer); holdUntil(old.held.until); old.held = null; }
+    else if (press) { heldMark(session.id, true); holdUntil(Date.now() + PRESS_MS); }
     c.sessions.set(session.id, e);
+    if (e.held && c.lift?.gen === gen && c.lift.at >= t0) captureConfirm(e);
     // Events go to this document only. Levels come many times a second; the session info rides along at most once a second.
-    const send = (event, value) => {
+    e.deliver = (event, value) => {
       if (c.sessions.get(session.id) !== e || !alive()) return;
       const now = Date.now(), withInfo = event !== 'level' && event !== 'pcm' || now - e.infoAt >= 1000;
       if (withInfo) e.infoAt = now;
       B.notice(frame, 'capture', { id: session.id, event, value, ...(withInfo ? { info: captureInfo(session) } : {}) });
     };
+    // A held take keeps its events (not the levels, which are only live) until it is confirmed.
+    const send = (event, value) => {
+      if (!e.held) return e.deliver(event, value);
+      if (event === 'level' || c.sessions.get(session.id) !== e) return;
+      if (e.held.queue.length >= PRESS_QUEUE) return captureDrop(st, e, frame);
+      e.held.queue.push([event, value]);
+    };
     for (const [event, on] of [['level', 'onLevel'], ['pcm', 'onPcm'], ['chunk', 'onChunk'], ['state', 'onState'], ['warn', 'onWarn']]) {
       if (typeof session[on] !== 'function') continue;
       try { e.offs.push(session[on](v => send(event, event === 'warn' && v && typeof v === 'object' ? String(v.message || '') : v))); } catch (_) {}
     }
-    return out({ id: session.id, info: captureInfo(session) });
+    return out({ id: session.id, info: captureInfo(session), ...(e.held ? { held: true } : {}) });
   }
   if (window.WizBrowserBoundary?.serve) {
     window.WizBrowserBoundary.serve((frame, method, args, ctx) => {

@@ -475,3 +475,100 @@ test('capture: a preparation the recorder never used is released when the start 
   await call('capture.release', { id: q });
   assert.deepEqual(R.asked.at(-1), ['release', 'morning-report']);
 });
+
+// Slice 29: hold to record on a touch screen. A start on touch-down (`press`, no tap yet) records at once but the take is
+// held: nothing reaches the page until a real tap in the window (`lifted`) confirms it; otherwise it is discarded.
+function pressRecorder() {
+  const asked = []; let active = null, n = 0;
+  const R = { asked, get active() { return active; }, getState: () => ({ active: !!active }), capabilities: () => ({}),
+    current: appId => (active?.appId === appId ? { id: active.id, appId } : null),
+    start: async (appId, o) => { asked.push(['start', appId, o]); return session(appId); },
+    attach: async appId => { asked.push(['attach', appId]); return active?.appId === appId ? active.api : null; },
+    pending: async appId => { asked.push(['pending', appId]); return [{ id: 't0', durationMs: 1 }, { id: 'kept', durationMs: 2 }]; },
+    ack: async (appId, id) => { asked.push(['ack', appId, id]); }, settle: async () => [] };
+  function session(appId, id = 't' + (++n)) {
+    const l = { level: new Set(), chunk: new Set() };
+    active = { id, appId, l, api: { id, getInfo: () => ({ phase: 'recording', durationMs: 7 }),
+      onLevel: fn => { l.level.add(fn); return () => l.level.delete(fn); }, onChunk: fn => { l.chunk.add(fn); return () => l.chunk.delete(fn); },
+      chunks: async () => [{ seq: 0 }], stop: async () => { asked.push(['stop', id]); active = null; return { id, durationMs: 7 }; },
+      cancel: async () => { asked.push(['cancel', id]); active = null; } } };
+    return active.api;
+  }
+  return R;
+}
+function store() { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), m }; }
+const settle = () => new Promise(r => setTimeout(r, 0));
+test('capture: a start on touch-down is held until the finger lifts; the page gets its audio only then', async () => {
+  const R = pressRecorder(), ls = store(), f = fixture({ win: { WizAppCapture: R, localStorage: ls } });
+  const call = (m, a, ctx = {}) => f.B.served(f.frame, m, a, ctx);
+  const s = await call('capture.start', { opts: { kind: 'audio' }, press: true });
+  assert.deepEqual(plainify(s), { capture: { id: 't1', info: { phase: 'recording', durationMs: 7 }, held: true } });
+  assert.deepEqual(JSON.parse(ls.getItem('wos.capture.held.v1')), ['t1'], 'kept in the shell\'s own storage while held');
+  for (const fn of R.active.l.level) fn(0.5);
+  for (const fn of R.active.l.chunk) fn({ seq: 0, startMs: 0 });
+  assert.equal(f.notices.filter(n => n.kind === 'capture' && n.id === 't1').length, 0, 'nothing of a held take reaches the page');
+  await assert.rejects(call('capture.call', { id: 't1', method: 'chunks' }), /needs a tap/, 'nor its audio on request');
+  assert.deepEqual(plainify(await call('capture.confirm', { id: 't1' })), { capture: false }, 'a page alone can\'t confirm it');
+  assert.deepEqual(plainify(await call('capture.confirm', { id: 't1' }, { lifted: true })), { capture: true });
+  assert.deepEqual(plainify(f.notices.filter(n => n.id === 't1').map(n => [n.event, n.value])), [['chunk', { seq: 0, startMs: 0 }]], 'the held chunk arrives (levels were only live)');
+  assert.equal(ls.getItem('wos.capture.held.v1'), null);
+  for (const fn of R.active.l.level) fn(0.7);
+  assert.deepEqual(plainify(f.notices.at(-1)).value, 0.7, 'and it is live from now on');
+  assert.deepEqual(plainify(await call('capture.call', { id: 't1', method: 'stop' })), { capture: { id: 't1', durationMs: 7 } });
+  // The app's own Stop right as the finger lifts confirms it too.
+  await call('capture.start', { opts: {}, press: true });
+  for (const fn of R.active.l.chunk) fn({ seq: 0 });
+  assert.deepEqual(plainify(await call('capture.call', { id: 't2', method: 'stop' }, { lifted: true })), { capture: { id: 't2', durationMs: 7 } });
+  assert.deepEqual(plainify(f.notices.filter(n => n.id === 't2').map(n => n.event)), ['chunk']);
+  // The finger lifts while the start is still on its way (a slow microphone prompt): the start confirms itself (Codex P2).
+  let go; const slow = R.start; R.start = async (appId, o) => { await new Promise(r => { go = r; }); return slow(appId, o); };
+  const pending = call('capture.start', { opts: {}, press: true });
+  for (let i = 0; i < 20 && !go; i++) await settle();
+  assert.deepEqual(plainify(await call('capture.confirm', {}, { lifted: true })), { capture: false });
+  go(); const landed = plainify(await pending); R.start = slow;
+  assert.equal(landed.capture.held, undefined, 'confirmed as it lands');
+  for (const fn of R.active.l.level) fn(0.9);
+  assert.equal(plainify(f.notices.at(-1)).value, 0.9);
+  await call('capture.call', { id: landed.capture.id, method: 'stop' });
+  // A lift from before this start began confirms nothing.
+  await call('capture.confirm', {}, { lifted: true }); await new Promise(r => setTimeout(r, 5));
+  assert.equal(plainify(await call('capture.start', { opts: {}, press: true })).capture.held, true);
+  await call('capture.call', { id: 't4', method: 'cancel' });
+});
+test('capture: a held take stopped without a tap, or left by its document, is discarded; a page never gets it later', async () => {
+  const R = pressRecorder(), ls = store(), f = fixture({ win: { WizAppCapture: R, localStorage: ls } });
+  const call = (m, a, ctx = {}) => f.B.served(f.frame, m, a, ctx);
+  await call('capture.start', { opts: {}, press: true });
+  for (const fn of R.active.l.chunk) fn({ seq: 0 });
+  await assert.rejects(call('capture.call', { id: 't1', method: 'stop' }), /needs a tap/);
+  await settle();
+  assert.deepEqual(R.asked.at(-1), ['cancel', 't1'], 'discarded, never stopped into a take');
+  assert.deepEqual(plainify(f.notices.filter(n => n.id === 't1').map(n => [n.event, n.value])), [['warn', 'Recording needs a tap in the app. It was discarded.']]);
+  assert.deepEqual(plainify(f.services.inspect()[0].holds), [], 'its update hold ends');
+  assert.equal(ls.getItem('wos.capture.held.v1'), null);
+  // A new document in the window: the held take is discarded and can't be attached.
+  await call('capture.start', { opts: {}, press: true });
+  f.B.genNow = 2; f.reset(); await settle();
+  assert.deepEqual(R.asked.at(-1), ['cancel', 't2']);
+  assert.equal(plainify(await call('capture.start', { attach: true })).capture, null);
+  // Only while the window is in front, one at a time, never with computer audio.
+  await call('capture.start', { opts: {}, press: true });
+  await assert.rejects(call('capture.start', { opts: {}, press: true }), /needs a tap/);
+  await assert.rejects(call('capture.start', { opts: { systemAudio: true }, press: true }), /needs a tap/);
+  let front = false; const g = fixture({ win: { WizAppCapture: pressRecorder(), localStorage: store() }, front: () => front });
+  await assert.rejects(g.B.served(g.frame, 'capture.start', { opts: {}, press: true }, {}), /needs a tap/);
+  front = true; assert.equal(plainify(await g.B.served(g.frame, 'capture.start', { opts: {}, press: true }, {})).capture.held, true);
+  await call('capture.call', { id: 't3', method: 'cancel' }); await g.B.served(g.frame, 'capture.call', { id: 't1', method: 'cancel' }, {});
+  assert.deepEqual(R.asked.at(-1), ['cancel', 't3'], 'Discard needs no tap');
+});
+test('capture: a take still held when the shell reloaded is discarded, never listed or attached', async () => {
+  const R = pressRecorder(), ls = store(); ls.setItem('wos.capture.held.v1', JSON.stringify(['t0', 't1']));
+  const f = fixture({ win: { WizAppCapture: R, localStorage: ls } });
+  const call = (m, a, ctx = {}) => f.B.served(f.frame, m, a, ctx);
+  assert.deepEqual(plainify(await call('capture.pending', {})), { capture: [{ id: 'kept', durationMs: 2 }] });
+  assert.deepEqual(R.asked.at(-1), ['ack', 'morning-report', 't0'], 'the held one is let go');
+  R.start('morning-report', {}); await settle(); // the recorder resumed it after the reload
+  assert.equal(plainify(await call('capture.start', { attach: true })).capture, null);
+  assert.deepEqual(R.asked.at(-1), ['cancel', 't1']);
+  assert.equal(ls.getItem('wos.capture.held.v1'), null);
+});

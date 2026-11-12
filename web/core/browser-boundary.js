@@ -66,11 +66,12 @@
   const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
-    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack'];
+    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
-  // with the tap it is handed (a fresh tap, or a recording this window prepared on one).
+  // with the tap it is handed (a fresh tap, or a recording this window prepared on one; a start on touch-down is held
+  // until a tap confirms it, capture.confirm).
   const TAPPED = ['share.text', 'share.file', 'share.wizard', 'capture.prepare'], INFLIGHT = 4;
   const NOTICE_REASONS = ['visible', 'focus', 'poll', 'agent'];
   // A share handed to this app (share.pending): only the item's own share fields, never the shell's record of it.
@@ -262,6 +263,15 @@
   // ancestor) for a few seconds; a page that only posts messages never gets it. No API: refuse.
   const activated = () => globalThis.navigator?.userActivation?.isActive === true;
   const focusedFrame = f => document.activeElement === f && (typeof document.hasFocus !== 'function' || document.hasFocus());
+  // A finger lifting after a long press (hold to record) activates the frame and the shell but gives the frame no focus.
+  // Such an activation came from a frame, not from the shell itself, when the shell saw no input of its own in the
+  // activation's lifetime (Chromium: 5 s) and focus is not in another frame. Used only to confirm a held recording.
+  let shellInputAt = 0;
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'touchend', 'keydown', 'click']) {
+    try { addEventListener(type, e => { if (e.isTrusted) shellInputAt = Date.now(); }, true); } catch (_) {}
+  }
+  const frameActivated = f => activated() && visible(f) && (focusedFrame(f) ||
+    (Date.now() - shellInputAt > 5500 && !(document.activeElement?.tagName === 'IFRAME' && document.activeElement !== f)));
   const word = v => (typeof v === 'string' && v.length <= 32 ? v : '');
   function emit(frame, ev) { for (const fn of [...inputListeners]) { try { fn(frame, ev); } catch (_) {} } }
   function input(st, d) {
@@ -325,8 +335,8 @@
       if ((st.inflight || 0) >= INFLIGHT) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
       // Whether this request came right after a real tap or key in this focused, visible window (see TAPPED).
-      const tapped = activated() && visible(st.frame) && focusedFrame(st.frame);
-      try { value = server(st.frame, d.method, d.args, Object.freeze({ tapped })); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
+      const tapped = activated() && visible(st.frame) && focusedFrame(st.frame), lifted = tapped || frameActivated(st.frame);
+      try { value = server(st.frame, d.method, d.args, Object.freeze({ tapped, lifted })); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
       if (!value || typeof value.then !== 'function') return answer(shape(value));
       st.inflight = (st.inflight || 0) + 1;
       Promise.resolve(value).then(v => answer(shape(v)), err => answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)))

@@ -181,6 +181,16 @@ On:
   skin package sheets as same-origin paths, plus My skin's CSS up to 64 KB), again on every reload, and pushes a new one
   when the skin, a skin sheet or My skin changes. The app takes only same-origin `.css` paths; the live kit swap works
   as before. Theme content only, like the tokens. Proof: `tests/qa-browser-boundary-skin-layer.cjs`.
+- Hold to record on a touch screen: the browser counts a touch as a tap only when the finger lifts, so a start on
+  touch-down has no tap yet. The app client sends such a start as `press` (a finger is down in the page). The shell
+  starts the recorder at once (window in front, one at a time, no computer audio) but HOLDS the take: no level, audio
+  or chunk reaches the page until a real tap in that visible window confirms it. The finger lifting is that tap: it
+  activates the frame without focusing it, so `lifted` also counts an activation the shell itself did not cause (no
+  shell input for 5.5 s, focus not in another frame). The client then asks `capture.confirm`, or the app's own Stop
+  comes right then; the held audio follows and the rest is live. Unconfirmed within 2 minutes, stopped without a tap,
+  or its document gone, the take is discarded (`cancel`); a take still held when the shell reloads is discarded when
+  the app next lists or attaches (`wos.capture.held.v1`, shell storage). Proof:
+  `tests/qa-browser-boundary-touch-hold.cjs` (real Chromium, real touch input).
 - Voice commands stay closed under the boundary: an app's `voice.commands` claim must answer synchronously while the
   shell parses a held-orb command, which a message channel can't do, and no installed app registers one (apps declare
   spoken words as data, `voice_routes`, which the shell opens itself and which work as before).
@@ -191,8 +201,6 @@ On:
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - The app orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is
   answered.
-- Recording: a hold-to-record press on a touch screen gets the browser's tap only when the finger lifts, so an app
-  that starts on touch-down must prepare in an earlier tap (or start on release).
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). The
