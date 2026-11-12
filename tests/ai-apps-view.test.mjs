@@ -218,7 +218,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aiApps, 'desktop'); assert.equal(w.html.dataset.viewChrome, 'desktop', 'the shared view chrome (the three-level sheet)');
   assert.equal(w.st.inset, 84, 'hosted apps keep room for the floating orb'); assert.equal(typeof w.st.insetOrb, 'function', 'and the orb says where it is (the orb bar)');
   assert.ok(w.q('link').getAttribute('href').endsWith('/desktop.css'), 'its own stylesheet, desktop-scoped');
-  assert.equal(w.html.dataset.aadSide, 'open', 'open from 900 px up');
+  assert.equal(w.html.dataset.aadSide, 'open', 'open from 680 px up');
   assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
   // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); the sections (round 5: Ready open)
   assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 16: no ⌂ (Home = ✕, Esc, ⌥`)');
@@ -338,7 +338,27 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   const withoutSigilMarkup = js.replace('micG.innerHTML', 'micGlyph').replace('micG.innerHTML = html', 'micGlyph = html');
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(withoutSigilMarkup), 'no independent markup, timers, storage or fetches beyond the shared sigil glyph');
   assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS, MIC \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
-  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;/);
+  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680;/);
+});
+
+test('desktop: the sidebar stays open down to 680 px wide, the rail below (James, 12 Nov 2026: half / third of the screen)', async () => {
+  const had = globalThis.innerWidth;
+  const at = async width => {
+    globalThis.innerWidth = width;
+    const w = world({ shell: 'desktop' }), store = {};
+    Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n, storage: { get: k => k in store ? store[k] : null, set: (k, v) => { store[k] = v; } },
+      keys: { on: () => () => {}, guide: () => () => {} }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk: () => {}, command: () => {} },
+      desk: { settings: () => {}, home: () => {} } });
+    w.api.apps.inset = () => () => {};
+    const off = (await layout()).default(w.api);
+    const side = w.html.dataset.aadSide; off?.();
+    return side;
+  };
+  try {
+    assert.equal(await at(700), 'open', 'open at 700 px');
+    assert.equal(await at(680), 'open', 'open at exactly 680 px');
+    assert.equal(await at(660), 'rail', 'the rail below 680 px');
+  } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
 
 test('desktop core hooks: the adapter lists chats with Chats\' own actions, shows the Chats desk, a New chat in it; Settings over the page', () => {

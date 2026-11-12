@@ -14,7 +14,7 @@
  *     Ready count (round 5, the phone's ☰ count).
  *   - Collapsed, it is a 120 px rail (round 12: words, not icons; was a 52 px icon rail, ChatGPT / Perplexity): ◫, +, 🔍, the open apps' icons, All apps, and the cog
  *     at the bottom. ◫ or Ctrl / ⌘ + Shift + S (ChatGPT's key) toggles it; the choice is kept on this device. It stays
- *     open from 900 px up (none of them fold it there); narrower it rests as the rail and opens over the page.
+ *     open from 680 px up (none of them fold it there); narrower it rests as the rail and opens over the page.
  *   - The main area beside it: a 52 px top row (what is in front on the left, a thread's title or an app's name; a small
  *     home button in its middle, always there (round 5, as on the phone); on the right, on Home only (round 5), the
  *     workspace switcher, where they put Temporary / Incognito), then the chat or the app.
@@ -75,7 +75,7 @@ import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sections
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
 
-export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
+export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680;
 /** Round 9 (Miguel, 2 Nov 2026): the panels resizable by drag, within these limits (px). Round 15: the sidebar, the
  * open-apps column on the right (Arc's vertical tabs; 52 px folded) and the app panel docked left of it. */
 export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400] };
