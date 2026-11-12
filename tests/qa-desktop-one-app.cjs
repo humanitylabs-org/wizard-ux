@@ -17,6 +17,8 @@ const ROWS = [['qa-a', 'Trip to Lisbon'], ['qa-b', 'Quarterly numbers'], ['qa-c'
   updated_at: iso(now - (i + 1) * 36e5), updatedAt: iso(now - (i + 1) * 36e5), last_active: (now - (i + 1) * 36e5) / 1000, message_count: 2, messageCount: 2, preview: 'Here you go.' }));
 const box = (page, s) => page.evaluate(s => { const n = document.querySelector(s); if (!n || !n.getClientRects().length) return null; const b = n.getBoundingClientRect(); const cs = getComputedStyle(n); return cs.visibility === 'hidden' || cs.display === 'none' || !b.width ? null : { x: Math.round(b.x), w: Math.round(b.width) }; }, s);
 const report = { web, cases: [] };
+// the chat's visible Back: the column's (PR 1414) or, for a new chat, one app's own
+const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
 (async () => {
   const browser = await chromium.launch();
   let page;
@@ -87,7 +89,7 @@ const report = { web, cases: [] };
         await page.click('.aad-side .aad-row[data-id="qa-a"], .aad-side [data-sid="qa-a"]', { timeout: 3000 }).catch(async () => { await page.evaluate(() => __wux.openThread('qa-a')); });
         await page.waitForFunction(() => /qa-a/.test(location.href + JSON.stringify(WizCore?.route?.() || '')) || document.querySelector('.ch-msgs') && document.body.innerText.includes('Done: a plan for qa-a'));
         await shot('4-thread');
-        entry.thread = { side: await box(page, '.aad-side'), chat: await box(page, '#stage > .wsp[data-aad-role="chat"], #stage > .wsp:not([hidden]) .win .dchats'), back: await box(page, '.aad-oneback'), ds: await ds() };
+        entry.thread = { side: await box(page, '.aad-side'), chat: await box(page, '#stage > .wsp[data-aad-role="chat"], #stage > .wsp:not([hidden]) .win .dchats'), back: await box(page, BACK), ds: await ds() };
         if (W >= 680) assert.ok(entry.thread.side, stem + ': list beside the chat from 680 px');
         else {
           assert.equal(entry.thread.side, null, stem + ': the chat alone when narrower');
@@ -98,7 +100,7 @@ const report = { web, cases: [] };
           await page.keyboard.press('Escape'); await settle();
           assert.ok(await box(page, '.aad-side'), stem + ': at the list Back stays put');
           await page.evaluate(() => __wux.openThread('qa-a')); await settle();
-          await page.click('.aad-oneback'); await settle();
+          await page.locator(BACK).filter({ visible: true }).first().click(); await settle();
           assert.ok(await box(page, '.aad-side'), stem + ': the visible Back shows the list');
         }
         // one click on the app: in front again, its word still there
@@ -111,7 +113,7 @@ const report = { web, cases: [] };
           await page.click('.aad-vt .aad-vchats'); await page.waitForFunction(() => document.documentElement.dataset.aadOne === 'chats');
           await page.evaluate(() => __wux.openThread('qa-b')); await settle();
           await page.setViewportSize({ width: 600, height: 760 }); await settle();
-          assert.ok(await box(page, '.aad-oneback'), stem + ': Back appears after shrinking to 600');
+          assert.ok(await box(page, BACK), stem + ': Back appears after shrinking to 600');
           assert.equal(await box(page, '.aad-side'), null, stem + ': the chat alone after shrinking');
           await page.setViewportSize({ width: 1200, height: 760 }); await settle();
           const wideDs = await ds();

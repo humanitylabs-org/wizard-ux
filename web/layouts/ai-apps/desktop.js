@@ -1769,7 +1769,7 @@ export default function desktop(api) {
       api.frame(() => { out?.cancel?.(); if (exitMotion === out) exitMotion = null; });
     };
     // (one app at a time: Chats replaces the app at once, on the click's own frame; no slide out)
-    const out = goBack && !one() && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    const out = goBack && !reduced() && !one() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
     exitMotion = out;
     if (out) closing = api.after(180, finish); else finish();
     return true;

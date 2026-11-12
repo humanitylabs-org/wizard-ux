@@ -113,6 +113,8 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.55.1
       - run: npx playwright install --only-shell chromium
       - run: node tests/qa-desktop-one-app.cjs
+      - run: QA_OUT=one-app-evidence/chats-back node tests/qa-desktop-chats-back-narrow.cjs
+        if: always()
       - uses: actions/upload-artifact@v4
         if: always()
         with:
