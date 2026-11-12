@@ -4,7 +4,7 @@
 // core/app-client.js. Checks the app is opaque and cannot reach the shell, and that Back and appearance still work.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-frames.cjs
 const http = require('http'), fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('../tools/qa-playwright.cjs');
 const WEB = path.join(__dirname, '..', 'web');
 const seen = [];
 const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wizard-os-home/core/app-client.js"></script></head>
