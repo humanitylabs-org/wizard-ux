@@ -149,9 +149,13 @@
   let openedAt = -Infinity;
   function rememberDirect(body) { try { if (typeof body?.direct === 'string') localStorage.setItem(DIRECT_KEY, body.direct); } catch (_) {} }
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Browser owner boundary (wizard-os#133, core/browser-boundary.js): with the box switch on, the repair page runs
+  // sandboxed like every app page (it shows repair chat output), so the shell can't read it; it proves it loaded by
+  // answering on the boundary channel instead. Off (the default): exactly as before.
+  const boundary = () => (window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary : null);
   // Local entry is part of the cached shell, not a second app or a remote preflight.
   function recoveryHtml() {
-    return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
+    return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden${boundary() ? ' ' + boundary().frameAttributes('/troubleshoot/') : ''} allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
   }
   const recoveries = new Set(), retaps = new Set();
   function mountRecovery(root, url) {
@@ -175,16 +179,37 @@
       if (!desktop() && directBase().confirmed && Date.now() - openedAt < 20000) { openedAt = -Infinity; location.assign(url); }
     };
     const failed = text => { clearTimeout(loadTimer); remoteLoading = false; frame.hidden = true; remoteReady = false; root.classList.remove('repair-ready'); details.open = true; remoteMessage(text); offerDirect(); };
+    const showRepair = () => {
+      remoteReady = true; frame.hidden = false; root.classList.add('repair-ready'); details.open = false; direct.hidden = true;
+      if (last?.wizard?.state === 'ok') clearTimeout(timer);
+      remoteMessage('Connected. The repair home and repair chat are below.');
+    };
+    const sealed = !!boundary() && frame.hasAttribute('sandbox');
+    let readyTimer;
+    if (sealed) {
+      boundary().attach(frame);
+      // The repair page's own answer on this load's channel is the proof (an error page never answers).
+      frame.addEventListener('wizard:boundary-ready', () => {
+        if (!connected() || !frame.getAttribute('src')) return;
+        remoteLoading = false; clearTimeout(loadTimer); clearTimeout(readyTimer);
+        showRepair();
+      });
+    }
     frame.addEventListener('load', () => {
       if (!frame.getAttribute('src')) return; // initial about:blank is not a failed repair-page load
+      if (sealed) {
+        // Loaded but not answered yet: give it the rest of the usual 8 s, then offer local help and the direct line.
+        if (remoteReady || boundary().ready(frame)) return;
+        clearTimeout(readyTimer);
+        readyTimer = setTimeout(() => { if (connected() && !boundary().ready(frame)) failed('The repair page didn’t load. Local connection help is still available.'); }, 8000);
+        return;
+      }
       remoteLoading = false; clearTimeout(loadTimer);
       try {
         const doc = frame.contentDocument;
         // The loaded document itself is the proof; it never waits on the connection checks.
         if (!connected() || !doc || !/\/troubleshoot\//.test(doc.location.pathname) || !doc.querySelector('header h1')) throw Error('Repair page unavailable');
-        remoteReady = true; frame.hidden = false; root.classList.add('repair-ready'); details.open = false; direct.hidden = true;
-        if (last?.wizard?.state === 'ok') clearTimeout(timer);
-        remoteMessage('Connected. The repair home and repair chat are below.');
+        showRepair();
       } catch (_) { failed('The repair page didn’t load. Local connection help is still available.'); }
     });
     // Load the repair page straight away, alongside the checks: a tap on Open Troubleshooter shows it as soon as
