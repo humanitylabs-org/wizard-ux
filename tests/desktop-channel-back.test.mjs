@@ -208,9 +208,9 @@ test('Esc in full screen: a post from the feed goes back to the feed and keeps f
 // the column's header names the list one level up and Back / Esc shows it over the page; beside it, no Back.
 test('listBack: the list one level up whenever it is not beside the chat; chatBack shows it over the page', () => {
   const src = between(js, '  function listBack() {', '  function setWide(on) {');
-  const run = ({ thread = 'qa-g1', side = 'rail', mode = 'tiled', view = 'activity', docked = true, fromFeed = false, one = false, narrow = true, folded = false } = {}) => {
+  const run = ({ thread = 'qa-g1', side = 'rail', mode = 'tiled', view = 'activity', docked = true, fromFeed = false, one = false, narrow = true, folded = false, oneList = false, oneSplit = false, pane = null } = {}) => {
     const c = { FEED: '__feed__', DRAFT: '__draft__', chatThread: thread, docked, peek: false, offPeek: null, folded, calls: [],
-      root: { dataset: { aadSide: side } }, panes: { get: () => ({ mode }) }, one: () => one, narrow: () => narrow,
+      root: { dataset: { aadSide: side } }, panes: { get: () => ({ mode }) }, one: () => one, narrow: () => narrow, oneList, pane, oneSplit: () => oneSplit, paintTop: () => c.calls.push('top'),
       feedBack: () => (fromFeed ? { id: 'launch', name: 'Launch' } : null), paintSide: () => c.calls.push('side:' + (c.peek ? 'over' : side)),
       closeChat: () => { c.calls.push('closeChat'); c.chatThread = null; return true; },
       api: { sessions: { channelView: () => view }, back: { push: fn => { c.calls.push('back.push'); c.pop = fn; return () => c.calls.push('back.off'); } } } };
@@ -232,7 +232,13 @@ test('listBack: the list one level up whenever it is not beside the chat; chatBa
   assert.equal(run({ thread: null }).up, '', 'Home / a new chat is the root');
   assert.equal(run({ thread: '__draft__' }).up, '', 'an app\'s Reply draft');
   assert.equal(run({ docked: false }).up, '', 'nothing docked');
-  assert.equal(run({ one: true }).up, '', 'one app at a time has its own Back');
+  // one app at a time (James, 12 Nov 2026): the chat alone (under 680 px) names its list; the list itself, the list beside
+  // it, or an app in front: none. Back shows the list (the chat stays open behind it), no peek over the page
+  assert.equal(run({ one: true }).up, 'Activity', 'one app at a time, the chat alone: Back to its list');
+  assert.equal(run({ one: true, oneList: true }).up, '', 'the list (the root)');
+  assert.equal(run({ one: true, oneSplit: true }).up, '', 'the list beside the chat');
+  assert.equal(run({ one: true, pane: { id: 'notes' } }).up, '', 'an app in front');
+  { const o = run({ one: true }); assert.equal(o.go(), true); assert.deepEqual(o.calls, ['top'], 'the list in front, the chat kept'); assert.equal(o.oneList, true); }
   // Back: the column closes one level, then the list over the page, its own Back (Esc) / a tap outside closes it
   const c = run(); assert.equal(c.go(), true);
   assert.deepEqual(c.calls, ['closeChat', 'back.push', 'side:over'], 'the chat closed, then the list over the page');

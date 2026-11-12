@@ -1792,8 +1792,10 @@ export default function desktop(api) {
    * where they were last"): a narrow window (the rail), the sidebar folded, or full screen. The name of the list it goes
    * to, or '' (the list beside it, a post's own "‹ # channel" Back, a new chat, or one app at a time's own Back). */
   function listBack() {
-    if (!docked || !chatThread || chatThread === DRAFT || one() || feedBack()) return '';
-    if (root.dataset.aadSide === 'open' && panes.get().mode !== 'full') return '';
+    if (!docked || !chatThread || chatThread === DRAFT || feedBack()) return '';
+    // one app at a time (ONE): the chat alone, narrower than ONE.split (its list, oneList, is the level above it)
+    if (one()) { if (pane || oneSplit() || oneList) return ''; }
+    else if (root.dataset.aadSide === 'open' && panes.get().mode !== 'full') return '';
     if (chatThread === FEED) return 'Channels';
     const v = api.sessions.channelView?.() || '';
     return v === 'channels' ? 'Channels' : v === 'activity' ? 'Activity' : 'Chats';
@@ -1803,6 +1805,8 @@ export default function desktop(api) {
   // closes it). In page only: never a history step, so Back at the root never leaves Wizard.
   function chatBack() {
     const up = listBack();
+    // one app at a time: the list fills the window again; the chat stays open behind it (Chats as it was)
+    if (one()) { if (!up) return false; oneList = true; paintTop(); return true; }
     if (!closeChat()) return false;
     if (up && !peek && peekable()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); paintSide(); }
     return true;
@@ -1946,7 +1950,7 @@ export default function desktop(api) {
     if (appFocused) api.apps.back?.(pane.id);
     // one app at a time, the chat alone (narrower than ONE.split): one level up is the list it came from (a post from a
     // channel's feed has its own "‹ # channel" first); at the list (the root) Back stays put
-    else if (one() && !pane && !oneSplit() && !feedBack()) { if (!oneList) { oneList = true; paintTop(); } }
+    else if (one() && !pane && !oneSplit() && !feedBack()) { if (!chatBack() && !oneList) { oneList = true; paintTop(); } }
     else if (docked) chatBack();
     else if (api.sessions?.channelBack?.()) paintList(); // Channels: thread → channel → list (issue 1256)
     return true; // bare AI apps desktop: no DOM change, no legacy navigation
@@ -2282,13 +2286,14 @@ export default function desktop(api) {
     if ((root.dataset.aadOne || '') !== v) { if (v) root.dataset.aadOne = v; else delete root.dataset.aadOne; }
     syncSide();
     // (a post opened from a channel's feed has its own "‹ # channel" Back there, cBack: one Back at a time)
-    const back = on && !pane && !oneSplit() && !oneList && !feedBack();
+    const back = on && !pane && !oneSplit() && !oneList && !feedBack() && !listBack();
     if (oneBack.hidden === back) oneBack.hidden = !back;
     if (back) { // named for the list it goes to (a channel's feed: Channels; else the list it was opened from)
       const v = chatThread === FEED ? 'channels' : api.sessions.channelView?.() || '', name = v === 'channels' ? 'Channels' : v === 'activity' ? 'Activity' : 'Chats';
       if (oneBack.textContent !== `‹ ${name}`) { oneBack.textContent = `‹ ${name}`; oneBack.title = 'Back (Esc)'; oneBack.setAttribute('aria-label', `Back to ${name} (Esc)`); }
     }
     const bh = docked ? cTop : top; if (back && oneBack.parentNode !== bh) bh.insertBefore(oneBack, bh.firstChild || null);
+    paintBack(); // (the chat alone or its list: the column's Back follows)
     paintOneChats();
   }
   // the window crossing either of ONE's widths (one app with the app bar, the list beside the chat): all of it again

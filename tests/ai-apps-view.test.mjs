@@ -2891,7 +2891,7 @@ test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats f
     const H = w.html.dataset, px = k => parseFloat(w.html.style.getPropertyValue(k));
     const d = () => ({ side: H.aadSide, one: H.aadOne, chat: H.aadChat, split: H.aadSplit, wide: H.aadWide, tabs: H.aadTabs, edge: H.aadDockEdge });
     w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.run();
-    const ob = w.q('.aad-oneback'), chat = { ...d(), back: ob ? { hidden: ob.hidden, textContent: ob.textContent } : null, backAt: ob?.parentNode?.className || '' };
+    const ob = [w.q('.aad-cback'), w.q('.aad-oneback')].find(b => b && !b.hidden) || w.q('.aad-oneback'), chat = { ...d(), back: ob ? { hidden: ob.hidden, textContent: ob.textContent } : null, backAt: ob?.parentNode?.className || '' };
     w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route); w.run();
     const app = { ...d(), appW: px('--aad-pane-app-width'), mainW: px('--aad-pane-main-width'), sideW: px('--aad-pane-side-width'), dockH: px('--aad-pane-dock-height'), dockW: px('--aad-pane-dock-width') };
     return { w, chat, app, d };
@@ -2937,7 +2937,7 @@ test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats f
     assert.equal(s.chat.side, 'none', '600: the chat alone'); assert.equal(s.chat.back.hidden, false, 'a visible Back');
     assert.match(s.chat.back.textContent, /^‹ (Chats|Activity|Channels)$/); assert.match(s.chat.backAt, /aad-(ctop|top)/, 'at the top left of the chat');
     s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click')); s.w.run();   // from the app: Chats as it was, the chat
-    assert.equal(s.w.html.dataset.aadOne, 'chats'); assert.equal(s.w.html.dataset.aadSide, 'none'); assert.equal(s.w.q('.aad-oneback').hidden, false);
+    assert.equal(s.w.html.dataset.aadOne, 'chats'); assert.equal(s.w.html.dataset.aadSide, 'none'); assert.ok([s.w.q('.aad-cback'), s.w.q('.aad-oneback')].filter(b => b && !b.hidden).length === 1, 'one visible Back');
     assert.equal(s.w.escape(), true, 'Esc is Back'); assert.equal(s.w.html.dataset.aadSide, 'full', 'the list again');
     assert.equal(s.w.escape(), true, 'at the list'); assert.equal(s.w.html.dataset.aadSide, 'full', 'Back never exits at the root');
     s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click'));
