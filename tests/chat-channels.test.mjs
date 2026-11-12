@@ -1641,3 +1641,164 @@ test('issue 471 review: a mark whose write failed, or one read while the switch 
   g.chanReadAt('general'); await settle(); await settle(); g.chanReadAt('general'); await settle();
   assert.equal(box2.at.general, NOW - H);
 });
+
+// wizard-ux issue 1317: Mark done (switch wizard/mark-done, with Channels on) in the post and row menu clears a thread's
+// amber Needs you and green New reply in the feed, Activity and the channel row, never archives or moves it, and a
+// later reply brings the markers back. The chats side here; the synced seen record (web/live.js) below.
+const MD_ON = 'wizard/desktop-chats wizard/chat-channels wizard/mark-done';
+const realAttOf = src.match(/\n  const attOf = (s => [^\n]+);\n/)[1];
+function doneFixture(opts = {}) {
+  const f = fixture({ marksAt: readTo(2.5), ...opts });
+  f.env.document.documentElement.dataset.tweaks = MD_ON;
+  vm.runInContext('attOf = ' + realAttOf, f.env); // the real status read, so Activity's \"Needs you:\" follows it too
+  const handled = new Map(), key = s => (f.env.LIVE.ownerOf(s) || 'hermes') + '|' + s.id;
+  // The seen layer's two calls (their real code is tested below): handled through the reply the row shows.
+  Object.assign(f.env.LIVE, {
+    markHandled: s => { handled.set(key(s), s.lastAssistantAt); s.fresh = false; return Promise.resolve(true); },
+    handled: s => handled.has(key(s)) && Date.parse(s.lastAssistantAt) <= Date.parse(handled.get(key(s))),
+  });
+  f.env.paintListsNow = () => f.renders.push('paint');
+  f.markDone = (wid, sid) => vm.runInContext('markDone', f.env)(wid, sid);
+  f.canMarkDone = s => vm.runInContext('canMarkDone', f.env)(s);
+  f.attOf = s => vm.runInContext('attOf', f.env)(s);
+  return f;
+}
+const lineOf = (f, rows, id) => f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes(`data-chchan="${id}"`));
+
+test('issue 1317: Mark done is offered only with its switch and Channels on, on a settled thread not already handled', () => {
+  const s = row('b', 2, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() });
+  const f = doneFixture({ sessions: { b: s } });
+  assert.equal(f.canMarkDone(s), true);
+  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/chat-channels';
+  assert.equal(f.canMarkDone(s), false, 'switch off: no menu item');
+  assert.equal(f.markDone('w', 'b'), false, 'and the action does nothing');
+  assert.equal(f.attOf(s)?.state, 'needs_you', 'switch off: the status is untouched');
+  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/mark-done';
+  assert.equal(f.canMarkDone(s), false, 'Channels off: no menu item either');
+  f.env.document.documentElement.dataset.tweaks = MD_ON;
+  assert.equal(f.canMarkDone({ ...s, status: 'running' }), false, 'a working thread');
+  assert.equal(f.canMarkDone({ ...s, archived: true }), false, 'an archived thread');
+  // The menus: Chats' row sheet (feed posts and Activity rows) and the AI apps sidebar's Activity rows.
+  const sheet = src.slice(src.indexOf('  function openRowSheet('), src.indexOf('  const emojiCategoryHtml'));
+  assert.match(sheet, /!nid && typeof canMarkDone === 'function' && canMarkDone\(s\) \? `<button type="button" data-rsmarkdone>\$\{MARK_DONE_SVG\}Mark done<\/button>`/);
+  assert.match(src, /if \(e\.target\.closest\('\[data-rsmarkdone\]'\) && rowSheet\?\.sid\) \{ const \{ wid: rw, sid \} = rowSheet; closeRowSheet\(\); markDone\(rw, sid\); return true; \}/);
+  assert.match(src, /if \(a === 'markdone'\) \{ markDone\(wid, sid\); return; \}/, 'the layouts\' sessionAct reaches it through threadAct');
+  assert.match(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), /\.\.\.\(chats\.canMarkDone\?\.\(s\) \? \['markdone'\] : \[\]\)/);
+});
+
+test('issue 1317: Mark done clears amber and green in the feed, Activity and the channel row; a new reply brings them back (main and routed)', async () => {
+  for (const [kind, agent] of [['main', ''], ['host-profile', 'host'], ['container', 'container'], ['restricted', 'restricted']]) {
+    const cid = agent ? { host: 'host-ops', container: 'box', restricted: 'locked' }[agent] : 'launch', sid = agent ? { host: 'h1', container: 'k1', restricted: 'r1' }[agent] : 'b';
+    const own = agent ? { owner: agent } : {};
+    const s = row(sid, 2, { ...own, fresh: true, messageCount: 2, attention: { state: 'needs_you', ask: 'Pick one' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() });
+    const other = row('a', 3, { messageCount: 2, lastAssistantAt: new Date(NOW - 3 * H).toISOString() });
+    const rows = [s, other];
+    const f = doneFixture({ history: { [(agent ? agent + '|' : '') + sid]: [{ role: 'user', text: 'q' }, { role: 'assistant', text: 'pick', at: NOW - 2 * H }] } });
+    f.env._rowOf = (wid, id) => id === sid ? s : null;
+    // Before: amber + green on the channel line, the post and the Activity status.
+    assert.match(lineOf(f, rows, cid), /^ unread"[^]*aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="1 unread">/, kind);
+    f.openChannel(f.w, cid);
+    f.channelFeed(f.w, f.chanOpen(f.w), rows); await settle();
+    let feed = f.channelFeed(f.w, f.chanOpen(f.w), rows);
+    assert.match(feed, /Needs you<\/span><span class="ch-post-st new">/, kind + ': the post shows both');
+    assert.equal(f.attOf(s)?.state, 'needs_you');
+    // Mark done.
+    assert.equal(f.markDone('w', sid), true, kind);
+    assert.deepEqual(f.toasts.at(-1), 'Cleared');
+    assert.equal(s.archived, undefined, kind + ': never archived'); assert.deepEqual(f.ops, [], kind + ': never moved');
+    feed = f.channelFeed(f.w, f.chanOpen(f.w), rows);
+    assert.doesNotMatch(feed, /Needs you<\/span>|ch-post-st new|new repl/, kind + ': the feed post is clear');
+    assert.equal(f.attOf(s), null, kind + ': Activity\'s Needs you status is clear too');
+    f.channelBack(f.w); f.w.focus = null;
+    assert.doesNotMatch(lineOf(f, rows, cid), /^ unread"|ch-chan-ind/, kind + ': the channel line is clear');
+    assert.equal(f.canMarkDone(s), false, kind + ': nothing left to clear');
+    // A later reply: green and amber come back as normal.
+    Object.assign(s, { fresh: true, at: NOW - 0.5 * H, lastAssistantAt: new Date(NOW - 0.5 * H).toISOString() });
+    assert.match(lineOf(f, rows, cid), /^ unread"[^]*aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="1 unread">/, kind + ': back after a new reply');
+    assert.equal(f.attOf(s)?.state, 'needs_you', kind);
+  }
+});
+
+test('issue 1317: an approval gate is not a marker; it stays amber after Mark done', () => {
+  const s = row('b', 2, { fresh: true, status: 'waiting_for_approval', lastAssistantAt: new Date(NOW - 2 * H).toISOString() });
+  const f = doneFixture({ sessions: { b: s } });
+  // Mark done reads it (no green), but the approval still waits on the owner.
+  f.markDone('w', 'b');
+  assert.match(lineOf(f, [s], 'launch'), /aria-label="Needs you"/);
+});
+
+test('issue 1317: Mark channel read moves the channel\'s read point to now and clears its green words, not amber', () => {
+  const b = row('b', 2, { fresh: true, attention: { state: 'needs_you', ask: 'Pick' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() });
+  const c = row('c', 1, { fresh: true, lastAssistantAt: new Date(NOW - H).toISOString() }), d = row('d', 1, { fresh: true });
+  const rows = [b, c, d];
+  const f = doneFixture();
+  f.env.LIVE.sessionsFor = () => rows;
+  f.openChannelSheet('w', 'launch');
+  assert.match(f.sheets.at(-1), /data-rschread>[^]*Mark channel read<\/button>/);
+  assert.equal(f.channelClick(click({ 'data-rschread': '' }), 'w', f.w), true);
+  assert.deepEqual([...f.marks].sort(), ['b', 'c'], 'only Launch\'s unread posts are marked read (d is in Voice)');
+  assert.equal(f.chanReadAt(f.chanReadKey({ id: 'launch', agent: 'hermes' })), NOW);
+  const launch = lineOf(f, rows, 'launch');
+  assert.doesNotMatch(launch, /^ unread"|ch-chan-dot new/, 'no green');
+  assert.match(launch, /aria-label="Needs you"/, 'amber is cleared only per thread');
+  f.env.document.documentElement.dataset.tweaks = 'wizard/desktop-chats wizard/chat-channels';
+  f.openChannelSheet('w', 'launch');
+  assert.doesNotMatch(f.sheets.at(-1), /data-rschread/, 'switch off: not offered');
+});
+
+// The synced half: the real seen record writer in web/live.js (LIVE.markHandled / LIVE.handled).
+const liveCut = (a, b) => { const i = liveSrc.indexOf(a); assert.ok(i >= 0, a); const j = liveSrc.indexOf(b, i); assert.ok(j > i, b); return liveSrc.slice(i, j); };
+function seenHarness({ put = async s => s } = {}) {
+  const store = new Map(), puts = [];
+  const ctx = {
+    otherAgent: id => !!id && id !== 'hermes', MAX: 500, READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']),
+    SEEN_BASE: 'wos.seen', SEEN_KEY: 'wos.seen:t', localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) },
+    putSeen: s => { puts.push(JSON.parse(JSON.stringify(s))); return put(s); },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(liveCut('  /* ---- thread-seen', '  /* ---- network') + `;this.L={ seen: null, emit() {}, rows: {}, session(id) { return this.rows[id] || null; },
+${liveCut('    markSeen(ids) {', '    async markUnread(ids) {')}
+};this.api={hasNew,merge,readLocal};`, ctx);
+  return { ...ctx.api, L: ctx.L, puts, store };
+}
+const T0 = Date.UTC(2026, 10, 12, 4);
+const seenRow = (n, extra = {}) => ({ id: 'plan', runtime: 'direct', status: 'completed', messageCount: n, updatedAt: new Date(T0 + n * 1000).toISOString(), lastAssistantAt: new Date(T0 + n * 1000).toISOString(), preview: 'reply ' + n, attention: { state: 'needs_you', ask: 'Pick' }, ...extra });
+
+test('issue 1317: LIVE.markHandled reads the thread and keeps what it was handled through, also when the box drops the field', async () => {
+  // Today's box keeps only the fields it knows (wizard-agent-service thread-seen validRecord): it echoes the record
+  // without handledThrough. This device still keeps it, and a box that keeps it shares it.
+  const strip = async s => ({ ...s, threads: Object.fromEntries(Object.entries(s.threads).map(([k, { handledThrough, ...r }]) => [k, r])) });
+  const h = seenHarness({ put: strip }), r = seenRow(4);
+  assert.equal(h.L.handled(r), false); assert.equal(h.hasNew(r, h.L.seen || { initializedAt: 0, threads: {} }), true);
+  assert.equal(await h.L.markHandled(r), true);
+  assert.equal(h.L.handled(r), true, 'handled'); assert.equal(h.hasNew(r, h.L.seen), false, 'and read (no green)');
+  assert.equal(h.L.handled(r), true, 'kept after the box\'s echo');
+  assert.equal(h.puts.at(-1).threads['direct:plan'].handledThrough, r.lastAssistantAt, 'sent to the box with the record');
+  assert.equal(h.hasNew(r, h.readLocal()), false);
+  h.L.seen = h.merge(h.readLocal(), await strip(h.L.seen)); // a later list poll
+  assert.equal(h.L.handled(r), true, 'a poll from the box does not forget it');
+  // A later reply: unread and not handled again.
+  const r5 = seenRow(5);
+  assert.equal(h.L.handled(r5), false); assert.equal(h.hasNew(r5, h.L.seen), true);
+  // A stale row (an older list read) never moves the mark back.
+  await h.L.markHandled(r5); await h.L.markHandled(seenRow(3));
+  assert.equal(h.L.handled(r5), true);
+  // A failed write keeps the mark on this device.
+  const off = seenHarness({ put: async () => { throw new Error('offline'); } });
+  assert.equal(await off.L.markHandled(r), false); assert.equal(off.L.handled(r), true);
+});
+
+test('issue 1317: a second device gets the handled mark through the seen record; routed rows keep their own', async () => {
+  const box = { state: null };
+  const keep = async s => { box.state = box.state ? a.merge(box.state, s) : s; return box.state; };
+  const a = seenHarness({ put: keep }), b = seenHarness({ put: keep });
+  for (const agent of ['', 'host', 'container', 'restricted']) {
+    const r = seenRow(4, agent ? { agent } : {}), main = seenRow(4);
+    await a.L.markHandled(r);
+    b.L.seen = b.merge(b.L.seen, box.state); // the other device's next list poll
+    assert.equal(b.L.handled(r), true, (agent || 'main') + ': handled on the other device');
+    assert.equal(b.hasNew(r, b.L.seen), false);
+    if (agent) assert.equal(b.L.handled(main), false, agent + ': the main thread sharing its id is untouched');
+    box.state = null; a.L.seen = null; b.L.seen = null; a.store.clear(); b.store.clear();
+  }
+});

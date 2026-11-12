@@ -192,7 +192,10 @@
     const unreadAt = Math.max(l.unreadAt ?? -1, r.unreadAt ?? -1);
     const la = Date.parse(l.assistantActivityAt ?? ''), ra = Date.parse(r.assistantActivityAt ?? '');
     const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
-    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
+    // Mark done (wizard-ux issue 1317): the newer "handled through" of the two is kept, whichever record wins.
+    const lh = Date.parse(l.handledThrough ?? ''), rh = Date.parse(r.handledThrough ?? '');
+    const ht = !isFinite(lh) ? (isFinite(rh) ? r.handledThrough : '') : !isFinite(rh) ? l.handledThrough : rh > lh ? r.handledThrough : l.handledThrough;
+    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), ...(ht ? { handledThrough: ht } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
   }
   /* Marking a row read never forgets a newer revision this device already knows was read (wizard-ux issue 1266):
    * the Channels feed can mark a row from a list read older than the record (a stale refresh, another device's
@@ -201,6 +204,13 @@
     const fresh = recordFor(s, seenAt); if (!prior) return fresh;
     const { unreadAt, ...kept } = later(prior, fresh);
     return { ...kept, seenAt: Math.max(seenAt, prior.seenAt || 0) };
+  }
+  /* Mark done (wizard-ux issue 1317): the revision a thread was handled through is its own newest reply time (else
+   * updatedAt), a server time, so device clocks never matter. A later reply moves past it and the markers come back. */
+  const handledRev = s => assistantAt(s) || s.updatedAt || '';
+  function handledOf(s, state) {
+    const r = state?.threads?.[seenKeyOf(s)], h = Date.parse(r?.handledThrough ?? ''), cur = Date.parse(handledRev(s));
+    return isFinite(h) && isFinite(cur) && cur <= h;
   }
   function merge(a, b) {
     if (!a) return b; if (!b) return a;
@@ -1289,6 +1299,23 @@
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
     },
+    /* Mark done (wizard-ux issue 1317): read as of now (the green markers) and handled through the reply it shows (the
+     * amber Needs you), in the same synced seen record. Rows as for markSeen. Resolves true once the box has it. */
+    markHandled(ids) {
+      const list = (Array.isArray(ids) ? ids : [ids]).map(id => id && typeof id === 'object' ? id : this.session(id)).filter(Boolean);
+      if (!list.length) return Promise.resolve(false);
+      const ts = Date.now();
+      let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
+      const threads = { ...state.threads };
+      for (const s of list) {
+        const k = seenKeyOf(s), rec = seenRecord(threads[k], s, ts), rev = handledRev(s), was = Date.parse(rec.handledThrough ?? '');
+        threads[k] = isFinite(Date.parse(rev)) && !(was > Date.parse(rev)) ? { ...rec, handledThrough: rev } : rec;
+      }
+      state = { ...state, threads };
+      this.seen = state; writeLocal(state); this.emit();
+      return putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); return true; }).catch(() => false);
+    },
+    handled(s) { return !!s && handledOf(s, this.seen); },
     async markUnread(ids) {
       const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       if (!list.length) return false;
@@ -1297,7 +1324,7 @@
       const threads = { ...before.threads };
       for (const s of list) {
         const key = seenKeyOf(s), prior = threads[key];
-        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), unreadAt };
+        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), ...(prior?.handledThrough ? { handledThrough: prior.handledThrough } : {}), unreadAt };
       }
       const pending = { ...before, threads };
       this.seen = pending; writeLocal(pending); this.emit();

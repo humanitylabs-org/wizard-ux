@@ -30,6 +30,7 @@
     "wizard/link-token-repair",
     "wizard/chat-channels",
     "wizard/channel-read-sync",
+    "wizard/mark-done",
     "wizard/narrow-one-app"
   ],
   "defaults": [

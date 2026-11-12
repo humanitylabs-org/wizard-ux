@@ -4329,6 +4329,7 @@
         if (!here) { openApp(APP.wizard, {}, { stay: true }); here = find(); }
         return !!here && !!CHATS.moveToChannel?.(here, sid); }
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+      if (act === 'markdone') return !!CHATS.markDone?.(Object.keys(W).find(id => mainChats(W[id])) || '', sid); // in place (issue 1317)
       const w = showChats(); if (!w) return false;
       if (act === 'rename') { CHATS.openRenameSheet(w.id, sid); return true; }
       CHATS.threadAct(w.id, sid, act); return true;
