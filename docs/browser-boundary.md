@@ -51,6 +51,13 @@ On:
   after a click outside the app. The shell takes input only from the focused, visible frame, and a click or a named
   ⌥ key also needs the browser's transient user activation, so a page that only posts messages cannot press them.
   Proof: `tests/qa-browser-boundary-keys.cjs`.
+- Other app frames: the pinned single-app session (`core/single-app-session.js`, an app added to the phone's Home
+  screen) gets the same sandbox and the same channel through `WizAppServices.attach`; it never reads the frame, so
+  its route is not saved across a restart while the boundary is on. Every page opened in the link sheet
+  (`core/links.js`) is sandboxed too and is treated like any other-site page: the sheet keeps its own Back stack but
+  no longer follows the page's own link clicks or title. Hidden voice-command frames (`core/app-services.js`) are not
+  loaded at all, so apps' voice commands are off while the boundary is on. Proof: `tests/qa-browser-boundary-other-frames.cjs`
+  (real Chromium) and `tests/browser-boundary-other-frames.test.mjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
@@ -61,7 +68,8 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   `ready` is answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
-  Other frames (link sheet, Welcome, Settings embeds, single-app session) are not sandboxed yet.
+  Shell pages in frames (Welcome, Settings embeds, Store) and the Troubleshooter recovery frame are not sandboxed yet:
+  they need owner calls through the shell first. Pages in the link sheet lose their own storage and pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385).
 - Shell pages that run inside a frame (Store, Agents, Setup) send no token; `<img>`/`<video>` loads of
   `/wizard/attachments/…` cannot carry a header.
