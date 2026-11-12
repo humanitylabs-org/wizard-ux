@@ -1008,6 +1008,53 @@
     return { state, pull, patch, create, move, moves, feed, rows, find, fresh, get off() { return off; } };
   }
   /* ---- end channel store ---- */
+  /* ---- channel reads (wizard-agent-service issue 471) ----
+   * Each channel's read watermark on the box (GET/PUT /wizard/v1/channels/read, the Agent Service's
+   * WIZARD_CHANNEL_READ_SYNC switch), so reading a channel to the bottom on one device clears it on the owner's others.
+   * Chats asks for it only while its wizard/channel-read-sync switch is on. marks() is the box's marks (key -> ms) or
+   * null (unknown yet, switch off on the box, older service: the device's own marks stay the only ones; asked again
+   * every few minutes). The box keeps every mark forward only, and so does this copy: a read that answers late never
+   * moves a mark back. */
+  const CHANNEL_READS_URL = '/wizard/v1/channels/read';
+  function channelReads({ req, emit, now = () => Date.now(), every = 30e3, offEvery = 5 * 60e3 } = {}) {
+    const KEY = /^(?:general(?:\|[a-z0-9][a-z0-9-]{0,47})?|[a-z0-9][a-z0-9-]{0,47}\|[a-z0-9-]{1,48})$/;
+    let doc = null, off = false, readAt = 0, reading = null;
+    // Newer of each mark; true when something moved.
+    function merge(at) {
+      if (!at || typeof at !== 'object') return false;
+      let moved = false; doc = doc || {};
+      for (const [k, t] of Object.entries(at)) if (KEY.test(k) && Number.isFinite(t) && !(doc[k] >= t)) { doc[k] = t; moved = true; }
+      return moved;
+    }
+    const tell = moved => { if (moved) { try { emit(); } catch (_) {} } };
+    function pull() {
+      if (reading) return reading;
+      readAt = now();
+      reading = (async () => {
+        try { const j = await (await req(CHANNEL_READS_URL, { cache: 'no-store' })).json(); const was = !doc; off = false; tell(merge(j && j.at) || was); }
+        catch (e) { if (e?.status === 404) { const had = !!doc; off = true; doc = null; tell(had); } }
+        finally { reading = null; }
+      })();
+      return reading;
+    }
+    function marks() {
+      if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
+      return off ? null : doc;
+    }
+    // Sends this device's newer marks (the caller already waits a couple of seconds between writes).
+    async function push(at) {
+      const body = {}; for (const [k, t] of Object.entries(at || {})) if (KEY.test(k) && Number.isFinite(t)) body[k] = Math.floor(t);
+      const keys = Object.keys(body).slice(0, 300); if (!keys.length || off) return false;
+      try {
+        const r = await req(CHANNEL_READS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Object.fromEntries(keys.map(k => [k, body[k]])) }) });
+        let j = null; try { j = await r.json(); } catch (_) {}
+        tell(merge(j && j.at)); return true;
+      } catch (e) { if (e?.status === 404) { off = true; doc = null; } return false; }
+    }
+    const fresh = () => { readAt = 0; };
+    return { marks, pull, push, fresh, get off() { return off; } };
+  }
+  /* ---- end channel reads ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -1942,7 +1989,8 @@
       if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
       applyLocal(s); return s;
     } });
-  try { addEventListener('focus', () => L.chanStore.fresh()); document.addEventListener('visibilitychange', () => { if (!document.hidden) L.chanStore.fresh(); }); } catch (e) {}
+  L.chanReads = channelReads({ req, emit: () => L.emit() });
+  try { addEventListener('focus', () => { L.chanStore.fresh(); L.chanReads.fresh(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { L.chanStore.fresh(); L.chanReads.fresh(); } }); } catch (e) {}
 
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };

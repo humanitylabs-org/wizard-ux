@@ -619,11 +619,29 @@ window.WizCore.chats = function createChats(H) {
    * all of it. A post is new for the channel only when it changed after the mark. That alone places the opening and
    * the New line and makes the channel's line bold. A reply never opened keeps its own "● New reply" words
    * (chanUnread), passive only: it never moves the opening, the line or the channel's state.
-   * The mark lives on this device (localStorage): the channel store and ui-preferences take only their own fields and
-   * the Agent Service is not changed for it. A channel never read here counts as read up to when this device first
-   * kept marks (since), so nothing old comes back as new. A move forward is written at most once per CHAN_READ_MS. */
-  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, chanActs = {};
+   * The mark lives on this device (localStorage). A channel never read here counts as read up to when this device first
+   * kept marks (since), so nothing old comes back as new. A move forward is written at most once per CHAN_READ_MS.
+   * With the wizard/channel-read-sync switch on (wizard-agent-service issue 471, off by default) the marks are also
+   * kept on the box (LIVE.chanReads, /wizard/v1/channels/read), so every device of the owner reads the newer of its
+   * own mark and the box's: reading a channel to the bottom on the desktop clears it on the phone. */
+  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/channel-read-sync', CHAN_READ_UP_MS = 30e3, chanActs = {};
   let chanReadDoc = null, chanReadT = 0, chanReadPaintT = 0;
+  let chanReadUpAt = -Infinity;
+  // The box's marks (key -> ms) while the sync switch is on and the box keeps them, else null.
+  const chanReadBox = () => {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CHAN_READ_SYNC)) return null; } catch (_) { return null; }
+    const box = (typeof LIVE !== 'undefined' && LIVE.chanReads?.marks?.()) || null;
+    if (box && Date.now() - chanReadUpAt >= CHAN_READ_UP_MS) chanReadUp(box);
+    return box;
+  };
+  /* This device's marks that are ahead of the box's go up: after each local write, and at most every CHAN_READ_UP_MS
+   * when the box answers, so a write that failed (offline, busy) or one made while the switch was off still reaches
+   * the box later. Once the box has them nothing is sent. */
+  function chanReadUp(box) {
+    chanReadUpAt = Date.now();
+    const up = Object.entries(chanReads().at).filter(([k, t]) => !(box[k] >= t)).sort((x, y) => y[1] - x[1]).slice(0, 300);
+    if (up.length) LIVE.chanReads.push(Object.fromEntries(up));
+  }
   function chanReadParse() {
     let v = null; try { v = JSON.parse(localStorage.getItem(CHAN_READ_KEY) || 'null'); } catch (_) {}
     if (!v || typeof v !== 'object' || !Number.isFinite(v.since) || !v.at || typeof v.at !== 'object') return null;
@@ -642,6 +660,8 @@ window.WizCore.chats = function createChats(H) {
       const was = chanReadParse(); if (was) { d.since = Math.min(d.since, was.since); for (const [k, t] of Object.entries(was.at)) if (!(d.at[k] >= t)) d.at[k] = t; }
       const at = Object.entries(d.at).sort((a, b) => b[1] - a[1]).slice(0, CHAN_READ_MAX); d.at = Object.fromEntries(at);
       try { localStorage.setItem(CHAN_READ_KEY, JSON.stringify({ since: d.since, at: d.at })); } catch (_) {}
+      // The same marks to the box (issue 471): every one this device holds ahead of it.
+      const box = chanReadBox(); if (box) chanReadUp(box);
     };
     if (now) put(); else if (!chanReadT) chanReadT = setTimeout(put, CHAN_READ_MS);
   }
@@ -653,7 +673,8 @@ window.WizCore.chats = function createChats(H) {
   // A channel is its agent and id. General focused on one agent shows only that agent's posts, so it has its own mark
   // (general|<agent>); the All General covers every agent's, so reading it to a time reads each focused one too.
   const chanReadKey = (c, gAg = '') => !c ? '' : c.general || c.id === CHAN_GENERAL ? (gAg ? 'general|' + storeAgent(gAg) : 'general') : storeAgent(c.agent) + '|' + c.id;
-  const chanReadAt = key => { const d = chanReads(), own = d.at[key] ?? d.since; return key.startsWith('general|') ? Math.max(own, d.at.general ?? d.since) : own; };
+  const chanReadOwn = key => { const d = chanReads(), box = chanReadBox(), own = d.at[key] ?? d.since; return box && Number.isFinite(box[key]) ? Math.max(own, box[key]) : own; };
+  const chanReadAt = key => { const own = chanReadOwn(key); return key.startsWith('general|') ? Math.max(own, chanReadOwn('general')) : own; };
   const chanGenAgent = w => { try { return focusAgentId(W[owner(w.id)] || w) || ''; } catch (_) { return ''; } };
   // Changed after the mark. A working post waits for its reply; a Done or snoozed-last one is not new (Activity's rule).
   const chanChanged = (s, mark) => !isWorking(s) && !s.archived && !(snoozeLast() && deferredOf(s)) && chanAt(s) > mark;
@@ -661,7 +682,7 @@ window.WizCore.chats = function createChats(H) {
   // Only ever forward. The channel lists on screen (the phone's list, the desktop's sidebar pane) show it at once.
   function chanReadTo(key, t) {
     if (!key || !Number.isFinite(t)) return false;
-    const d = chanReads(); if (t <= (d.at[key] ?? d.since)) return false;
+    const d = chanReads(); if (t <= chanReadOwn(key)) return false;
     d.at[key] = t; chanReadSave();
     clearTimeout(chanReadPaintT); chanReadPaintT = setTimeout(chanReadPaint, 120);
     return true;

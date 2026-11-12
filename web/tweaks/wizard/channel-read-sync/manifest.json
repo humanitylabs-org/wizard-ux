@@ -1,0 +1,11 @@
+{
+  "id": "wizard/channel-read-sync",
+  "name": "Channels read on every device",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "How far you have read each channel (and General) is kept on your box, so reading a channel to the bottom on the desktop clears it on the phone too, within about 30 seconds. Needs Channels in Chats and a box with the Agent Service read sync (WIZARD_CHANNEL_READ_SYNC=1); otherwise each device keeps its own (wizard-agent-service issue 471)."
+}

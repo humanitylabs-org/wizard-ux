@@ -29,6 +29,7 @@
     "wizard/connector-models",
     "wizard/link-token-repair",
     "wizard/chat-channels",
+    "wizard/channel-read-sync",
     "wizard/narrow-one-app"
   ],
   "defaults": [

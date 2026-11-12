@@ -357,6 +357,12 @@
       "kind": "write",
       "note": "Chats channel store move (wizard-ux issue 1261): only when a chat is filed with wizard/chat-channels on and the store answering; tests/chat-channel-store.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channels/read": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write",
+      "note": "Channel read watermarks on the box (wizard-agent-service issue 471): read and written only while the off-by-default wizard/channel-read-sync and wizard/chat-channels switches are on, which none of the three flows turn on; tests/chat-channels.test.mjs (issue 471) covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/ui-preferences": {
       "status": "catalogued",
       "source": "web/core/chat-pins.js",
