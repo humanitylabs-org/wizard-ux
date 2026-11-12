@@ -77,11 +77,13 @@ import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sections
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;
-/** Narrow desktop, one app at a time (switch wizard/narrow-one-app, off by default; wizard-ux issue 1314, James 12 Nov
- * 2026): below `from` px wide the main area shows ONE thing, an app or Chats, and the right Apps column (Chats on top) is
- * the only switcher; Chats shows its list beside the chat from `split` px, narrower the list, then the chat with Back;
- * below `rail` px the Apps column rests folded to its icons. */
-export const ONE = Object.freeze({ id: 'wizard/narrow-one-app', from: 1024, split: 720, rail: 560 });
+/** Narrower desktop window, one app at a time (James, 12 Nov 2026, from the approved mockup: Wizard at half or a third of
+ * his screen beside Zoom; wizard-ux issue 1314 was the earlier switch): below `from` px wide the main area shows ONE
+ * thing, an app or Chats, and the Apps column becomes the app bar at the `bar` edge (`barH` px): Chats first, then the
+ * pinned and open apps either side of the orb, All apps last, one click each. Chats keeps its list beside the chat
+ * from `split` px (the sidebar's own DOCKED_FROM), narrower the list, then the chat with Back. The bar's edge lives
+ * here only: the pane geometry places it (dock edge) and desktop.css reads html[data-aad-dock-edge]. */
+export const ONE = Object.freeze({ from: 1100, split: DOCKED_FROM, bar: 'bottom', barH: 64 });
 /** Round 9 (Miguel, 2 Nov 2026): the panels resizable by drag, within these limits (px). Round 15: the sidebar, the
  * open-apps column on the right (Arc's vertical tabs; 52 px folded) and the app panel docked left of it. */
 export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400] };
@@ -127,9 +129,8 @@ export default function desktop(api) {
   let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   let paneGeometry = null, secondEl = null;
   const paneVars = new Set();
-  /* Narrow desktop, one app at a time (ONE above): read inline from the shell's switches, never stored here */
-  const oneSwitch = () => { try { return String(root.dataset.tweaks || '').split(' ').includes(ONE.id); } catch (_) { return false; } };
-  const one = () => oneSwitch() && (globalThis.innerWidth || 1440) < ONE.from;
+  /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored */
+  const one = () => (globalThis.innerWidth || 1440) < ONE.from;
   /* Activity as a short what-needs-me list (wizard-ux issue 1336, the Channels switch wizard/chat-channels): no agent
    * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
    * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
@@ -144,11 +145,12 @@ export default function desktop(api) {
   const paneModel = () => { const m = panes.get(); return one() ? { ...m, mode: 'tiled', ratio: null, weights: {}, slots: ['chats', 'app'], app2: null } : m; };
   function placePanes(s) {
     const m = paneModel(), focus = root.hasAttribute('data-aad-focus');
-    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end.
-    const edge = ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
+    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end. The narrower window's
+    // app bar (ONE) is that dock at ONE.bar, ONE.barH thick; the saved wide-window edge is left as it is.
+    const bar = one(), edge = bar ? ONE.bar : ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
     const sm = root.dataset.aadSide;
     const sideWidth = focus || sm === 'none' ? 0 : sm === 'open' ? s.side[0] : sm === 'full' ? vw() : RAIL;
-    const dockWidth = focus ? 0 : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
+    const dockWidth = focus ? 0 : bar ? ONE.barH : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
     paneGeometry = panes.geometry({ ...m, dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
       sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!secondEl,
     });
@@ -241,10 +243,7 @@ export default function desktop(api) {
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
   const cancelBtn = el('button', 'aad-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
   // (round 16: no ⌂ here any more; Home = a chat's ✕, Esc, ⌥`)
-  // narrow desktop (ONE): Back from the chats list to the app that was in front (never out of the shell)
-  const oneLB = el('button', 'aad-cback aad-onelist', { type: 'button' }); oneLB.hidden = true;
   head.append(wsBtn, findBtn, searchBox, cancelBtn, togBtn);
-  head.insertBefore(oneLB, wsBtn);
   const scroll = el('div', 'aad-scroll');
   const foot = el('div', 'aad-foot');
   const newBtn = el('button', 'aad-new', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); newBtn.append(icon('plus'));
@@ -424,19 +423,23 @@ export default function desktop(api) {
   // round 16 item 7: + at the column's end (in place of All apps): the picker of installed apps neither pinned nor open
   const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Open another app: search all installed apps, including open and pinned apps', title: 'Open another app (Left ⌥Space · ⌥A)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
-  vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
+  // (the app bar's own word for it, ONE: "All apps", the phone's)
+  vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }), el('span', 'aad-vtn aad-vtn-bar', { text: 'All apps', 'aria-hidden': 'true' }));
   const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
   const tidyW = el('span', 'aad-tidy-w');
   tidyBtn.append(icon('snooze', 'aad-ico aad-tidy-i'), tidyW);
   vtFoot.append(vtAll, tidyBtn);
-  /* Narrow desktop (ONE): Chats is this column's first row, set apart from the apps by the column's own hairline; the
-   * left sidebar is gone there, so this is the one way back to the chats. Hidden whenever the switch is off or the
-   * window is wide (outside the list: the rows' drag and their numbering never see it). */
+  /* Narrower window (ONE): this column is the app bar (desktop.css, html[data-aad-dock-edge]) and Chats is its first
+   * item, the one way back to the chats there (the left sidebar is gone); hidden while the window is wide (outside the
+   * list: the rows' drag and their numbering never see it). Its badge: the chats waiting (Ready's count). */
   const vOne = el('div', 'aad-vone'); vOne.hidden = true;
   const vChats = el('div', 'aad-vchats', { role: 'button', tabindex: '0', 'data-app': CHATS, title: 'Chats', 'aria-label': 'Chats' });
-  { const ic = el('span', 'aad-vti'), t0 = el('span', 'aad-tile is-vt', { 'aria-hidden': 'true' }); t0.style.setProperty('--c', 'var(--wz-accent)'); t0.append(el('i', 'sgi sg-chats', { 'aria-hidden': 'true' })); ic.append(t0); vChats.append(ic, el('span', 'aad-vtn', { text: 'Chats' })); }
+  const vChatsN = el('b', 'aad-vtb', { 'aria-hidden': 'true' }); vChatsN.hidden = true;
+  { const ic = el('span', 'aad-vti'), t0 = el('span', 'aad-tile is-vt', { 'aria-hidden': 'true' }); t0.style.setProperty('--c', 'var(--wz-accent)'); t0.append(el('i', 'sgi sg-chats', { 'aria-hidden': 'true' })); ic.append(t0); vChats.append(ic, el('span', 'aad-vtn', { text: 'Chats' }), vChatsN); }
   vOne.append(vChats, el('hr', 'aad-vtsep', { 'aria-hidden': 'true' }));
-  vt.id = 'aad-vt'; vt.append(vtHead, vtList, vtFoot);
+  // the app bar's gap for the orb (between its two halves; the orb moves into it, as into the composer's slot)
+  const vtOrb = el('i', 'aad-vtorb', { 'aria-hidden': 'true' });
+  vt.id = 'aad-vt'; vt.append(vtHead, vtList, vtFoot, vtOrb);
   vt.insertBefore(vOne, vtList);
   const toast = el('div', 'aad-toast', { role: 'status' }); toast.hidden = true;
   const toastW = el('span', 'aad-toast-w'), toastU = el('button', 'aad-toast-u', { type: 'button', text: 'Undo' });
@@ -1314,6 +1317,7 @@ export default function desktop(api) {
     return homeComposer();
   }
   function orbSlot() {
+    if (one()) return null;   // (the narrower window's app bar holds the orb at its centre, for Chats too)
     const c = orbComposer();
     const row = c?.querySelector('.ch-row2');
     return row ? gridSlot(row, 3) : null;
@@ -1391,7 +1395,7 @@ export default function desktop(api) {
     api.listen(b, 'keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); pick(); return; }
       if (e.key === 'Delete' && !pinned) { e.preventDefault?.(); closeDesk(d); return; }
-      const all = [...vtList.querySelectorAll('.aad-vtab')], i = all.indexOf(b), j = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+      const all = [...vtList.querySelectorAll('.aad-vtab')], i = all.indexOf(b), j = { ArrowDown: i + 1, ArrowUp: i - 1, ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: all.length - 1 }[e.key];
       if (j != null && all[j]) { e.preventDefault?.(); all[j].focus?.(); }
     });
     api.listen(b, 'contextmenu', e => { e.preventDefault?.(); openAppMenu({ id: d.id, name, ...(open ? { desk: d.desk } : {}), system: !!metaOf(d.id).system, col: colPlace(d, pinned) }, { x: e.clientX, y: e.clientY, el: b }); });
@@ -1490,7 +1494,7 @@ export default function desktop(api) {
     return true;
   }
   api.listen(vtList, 'pointerdown', e => {
-    if (e.button || drag) return;
+    if (e.button || drag || one()) return;   // (the app bar: reordering by its menu's Move left / right; drag is the column's)
     const b = e.target?.closest?.('.aad-vtab'); if (!b || e.target.closest?.('.aad-vtx, .aad-np')) return;
     drag = { b, pid: e.pointerId, x0: e.clientX, y0: e.clientY, y: e.clientY, on: false, to: null, hold: null };
     drag.hold = api.after(DRAG_HOLD_MS, () => { if (drag && !drag.on) { dragStart(); dragMove(drag.y); } });
@@ -1504,9 +1508,10 @@ export default function desktop(api) {
   api.listen(vtList, 'pointercancel', () => dragEnd(false));
   api.listen(vtList, 'lostpointercapture', () => { if (drag?.on) dragEnd(true); });
   function paintVt(force = false) {
-    const oneRail = one() && vw() < ONE.rail, mode = vtFolded || oneRail ? 'rail' : 'open';
+    // (the narrower window's app bar, ONE: its own look, never the folded rail's; the fold choice is kept for wide)
+    const bar = one(), mode = bar ? 'bar' : vtFolded ? 'rail' : 'open';
     if (root.dataset.aadTabs !== mode) { root.dataset.aadTabs = mode; applySizes(); }
-    paintOneChats(); if (vtTog.hidden !== oneRail) vtTog.hidden = oneRail;
+    paintOneChats(); if (vtTog.hidden !== bar) vtTog.hidden = bar;
     vtTog.setAttribute('aria-expanded', String(!vtFolded));
     vtTog.setAttribute('aria-label', vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = vtFolded ? 'Expand (⌥R)' : 'Fold to icons (⌥R)';
     const { pinned, others } = vtTabs();
@@ -1517,14 +1522,26 @@ export default function desktop(api) {
     out.push(...others.map(d => vtTab(d, false)));
     if (!out.length) out.push(el('p', 'aad-vtnone', { text: 'No apps open.' }));
     if (drag) dragEnd(false);
+    // the app bar: Chats and the first half of the apps left of the orb, the rest and All apps right of it (the phone's
+    // orb bar: the orb in one spot, the items either side of it)
+    // (Chats and All apps count too; an odd count gets an empty spot on the right, so the orb sits at the bar's centre)
+    if (bar) {
+      const rows = out.filter(n => n.classList?.contains('aad-vtab')), all = rows.length + 2, left = Math.ceil(all / 2) - 1;
+      rows.forEach((n, i) => { n.dataset.half = i < left ? 'l' : 'r'; });
+      if (all % 2) out.push(el('i', 'aad-vtfill', { 'aria-hidden': 'true', 'data-half': 'r' }));
+    }
+    vtList.setAttribute('aria-orientation', bar ? 'horizontal' : 'vertical');
     vtList.replaceChildren(...out, dropLine);
     markMedia();
   }
-  /* narrow desktop (ONE): the Chats row on top of the column, lit while Chats is in front */
+  /* narrower window (ONE): Chats, the app bar's first item, lit while Chats is in front; its badge: chats waiting */
   function paintOneChats() {
-    const on = one(), front = on && !pane;
+    const on = one(), front = on && !pane, n = on ? badgeText(CHATS) : '';
     if (vOne.hidden === on) vOne.hidden = !on;
     vChats.classList.toggle('is-on', front); vChats.setAttribute('aria-pressed', String(front));
+    if (front) vChats.setAttribute('aria-current', 'page'); else vChats.removeAttribute('aria-current');
+    if (vChatsN.textContent !== n) vChatsN.textContent = n; vChatsN.hidden = !n;
+    const label = 'Chats' + (n ? `, ${n} new` : ''); if (vChats.getAttribute('aria-label') !== label) vChats.setAttribute('aria-label', label);
   }
   /** Chats from the column: from an app, Chats as it was (the open chat, else the list); Chats in front again, its first
    * view (the list, and at half width a new chat beside it) */
@@ -1538,20 +1555,26 @@ export default function desktop(api) {
   api.listen(vChats, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); oneChats(); } });
   /** the app last in front, while its desk is still open (Back from the chats list goes there) */
   const oneApp = () => oneLast && desks().some(d => d.desk === oneLast.desk && d.id === oneLast.id) ? oneLast : null;
-  api.listen(oneLB, 'click', () => { const a = oneApp(); if (a && one()) goApp(a.id, a.desk); });
   api.listen(oneBack, 'click', () => { if (!one()) return; oneList = true; paintTop(); });
   function toggleTabs() { focusLeave(); vtFolded = !vtFolded; api.storage.set('tabsFolded', vtFolded); flip([top, orbBox, ...shownDesks()], () => paintVt(true)); retileSoon(); }
   api.listen(vtTog, 'click', toggleTabs);
   /** a tab: its app as the panel; the one in front again hides the panel (the desk stays open) */
   function pickVt(d) {
-    // narrow desktop (ONE): the app in front stays in front (one app at a time; Chats is the column's first row)
-    if (one() && pane && Number(pane.desk) === d.desk) return;
+    // narrower window (ONE): the app in front stays in front (one app at a time; Chats is the bar's first item) and goes
+    // back to its top level, the phone's tap on the tab you are on
+    if (one() && pane && Number(pane.desk) === d.desk) { appTop(); return; }
     // The chat docked beside the panel has the keyboard (a reply was just sent there): the panel's tab brings its app
     // forward, never hides it out from under the pointer (James, 6 Nov 2026: "Messenger became unclickable").
     const chatHasIt = !!pane && docked && Number(api.route().desk) !== d.desk;
     if (frontDesk() === d.desk && !chatHasIt) { if (pane) hidePanel(); else goHome(); return; }
     if (d.id === CHATS) { closeAll(); api.nav.goDesk(d.desk); return; }
     goApp(d.id, d.desk);
+  }
+  /** the app in front at its top level: its own Back, step by step, until it says it is at its root (never past it:
+   * the app stays open); a sandboxed app answers later, so one step there */
+  function appTop() {
+    const f = paneFrame(), S = globalThis.WizAppServices; if (!f || !S?.back) return;
+    for (let i = 0; i < 12; i++) if (S.back(f) !== 'handled') break;
   }
   function closeDesk(d) {
     if (pane && Number(pane.desk) === d.desk) { pane = null; setWide(false); }
@@ -1745,7 +1768,8 @@ export default function desktop(api) {
       paintSplit(!!chatThread); paintTop();
       api.frame(() => { out?.cancel?.(); if (exitMotion === out) exitMotion = null; });
     };
-    const out = goBack && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    // (one app at a time: Chats replaces the app at once, on the click's own frame; no slide out)
+    const out = goBack && !one() && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
     exitMotion = out;
     if (out) closing = api.after(180, finish); else finish();
     return true;
@@ -1920,6 +1944,9 @@ export default function desktop(api) {
     if (a?.tagName === 'IFRAME' && !pane?.el?.contains(a)) return false;
     const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
     if (appFocused) api.apps.back?.(pane.id);
+    // one app at a time, the chat alone (narrower than ONE.split): one level up is the list it came from (a post from a
+    // channel's feed has its own "‹ # channel" first); at the list (the root) Back stays put
+    else if (one() && !pane && !oneSplit() && !feedBack()) { if (!oneList) { oneList = true; paintTop(); } }
     else if (docked) chatBack();
     else if (api.sessions?.channelBack?.()) paintList(); // Channels: thread → channel → list (issue 1256)
     return true; // bare AI apps desktop: no DOM change, no legacy navigation
@@ -2246,28 +2273,30 @@ export default function desktop(api) {
    * at half width the list beside the chat; narrower the list or the chat), and the two Backs */
   function paintOne(h) {
     const on = one();
-    if (on !== oneWas) { oneWas = on; oneList = true; oneSeen = chatThread; if (!on) paintVt(true); }
+    // (crossing ONE.from: the column becomes the app bar or the column again, laid out for it at once)
+    if (on !== oneWas) { oneWas = on; oneList = true; oneSeen = chatThread; if (on) closeTidy(); paintVt(true); applySizes(); retileSoon(); }
     oneSig = oneNow();
     // a chat opened (from the list, a notification, a key) shows that chat
     if (on && !h.app && chatThread !== oneSeen) { if (chatThread) oneList = false; oneSeen = chatThread; }
     const v = on ? (pane ? 'app' : 'chats') : '';
     if ((root.dataset.aadOne || '') !== v) { if (v) root.dataset.aadOne = v; else delete root.dataset.aadOne; }
     syncSide();
-    const back = on && !pane && !oneSplit() && !oneList, a = on && !pane && root.dataset.aadSide !== 'none' ? oneApp() : null;
+    // (a post opened from a channel's feed has its own "‹ # channel" Back there, cBack: one Back at a time)
+    const back = on && !pane && !oneSplit() && !oneList && !feedBack();
     if (oneBack.hidden === back) oneBack.hidden = !back;
+    if (back) { // named for the list it goes to (a channel's feed: Channels; else the list it was opened from)
+      const v = chatThread === FEED ? 'channels' : api.sessions.channelView?.() || '', name = v === 'channels' ? 'Channels' : v === 'activity' ? 'Activity' : 'Chats';
+      if (oneBack.textContent !== `‹ ${name}`) { oneBack.textContent = `‹ ${name}`; oneBack.title = 'Back (Esc)'; oneBack.setAttribute('aria-label', `Back to ${name} (Esc)`); }
+    }
     const bh = docked ? cTop : top; if (back && oneBack.parentNode !== bh) bh.insertBefore(oneBack, bh.firstChild || null);
-    oneLB.hidden = !a;
-    if (a) { const n = appName(a.id) || 'the app'; oneLB.textContent = `‹ ${n}`; oneLB.title = `Back to ${n}`; oneLB.setAttribute('aria-label', `Back to ${n}`); }
     paintOneChats();
   }
-  // the window crossing any of ONE's widths (one app, the list beside the chat, the folded column), or the switch
-  // turned on or off: all of it again (Codex review: not only ONE.from)
-  const oneNow = () => `${one()}|${oneSplit()}|${(globalThis.innerWidth || 1440) < ONE.rail}`;
+  // the window crossing either of ONE's widths (one app with the app bar, the list beside the chat): all of it again
+  // (Codex review: not only ONE.from)
+  const oneNow = () => `${one()}|${oneSplit()}`;
   let oneSig = '';
   const oneCheck = () => { if (oneNow() !== oneSig) paintTop(); };
   api.listen(globalThis, 'resize', oneCheck);
-  const oneMo = globalThis.MutationObserver ? new MutationObserver(oneCheck) : null;
-  oneMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
   /* round 21 (Miguel, 4 Nov 2026): one left/right model for every open the shell starts by itself. An app (a
    * notification's Open, the launcher, a command) or a link an app owns = that app in the right panel, its one window
    * reused and taken to the page; a link no app owns = one link page in the same panel; no view opens beside a thread
@@ -2315,7 +2344,7 @@ export default function desktop(api) {
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove(); macHoles?.dispose();
-    oneMo?.disconnect(); oneBack.remove();
+    oneBack.remove();
     closeMenu(); closeWs(); offRws?.(); globalThis.WizWorkspaces?.close?.(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();
