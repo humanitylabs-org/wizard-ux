@@ -104,3 +104,37 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-ag .ag-sig { width: 100%; hei
 html[data-tweaks~="wizard/chat-channels"] .ch-post-rr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; margin-top: 2px; color: var(--ink-3); font-size: .75rem; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-rr .ch-post-sts { display: inline-flex; align-items: center; gap: 8px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-reply { min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: .8125rem; font-weight: 500; }
+
+/* Activity as a short what-needs-me list (wizard-ux issue 1336). One marker per row at its right end, the same three
+   meanings everywhere: the spinner (working), amber (needs you, until addressed) and green (unread, until opened); the
+   violet unread time and dot go. */
+html[data-tweaks~="wizard/chat-channels"] .ch-row .ch-act-ind { flex: none; align-self: center; display: inline-flex; padding-left: 8px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort { padding: 2px 10px 6px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-older { display: block; width: 100%; }
+/* Agents in the Channels list: a folded row above Archive, each agent with its sigil */
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-agents { margin-top: 8px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-sig { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-sig .ag-sig, html[data-tweaks~="wizard/chat-channels"] .ch-chan-sig svg { width: 100%; height: 100%; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-h .ch-chan-sig { margin-right: 6px; vertical-align: -4px; }
+/* Undo after an archive: opaque, above the bottom bar and the shell's toast, for about five seconds */
+html[data-tweaks~="wizard/chat-channels"] .ch-undo { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 88px); z-index: 2147483000; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); min-height: 44px; padding: 0 6px 0 16px; border: 1px solid var(--line, var(--wz-border)); border-radius: 12px; background: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)), var(--wz-base, var(--bg)); color: var(--ink, var(--wz-text)); box-shadow: 0 8px 24px color-mix(in srgb, var(--ink, var(--wz-text)) 18%, transparent); font-size: .875rem; }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo button { flex: none; min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, var(--violet-2)); font: inherit; font-weight: 600; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo button:hover { background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 12%, transparent); }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: -2px; }
+/* The AI apps sidebar's Activity rows: green replaces the accent (purple) unread dot; amber for needs you */
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw { --ch-new: var(--green, var(--wz-success)); }
+@supports (color: oklch(from red l c h)) { html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw { --ch-new: oklch(from var(--green, var(--wz-success)) l c 150); } }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-st.is-needs { width: 8px; height: 8px; background: var(--amber, var(--wz-warning)); }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-more-older { display: block; width: calc(100% - 16px); margin: 4px 8px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, currentColor); font: inherit; font-size: .8125rem; text-align: left; padding: 0 8px; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-more-older:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+/* the one-line phone list (wizard/desktop-chats): the marker takes the accent unread dot's slot after the time; the
+   spinner shows only there (the other lists keep the row's own status icon at its left) */
+html[data-tweaks~="wizard/chat-channels"] .ch-row .ch-act-ind .ch-spin { display: none; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind { order: 6; margin: 0 2px 0 -2px; padding-left: 0; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind .ch-spin { display: inline-block; width: 10px; height: 10px; box-sizing: border-box; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { background: transparent; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:has(.ch-act-ind)::after { content: none; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-sec-m { margin-left: 6px; font-size: .75rem; opacity: .6; }

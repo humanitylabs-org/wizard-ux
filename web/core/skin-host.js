@@ -926,7 +926,11 @@
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
         // (a focused agent's list carries no inbox notifications: they belong to All, as in Chats)
-        list: opts => { const l = live() ? (opts?.focused === true && shell.sessionListFocused ? shell.sessionListFocused() : shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = opts?.focused === true && shell.agentFocus?.().id ? (o.ready || []) : withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
+        // { activity: true } (Channels on, wizard-ux issue 1336): every agent's chats as Working, Ready, Recent (+ older:
+        // how many more Show older adds; { older: true } lists them), Snoozed and Archive, in the one Activity sort;
+        // unread notifications wait in Ready, read ones sit in Recent.
+        list: opts => { if (opts?.activity === true && live() && shell.activityList) return activityRows(shell.activityList({ order: readReadyOrder(), older: opts.older === true }));
+          const l = live() ? (opts?.focused === true && shell.sessionListFocused ? shell.sessionListFocused() : shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = opts?.focused === true && shell.agentFocus?.().id ? (o.ready || []) : withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
         open: id => { if (!live() || typeof id !== 'string' || !id) return; if (id.startsWith(NOTE_ID)) inboxAct(NOTE_ID_OPEN, id.slice(NOTE_ID.length)); else shell.openThread(id); },
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
         // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.
@@ -1219,6 +1223,14 @@
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
   function readWorkingOrder() { return window.WizLive?.workingOrder?.() || 'alphabetical'; }
   function readReadyOrder() { try { const v = localStorage.getItem(READY_ORDER_KEY); return READY_ORDERS.includes(v) ? v : 'newest'; } catch (_) { return 'newest'; } }
+  function activityRows(l) {
+    if (!l) return null;
+    const M = window.WizChatsListModel, o = structuredClone(l), order = readReadyOrder();
+    const notes = noteRows().map(r => ({ ...r, mark: r.snoozed ? '' : r.rank === 1 ? 'needs' : 'new' }));
+    o.ready = M.activitySort([...(o.ready || []), ...notes.filter(r => !r.snoozed)], order);
+    o.recent = M.activitySort([...(o.recent || []), ...notes.filter(r => r.snoozed)], 'newest');
+    return o;
+  }
   function withNoteRows(ready) {
     return window.WizChatsListModel.readySort([...ready, ...noteRows()], readReadyOrder());
   }

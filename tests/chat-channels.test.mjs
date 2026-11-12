@@ -323,7 +323,8 @@ test('switching off with a channel open returns the list to the Focus it had, un
 });
 
 test('the channel name shows once in an open feed: no focus strip, no title-bar label', () => {
-  assert.match(src, /\$\{feed \? '' : focusStrip\(w\)\}/);
+  // Issue 1336: with Channels on there is no focus strip at all (agents live in the Channels list's Agents row).
+  assert.match(src, /\$\{feed \|\| chanOn \? '' : focusStrip\(w\)\}/);
   assert.match(src, /function listTitle\(w\) \{ return focusAgents\(\)\.length === 1 && focusOf\(w\)\?\.kind === 'space' && !\(typeof chanOpen === 'function' && chanOpen\(w\)\)/);
 });
 
@@ -1971,4 +1972,147 @@ test('issue 1331: Archive turns quiet; Mark done is the strong button, only whil
   assert.equal(vm.runInContext('needsAsk', f.env)({ ...s, attention: { state: 'fyi', ask: 'x' } }), null, 'nothing prominent otherwise');
   const cat = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
   assert.ok(cat.tweaks.includes('wizard/needs-you-in-thread') && !cat.defaults.includes('wizard/needs-you-in-thread'), 'listed, off by default');
+});
+
+/* Issue 1336: Activity as a short what-needs-me list, behind the same switch. The real Channels block helpers (Needs you,
+ * unread, the row marker, the agent name, Agents in the Channels list, the agent's feed, Undo) with the real list model. */
+const actFn = (f, name) => vm.runInContext(name, f.env);
+function actGroups(f, rows, opts = {}) {
+  const M = f.env.WizChatsListModel;
+  return M.activityGroups({ ready: rows }, { needs: actFn(f, 'actNeeds'), unread: actFn(f, 'actUnread'), at: s => s.at }, { now: NOW, ...opts });
+}
+const actIds = list => [...list].map(s => s.id);
+
+test('issue 1336: green leaves Ready once opened; amber stays in Ready until it is addressed (Mark done)', () => {
+  const green = row('g', 1, { fresh: true }), amber = row('y', 2, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() }), plain = row('p', 3);
+  const f = doneFixture({ sessions: { y: amber } });
+  let g = actGroups(f, [green, amber, plain]);
+  assert.deepEqual(actIds(g.ready), ['g', 'y']); assert.deepEqual(actIds(g.recent), ['p']);
+  // Opening both threads reads them (openChat → LIVE.markSeen): green goes to Recent, amber stays (James: "It should stay in ready").
+  f.env.LIVE.markSeen([green, amber]);
+  g = actGroups(f, [green, amber, plain]);
+  assert.deepEqual(actIds(g.ready), ['y'], 'opening a yellow thread keeps it in Ready');
+  assert.deepEqual(actIds(g.recent), ['g', 'p'], 'the opened green thread is in Recent, newest first');
+  // Addressed: Mark done (the one rule of issue 1331/1317) takes it out of Ready.
+  assert.equal(f.markDone('w', 'y'), true);
+  g = actGroups(f, [green, amber, plain]);
+  assert.deepEqual(actIds(g.ready), []); assert.deepEqual(actIds(g.recent), ['g', 'y', 'p']);
+});
+
+test('issue 1336: one marker per row, amber over green, spinner for working; the purple dot is gone', () => {
+  const f = fixture();
+  const mark = actFn(f, 'actMark'), html = actFn(f, 'actRowMark');
+  const both = row('b', 1, { fresh: true, attention: { state: 'needs_you', ask: 'x' } });
+  assert.equal(mark(both), 'needs', 'yellow wins when a thread qualifies for both');
+  assert.equal(mark(row('n', 1, { fresh: true })), 'new');
+  assert.equal(mark(row('w', 1, { status: 'running', fresh: true })), 'working');
+  assert.equal(mark(row('a', 1, { status: 'waiting_for_approval' })), 'needs', 'an approval waits on the owner too');
+  assert.equal(mark(row('r', 1)), '');
+  assert.match(html(both), /^<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><\/span>$/);
+  assert.match(html(row('n', 1, { fresh: true })), /ch-chan-dot new" role="img" aria-label="Unread"/);
+  const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('html[data-tweaks~="wizard/chat-channels"] .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }'), 'no violet unread time with the switch on');
+  assert.ok(css.includes('.aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }'), 'the AI apps unread dot is green, not the accent');
+});
+
+test('issue 1336: the three sorts (Newest first, Oldest first, Needs you first); Recent is always newest first', () => {
+  const f = fixture();
+  const rows = [row('old-needs', 5, { attention: { state: 'needs_you', ask: 'x' } }), row('mid', 3, { fresh: true }), row('new', 1, { fresh: true }), row('r1', 2), row('r2', 4)];
+  assert.deepEqual([...f.env.WizChatsListModel.ACTIVITY_SORTS].map(([, l]) => l), ['Newest first', 'Oldest first', 'Needs you first']);
+  assert.deepEqual(actIds(actGroups(f, rows).ready), ['new', 'mid', 'old-needs'], 'Newest first is the default');
+  assert.deepEqual(actIds(actGroups(f, rows, { order: 'oldest' }).ready), ['old-needs', 'mid', 'new']);
+  assert.deepEqual(actIds(actGroups(f, rows, { order: 'priority' }).ready), ['old-needs', 'new', 'mid'], 'Needs you first, then newest');
+  for (const order of ['newest', 'oldest', 'priority']) assert.deepEqual(actIds(actGroups(f, rows, { order }).recent), ['r1', 'r2']);
+  assert.equal(f.env.WizChatsListModel.activitySortOf('subject'), 'newest', 'a By subject order reads as Newest first');
+});
+
+test('issue 1336: Recent goes back about a week, then Show older lists the rest of the live window', () => {
+  const f = fixture();
+  const rows = [row('d1', 24), row('d6', 6 * 24), row('d9', 9 * 24), row('d20', 20 * 24)];
+  const g = actGroups(f, rows);
+  assert.deepEqual(actIds(g.recent), ['d1', 'd6']); assert.equal(g.older, 2);
+  const all = actGroups(f, rows, { older: true });
+  assert.deepEqual(actIds(all.recent), ['d1', 'd6', 'd9', 'd20']); assert.equal(all.older, 0);
+  // Snoozed and Archived are their own folded sections at the bottom.
+  const M = f.env.WizChatsListModel, sn = row('s', 1, { deferred: true }), ar = row('x', 1, { archived: true });
+  const g2 = M.activityGroups({ ready: [sn], archive: [ar], working: [] }, { needs: actFn(f, 'actNeeds'), unread: actFn(f, 'actUnread'), at: s => s.at }, { now: NOW });
+  assert.deepEqual([actIds(g2.snoozed), actIds(g2.archive), actIds(g2.ready), actIds(g2.recent)], [['s'], ['x'], [], []]);
+});
+
+test('issue 1336: Agents sits folded just above Archive and is hidden with one agent; an agent opens its own feed', () => {
+  const agentsList = [{ id: 'host', label: 'Host' }, { id: 'hermes', label: 'Archimedes', is_default: true }, { id: 'container', label: 'Box' }];
+  const f = fixture({ agents: { h1: 'host', k1: 'container' } });
+  f.env.focusAgents = () => [agentsList[1]];
+  f.env.agentName = id => (agentsList.find(a => a.id === id) || { label: id }).label;
+  const archived = [row('a', 1)];
+  f.store.set('wos.chats.channel-prefs.v1', JSON.stringify({ archived: { voice: new Date(NOW).toISOString() } }));
+  assert.doesNotMatch(f.channelsBody(f.w, archived), /data-chchanagents/, 'one agent: no Agents section');
+  f.env.focusAgents = () => agentsList;
+  let html = f.channelsBody(f.w, archived);
+  assert.match(html, /<button type="button" class="ch-sec-h" data-chchanagents aria-expanded="false"><span>Agents<\/span><small>3<\/small>/);
+  assert.ok(html.indexOf('data-chchanagents') < html.indexOf('data-chchanarch') && html.indexOf('data-chchanagents') > html.indexOf('data-chchannew'), 'after + New channel, before Archive');
+  assert.doesNotMatch(html, /data-chchan="@agent:/, 'collapsed by default');
+  assert.equal(f.channelClick(click({ 'data-chchanagents': '' }), 'w', f.w), true);
+  html = f.channelsBody(f.w, [row('h1', 1, { fresh: true }), row('a', 2)]);
+  assert.deepEqual([...html.matchAll(/data-chchan="@agent:([^"]+)"/g)].map(m => m[1]), ['hermes', 'host', 'container'], 'the main agent first');
+  assert.match(html.split('data-chchan="@agent:host"')[1].split('</button>')[0], /ch-chan-dot new/, 'each agent row has the aggregate marker');
+  // Open: the agent's Focus, a feed of every thread with that agent, whatever channel it is in; Back returns.
+  f.w.focus = null;
+  assert.equal(f.channelClick(click({ 'data-chchan': '@agent:host' }), 'w', f.w), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'agent', key: 'host' });
+  const open = f.chanOpen(f.w);
+  assert.deepEqual(JSON.parse(JSON.stringify(open)), { id: '@agent:host', name: 'Host', agent: 'host', agentFeed: true });
+  assert.equal(f.inChannel(open, row('h1', 1)), true, 'a thread in the host-ops channel'); assert.equal(f.inChannel(open, row('h9', 1, { owner: 'host' })), true, 'and one in General');
+  assert.equal(f.inChannel(open, row('a', 1)), false, 'never another agent\'s');
+  assert.equal(f.chanSpaceOf(f.w), '', 'its message box starts the new thread in General');
+  assert.equal(f.chanReadKey(open), '', 'no channel watermark of its own');
+  assert.equal(f.channelBack(f.w), true); assert.equal(f.w.focus, null);
+  assert.equal(f.openChannel(f.w, '@agent:nobody'), false, 'only a visible agent');
+});
+
+test('issue 1336: main vs routed: host-profile, container and restricted threads name their agent after the channel; Ready and marks per row', () => {
+  const f = fixture({ agents: { h1: 'host', k1: 'container', r1: 'restricted' } });
+  f.env.agentName = id => ({ host: 'Host ops agent', container: 'Box agent', restricted: 'Locked agent' })[id] || 'Archimedes';
+  const label = actFn(f, 'agentLabelOf');
+  assert.equal(label(row('a', 1)), '', 'the main agent says nothing');
+  for (const [id, owner, name] of [['h1', 'host', 'Host ops agent'], ['k1', 'container', 'Box agent'], ['r1', 'restricted', 'Locked agent']]) {
+    assert.equal(label(row(id, 1, { owner })), name, owner);
+    // A routed row sharing a main thread's id is still its own agent's (the row's owner, never the id).
+    assert.equal(label(row('a', 1, { owner })), name, owner + ' with a shared id');
+    const g = actGroups(f, [row(id, 1, { owner, fresh: true }), row('a', 2, { owner: '' })]);
+    assert.deepEqual(actIds(g.ready), [id]); assert.deepEqual(actIds(g.recent), ['a']);
+    assert.equal(actFn(f, 'actMark')(row(id, 1, { owner, attention: { state: 'needs_you', ask: 'x' } })), 'needs');
+  }
+});
+
+test('issue 1336: Undo after an archive (about 5 s) restores; Activity shows every agent; switch off changes nothing', () => {
+  const f = fixture();
+  const appended = [], timers = [];
+  const mk = () => { const btn = { listeners: {}, addEventListener(k, fn) { this.listeners[k] = fn; } }; return { className: '', attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; }, querySelector: () => btn, btn, removed: 0, remove() { this.removed++; } }; };
+  Object.assign(f.env.document, { createElement: () => mk(), body: { append: el => appended.push(el) } });
+  f.env.setTimeout = (fn, ms) => { timers.push([fn, ms]); return timers.length; };
+  let undone = 0;
+  assert.equal(actFn(f, 'actUndo')('Archived', () => undone++), true);
+  assert.equal(appended.length, 1); assert.match(appended[0].innerHTML, /<span>Archived<\/span><button type="button" data-chundo>Undo<\/button>/);
+  assert.equal(appended[0].attrs.role, 'status'); assert.equal(timers.at(-1)[1], 5000);
+  appended[0].btn.listeners.click(); assert.equal(undone, 1); assert.equal(appended[0].removed, 1);
+  // Activity drops an old agent / Space Focus (the chips are gone); a channel's or agent's feed keeps it.
+  f.w.focus = { kind: 'agent', key: 'host' };
+  assert.equal(actFn(f, 'actAllAgents')(f.w), true); assert.equal(f.w.focus, null);
+  f.w.focus = { kind: 'space', key: 'launch' }; f.w.chan = { id: 'launch', prev: null };
+  assert.equal(actFn(f, 'actAllAgents')(f.w), false, 'a channel feed is open');
+  f.w.chan = null;
+  // Switch off: no marker, no agent name, no Undo, the Focus untouched.
+  f.setOn(false);
+  assert.equal(actFn(f, 'agentLabelOf')(row('h1', 1, { owner: 'host' })), '');
+  assert.equal(actFn(f, 'actUndo')('Archived', () => undone++), false); assert.equal(appended.length, 1);
+  assert.equal(actFn(f, 'actAllAgents')(f.w), false); assert.deepEqual(JSON.parse(JSON.stringify(f.w.focus)), { kind: 'space', key: 'launch' });
+});
+
+test('issue 1336: the switch-off path keeps today\'s Activity: sections, focus strip, layout choices and plain toasts', () => {
+  // Every new branch is behind channelsOn() (chanOn in the renderer); off, the renderer takes today's branches.
+  assert.match(src, /else if \(chanOn && !side && !feed && !n && !F && typeof activityBody === 'function'\) body = draftSec \+ activityBody\(w, all, listNotes\);/);
+  assert.match(src, /\$\{typeof channelsOn === 'function' && channelsOn\(\) \? '' : `\$\{LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
+  assert.match(src, /if \(!\(a === 'done' && typeof actUndo === 'function' && actUndo\(msg\[1\],[^\n]+\n\s+toast\(msg\[0\], msg\[1\], 1600\);/);
+  assert.match(src, /function activityClick\(e, w\) \{\n\s+if \(!w \|\| w\.thread \|\| typeof channelsOn !== 'function' \|\| !channelsOn\(\)\) return false;/);
 });

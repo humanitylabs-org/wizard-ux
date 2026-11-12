@@ -142,6 +142,8 @@ function sessionRow(s, kind, { live, chats, pins } = {}) {
     needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state,
     // its "# channel" while Channels is on (wizard-ux issue 1256: the AI apps sidebar's Activity rows)
     ...(chats.channelOf?.(s) ? { channel: chats.channelOf(s) } : {}),
+    // and, for an agent other than the main one, that agent's name after it (wizard-ux issue 1336: "# Chats · Philosopher")
+    ...(chats.channelOf?.(s) && chats.agentLabelOf?.(s) ? { agentName: chats.agentLabelOf(s) } : {}),
     // Move to channel… (wizard-ux issue 1292): the same picker as a channel feed's row menu, only while Channels is on
     // Mark done (wizard-ux issue 1317): only while its switch and Channels are on (chats.canMarkDone)
     actions: [...(pins ? ['pin'] : []), 'rename', ...(chats.canMarkDone?.(s) ? ['markdone'] : []), ...(kind === 'ready' && !fresh ? ['unread'] : []), ...(chats.channelOf?.(s) ? ['move'] : []),
@@ -195,6 +197,46 @@ function priorityGroups(list, notes, rank) {
   for (const n of notes) add(notificationRow(n).rank, n, true);
   return [...by.values()].sort((a, b) => a.rank - b.rank);
 }
+/* Activity as a short "what needs me" list (wizard-ux issue 1336, with Channels on; James, 12 Nov 2026). Working, then
+ * Ready, which holds only threads waiting on the owner (amber, until addressed) and finished unread ones (green, until
+ * opened), then Recent (everything else, newest first, about a week back, "Show older" for the rest of the live window),
+ * then Snoozed and Archived. One sort for the view, stored as Chats' own Ready order (newest / oldest / priority, shared
+ * across devices): Newest first, Oldest first, Needs you first. Sections come from the shell's own classification
+ * (LIVE.workGroups), never a second status policy. Pure. */
+const ACTIVITY_SORTS = Object.freeze([['newest', 'Newest first'], ['oldest', 'Oldest first'], ['priority', 'Needs you first']]);
+const activitySortOf = o => o === 'oldest' || o === 'priority' ? o : 'newest';
+const ACTIVITY_RECENT_DAYS = 7, DAY_MS = 864e5;
+// One marker per row, the same three meanings everywhere: working (spinner), needs (amber) and new (green); amber wins.
+const activityMark = ({ working, needs, unread }) => working ? 'working' : needs ? 'needs' : unread ? 'new' : '';
+const msOf = v => typeof v === 'number' ? v : Date.parse(v ?? '') || 0;
+/** Rows in the view's order. at(r) and needs(r) read a row (raw session or projected row); ties by id. */
+function activitySort(rows, order, { at = r => msOf(r?.at), needs = r => r?.mark === 'needs' } = {}) {
+  const o = activitySortOf(order), id = r => String(r?.id ?? '');
+  const t = (a, b) => (o === 'oldest' ? at(a) - at(b) : at(b) - at(a)) || (id(a) < id(b) ? -1 : id(a) > id(b) ? 1 : 0);
+  return (rows || []).slice().sort(o === 'priority' ? (a, b) => Number(!!needs(b)) - Number(!!needs(a)) || t(a, b) : t);
+}
+/** The sections from the shell's groups (LIVE.workGroups) and its facts: needs(s), unread(s), at(s) in ms.
+ * { working, ready, recent, older (how many Recent rows "Show older" would add), snoozed, archive }. Pure. */
+function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false } = {}) {
+  if (!groups) return null;
+  const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
+  const rest = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || [])];
+  const ready = [], recent = [], snz = [...(groups.deferred || [])];
+  for (const s of rest) (snoozed(s) ? snz : needs(s) || unread(s) ? ready : recent).push(s);
+  const newest = rows => activitySort(rows, 'newest', { at });
+  const cut = now - days * DAY_MS, all = newest(recent), within = all.filter(s => at(s) >= cut);
+  return { working: activitySort(groups.working || [], order === 'priority' ? 'newest' : order, { at }), ready: activitySort(ready, order, { at, needs }),
+    recent: older ? all : within, older: older ? 0 : all.length - within.length, snoozed: newest(snz), archive: newest(groups.archive || []) };
+}
+/** The same sections as rows for a layout that draws its own list (sessionRow, plus each row's marker). */
+function activityList(groups, facts, opts = {}) {
+  const c = facts.chats, at = s => msOf(facts.live.cardAt?.(s)) || msOf(s.updatedAt) || msOf(s.createdAt);
+  const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
+  const g = activityGroups(groups, { needs, unread, at }, opts); if (!g) return null;
+  const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }) }));
+  return { working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
+    snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') };
+}
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */
 /** The one unread tally for raw threads (+ notification rows): every Ready-side number is this, never the list length. */
@@ -202,5 +244,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

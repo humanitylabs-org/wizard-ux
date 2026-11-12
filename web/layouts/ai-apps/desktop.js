@@ -125,6 +125,15 @@ export default function desktop(api) {
   /* Narrow desktop, one app at a time (ONE above): read inline from the shell's switches, never stored here */
   const oneSwitch = () => { try { return String(root.dataset.tweaks || '').split(' ').includes(ONE.id); } catch (_) { return false; } };
   const one = () => oneSwitch() && (globalThis.innerWidth || 1440) < ONE.from;
+  /* Activity as a short what-needs-me list (wizard-ux issue 1336, the Channels switch wizard/chat-channels): no agent
+   * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
+   * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
+   * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
+  const actOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (_) { return false; } };
+  const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
+  const ACT_EMPTY = { working: 'Nothing working.', ready: 'Nothing needs you.', recent: 'Nothing else this week.', snoozed: 'Nothing snoozed.', archive: 'Nothing archived.' };
+  const LKINDS = [...KINDS, 'recent'];
+  let actOlder = false;
   const oneSplit = () => (globalThis.innerWidth || 1440) >= ONE.split;
   // (one app at a time: no split, no side by side, no second app; the saved arrangement is kept for the wide window)
   const paneModel = () => { const m = panes.get(); return one() ? { ...m, mode: 'tiled', ratio: null, weights: {}, slots: ['chats', 'app'], app2: null } : m; };
@@ -198,9 +207,9 @@ export default function desktop(api) {
   let noteWant = false;
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
-  const readSessions = () => { sessions = api.sessions.list({ focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
+  const readSessions = () => { sessions = api.sessions.list((typeof actOn === 'function' && actOn()) ? { activity: true, older: actOlder } : { focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
   // (a chat opened from elsewhere may belong to an agent the sidebar is not focused on: look in the whole list too)
-  const titleOf = id => { for (const s of [sessions || readSessions(), api.sessions.list()]) for (const k of KINDS) { const r = ((s || {})[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
+  const titleOf = id => { for (const s of [sessions || readSessions(), api.sessions.list()]) for (const k of (typeof LKINDS !== 'undefined' ? LKINDS : KINDS)) { const r = ((s || {})[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
   // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.
   const ttAgent = id => globalThis.WizLive?.agentOf?.(id) || '';
   const ttDots = id => { const T = globalThis.WosThreadTracker; return T?.on?.() ? T.dots(id, ttAgent(id)) : ''; };
@@ -256,7 +265,7 @@ export default function desktop(api) {
   let agentsDrawn = '';
   function paintAgents() {
     const f = api.agents.focus ? api.agents.focus() : { id: '', agents: [] }, list = f.agents || [];
-    const sig = list.length > 1 ? JSON.stringify([f.id, list.map(a => [a.id, a.label, a.colour, a.private])]) : '';
+    const sig = list.length > 1 && !(typeof actOn === 'function' && actOn()) ? JSON.stringify([f.id, list.map(a => [a.id, a.label, a.colour, a.private])]) : '';
     if (sig === agentsDrawn) return;
     agentsDrawn = sig; agentsRow.hidden = !sig;
     if (!sig) { agentsRow.replaceChildren(); return; }
@@ -507,12 +516,15 @@ export default function desktop(api) {
   const setWorkingOrder = o => { api.sessions.setWorkingOrder?.(o); readSessions(); paintList(true); paintRail(true); };
   const readyOrder = () => groupOrder(api.sessions.order?.());
   // (round 20 item 9: off = one flat Ready; round 24c: 'status' / 'project' / 'none', the old on/off switch read as status / none, a saved 'subject' as project)
-  const groupBy = () => api.storage.get('groupReady') === true ? 'status' : ['project', 'subject'].includes(api.storage.get('groupBy')) ? 'project' : 'none';
+  const groupBy = () => (typeof actOn === 'function' && actOn()) ? 'none' : api.storage.get('groupReady') === true ? 'status' : ['project', 'subject'].includes(api.storage.get('groupBy')) ? 'project' : 'none';
   const groupReady = () => groupBy() === 'status';
   // round 22: the rows' times stay true ("5m" becomes "6m") without a repaint: one cheap text pass every 10 s
   const tickTimes = () => { const now = Date.now(); for (const t of scroll.querySelectorAll('.aad-time')) { const v = shortTime(t.dataset.at, now); if (v && t.textContent !== v) t.textContent = v; } api.after(10e3, tickTimes); };
   api.after(10e3, tickTimes);
   const setOrder = o => { api.sessions.setOrder?.(groupOrder(o)); paintList(true); paintRail(true); paintSetting(); };
+  // Activity's one sort (issue 1336): Chats' own Ready order, where Priority reads as Needs you first.
+  const actOrder = () => globalThis.WizChatsListModel.activitySortOf(api.sessions.order?.());
+  const setActOrder = o => { api.sessions.setOrder?.(globalThis.WizChatsListModel.activitySortOf(o)); readSessions(); paintList(true); paintRail(true); paintSetting(); };
   const setGroup = m => { m = groupMode(m); api.storage.set('groupBy', m); api.storage.set('groupReady', m === 'status'); paintSetting(); paintList(true); paintRail(true); };
   api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); else paintRail(); paintSetting(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
@@ -520,7 +532,7 @@ export default function desktop(api) {
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
-  api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
+  api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); paintSetting(); paintAgents(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
   api.listen(globalThis, 'resize', syncSide);
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -807,6 +819,8 @@ export default function desktop(api) {
     if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
     // Channels on (issue 1256): the chat's channel, muted on a second line, as in Chats' Activity
     if (s.channel) title.append(el('span', 'aad-chan-line', { text: `# ${s.channel}` }));
+    // (issue 1336: another agent's thread names it after the channel, "# WizardOS Chats · Philosopher")
+    if (s.channel && s.agentName) title.lastChild?.append?.(` · ${s.agentName}`);
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
     if (dots) b.append(dots);
@@ -814,10 +828,13 @@ export default function desktop(api) {
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
-    if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
+    // (Activity with Channels on, issue 1336: the row's one marker, amber over green; no purple unread dot)
+    const mk = typeof s.mark === 'string' ? s.mark : null;
+    if (mk !== null ? s.kind === 'working' || mk === 'needs' || mk === 'new' : s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : mk === 'needs' ? ' is-needs' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
-    if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}`);
+    if (mk === 'needs') b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, needs you`);
+    if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}${s.agentName ? `, ${s.agentName}` : ''}`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; feedFocus = null; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
@@ -860,8 +877,8 @@ export default function desktop(api) {
   function openSortMenu(btn, kind = 'sort') {
     if (menu?.wrap === btn) { closeMenu(); return; }
     closeMenu();
-    const isWorking = kind === 'working-sort', isSort = kind === 'sort' || isWorking;
-    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isWorking ? 'Sort Working' : isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
+    const isWorking = kind === 'working-sort', isAct = kind === 'act-sort', isSort = kind === 'sort' || isWorking || isAct;
+    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isAct ? 'Sort' : isWorking ? 'Sort Working' : isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
     const item = (on, w0, attrs, fn) => {
       const it = el('button', 'aad-pop-i' + (on ? ' is-on' : ''), { type: 'button', role: 'menuitemradio', 'aria-checked': String(on), ...attrs });
       it.append(on ? icon('check') : el('span', 'aad-ico', { 'aria-hidden': 'true' }), el('span', '', { text: w0 }));
@@ -869,7 +886,8 @@ export default function desktop(api) {
       return it;
     };
     card.append(el('h3', 'aad-pop-h', { text: isSort ? 'Sort' : 'Group' }));
-    if (isWorking) for (const [v, w0] of globalThis.WizChatsListModel.WORKING_SORTS) card.append(item(v === workingOrder(), w0, { 'data-working-order': v }, () => setWorkingOrder(v)));
+    if (isAct) for (const [v, w0] of globalThis.WizChatsListModel.ACTIVITY_SORTS) card.append(item(v === actOrder(), w0, { 'data-act-order': v }, () => setActOrder(v)));
+    else if (isWorking) for (const [v, w0] of globalThis.WizChatsListModel.WORKING_SORTS) card.append(item(v === workingOrder(), w0, { 'data-working-order': v }, () => setWorkingOrder(v)));
     else if (isSort) for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
     else for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
     scene.append(card);
@@ -884,6 +902,20 @@ export default function desktop(api) {
   /* ---------- round 19 item 2: the order in Settings › Chats & app screens (this view's own group there) ---------- */
   const setNode = el('div', 'st-group aad-stg', { 'data-aad-setting': '' });
   function paintSetting() {
+    if ((typeof actOn === 'function' && actOn())) {
+      // Activity with Channels on (issue 1336): the one sort, no grouping (Channels does the grouping now).
+      const ao = actOrder(), ar = el('div', 'st-chats-options', { role: 'radiogroup', 'aria-label': 'Sort Activity' });
+      for (const [v, w0] of globalThis.WizChatsListModel.ACTIVITY_SORTS) {
+        const b = el('button', 'st-row wz-row', { type: 'button', role: 'radio', 'aria-checked': String(v === ao), 'data-aad-act-order': v });
+        const tx = el('span', 'st-tx'); tx.append(el('b', '', { text: w0 }));
+        b.append(el('span', '', { 'aria-hidden': 'true', text: v === ao ? '◉' : '○' }), tx);
+        api.listen(b, 'click', () => setActOrder(v));
+        ar.append(b);
+      }
+      setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), el('p', 'aad-stg-l', { text: 'Sort Activity' }), ar,
+        el('p', 'aad-stg-n', { text: 'Working and Ready follow this order; Recent is always newest first. The same choice as Chats\' own order.' }));
+      return;
+    }
     const o = readyOrder();
     const radios = el('div', 'st-chats-options', { role: 'radiogroup', 'aria-label': 'Order chats within each group' });
     for (const [v, w0] of GROUP_ORDERS) {
@@ -917,14 +949,45 @@ export default function desktop(api) {
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
-      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
+      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]
+      .concat((typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join()]))] : []));
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
-      const seen = new Set(), hitsC = KINDS.flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
+      const seen = new Set(), hitsC = (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
       if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
+    } else if ((typeof actOn === 'function' && actOn())) {
+      // Activity with Channels on (issue 1336): Working, Ready (its one sort on the header), Recent with Show older,
+      // then Snoozed and Archived folded at the very bottom, each with its count.
+      for (const [k, word0] of ACT_SECTIONS) {
+        const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
+        const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
+        hd.append(el('span', 'aad-sec-w', { text: word0 }));
+        // (Ready's count is what waits on the owner: the pill; the others a muted number)
+        if (rows.length && k !== 'recent') hd.append(el(k === 'ready' ? 'b' : 'span', k === 'ready' ? 'aad-sec-n' : 'aad-sec-m', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+        hd.append(icon('down', 'aad-ico aad-sec-c'));
+        hd.setAttribute('aria-label', `${word0}${rows.length && k !== 'recent' ? `, ${rows.length}` : ''}${on ? '' : ', folded'}`);
+        api.listen(hd, 'click', () => { secOpen[k] = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
+        const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
+        if (on) {
+          if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
+          else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : ACT_EMPTY[k] }));
+          if (k === 'recent' && s.older) {
+            const more = el('button', 'aad-more-older', { type: 'button', text: `Show older · ${s.older}` });
+            api.listen(more, 'click', () => { actOlder = true; readSessions(); paintList(true); });
+            body.append(more);
+          }
+        }
+        if (k === 'ready') {
+          const row = el('div', 'aad-sech'), word = (globalThis.WizChatsListModel.ACTIVITY_SORTS.find(([v]) => v === actOrder()) || globalThis.WizChatsListModel.ACTIVITY_SORTS[0])[1];
+          const sort = el('button', 'aad-sortb aad-act-orderb', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': `Sort: ${word}. Change`, title: 'Sort' });
+          sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
+          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'act-sort'); });
+          row.append(hd, sort); out.push(row, body);
+        } else out.push(hd, body);
+      }
     } else {
       // The sidebar and its search are Chats only; app search belongs to the global launcher.
       // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
@@ -1839,7 +1902,7 @@ export default function desktop(api) {
     const section = group(row);
     return rows.filter(r => r.parentElement === row.parentElement && group(r) === section).map(r => r.dataset.sid);
   });
-  const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
+  const readyIds = () => (typeof actOn === 'function' && actOn()) ? ((sessions || readSessions()).ready || []).map(r => r.id) : readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
     const ids = readyIds();

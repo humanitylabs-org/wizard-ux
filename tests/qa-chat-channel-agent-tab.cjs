@@ -1,4 +1,6 @@
 'use strict';
+// Since wizard-ux issue 1336 the focus strip is gone while Channels is on (agents live in the Channels list's Agents row):
+// run this only against a tree from before it (QA_WEB=<that tree>/web).
 // wizard-ux issue 1340 in a real browser: phone 412x915, Nebula + Grove, Channels on, two agents. Open a named channel,
 // go Back, open General: the agent tab in the Chats focus strip names the agent ("Archimedes"), never the channel
 // ("WizardOS Apps"), in every step. Synthetic transport only (no box is reached; writes are answered in memory).
