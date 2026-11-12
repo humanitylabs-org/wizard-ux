@@ -333,10 +333,16 @@
     finally { restartAsk = ''; restartChanged(); void restartPoll(); }
   }
   // Names of the chats still running, from the shell's own list (health carries counts only, never thread ids).
+  // A chat counts as running the way the Chats list's Working does (a live run id, a helper), or when this device sent
+  // it a run the list has not caught up with yet (the thread then shows “Replying…”). A send the restart holds
+  // (queued / not yet submitted) is saved, not running, as the Chats list shows it during a restart (chats.js 'held').
+  const RESTART_BUSY = ['running', 'stopping'], RESTART_SAVED = ['queued', 'submitting'];
   function restartRunning() {
     try {
-      const rows = window.WizLive?.unified?.() || [];
-      return rows.filter(s => s && !s.archived && ['running', 'stopping'].includes(s.status)).map(s => String(s.title || 'Untitled chat'));
+      const L = window.WizLive, rows = L?.unified?.() || [], model = window.WizChatsListModel;
+      const busy = s => !RESTART_SAVED.includes(s.status) && ((model?.isListWorking ? model.isListWorking(s) : RESTART_BUSY.includes(s.status))
+        || (!!s.runId && RESTART_BUSY.includes(s.lastRunStatus)) || !!L?.pendingRun?.(s.id));
+      return rows.filter(s => s && !s.archived && !s.hidden && busy(s)).map(s => String(s.title || 'Untitled chat'));
     } catch (_) { return []; }
   }
   function restartNoticeHtml() {
@@ -372,7 +378,13 @@
   }
   window.addEventListener?.('wos:tweak-choice', () => { setTimeout(() => { void restartPoll(); }, 0); });
   globalThis.document?.addEventListener?.('visibilitychange', () => { if (!document.hidden && restartOn()) void restartPoll(); });
-  if (restartOn()) void restartPoll();
+  // The skin host paints data-tweaks after this script loads (and again whenever the list changes, on any device), so
+  // the watch starts or stops whenever the switch appears in or leaves that list, not only on a choice in this tab.
+  let restartWasOn = restartOn();
+  const restartWatch = () => { const on = restartOn(); if (on === restartWasOn) return; restartWasOn = on; void restartPoll(); };
+  window.addEventListener?.('wos:prefs', restartWatch);
+  try { if (typeof MutationObserver === 'function' && document.documentElement?.nodeType === 1) new MutationObserver(restartWatch).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
+  if (restartWasOn) void restartPoll();
   window.WizReach = {
     diagnose,
     reloadRepair,

@@ -23,15 +23,19 @@ function el(tag = 'div') {
     querySelector(sel) { return sel === '[data-restart-notice]' ? this.children.find(c => 'restartNotice' in c.dataset) || null : null; } };
   return node;
 }
-function reach({ on = true, health, post } = {}) {
+function reach({ on = true, health, post, rows, live = {}, model, observe = false } = {}) {
   let now = 1_800_000_000_000;
   const calls = [], hosts = [el('form')], timers = [];
   const dataset = { shell: 'phone', tweaks: on ? 'wizard/chat-channels ' + SWITCH : 'wizard/chat-channels' };
-  const document = { documentElement: { dataset }, hidden: false, body: {},
+  const listeners = {}, observers = [];
+  const document = { documentElement: { dataset, ...(observe ? { nodeType: 1 } : {}) }, hidden: false, body: {},
     querySelectorAll: sel => sel === '[data-restart-notice]' ? hosts.flatMap(h => h.children.filter(c => 'restartNotice' in c.dataset)) : [],
     createElement: tag => el(tag), addEventListener() {} };
   const ctx = { document, navigator: { onLine: true }, location: { hostname: 'wizard.example.com' }, Event, AbortController,
     Date: { now: () => now }, dispatchEvent() {}, console,
+    addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
+    ...(observe ? { MutationObserver: class { constructor(fn) { this.fn = fn; } observe(target, opts) { observers.push({ fn: this.fn, target, opts }); } } } : {}),
+    ...(model ? { WizChatsListModel: model } : {}),
     setTimeout(fn, ms) { timers.push(ms); return timers.length; }, clearTimeout() {},
     fetch: async (url, init = {}) => {
       calls.push([url, init.method || 'GET', init.body || '', init.headers?.['Content-Type'] || '']);
@@ -39,11 +43,12 @@ function reach({ on = true, health, post } = {}) {
       if (url === '/wizard/v1/restart') return post(JSON.parse(init.body));
       return ok({ checks: [], overall: 'ok' });
     },
-    WizLive: { unified: () => [{ id: 'wizard_long', title: 'Long research', status: 'running' }, { id: 'wizard_done', title: 'Done one', status: 'completed' }] },
+    WizLive: { unified: () => rows || [{ id: 'wizard_long', title: 'Long research', status: 'running' }, { id: 'wizard_done', title: 'Done one', status: 'completed' }], ...live },
   };
   ctx.window = ctx; ctx.globalThis = ctx; vm.runInNewContext(reachSource, ctx);
   const settle = () => new Promise(r => setTimeout(r, 0));
-  return { api: ctx.WizReach, ctx, calls, hosts, timers, dataset, settle, advance: ms => { now += ms; } };
+  const fire = type => { for (const fn of listeners[type] || []) fn(new Event(type)); };
+  return { api: ctx.WizReach, ctx, calls, hosts, timers, dataset, settle, fire, observers, advance: ms => { now += ms; } };
 }
 const holding = (extra = {}) => ok({ status: 'ok', restart: { phase: 'waiting', holding: true, reason: 'update', active: 1, held: 2, oldest_active_s: 40, wait_until: '2027-01-15T08:10:00.000Z', ...extra } });
 
@@ -129,6 +134,53 @@ test('overdue: the owner sees what still runs and chooses Wait longer or Restart
 
   assert.equal(await h.api.restartChoose('now'), true);
   assert.deepEqual(posts[1], { now: true });
+});
+
+test('switch painted after load (reload, phone, second device): the watch starts without a choice in this tab', async () => {
+  // The skin host fills data-tweaks after reach.js runs; the review saw 0 health reads in 40 s after a reload.
+  for (const via of ['prefs', 'observer']) {
+    const h = reach({ on: false, observe: via === 'observer', health: () => holding() });
+    await h.settle();
+    assert.equal(h.calls.length, 0, via);
+    h.dataset.tweaks = 'wizard/chat-channels ' + SWITCH;
+    if (via === 'prefs') h.fire('wos:prefs');
+    else { assert.equal(JSON.stringify(h.observers[0].opts.attributeFilter), '["data-tweaks"]'); h.observers[0].fn([]); }
+    await h.settle(); await h.settle();
+    assert.deepEqual(h.calls.map(c => c[0]), ['/wizard/health'], via);
+    assert.equal(h.api.restart().phase, 'waiting', via);
+    h.api.paintRestart(h.hosts);
+    assert.match(h.hosts[0].children[0].innerHTML, /Restarting when chats finish/, via);
+    // Another repaint with the same list does not start a second poll.
+    if (via === 'prefs') h.fire('wos:prefs'); else h.observers[0].fn([]);
+    await h.settle();
+    assert.equal(h.calls.length, 1, via);
+    // Switched off elsewhere: the watch stops and the note goes.
+    h.dataset.tweaks = 'wizard/chat-channels';
+    if (via === 'prefs') h.fire('wos:prefs'); else h.observers[0].fn([]);
+    await h.settle();
+    assert.equal(h.calls.length, 1, via);
+    assert.equal(h.api.restart(), null, via);
+  }
+});
+
+test('overdue names every chat the Chats list counts as working and a run this device just sent, never a held send', async () => {
+  const model = { isListWorking: s => ['submitting', 'queued', 'running', 'stopping'].includes(s.status) || !!s.background };
+  const rows = [
+    { id: 'a', title: 'Helper at work', status: 'completed', background: 'helper' },
+    { id: 'q', title: 'Saved send', status: 'queued' },
+    { id: 'q2', title: 'Saved new chat', status: 'submitting' },
+    { id: 'b', title: 'Live run', status: 'completed', runId: 'run_b', lastRunStatus: 'running' },
+    { id: 'c', title: 'Just sent', status: 'completed' },
+    { id: 'd', title: 'Finished', status: 'completed' },
+    { id: 'e', title: 'Archived', status: 'running', archived: true },
+  ];
+  const h = reach({ rows, model, live: { pendingRun: sid => ['c', 'q'].includes(sid) ? 'run_' + sid : '' }, health: () => holding({ phase: 'overdue', active: 3 }) });
+  await h.settle(); await h.settle();
+  h.api.paintRestart(h.hosts);
+  const html = h.hosts[0].children[0].innerHTML;
+  assert.match(html, /3 chats are still running: “Helper at work”, “Live run”, “Just sent”/);
+  // A send the restart holds is saved, not running (Codex P2): never listed beside the chats that block the restart.
+  assert.doesNotMatch(html, /Finished|Archived|Saved send|Saved new chat/);
 });
 
 test('Restart now shows as restarting now once the gate carries the choice', async () => {
