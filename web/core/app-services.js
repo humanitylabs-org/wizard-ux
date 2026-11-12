@@ -255,6 +255,16 @@
     try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
   }
   function setTools(st, list, base) { st.tools = cleanTools(st, list, base); const shown = paintTools(st); window.dispatchEvent(new CustomEvent('wizard:app-tools')); return shown; }
+  // What the phone's approval sheet gets: the catalog's name for the app (never the page's) and only the needed fields.
+  function identityParams(app, method, args) {
+    const params = { requester: String(app.name || app.id).replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 80) };
+    if (method === 'sign') params.event = args?.event;
+    if (method === 'nip44_encrypt' || method === 'nip44_decrypt') {
+      params.pubkey = args?.pubkey;
+      const key = method === 'nip44_encrypt' ? 'plaintext' : 'ciphertext'; params[key] = args?.[key];
+    }
+    return params;
+  }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
   // never owner links, arbitrary same-origin frames or off-origin apps. Label comes from the catalog.
   async function identity(st, doc, method, args) {
@@ -265,12 +275,7 @@
     };
     const app = authorize(), bridge = window.WizCore?.bridge;
     if (!window.wizardDevicePort || !bridge?.call) return { unavailable: true }; // Desktop-to-phone routing is not v1.
-    const params = { requester: String(app.name || app.id).replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 80) };
-    if (method === 'sign') params.event = args?.event;
-    if (method === 'nip44_encrypt' || method === 'nip44_decrypt') {
-      params.pubkey = args?.pubkey;
-      const key = method === 'nip44_encrypt' ? 'plaintext' : 'ciphertext'; params[key] = args?.[key];
-    }
+    const params = identityParams(app, method, args);
     // Copy now: an app cannot mutate its event after the sheet is opened.
     const payload = JSON.stringify(params);
     if (payload.length > 140000) throw fault('Wizard ID request too large');
@@ -954,8 +959,8 @@
     return () => { if (!done) { done = true; use.running--; } };
   }
   // Under the boundary a sandboxed app sets its own badge and title bar, shares out (also to Wizard), receives shares,
-  // transcribes, holds shell updates, ducks Wizard Music and uses its fingerprint vault over the boundary channel
-  // (browser-boundary.js).
+  // transcribes, holds shell updates, ducks Wizard Music, uses its fingerprint vault and asks for Wizard ID over the
+  // boundary channel (browser-boundary.js).
   function holdFor(st, reason) {
     if (st.holds.size >= 64) throw fault('Too many update holds');
     const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
@@ -980,6 +985,30 @@
     let result;
     try { result = await vaultCall(st.appId, method, extra); } catch (e) { throw fail(e.code || 'failed'); }
     if (!alive()) throw fail('cancelled'); // no secret to a reloaded, navigated or closed document
+    return result;
+  }
+  // Wizard ID (Android) for a sandboxed app: the same rule as identity() above, checked by what the shell controls.
+  // Only an installed `kind:wizard` apps.json app; the phone's own approval sheet (biometric/PIN) names the app from
+  // the catalog, never from the page. A sheet opens only while that window is steadily in front, and an answer goes
+  // back only to the same document that asked (gen), so a reload or another page in the window never gets it.
+  async function boundaryIdentity(st, frame, method, args) {
+    const B = window.WizBrowserBoundary, gen = B.gen(frame), alive = () => boundaryLive(st) && B.gen(frame) === gen;
+    const authorize = () => {
+      const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.source === 'apps.json');
+      if (!app || !alive() || st.url.origin !== ORIGIN) throw fault('Wizard ID needs an installed app');
+      return app;
+    };
+    const app = authorize(), bridge = window.WizCore?.bridge;
+    if (!window.wizardDevicePort || !bridge?.call) return { unavailable: true }; // Desktop-to-phone routing is not v1.
+    const params = identityParams(app, method, args);
+    const payload = JSON.stringify(params); // a copy: the request can't change after the sheet opens
+    if (payload.length > 140000) throw fault('Wizard ID request too large');
+    if (method !== 'info') {
+      try { await whenInFront(st, alive); } catch (e) { throw fault('Wizard ID: ' + (e.code === 'not_in_front' ? 'not_in_front' : 'cancelled')); }
+      authorize();
+    }
+    const result = await bridge.call('identity.' + method, JSON.parse(payload));
+    authorize(); // no signature or plaintext to a reloaded, navigated, closed or uninstalled window
     return result;
   }
   if (window.WizBrowserBoundary?.serve) {
@@ -1044,6 +1073,7 @@
       // window restores the music (onReset, reset).
       if (method === 'audio.duck') return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, args?.on === true) : false;
       if (method === 'vault.has' || method === 'vault.seal' || method === 'vault.open' || method === 'vault.forget') return boundaryVault(st, frame, method.slice(6), args);
+      if (['identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'].includes(method)) return boundaryIdentity(st, frame, method.slice(9), args);
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {

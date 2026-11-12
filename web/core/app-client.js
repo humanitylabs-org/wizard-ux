@@ -43,6 +43,9 @@
    * an opaque origin and cannot reach the shell's window. Back, appearance and field insertion then travel by
    * postMessage through core/browser-boundary-client.js; requests carry only what the shell answers there. */
   const opaque = framed && globalThis.origin === 'null';
+  // Wizard ID: the phone's sheet may stay open 3 minutes. Under the boundary the shell first waits up to a minute for
+  // the window to be in front (app-services.js boundaryIdentity), so the app waits for both.
+  const ID_WAIT = opaque ? 255000 : 190000;
   let boundaryLoad = null;
   function boundaryClient() {
     if (!opaque) return Promise.resolve(null);
@@ -510,9 +513,9 @@
     readyExtension: Object.freeze({write: (kind,input,before,options={}) => request('ready.write',{kind,input,before},120000,options.onAdmitted)}),
     identity: Object.freeze({
       info: () => framed ? request('identity.info') : Promise.resolve({ unavailable: true }),
-      sign: event => framed ? request('identity.sign', { event }, 190000) : Promise.resolve({ unavailable: true }),
-      nip44_encrypt: args => framed ? request('identity.nip44_encrypt', args, 190000) : Promise.resolve({ unavailable: true }),
-      nip44_decrypt: args => framed ? request('identity.nip44_decrypt', args, 190000) : Promise.resolve({ unavailable: true }),
+      sign: event => framed ? request('identity.sign', { event }, ID_WAIT) : Promise.resolve({ unavailable: true }),
+      nip44_encrypt: args => framed ? request('identity.nip44_encrypt', args, ID_WAIT) : Promise.resolve({ unavailable: true }),
+      nip44_decrypt: args => framed ? request('identity.nip44_decrypt', args, ID_WAIT) : Promise.resolve({ unavailable: true }),
     }),
     shell: Object.freeze({
       openCompanion: opts => shellOp('openCompanion', opts),

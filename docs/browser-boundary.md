@@ -135,16 +135,22 @@ On:
   the secret goes back only to the document that asked (`gen`); a reloaded, navigated or closed window gets
   `vault:cancelled`. Only `{ secret }` (up to 4096 characters) or `{ available, saved }` cross; native error codes cross
   as `vault:<code>`. Proof: `tests/qa-browser-boundary-duck-vault.cjs` (real Chromium).
+- Wizard ID (Android, docs/WIZARD_ID.md): `WizardApp.identity.info`, `.sign`, `.nip44_encrypt` and `.nip44_decrypt`
+  are answered for an installed `kind:wizard` apps.json app only (an owner link is refused), with the same window
+  checks. The phone's own approval sheet (biometric/PIN) names the app from the catalog, never from the page; a sheet
+  opens only while that window is steadily in front, and the answer goes back only to the document that asked (`gen`).
+  Only the owner's public info, a well-formed signed event, `{ ciphertext }`, `{ plaintext }` or `denied`/`cancelled`/
+  `none` cross. Desktop answers `{ unavailable: true }`, as before. Proof: `tests/qa-browser-boundary-identity.cjs`.
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services capture, orb, identity and voice commands are closed under the boundary (only `ready`,
+  app services capture, orb and voice commands are closed under the boundary (only `ready`,
   `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`, `voice.transcribe`, `update.hold`,
-  `update.release`, receiving shares, `audio.duck` and the vault are answered, and the update, fresh-data and share
-  notices are sent).
+  `update.release`, receiving shares, `audio.duck`, the vault and Wizard ID are answered, and the update, fresh-data
+  and share notices are sent).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.

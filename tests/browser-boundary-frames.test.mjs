@@ -221,7 +221,7 @@ test('badge and title bar: served by the one registered server; taps come back; 
   assert.equal(await f.a.WizBoundaryClient.request('badge.set', { n: 3 }, 2000), null, 'only a boolean ever crosses back');
   assert.equal(await f.a.WizBoundaryClient.request('titlebar.set', { tools: [{ id: 'older', kind: 'button' }] }, 2000), true);
   await assert.rejects(f.a.WizBoundaryClient.request('titlebar.set', { bad: true }, 2000), e => e.code === 'refused' && /Invalid/.test(e.message));
-  await assert.rejects(f.a.WizBoundaryClient.request('identity.info', {}, 2000), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('capture.pending', {}, 2000), e => e.code === 'unavailable');
   // Sharing out needs the browser's transient user activation (a real tap in the app); this shell has none.
   await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'x' }, 2000), e => e.code === 'refused' && /tap/.test(e.message));
   assert.deepEqual(calls.map(c => c.slice(0, 2)), [[true, 'badge.set'], [true, 'titlebar.set'], [true, 'titlebar.set']]);
@@ -645,4 +645,30 @@ test('duck and vault: served methods, only a secret or saved flags cross back, v
   assert.deepEqual(clone(await req('vault.forget', {})), { saved: false });
   await assert.rejects(req('vault.open', { title: 'no' }), e => e.message === 'vault:cancelled');
   assert.deepEqual(calls, ['audio.duck', 'vault.has', 'vault.open', 'vault.seal', 'vault.forget', 'vault.open']);
+});
+
+// Slice 22: Wizard ID crosses as protocol data only: the owner's public info, a well-formed signed event, a NIP-44
+// result, or denied / cancelled / none. Anything else the shell holds stays behind.
+test('identity: served methods, only public info, a signed event or a NIP-44 result cross back', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el);
+  await tick(); await tick();
+  const ev = { id: 'a'.repeat(64), pubkey: 'b'.repeat(64), created_at: 1700000000, kind: 1, tags: [['p', 'c'.repeat(64)]], content: 'hi', sig: 'd'.repeat(128) };
+  const calls = [];
+  sh.B.serve((el, method, args) => {
+    calls.push(method);
+    if (method === 'identity.info') return Promise.resolve({ npub: 'npub1x', pubkey: 'b'.repeat(64), name: 'Owner', backed_up: false, nsec: 'never' });
+    if (method === 'identity.sign') return Promise.resolve(args.event.kind === 2 ? { denied: true, why: 'x' } : args.event.kind === 3 ? { ...ev, sig: 'zz' } : { ...ev, requester: 'Notes' });
+    if (method === 'identity.nip44_encrypt') return Promise.resolve({ ciphertext: 'Aq==', key: 'k' });
+    return Promise.resolve({ plaintext: 'hello', shared: 'k' });
+  });
+  const req = (m, a) => f.a.WizBoundaryClient.request(m, a, 2000);
+  assert.deepEqual(clone(await req('identity.info', {})), { npub: 'npub1x', pubkey: 'b'.repeat(64), name: 'Owner', backed_up: false });
+  assert.deepEqual(clone(await req('identity.sign', { event: { kind: 1 } })), ev, 'only the signed event\'s own fields');
+  assert.deepEqual(clone(await req('identity.sign', { event: { kind: 2 } })), { denied: true });
+  assert.equal(await req('identity.sign', { event: { kind: 3 } }), null, 'a malformed event never crosses');
+  assert.deepEqual(clone(await req('identity.nip44_encrypt', { pubkey: 'c'.repeat(64), plaintext: 'hi' })), { ciphertext: 'Aq==' });
+  assert.deepEqual(clone(await req('identity.nip44_decrypt', { pubkey: 'c'.repeat(64), ciphertext: 'Aq==' })), { plaintext: 'hello' });
+  assert.deepEqual(calls, ['identity.info', 'identity.sign', 'identity.sign', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt']);
 });
