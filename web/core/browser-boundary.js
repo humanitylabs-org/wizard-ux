@@ -12,7 +12,8 @@
  *    admitted only from the registered frame's own contentWindow with the current channel.
  *  - back(frame, onRoot): asks the app to go back one step. `handled` = the app did it; `atRoot` = onRoot() runs the
  *    shell's own next step. No answer (timeout) stays put, because a late answer may already have moved the app.
- *  - theme(frame, appearance): the Appearance v1 context, pushed on change and again on every `ready`.
+ *  - theme(frame, appearance, layer): the Appearance v1 context and the skin layer, pushed on change and again on
+ *    every `ready`.
  *  - pinField(frame): the focused field in the focused app frame is sealed once; insert(text) puts text there only if
  *    the field did not change in between, release() lets it go.
  *  - field.focus: the app says (a boolean, nothing else) whether a text field has focus, so the shell's dictation
@@ -295,7 +296,7 @@
       // The shell's own proof that an app document answered on this load (the Troubleshooter window waits on it,
       // core/reach.js). Only this frame's own window, on the current channel, can raise it.
       try { st.frame.dispatchEvent(new Event('wizard:boundary-ready')); } catch (_) {}
-      if (st.appearance) send(st, 'theme', { appearance: st.appearance });
+      if (st.appearance) send(st, 'theme', { appearance: st.appearance, layer: st.layer || null });
       try { window.WizAppearance?.sync?.(); } catch (_) {}
       return;
     }
@@ -446,7 +447,13 @@
       }
       return false;
     },
-    theme(frame, appearance) { const st = sessions.get(frame); if (!st || !appearance) return; st.appearance = appearance; if (st.ready) send(st, 'theme', { appearance }); },
+    // The skin layer (appearance-host skinLayer: same-origin stylesheet paths + My skin's CSS) travels with the theme,
+    // since a sandboxed app cannot read the shell's stylesheets itself (app-client syncSkinLayer).
+    theme(frame, appearance, layer) {
+      const st = sessions.get(frame); if (!st || !appearance) return;
+      st.appearance = appearance; st.layer = layer || null;
+      if (st.ready) send(st, 'theme', { appearance, layer: st.layer });
+    },
     async pinField(frame) {
       const st = sessions.get(frame);
       // The frame has focus, or the app still reports its focused field while a shell control (the orb) is pressed.

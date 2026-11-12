@@ -172,6 +172,12 @@ On:
   click outside it gives them back). An app's own `data-wz-key` for one of these letters still wins while it is in
   front. In the Classic desktop the view is gone and they stay the page's. Proof:
   `tests/qa-browser-boundary-view-keys.cjs` (real Chromium, the real AI apps desktop with the boundary on).
+- The app kit's skin layer: a same-origin app copies the shell's skin stylesheets and My skin from its parent
+  (app-client `syncSkinLayer`), which a sandboxed app cannot read. Under the boundary the appearance host sends the
+  layer with each theme (`WizBrowserBoundary.theme(frame, appearance, layer)`: `core/skins.css` and the loaded, enabled
+  skin package sheets as same-origin paths, plus My skin's CSS up to 64 KB), again on every reload, and pushes a new one
+  when the skin, a skin sheet or My skin changes. The app takes only same-origin `.css` paths; the live kit swap works
+  as before. Theme content only, like the tokens. Proof: `tests/qa-browser-boundary-skin-layer.cjs`.
 - Voice commands stay closed under the boundary: an app's `voice.commands` claim must answer synchronously while the
   shell parses a held-orb command, which a message channel can't do, and no installed app registers one (apps declare
   spoken words as data, `voice_routes`, which the shell opens itself and which work as before).
@@ -184,8 +190,8 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is answered.
 - Recording: a hold-to-record press on a touch screen gets the browser's tap only when the finger lifts, so an app
   that starts on touch-down must prepare in an earlier tap (or start on release).
-- Desktop: the app kit's live skin layer in a sandboxed app; the phone shell has no key forwarding (it has no desktop keys).
-  Pages in the link sheet lose their own storage and pop-ups.
+- Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
+  pop-ups.
 - Most apps still need their own storage and backend calls to work from an opaque origin (wizard-os#385). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
