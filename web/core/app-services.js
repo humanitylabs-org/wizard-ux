@@ -509,7 +509,7 @@
   addEventListener('wizard:share-pending', e => {
     for (const st of frames.values()) if (st.appId === e.detail?.appId && valid(st, st.doc)) {
       try { st.frame.contentWindow.postMessage({ type: 'wizard:app:share', version: VERSION }, ORIGIN); } catch (_) {}
-    }
+    } else if (st.appId === e.detail?.appId && boundaryLive(st)) window.WizBrowserBoundary.notice(st.frame, 'share');
   });
   // onRoot: the shell's own next step, run later when a sandboxed app (browser boundary) answers that it is at its root.
   function back(frame, onRoot) {
@@ -953,8 +953,8 @@
     let done = false;
     return () => { if (!done) { done = true; use.running--; } };
   }
-  // Under the boundary a sandboxed app sets its own badge and title bar, shares out (also to Wizard), transcribes and
-  // holds shell updates over the boundary channel (browser-boundary.js).
+  // Under the boundary a sandboxed app sets its own badge and title bar, shares out (also to Wizard), receives shares,
+  // transcribes and holds shell updates over the boundary channel (browser-boundary.js).
   function holdFor(st, reason) {
     if (st.holds.size >= 64) throw fault('Too many update holds');
     const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
@@ -1011,6 +1011,13 @@
         const take = transcribeBudget(st.appId, args?.file);
         return transcribeFile(args?.file, { language: args?.language }).finally(take);
       }
+      // Receiving shares (docs/SHARE-SHEET.md): the same per-app ops a same-origin frame uses, always for this window's
+      // installed app id (never one the page names). An item stays pending, claimed by this window, until the app acks
+      // that it placed it; browser-boundary.js lets only the item's own share fields cross.
+      if (method === 'share.receive') return !!shareOps?.register(st.appId, { accepts: args?.accepts, targets: args?.targets });
+      if (method === 'share.targets') return !!shareOps?.setTargets(st.appId, args?.targets);
+      if (method === 'share.pending') return shareOps?.pending(st.appId, { owner: st, alive: () => boundaryLive(st) }) || [];
+      if (method === 'share.ack') return typeof args?.id === 'string' && !!shareOps?.ack(st.appId, args.id);
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {

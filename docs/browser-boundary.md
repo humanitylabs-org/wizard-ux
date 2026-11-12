@@ -121,15 +121,22 @@ On:
   sandboxed app as `notice` on its channel (`WizBrowserBoundary.notice`), with the same window checks as the badge.
   Only the update's version string and the ask's reason cross. A document that answers on a new channel hears a
   pending update again. Proof: `tests/qa-browser-boundary-notices.cjs` (real Chromium).
+- Receiving shares (docs/SHARE-SHEET.md): `WizardApp.share.receive` registers the app with the shell's share sheet
+  (`share.receive`, `share.targets`), always under its window's installed app id, never one the page names. A tap on
+  the app or one of its people in the shell's sheet hands it the item: an open app hears `notice` `share` and pulls
+  (`share.pending`), the window claims the item and the app acks it once placed (`share.ack`). Only the item's own
+  share fields cross (`id`, `kind`, `text`, `url`, `title`, `target`, and for a file `file`, `name`, `mime`, `size`).
+  No tap is needed: the owner already chose the app in the shell's sheet. Proof:
+  `tests/qa-browser-boundary-share-receive.cjs` (real Chromium, the real share sheet).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services receiving shares, capture, orb, vault, identity and voice commands are closed under the boundary
-  (only `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`, `voice.transcribe`,
-  `update.hold` and `update.release` are answered, and the update and fresh-data notices are sent).
+  app services capture, orb, vault, identity and voice commands are closed under the boundary (only `ready`,
+  `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`, `voice.transcribe`, `update.hold`,
+  `update.release` and receiving shares are answered, and the update, fresh-data and share notices are sent).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.

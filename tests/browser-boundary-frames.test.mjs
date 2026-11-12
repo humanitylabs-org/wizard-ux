@@ -586,3 +586,38 @@ test('notices: update and refresh reach the ready app on its current channel, as
   assert.deepEqual(refreshes, ['agent']);
   assert.ok(sh.log.filter(l => l.to === 'app').every(l => l.target === '*'));
 });
+
+// Slice 20: receiving shares. The app registers and pulls for its own window; a waiting share is announced on its
+// channel; a pending item crosses as its own share fields only.
+test('receiving shares: served methods, item fields only, and a share notice that makes the app pull', async () => {
+  const sh = shell(), f = frame(sh);
+  const shares = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => false, onShare: () => shares.push('pull') });
+  sh.B.attach(f.el);
+  await tick(); await tick();
+  const calls = [];
+  sh.B.serve((el, method, args) => {
+    calls.push([method, clone(args)]);
+    if (method === 'share.pending') return [
+      { id: 'sh-1', kind: 'text', text: 'hello', title: 'T', target: 'p1', claim: { owner: 'shell record' }, appId: 'notes', at: 1 },
+      { id: 'sh-2', kind: 'script', text: 'x' },
+      { kind: 'text', text: 'no id' },
+      { id: 'sh-3', kind: 'url', url: 'https://example.com/a', text: 'y'.repeat(200001), size: 3 },
+    ];
+    return method === 'share.ack' ? args.id === 'sh-1' : true;
+  });
+  // No tap needed: receiving opens no shell sheet; the app only reads what the owner already sent to it.
+  assert.equal(await f.a.WizBoundaryClient.request('share.receive', { accepts: ['text'] }, 2000), true);
+  assert.equal(await f.a.WizBoundaryClient.request('share.targets', { targets: [{ id: 'p1', name: 'Ann' }] }, 2000), true);
+  assert.deepEqual(clone(await f.a.WizBoundaryClient.request('share.pending', {}, 2000)), [
+    { id: 'sh-1', kind: 'text', target: 'p1', text: 'hello', title: 'T' },
+    { id: 'sh-3', kind: 'url', target: null, url: 'https://example.com/a', size: 3 },
+  ], 'only the item\'s share fields; the shell\'s claim and an unknown kind never cross');
+  assert.equal(await f.a.WizBoundaryClient.request('share.ack', { id: 'sh-1' }, 2000), true);
+  assert.deepEqual(calls.map(c => c[0]), ['share.receive', 'share.targets', 'share.pending', 'share.ack']);
+  assert.equal(sh.B.notice(f.el, 'share'), true);
+  await tick(); await tick();
+  assert.deepEqual(shares, ['pull']);
+  f.load(); // a new channel: the old document's notice target is gone until it answers again
+  assert.equal(sh.B.notice(f.el, 'share'), false, 'not ready on the new channel yet: nothing');
+});

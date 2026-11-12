@@ -29,13 +29,16 @@
  *    sheet, where the owner picks (the shell's confirm); `share.wizard` (the same tap, then the shell's own Send to
  *    <agent> sheet, where the owner reads the text and sends or cancels); `voice.transcribe` (the box's transcriber,
  *    within a per-app budget); and `update.hold` / `update.release` (the app's unsaved work makes a shell update wait,
- *    for that window's current document only). They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
+ *    for that window's current document only); and receiving shares (`share.receive`, `share.targets`, `share.pending`,
+ *    `share.ack`), always for the window's own installed app id, where a pending item crosses as its share fields only.
+ *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
  *    status, a transcript), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
  *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
  *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
  *  - notice(frame, kind, data): the shell's own notices to a ready app, on its current channel: `update` (a new
- *    shell is ready; only its version string crosses) and `refresh` (read your data again; only the reason crosses).
+ *    shell is ready; only its version string crosses), `refresh` (read your data again; only the reason crosses) and
+ *    `share` (a share was handed to this app: pull it; nothing else crosses).
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -48,13 +51,27 @@
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
-  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release'];
+  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
+    'share.receive', 'share.targets', 'share.pending', 'share.ack'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   const TAPPED = ['share.text', 'share.file', 'share.wizard'], INFLIGHT = 4;
   const NOTICE_REASONS = ['visible', 'focus', 'poll', 'agent'];
-  // What may cross back to the app: protocol data only, never a shell object.
+  // A share handed to this app (share.pending): only the item's own share fields, never the shell's record of it.
+  const SHARE_KINDS = ['text', 'url', 'image', 'file'], SHARE_FIELDS = [['text', 200000], ['url', 8192], ['title', 1024], ['name', 255], ['mime', 255], ['target', 160]];
+  const isBlob = f => !!f && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(f));
+  function shareItem(x) {
+    if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !x.id || x.id.length > 96 || !SHARE_KINDS.includes(x.kind)) return null;
+    const o = { id: x.id, kind: x.kind, target: null };
+    for (const [k, n] of SHARE_FIELDS) if (typeof x[k] === 'string' && x[k].length <= n) o[k] = x[k];
+    if (Number.isFinite(x.size) && x.size >= 0) o.size = x.size;
+    if (isBlob(x.file)) o.file = x.file;
+    return o;
+  }
+  // What may cross back to the app: protocol data only, never a shell object. Shares go in batches of 32; the app's
+  // client (app-client.js pullShares) asks again after a full batch.
   function shape(v) {
+    if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
     if (typeof v === 'string') return v.length <= 32 ? v : null;
     if (v && typeof v === 'object') {
@@ -280,6 +297,7 @@
         if (!NOTICE_REASONS.includes(data?.reason)) return false;
         send(st, 'notice', { kind, reason: data.reason }); return true;
       }
+      if (kind === 'share') { send(st, 'notice', { kind }); return true; } // a share is waiting: pull it (share.pending)
       if (kind === 'update') {
         const v = data?.available, version = typeof v?.version === 'string' ? v.version.slice(0, 128) : '';
         send(st, 'notice', { kind, available: v ? { version } : null }); return true;

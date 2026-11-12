@@ -54,9 +54,9 @@
       (document.head || document.documentElement).appendChild(s);
     }));
   }
-  // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update and
-  // fresh-data notices (the same as wizard:app:update / wizard:app:refresh for a same-origin frame).
-  const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r) });
+  // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
+  // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
+  const boundaryHooks = () => ({ onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares() });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
   const localHolds = new Map();
@@ -234,7 +234,7 @@
   }
   /* Receiving shares from Wizard's share sheet (docs/SHARE-SHEET.md). Hosted apps only: the shell keeps each item
    * pending until receive() returns true (the item is visibly placed, e.g. in the app's composer), then it is acked. */
-  let shareRecv = null, sharePull = null;
+  let shareRecv = null, sharePull = null; const SHARE_BATCH = 32;
   function shareOp(op, args) {
     if (service) return Promise.resolve().then(() => op === 'receive' ? service.share.receive(args) : op === 'targets' ? service.share.targets(args.targets) : op === 'pending' ? service.share.pending() : service.share.ack(args.id));
     if (transportReady) return request('share.' + op, args);
@@ -245,17 +245,22 @@
     if (sharePull) { sharePull.again = true; return sharePull.done; }
     const run = sharePull = { again: false };
     run.done = (async () => {
-      let n = 0;
+      let n = 0; const offered = new Set();
       try {
         do {
           run.again = false;
           const items = await shareOp('pending').catch(() => []);
+          let fresh = 0;
           for (const it of Array.isArray(items) ? items : []) {
             if (!shareRecv) break;
+            if (offered.has(it?.id)) continue; // refused once in this pull: not offered again
+            offered.add(it?.id); fresh++;
             let ok = false;
             try { ok = (await shareRecv.receive(Object.freeze({ ...it }))) === true; } catch (e) { console.warn('WizardApp share receive', e); }
             if (ok) { await shareOp('ack', { id: it.id }).catch(() => {}); n++; }
           }
+          // A full batch (the browser boundary hands at most SHARE_BATCH items at a time): pull the rest too.
+          if (Array.isArray(items) && items.length >= SHARE_BATCH && fresh) run.again = true;
         } while (run.again && shareRecv);
       } finally { sharePull = null; }
       return n;
