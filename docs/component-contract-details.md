@@ -124,3 +124,5 @@ Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tint
 ServerSwitchGuard (Android Wizard switch): names the unfinished work; finished kept meetings never block.
 
 Plumbing file notes (moved from COMPONENTS.md): `WosMedia` lives in `media-watch.js`; `WizWorkspaces` (`workspaces.js`) is the saved Wizards switcher. `WizBrowserBoundary` (`browser-boundary.js`, shell) and `WizBoundaryClient` (`browser-boundary-client.js`, app side) are the browser owner boundary's sandboxed-frame channel (wizard-os#133, [doc](browser-boundary.md)).
+
+Thread tracker order (moved from COMPONENTS.md): oldest first (running, then acked fold, last).
