@@ -18,7 +18,7 @@ const snapshot = (sid, choice, agent) => agent
   : { model: choice && !choice.agent ? choice.model : 'main-default', provider: 'main-p' };
 
 function tapRoute({ live, newModel }) {
-  const ctx = { CHATS: { modelRoute: () => live, PW: { newModel: c => c.newModel || null }, ch: () => ({ newModel }) }, window: { WosModels: { snapshot } } };
+  const ctx = { CHATS: { modelRoute: () => live, boxModel: k => (k ? newModel : null) || null }, window: { WosModels: { snapshot } } };
   vm.createContext(ctx);
   vm.runInContext(cut(app, '  function sendTapRoute(', '  // A take that sends nothing') + ';this.sendTapRoute=sendTapRoute;', ctx);
   return ctx.sendTapRoute;
@@ -26,7 +26,7 @@ function tapRoute({ live, newModel }) {
 
 test('phone: a #General take with no agent goes to the main agent on the General box pick', () => {
   const view = { id: 'win', thread: '__new__', space: '', channel: 'General', chanAgent: '' };
-  const pin = { wid: 'win', sid: '__new__' };
+  const pin = { wid: 'win', sid: '__new__', box: 'chan::General' };
   const philosopher = { model: 'claude-fable-5-1', provider: 'philosopher-p', agent: 'philosopher' };
   const opus = { model: 'claude-opus', provider: 'main-p' };
   // The reported case: the route from the start of the take and the live read both came out as Philosopher.
@@ -47,7 +47,7 @@ test('phone: a #General take with no agent goes to the main agent on the General
 test('phone: a routed agent\'s channel keeps its agent (host profile, container, restricted)', () => {
   for (const [space, agent] of [['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
     const view = { id: 'win', thread: '__new__', space, chanAgent: agent };
-    const pin = { wid: 'win', sid: '__new__' };
+    const pin = { wid: 'win', sid: '__new__', box: 'chan:' + agent + ':' + space };
     const own = { model: agent + '-picked', provider: agent + '-p', agent };
     const other = { model: 'claude-fable-5-1', provider: 'philosopher-p', agent: 'philosopher' };
     assert.deepEqual({ ...tapRoute({ live: own, newModel: null })({ view, route: other }, pin) }, own, agent + ': live pick for this agent');

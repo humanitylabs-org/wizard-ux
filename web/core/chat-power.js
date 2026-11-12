@@ -292,9 +292,10 @@ window.WosChatPower = function chatPower(A) {
     return M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null;
   }
   // The chip in the thread header: the model this thread (or this new chat) runs on. Tap to change it.
-  function modelChip(w, s) {
+  // pick (a channel box, wizard-ux issue 1309): its own route, null = the default; never the window's New chat pick.
+  function modelChip(w, s, pick) {
     if (!M) return '';
-    const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
+    const cur = pick !== undefined ? pick || newModel({}, w) : w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     // A new chat in the main Chats on a Private model belongs to that private agent (unified Chats).
     const AG = window.WosAgents;
     const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
@@ -307,8 +308,8 @@ window.WosChatPower = function chatPower(A) {
   }
   /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
    * Tapping it opens the compact model menu over the right side, just above it. */
-  function modelLabel(w, s) {
-    const chip = modelChip(w, s); if (!chip) return '';
+  function modelLabel(w, s, pick) {
+    const chip = modelChip(w, s, pick); if (!chip) return '';
     return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
   }
   /* Miguel's skins only (Dark, Light, Landscapes; M.ours()): a four-position slide switch (Opus · Astra · Sol · the
@@ -374,6 +375,9 @@ window.WosChatPower = function chatPower(A) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
     if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
+    // A channel's box keeps its own pick, painted in every box of that channel on this frame (wizard-ux issue 1309).
+    // Never falls through to the window's New chat pick: a model the channel refuses (another agent's) changes nothing.
+    if (sh.mode === 'new' && sh.chan) { if (A.setChanModel?.(sh.pane, { model: o.value, provider: o.provider, agent: o.agent })) toast('◇', `New posts here on ${o.name}`, 1400); return; }
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) (w.thread ? A.renderThreadNow(w) : A.renderChats(w)); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
@@ -600,6 +604,11 @@ window.WosChatPower = function chatPower(A) {
   const SEND_SVG = '<svg class="snd" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
   // The thread a window's composer belongs to: its open thread, or a new chat from a channel's box (wizard-ux issue 1258).
   const boxThread = w => w?.thread || (w && A.chanOpen?.(w) ? '__new__' : '');
+  // A channel's own box (its pane draws the feed): its model pick is the box's own (A.chanModel), wizard-ux issue 1309.
+  // The pane, not its window: a classic window's list pane shows the feed beside a thread open on its right.
+  const chanPane = pane => { const pw = H.win(pane); return !!pw && !pw.thread && !!A.chanBox?.(pane); };
+  const chanCur = pane => A.chanModel?.(pane) || newModel({}, H.win(pane));
+  const paneThread = pane => chanPane(pane) ? '__new__' : boxThread(H.win(A.owner(pane)));
   // A box-mic take from a channel keeps the channel it started in (its Space; '' = General), per window.
   const boxSpace = new Map();
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = boxThread(H.win(wid)), on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
@@ -611,9 +620,11 @@ window.WosChatPower = function chatPower(A) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = capturedRunId ?? (A.isWorking(s) && s.runId ? s.runId : '');
-    const nm = route || (isNew ? (c.newModel || null) : null);
     // The channel this take started in: carried by the take (survives a reload), else pinned by the box mic's tap.
     const pins = typeof boxSpace !== 'undefined' ? boxSpace : null, pinned = !isNew ? undefined : typeof space === 'string' ? space : pins?.get(wid); pins?.delete(wid);
+    // A channel's take: its box's own pick (issue 1309), and the window's New chat pick is left alone.
+    const chanTake = isNew && (typeof pinned === 'string' || (!!A.chanBox?.(wid) && !w?.thread));
+    const nm = route || (isNew ? (chanTake ? A.chanModel?.(wid) : c.newModel) || null : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
@@ -624,7 +635,7 @@ window.WosChatPower = function chatPower(A) {
     // A take pinned to a channel with its route: that route's agent ('' = the main agent), never the agent this window
     // shows by the time it is saved (wizard-ux issue 1312).
     const chanAgent = typeof pinned === 'string' && route ? route.agent || '' : nm?.agent || A.winAgent(w);
-    if (isNew) c.newModel = null;
+    if (isNew && !chanTake) c.newModel = null;
     follow(wid);
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
@@ -640,7 +651,7 @@ window.WosChatPower = function chatPower(A) {
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(typeof pinned === 'string' ? { space: false } : {}), ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && chanAgent ? { agent: chanAgent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
-      if (isNew && nm) c.newModel = nm;
+      if (isNew && nm && !chanTake) c.newModel = nm;
       sealed.putBack();
       if (left) left.restore();
       throw e;
@@ -727,22 +738,22 @@ window.WosChatPower = function chatPower(A) {
   }
   function openModels(pane, mode, pop) {
     if (!M) return;
-    const wid = A.owner(pane), w = H.win(wid), sid = boxThread(w); if (!w || !sid || (!w.thread && mode !== 'new')) return;
+    const wid = A.owner(pane), w = H.win(wid), chan = chanPane(pane), sid = paneThread(pane); if (!w || !sid || (!w.thread && mode !== 'new')) return;
     const s = sid === '__new__' ? null : LIVE.session(sid);
-    const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
+    const cur = chan ? chanCur(pane) : mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
-    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && w.thread && M.privateOptions ? M.privateOptions() : null; // a channel's box stays with its agent
-    openSheet({ type: 'model', pane, wid, sid, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
+    const priv = !chan && !agent && !A.winAgent(w) && mode !== 'retry' && w.thread && M.privateOptions ? M.privateOptions() : null; // a channel's box stays with its agent
+    openSheet({ type: 'model', pane, wid, sid, mode, chan, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if visible choices or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
     const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
     const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.()]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
-      if (sheet !== opened || sheet?.type !== 'model' || boxThread(H.win(wid)) !== opened.sid) return;
+      if (sheet !== opened || sheet?.type !== 'model' || paneThread(pane) !== opened.sid) return;
       // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
-      const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
+      const cur = chan ? chanCur(pane) : mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
       if (key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
     });
   }
@@ -781,7 +792,7 @@ window.WosChatPower = function chatPower(A) {
     }
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
-    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, boxThread(ww) === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
+    if (t.closest('[data-chmodel]')) { openModels(id, paneThread(id) === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
     if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id, false); } return true; }
     if (t.closest('[data-chmic]')) {
       const sid = boxThread(w); if (!sid || !H.recordReply) return true;

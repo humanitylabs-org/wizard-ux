@@ -66,7 +66,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={setChanModel,chanModel,channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -438,7 +438,7 @@ test('Send paints the post on the same frame, starts a new chat filed into the c
 
 test('a model picked in the channel box rides along; the needs-you filter opens so the post is seen', async () => {
   const f = fixture(); f.openChannel(f.w, 'launch'); f.env.ch('w').chanFilter = 'needs';
-  f.env.ch('w').newModel = { model: 'opus', provider: 'anthropic' }; f.env._sendResult = Promise.resolve({ sessionId: 'n2' });
+  f.setChanModel('w', { model: 'opus', provider: 'anthropic' }); f.env._sendResult = Promise.resolve({ sessionId: 'n2' }); // the box's own pick (issue 1309)
   await f.channelSend('w', form('hi'));
   assert.deepEqual(JSON.parse(JSON.stringify(f.env._sends[0][4].route)), { model: 'opus', provider: 'anthropic' });
   assert.equal(f.env.ch('w').chanFilter, 'open');
@@ -582,7 +582,7 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   assert.match(power, /const boxThread = w => w\?\.thread \|\| \(w && A\.chanOpen\?\.\(w\) \? '__new__' : ''\);/);
   assert.match(power, /const sid = boxThread\(w\); if \(!sid \|\| !H\.recordReply\) return true;/);
-  assert.match(power, /openModels\(id, boxThread\(ww\) === '__new__' \? 'new' : 'thread'/);
+  assert.match(power, /openModels\(id, paneThread\(id\) === '__new__' \? 'new' : 'thread'/); // the pane's own box (issue 1309)
   // An orb take is pinned to the channel it started in (Codex P1): phone viewOf carries its Space to every send path,
   // the desktop orb keeps it from the start of the take.
   assert.match(app, /const pinSpace = v => typeof v\?\.space === 'string' && v\.thread === '__new__' \? \{ space: v\.space \} : \{\};/);
@@ -604,26 +604,24 @@ test('a channel feed names the Space its new chats go to (General = none); no fe
 
 test('a private agent\'s model is never sent from a main channel box (its chat could not be filed there); the channel\'s own agent\'s is', async () => {
   const f = fixture(); f.openChannel(f.w, 'launch'); f.env._sendResult = Promise.resolve({ sessionId: 'p1' });
-  f.env.ch('w').newModel = { model: 'tinfoil', provider: 'tinfoil', agent: 'restricted' };
+  f.setChanModel('w', { model: 'tinfoil', provider: 'tinfoil', agent: 'restricted' });
   await f.channelSend('w', form('private?'));
   assert.equal(f.env._sends[0][4].route, null, 'default route instead of another agent');
   const g = fixture(); g.openChannel(g.w, 'host-ops'); g.env._sendResult = Promise.resolve({ sessionId: 'p2' });
-  g.env.ch('w').newModel = { model: 'h-model', provider: 'h', agent: 'host' };
+  g.setChanModel('w', { model: 'h-model', provider: 'h', agent: 'host' });
   await g.channelSend('w', form('host ask'));
   assert.equal(g.env._sends[0][4].route?.model, 'h-model');
 });
 
-test('a model picked for another agent never rides into a channel (box, mic or orb all read it): it is dropped on paint', () => {
+test('a model picked for another agent never rides into a channel (box, mic or orb all read it); the New chat pick is left alone', () => {
   const f = fixture(); f.openChannel(f.w, 'launch');
+  f.setChanModel('w', { model: 'tinfoil', provider: 'tinfoil', agent: 'restricted' }); assert.equal(f.chanModel(f.w), null);
   f.env.ch('w').newModel = { model: 'tinfoil', provider: 'tinfoil', agent: 'restricted' };
-  f.chanComposer(f.w, f.chanOpen(f.w)); assert.equal(f.env.ch('w').newModel, null);
-  f.env.ch('w').newModel = { model: 'opus', provider: 'anthropic' };
-  f.chanComposer(f.w, f.chanOpen(f.w)); assert.equal(f.env.ch('w').newModel?.model, 'opus', 'a main pick stays in a main channel');
+  f.chanComposer(f.w, f.chanOpen(f.w)); assert.equal(f.env.ch('w').newModel?.model, 'tinfoil', 'a box paint never clears the window\'s New chat pick (issue 1309)');
+  f.setChanModel('w', { model: 'opus', provider: 'anthropic' }); assert.equal(f.chanModel(f.w)?.model, 'opus', 'a main pick stays in a main channel');
   const g = fixture(); g.openChannel(g.w, 'box');
-  g.env.ch('w').newModel = { model: 'h', provider: 'h', agent: 'host' };
-  g.chanComposer(g.w, g.chanOpen(g.w)); assert.equal(g.env.ch('w').newModel, null, 'a host pick never rides into the container channel');
-  g.env.ch('w').newModel = { model: 'c', provider: 'c', agent: 'container' };
-  g.chanComposer(g.w, g.chanOpen(g.w)); assert.equal(g.env.ch('w').newModel?.model, 'c');
+  g.setChanModel('w', { model: 'h', provider: 'h', agent: 'host' }); assert.equal(g.chanModel(g.w), null, 'a host pick never rides into the container channel');
+  g.setChanModel('w', { model: 'c', provider: 'c', agent: 'container' }); assert.equal(g.chanModel(g.w)?.model, 'c');
 });
 
 test('a photo still uploading stays with the channel it was attached in when another channel opens', () => {
@@ -1414,7 +1412,7 @@ test('issue 1291: every owner post path calls it (box mic, voice keys and the or
   assert.match(src, /if \(isNew && typeof opts\.space === 'string' && it\?\.sessionId && typeof chanOwnPost === 'function'\) chanOwnPost\(opts\.space, it\.agent \?\? AGID \?\? ''\);/);
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   assert.match(power, /if \(typeof pinned === 'string' && it\?\.sessionId\) A\.chanOwnPost\?\.\(pinned, it\.agent \|\| ''\);/);
-  assert.match(src, /spaceMember, chanOwnPost \}\) : null;/, 'handed to chat-power');
+  assert.match(src, /spaceMember, chanOwnPost, chanBox: [^\n]*setChanModel \}\) : null;/, 'handed to chat-power');
   assert.match(cut('  async function channelSend(', '  function chanDropSending'), /renderChatList\(w, elOf\(wid\)\); chanToEnd\(wid\);[\s\S]*chanRepaint\(\); chanToEnd\(wid\);/);
 });
 

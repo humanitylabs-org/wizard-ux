@@ -1412,12 +1412,30 @@ window.WizCore.chats = function createChats(H) {
     const open = w && !w.thread ? chanOpen(w) : null;
     return open && !chanArchived(open.id) ? `chan:${open.agent || winAgent(w) || ''}:${open.id}` : '';
   }
+  /* The model picked in a channel's box (wizard-ux issue 1309), one per box (agent + channel), whichever pane draws the
+   * feed (the AI apps feed and the classic list pane are panes of their own, id::side / id::list, whose window is
+   * another id): the label, the menu's tick and every post from the box (Send, its mic, the orb) read this one place.
+   * Kept through redraws, posts and channel switches until changed; in memory only. A thread's or New chat's pick never
+   * lands here, and this one never rides into them. */
+  const CHAN_MODEL = new Map();
+  // By box key (chan:<agent>:<channel>): a take keeps the box it started in, whatever channel is in front by Send.
+  function boxModel(key) {
+    const nm = key ? CHAN_MODEL.get(key) : null; if (!nm) return null;
+    return !nm.agent || nm.agent === key.split(':')[1] ? nm : null; // only a model of this channel's own agent
+  }
+  function chanModel(w) { return boxModel(chanDraftKey(w)); }
+  function setChanModel(wid, route) {
+    const key = chanDraftKey(W[wid]); if (!key || !route?.model) return false;
+    if (route.agent && route.agent !== key.split(':')[1]) return false; // another agent's model never rides into this channel
+    CHAN_MODEL.set(key, { model: route.model, provider: route.provider || '', ...(route.agent ? { agent: route.agent } : {}) });
+    // Paint first: every box of this channel on screen shows the pick on this frame (the morph keeps scroll and caret).
+    for (const id of Object.keys(CH)) { const x = W[id], el = x && chanDraftKey(x) === key ? elOf(id) : null; if (el) renderChatList(x, el); }
+    return true;
+  }
   function chanComposer(w, open) {
     const key = chanDraftKey(w); if (!key) return '';
-    const c = ch(w.id), agent = open.agent || winAgent(w) || '';
-    // A model picked for another agent (a private one in New chat, another channel's) never rides into this channel:
-    // its chat would belong to that agent and could not be filed here. The box, its mic and the orb read c.newModel.
-    if (c.newModel?.agent && c.newModel.agent !== agent) c.newModel = null;
+    // The box, its mic and the orb read the box's own pick (chanModel), never the window's New chat pick (issue 1309).
+    const c = ch(w.id);
     if (c.draftFor !== key) {
       // A photo still uploading stays with the channel it was attached in: its live tray waits here (the upload
       // finishes into it) and comes back, saved, when that channel is open again.
@@ -1429,8 +1447,8 @@ window.WizCore.chats = function createChats(H) {
       if (live) KIT.drafts.set(key, c.draft, c.files);
     }
     PW?.ensureModels?.();
-    // The label a new chat from this list shows (same default, same pick): the label reads the window as a new chat.
-    const mlabel = PW?.modelLabel ? PW.modelLabel({ ...w, thread: '__new__' }, null) : '';
+    // The label: this box's own pick (wizard-ux issue 1309), else the default a new chat from this list starts on.
+    const mlabel = PW?.modelLabel ? PW.modelLabel({ ...w, thread: '__new__' }, null, chanModel(w)) : '';
     const say = open.agentFeed ? `Message ${open.name}` : `Message # ${open.name}`;
     return `<form data-part="composer" class="ch-compose ch-chan-compose${hasContent(c.draft, c.files || []) ? ' has-text' : ''}" data-morph-key="chanbox:${esc(key)}" data-chform data-chchanform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach pictures or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${esc(say)}" aria-label="${esc(say)}" enterkeyhint="enter">${esc(c.draft || '')}</textarea>${mlabel}</div>${PW?.micBtn ? PW.micBtn(w.id) : ''}<button type="submit" class="ch-send" aria-label="${esc(open.agentFeed ? `Post to ${open.name}` : `Post in # ${open.name}`)}"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>`;
   }
@@ -1479,8 +1497,8 @@ window.WizCore.chats = function createChats(H) {
     const files = tray.map(pendRef).filter(f => f && f.id);
     const media = tray.filter(f => /^image\//.test(f.mime || '') && f.preview).map((f, i) => ({ id: f.id || 'up' + i, name: f.name || 'Photo', mime: f.mime, kind: 'image', url: f.preview }));
     const agent = open.agent || winAgent(w) || '', owner0 = agent && AGS()?.isOther?.(agent) ? agent : '';
-    // Only a model of this channel's own agent: the chat must belong to the agent whose Space it is filed into.
-    const nm = PW?.newModel?.(c) || null, route = nm && (!nm.agent || nm.agent === agent) ? nm : null;
+    // The box's own pick (only a model of this channel's own agent: the chat must belong to the agent whose Space it is filed into).
+    const route = chanModel(w);
     const p = { key: 'chanpost:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), feed: key, owner: owner0, text, media, at: Date.now(), sid: '' };
     CHAN_SENDING.push(p);
     if (ta) { ta.value = ''; growTa(ta); }
@@ -4401,7 +4419,8 @@ window.WizCore.chats = function createChats(H) {
     const dkey = isNew ? (winAG ? 'agentnew:' + winAG : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
     if (here) PW?.follow(wid);
-    if (nm) c.newModel = null;
+    const chanPost = isNew && typeof opts.space === 'string'; // a channel's post: its box keeps its own pick (issue 1309)
+    if (nm && !chanPost) c.newModel = null;
     const carried = carryText ? c.carry : null;
     if (carried) c.carry = null;
     // Send and go: on the phone a reply steps back one level; a new thread
@@ -4431,7 +4450,7 @@ window.WizCore.chats = function createChats(H) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.
       if (hold) LIVE.releaseSend?.(hold);
-      if (nm) c.newModel = nm;
+      if (nm && !chanPost) c.newModel = nm;
       if (carried) c.carry = carried;
       if (sealed) sealed.putBack(); else if (here && !voice) { KIT.drafts.set(dkey, text, tray); if (reply) KIT.drafts.setReply(dkey, reply); }
       if (left) left.restore();
@@ -4818,7 +4837,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, paintJump, chanSpaceOf, spaceMember, chanOwnPost }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, paintJump, chanSpaceOf, spaceMember, chanOwnPost, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', chanModel: wid => chanModel(W[wid]), setChanModel }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
@@ -4833,7 +4852,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, activityNeeds: actNeeds, activityUnread: actUnread, activityMark: actMark, agentLabelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid, box) => { const nm = sid !== '__new__' ? null : box ? boxModel(box) : chanDraftKey(W[wid]) ? chanModel(W[wid]) : PW?.newModel(ch(wid)); return window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', nm, sid === '__new__' ? (winAgent(W[wid]) || nm?.agent || '') : ''); }, winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, activityNeeds: actNeeds, activityUnread: actUnread, activityMark: actMark, agentLabelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', chanModel: wid => chanModel(W[wid]), boxModel, setChanModel, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts, canMarkDone, markDone };
 };
