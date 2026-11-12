@@ -3172,6 +3172,8 @@
     // An unmatched command's words, sent on as a new chat (the launcher's own ask path; the layout says so itself).
     askAgent: text => { void ask(text, 'an orb command with no local match, sent on as a message', null, null, true); return true; },
     agentHere: () => ({ id: '', label: window.WizConfig.agent(), main: true }),
+    // Activity with Channels on (wizard-ux issue 1336): every agent's chats as Working, Ready, Recent, Snoozed, Archived.
+    activityList: (o = {}) => window.WizChatsListModel.activityList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }, { order: o.order, older: !!o.older, now: Date.now() }),
     /* Working / Ready rows (the rest too, for the AI apps view's search), each with the actions Chats' own row offers
      * (Pin, Rename, Mark unread, Snooze, Done, Restore), acted on through Chats' own paths; the Orb view reads the same. */
     sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
