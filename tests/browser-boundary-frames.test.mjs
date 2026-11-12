@@ -201,7 +201,7 @@ test('field insertion: pinned field gets the text once, a field typed in meanwhi
 test('client requests: only the served methods, and it waits for the first hello', async () => {
   const sh = shell(), f = frame(sh);
   f.a.WizBoundaryClient.connect({ onBack: () => false });
-  await assert.rejects(f.a.WizBoundaryClient.request('capture.pending', {}), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('orb.set', {}), e => e.code === 'unavailable');
   const r = f.a.WizBoundaryClient.request('ready', null, 2000);
   sh.B.attach(f.el);
   assert.deepEqual(clone(await r), { version: 1, hosted: true });
@@ -221,7 +221,7 @@ test('badge and title bar: served by the one registered server; taps come back; 
   assert.equal(await f.a.WizBoundaryClient.request('badge.set', { n: 3 }, 2000), null, 'only a boolean ever crosses back');
   assert.equal(await f.a.WizBoundaryClient.request('titlebar.set', { tools: [{ id: 'older', kind: 'button' }] }, 2000), true);
   await assert.rejects(f.a.WizBoundaryClient.request('titlebar.set', { bad: true }, 2000), e => e.code === 'refused' && /Invalid/.test(e.message));
-  await assert.rejects(f.a.WizBoundaryClient.request('capture.pending', {}, 2000), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('orb.set', {}, 2000), e => e.code === 'unavailable');
   // Sharing out needs the browser's transient user activation (a real tap in the app); this shell has none.
   await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'x' }, 2000), e => e.code === 'refused' && /tap/.test(e.message));
   assert.deepEqual(calls.map(c => c.slice(0, 2)), [[true, 'badge.set'], [true, 'titlebar.set'], [true, 'titlebar.set']]);
@@ -671,4 +671,36 @@ test('identity: served methods, only public info, a signed event or a NIP-44 res
   assert.deepEqual(clone(await req('identity.nip44_encrypt', { pubkey: 'c'.repeat(64), plaintext: 'hi' })), { ciphertext: 'Aq==' });
   assert.deepEqual(clone(await req('identity.nip44_decrypt', { pubkey: 'c'.repeat(64), ciphertext: 'Aq==' })), { plaintext: 'hello' });
   assert.deepEqual(calls, ['identity.info', 'identity.sign', 'identity.sign', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt']);
+});
+
+// Slice 23: recording (capture.*). Preparing needs a tap; the server is told whether a start came with one; the
+// recorder's data crosses as plain data only; its events reach the app as `capture` notices.
+test('capture: prepare needs a tap, start carries the tap to the server, answers and events are plain data only', async () => {
+  const sh = shell(), f = frame(sh), heard = [], hellos = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => false, onCapture: d => heard.push(clone(d)), onReady: () => hellos.push(1) });
+  sh.B.attach(f.el);
+  await tick();
+  assert.ok(hellos.length >= 1, 'onReady runs after the hello');
+  const calls = [];
+  class Shell { constructor() { this.secret = 'shell'; } }
+  sh.B.serve((el, method, args, ctx) => {
+    calls.push([method, ctx.tapped]);
+    if (method === 'capture.start') return Promise.resolve({ capture: { id: 't1', info: { phase: 'recording', durationMs: 5, hook() {}, owner: new Shell() } } });
+    if (method === 'capture.prepare') return { capture: { id: 'p1' } };
+    return { capture: [{ id: 't0', meta: { a: 1 }, run: () => 1 }] };
+  });
+  await assert.rejects(f.a.WizBoundaryClient.request('capture.prepare', { opts: {} }, 2000), e => e.code === 'refused' && /Recording needs a tap/.test(e.message));
+  assert.equal(calls.length, 0, 'no tap: the server never sees a prepare');
+  assert.deepEqual(clone(await f.a.WizBoundaryClient.request('capture.start', { opts: {} }, 2000)), { capture: { id: 't1', info: { phase: 'recording', durationMs: 5 } } },
+    'only plain data crosses: no function, no shell object');
+  sh.g.navigator = { userActivation: { isActive: true } }; sh.g.document.activeElement = f.el;
+  assert.deepEqual(clone(await f.a.WizBoundaryClient.request('capture.prepare', { opts: {} }, 2000)), { capture: { id: 'p1' } });
+  await f.a.WizBoundaryClient.request('capture.start', { opts: {} }, 2000);
+  assert.deepEqual(clone(await f.a.WizBoundaryClient.request('capture.pending', {}, 2000)), { capture: [{ id: 't0', meta: { a: 1 } }] });
+  assert.deepEqual(calls, [['capture.start', false], ['capture.prepare', true], ['capture.start', true], ['capture.pending', true]]);
+  assert.equal(sh.B.notice(f.el, 'capture', { id: 't1', event: 'level', value: 0.5 }), true);
+  assert.equal(sh.B.notice(f.el, 'capture', { event: 'current', value: { id: 't1', phase: 'recording', fn() {} } }), true);
+  assert.equal(sh.B.notice(f.el, 'capture', { id: 't1', event: 'eval', value: 1 }), false, 'unknown event');
+  await tick(); await tick();
+  assert.deepEqual(heard, [{ event: 'level', id: 't1', value: 0.5 }, { event: 'current', value: { id: 't1', phase: 'recording' } }]);
 });

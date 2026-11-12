@@ -25,6 +25,9 @@
  * The shell's notices come as `notice`: `update` (a new shell is ready: { version } or null, onUpdate) and `refresh`
  * (read your data again, with the reason: onRefresh) and `share` (a share is waiting: onShare pulls it), the same
  * signals a same-origin app gets as wizard:app:update / wizard:app:refresh / wizard:app:share.
+ * Recording (`capture.*`): the shell's one recorder records for this window's app; preparing or starting a new
+ * recording needs a real tap here. Its events come as `notice` `capture` (onCapture), and onReady runs after every
+ * hello so WizardApp can read the recorder's state again and reattach its sessions on the new channel.
  */
 (() => {
   'use strict';
@@ -33,10 +36,12 @@
   if (!framed || globalThis.origin !== 'null') return;
   const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
-    'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'], STICKY = ['badge.set', 'titlebar.set'];
+    'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
+    'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, serial = 0, claimed = new Set();
+  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, serial = 0, claimed = new Set();
+  const CAPTURE_EVENTS = ['level', 'pcm', 'chunk', 'state', 'warn', 'info', 'current'];
   const sticky = new Map();   // the last badge / title bar this document asked for, sent again on a new channel
   const waiters = new Set();   // requests made before the first hello wait for it (up to their own timeout)
   const seals = new Map(), requests = new Map();
@@ -123,6 +128,7 @@
       for (const [method, args] of sticky) {
         if (![...requests.values()].some(w => w.method === method)) send({ op: 'service.request', id: 'wbs-' + (++serial), method, args });
       }
+      try { onReady?.(); } catch (_) {}
       return;
     }
     if (!channel || d.channel !== channel) return;
@@ -135,6 +141,9 @@
     if (d.op === 'notice') {
       if (d.kind === 'refresh' && ['visible', 'focus', 'poll', 'agent'].includes(d.reason)) { try { onRefresh?.(d.reason); } catch (_) {} }
       if (d.kind === 'share') { try { onShare?.(); } catch (_) {} }
+      if (d.kind === 'capture' && CAPTURE_EVENTS.includes(d.event) && (d.id === undefined || (typeof d.id === 'string' && d.id.length <= 128))) {
+        try { onCapture?.({ event: d.event, id: d.id, value: d.value, info: d.info && typeof d.info === 'object' ? d.info : undefined }); } catch (_) {}
+      }
       if (d.kind === 'update' && (d.available === null || (d.available && typeof d.available === 'object' && typeof d.available.version === 'string'))) {
         try { onUpdate?.(d.available ? Object.freeze({ version: d.available.version.slice(0, 128) }) : null); } catch (_) {}
       }
@@ -217,7 +226,8 @@
   }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared } = {}) {
+    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello } = {}) {
+      onCapture = typeof recording === 'function' ? recording : null; onReady = typeof hello === 'function' ? hello : null;
       back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;
       onTool = typeof tap === 'function' ? tap : null;
       onUpdate = typeof upd === 'function' ? upd : null; onRefresh = typeof fresh === 'function' ? fresh : null;

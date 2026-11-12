@@ -1011,8 +1011,144 @@
     authorize(); // no signature or plaintext to a reloaded, navigated, closed or uninstalled window
     return result;
   }
+  // Recording (capture) for a sandboxed app: the shell's one recorder (core/app-capture.js) records for the window's
+  // installed app id, exactly as for a same-origin app; the page gets its sessions over the boundary channel.
+  //  - A NEW recording needs a real tap in that window: browser-boundary.js hands `tapped` (a tap or key in this
+  //    focused, visible frame just now), or the start names a recording this document prepared on such a tap in the
+  //    last minute (the app may ask its own backend in between). Reattaching or resuming this app's own take does not
+  //    (a reload must not stop or lose a meeting).
+  //  - Events (level, PCM, chunks, state, warnings) go only to the document that started or attached the session; a
+  //    new document gets none until it attaches. A reload never stops the recorder (as same-origin).
+  //  - The recorder is held for a shell update from before the microphone prompt until it stops, also across a reload.
+  const CAPTURE_OPTS = ['kind', 'mime', 'audio', 'pcm', 'chunkMs', 'maxMs', 'maxBytes', 'systemAudio', 'meta', 'seqBase', 'offsetMs', 'preparedId', 'resumeId'];
+  const CAPTURE_CALLS = ['stop', 'cancel', 'pause', 'resume', 'setSystemAudio', 'chunks', 'info'];
+  const PREPARED_MS = 60000;
+  function captureOpts(opts) {
+    const o = {};
+    if (opts && typeof opts === 'object') for (const k of CAPTURE_OPTS) if (opts[k] !== undefined && typeof opts[k] !== 'function') o[k] = opts[k];
+    const safe = JSON.parse(JSON.stringify(o)); // data only: no callbacks or objects from the page reach the recorder
+    if (['auto', 'command', 'dictation'].includes(safe.kind)) throw fault('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata');
+    return safe;
+  }
+  const captureInfo = session => { try { return session.getInfo(); } catch (_) { return null; } };
+  const captureCaps = () => {
+    const R = window.WizAppCapture, caps = {};
+    for (const meeting of [false, true]) for (const pcm of [false, true]) {
+      try { caps[(meeting ? 'meeting' : 'audio') + (pcm ? '-pcm' : '')] = R?.capabilities?.({ kind: meeting ? 'meeting' : 'audio', pcm }) || {}; } catch (_) { caps[(meeting ? 'meeting' : 'audio') + (pcm ? '-pcm' : '')] = {}; }
+    }
+    return caps;
+  };
+  function captureCurrent(st) { try { return window.WizAppCapture?.current?.(st.appId) || null; } catch (_) { return null; } }
+  // What this app's recorder holds now, to every ready sandboxed window of the app when it changes.
+  function captureAnnounce() {
+    const B = window.WizBrowserBoundary; if (!B?.notice) return;
+    for (const st of frames.values()) {
+      if (!st.bcap || !boundaryLive(st)) continue;
+      const now = captureCurrent(st), key = JSON.stringify(now);
+      if (key === st.bcap.said) continue;
+      st.bcap.said = key; B.notice(st.frame, 'capture', { event: 'current', value: now });
+    }
+  }
+  addEventListener('wizard-app-capture-state', captureAnnounce);
+  const shellVoiceBusy = () => { const shell = window.__wos || window.__wux; return !!(shell?.voice && shell.voice !== 'idle'); };
+  // Forget this window's sessions and preparations of documents other than `gen` (all of them for null). The recorder
+  // itself keeps going.
+  function captureForget(st, gen) {
+    const c = st.bcap; if (!c) return;
+    for (const [id, e] of c.sessions) if (e.gen !== gen) { for (const off of e.offs) { try { off(); } catch (_) {} } c.sessions.delete(id); }
+    for (const [id, p] of c.prepared) if (p.gen !== gen) { c.prepared.delete(id); try { p.release(); } catch (_) {} }
+    c.said = undefined;
+  }
+  async function boundaryCapture(st, frame, method, args, ctx) {
+    const B = window.WizBrowserBoundary, R = window.WizAppCapture, gen = B.gen(frame), alive = () => boundaryLive(st) && B.gen(frame) === gen;
+    if (!R) throw fault('Shared capture unavailable');
+    if (!st.bcap) { st.bcap = { sessions: new Map(), prepared: new Map(), said: undefined }; (st.captureOffs ||= new Set()).add(() => captureForget(st, null)); }
+    const c = st.bcap, out = value => ({ capture: value === undefined ? null : value });
+    if (method === 'capture.sync') { const current = captureCurrent(st); c.said = JSON.stringify(current); return out({ current, caps: captureCaps() }); }
+    if (method === 'capture.pending') { const takes = await R.pending(st.appId); return out(takes); }
+    if (method === 'capture.ack') { if (typeof args?.id !== 'string') throw fault('Invalid capture id'); await R.ack(st.appId, args.id); return out(true); }
+    if (method === 'capture.settle') { const keep = typeof args?.keepId === 'string' ? args.keepId : null; return out(await R.settle(st.appId, keep)); }
+    if (method === 'capture.release') { const p = c.prepared.get(args?.id); if (p && p.gen === gen) { c.prepared.delete(args.id); p.release(); } return out(true); }
+    if (method === 'capture.prepare') {
+      if (!ctx?.tapped) throw fault('Recording needs a tap in the app');
+      if (shellVoiceBusy()) throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy' });
+      if (!R.prepare) throw fault('Capture preparation unavailable');
+      if (c.prepared.size >= 8) throw fault('Too many prepared recordings');
+      const p = R.prepare(st.appId, captureOpts(args?.opts));
+      c.prepared.set(p.id, { gen, at: Date.now(), release: p.release });
+      return out({ id: p.id });
+    }
+    if (method === 'capture.call') {
+      const e = c.sessions.get(args?.id), what = args?.method;
+      if (!e || e.gen !== gen) throw fault('This recording is not this page\'s');
+      if (!CAPTURE_CALLS.includes(what)) throw fault('Capture method unavailable');
+      if (what === 'info') return out(captureInfo(e.session));
+      if (what === 'stop' || what === 'cancel') {
+        // Stop and Discard are distinct intents; the recorder arbitrates their race (as same-origin).
+        if (!e.finished[what]) e.finished[what] = Promise.resolve().then(() => e.session[what]()).then(r => { e.release(); return r; }, err => { delete e.finished[what]; throw err; });
+        return out(await e.finished[what]);
+      }
+      if (what === 'setSystemAudio') return out(await e.session.setSystemAudio(args?.args?.on === true));
+      if (!e.session[what]) throw fault('Capture method unavailable');
+      return out(await e.session[what]());
+    }
+    if (method !== 'capture.start') throw fault('Not available');
+    const attaching = args?.attach === true, opts = attaching ? {} : captureOpts(args?.opts);
+    // This document's own preparation, taken out of the list now. Until the recorder uses it, every way out of this
+    // start releases it (an unused preparation keeps an AudioContext and the recorder's hold; Codex P1). The recorder
+    // ignores a release of one it already used.
+    let prep = null;
+    if (opts.preparedId !== undefined) {
+      const p = c.prepared.get(opts.preparedId);
+      if (p && p.gen === gen) { c.prepared.delete(opts.preparedId); prep = p; } else delete opts.preparedId;
+      if (prep && Date.now() - prep.at > PREPARED_MS) { prep.release(); prep = null; delete opts.preparedId; }
+    }
+    const unprepare = () => { if (prep) { try { prep.release(); } catch (_) {} prep = null; } };
+    const fresh = !attaching && !opts.resumeId;
+    if (fresh && !ctx?.tapped && !prep) { unprepare(); throw fault('Recording needs a tap in the app'); }
+    if (shellVoiceBusy()) { unprepare(); throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' }); }
+    // The hold is the recorder's, not the document's: it stays across a reload until the recording stops (onReset keeps
+    // sheetHolds).
+    const hold = holdFor(st, 'Recording'); (st.sheetHolds ||= new Set()).add(hold);
+    let released = false;
+    const release = () => { if (released) return; released = true; removeEventListener('wizard-app-capture-state', onState); st.sheetHolds.delete(hold); if (st.holds.delete(hold)) changed(); };
+    const onState = () => { if (R.getState?.().active === false) release(); };
+    addEventListener('wizard-app-capture-state', onState);
+    let session;
+    try {
+      session = await (attaching ? R.attach(st.appId) : opts.resumeId && R.resume ? R.resume(st.appId, opts.resumeId, opts) : R.start(st.appId, opts));
+      if (!session) { release(); unprepare(); return out(null); }
+      if (!alive()) throw fault('App frame is no longer authorized');
+    } catch (err) {
+      unprepare();
+      // The microphone prompt can outlive this document: stop and keep the take (a document that attached meanwhile owns it).
+      if (session && !session.reattached?.()) { try { await session.stop(); } catch (_) {} }
+      release();
+      if (err.code === 'busy' && err.appId) {
+        const owner = apps().find(a => a.id === err.appId);
+        err.message = 'The microphone is recording in ' + (owner?.name || String(err.appId).replace(/[-_]/g, ' ')) + '. Stop that recording first.';
+      }
+      throw err;
+    }
+    const old = c.sessions.get(session.id);
+    if (old) for (const off of old.offs) { try { off(); } catch (_) {} }
+    const e = { session, gen, offs: [], finished: {}, release, infoAt: 0 };
+    c.sessions.set(session.id, e);
+    // Events go to this document only. Levels come many times a second; the session info rides along at most once a second.
+    const send = (event, value) => {
+      if (c.sessions.get(session.id) !== e || !alive()) return;
+      const now = Date.now(), withInfo = event !== 'level' && event !== 'pcm' || now - e.infoAt >= 1000;
+      if (withInfo) e.infoAt = now;
+      B.notice(frame, 'capture', { id: session.id, event, value, ...(withInfo ? { info: captureInfo(session) } : {}) });
+    };
+    for (const [event, on] of [['level', 'onLevel'], ['pcm', 'onPcm'], ['chunk', 'onChunk'], ['state', 'onState'], ['warn', 'onWarn']]) {
+      if (typeof session[on] !== 'function') continue;
+      try { e.offs.push(session[on](v => send(event, event === 'warn' && v && typeof v === 'object' ? String(v.message || '') : v))); } catch (_) {}
+    }
+    return out({ id: session.id, info: captureInfo(session) });
+  }
   if (window.WizBrowserBoundary?.serve) {
-    window.WizBrowserBoundary.serve((frame, method, args) => {
+    window.WizBrowserBoundary.serve((frame, method, args, ctx) => {
       const st = frames.get(frame);
       if (!boundaryLive(st)) throw fault('App window not verified');
       if (method === 'badge.set') { setBadge(st.appId, args?.n, args?.more === true); st.badged = true; return true; }
@@ -1074,12 +1210,14 @@
       if (method === 'audio.duck') return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, args?.on === true) : false;
       if (method === 'vault.has' || method === 'vault.seal' || method === 'vault.open' || method === 'vault.forget') return boundaryVault(st, frame, method.slice(6), args);
       if (['identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'].includes(method)) return boundaryIdentity(st, frame, method.slice(9), args);
+      if (method.startsWith('capture.')) return boundaryCapture(st, frame, method, args, ctx);
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {
       const st = frames.get(frame); if (!st) return;
       if (st.tools) setTools(st, null);
       window.WizBackgroundAudio?.duck?.(st, false); // the old document's duck ends with it
+      captureForget(st, window.WizBrowserBoundary.gen(frame)); // its recording events and preparations end; the recorder keeps going
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

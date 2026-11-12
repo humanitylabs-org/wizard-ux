@@ -45,7 +45,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
     WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } }, ...extra };
   if (extra.WizCore) window.WizCore = { ...extra.WizCore, apps: () => ({ APPS: [app] }) };
   const globalOn = {};
-  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, setInterval() {}, setTimeout, clearTimeout,
+  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { globalOn[t] = (globalOn[t] || []).filter(x => x !== fn); }, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: front });
   return { B, frame, bar, notices, emit: (t, detail) => { for (const fn of globalOn[t] || []) fn({ detail }); }, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
@@ -99,7 +99,7 @@ test('not ready on its channel, outside its app path, or a shell-owned count: re
     assert.throws(() => f.call('badge.set', { n: 9 })); assert.equal(id in f.counts, false);
   }
   const f = fixture();
-  assert.throws(() => f.call('capture.pending', {}), /Not available/);
+  assert.throws(() => f.call('orb.set', {}), /Not available/);
   f.B.readyNow = false;
   assert.throws(() => f.call('badge.set', { n: 1 }), /not verified/, 'a frame whose new document has not answered yet');
 });
@@ -381,4 +381,97 @@ test('identity: the approval sheet only for the window in front; a reloaded or c
     revoke(g); answer(SIGNED);
     await assert.rejects(p, /installed app/);
   }
+});
+
+// Slice 23: recording for a sandboxed app. The shell's recorder (core/app-capture.js) is a stand-in.
+function recorder() {
+  const asked = [], subs = new Set(); let active = null, n = 0;
+  const R = { asked, subs, get active() { return active; }, getState: () => ({ active: !!active }),
+    capabilities: o => ({ pcm: o.pcm === true, native: o.kind === 'meeting' ? 'meetings' : null }),
+    current: appId => (active?.appId === appId ? { id: active.id, appId } : null),
+    prepare: (appId, o) => { asked.push(['prepare', appId, o]); return { id: 'p' + (++n), release: () => asked.push(['release', appId]) }; },
+    start: async (appId, o) => { asked.push(['start', appId, o]); return session(appId); },
+    resume: async (appId, id, o) => { asked.push(['resume', appId, id]); return session(appId, id); },
+    attach: async appId => { asked.push(['attach', appId]); return active?.appId === appId ? active.api : null; },
+    pending: async appId => { asked.push(['pending', appId]); return [{ id: 't0', durationMs: 1 }]; },
+    ack: async (appId, id) => { asked.push(['ack', appId, id]); }, settle: async () => [] };
+  function session(appId, id = 't' + (++n)) {
+    const level = new Set();
+    active = { id, appId, level, api: { id, getInfo: () => ({ phase: 'recording', durationMs: 7 }), onLevel: fn => { level.add(fn); subs.add(fn); return () => { level.delete(fn); subs.delete(fn); }; },
+      stop: async () => { active = null; return { id, durationMs: 7 }; }, cancel: async () => { active = null; } } };
+    return active.api;
+  }
+  return R;
+}
+const plainify = v => JSON.parse(JSON.stringify(v));
+test('capture: a new recording needs a tap (or a preparation from one); attach and resume do not; only data reaches the recorder', async () => {
+  const R = recorder(), f = fixture({ win: { WizAppCapture: R } });
+  const call = (m, a, tapped = false) => f.B.served(f.frame, m, a, { tapped });
+  await assert.rejects(call('capture.start', { opts: { kind: 'audio' } }), /needs a tap/);
+  await assert.rejects(call('capture.prepare', { opts: {} }), /needs a tap/);
+  await assert.rejects(call('capture.start', { opts: { kind: 'command' } }, true), /reserved/);
+  assert.equal(R.asked.length, 0, 'the recorder was never asked');
+  const s = await call('capture.start', { opts: { kind: 'audio', pcm: true, onPcm() {}, meta: { a: 1 }, secret: 'x' } }, true);
+  assert.deepEqual(plainify(s), { capture: { id: 't1', info: { phase: 'recording', durationMs: 7 } } });
+  assert.deepEqual(plainify(R.asked[0]), ['start', 'morning-report', { kind: 'audio', pcm: true, meta: { a: 1 } }], 'the window\'s app id; no callback, no unknown key');
+  await call('capture.call', { id: 't1', method: 'stop' });
+  // Prepared on a tap: the start later needs none. Prepared by an older document: it does.
+  const p = (await call('capture.prepare', { opts: { kind: 'audio' } }, true)).capture.id;
+  assert.equal((await call('capture.start', { opts: { kind: 'audio', preparedId: p } })).capture.id, 't3');
+  assert.equal(R.asked.at(-1)[2].preparedId, p);
+  await call('capture.call', { id: 't3', method: 'stop' });
+  const q = (await call('capture.prepare', { opts: {} }, true)).capture.id;
+  f.B.genNow = 2; f.reset();
+  await assert.rejects(call('capture.start', { opts: { preparedId: q } }), /needs a tap/);
+  assert.deepEqual(R.asked.at(-1), ['release', 'morning-report'], 'a new document releases the old one\'s preparation');
+  // Continuing this app's own take needs no tap.
+  assert.equal((await call('capture.start', { opts: { resumeId: 't9' } })).capture.id, 't9');
+  assert.equal((await call('capture.start', { attach: true })).capture.id, 't9');
+  assert.deepEqual(plainify(await call('capture.pending', {})), { capture: [{ id: 't0', durationMs: 1 }] });
+  assert.ok(R.asked.every(x => x[1] === 'morning-report'));
+  // A page outside the window's app path: refused before the recorder.
+  const g = fixture({ win: { WizAppCapture: R }, src: 'https://wizard.example/other-app/' }), before = R.asked.length;
+  assert.throws(() => g.B.served(g.frame, 'capture.pending', {}, { tapped: true }), /not verified/);
+  assert.equal(R.asked.length, before);
+});
+test('capture: events reach only the document that started it; a reload forgets them, the recorder and its update hold stay', async () => {
+  const R = recorder(), f = fixture({ win: { WizAppCapture: R } });
+  const call = (m, a, tapped = false) => f.B.served(f.frame, m, a, { tapped });
+  assert.deepEqual(plainify(await call('capture.sync', {})), { capture: { current: null, caps: { audio: { pcm: false, native: null }, 'audio-pcm': { pcm: true, native: null }, meeting: { pcm: false, native: 'meetings' }, 'meeting-pcm': { pcm: true, native: 'meetings' } } } });
+  await call('capture.start', { opts: {} }, true);
+  for (const fn of R.active.level) fn(0.4);
+  assert.deepEqual(plainify(f.notices.filter(n => n.kind === 'capture').map(n => [n.event, n.id, n.value])), [['level', 't1', 0.4]]);
+  f.emit('wizard-app-capture-state');
+  assert.deepEqual(plainify(f.notices.at(-1)), { kind: 'capture', event: 'current', value: { id: 't1', appId: 'morning-report' } });
+  const holds = () => plainify(f.services.inspect()[0].holds);
+  assert.deepEqual(holds(), ['Recording']);
+  // The window loads a new document: no events for it, no calls on the old session, but the recording and its hold stay.
+  f.B.genNow = 2; f.reset();
+  assert.equal(R.subs.size, 0, 'the old document\'s listeners are gone');
+  await assert.rejects(call('capture.call', { id: 't1', method: 'stop' }), /not this page/);
+  assert.ok(R.active, 'the recorder keeps going');
+  assert.deepEqual(holds(), ['Recording'], 'a shell update still waits');
+  // The new document attaches and follows it; Stop ends the hold.
+  await call('capture.start', { attach: true });
+  for (const fn of R.active.level) fn(0.6);
+  assert.deepEqual(plainify(f.notices.filter(n => n.event === 'level').map(n => n.value)), [0.4, 0.6]);
+  assert.deepEqual(plainify(await call('capture.call', { id: 't1', method: 'stop' })), { capture: { id: 't1', durationMs: 7 } });
+  f.emit('wizard-app-capture-state');
+  assert.deepEqual(holds(), []);
+});
+test('capture: a preparation the recorder never used is released when the start fails (Codex P1)', async () => {
+  const R = recorder(), f = fixture({ win: { WizAppCapture: R } });
+  const call = (m, a, tapped = false) => f.B.served(f.frame, m, a, { tapped });
+  R.start = async (appId, o) => { R.asked.push(['start', appId, o]); throw Object.assign(new Error('NotAllowedError'), { code: 'denied' }); };
+  const p = (await call('capture.prepare', { opts: {} }, true)).capture.id;
+  await assert.rejects(call('capture.start', { opts: { preparedId: p } }), /NotAllowed/);
+  assert.deepEqual(R.asked.slice(-2).map(x => x[0]), ['start', 'release'], 'the mic was refused: the preparation is let go');
+  assert.deepEqual(plainify(f.services.inspect()[0].holds), [], 'and so is the update hold');
+  // Wizard voice holds the microphone: refused before the recorder, the preparation is let go too.
+  const q = (await call('capture.prepare', { opts: {} }, true)).capture.id;
+  const before = R.asked.length;
+  await assert.rejects(f.B.served(f.frame, 'capture.start', { opts: { preparedId: 'nope' } }, { tapped: false }), /needs a tap/);
+  assert.equal(R.asked.length, before, 'an unknown preparation id is no tap');
+  await call('capture.release', { id: q });
+  assert.deepEqual(R.asked.at(-1), ['release', 'morning-report']);
 });
