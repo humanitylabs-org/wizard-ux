@@ -624,22 +624,24 @@ window.WizCore.chats = function createChats(H) {
    * With the wizard/channel-read-sync switch on (wizard-agent-service issue 471, off by default) the marks are also
    * kept on the box (LIVE.chanReads, /wizard/v1/channels/read), so every device of the owner reads the newer of its
    * own mark and the box's: reading a channel to the bottom on the desktop clears it on the phone. */
-  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/channel-read-sync', chanActs = {};
+  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/channel-read-sync', CHAN_READ_UP_MS = 30e3, chanActs = {};
   let chanReadDoc = null, chanReadT = 0, chanReadPaintT = 0;
-  const chanReadDirty = new Set();
-  let chanReadSeeded = false;
+  let chanReadUpAt = -Infinity;
   // The box's marks (key -> ms) while the sync switch is on and the box keeps them, else null.
   const chanReadBox = () => {
     try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CHAN_READ_SYNC)) return null; } catch (_) { return null; }
     const box = (typeof LIVE !== 'undefined' && LIVE.chanReads?.marks?.()) || null;
-    // The first time the box answers, this device's marks that are ahead of it go up once (read here before the switch).
-    if (box && !chanReadSeeded) {
-      chanReadSeeded = true;
-      const up = Object.entries(chanReads().at).filter(([k, t]) => !(box[k] >= t)).sort((x, y) => y[1] - x[1]).slice(0, 300);
-      if (up.length) LIVE.chanReads.push(Object.fromEntries(up));
-    }
+    if (box && Date.now() - chanReadUpAt >= CHAN_READ_UP_MS) chanReadUp(box);
     return box;
   };
+  /* This device's marks that are ahead of the box's go up: after each local write, and at most every CHAN_READ_UP_MS
+   * when the box answers, so a write that failed (offline, busy) or one made while the switch was off still reaches
+   * the box later. Once the box has them nothing is sent. */
+  function chanReadUp(box) {
+    chanReadUpAt = Date.now();
+    const up = Object.entries(chanReads().at).filter(([k, t]) => !(box[k] >= t)).sort((x, y) => y[1] - x[1]).slice(0, 300);
+    if (up.length) LIVE.chanReads.push(Object.fromEntries(up));
+  }
   function chanReadParse() {
     let v = null; try { v = JSON.parse(localStorage.getItem(CHAN_READ_KEY) || 'null'); } catch (_) {}
     if (!v || typeof v !== 'object' || !Number.isFinite(v.since) || !v.at || typeof v.at !== 'object') return null;
@@ -658,11 +660,8 @@ window.WizCore.chats = function createChats(H) {
       const was = chanReadParse(); if (was) { d.since = Math.min(d.since, was.since); for (const [k, t] of Object.entries(was.at)) if (!(d.at[k] >= t)) d.at[k] = t; }
       const at = Object.entries(d.at).sort((a, b) => b[1] - a[1]).slice(0, CHAN_READ_MAX); d.at = Object.fromEntries(at);
       try { localStorage.setItem(CHAN_READ_KEY, JSON.stringify({ since: d.since, at: d.at })); } catch (_) {}
-      // The same marks to the box (issue 471), only the ones this device moved since the last write.
-      if (chanReadDirty.size) {
-        const keys = [...chanReadDirty]; chanReadDirty.clear();
-        if (chanReadBox()) LIVE.chanReads.push(Object.fromEntries(keys.filter(k => Number.isFinite(d.at[k])).map(k => [k, d.at[k]])));
-      }
+      // The same marks to the box (issue 471): every one this device holds ahead of it.
+      const box = chanReadBox(); if (box) chanReadUp(box);
     };
     if (now) put(); else if (!chanReadT) chanReadT = setTimeout(put, CHAN_READ_MS);
   }
@@ -684,7 +683,7 @@ window.WizCore.chats = function createChats(H) {
   function chanReadTo(key, t) {
     if (!key || !Number.isFinite(t)) return false;
     const d = chanReads(); if (t <= chanReadOwn(key)) return false;
-    d.at[key] = t; chanReadDirty.add(key); chanReadSave();
+    d.at[key] = t; chanReadSave();
     clearTimeout(chanReadPaintT); chanReadPaintT = setTimeout(chanReadPaint, 120);
     return true;
   }

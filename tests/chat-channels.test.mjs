@@ -1550,6 +1550,7 @@ function fakeBox({ on = true } = {}) {
   box.req = async (url, init = {}) => {
     box.calls.push([init.method || 'GET', url, init.body ? JSON.parse(init.body) : null]);
     if (url !== '/wizard/v1/channels/read' || !box.on) { const e = new Error('HTTP 404'); e.status = 404; throw e; }
+    if (box.offline && init.method === 'PUT') { const e = new Error('offline'); e.status = 0; throw e; }
     if (init.method === 'PUT') for (const [k, t] of Object.entries(JSON.parse(init.body).at)) if (!(box.at[k] >= t)) box.at[k] = t;
     return { json: async () => ({ schema: 'wizard.channel-reads/1', at: { ...box.at } }) };
   };
@@ -1619,4 +1620,24 @@ test('issue 471: marks read on a device before the switch go to the box once, th
   assert.deepEqual(box.at, { general: NOW - 2 * H, 'hermes|launch': NOW - 3 * H }, 'only the mark ahead of the box went up; the box kept its newer one');
   assert.equal(box.calls.filter(c => c[0] === 'PUT').length, 1, 'once');
   assert.equal(f.chanReadAt('hermes|launch'), NOW - 3 * H, 'the device reads the newer of its own and the box\'s');
+});
+
+test('issue 471 review: a mark whose write failed, or one read while the switch was off, still reaches the box later', async () => {
+  const box = fakeBox(), rows = generalRows(10), f = await syncDevice(box);
+  box.offline = true;
+  f.openChannel(f.w, '__general__'); readToEnd(f, rows); await settle();
+  assert.equal(box.at.general, undefined, 'the write failed');
+  box.offline = false; f.env._now = NOW + 31e3; f.env.LIVE.chanReads.fresh();
+  f.chanReadAt('general'); await settle(); await settle(); f.chanReadAt('general'); await settle();
+  assert.equal(box.at.general, NOW - H, 'sent again once the box answers');
+  const puts = box.calls.filter(c => c[0] === 'PUT').length;
+  f.env._now = NOW + 62e3; f.chanReadAt('general'); await settle();
+  assert.equal(box.calls.filter(c => c[0] === 'PUT').length, puts, 'nothing more once the box has it');
+  // Read with the switch off, then turned on: the mark goes up.
+  const box2 = fakeBox(), g = await syncDevice(box2, {}, false);
+  g.openChannel(g.w, '__general__'); readToEnd(g, rows); await settle();
+  assert.deepEqual(box2.calls, [], 'switch off: nothing sent');
+  g.env.document.documentElement.dataset.tweaks += ' wizard/channel-read-sync';
+  g.chanReadAt('general'); await settle(); await settle(); g.chanReadAt('general'); await settle();
+  assert.equal(box2.at.general, NOW - H);
 });
