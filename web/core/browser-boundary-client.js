@@ -13,15 +13,16 @@
  * from this page, the way the shell's own key handler took them before the boundary; every other ⌥ chord stays this
  * page's alone, and so do ⌥ word moves and, on a Mac, ⌥- / ⌥= typed in a text field.
  * There is no generic request forwarding: request() carries only the methods the shell answers under the boundary:
- * `ready`, `badge.set` and `titlebar.set`. The last badge and title bar are sent again on every new channel (the shell
- * clears the title bar on each load), and a title-bar tap comes back as `tool` (onTool).
+ * `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file` (the shell opens its own share sheet, and only
+ * right after a real tap in this page) and `voice.transcribe`. The last badge and title bar are sent again on every
+ * new channel (the shell clears the title bar on each load), and a title-bar tap comes back as `tool` (onTool).
  */
 (() => {
   'use strict';
   if (window.WizBoundaryClient) return;
   let framed = false; try { framed = parent !== window; } catch (_) { framed = true; }
   if (!framed || globalThis.origin !== 'null') return;
-  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set'], STICKY = ['badge.set', 'titlebar.set'];
+  const TYPE = 'wizard:boundary', VERSION = 1, METHODS = ['ready', 'badge.set', 'titlebar.set', 'share.text', 'share.file', 'voice.transcribe'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   let channel = '', back = null, applyTheme = null, onTool = null, serial = 0, claimed = new Set();
@@ -169,7 +170,7 @@
       if (!METHODS.includes(method)) return Promise.reject(error('unavailable', 'Not available inside the browser boundary yet'));
       if (requests.size + waiters.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
       // The shell can't read this page's address; relative title-bar links resolve against it (and are still checked).
-      if (method === 'titlebar.set') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
+      if (method === 'titlebar.set' || method === 'share.text') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
       if (STICKY.includes(method)) sticky.set(method, args);
       const id = 'wbs-' + (++serial);
       return new Promise((resolve, reject) => {

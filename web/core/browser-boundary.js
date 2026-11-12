@@ -23,9 +23,13 @@
  *    windows. onInput(fn) gets them for the focused, visible frame only; a click and a named ⌥ key also need the
  *    browser's transient user activation (a real click or key in the frame activates the shell too), so a page that
  *    only posts messages cannot press them at all.
- *  - service.request: the bounded app services the shell answers under the boundary: `ready`, and the ones that act
- *    only on the app's own window, `badge.set` and `titlebar.set`, handed to the one server core/app-services.js
- *    registers (serve(fn)), which checks the frame against the installed app list and validates the data. A title-bar
+ *  - service.request: the bounded app services the shell answers under the boundary: `ready`; the ones that act
+ *    only on the app's own window, `badge.set` and `titlebar.set`; sharing out (`share.text`, `share.file`), which
+ *    also needs the browser's transient user activation and a visible frame and always opens the shell's own share
+ *    sheet, where the owner picks (the shell's confirm); and `voice.transcribe` (the box's transcriber, within a
+ *    per-app budget). They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
+ *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
+ *    status, a transcript), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
  *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
  *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
  * Off (the default): nothing is defined and every frame is exactly as before.
@@ -40,7 +44,19 @@
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
-  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set'];
+  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'voice.transcribe'];
+  // Sharing out opens a shell sheet: only right after a real tap or key in that app window, never from a page alone.
+  const TAPPED = ['share.text', 'share.file'], INFLIGHT = 4;
+  // What may cross back to the app: protocol data only, never a shell object.
+  function shape(v) {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'string') return v.length <= 32 ? v : null;
+    if (v && typeof v === 'object') {
+      if (v.unavailable === true) return { unavailable: true };
+      if (typeof v.text === 'string' && v.text.length <= 200000) return { text: v.text };
+    }
+    return null;
+  }
   let serial = 0, claimed = [], server = null;
   const fieldChanged = () => { for (const fn of [...fieldListeners]) { try { fn(); } catch (_) {} } };
   const newChannel = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -54,7 +70,7 @@
   }
   function revoke(st) {
     for (const [id, wait] of pending) if (wait.st === st) { clearTimeout(wait.timer); pending.delete(id); wait.resolve({ status: 'stale' }); }
-    st.channel = newChannel(); st.ready = false; st.backPending = false;
+    st.channel = newChannel(); st.ready = false; st.backPending = false; st.inflight = 0;
     // A new document: whatever field it had focused is gone, and old dictation seals no longer match (gen).
     st.gen = (st.gen || 0) + 1; if (st.field) { st.field = false; fieldChanged(); }
     themedWin(st.frame)?.classList.remove('wz-themed');
@@ -174,14 +190,21 @@
       return;
     }
     if (d.op === 'service.request' && typeof d.id === 'string' && d.id.length <= 96) {
-      // `ready`, and the services that act only on the app's own window (SERVED). Every other app service stays
-      // closed under the boundary. The answer is protocol data only (a boolean), never a shell object.
-      const answer = (value, code, message) => send(st, 'service.reply', { id: d.id, ...(code ? { error: { code, message } } : { value }) });
+      // `ready` and the bounded services (SERVED, see the header). Every other app service stays closed under the
+      // boundary. The answer is protocol data only (shape), and only on the channel the request came in on.
+      const channel = st.channel;
+      const answer = (value, code, message) => { if (connected(st) && st.channel === channel) send(st, 'service.reply', { id: d.id, ...(code ? { error: { code, message } } : { value }) }); };
       if (d.method === 'ready') return answer({ version: VERSION, hosted: true });
       if (!st.ready || !server || !SERVED.includes(d.method)) return answer(undefined, 'unavailable', 'Not available inside the browser boundary yet');
+      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame))) return answer(undefined, 'refused', 'Share needs a tap in the app');
+      if ((st.inflight || 0) >= INFLIGHT) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
       try { value = server(st.frame, d.method, d.args); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
-      return answer(typeof value === 'boolean' ? value : null);
+      if (!value || typeof value.then !== 'function') return answer(shape(value));
+      st.inflight = (st.inflight || 0) + 1;
+      Promise.resolve(value).then(v => answer(shape(v)), err => answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)))
+        .finally(() => { if (st.channel === channel) st.inflight--; });
+      return;
     }
     if (d.op === 'reply' && typeof d.id === 'string') {
       const wait = pending.get(d.id);

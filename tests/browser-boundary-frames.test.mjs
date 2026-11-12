@@ -198,10 +198,10 @@ test('field insertion: pinned field gets the text once, a field typed in meanwhi
   assert.equal(el2.value, 'abcd');
 });
 
-test('client requests: only ready, and it waits for the first hello', async () => {
+test('client requests: only the served methods, and it waits for the first hello', async () => {
   const sh = shell(), f = frame(sh);
   f.a.WizBoundaryClient.connect({ onBack: () => false });
-  await assert.rejects(f.a.WizBoundaryClient.request('share.text', {}), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('share.wizard', {}), e => e.code === 'unavailable');
   const r = f.a.WizBoundaryClient.request('ready', null, 2000);
   sh.B.attach(f.el);
   assert.deepEqual(clone(await r), { version: 1, hosted: true });
@@ -221,7 +221,9 @@ test('badge and title bar: served by the one registered server; taps come back; 
   assert.equal(await f.a.WizBoundaryClient.request('badge.set', { n: 3 }, 2000), null, 'only a boolean ever crosses back');
   assert.equal(await f.a.WizBoundaryClient.request('titlebar.set', { tools: [{ id: 'older', kind: 'button' }] }, 2000), true);
   await assert.rejects(f.a.WizBoundaryClient.request('titlebar.set', { bad: true }, 2000), e => e.code === 'refused' && /Invalid/.test(e.message));
-  await assert.rejects(f.a.WizBoundaryClient.request('share.text', {}, 2000), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('share.wizard', {}, 2000), e => e.code === 'unavailable');
+  // Sharing out needs the browser's transient user activation (a real tap in the app); this shell has none.
+  await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'x' }, 2000), e => e.code === 'refused' && /tap/.test(e.message));
   assert.deepEqual(calls.map(c => c.slice(0, 2)), [[true, 'badge.set'], [true, 'titlebar.set'], [true, 'titlebar.set']]);
   // A tap: only to this frame, only on its current channel, only a tool id (and a picker value).
   assert.equal(sh.B.tool(f.el, 'older'), true);
@@ -474,4 +476,41 @@ test('on: the disposer of a guarded shell window also ends the session the guard
   dispose();
   assert.equal(sh.B.owns(el), false, 'closing the window lets go of its session');
   assert.equal(listeners.size, 0, 'and of every load listener');
+});
+
+test('share and transcription: async answers are protocol data only, share needs a tap, a reload drops the answer', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el);
+  await tick();
+  const calls = [], later = [];
+  sh.B.serve((el, method, args) => {
+    calls.push([method, clone({ ...args, file: undefined })]);
+    if (method === 'voice.transcribe') return args.slow ? new Promise(r => later.push(r)) : Promise.resolve({ text: 'hello', provider: 'secret', key: 'k' });
+    if (method === 'share.text') return Promise.resolve('shared');
+    if (method === 'share.file') return Promise.reject(new Error('Share failed'));
+    return true;
+  });
+  assert.deepEqual(clone(await f.a.WizBoundaryClient.request('voice.transcribe', { language: 'en' }, 2000)), { text: 'hello' }, 'only the transcript crosses back');
+  // No activation API or no tap: refused before the server sees it.
+  await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'a' }, 2000), e => e.code === 'refused');
+  assert.equal(calls.some(c => c[0] === 'share.text'), false);
+  sh.g.navigator = { userActivation: { isActive: true } };
+  assert.equal(await f.a.WizBoundaryClient.request('share.text', { text: 'a' }, 2000), 'shared');
+  assert.equal(calls.at(-1)[1].base, 'https://box.example.ts.net/notes/', 'the page\'s own address for a relative link');
+  await assert.rejects(f.a.WizBoundaryClient.request('share.file', { options: {} }, 2000), e => e.code === 'refused' && /Share failed/.test(e.message));
+  // At most 4 at once per window.
+  const slow = [1, 2, 3, 4].map(() => f.a.WizBoundaryClient.request('voice.transcribe', { slow: true }, 2000));
+  await tick(); await tick();
+  await assert.rejects(f.a.WizBoundaryClient.request('voice.transcribe', {}, 2000), e => e.code === 'busy');
+  // The window loads a new document before the answer: the answer is not sent to it.
+  const old = later.splice(0), sent = sh.log.length;
+  f.load(); await tick(); await tick();
+  for (const r of old) r({ text: 'old channel' });
+  await tick(); await tick();
+  assert.equal(sh.log.slice(sent).filter(m => m.op === 'service.reply').length, 0, 'no answer on the new channel for the old one');
+  // The same document asks again on its new channel (the client re-sends open requests), within a fresh in-flight count.
+  assert.equal(later.length, 4);
+  for (const r of later) r({ text: 'new channel' });
+  assert.deepEqual((await Promise.all(slow)).map(clone), [1, 2, 3, 4].map(() => ({ text: 'new channel' })));
 });
