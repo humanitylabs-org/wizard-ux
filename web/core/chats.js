@@ -465,7 +465,7 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     // The row the window shows (a routed post can share its id with a main thread), as openChat's markSeen does.
     void LIVE.markHandled(s);
-    paintListsNow(); chanSeenPaint(); needsRepaint(sid);
+    paintListsNow(); chanSeenPaint(); needsRepaint(wid, sid, s);
     toast('✓', 'Cleared', 1400);
     return true;
   }
@@ -497,12 +497,13 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(wid), q = reply?.quote;
     if (!needsThreadOn() || !q || q.role !== 'assistant' || !sid || c.needsFor !== sid || !(Math.abs((+q.at || 0) - c.needsAt) < 1500)) return false;
     const s = rowOf(owner(wid), sid) || LIVE.session(sid); if (!needsAsk(s) || !LIVE.markHandled) return false;
-    void LIVE.markHandled(s); paintListsNow(); chanSeenPaint(); needsRepaint(sid);
+    void LIVE.markHandled(s); paintListsNow(); chanSeenPaint(); needsRepaint(wid, sid, s);
     return true;
   }
   // The open thread repaints on the tap's frame too (AI review of 1331: the line and Mark done stayed until a reopen).
-  function needsRepaint(sid) {
-    for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread && x.thread === sid) renderThreadNow(x); }
+  // Only windows showing that same row: a routed thread sharing the id with a main one keeps its own state (Codex P2).
+  function needsRepaint(wid, sid, s) {
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === sid && (id === wid || rowOf(owner(id), sid) === s)) renderThreadNow(x); }
   }
   // Opening a thread with an open Needs you lands on that message (once per open), its amber line at the top.
   function needsLand(w, nav) {

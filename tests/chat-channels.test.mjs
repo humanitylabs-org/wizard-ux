@@ -1889,6 +1889,17 @@ test('issue 1331: Mark done (and Reply) repaints the open thread on the tap, so 
     // Another thread in the window: nothing to repaint.
     painted.length = 0; f.w.thread = 'zz'; Object.assign(s, { lastAssistantAt: new Date(NOW - 0.5 * H).toISOString() });
     vm.runInContext('markDone', f.env)('w', sid, true); assert.deepEqual(painted, [], kind + ': a window on another thread stays');
+    // Codex P2: another window on the same id but another agent's row (a routed thread) is left alone.
+    const other = { id: 'other', thread: sid }, wins = { w: f.w, other }, alt = { ...s };
+    f.env.W = new Proxy({}, { get: (_, id) => wins[id] }); f.w.thread = sid; painted.length = 0;
+    f.env._rowOf = (wid, id) => id === sid ? (wid === 'other' ? alt : s) : null;
+    Object.assign(s, { lastAssistantAt: new Date(NOW - 0.25 * H).toISOString() });
+    vm.runInContext('markDone', f.env)('w', sid, true);
+    assert.deepEqual(painted.map(p => p[0]), ['w'], kind + ': only the window showing that row');
+    f.env._rowOf = (wid, id) => id === sid ? s : null; painted.length = 0;
+    Object.assign(s, { lastAssistantAt: new Date(NOW - 0.2 * H).toISOString() });
+    vm.runInContext('markDone', f.env)('w', sid, true);
+    assert.deepEqual(painted.map(p => p[0]), ['w', 'other'], kind + ': a second window on the same row repaints too');
     f.w.thread = null;
   }
 });
