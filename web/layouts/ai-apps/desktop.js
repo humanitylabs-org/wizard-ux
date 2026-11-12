@@ -433,7 +433,7 @@ export default function desktop(api) {
   /* ---------- the sidebar's width: open, the rail, or open over the page (narrow) ---------- */
   let folded = api.storage.get('folded') === true, peek = false;
   // A chat docked beside an app panel needs that room: there the sidebar keeps the old 900 px breakpoint, so the app
-  // is never squeezed to nothing between the docked chat and the open-apps column (#1313 review).
+  // is never squeezed to nothing between the docked chat and the open-apps column (Codex review on PR 1313).
   const narrow = () => (globalThis.innerWidth || 1440) < (root.dataset.aadChat && root.dataset.aadSplit ? CROWDED_FROM : DOCKED_FROM);
   const sideWant = () => narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
   /** the sidebar again after a resize or a chat docking beside an app (or leaving): only when its mode changes */

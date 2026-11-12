@@ -2341,7 +2341,7 @@ test('a reload with an app in front: the thread the Chats desk holds docks besid
 });
 
 /* James, 12 Nov 2026: the sidebar stays open down to 680 px. A chat docked beside an app panel keeps the old 900 px
- * breakpoint, so the app is never squeezed to nothing between the chat and the open-apps column (#1313 review). */
+ * breakpoint, so the app is never squeezed to nothing between the chat and the open-apps column (Codex review on PR 1313). */
 test('desktop at 760 px: a docked chat alone keeps the sidebar open; a chat docked beside an app folds it to the rail', async () => {
   const had = globalThis.innerWidth; globalThis.innerWidth = 760;
   try {
