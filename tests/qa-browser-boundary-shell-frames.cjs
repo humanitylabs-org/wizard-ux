@@ -40,7 +40,16 @@ const server = http.createServer((req, res) => {
   if (u.pathname.startsWith('/wizard-os-home/') && !/\/(api|store-install|store-data)\//.test(u.pathname)) {
     let file = path.join(WEB, u.pathname.slice('/wizard-os-home/'.length));
     if (file.endsWith('/')) file += 'index.html';
-    if (file.startsWith(WEB) && fs.existsSync(file) && fs.statSync(file).isFile()) { res.setHeader('content-type', TYPES[path.extname(file)] || 'text/plain'); return res.end(fs.readFileSync(file)); }
+    if (file.startsWith(WEB) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+      res.setHeader('content-type', TYPES[path.extname(file)] || 'text/plain');
+      let body = fs.readFileSync(file);
+      // Like nginx with the boundary on (packaging/entrypoint.sh): the token only for a top-level page load.
+      if (file.endsWith('.html')) {
+        const nav = req.headers['sec-fetch-mode'] === 'navigate' && ['document', 'empty'].includes(req.headers['sec-fetch-dest']);
+        body = String(body).replace('<meta name="wizard-shell-token" content="off">', `<meta name="wizard-shell-token" content="${nav ? TOKEN : ''}">`);
+      }
+      return res.end(body);
+    }
   }
   // Owner routes answer like the Agent Service / App Manager with the boundary on: the token or 401.
   const owner = /^\/(wizard\/|api\/|v1\/|wizard-os-home\/(api|store-install)\/)/.test(u.pathname);
@@ -65,6 +74,21 @@ const check = (ok, what) => { console.log((ok ? 'PASS ' : 'FAIL ') + what); if (
     check(status === 200, `${id}: owner call from the page gets through (status ${status})`);
     const fromPage = seen.filter(s => s.ref.includes(url.replace(/index\.html$/, '')) && /^\/(wizard\/|api\/|v1\/|wizard-os-home\/(api|store-install)\/)/.test(s.path));
     check(fromPage.length > 0 && fromPage.every(s => s.token === TOKEN), `${id}: every owner call from the page carried the token (${fromPage.length}: ${[...new Set(fromPage.map(s => s.path))].join(', ')})`);
+  }
+  // Store, Agents and Setup opened as a top-level tab (not in a Wizard window): the page load carries the token and
+  // the page arms itself; the token is not left in the page.
+  for (const [id, url] of [['store', '/wizard-os-home/store/index.html'], ['agents', '/wizard-os-home/agents/index.html'], ['setup', '/wizard-os-home/setup/index.html']]) {
+    const tab = await browser.newPage();
+    const mark = seen.length;
+    await tab.goto(base + url);
+    await tab.waitForLoadState('load');
+    const status = await tab.evaluate(() => fetch('/wizard/v1/agents').then(r => r.status, e => 'blocked:' + e.name)).catch(e => 'error:' + e.message);
+    check(status === 200, `${id} as a top-level tab: owner call gets through (status ${status})`);
+    const left = await tab.evaluate(t => !!document.querySelector('meta[name="wizard-shell-token"]') || document.documentElement.outerHTML.includes(t), TOKEN);
+    check(left === false, `${id} as a top-level tab: no token left in the page`);
+    const fromTab = seen.slice(mark).filter(s => /^\/(wizard\/|api\/|v1\/|wizard-os-home\/(api|store-install)\/)/.test(s.path));
+    check(fromTab.length > 0 && fromTab.every(s => s.token === TOKEN), `${id} as a top-level tab: every owner call carried the token (${fromTab.length}: ${[...new Set(fromTab.map(s => s.path))].join(', ')})`);
+    await tab.close();
   }
   const appSandbox = await page.evaluate(() => window.openWin('app', '/notes/'));
   check(appSandbox === 'allow-scripts allow-forms allow-downloads', `app page sandboxed (${appSandbox})`);
