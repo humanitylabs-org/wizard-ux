@@ -108,10 +108,10 @@ const server = http.createServer((req, res) => {
   const tap = async (sel) => { await ensure(); await frameOf('/notes/').click(sel); await settle(); };
   await tap('#ext');
   let s = await shell();
-  ok(s.opened.includes('https://example.com/article'), 'a link to another site in a new tab opens in the owner\'s browser: ' + JSON.stringify(s.opened));
+  ok(s.opened.some(x => x === 'https://example.com/article'), 'a link to another site in a new tab opens in the owner\'s browser: ' + JSON.stringify(s.opened));
   await tap('#extself');
   s = await shell();
-  ok(s.opened.includes('https://example.net/page') && frameOf('/notes/'), 'a link to another site opens in the owner\'s browser and the app stays in its window: ' + JSON.stringify(s.opened));
+  ok(s.opened.some(x => x === 'https://example.net/page') && frameOf('/notes/'), 'a link to another site opens in the owner\'s browser and the app stays in its window: ' + JSON.stringify(s.opened));
   await tap('#other');
   s = await shell();
   ok(s.routed.some(r => r.href === base + '/other/page?x=1' && r.from === 'notes') && frameOf('/notes/'), 'a link to another app opens as that app\'s window, not inside this one: ' + JSON.stringify(s.routed));
@@ -123,19 +123,19 @@ const server = http.createServer((req, res) => {
   ok(s.viewed.length === 1 && s.viewed[0].items[s.viewed[0].i] === '/notes/pic.png', 'a photo of this Wizard opens in the viewer: ' + JSON.stringify(s.viewed));
   await tap('#browse');
   s = await shell();
-  ok(s.opened.includes('https://example.org/doc'), 'a link marked for the browser opens there: ' + JSON.stringify(s.opened));
+  ok(s.opened.some(x => x === 'https://example.org/doc'), 'a link marked for the browser opens there: ' + JSON.stringify(s.opened));
   await tap('#pop');
   s = await shell();
   const popRet = await frameOf('/notes/').evaluate(() => results.pop);
-  ok(s.opened.includes('https://example.com/popup') && popRet === null, 'window.open after a tap opens in the owner\'s browser: ' + JSON.stringify(s.opened));
-  ok(!s.opened.includes('https://example.com/sneaky'), 'window.open without a tap stayed closed');
+  ok(s.opened.some(x => x === 'https://example.com/popup') && popRet === null, 'window.open after a tap opens in the owner\'s browser: ' + JSON.stringify(s.opened));
+  ok(!s.opened.some(x => x === 'https://example.com/sneaky'), 'window.open without a tap stayed closed');
   // A tap elsewhere in the shell activates the shell too; the app opening a pop-up right then gets nothing.
   await ensure(); await frameOf('/notes/').evaluate(() => later());
   await page.click('#shellbtn');
   await until('/notes/', () => results.later);
   await settle();
   s = await shell();
-  ok(!s.opened.includes('https://example.com/later'), 'a tap outside the app window does not let it open a pop-up: ' + JSON.stringify(s.opened));
+  ok(!s.opened.some(x => x === 'https://example.com/later'), 'a tap outside the app window does not let it open a pop-up: ' + JSON.stringify(s.opened));
   // In-page anchors and the app's own pages stay the page's.
   await tap('#anchor');
   ok(await frameOf('/notes/').evaluate(() => location.hash) === '#later', 'an in-page anchor stays the page\'s');
