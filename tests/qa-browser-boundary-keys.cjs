@@ -29,7 +29,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
 </script></body></html>`;
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
-  if (u.pathname === '/') { res.setHeader('content-type', 'text/html'); return res.end(SHELL.replace('src="/notes/"', `src="/notes/${u.search}"`)); }
+  if (u.pathname === '/') { res.setHeader('content-type', 'text/html'); return res.end(u.search === '?hostile' ? SHELL.replace('src="/notes/"', 'src="/notes/?hostile"') : SHELL); }
   if (u.pathname === '/notes/') { res.setHeader('content-type', 'text/html'); return res.end(APP); }
   if (u.pathname.startsWith('/wizard-os-home/')) {
     const file = path.join(WEB, u.pathname.slice('/wizard-os-home/'.length));
