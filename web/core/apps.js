@@ -168,8 +168,29 @@
       window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
+      sweepAppData(snapshot.apps);
       return true;   // a fresh list from the box (refreshApps resolves true; false = the read failed, cache kept)
     } catch (e) { return false; }
+  }
+  /* wizard-os#133: the data the shell keeps on this device for a sandboxed app's windows (saved settings, databases)
+   * is deleted once the box's list shows the app is gone (removed by the agent, the box command or another device's
+   * Store). store/store-remove.js sweepGone decides (it waits a day for an app the Store did not remove here); this
+   * only hands it each fresh list, at most every 10 minutes, and only when such data exists on this device. */
+  const SWEEP_FROM = document.currentScript?.src || '';
+  let sweptAt = 0;
+  async function sweepAppData(apps) {
+    try {
+      if (!SWEEP_FROM || !apps.some(a => a?.source === 'apps.json') || Date.now() - sweptAt < 6e5) return;
+      const keys = Object.keys(localStorage);
+      const kept = keys.some(k => k.startsWith('wos.app-storage.v1.') || k === 'wos.app-removed.v1' || k === 'wos.app-gone.v1')
+        || !indexedDB.databases || (await indexedDB.databases()).some(d => d.name === 'wos-app-idb-v1');
+      if (!kept) return;
+      sweptAt = Date.now();
+      const ids = new Set([...apps.map(a => a?.id), ...ALL.map(a => a.id)].filter(Boolean).map(String));
+      for (const [old, id] of Object.entries(APP_ID_ALIASES)) if (ids.has(old) || ids.has(id)) { ids.add(old); ids.add(id); }
+      const m = await import(new URL('../store/store-remove.js', SWEEP_FROM).href);
+      await m.sweepGone(ids);
+    } catch (_) {}
   }
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;
