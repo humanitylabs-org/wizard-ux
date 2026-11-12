@@ -783,7 +783,7 @@
   }
   /* The same for a sandboxed window (media.view): its own blob: URLs belong to its opaque origin and the shell can't
    * read them, so app-client.js sends such an item's bytes (`blob`) and the shell shows them under a blob: URL of its
-   * own (the window's last set is revoked on its next view and when the window goes). Other items must be this host's
+   * own (the window's last set is revoked on its next view, a new document and when the window goes). Other items must be this host's
    * own http(s) addresses outside the owner routes; a relative one resolves against the page's address in the app. */
   const MEDIA_BLOBS = 50;
   function boundaryMedia(st, args) {
@@ -1618,6 +1618,7 @@
       for (const c of st.netCalls?.values() || []) c.abort(); // the old document's backend calls stop; no page gets their answers
       st.netCalls?.clear(); st.netFlows?.clear();
       wsCloseAll(st); // and its sockets close
+      mediaRevoke(st); // and the shell's blob: copies of its pictures go
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

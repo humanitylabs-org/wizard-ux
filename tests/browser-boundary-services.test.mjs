@@ -894,7 +894,7 @@ test('media.view: the window\'s own photos open in the shell viewer; another sit
   assert.equal(opened.length, 2);
 });
 
-test('media.view: the page\'s own blob photos open under a shell blob: URL, revoked on the next view and when the window goes', () => {
+test('media.view: the page\'s own blob photos open under a shell blob: URL, revoked on the next view, a new document and when the window goes', () => {
   const opened = [], made = [], revoked = [];
   const WosChat = { viewer: { open: items => { opened.push(items); return true; } } };
   const f = fixture({ win: { WosChat } });
@@ -913,8 +913,14 @@ test('media.view: the page\'s own blob photos open under a shell blob: URL, revo
     WosChat.viewer.open = () => false;
     assert.equal(f.call('media.view', { items: [{ blob: pic }] }), false);
     assert.deepEqual(revoked, ['blob:https://wizard.example/0', 'blob:https://wizard.example/2']);
+    // A new document in the window (Codex P2): its pictures' shell copies go too.
+    WosChat.viewer.open = items => { opened.push(items); return true; };
+    f.call('media.view', { items: [{ blob: pic }] });
+    f.reset();
+    assert.deepEqual(revoked.at(-1), 'blob:https://wizard.example/3');
+    f.call('media.view', { items: [{ blob: pic }] });
     f.detach();
-    assert.deepEqual(revoked.at(-1), 'blob:https://wizard.example/1');
+    assert.deepEqual(revoked.at(-1), 'blob:https://wizard.example/4');
   } finally { URL.createObjectURL = create; URL.revokeObjectURL = revoke; }
 });
 

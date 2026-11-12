@@ -1250,7 +1250,7 @@
     request(op, args).then(v => { if (v !== true) console.warn('WizardApp ' + op + ': not opened'); }, e => console.warn('WizardApp ' + op, e?.message || e));
     return true;
   }
-  // Photos: this host's own addresses go as they are; the page's own blob: photos (its opaque origin's, which the shell
+  // Pictures: this host's own addresses go as they are; the page's own blob: pictures (its opaque origin's, which the shell
   // can't read) go as their bytes. Anything else is left out, and its place kept so the tapped item stays the one shown.
   function shellMedia(items, index) {
     if (!Array.isArray(items)) return false;
