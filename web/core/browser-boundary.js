@@ -71,6 +71,11 @@
  *    streamed call (`stream`: server-sent events, a reply written as it goes) gets its status and headers first and its
  *    body as `net` notices (bytes, end, error); `net.ack` says how much the page has taken, so the shell reads on only
  *    while little waits in between.
+ *  - ws: an opaque page's own WebSocket goes out with `Origin: null` and no cookies, and an app server that checks the
+ *    Origin refuses it, so app-client.js opens a socket to this host as `ws.open` and the shell opens it, on the same
+ *    rule as net (the window's own app path, never an owner route). The server's messages come as `ws` notices (text or
+ *    bytes, then its close); the page's messages go as `ws.send` and its close as `ws.close`. Every socket of a
+ *    document ends with it.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -87,7 +92,7 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack'];
+    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
@@ -122,6 +127,11 @@
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.store instanceof Map) return { store: Object.fromEntries([...v.store].filter(([k, x]) => typeof k === 'string' && typeof x === 'string')) };
     // An app's own backend answer (net.fetch): status, the headers a page may see, the body bytes and the final address.
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.net && typeof v.net === 'object') return { net: netShape(v.net) };
+    // An app's own socket that opened (ws.open): the subprotocol and extensions the server chose.
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.ws && typeof v.ws === 'object') {
+      const str = x => (typeof x === 'string' && x.length <= 1024 ? x : '');
+      return { ws: { protocol: str(v.ws.protocol), extensions: str(v.ws.extensions) } };
+    }
     if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
     if (typeof v === 'string') return v.length <= 32 ? v : null;
@@ -370,18 +380,21 @@
       // The tap must be in this window: a tap or key elsewhere in the shell also activates the shell, but then this
       // frame no longer has focus (a click or key in the frame gives it focus).
       if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', d.method.startsWith('capture.') ? 'Recording needs a tap in the app' : 'Share needs a tap in the app');
-      const net = d.method === 'net.fetch', slot = net ? 'netInflight' : 'inflight';
-      // Stopping a call or taking a streamed answer's pieces is answered at once and never waits for a slot.
-      const quick = d.method === 'net.abort' || d.method === 'net.ack';
+      // Opening a socket waits for its server like a backend call does, on the same budget.
+      const net = d.method === 'net.fetch' || d.method === 'ws.open', slot = net ? 'netInflight' : 'inflight';
+      // Stopping a call, taking a streamed answer's pieces and a socket's own messages or close are answered at once
+      // and never wait for a slot.
+      const quick = ['net.abort', 'net.ack', 'ws.send', 'ws.close'].includes(d.method);
       if (!quick && (st[slot] || 0) >= (net ? NET_INFLIGHT : INFLIGHT)) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
       // Whether this request came right after a real tap or key in this focused, visible window (see TAPPED).
       const tapped = activated() && visible(st.frame) && focusedFrame(st.frame), lifted = tapped || frameActivated(st.frame);
-      try { value = server(st.frame, d.method, d.args, Object.freeze({ tapped, lifted })); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }
+      // A refusal may carry its own code (net.fetch, ws.open: `outside`, so the app's own fetch or socket goes out
+      // unchanged instead).
+      const code = err => (net && err?.code === 'outside' ? 'outside' : 'refused');
+      try { value = server(st.frame, d.method, d.args, Object.freeze({ tapped, lifted })); } catch (err) { return answer(undefined, code(err), String(err?.message || 'Refused').slice(0, 200)); }
       if (!value || typeof value.then !== 'function') return answer(shape(value));
       st[slot] = (st[slot] || 0) + 1;
-      // A refusal may carry its own code (net.fetch: `outside`, so the app's own fetch goes out unchanged instead).
-      const code = err => (net && err?.code === 'outside' ? 'outside' : 'refused');
       Promise.resolve(value).then(v => answer(shape(v)), err => answer(undefined, code(err), String(err?.message || 'Refused').slice(0, 200)))
         .finally(() => { if (st.channel === channel) st[slot]--; });
       return;
@@ -570,6 +583,22 @@
         }
         if (data.event === 'end') { send(st, 'notice', { kind, key: data.key, event: 'end' }); return true; }
         if (data.event === 'error') { send(st, 'notice', { kind, key: data.key, event: 'error', message: typeof data.message === 'string' ? data.message.slice(0, 200) : '' }); return true; }
+        return false;
+      }
+      if (kind === 'ws') {
+        // This document's own socket (ws.open): a message from its server (text or bytes) or its close (code, reason,
+        // clean or not). Nothing else crosses.
+        if (typeof data?.key !== 'string' || !data.key || data.key.length > 64) return false;
+        if (data.event === 'message') {
+          const text = typeof data.data === 'string';
+          if (text ? data.data.length > NET_MAX : Object.prototype.toString.call(data.data) !== '[object ArrayBuffer]' || data.data.byteLength > NET_MAX) return false;
+          send(st, 'notice', { kind, key: data.key, event: 'message', data: data.data }); return true;
+        }
+        if (data.event === 'close') {
+          const code = Number.isInteger(data.code) && data.code >= 1000 && data.code <= 4999 ? data.code : 1006;
+          const reason = typeof data.reason === 'string' ? data.reason.slice(0, 123) : '';
+          send(st, 'notice', { kind, key: data.key, event: 'close', code, reason, wasClean: data.wasClean === true }); return true;
+        }
         return false;
       }
       if (kind === 'update') {

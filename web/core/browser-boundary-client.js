@@ -37,6 +37,8 @@
  * The app's own backend (`net.fetch`): app-client.js sends the page's fetch to this host through the shell, which makes
  * it only inside this window's app path. One open on a channel that is replaced fails instead of being sent again. A
  * streamed answer's body comes as `notice` `net` (onNet: bytes, end, error), and every open one ends on a new channel.
+ * The app's own WebSocket (`ws.open`, `ws.send`, `ws.close`) goes the same way: the shell opens it, and the server's
+ * messages and close come as `notice` `ws` (onNet with `ws: true`); every socket ends on a new channel.
  */
 (() => {
   'use strict';
@@ -47,7 +49,7 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack'], STICKY = ['badge.set', 'titlebar.set'];
+    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, serial = 0, claimed = new Set();
@@ -185,10 +187,11 @@
       for (const [id, wait] of requests) {
         // An app's own backend call may already have reached its server on the old channel: never send it twice (a
         // POST would run twice). It fails like a dropped connection, and the app retries if it wants to.
-        if (wait.method === 'net.fetch') { clearTimeout(wait.timer); requests.delete(id); wait.reject(error('failed', 'Connection to the app server was interrupted')); continue; }
+        // A socket's open and its messages likewise: the shell closed its sockets with the old channel.
+        if (wait.method === 'net.fetch' || wait.method.startsWith('ws.')) { clearTimeout(wait.timer); requests.delete(id); wait.reject(error('failed', 'Connection to the app server was interrupted')); continue; }
         send({ op: 'service.request', id, method: wait.method, args: wait.args });
       }
-      // Streamed answers end with the old channel too (the shell stopped them).
+      // Streamed answers and sockets end with the old channel too (the shell stopped them).
       try { onNet?.({ event: 'reset' }); } catch (_) {}
       for (const go of [...waiters]) go();
       // Holds: the shell dropped them with the old channel. One still being placed is re-sent above with the requests.
@@ -222,6 +225,11 @@
       if (d.kind === 'net' && typeof d.key === 'string' && d.key.length <= 64 && ['chunk', 'end', 'error'].includes(d.event)
         && (d.event !== 'chunk' || Object.prototype.toString.call(d.chunk) === '[object ArrayBuffer]')) {
         try { onNet?.({ key: d.key, event: d.event, chunk: d.event === 'chunk' ? d.chunk : undefined, message: typeof d.message === 'string' ? d.message.slice(0, 200) : '' }); } catch (_) {}
+      }
+      // The app's own socket (ws.open): a message from its server, or its close.
+      if (d.kind === 'ws' && typeof d.key === 'string' && d.key.length <= 64) {
+        if (d.event === 'message' && (typeof d.data === 'string' || Object.prototype.toString.call(d.data) === '[object ArrayBuffer]')) { try { onNet?.({ ws: true, key: d.key, event: 'message', data: d.data }); } catch (_) {} }
+        if (d.event === 'close' && Number.isInteger(d.code)) { try { onNet?.({ ws: true, key: d.key, event: 'close', code: d.code, reason: typeof d.reason === 'string' ? d.reason.slice(0, 123) : '', wasClean: d.wasClean === true }); } catch (_) {} }
       }
       if (d.kind === 'update' && (d.available === null || (d.available && typeof d.available === 'object' && typeof d.available.version === 'string'))) {
         try { onUpdate?.(d.available ? Object.freeze({ version: d.available.version.slice(0, 128) }) : null); } catch (_) {}

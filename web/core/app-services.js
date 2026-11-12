@@ -113,7 +113,7 @@
   const live = (st, doc) => valid(st, doc) || boundaryLive(st);
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); wsCloseAll(st); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -1335,6 +1335,118 @@
     if (!boundaryLive(st) || B.gen(st.frame) !== gen) throw fault('App document changed');
     return { net: { status: res.status, statusText: res.statusText, headers: [...res.headers], body: out, url: res.url || u.href, redirected: res.redirected === true } };
   }
+  /* An app's own WebSocket under the boundary (ws.open, ws.send, ws.close; docs/browser-boundary.md). An opaque page's
+   * socket goes out with `Origin: null` and no cookies, and an app server that checks Origin (the Recorder's live
+   * transcript) refuses it. So the shell opens it, with this host's origin and cookies, only inside the window's own
+   * app path (the same rule as net.fetch) and never to an owner route. Messages from the server go to the window's
+   * current document as `ws` notices; the page's own messages come back as ws.send. A socket ends with the page's close,
+   * the server, the document (a load) or the window, and at most WS_OPEN are open per window. An address outside the
+   * path answers `outside`: the page's own WebSocket then goes out unchanged, as before. */
+  const WS_OPEN = 8, WS_MSG = 4 * 1024 * 1024, WS_BUFFER = 16 * 1024 * 1024, WS_WAIT = 45000;
+  const WS_PROTOCOL = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]{1,128}$/;
+  const wsTarget = (st, href) => {
+    let u; try { u = new URL(String(href)); } catch (_) { return null; }
+    if (!/^wss?:$/.test(u.protocol) || u.username || u.password || u.hash) return null;
+    const h = new URL(u.href); h.protocol = u.protocol === 'wss:' ? 'https:' : 'http:';
+    return netTarget(st, h.href) ? u : null;
+  };
+  const wsBytes = d => (typeof d === 'string' ? d.length * 3 : d.byteLength);
+  const utf8 = t => { try { return encodeURIComponent(t).replace(/%[0-9A-F]{2}/g, '.').length; } catch (_) { return Infinity; } };
+  // Every socket of this window closes; no page gets their messages.
+  function wsCloseAll(st) { for (const c of [...(st.wsConns?.values() || [])]) c.end(); st.wsConns?.clear(); }
+  // A window that went away without a detach (its frame left the page) still closes its sockets (checked every 5 s
+  // while any is open).
+  const wsOwners = new Set();
+  let wsSweep = 0;
+  const wsWatch = () => {
+    if (wsSweep) return;
+    wsSweep = setInterval(() => {
+      for (const st of [...wsOwners]) {
+        for (const c of [...(st.wsConns?.values() || [])]) if (!c.live()) c.end();
+        if (!st.wsConns?.size) wsOwners.delete(st);
+      }
+      if (!wsOwners.size) { clearInterval(wsSweep); wsSweep = 0; }
+    }, 5000);
+  };
+  function boundaryWsOpen(st, args) {
+    const B = window.WizBrowserBoundary;
+    if (!args || typeof args !== 'object' || typeof args.url !== 'string' || args.url.length > 8192) throw fault('Bad request');
+    const key = typeof args.key === 'string' && args.key && args.key.length <= 64 ? args.key : '';
+    if (!key) throw fault('Bad request');
+    const u = wsTarget(st, args.url); if (!u) throw outside();
+    const protocols = Array.isArray(args.protocols) ? args.protocols : [];
+    if (protocols.length > 16 || protocols.some(p => typeof p !== 'string' || !WS_PROTOCOL.test(p)) || new Set(protocols).size !== protocols.length) throw fault('Bad request');
+    st.wsConns ||= new Map();
+    if (st.wsConns.has(key)) throw fault('Bad request');
+    if (st.wsConns.size >= WS_OPEN) throw fault('Too many open app sockets');
+    const gen = B.gen(st.frame);
+    let ws;
+    try { ws = new window.WebSocket(u.href, protocols); } catch (_) { throw fault('Bad request'); }
+    ws.binaryType = 'arraybuffer';
+    let opened = false, ended = false, settle = null, timer = 0;
+    const live = () => !ended && boundaryLive(st) && B.gen(st.frame) === gen && st.wsConns?.get(key) === c;
+    const c = {
+      ws, live,
+      // Ends the socket in the shell; the page hears nothing more of it (its document or channel is gone, or it asked).
+      end() {
+        if (ended) return; ended = true; clearTimeout(timer);
+        if (st.wsConns?.get(key) === c) st.wsConns.delete(key);
+        try { ws.close(); } catch (_) {}
+        settle?.(false);
+      },
+      // The shell gives up on it (a message too large, a server not reading): the page hears an abnormal close.
+      fail() { tellGone(1006, '', false); c.end(); },
+    };
+    st.wsConns.set(key, c); wsOwners.add(st); wsWatch();
+    timer = setTimeout(() => { if (!opened) c.end(); }, WS_WAIT);
+    const tell = data => { if (!live() || !B.notice(st.frame, 'ws', { key, ...data })) { c.end(); return false; } return true; };
+    ws.addEventListener('message', e => {
+      if (!opened || ended) return;
+      const d = e.data;
+      if (typeof d !== 'string' && Object.prototype.toString.call(d) !== '[object ArrayBuffer]') return;
+      // Larger than the shell passes on: the page's socket fails (1009, as a browser's own does) and this one closes.
+      if (wsBytes(d) > B.netMax) { tellGone(1009, 'Message too large', false); c.end(); return; }
+      tell({ event: 'message', data: d });
+    });
+    const tellGone = (code, reason, wasClean) => { if (live()) B.notice(st.frame, 'ws', { key, event: 'close', code, reason, wasClean }); };
+    ws.addEventListener('close', e => {
+      clearTimeout(timer);
+      if (ended) return;
+      if (opened) tellGone(e.code, e.reason, e.wasClean);
+      ended = true; if (st.wsConns?.get(key) === c) st.wsConns.delete(key);
+      settle?.(false);
+    });
+    return new Promise((resolve, reject) => {
+      settle = ok => { settle = null; if (!ok) reject(fault('Connection failed')); };
+      ws.addEventListener('open', () => {
+        clearTimeout(timer);
+        if (ended) return;
+        if (!live()) { c.end(); return; }
+        opened = true; settle = null;
+        resolve({ ws: { protocol: ws.protocol, extensions: ws.extensions } });
+      });
+    });
+  }
+  function boundaryWsSend(st, args) {
+    const c = typeof args?.key === 'string' ? st.wsConns?.get(args.key) : null;
+    if (!c || !c.live() || c.ws.readyState !== 1) return false;
+    const d = args.data;
+    if (typeof d !== 'string' && Object.prototype.toString.call(d) !== '[object ArrayBuffer]') return false;
+    // Too large a message, or the server is not reading: the socket fails, as a browser's own does.
+    if (wsBytes(d) > WS_MSG || c.ws.bufferedAmount + wsBytes(d) > WS_BUFFER) { c.fail(); return false; }
+    try { c.ws.send(d); } catch (_) { c.fail(); return false; }
+    return true;
+  }
+  function boundaryWsClose(st, args) {
+    const c = typeof args?.key === 'string' ? st.wsConns?.get(args.key) : null;
+    if (!c) return false;
+    const code = Number.isInteger(args.code) && (args.code === 1000 || (args.code >= 3000 && args.code <= 4999)) ? args.code : undefined;
+    const reason = typeof args.reason === 'string' && utf8(args.reason) <= 123 ? args.reason : '';
+    // Not open yet: it never opens. Open: the closing handshake runs and its close comes to the page as a notice.
+    if (c.ws.readyState !== 1) { c.end(); return true; }
+    try { code ? c.ws.close(code, reason) : c.ws.close(); } catch (_) { c.end(); }
+    return true;
+  }
   if (window.WizBrowserBoundary?.serve) {
     window.WizBrowserBoundary.serve((frame, method, args, ctx) => {
       const st = frames.get(frame);
@@ -1407,6 +1519,10 @@
       if (method === 'net.abort') { const c = typeof args?.key === 'string' ? st.netCalls?.get(args.key) : null; if (!c) return false; c.abort(); st.netCalls.delete(args.key); return true; }
       // How much of a streamed answer the page has taken (see netPump): the shell may read on.
       if (method === 'net.ack') { const fl = typeof args?.key === 'string' ? st.netFlows?.get(args.key) : null; if (!fl) return false; fl.ack(Number(args.n)); return true; }
+      // The app's own WebSocket (see boundaryWsOpen): open, a message from the page, close.
+      if (method === 'ws.open') return boundaryWsOpen(st, args);
+      if (method === 'ws.send') return boundaryWsSend(st, args);
+      if (method === 'ws.close') return boundaryWsClose(st, args);
       throw fault('Not available');
     });
     window.WizBrowserBoundary.onReset(frame => {
@@ -1416,6 +1532,7 @@
       captureForget(st, window.WizBrowserBoundary.gen(frame)); // its recording events and preparations end; the recorder keeps going
       for (const c of st.netCalls?.values() || []) c.abort(); // the old document's backend calls stop; no page gets their answers
       st.netCalls?.clear(); st.netFlows?.clear();
+      wsCloseAll(st); // and its sockets close
       // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
       // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
       let gone = false;

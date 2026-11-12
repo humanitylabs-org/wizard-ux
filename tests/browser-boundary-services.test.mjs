@@ -724,3 +724,87 @@ test('app backend stream: at most 16 open calls per window; an error mid-stream 
   await pause(20);
   assert.deepEqual(broken.f.notices.map(n => [n.event, n.message]), [['error', 'reset by peer']]);
 });
+// wizard-os#133 slice 38: an app's own WebSocket (ws.open / ws.send / ws.close). Real Chromium proof:
+// tests/qa-browser-boundary-websocket.cjs.
+function wsFixture() {
+  const made = [];
+  class FakeWS {
+    constructor(url, protocols) { this.url = url; this.protocols = protocols; this.readyState = 0; this.sent = []; this.closed = null; this.bufferedAmount = 0; this.on = {}; this.protocol = ''; this.extensions = ''; made.push(this); }
+    addEventListener(t, fn) { (this.on[t] ||= []).push(fn); }
+    emit(t, e = {}) { for (const fn of this.on[t] || []) fn(e); }
+    open(protocol = '') { this.readyState = 1; this.protocol = protocol; this.emit('open'); }
+    send(d) { this.sent.push(d); }
+    close(code, reason) { this.closed = [code, reason]; this.readyState = 2; }
+    gone(code, reason, wasClean) { this.readyState = 3; this.emit('close', { code, reason, wasClean }); }
+  }
+  const f = fixture({ win: { WebSocket: FakeWS } });
+  f.B.ownerRoute = u => /^\/(?:wizard\/|api\/|v1\/)/.test(new URL(u).pathname);
+  f.B.netMax = 1024;
+  return { f, made };
+}
+test('app socket: ws.open opens it inside the window\'s own app path only; another app, an owner route or another site is `outside`', async () => {
+  const { f, made } = wsFixture();
+  const p = f.call('ws.open', { key: 'ws-1', url: 'wss://wizard.example/morning-report/live', protocols: ['live.v1'] });
+  assert.equal(made.length, 1); assert.equal(made[0].url, 'wss://wizard.example/morning-report/live'); assert.deepEqual([...made[0].protocols], ['live.v1']);
+  assert.equal(made[0].binaryType, 'arraybuffer');
+  made[0].open('live.v1');
+  assert.deepEqual(JSON.parse(JSON.stringify(await p)), { ws: { protocol: 'live.v1', extensions: '' } });
+  for (const url of ['wss://wizard.example/other-app/live', 'wss://wizard.example/wizard/v1/live', 'wss://elsewhere.example/morning-report/live', 'https://wizard.example/morning-report/live', 'wss://u:p@wizard.example/morning-report/live']) {
+    assert.throws(() => f.call('ws.open', { key: 'ws-x', url }), err => err.code === 'outside', url);
+  }
+  assert.throws(() => f.call('ws.open', { key: 'ws-1', url: 'wss://wizard.example/morning-report/live' }), /Bad request/, 'one socket per key');
+  assert.throws(() => f.call('ws.open', { key: 'ws-2', url: 'wss://wizard.example/morning-report/live', protocols: ['bad protocol'] }), /Bad request/);
+  assert.equal(made.length, 1, 'nothing else was opened');
+});
+test('app socket: messages both ways; the server\'s close reaches the page; a refused open rejects', async () => {
+  const { f, made } = wsFixture();
+  const p = f.call('ws.open', { key: 'ws-a', url: 'wss://wizard.example/morning-report/live' });
+  assert.equal(f.call('ws.send', { key: 'ws-a', data: 'too early' }), false, 'nothing is sent before it is open');
+  made[0].open(); await p;
+  assert.equal(f.call('ws.send', { key: 'ws-a', data: 'hello' }), true);
+  const bin = new Uint8Array([1, 2]).buffer;
+  assert.equal(f.call('ws.send', { key: 'ws-a', data: bin }), true);
+  assert.equal(f.call('ws.send', { key: 'ws-a', data: { not: 'data' } }), false);
+  assert.equal(f.call('ws.send', { key: 'ws-other', data: 'x' }), false, 'only this window\'s own socket');
+  assert.deepEqual(made[0].sent, ['hello', bin]);
+  made[0].emit('message', { data: 'words' }); made[0].emit('message', { data: new Uint8Array([7]).buffer });
+  made[0].gone(4001, 'see you', true);
+  assert.deepEqual(f.notices.map(n => [n.kind, n.key, n.event, n.data instanceof ArrayBuffer ? [...new Uint8Array(n.data)] : n.data ?? null, n.code ?? null]),
+    [['ws', 'ws-a', 'message', 'words', null], ['ws', 'ws-a', 'message', [7], null], ['ws', 'ws-a', 'close', null, 4001]]);
+  assert.equal(f.call('ws.send', { key: 'ws-a', data: 'after' }), false, 'a closed socket is gone');
+  const refused = f.call('ws.open', { key: 'ws-b', url: 'wss://wizard.example/morning-report/live' });
+  made[1].gone(1006, '', false);
+  await assert.rejects(refused, /Connection failed/);
+});
+test('app socket: the page\'s close runs the handshake; a message too large or a new document ends it; at most 8 per window', async () => {
+  const { f, made } = wsFixture();
+  const p = f.call('ws.open', { key: 'ws-c', url: 'wss://wizard.example/morning-report/live' }); made[0].open(); await p;
+  assert.equal(f.call('ws.close', { key: 'ws-c', code: 4321, reason: 'done' }), true);
+  assert.deepEqual(made[0].closed, [4321, 'done']);
+  made[0].gone(4321, 'done', true);
+  assert.equal(f.notices.at(-1).event, 'close'); assert.equal(f.notices.at(-1).code, 4321);
+  // A bad code is not passed on (a plain close instead).
+  const q = f.call('ws.open', { key: 'ws-d', url: 'wss://wizard.example/morning-report/live' }); made[1].open(); await q;
+  f.call('ws.close', { key: 'ws-d', code: 1006 }); assert.deepEqual(made[1].closed, [undefined, undefined]);
+  // Closing before it opened: it never opens.
+  const early = f.call('ws.open', { key: 'ws-e', url: 'wss://wizard.example/morning-report/live' });
+  f.call('ws.close', { key: 'ws-e' }); await assert.rejects(early, /Connection failed/);
+  // Too large a message from the page: the page hears an abnormal close.
+  const big = f.call('ws.open', { key: 'ws-f', url: 'wss://wizard.example/morning-report/live' }); made[3].open(); await big;
+  f.notices.length = 0;
+  assert.equal(f.call('ws.send', { key: 'ws-f', data: new ArrayBuffer(5 * 1024 * 1024) }), false);
+  assert.deepEqual(f.notices.map(n => [n.event, n.code, n.wasClean]), [['close', 1006, false]]);
+  assert.ok(made[3].closed, 'and the shell closed it');
+  // A new document: the old one's sockets close and the new page hears nothing of them.
+  const r = f.call('ws.open', { key: 'ws-g', url: 'wss://wizard.example/morning-report/live' }); made[4].open(); await r;
+  f.notices.length = 0; f.reset(); f.B.genNow = 2;
+  assert.ok(made[4].closed, 'closed with its document');
+  made[4].emit('message', { data: 'late' }); made[4].gone(1000, '', true);
+  assert.equal(f.notices.length, 0);
+  // At most 8 open per window.
+  for (let i = 0; i < 8; i++) f.call('ws.open', { key: 'ws-n' + i, url: 'wss://wizard.example/morning-report/live' }).catch(() => {});
+  assert.throws(() => f.call('ws.open', { key: 'ws-n8', url: 'wss://wizard.example/morning-report/live' }), /Too many open/);
+  // Closing the window closes every socket it has.
+  f.detach();
+  assert.ok(made.slice(5).every(w => w.closed), 'the window\'s sockets close with it');
+});
