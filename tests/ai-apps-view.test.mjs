@@ -2869,3 +2869,46 @@ test('skin-host agents.focus / setFocus run in their own scope (no out-of-scope 
   const broken = new Function('shell', 'need', `'use strict'; return ({ focus: () => live() ? shell.agentFocus() : null });`)(shell, () => ({}));
   assert.throws(() => broken.focus(), ReferenceError);
 });
+
+/* Narrow desktop, one app at a time (switch wizard/narrow-one-app, wizard-ux issue 1314): below 1024 px with the switch
+ * on, an app fills the main area with no sidebar and no chat docked beside it, Chats is the Apps column's first row,
+ * and Chats shows the list beside the chat from 720 px, narrower the chat alone with Back. Off: exactly as before. */
+test('desktop narrow one-app: switch on below 1024 px = one thing at a time; off = unchanged', async () => {
+  const had = globalThis.innerWidth;
+  const run = async (width, on) => {
+    globalThis.innerWidth = width;
+    const { w } = deskWorld();
+    if (on) w.html.dataset.tweaks = 'wizard/narrow-one-app';
+    const stage = new El('div'); stage.id = 'stage';
+    const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+    const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+    (await layout()).default(w.api);
+    const d = () => ({ side: w.html.dataset.aadSide, one: w.html.dataset.aadOne, chat: w.html.dataset.aadChat, split: w.html.dataset.aadSplit, wide: w.html.dataset.aadWide });
+    w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.run();
+    const chat = d();
+    w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
+    const app = { ...d(), appW: parseFloat(w.html.style.getPropertyValue('--aad-pane-app-width')), mainW: parseFloat(w.html.style.getPropertyValue('--aad-pane-main-width')), sideW: parseFloat(w.html.style.getPropertyValue('--aad-pane-side-width')) };
+    // the arrangement keys / buttons do nothing while narrow: the saved wide-window arrangement is kept (Codex review)
+    const mode0 = JSON.stringify(globalThis.WizCore.panes.get());
+    for (const b of w.html.querySelectorAll?.('.aad-mode[data-mode="pair"]') || []) b.dispatchEvent(new FakePointerEvent('click'));
+    const modeKept = JSON.stringify(globalThis.WizCore.panes.get()) === mode0;
+    globalThis.WizCore.panes.set({ mode: 'tiled' });
+    return { chat, app, modeKept };
+  };
+  try {
+    const off = await run(880, false);
+    assert.equal(off.app.side, 'rail', 'off: a chat beside an app folds the sidebar to the rail, as before');
+    assert.equal(off.app.chat, 'on', 'off: the chat stays docked beside the app'); assert.equal(off.app.one, undefined);
+    const on = await run(880, true);
+    assert.equal(on.app.one, 'app'); assert.equal(on.app.side, 'none', 'on: no sidebar beside the app');
+    assert.equal(on.app.chat, undefined, 'on: no chat docked beside the app'); assert.equal(on.app.wide, '', 'on: the app fills the main area');
+    assert.equal(on.app.sideW, 0); assert.equal(on.app.appW, on.app.mainW, 'the app is as wide as the main area');
+    assert.equal(on.chat.one, 'chats'); assert.equal(on.chat.side, 'open', 'on at 880 px: the list beside the chat');
+    assert.equal(on.modeKept, true, 'on: Side by side does not rewrite the saved arrangement'); assert.equal(off.modeKept, false, 'off: Side by side works as before');
+    const narrow = await run(640, true);
+    assert.equal(narrow.chat.side, 'none', 'on at 640 px: the open chat alone (Back to the list)');
+    assert.equal(narrow.app.side, 'none');
+    const wideOn = await run(1100, true);
+    assert.equal(wideOn.app.one, undefined, 'on but wide: unchanged'); assert.equal(wideOn.app.chat, 'on', 'wide: the chat docked beside the app as before');
+  } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
+});
