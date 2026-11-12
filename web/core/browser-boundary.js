@@ -30,10 +30,13 @@
  *    <agent> sheet, where the owner reads the text and sends or cancels); `voice.transcribe` (the box's transcriber,
  *    within a per-app budget); and `update.hold` / `update.release` (the app's unsaved work makes a shell update wait,
  *    for that window's current document only); and receiving shares (`share.receive`, `share.targets`, `share.pending`,
- *    `share.ack`), always for the window's own installed app id, where a pending item crosses as its share fields only.
+ *    `share.ack`), always for the window's own installed app id, where a pending item crosses as its share fields only;
+ *    `audio.duck` (lower Wizard Music for that window, restored on its next load); and the fingerprint vault
+ *    (`vault.has`, `vault.seal`, `vault.open`, `vault.forget`: the window's own app's secret, only while that window is
+ *    in front, back only to the document that asked).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
- *    status, a transcript), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
+ *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
  *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
  *    title-bar tools (onReset); the client sends its last badge and title bar again on each new channel.
  *  - notice(frame, kind, data): the shell's own notices to a ready app, on its current channel: `update` (a new
@@ -52,7 +55,7 @@
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
   const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release',
-    'share.receive', 'share.targets', 'share.pending', 'share.ack'];
+    'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   const TAPPED = ['share.text', 'share.file', 'share.wizard'], INFLIGHT = 4;
@@ -77,6 +80,9 @@
     if (v && typeof v === 'object') {
       if (v.unavailable === true) return { unavailable: true };
       if (typeof v.text === 'string' && v.text.length <= 200000) return { text: v.text };
+      // The fingerprint vault: the app's own secret (open), or whether one is saved (has, seal, forget).
+      if (typeof v.secret === 'string' && v.secret.length <= 4096) return { secret: v.secret };
+      if (typeof v.saved === 'boolean') return typeof v.available === 'boolean' ? { available: v.available, saved: v.saved } : { saved: v.saved };
     }
     return null;
   }
