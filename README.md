@@ -1,0 +1,1 @@
+Evidence for wizard-ux issue 1311 (PR 1322). Synthetic shell, 1440x900 AI apps desktop: Activity, +, type, send. before = 55f5609bf, after = main with PR 1322. Harness: qa-1311-send-stays-open.cjs (run from tests/).
