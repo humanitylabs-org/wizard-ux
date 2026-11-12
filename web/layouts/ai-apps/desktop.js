@@ -313,7 +313,8 @@ export default function desktop(api) {
   /* Back to the channel (wizard-ux issue 1302; James, 11 Nov 2026: "if I open a channel and then I click through to a
    * thread there's no way for me to go back to the channel"): a thread opened from a channel's feed in this column shows
    * "‹ # name" at the left of its header, and it does what Esc does (closeChat: the feed again, at its place). A thread
-   * opened from Activity or the sidebar has none. */
+   * opened from Activity or the sidebar shows "‹ Activity" / "‹ Chats" (and the feed "‹ Channels") only while the list
+   * is not beside it (James, 12 Nov 2026: "Make sure the user always has a back button in chats"; listBack below). */
   const cBack = el('button', 'aad-cback', { type: 'button' }); cBack.hidden = true;
   cTop.append(cBack, tt, cX);
   // narrow desktop (ONE), narrower than ONE.split: the chat (or a new one) alone, Back to the chats list
@@ -483,10 +484,13 @@ export default function desktop(api) {
   // A chat docked beside an app panel needs that room: there the sidebar keeps the old 900 px breakpoint, so the app
   // is never squeezed to nothing between the docked chat and the open-apps column (Codex review on PR 1313).
   const narrow = () => (globalThis.innerWidth || 1440) < (root.dataset.aadChat && root.dataset.aadSplit ? CROWDED_FROM : DOCKED_FROM);
-  const sideWant = () => one() ? (pane ? 'none' : oneSplit() ? 'open' : oneList ? 'full' : 'none') : narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
+  // (peek: the list shown over the page, by ◫ on a narrow window or by a chat's Back wherever the list is not beside it:
+  // narrow, folded to the rail, or full screen)
+  const peekable = () => narrow() || folded || panes.get().mode === 'full';
+  const sideWant = () => one() ? (pane ? 'none' : oneSplit() ? 'open' : oneList ? 'full' : 'none') : peek && peekable() ? 'over' : narrow() || folded ? 'rail' : 'open';
   /** the sidebar again after a resize or a chat docking beside an app (or leaving): only when its mode changes */
   function syncSide() {
-    if ((one() || !narrow()) && peek) { peek = false; offPeek?.(); offPeek = null; }
+    if ((one() || !peekable()) && peek) { peek = false; offPeek?.(); offPeek = null; }
     if (sideWant() !== root.dataset.aadSide) paintSide();
   }
   function paintSide(relayout = true) {
@@ -503,12 +507,13 @@ export default function desktop(api) {
     rTog.title = 'Open sidebar (⌥L)';
     if (open) paintList(); else paintRail();
     applySizes();
+    paintBack(); // (the list beside the chat or not: its Back follows)
     // the desks' windows are laid out in pixels: lay them out again for the new width
     if (relayout && was !== mode && (was === 'open') !== (mode === 'open')) retileSoon();
   }
   function toggleSide() {
     focusLeave();
-    if (narrow()) { peek = !peek; if (peek) offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); else { offPeek?.(); offPeek = null; } }
+    if (narrow() || peek) { peek = !peek; if (peek) offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); else { offPeek?.(); offPeek = null; } }
     else { folded = !folded; api.storage.set('folded', folded); }
     if (q) setSearch(false);
     paintSide();
@@ -1702,14 +1707,15 @@ export default function desktop(api) {
   function paintBack() {
     // another chat (or none) in the column: that post's Back is spent; the feed itself keeps it for a reopen
     if (fromFeed && chatThread !== fromFeed.sid && chatThread !== FEED) fromFeed = null;
-    const b = feedBack(); cBack.hidden = !b; if (!b) return;
-    const name = `# ${b.name || ''}`; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
+    const b = feedBack(), up = b ? '' : listBack(); cBack.hidden = !b && !up; if (!b && !up) return;
+    const name = b ? `# ${b.name || ''}` : up; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
   }
-  api.listen(cBack, 'click', () => closeChat());
+  api.listen(cBack, 'click', () => chatBack());
   // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
   function feedOpened(open) {
     // the feed closed by its own Back to channels: as Esc, the app it was brought in front of gets the front back
     if (!open) { feedGone(); paintTop(); return; }
+    unpeek(); // (a channel picked in the list shown over the page: its feed in front)
     const h = here(), r = api.route();
     // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
     if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
@@ -1756,6 +1762,26 @@ export default function desktop(api) {
     if (!feedBack()) feedFocus = null; // a plain chat closing: no feed to give the front back from
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
+  }
+  /* One level up from the column wherever the list is not beside it (James, 12 Nov 2026: "I am missing a back button
+   * here at smaller width ... It either takes them back to the channels or the chats list, wherever is one level above
+   * where they were last"): a narrow window (the rail), the sidebar folded, or full screen. The name of the list it goes
+   * to, or '' (the list beside it, a post's own "‹ # channel" Back, a new chat, or one app at a time's own Back). */
+  function listBack() {
+    if (!docked || !chatThread || chatThread === DRAFT || one() || feedBack()) return '';
+    if (root.dataset.aadSide === 'open' && panes.get().mode !== 'full') return '';
+    if (chatThread === FEED) return 'Channels';
+    const v = api.sessions.channelView?.() || '';
+    return v === 'channels' ? 'Channels' : v === 'activity' ? 'Activity' : 'Chats';
+  }
+  // Back (the header's ‹ and Esc): the column one level up (closeChat: a post to its feed, the feed or a chat closed);
+  // a chat that came from the list shows that list again, over the page, at its place (its own Back / a tap outside
+  // closes it). In page only: never a history step, so Back at the root never leaves Wizard.
+  function chatBack() {
+    const up = listBack();
+    if (!closeChat()) return false;
+    if (up && !peek && peekable()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); paintSide(); }
+    return true;
   }
   function setWide(on) {
     const w = !!on && !!pane; if (w === wide) { paintWide(); return; } wide = w;
@@ -1878,7 +1904,8 @@ export default function desktop(api) {
       // A channel post's thread full screen: Esc is its "‹ # channel" Back, the feed again and still full screen
       // (wizard-ux issue 1325: going back never changes the owner's view). Full screen shows only the focused slot, so
       // the panes' focus decides, never a stale focus left in the hidden app's frame (Codex, PR 1390).
-      if (panes.get().focus === 'chats' && feedBack()) { closeChat(); return true; }
+      // The same for a chat from the list, which full screen hides: Back shows the list over it, still full screen.
+      if (panes.get().focus === 'chats' && (feedBack() || listBack())) { chatBack(); return true; }
       // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
       const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
       // 'pending': a sandboxed app (browser boundary) answers later; at its root full screen ends then.
@@ -1893,7 +1920,7 @@ export default function desktop(api) {
     if (a?.tagName === 'IFRAME' && !pane?.el?.contains(a)) return false;
     const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
     if (appFocused) api.apps.back?.(pane.id);
-    else if (docked) closeChat();
+    else if (docked) chatBack();
     else if (api.sessions?.channelBack?.()) paintList(); // Channels: thread → channel → list (issue 1256)
     return true; // bare AI apps desktop: no DOM change, no legacy navigation
   });

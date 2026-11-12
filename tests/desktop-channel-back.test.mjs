@@ -18,6 +18,8 @@ function world() {
   const c = { FEED: '__feed__', feedBox: {}, cBack, open: { id: 'apps', name: 'WizardOS Apps' }, chatThread: '__feed__', docked: true, closed: 0,
     api: { listen: (t, type, fn, opts) => listeners.push({ t, type, fn, opts }) } };
   c.feedOn = () => c.open; c.closeChat = () => { c.closed++; return true; };
+  // the list beside the chat (wide, sidebar open): no list Back; tests below set c.up to the list it would go to
+  c.up = ''; c.listBack = () => c.up; c.chatBack = () => c.closeChat();
   vm.createContext(c);
   vm.runInContext(between(js, '  let fromFeed = null;', '  // A channel opened in the sidebar: its feed comes') + `
     this.t = { feedPost, feedBack, feedTitle, paintBack, get fromFeed() { return fromFeed; }, set chat(v) { chatThread = v; } };`, c);
@@ -91,7 +93,10 @@ test('wiring: the Back sits left of the title, every sidebar open clears it, the
   assert.match(js, /noteWant = id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(id\);/, 'the rail');
   assert.match(js, /noteWant = nx\.id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(nx\.id\);/, '⌥↓ / ⌥↑');
   // Back never exits (AGENTS.md): the button is the in-page Esc path only; closeChat swaps the column, no history step.
-  assert.match(js, /api\.listen\(cBack, 'click', \(\) => closeChat\(\)\);/);
+  assert.match(js, /api\.listen\(cBack, 'click', \(\) => chatBack\(\)\);/);
+  const up = between(js, '  function chatBack() {', '\n  }\n');
+  assert.match(up, /if \(!closeChat\(\)\) return false;/, 'Back is closeChat first (the post to its feed, the feed or a chat closed)');
+  assert.doesNotMatch(up, /history\.|location\.|\.back\(\)/, 'no history navigation in the list Back either');
   const close = js.slice(js.indexOf('  function closeChat() {'), js.indexOf('\n  }\n', js.indexOf('  function closeChat() {')));
   assert.doesNotMatch(close, /history\.|location\.|\.back\(/, 'no history navigation in the Back path');
   assert.match(close, /if \(chatThread === FEED\)[^\n]*channelBack\?\.\(\)/, 'Esc on the feed itself still closes the feed');
@@ -134,7 +139,7 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
   const desk = ({ mode = 'centre', focus = 'app', app = 'pages', fromFeed = false } = {}) => {
     const c = { FEED: '__feed__', docked: true, chatThread: null, noteWant: false, draftWant: false, calls: [], mode, focus, pane: app ? { id: app } : null,
       panes: { get: () => ({ mode: c.mode, focus: c.focus }), set: v => { if (v.mode) c.mode = v.mode; if (v.focus) { c.focus = v.focus; c.calls.push('focus:' + v.focus); } } },
-      here: () => ({ app }), mainChats: () => ({ desk: 1 }), feedBack: () => (fromFeed ? { id: 'launch' } : null),
+      here: () => ({ app }), mainChats: () => ({ desk: 1 }), feedBack: () => (fromFeed ? { id: 'launch' } : null), unpeek: () => c.calls.push('unpeek'),
       windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
       api: { route: () => ({ view: 'thread', thread: '__new__' }), sessions: { channelBack: () => true, newChat: () => c.calls.push('newChat') } } };
     vm.createContext(c);
@@ -174,22 +179,74 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
 // does; anything else in full screen (an app, a plain chat, the feed itself) still leaves full screen first.
 test('Esc in full screen: a post from the feed goes back to the feed and keeps full screen', () => {
   const src = between(js, '  api.back.surface?.(() => {', '    const a = doc.activeElement;');
-  const run = ({ focus = 'chats', back = true, inApp = false, fullFrom = 'tiled' }) => {
+  const run = ({ focus = 'chats', back = true, inApp = false, fullFrom = 'tiled', list = '' }) => {
     const act = {}, c = { calls: [], fullFrom, doc: { activeElement: act }, lastSurface: focus === 'chats' ? 'chat' : 'app', globalThis: {},
       pane: { el: { contains: n => inApp && n === act, querySelector: () => null } }, chatsEl: () => ({ contains: n => !inApp && n === act }),
       panes: { get: () => ({ mode: 'full', focus }) }, feedBack: () => (back ? { id: 'launch', name: 'Launch' } : null),
       closeChat: () => { c.calls.push('closeChat'); return true; }, windowMode: m => c.calls.push('mode:' + m),
+      listBack: () => list, chatBack: () => { c.calls.push('closeChat'); return true; },
       api: { back: { surface: fn => { c.fn = fn; } } } };
     vm.createContext(c); vm.runInContext(`${src}  });\nthis.ok = this.fn();`, c);
     return c;
   };
   const post = run({}); assert.equal(post.ok, true); assert.deepEqual(post.calls, ['closeChat'], 'the feed again, still full screen');
   assert.deepEqual(run({ inApp: true }).calls, ['closeChat'], 'a stale focus in the hidden app frame does not win');
-  assert.deepEqual(run({ back: false }).calls, ['mode:tiled'], 'a plain chat or the feed: Esc leaves full screen');
+  assert.deepEqual(run({ back: false }).calls, ['mode:tiled'], 'nothing open in the column (Home): Esc leaves full screen');
+  // full screen hides the list: a chat from it (or the feed) goes back to that list first, still full screen (James, 12 Nov 2026)
+  for (const list of ['Activity', 'Channels']) assert.deepEqual(run({ back: false, list }).calls, ['closeChat'], `${list}: Back to the list, full screen kept`);
   assert.deepEqual(run({ focus: 'app', inApp: true }).calls, ['mode:tiled'], 'the app full screen: unchanged');
   // full screen entered from 50/50 or centred: leaving it goes back to that view, not tiled
   for (const fullFrom of ['pair', 'centre']) {
     assert.deepEqual(run({ back: false, fullFrom }).calls, ['mode:' + fullFrom], `a plain chat: Esc back to ${fullFrom}`);
     assert.deepEqual(run({ focus: 'app', inApp: true, fullFrom }).calls, ['mode:' + fullFrom], `the app: Esc back to ${fullFrom}`);
   }
+});
+
+// James, 12 Nov 2026 (Mac app window ~600 px, a thread full screen, no way back): "Make sure the user always has a back
+// button in chats. It either takes them back to the channels or the chats list, wherever is one level above where they
+// were last." Wherever the sidebar's list is not beside the column (the rail of a narrow window, folded, full screen),
+// the column's header names the list one level up and Back / Esc shows it over the page; beside it, no Back.
+test('listBack: the list one level up whenever it is not beside the chat; chatBack shows it over the page', () => {
+  const src = between(js, '  function listBack() {', '  function setWide(on) {');
+  const run = ({ thread = 'qa-g1', side = 'rail', mode = 'tiled', view = 'activity', docked = true, fromFeed = false, one = false, narrow = true, folded = false } = {}) => {
+    const c = { FEED: '__feed__', DRAFT: '__draft__', chatThread: thread, docked, peek: false, offPeek: null, folded, calls: [],
+      root: { dataset: { aadSide: side } }, panes: { get: () => ({ mode }) }, one: () => one, narrow: () => narrow,
+      feedBack: () => (fromFeed ? { id: 'launch', name: 'Launch' } : null), paintSide: () => c.calls.push('side:' + (c.peek ? 'over' : side)),
+      closeChat: () => { c.calls.push('closeChat'); c.chatThread = null; return true; },
+      api: { sessions: { channelView: () => view }, back: { push: fn => { c.calls.push('back.push'); c.pop = fn; return () => c.calls.push('back.off'); } } } };
+    c.peekable = () => c.narrow() || c.folded || c.panes.get().mode === 'full';
+    vm.createContext(c); vm.runInContext(`${src}\nthis.up = listBack(); this.go = chatBack;`, c);
+    return c;
+  };
+  // where the list is not beside: the name of the list it returns to
+  assert.equal(run().up, 'Activity', 'narrow (the rail): a chat from Activity');
+  assert.equal(run({ view: '' }).up, 'Chats', 'Channels off: the chats list');
+  assert.equal(run({ view: 'channels' }).up, 'Channels');
+  assert.equal(run({ thread: '__feed__', view: 'channels' }).up, 'Channels', 'a channel\'s feed: the channel list');
+  assert.equal(run({ side: 'open', narrow: false, mode: 'full' }).up, 'Activity', 'full screen hides the sidebar');
+  assert.equal(run({ side: 'rail', narrow: false, folded: true }).up, 'Activity', 'the sidebar folded to the rail');
+  // where it is beside, or another Back owns it: none
+  assert.equal(run({ side: 'open', narrow: false }).up, '', 'the list beside the chat: no Back');
+  for (const mode of ['pair', 'centre']) assert.equal(run({ side: 'open', narrow: false, mode }).up, '', `${mode}: the sidebar still shows`);
+  assert.equal(run({ fromFeed: true }).up, '', 'a post from the feed keeps its own "‹ # channel"');
+  assert.equal(run({ thread: null }).up, '', 'Home / a new chat is the root');
+  assert.equal(run({ thread: '__draft__' }).up, '', 'an app\'s Reply draft');
+  assert.equal(run({ docked: false }).up, '', 'nothing docked');
+  assert.equal(run({ one: true }).up, '', 'one app at a time has its own Back');
+  // Back: the column closes one level, then the list over the page, its own Back (Esc) / a tap outside closes it
+  const c = run(); assert.equal(c.go(), true);
+  assert.deepEqual(c.calls, ['closeChat', 'back.push', 'side:over'], 'the chat closed, then the list over the page');
+  c.pop(); assert.equal(c.peek, false, 'Esc again: the list closes; the root stays in Wizard');
+  // beside it: Back is closeChat alone (no peek), as Esc was
+  const w = run({ side: 'open', narrow: false }); w.go(); assert.deepEqual(w.calls, ['closeChat']);
+  const p = run({ fromFeed: true }); p.go(); assert.deepEqual(p.calls, ['closeChat'], 'a post to its feed, no list');
+  // the sidebar's mode follows peek wherever the list is not beside; paintSide repaints the Back
+  assert.match(js, /peek && peekable\(\) \? 'over' : narrow\(\) \|\| folded \? 'rail' : 'open';/);
+  assert.match(js, /if \(\(one\(\) \|\| !peekable\(\)\) && peek\)/);
+  assert.match(js, /applySizes\(\);\n    paintBack\(\); \/\/ \(the list beside the chat or not/);
+  // Esc is the same Back in every mode
+  assert.match(js, /if \(panes\.get\(\)\.focus === 'chats' && \(feedBack\(\) \|\| listBack\(\)\)\) \{ chatBack\(\); return true; \}/);
+  assert.match(js, /else if \(docked\) chatBack\(\);/);
+  // full screen shows the list over it when Back asks for it
+  assert.match(css, /\[data-aad-mode="full"\]:not\(\[data-aad-side="over"\]\) \.aad-side/);
 });
