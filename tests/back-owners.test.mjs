@@ -55,6 +55,8 @@ function appFocusFixture({paneOn=false,appFocused=true,docked=false}={}) {
  f.c.pane=paneOn?{id:'browser',el:{contains:a=>a===frame}}:null;
  f.c.pTop={contains:()=>false};f.c.lastSurface=appFocused?'app':'chat';f.c.chatsEl=()=>({contains:a=>a===field});
  f.c.docked=docked;f.c.fullFrom='tiled';f.c.closeChat=()=>f.hits.push('close-chat');f.c.chatBack=()=>f.hits.push('close-chat');f.c.listBack=()=>'';
+ // (one app at a time, ONE: a wide window here)
+ f.c.one=()=>false;f.c.oneSplit=()=>true;f.c.oneList=true;f.c.paintTop=()=>{};
  f.c.api={back:{surface:fn=>{f.w.WosSkinHost={escapeSurface:fn};}},apps:{back:id=>f.hits.push('layout-app:'+id)}};
  f.c.escStep=()=>{f.hits.push('focused-app-fallback');return 'hosted';};
  f.c.panes={get:()=>({mode:'tiled',focus:appFocused?'app':'chats'}),set(){}};f.c.windowMode=()=>f.hits.push('window-mode');

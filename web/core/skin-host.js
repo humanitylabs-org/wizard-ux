@@ -752,7 +752,8 @@
     // (round 7) a desktop app panel beside the orb's column (AI apps: the app on the right, the orb in the chat): no orb
     // over it, so no room kept for one (no lift, no band)
     let fi = frameInset;
-    if (fi && isDoc && document.documentElement.dataset.shell === 'desktop') { try { const o = frameOrb?.(), r = f.getBoundingClientRect(); if (o && r.width && (o.x < r.left || o.x > r.right)) fi = 0; } catch (_) {} }
+    // (no room for an orb that is not over the frame: beside a document, or below it in a desktop app bar)
+    if (fi && document.documentElement.dataset.shell === 'desktop') { try { const o = frameOrb?.(), r = f.getBoundingClientRect(); if (o && r.width && (isDoc && (o.x < r.left || o.x > r.right) || o.y - o.d / 2 >= r.bottom - 1)) fi = 0; } catch (_) {} }
     let d = null; try { d = f.contentDocument; } catch (_) { return; }
     if (!d?.documentElement) return;
     d.documentElement.style.setProperty('--wos-inset-b', fi + 'px');

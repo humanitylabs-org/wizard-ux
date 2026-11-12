@@ -341,7 +341,9 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;/);
 });
 
-test('desktop: the sidebar stays open down to 680 px wide, the rail below (James, 12 Nov 2026: half / third of the screen)', async () => {
+// (from 12 Nov 2026 the window under 1100 px is one app at a time: the list stays beside the chat down to 680 px, then
+// the list alone fills the window, the chat after it with Back; the rail is the wide window's fold)
+test('desktop: the sidebar stays open down to 680 px wide, below it the list alone (James, 12 Nov 2026: half / third of the screen)', async () => {
   const had = globalThis.innerWidth;
   const at = async width => {
     globalThis.innerWidth = width;
@@ -357,7 +359,7 @@ test('desktop: the sidebar stays open down to 680 px wide, the rail below (James
   try {
     assert.equal(await at(700), 'open', 'open at 700 px');
     assert.equal(await at(680), 'open', 'open at exactly 680 px');
-    assert.equal(await at(660), 'rail', 'the rail below 680 px');
+    assert.equal(await at(660), 'full', 'below 680 px the list alone (one thing at a time)');
   } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
 
@@ -2342,7 +2344,7 @@ test('a reload with an app in front: the thread the Chats desk holds docks besid
 
 /* James, 12 Nov 2026: the sidebar stays open down to 680 px. A chat docked beside an app panel keeps the old 900 px
  * breakpoint, so the app is never squeezed to nothing between the chat and the open-apps column (Codex review on PR 1313). */
-test('desktop at 760 px: a docked chat alone keeps the sidebar open; a chat docked beside an app folds it to the rail', async () => {
+test('desktop at 760 px (one app at a time): a chat keeps its list open beside it; an app is alone, no chat docked beside it', async () => {
   const had = globalThis.innerWidth; globalThis.innerWidth = 760;
   try {
     const { w } = deskWorld();
@@ -2354,8 +2356,8 @@ test('desktop at 760 px: a docked chat alone keeps the sidebar open; a chat dock
     assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.html.dataset.aadSplit, undefined);
     assert.equal(w.html.dataset.aadSide, 'open', 'a chat alone: open at 760 px');
     w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
-    assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.html.dataset.aadSplit, 'on');
-    assert.equal(w.html.dataset.aadSide, 'rail', 'a chat beside an app: the rail below 900 px');
+    assert.equal(w.html.dataset.aadChat, undefined, 'no chat docked beside the app'); assert.equal(w.html.dataset.aadSplit, 'on');
+    assert.equal(w.html.dataset.aadSide, 'none', 'the app alone');
     assert.ok(parseFloat(w.html.style.getPropertyValue('--aad-pane-app-width')) > 100, 'the app keeps a usable column');
   } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
@@ -2441,7 +2443,7 @@ test('round 23 desktop: the folded rail is a tally of marks (spinners, dots, rin
 test('AI apps view: Now playing is only small bars on the playing app\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon', () => {
   const js = read('web/layouts/ai-apps/desktop.js');
   assert.doesNotMatch(js, /apps-top|aad-vtnow|vtNow/, 'the pill row at the top of the column is gone');
-  assert.match(js, /vt\.append\(vtHead, vtList, vtFoot\)/, 'the column is exactly as before Now playing');
+  assert.match(js, /vt\.append\(vtHead, vtList, vtFoot, vtOrb\)/, 'the column is exactly as before Now playing (and the app bar\'s orb spot)');
   assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
   assert.match(js, /np = el\('button', 'aad-np', \{ type: 'button', tabindex: '-1' \}\);/, 'the bars are a button on the icon');
   assert.match(js, /api\.listen\(np, 'click', e => \{ e\.stopPropagation\?\.\(\);[^\n]*api\.media\.pause\(x\.key\) : api\.media\.play\(x\.key\)/, 'a click pauses / plays that app and never reaches the row (which opens it)');
@@ -2870,45 +2872,75 @@ test('skin-host agents.focus / setFocus run in their own scope (no out-of-scope 
   assert.throws(() => broken.focus(), ReferenceError);
 });
 
-/* Narrow desktop, one app at a time (switch wizard/narrow-one-app, wizard-ux issue 1314): below 1024 px with the switch
- * on, an app fills the main area with no sidebar and no chat docked beside it, Chats is the Apps column's first row,
- * and Chats shows the list beside the chat from 720 px, narrower the chat alone with Back. Off: exactly as before. */
-test('desktop narrow one-app: switch on below 1024 px = one thing at a time; off = unchanged', async () => {
+/* A narrower window, one app at a time (James, 12 Nov 2026, the approved mockup: Wizard at half or a third of his screen
+ * beside Zoom): from 1100 px today's layout, unchanged; narrower, an app fills the main area with no sidebar and no chat
+ * docked beside it, the Apps column is the app bar along the bottom (Chats first, the orb at its centre, All apps last),
+ * one click switches Chats <-> an app, and Chats shows the list beside the chat from 680 px (DOCKED_FROM), narrower the
+ * list, then the chat alone with a visible Back at the top left (Esc the same; at the list Back stays put). */
+test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats first, one click each; Chats two panes at 720, one with Back at 600', async () => {
   const had = globalThis.innerWidth;
-  const run = async (width, on) => {
+  const run = async width => {
     globalThis.innerWidth = width;
     const { w } = deskWorld();
-    if (on) w.html.dataset.tweaks = 'wizard/narrow-one-app';
+    // (the shell's desk switch names the new desk in its route at once, as the real one does)
+    w.api.nav.goDesk = i => { w.st.gone.push(i); w.st.route = i === 1 ? { home: false, view: 'thread', thread: w.st.route.thread || 'r1', desk: 1 } : { home: false, view: 'desk', thread: null, desk: i }; w.emit('route', w.st.route); };
     const stage = new El('div'); stage.id = 'stage';
     const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
-    const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+    const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '5'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
     (await layout()).default(w.api);
-    const d = () => ({ side: w.html.dataset.aadSide, one: w.html.dataset.aadOne, chat: w.html.dataset.aadChat, split: w.html.dataset.aadSplit, wide: w.html.dataset.aadWide });
+    const H = w.html.dataset, px = k => parseFloat(w.html.style.getPropertyValue(k));
+    const d = () => ({ side: H.aadSide, one: H.aadOne, chat: H.aadChat, split: H.aadSplit, wide: H.aadWide, tabs: H.aadTabs, edge: H.aadDockEdge });
     w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.run();
-    const chat = d();
-    w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
-    const app = { ...d(), appW: parseFloat(w.html.style.getPropertyValue('--aad-pane-app-width')), mainW: parseFloat(w.html.style.getPropertyValue('--aad-pane-main-width')), sideW: parseFloat(w.html.style.getPropertyValue('--aad-pane-side-width')) };
-    // the arrangement keys / buttons do nothing while narrow: the saved wide-window arrangement is kept (Codex review)
-    const mode0 = JSON.stringify(globalThis.WizCore.panes.get());
-    for (const b of w.html.querySelectorAll?.('.aad-mode[data-mode="pair"]') || []) b.dispatchEvent(new FakePointerEvent('click'));
-    const modeKept = JSON.stringify(globalThis.WizCore.panes.get()) === mode0;
-    globalThis.WizCore.panes.set({ mode: 'tiled' });
-    return { chat, app, modeKept };
+    const ob = [w.q('.aad-cback'), w.q('.aad-oneback')].find(b => b && !b.hidden) || w.q('.aad-oneback'), chat = { ...d(), back: ob ? { hidden: ob.hidden, textContent: ob.textContent } : null, backAt: ob?.parentNode?.className || '' };
+    w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route); w.run();
+    const app = { ...d(), appW: px('--aad-pane-app-width'), mainW: px('--aad-pane-main-width'), sideW: px('--aad-pane-side-width'), dockH: px('--aad-pane-dock-height'), dockW: px('--aad-pane-dock-width') };
+    return { w, chat, app, d };
   };
   try {
-    const off = await run(880, false);
-    assert.equal(off.app.side, 'rail', 'off: a chat beside an app folds the sidebar to the rail, as before');
-    assert.equal(off.app.chat, 'on', 'off: the chat stays docked beside the app'); assert.equal(off.app.one, undefined);
-    const on = await run(880, true);
-    assert.equal(on.app.one, 'app'); assert.equal(on.app.side, 'none', 'on: no sidebar beside the app');
-    assert.equal(on.app.chat, undefined, 'on: no chat docked beside the app'); assert.equal(on.app.wide, '', 'on: the app fills the main area');
-    assert.equal(on.app.sideW, 0); assert.equal(on.app.appW, on.app.mainW, 'the app is as wide as the main area');
-    assert.equal(on.chat.one, 'chats'); assert.equal(on.chat.side, 'open', 'on at 880 px: the list beside the chat');
-    assert.equal(on.modeKept, true, 'on: Side by side does not rewrite the saved arrangement'); assert.equal(off.modeKept, false, 'off: Side by side works as before');
-    const narrow = await run(640, true);
-    assert.equal(narrow.chat.side, 'none', 'on at 640 px: the open chat alone (Back to the list)');
-    assert.equal(narrow.app.side, 'none');
-    const wideOn = await run(1100, true);
-    assert.equal(wideOn.app.one, undefined, 'on but wide: unchanged'); assert.equal(wideOn.app.chat, 'on', 'wide: the chat docked beside the app as before');
+    // 1440: today's layout (the Apps column at the right, the chat docked beside the app, no bar)
+    const wide = await run(1440);
+    assert.equal(wide.app.one, undefined); assert.equal(wide.app.chat, 'on', '1440: the chat docked beside the app, as before');
+    assert.notEqual(wide.app.tabs, 'bar'); assert.equal(wide.app.edge, 'end', '1440: the Apps column at the right');
+    assert.equal(wide.w.q('.aad-vone').hidden, true, '1440: no Chats item in the column');
+    // 900: one app, the bottom app bar with Chats first
+    const n = await run(900), { w } = n;
+    assert.equal(n.app.one, 'app'); assert.equal(n.app.side, 'none', 'no sidebar beside the app'); assert.equal(n.app.chat, undefined, 'no chat docked beside it');
+    assert.equal(n.app.wide, '', 'the app fills the main area'); assert.equal(n.app.appW, n.app.mainW); assert.equal(n.app.sideW, 0);
+    assert.equal(n.app.tabs, 'bar'); assert.equal(n.app.edge, 'bottom', 'the bar along the bottom (ONE.bar)');
+    assert.equal(n.app.dockW, 900, 'the bar spans the window'); assert.ok(n.app.dockH > 40 && n.app.dockH <= 80, 'a bar, not a column');
+    const vt = w.q('.aad-vt'), kids = vt.children.map(k => k.className);
+    assert.ok(kids.indexOf('aad-vone') < kids.indexOf('aad-vtl') && kids.indexOf('aad-vtl') < kids.indexOf('aad-vtf'), 'Chats, then the apps, then All apps');
+    assert.equal(w.q('.aad-vone').hidden, false); assert.equal(w.q('.aad-vchats').getAttribute('aria-pressed'), 'false');
+    const tabs = w.qa('.aad-vtl .aad-vtab'), notes = tabs.find(t => t.dataset.app === 'notes');
+    assert.ok(notes, 'the open apps are in the bar'); assert.ok(tabs.every(t => t.dataset.half === 'l' || t.dataset.half === 'r'), 'each app either side of the orb');
+    assert.equal(w.q('.aad-vtl').getAttribute('aria-orientation'), 'horizontal');
+    // one click: Chats; one click: Notes again
+    w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.html.dataset.aadOne, 'chats', 'one click shows Chats (the same frame)');
+    assert.equal(w.q('.aad-vchats').getAttribute('aria-pressed'), 'true');
+    w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.run();
+    const gone = w.st.gone.length;
+    w.qa('.aad-vtl .aad-vtab').find(t => t.dataset.app === 'notes').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.st.gone.at(-1), 5, 'one click on Notes goes to its desk'); assert.equal(w.st.gone.length, gone + 1);
+    w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route); w.run();
+    assert.equal(w.html.dataset.aadOne, 'app');
+    // the bar's CSS: placed by the pane geometry's dock box, the orb at its centre, the stage ending at the bar
+    const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"]';
+    assert.ok(css.includes(P + ' .aad-vchats { order: 1; }') && css.includes(P + ' .aad-vall { order: 5; }'), 'Chats first, All apps last');
+    assert.match(css, /\[data-aad-tabs="bar"\] \.aad-orb \{ left: calc\(var\(--aad-pane-dock-x\) \+ var\(--aad-pane-dock-width\) \/ 2 - 30px\)/);
+    // 720: Chats with its list beside the chat
+    const m = await run(720);
+    assert.equal(m.chat.one, 'chats'); assert.equal(m.chat.side, 'open', '720: the list beside the chat'); assert.ok(!m.chat.back || m.chat.back.hidden, 'no Back: the list is beside it');
+    assert.equal(m.app.one, 'app'); assert.equal(m.app.tabs, 'bar');
+    // 600: the chat alone with Back at the top left; Back / Esc the list; at the list Back stays put
+    const s = await run(600);
+    assert.equal(s.chat.side, 'none', '600: the chat alone'); assert.equal(s.chat.back.hidden, false, 'a visible Back');
+    assert.match(s.chat.back.textContent, /^‹ (Chats|Activity|Channels)$/); assert.match(s.chat.backAt, /aad-(ctop|top)/, 'at the top left of the chat');
+    s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click')); s.w.run();   // from the app: Chats as it was, the chat
+    assert.equal(s.w.html.dataset.aadOne, 'chats'); assert.equal(s.w.html.dataset.aadSide, 'none'); assert.ok([s.w.q('.aad-cback'), s.w.q('.aad-oneback')].filter(b => b && !b.hidden).length === 1, 'one visible Back');
+    assert.equal(s.w.escape(), true, 'Esc is Back'); assert.equal(s.w.html.dataset.aadSide, 'full', 'the list again');
+    assert.equal(s.w.escape(), true, 'at the list'); assert.equal(s.w.html.dataset.aadSide, 'full', 'Back never exits at the root');
+    s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(s.w.html.dataset.aadSide, 'full');
   } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });

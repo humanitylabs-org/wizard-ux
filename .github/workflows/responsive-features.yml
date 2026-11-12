@@ -102,6 +102,24 @@ jobs:
           path: |
             escape-back-evidence/
             archive-flash-evidence/
+  desktop-one-app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - run: npx playwright install --only-shell chromium
+      - run: node tests/qa-desktop-one-app.cjs
+      - run: QA_OUT=one-app-evidence/chats-back node tests/qa-desktop-chats-back-narrow.cjs
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-one-app-evidence
+          path: one-app-evidence/
   opaque-overlays:
     runs-on: ubuntu-latest
     timeout-minutes: 10
