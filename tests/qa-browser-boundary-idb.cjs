@@ -96,7 +96,7 @@ const server = http.createServer((req, res) => {
       await localStore('put', { id: 'c1', note: 'Morning walk', blob: new Blob(['x'.repeat(1200)], { type: 'audio/webm' }), client_ts: new Date(0).toISOString() });
       await localStore('put', { id: 'c2', note: 'Cafe', blob: new Blob(['y'.repeat(800)], { type: 'audio/webm' }) });
       return await show();
-    } catch (e) { return e.name + ': ' + e.message; }
+    } catch (e) { await show(); return e.name + ': ' + e.message; }
   });
   ok(saved === 2, 'the app saves two clips with their audio and lists them: ' + JSON.stringify(saved));
   if (SHOT) { await page.waitForTimeout(100); await page.screenshot({ path: SHOT }); }
