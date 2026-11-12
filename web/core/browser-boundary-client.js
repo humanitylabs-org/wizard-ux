@@ -41,6 +41,9 @@
  * messages and close come as `notice` `ws` (onNet with `ws: true`); every socket ends on a new channel. The app's own
  * IndexedDB is kept by the shell (`idb.load`, `idb.commit`, `idb.drop`, `idb.list`); `notice` `idb` (onIdb) says another
  * window of the app changed a database.
+ * Links (`link.open`): app-client.js hands a tapped link that leaves this window (a new tab, another site, a page
+ * outside `home`, the window's app path from the hello, or window.open) to the shell, which opens it as for a
+ * same-origin app; only right after a real tap here.
  */
 (() => {
   'use strict';
@@ -51,10 +54,11 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'], STICKY = ['badge.set', 'titlebar.set'];
+    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close', 'link.open'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, onIdb = null, serial = 0, claimed = new Set();
+  // home: this window's own app path from the shell's hello (e.g. /notes/), so app-client.js knows which links leave it.
+  let home = '', channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, onIdb = null, serial = 0, claimed = new Set();
   // App keys (data-wz-key): WizardApp's own live list and press (core/app-client.js keys), used only while the shell's
   // layout presses app keys (`app` in hello / keys).
   let appKeys = null, appPress = null, appOn = false, appSent = '', appQueued = false, appKeyNow = [];
@@ -185,6 +189,7 @@
       // A new channel in the same document (the shell saw a load or reattached): seals end, open requests are asked
       // again on the new channel. Only a new document (pagehide) drops them.
       for (const id of [...seals.keys()]) release(id);
+      home = typeof d.home === 'string' && d.home.length <= 512 && /^\/(?:(?!\.\.?\/)[^/?#%\\]+\/)+$/.test(d.home) ? d.home : '';
       channel = d.channel; appSent = ''; send({ op: 'ready' }); setKeys(d.keys, d.app); reportField(true);
       for (const [id, wait] of requests) {
         // An app's own backend call may already have reached its server on the old channel: never send it twice (a
@@ -372,12 +377,13 @@
       try { parent.postMessage({ type: TYPE, version: VERSION, op: 'boot' }, SHELL); } catch (_) {}
     },
     get ready() { return !!channel; },
+    get home() { return home; },
     request(method, args, timeout = 15000) {
       if (!METHODS.includes(method)) return Promise.reject(error('unavailable', 'Not available inside the browser boundary yet'));
       if (method === 'update.hold') return hold(args);
       if (method === 'update.release') return unhold(args);
       // The shell can't read this page's address; relative title-bar links resolve against it (and are still checked).
-      if (method === 'titlebar.set' || method === 'share.text') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
+      if (method === 'titlebar.set' || method === 'share.text' || method === 'link.open') args = { ...(args && typeof args === 'object' ? args : {}), base: String(location.href || '').slice(0, 2048) };
       if (STICKY.includes(method)) sticky.set(method, args);
       return send1(method, args, timeout);
     },

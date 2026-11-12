@@ -273,7 +273,7 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
   assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate('url, a.id')), 'desktop app frames');
   const services = read('web/core/app-services.js');
   assert.match(services, /if \(window\.WizBrowserBoundary\?\.owns\(frame\)\) return window\.WizBrowserBoundary\.back\(frame, onRoot\);/);
-  assert.match(services, /window\.WizBrowserBoundary\?\.enabled \? window\.WizBrowserBoundary\.attach\(frame\) : null/);
+  assert.match(services, /window\.WizBrowserBoundary\?\.enabled \? window\.WizBrowserBoundary\.attach\(frame, \{ home: appHome\(url\) \}\) : null/);
   const client = read('web/core/app-client.js');
   assert.match(client, /const opaque = framed && globalThis\.origin === 'null';/);
   assert.match(client, /\/wizard-os-home\/core\/browser-boundary-client\.js/);
@@ -1012,4 +1012,35 @@ test('app backend (net.fetch): its own budget beside the other services, only th
   assert.equal(calls.filter(m => m === 'net.fetch').length, before, 'no backend call was sent again');
   for (const r of later) r({ text: 'x' });
   await Promise.allSettled(slowSvc);
+});
+
+// Slice 43: the window's own app path reaches the page in each hello, so its links that leave it go to the shell.
+test('the hello names the window\'s app path (home); a bad one is never sent', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el, { home: '/notes/' }); await tick();
+  assert.equal(f.a.WizBoundaryClient.home, '/notes/');
+  f.load(); await tick();
+  assert.equal(f.a.WizBoundaryClient.home, '/notes/', 'every new channel names it again');
+  for (const home of ['/', 'notes/', '/notes', '/a/../b/', '/a%2f/', 'https://evil.example/x/', '/' + 'a'.repeat(600) + '/']) {
+    const sh2 = shell(), g = frame(sh2);
+    g.a.WizBoundaryClient.connect({ onBack: () => false });
+    sh2.B.attach(g.el, { home }); await tick();
+    assert.ok(g.a.WizBoundaryClient.ready);
+    assert.equal(g.a.WizBoundaryClient.home, '', home.slice(0, 20));
+  }
+});
+
+test('link.open is served only right after a real tap in this focused, visible window', async () => {
+  const sh = shell(), f = frame(sh), seen = [];
+  sh.B.serve((frameEl, method, args) => { seen.push([method, args.href]); return true; });
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el, { home: '/notes/' }); await tick();
+  const ask = () => f.a.WizBoundaryClient.request('link.open', { href: 'https://example.com/' }).then(v => v, e => e.code);
+  assert.equal(await ask(), 'refused', 'no tap: nothing opens');
+  sh.g.navigator = { userActivation: { isActive: true } };
+  assert.equal(await ask(), 'refused', 'a tap elsewhere in the shell (the frame has no focus) is not enough');
+  sh.g.document.activeElement = f.el;
+  assert.equal(await ask(), true);
+  assert.deepEqual(seen, [['link.open', 'https://example.com/']]);
 });

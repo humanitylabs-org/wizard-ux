@@ -46,6 +46,49 @@
   // Wizard ID: the phone's sheet may stay open 3 minutes. Under the boundary the shell first waits up to a minute for
   // the window to be in front (app-services.js boundaryIdentity), so the app waits for both.
   const ID_WAIT = opaque ? 255000 : 190000;
+  /* Links and pop-ups under the boundary: the sandbox has no allow-popups or allow-top-navigation, and the shell can't
+   * patch this page's links (core/links.js guardFrame), so a link that opens a new tab or the whole page (target
+   * _blank / _top / _parent), window.open, a link to another site or to a page outside this window's app path (the
+   * shell names it in its hello), and an image of this Wizard did nothing or loaded into this window. Such a tap goes to
+   * the shell (`link.open`), which opens it the way it does for a same-origin app: the link sheet, that app's window,
+   * the owner's browser, the image viewer or a download. The shell takes it only right after a real tap in this
+   * window, as a browser's pop-up rule. Registered before the saved-settings listener below, which leaves a link it took
+   * alone. Same-origin downloads stay the page's (the sandbox allows them). */
+  if (opaque) (() => {
+    const LEAVE = /^_(blank|top|parent)$/i, IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+    const url = href => { try { const u = new URL(String(href), document.baseURI || location.href); return /^https?:$/.test(u.protocol) ? u : null; } catch (_) { return null; } };
+    const leaves = (u, target) => {
+      if (u.origin !== location.origin || LEAVE.test(target || '') || IMAGE.test(u.pathname)) return true;
+      const home = window.WizBoundaryClient?.home || '';
+      return !!home && (!u.pathname.startsWith(home) || /%(?:2f|5c|2e|25)/i.test(u.pathname));
+    };
+    const hand = (u, browse) => { boundaryClient().then(c => c?.request('link.open', { href: u.href, browse }, 8000)).catch(() => {}); };
+    addEventListener('click', e => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target?.closest?.('a[href], area[href]'); if (!a) return;
+      const u = url(a.getAttribute('href')); if (!u) return;
+      if (a.hasAttribute('download') && u.origin === location.origin) return;
+      // An in-page anchor stays the page's.
+      if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search && u.hash && !LEAVE.test(a.getAttribute('target') || '')) return;
+      if (!leaves(u, a.getAttribute('target'))) return;
+      e.preventDefault(); e.stopPropagation();
+      hand(u, a.hasAttribute('data-wizard-browse'));
+    }, true);
+    // A form aimed at the whole page would be refused by the sandbox: it stays in this window, as guardFrame does.
+    addEventListener('submit', e => {
+      const f = e.target, b = e.submitter, own = !!b?.hasAttribute?.('formtarget');
+      const t = ((own ? b.getAttribute('formtarget') : f?.getAttribute?.('target')) || '').toLowerCase();
+      if (t === '_top' || t === '_parent') (own ? b : f).setAttribute(own ? 'formtarget' : 'target', '_self');
+    }, true);
+    try {
+      const open = window.open;
+      window.open = function (href, target, features) {
+        const u = href == null || href === '' ? null : url(href);
+        if (u && (target == null || target === '' || LEAVE.test(String(target)))) { hand(u, false); return null; }
+        return open.call(window, href, target, features);
+      };
+    } catch (_) {}
+  })();
   /* Saved settings under the boundary: the browser refuses localStorage and sessionStorage to an opaque origin (any use
    * throws), so the page gets stand-ins with the same methods. localStorage is the shell's copy for this window's
    * installed app (browser-boundary.js appStorage): a new window starts with it in its frame name, read here before the
@@ -128,7 +171,7 @@
       if (target && target !== '_self') return;
       try { const u = new URL(url, location.href); if (u.origin !== location.origin || !under(u.pathname, base)) window.name = ''; } catch (_) { window.name = ''; }
     };
-    addEventListener('click', e => { const a = e.target?.closest?.('a[href], area[href]'); if (a && !a.hasAttribute('download')) away(a.href, a.target); }, true);
+    addEventListener('click', e => { const a = e.target?.closest?.('a[href], area[href]'); if (a && !e.defaultPrevented && !a.hasAttribute('download')) away(a.href, a.target); }, true);
     addEventListener('submit', e => { const f = e.target; if (f?.tagName === 'FORM') away(e.submitter?.formAction || f.action, e.submitter?.formTarget || f.target); }, true);
     addEventListener('pagehide', flush);
     return {

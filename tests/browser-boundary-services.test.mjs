@@ -836,3 +836,34 @@ test('app socket: the page\'s close runs the handshake; a message too large or a
   f.detach();
   assert.ok(made.slice(first).length === 8 && made.slice(first).every(w => w.closed), 'the window\'s sockets close with it');
 });
+
+// Slice 43: a link the page's own tap opens outside its window goes to the shell's link rules (core/links.js follow).
+test('link.open hands the address to the shell\'s link rules for this window, resolved inside the app', () => {
+  const followed = [];
+  const WizLinks = { follow: (frame, href, o) => { followed.push({ frame, href, browse: o.browse }); return true; } };
+  const f = fixture({ win: { WizLinks } });
+  assert.equal(f.call('link.open', { href: 'https://example.com/a', browse: false }), true);
+  assert.equal(f.call('link.open', { href: 'page2', base: 'https://wizard.example/morning-report/sub/index.html' }), true);
+  assert.equal(f.call('link.open', { href: 'https://example.org/doc', browse: true }), true);
+  assert.deepEqual(followed.map(x => [x.frame === f.frame, x.href, x.browse]), [
+    [true, 'https://example.com/a', false],
+    [true, 'https://wizard.example/morning-report/sub/page2', false],
+    [true, 'https://example.org/doc', true]]);
+  // A base outside the app is ignored: the relative link resolves against the window's own app path.
+  f.call('link.open', { href: 'x', base: 'https://wizard.example/other-app/' });
+  assert.equal(followed.at(-1).href, 'https://wizard.example/morning-report/x');
+  // Only http(s) addresses, without credentials, and not too long.
+  for (const href of ['javascript:alert(1)', 'data:text/html,hi', 'file:///etc/passwd', 'https://u:p@example.com/', 'x'.repeat(9000), 42])
+    assert.equal(f.call('link.open', { href }), false, String(href).slice(0, 30));
+  assert.equal(followed.length, 4);
+});
+
+test('link.open: a window that is not verified, or a shell without its link sheet, opens nothing', () => {
+  const followed = [];
+  const WizLinks = { follow: (frame, href) => { followed.push(href); return true; } };
+  const f = fixture({ win: { WizLinks }, src: 'https://wizard.example/elsewhere/' });
+  assert.throws(() => f.call('link.open', { href: 'https://example.com/' }), /not verified/);
+  assert.equal(followed.length, 0);
+  const g = fixture();
+  assert.equal(g.call('link.open', { href: 'https://example.com/' }), false);
+});

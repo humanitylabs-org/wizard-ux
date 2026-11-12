@@ -77,6 +77,10 @@
  *    rule as net (the window's own app path, never an owner route). The server's messages come as `ws` notices (text or
  *    bytes, then its close); the page's messages go as `ws.send` and its close as `ws.close`. Every socket of a
  *    document ends with it.
+ *  - link.open: the sandbox has no `allow-popups` or `allow-top-navigation`, and the shell can no longer patch the
+ *    page's links (core/links.js guardFrame), so app-client.js hands a tapped link that leaves the window (a new tab,
+ *    another site, a page outside the window's `home` path, window.open) to the shell, which opens it as it does for
+ *    a same-origin app (WizLinks.follow). Only right after a real tap in that focused, visible window (TAPPED).
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -93,13 +97,14 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'];
+    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close', 'link.open'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
   // with the tap it is handed (a fresh tap, or a recording this window prepared on one; a start on touch-down is held
   // until a tap confirms it, capture.confirm).
-  const TAPPED = ['share.text', 'share.file', 'share.wizard', 'capture.prepare'], INFLIGHT = 4;
+  // Opening a link (link.open: a new tab, another site, another app) needs the same tap, as a browser's own pop-up rule.
+  const TAPPED = ['share.text', 'share.file', 'share.wizard', 'capture.prepare', 'link.open'], INFLIGHT = 4;
   // An app's own backend calls (net.fetch): a separate budget, so a slow call never blocks Back or the other services.
   const NET_INFLIGHT = 8, NET_MAX = 32 * 1024 * 1024;
   // Owner routes on this origin: the same list as core/shell-token.js OWNER (a test keeps them identical). An app's
@@ -223,6 +228,7 @@
   // window keeps its own ⌥ shortcuts.
   const appOn = st => { for (const p of appPressers) { try { if (p() === st.frame) return true; } catch (_) {} } return false; };
   const keysMsg = st => ({ keys: claimed, app: appOn(st) });
+  const helloMsg = st => ({ ...keysMsg(st), home: st.home || '' });
   function syncAppKeys() {
     for (const st of sessions.values()) {
       const on = appOn(st);
@@ -298,12 +304,16 @@
     check();
     return dispose;
   }
-  function attach(frame) {
+  // The window's own app path (`home`, e.g. /notes/), told to the page in each hello so its links that leave it go to
+  // the shell (link.open). The page knows its own address anyway; nothing else about the window crosses.
+  const HOME = /^\/(?:(?!\.\.?\/)[^/?#%\\]+\/)+$/;
+  function attach(frame, { home } = {}) {
     if (frame?.tagName === 'IFRAME' && !frame.hasAttribute('sandbox') && !frame.hasAttribute('srcdoc')) return guard(frame);
     if (!opaqueFrame(frame)) return () => {};
-    const had = sessions.get(frame); if (had) return had.detach;
-    const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0 };
-    const hello = () => { revoke(st); st.appSent = appOn(st); send(st, 'hello', keysMsg(st)); };
+    const had = sessions.get(frame); if (had) { if (typeof home === 'string' && HOME.test(home) && home.length <= 512) had.home = home; return had.detach; }
+    const st = { frame, channel: newChannel(), ready: false, appearance: null, backPending: false, field: false, gen: 0,
+      home: typeof home === 'string' && HOME.test(home) && home.length <= 512 ? home : '' };
+    const hello = () => { revoke(st); st.appSent = appOn(st); send(st, 'hello', helloMsg(st)); };
     st.detach = () => { if (sessions.get(frame) !== st) return; frame.removeEventListener('load', hello); revoke(st); sessions.delete(frame); };
     sessions.set(frame, st);
     frame.addEventListener('load', hello); hello();
@@ -350,7 +360,7 @@
     const st = [...sessions.values()].find(s => s.frame.contentWindow === e.source);
     if (!connected(st)) return;
     // A client that loaded after our hello asks for one; it gets a fresh hello on the current channel.
-    if (d.op === 'boot') { if (!st.ready) { st.appSent = appOn(st); send(st, 'hello', keysMsg(st)); } return; }
+    if (d.op === 'boot') { if (!st.ready) { st.appSent = appOn(st); send(st, 'hello', helloMsg(st)); } return; }
     if (d.channel !== st.channel) return;
     if (d.op === 'ready') {
       st.ready = true;
@@ -382,7 +392,7 @@
       if (!st.ready || !server || !SERVED.includes(d.method)) return answer(undefined, 'unavailable', 'Not available inside the browser boundary yet');
       // The tap must be in this window: a tap or key elsewhere in the shell also activates the shell, but then this
       // frame no longer has focus (a click or key in the frame gives it focus).
-      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', d.method.startsWith('capture.') ? 'Recording needs a tap in the app' : 'Share needs a tap in the app');
+      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', d.method.startsWith('capture.') ? 'Recording needs a tap in the app' : d.method === 'link.open' ? 'Opening a link needs a tap in the app' : 'Share needs a tap in the app');
       // Opening a socket waits for its server like a backend call does, on the same budget.
       const net = d.method === 'net.fetch' || d.method === 'ws.open', slot = net ? 'netInflight' : 'inflight';
       // Stopping a call, taking a streamed answer's pieces and a socket's own messages or close are answered at once
