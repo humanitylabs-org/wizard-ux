@@ -167,3 +167,23 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
   // no app open: nothing to give the front back to
   const bare = desk({ app: '' }); bare.pane = null; bare.open(); bare.close(); assert.equal(bare.focus, 'chats');
 });
+
+// Esc full screen (wizard-ux issue 1325; James, 12 Nov 2026: "going back shouldn't change the user's selected view"): a
+// channel post's thread in the chat column, full screen, goes back to its feed and stays full screen, as its Back button
+// does; anything else in full screen (an app, a plain chat, the feed itself) still leaves full screen first.
+test('Esc in full screen: a post from the feed goes back to the feed and keeps full screen', () => {
+  const src = between(js, '  api.back.surface?.(() => {', '    const a = doc.activeElement;');
+  const run = ({ focus = 'chats', back = true, inApp = false }) => {
+    const act = {}, c = { calls: [], doc: { activeElement: act }, lastSurface: focus === 'chats' ? 'chat' : 'app', globalThis: {},
+      pane: { el: { contains: n => inApp && n === act, querySelector: () => null } }, chatsEl: () => ({ contains: n => !inApp && n === act }),
+      panes: { get: () => ({ mode: 'full', focus }) }, feedBack: () => (back ? { id: 'launch', name: 'Launch' } : null),
+      closeChat: () => { c.calls.push('closeChat'); return true; }, windowMode: m => c.calls.push('mode:' + m),
+      api: { back: { surface: fn => { c.fn = fn; } } } };
+    vm.createContext(c); vm.runInContext(`${src}  });\nthis.ok = this.fn();`, c);
+    return c;
+  };
+  const post = run({}); assert.equal(post.ok, true); assert.deepEqual(post.calls, ['closeChat'], 'the feed again, still full screen');
+  assert.deepEqual(run({ inApp: true }).calls, ['closeChat'], 'a stale focus in the hidden app frame does not win');
+  assert.deepEqual(run({ back: false }).calls, ['mode:tiled'], 'a plain chat or the feed: Esc leaves full screen');
+  assert.deepEqual(run({ focus: 'app', inApp: true }).calls, ['mode:tiled'], 'the app full screen: unchanged');
+});
