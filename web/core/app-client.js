@@ -234,9 +234,10 @@
       streams.set(key, s);
       return s;
     }
-    // A new shell channel (the window reattached) ends every open stream: the shell stopped them.
+    // A new shell channel (the window reattached) ends every open stream: the shell stopped them. A call still waiting
+    // for its answer's head is not one yet: either it fails on its own or it goes again on the new channel (hello `took`).
     netNotice = d => {
-      if (d?.event === 'reset') { for (const s of [...streams.values()]) s.on({ event: 'error' }); for (const w of [...sockets.values()]) w({ event: 'reset' }); return; }
+      if (d?.event === 'reset') { for (const s of [...streams.values()]) if (s.headed) s.on({ event: 'error' }); for (const w of [...sockets.values()]) w({ event: 'reset' }); return; }
       if (d?.ws === true) { sockets.get(d.key)?.(d); return; }
       streams.get(d?.key)?.on(d);
     };
@@ -280,6 +281,7 @@
         }
         const r = v?.net; if (!r || typeof r !== 'object') { streams.delete(key); throw new TypeError('Failed to fetch'); }
         const streamed = r.stream === true && !!pipe;
+        if (pipe) pipe.headed = true;
         if (!streamed) streams.delete(key);
         const empty = NULL_BODY.includes(r.status) || req.method === 'HEAD';
         if (streamed && empty) pipe.fail(abortError());

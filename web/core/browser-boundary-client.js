@@ -192,10 +192,18 @@
       for (const id of [...seals.keys()]) release(id);
       home = typeof d.home === 'string' && d.home.length <= 512 && /^\/(?:(?!\.\.?\/)[^/?#\\]+\/)+$/.test(d.home) && !/%(?:2f|5c|2e|25)/i.test(d.home) ? d.home : '';
       channel = d.channel; appSent = ''; send({ op: 'ready' }); setKeys(d.keys, d.app); reportField(true);
+      // The backend calls the shell had taken on the old channel and not answered yet (`took`, ids only).
+      const took = Array.isArray(d.took) ? new Set(d.took.slice(0, 256).filter(x => typeof x === 'string')) : null;
       for (const [id, wait] of requests) {
         // An app's own backend call may already have reached its server on the old channel: never send it twice (a
         // POST would run twice). It fails like a dropped connection, and the app retries if it wants to.
         // A socket's open and its messages likewise: the shell closed its sockets with the old channel.
+        // A backend call the shell says it never took (it came after the shell had moved on, e.g. one the page made while
+        // it was still loading, before the shell's load hello) never reached the server, so it goes again on the new channel.
+        if (took && wait.method === 'net.fetch' && !took.has(id)) {
+          send({ op: 'service.request', id, method: wait.method, args: wait.args });
+          continue;
+        }
         if (wait.method === 'net.fetch' || wait.method.startsWith('ws.')) { clearTimeout(wait.timer); requests.delete(id); wait.reject(error('failed', 'Connection to the app server was interrupted')); continue; }
         send({ op: 'service.request', id, method: wait.method, args: wait.args });
       }

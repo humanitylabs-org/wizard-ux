@@ -244,7 +244,7 @@ On:
   hides where a redirect goes until it has followed it, so only GET and HEAD follow one (an answer from outside the
   path is refused); any other method's redirect is never followed, so a POST is never sent on to another app. An abort
   stops the call in the shell too (`net.abort`, the window's own open call only). At most 8 at once per window, apart from the other services, and 32 MB each
-  way. A call open when the window gets a new channel fails instead of running twice. An address outside the path
+  way. A call open when the window gets a new channel fails instead of running twice. A call the shell never took (it came on the channel the window's load had just ended, e.g. one a page makes while it is still loading) is sent again on the new channel: the shell's hello names the calls it took and has not answered (`took`), and only those fail. An address outside the path
   (another app, an owner route) gets the page's own fetch unchanged, so it still goes out with `Origin: null`, no cookie
   and no token. `XMLHttpRequest` goes the same way: app-client.js puts a stand-in in its place that makes an async
   request through that `fetch` (status, headers, `responseType` text/json/arraybuffer/blob/document, abort, timeout,
