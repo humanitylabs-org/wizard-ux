@@ -45,7 +45,7 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true, wi
     WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } }, ...extra };
   if (extra.WizCore) window.WizCore = { ...extra.WizCore, apps: () => ({ APPS: [app] }) };
   const globalOn = {};
-  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { globalOn[t] = (globalOn[t] || []).filter(x => x !== fn); }, setInterval() {}, setTimeout, clearTimeout,
+  vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, Headers, addEventListener: (t, fn) => { (globalOn[t] ||= []).push(fn); }, removeEventListener: (t, fn) => { globalOn[t] = (globalOn[t] || []).filter(x => x !== fn); }, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: front });
   return { B, frame, bar, notices, emit: (t, detail) => { for (const fn of globalOn[t] || []) fn({ detail }); }, fire: t => { for (const fn of on[t] || []) fn({}); }, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
@@ -583,4 +583,56 @@ test('saved settings: storage.load / storage.save always use the window\'s own a
   f.B.readyNow = false;
   assert.throws(() => f.call('storage.save', { ops: [{ k: 'x', v: 'y' }] }), /not verified/);
   assert.equal(calls.length, 2, 'a window that is not the verified app saves nothing');
+});
+
+// Slice 35: a sandboxed app's own backend calls (net.fetch). The shell makes them only inside the window's own app path.
+function netFixture(answer = () => new Response('{"ok":1}', { status: 200, headers: { 'content-type': 'application/json', 'x-v': '7' } })) {
+  const asked = [];
+  const fetch = async (url, init) => { asked.push({ url, init }); return answer(url, init); };
+  const f = fixture({ win: { fetch } });
+  f.B.ownerRoute = u => /^\/(?:wizard\/|api\/|v1\/)/.test(new URL(u).pathname);
+  f.B.netMax = 1024;
+  return { f, asked };
+}
+test('app backend: net.fetch is made inside the window\'s own app path, with the page\'s method, headers and body', async () => {
+  const { f, asked } = netFixture();
+  const body = new TextEncoder().encode('{"a":1}').buffer;
+  const v = await f.call('net.fetch', { url: 'https://wizard.example/morning-report/api/save', method: 'post', headers: [['content-type', 'application/json'], ['x-wizard-shell-token', 'forged'], ['X-App', 'yes']], body, credentials: 'include' });
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].url, 'https://wizard.example/morning-report/api/save');
+  assert.equal(asked[0].init.method, 'POST');
+  assert.equal(asked[0].init.credentials, 'same-origin');
+  assert.equal(asked[0].init.headers.get('x-app'), 'yes');
+  assert.equal(asked[0].init.headers.get('x-wizard-shell-token'), null, 'a page never names the shell token header');
+  assert.equal(new TextDecoder().decode(asked[0].init.body), '{"a":1}');
+  assert.equal(v.net.status, 200);
+  assert.equal(new TextDecoder().decode(v.net.body), '{"ok":1}');
+  assert.ok(v.net.headers.some(([k, x]) => k === 'x-v' && x === '7'));
+});
+test('app backend: another app, an owner route, another site or a bad method is never fetched', async () => {
+  const { f, asked } = netFixture();
+  for (const url of ['https://wizard.example/other-app/api/x', 'https://wizard.example/wizard/v1/chats', 'https://evil.example/morning-report/', 'https://wizard.example/morning-report/%2e%2e/wizard/v1/chats', 'https://u:p@wizard.example/morning-report/x', 'javascript:alert(1)']) {
+    await assert.rejects(f.call('net.fetch', { url }), err => err.code === 'outside', url);
+  }
+  await assert.rejects(f.call('net.fetch', { url: 'https://wizard.example/morning-report/x', method: 'CONNECT' }), /Method not allowed/);
+  await assert.rejects(f.call('net.fetch', { url: 'https://wizard.example/morning-report/x', method: 'POST', body: new ArrayBuffer(2048) }), /too large/);
+  assert.equal(asked.length, 0);
+  f.B.readyNow = false;
+  assert.throws(() => f.call('net.fetch', { url: 'https://wizard.example/morning-report/x' }), /not verified/);
+});
+test('app backend: a redirect out of the app and a too large answer give the page nothing', async () => {
+  const out = netFixture(() => { const r = new Response('secret'); Object.defineProperty(r, 'url', { value: 'https://wizard.example/other-app/api/secret' }); return r; });
+  await assert.rejects(out.f.call('net.fetch', { url: 'https://wizard.example/morning-report/api/go' }), /Redirected outside/);
+  const big = netFixture(() => new Response(new Uint8Array(4096)));
+  await assert.rejects(big.f.call('net.fetch', { url: 'https://wizard.example/morning-report/api/big' }), /too large/);
+  const moved = netFixture();
+  const p = moved.f.call('net.fetch', { url: 'https://wizard.example/morning-report/api/x' });
+  moved.f.B.genNow = 2; // the window loaded another page meanwhile
+  await assert.rejects(p, /document changed/);
+});
+test('app backend: the shell\'s owner route list is the same in shell-token.js and browser-boundary.js', () => {
+  const re = /const OWNER = (\/.*\/);/;
+  const a = readFileSync(new URL('../web/core/shell-token.js', import.meta.url), 'utf8').match(re)?.[1];
+  const b = readFileSync(new URL('../web/core/browser-boundary.js', import.meta.url), 'utf8').match(re)?.[1];
+  assert.ok(a && a === b, 'OWNER differs: ' + a + ' vs ' + b);
 });

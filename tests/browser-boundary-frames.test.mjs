@@ -956,3 +956,39 @@ test('saved settings: a new app window gets them in its frame name with its own 
   assert.doesNotMatch(B.frameAttributes('/notes/'), /name=/, 'no app id: no name');
   assert.equal(B.frameAttributes('/wizard-os-home/store/', 'notes'), '', 'the shell\'s own pages stay as they are');
 });
+
+test('app backend (net.fetch): its own budget beside the other services, only the answer\'s shape crosses, never sent twice', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el);
+  await tick();
+  const calls = [], later = [];
+  sh.B.serve((el, method, args) => {
+    calls.push(method);
+    if (method === 'net.fetch') {
+      if (args.url.endsWith('/out')) return Promise.reject(Object.assign(new Error('Outside this app'), { code: 'outside' }));
+      if (args.url.endsWith('/slow')) return new Promise(r => later.push(r));
+      return Promise.resolve({ net: { status: 201, statusText: 'Created', headers: [['x-v', '7'], ['bad', 1]], body: new ArrayBuffer(3), url: args.url, redirected: false, shell: 'leak' } });
+    }
+    if (method === 'voice.transcribe') return new Promise(r => later.push(r));
+    return true;
+  });
+  const got = await f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/api/x' }, 2000);
+  // (This harness copies messages as JSON, so the body bytes are checked in real Chromium: qa-browser-boundary-backend.cjs.)
+  assert.deepEqual(clone({ ...got.net, body: undefined }), { status: 201, statusText: 'Created', headers: [['x-v', '7']], url: 'https://box.example.ts.net/notes/api/x', redirected: false });
+  await assert.rejects(f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/other/out' }, 2000), e => e.code === 'outside');
+  // Four slow services fill their budget; backend calls still go (their own 8), and Back-related services are not blocked by them.
+  const slowSvc = [1, 2, 3, 4].map(() => f.a.WizBoundaryClient.request('voice.transcribe', {}, 2000));
+  const slowNet = [1, 2, 3, 4, 5, 6, 7, 8].map(() => f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/slow', method: 'POST' }, 2000));
+  await tick(); await tick();
+  await assert.rejects(f.a.WizBoundaryClient.request('net.fetch', { url: 'https://box.example.ts.net/notes/slow' }, 2000), e => e.code === 'busy');
+  assert.equal(later.length, 12);
+  // A new channel in the same document: the open backend calls fail instead of running again on the server.
+  const before = calls.filter(m => m === 'net.fetch').length;
+  const settled = Promise.allSettled(slowNet);
+  f.load(); await tick(); await tick();
+  assert.ok((await settled).every(r => r.status === 'rejected' && r.reason.code === 'failed'));
+  assert.equal(calls.filter(m => m === 'net.fetch').length, before, 'no backend call was sent again');
+  for (const r of later) r({ text: 'x' });
+  await Promise.allSettled(slowSvc);
+});

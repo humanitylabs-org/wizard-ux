@@ -34,6 +34,8 @@
  * hello so WizardApp can read the recorder's state again and reattach its sessions on the new channel.
  * Saved settings (`storage.load`, `storage.save`): the page's localStorage stand-in (core/app-client.js) keeps the
  * shell's copy for this window's app up to date.
+ * The app's own backend (`net.fetch`): app-client.js sends the page's fetch to this host through the shell, which makes
+ * it only inside this window's app path. One open on a channel that is replaced fails instead of being sent again.
  */
 (() => {
   'use strict';
@@ -44,7 +46,7 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save'], STICKY = ['badge.set', 'titlebar.set'];
+    'storage.load', 'storage.save', 'net.fetch'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, serial = 0, claimed = new Set();
@@ -179,7 +181,12 @@
       // again on the new channel. Only a new document (pagehide) drops them.
       for (const id of [...seals.keys()]) release(id);
       channel = d.channel; appSent = ''; send({ op: 'ready' }); setKeys(d.keys, d.app); reportField(true);
-      for (const [id, wait] of requests) send({ op: 'service.request', id, method: wait.method, args: wait.args });
+      for (const [id, wait] of requests) {
+        // An app's own backend call may already have reached its server on the old channel: never send it twice (a
+        // POST would run twice). It fails like a dropped connection, and the app retries if it wants to.
+        if (wait.method === 'net.fetch') { clearTimeout(wait.timer); requests.delete(id); wait.reject(error('failed', 'Connection to the app server was interrupted')); continue; }
+        send({ op: 'service.request', id, method: wait.method, args: wait.args });
+      }
       for (const go of [...waiters]) go();
       // Holds: the shell dropped them with the old channel. One still being placed is re-sent above with the requests.
       for (const h of holds.values()) { h.shell = null; if (!h.placing) place(h); }
