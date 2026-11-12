@@ -46,8 +46,15 @@
     fieldSent = on; send({ op: 'field.focus', editable: on });
   };
   if (typeof document.addEventListener === 'function') {
-    document.addEventListener('focusin', () => { const el = document.activeElement; lastField = editable(el) ? el : null; reportField(false); }, true);
+    document.addEventListener('focusin', () => { const el = document.activeElement; lastField = editable(el) ? el : null; reportField(true); }, true);
     document.addEventListener('focusout', () => setTimeout(() => { if (!away()) lastField = editable(document.activeElement) ? document.activeElement : null; reportField(false); }, 0), true);
+  }
+  // A field that turns read-only, disabled, inert or no-dictation, or leaves the page, without a focus event: say so,
+  // so the shell never offers a take that would be refused at the end.
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    let queued = false;
+    new MutationObserver(() => { if (queued || !fieldSent) return; queued = true; setTimeout(() => { queued = false; reportField(false); }, 0); })
+      .observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['readonly', 'disabled', 'inert', 'data-no-dictation', 'type'] });
   }
   addEventListener('message', e => {
     const d = e.data;

@@ -81,8 +81,9 @@
       return;
     }
     if (d.op === 'field.focus') {
-      const on = d.editable === true;
-      if (st.field !== on) { st.field = on; fieldChanged(); }
+      // Every report repaints: focus coming back into the frame from the shell changes nothing here but the shell's
+      // own focus, which the shell cannot observe inside the frame.
+      st.field = d.editable === true; fieldChanged();
       return;
     }
     if (d.op === 'theme.applied') {

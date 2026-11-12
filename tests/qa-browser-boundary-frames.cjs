@@ -72,9 +72,13 @@ const server = http.createServer((req, res) => {
   await page.waitForTimeout(100); await page.focus('#orb');
   const fromOrb = await page.evaluate(() => window.dictate('Say'));
   const fieldValue = await app().evaluate(() => document.getElementById('f').value);
+  // The focused field turns read-only without a focus event: the shell stops offering dictation.
+  await app().click('#f'); await page.waitForFunction(() => window.fieldPaints.at(-1) === true, null, { timeout: 4000 });
+  await app().evaluate(() => { document.getElementById('f').readOnly = true; });
+  const readOnlyDropped = await page.waitForFunction(() => window.fieldPaints.at(-1) === false, null, { timeout: 4000 }).then(() => true, () => false);
   const rootSteps = await page.evaluate(() => window.rootSteps);
   const ownerCall = seen.find(s => s.path === '/wizard/v1/threads');
-  const result = { probe, back: [r1, r2], steps, rootSteps, ownerCall, dictation: { before, dictated, fromOrb, fieldValue }, errors };
+  const result = { probe, back: [r1, r2], steps, rootSteps, ownerCall, dictation: { before, dictated, fromOrb, fieldValue, readOnlyDropped }, errors };
   console.log(JSON.stringify(result, null, 1));
   const fails = [];
   if (probe.origin !== 'null') fails.push('app origin is not opaque');
@@ -87,6 +91,7 @@ const server = http.createServer((req, res) => {
   if (rootSteps.join() !== 'shell-step') fails.push('shell step at root did not run once');
   if (before !== 'no-field') fails.push('dictation offered with no field focused');
   if (dictated !== 'inserted' || fromOrb !== 'inserted' || fieldValue !== 'Say hello world') fails.push('dictation into the sandboxed field');
+  if (!readOnlyDropped) fails.push('a read-only field still offered dictation');
   if (errors.length) fails.push('page errors');
   await browser.close(); server.close();
   if (fails.length) { console.error('FAIL', fails); process.exit(1); }
