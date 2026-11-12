@@ -28,7 +28,6 @@
     "wizard/update-bug-reports",
     "wizard/connector-models",
     "wizard/link-token-repair",
-    "wizard/cli-install-links",
     "wizard/chat-channels"
   ],
   "defaults": [
