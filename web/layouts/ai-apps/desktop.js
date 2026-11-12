@@ -1579,6 +1579,22 @@ export default function desktop(api) {
   const noteOn = () => !!notificationSurface();
   const noteTitle = () => notificationSurface()?.notificationTitle || 'Notification';
   let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
+  /* The app beside a chat survives a reload (wizard-ux issue 1368): a chat opened from the sidebar puts the Chats desk
+   * in front (the route), and the panel was kept only in memory. Saved as { id, desk } whenever it changes; on boot,
+   * with the Chats desk in front, the same app's desk becomes the panel again (the shell draws it on a later paint). */
+  let besideWant = api.storage.get('beside'), besideSaved = JSON.stringify(besideWant ?? null), besideTries = 0;
+  function restoreBeside(h) {
+    const b = besideWant, d = b && typeof b.id === 'string' && (desks().find(x => x.id === b.id && x.desk === b.desk) || desks().find(x => x.id === b.id));
+    if (!d || d.id === CHATS || h.app || h.r.home || !onMainChats(h.r)) { besideWant = null; return; }
+    const el0 = placementOf(d.desk);
+    if (el0) { pane = { id: d.id, el: el0, desk: d.desk }; besideWant = null; }
+    else if (++besideTries > 20) besideWant = null;
+    else api.after(150, () => paintTop());
+  }
+  function keepBeside() {
+    const v = pane ? { id: pane.id, desk: Number(pane.desk) } : null, s = JSON.stringify(v);
+    if (s !== besideSaved) { besideSaved = s; api.storage.set('beside', v); }
+  }
   function paintSplit(chatOn) {
     const h = here();
     if (dropped && (want === h.app || h.app !== dropped.id || Number(h.r.desk) !== dropped.desk)) dropped = null;
@@ -1590,7 +1606,9 @@ export default function desktop(api) {
       want = null;
     }
     if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; const generation = focusGeneration; api.after(60, () => focusFrame(0, generation)); }
+    if (besideWant && !pane) restoreBeside(h);
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
+    if (!besideWant) keepBeside();
     if (!pane && wide) setWide(false);
     // narrow desktop (ONE): the app in front fills the main area (as ⤢ Wider); the chat stays open behind it, not beside
     if (pane) oneLast = { id: pane.id, desk: Number(pane.desk) };
