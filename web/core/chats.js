@@ -612,6 +612,74 @@ window.WizCore.chats = function createChats(H) {
   // own tally (WizChatsListModel.unreadThreads), so the two numbers can never disagree.
   const chanUnread = s => !isWorking(s) && !s.archived && !!LIVE.isNew?.(s) && !(snoozeLast() && deferredOf(s));
   const chanUnreadN = rows => window.WizChatsListModel?.unreadThreads ? window.WizChatsListModel.unreadThreads(rows, chanUnread) : rows.filter(chanUnread).length;
+  /* A channel's read watermark (wizard-ux issue 1316, which supersedes the opening place and New line of 1263 and 1269;
+   * James, 12 Nov 2026: "Just track their scroll position in the channel as what they have read. If they've scrolled
+   * to the bottom of the channel, mark the whole thing as read"). Slack's model: each channel keeps the newest activity
+   * time (chanAt: a post's start or its latest reply) the owner has scrolled past in its feed; the end of the feed is
+   * all of it. A post is new for the channel only when it changed after the mark. That alone places the opening and
+   * the New line and makes the channel's line bold. A reply never opened keeps its own "● New reply" words
+   * (chanUnread), passive only: it never moves the opening, the line or the channel's state.
+   * The mark lives on this device (localStorage): the channel store and ui-preferences take only their own fields and
+   * the Agent Service is not changed for it. A channel never read here counts as read up to when this device first
+   * kept marks (since), so nothing old comes back as new. A move forward is written at most once per CHAN_READ_MS. */
+  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, chanActs = {};
+  let chanReadDoc = null, chanReadT = 0, chanReadPaintT = 0;
+  function chanReadParse() {
+    let v = null; try { v = JSON.parse(localStorage.getItem(CHAN_READ_KEY) || 'null'); } catch (_) {}
+    if (!v || typeof v !== 'object' || !Number.isFinite(v.since) || !v.at || typeof v.at !== 'object') return null;
+    return { since: v.since, at: Object.fromEntries(Object.entries(v.at).filter(([, t]) => Number.isFinite(t))) };
+  }
+  function chanReads() {
+    if (chanReadDoc) return chanReadDoc;
+    const v = chanReadParse(); chanReadDoc = v || { since: Date.now(), at: {} };
+    if (!v) chanReadSave(true); // since is kept at once: it must not move on the next load
+    return chanReadDoc;
+  }
+  // Written with the newer of each mark (another tab of this device may have moved one meanwhile), newest kept.
+  function chanReadSave(now = false) {
+    const put = () => {
+      clearTimeout(chanReadT); chanReadT = 0; const d = chanReadDoc; if (!d) return;
+      const was = chanReadParse(); if (was) { d.since = Math.min(d.since, was.since); for (const [k, t] of Object.entries(was.at)) if (!(d.at[k] >= t)) d.at[k] = t; }
+      const at = Object.entries(d.at).sort((a, b) => b[1] - a[1]).slice(0, CHAN_READ_MAX); d.at = Object.fromEntries(at);
+      try { localStorage.setItem(CHAN_READ_KEY, JSON.stringify({ since: d.since, at: d.at })); } catch (_) {}
+    };
+    if (now) put(); else if (!chanReadT) chanReadT = setTimeout(put, CHAN_READ_MS);
+  }
+  try {
+    window.addEventListener('pagehide', () => { if (chanReadT) chanReadSave(true); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && chanReadT) chanReadSave(true); });
+    window.addEventListener('storage', e => { if (e.key === CHAN_READ_KEY && !chanReadT) { chanReadDoc = null; chanReadPaint(); } });
+  } catch (_) {}
+  // General is one channel whichever agent's list it is opened from (the desktop sidebar and its feed column agree).
+  const chanReadKey = c => !c ? '' : c.general || c.id === CHAN_GENERAL ? 'general' : storeAgent(c.agent) + '|' + c.id;
+  const chanReadAt = key => { const d = chanReads(); return d.at[key] ?? d.since; };
+  // Changed after the mark. A working post waits for its reply; a Done or snoozed-last one is not new (Activity's rule).
+  const chanChanged = (s, mark) => !isWorking(s) && !s.archived && !(snoozeLast() && deferredOf(s)) && chanAt(s) > mark;
+  const chanNewCount = (c, rows) => { const mark = chanReadAt(chanReadKey(c)); return rows.filter(s => chanChanged(s, mark)).length; };
+  // Only ever forward. The channel lists on screen (the phone's list, the desktop's sidebar pane) show it at once.
+  function chanReadTo(key, t) {
+    if (!key || !Number.isFinite(t)) return false;
+    const d = chanReads(); if (t <= (d.at[key] ?? d.since)) return false;
+    d.at[key] = t; chanReadSave();
+    clearTimeout(chanReadPaintT); chanReadPaintT = setTimeout(chanReadPaint, 120);
+    return true;
+  }
+  function chanReadPaint() { if (!channelsOn()) return; for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); } }
+  /* How far the owner has read a feed: every post whose top is above the bottom of his view, but never past a post that
+   * changed and is still below it (the mark is a time and the feed is in posting order: a new reply on an old post must
+   * not read a newer post he has not reached). At the end of the feed that is the newest post it shows. */
+  function chanReadFeed(wid, sc, feed) {
+    const w = W[wid], open = w && chanOpen(w), m = chanActs[wid];
+    if (!open || !m || m.key !== chanReadKey(open) || !sc?.clientHeight || !feed) return false;
+    const mark = chanReadAt(m.key), edge = sc.getBoundingClientRect().top + sc.clientHeight;
+    let seen = -Infinity, cap = Infinity;
+    for (const n of feed.querySelectorAll('[data-morph-key]')) {
+      const p = m.at.get(n.dataset.chrow) || m.at.get(n.dataset.morphKey); if (!p) continue;
+      if (n.getBoundingClientRect().top < edge) seen = Math.max(seen, p.at);
+      else if (p.changed && p.at > mark) cap = Math.min(cap, p.at - 1);
+    }
+    return chanReadTo(m.key, Math.min(seen, cap));
+  }
   // Opening a post marks it read (LIVE.markSeen). The desktop keeps the feed on screen beside the thread, and its
   // list pane skips Live repaints while focus is inside it (the tapped post), so the feed is painted here at once:
   // the line and the channel are already read when Back lands on them, never a frame late.
@@ -630,8 +698,7 @@ window.WizCore.chats = function createChats(H) {
    * and a chevron post line keep every marker in one slot at the right, just before the chevron, always in this order:
    * spinner (working), amber (needs you), green (new replies). Nothing sits beside the name, and there is no number
    * pill (issue 1269): the green dot carries the unread count in its label. */
-  function chanMark(rows, post = false) {
-    const un = chanUnreadN(rows);
+  function chanMark(rows, post = false, un = chanUnreadN(rows)) {
     const marks = (rows.some(isWorking) ? '<i class="ch-spin" role="img" aria-label="Working"></i>' : '')
       + (rows.some(chanNeeds) ? '<i class="ch-chan-dot" role="img" aria-label="Needs you"></i>' : '')
       + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
@@ -640,8 +707,9 @@ window.WizCore.chats = function createChats(H) {
   function channelLine(ch0, rows, now, cur = '') {
     const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
-    const un = chanUnreadN(mine);
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
+    // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
+    const un = chanNewCount(ch0, mine);
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
@@ -797,16 +865,18 @@ window.WizCore.chats = function createChats(H) {
     if (held && n < 20) { clearTimeout(firstT); firstT = setTimeout(() => chanRepaint(n + 1), 400); }
   }
   /* Where a feed opens and stays (wizard-ux issue 1263; James, 10 Nov 2026: "it shouldn't auto scroll to the top ever").
-   * Unread posts: it opens at the first one, under a "New" line; all read: at the very bottom. Chosen once per open
+   * Posts changed since the channel's watermark (issue 1316, chanChanged): it opens at the first of them in posting
+   * order, under a "New" line, just below what was read; nothing changed: at the very bottom. A post whose reply was
+   * never opened does not count (its "● New reply" words are passive). Chosen once per open
    * (o.chan.newKey/at), so the line never jumps away while James reads; the next open clears it. The place is held,
    * not set once: every paint and every growth of the feed (first messages, thumbnails, "more") puts it back, because
    * posts fill in late. Once James scrolls, the post at the top of his view is the place (the bottom when he is at the
    * end), so a repaint, a refresh or Back from a thread lands where he was. */
   const CHAN_NEW_Y = 8, CHAN_USER_MS = 1200, chanUserAt = {}, chanSetTop = {}, chanRO = {};
   const chanKey = s => rowAgent(s) + '|' + s.id;
-  function chanStart(w, shown) {
+  function chanStart(w, shown, open) {
     const c = (W[owner(w.id)] || w)?.chan; if (!c) return null;
-    if (c.at === undefined && shown.length) { const u = shown.find(chanUnread); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y, bar: true } : { end: true }; }
+    if (c.at === undefined && shown.length) { const mark = chanReadAt(chanReadKey(open)), u = shown.find(s => chanChanged(s, mark)); c.newKey = u ? chanKey(u) : ''; c.at = u ? { key: 'chan-new', y: CHAN_NEW_Y, bar: true } : { end: true }; }
     return c;
   }
   const chanScroller = wid => elOf(wid)?.querySelector?.('.ch-list > .ch-scroll') || null;
@@ -826,11 +896,14 @@ window.WizCore.chats = function createChats(H) {
     const to = at.end || !node ? max : Math.max(0, Math.min(max, sc.scrollTop + node.getBoundingClientRect().top - sc.getBoundingClientRect().top - (at.y || 0) - stuck));
     if (Math.abs(sc.scrollTop - to) >= 1) sc.scrollTop = to;
     chanSetTop[wid] = sc.scrollTop; // the scroll event this fires is the hold's own, never James's
+    // The whole feed in view at its end (a short channel, or the end is the place): read to its newest post (issue 1316).
+    if (sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4) chanReadFeed(wid, sc, feed);
   }
   /* Seeing a post is not reading it (wizard-ux issue 1269, which overrides issue 1266; James, 11 Nov 2026: "the green
    * dot gets dismissed when I go into that topic and I see that reply"). The feed, its scrolling and its end never
    * write seen: a post's green dot and its share of the channel's unread clear only when its chat opens, through the
-   * per-chat seen record Activity uses (openChat → LIVE.markSeen). The New line still moves per open (chanStart). */
+   * per-chat seen record Activity uses (openChat → LIVE.markSeen). Scrolling moves only the channel's watermark
+   * (chanReadFeed, issue 1316), never a post's seen record. */
   // The feed grows after a paint (first messages, pictures, "more"); each growth puts the place back.
   function chanWatch(wid, sc, feed) {
     const cur = chanRO[wid]; if (cur && cur.feed === feed && cur.sc === sc) return;
@@ -846,6 +919,7 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid], c = w && (W[owner(wid)] || w)?.chan; if (!c || !channelsOn() || !(Date.now() - (chanUserAt[wid] || 0) < CHAN_USER_MS)) return;
     const feed = sc.querySelector('.ch-chan-feed'); if (!feed || !sc.clientHeight || Math.abs(sc.scrollTop - (chanSetTop[wid] ?? -9)) < 1) return;
     chanUserAt[wid] = Date.now();
+    chanReadFeed(wid, sc, feed); // his scroll moves the channel's watermark forward (issue 1316)
     if (sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4) { c.at = { end: true }; return; }
     // The top of his view is below the sticky filter bar.
     const edge = sc.getBoundingClientRect().top + chanStuck(feed), all = [...feed.querySelectorAll('[data-morph-key]')], i = all.findIndex(x => x.getBoundingClientRect().bottom > edge + 1);
@@ -857,7 +931,10 @@ window.WizCore.chats = function createChats(H) {
   function channelFeed(w, open, rows) {
     const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
     const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort(chanPostOrder);
-    const cs = chanStart(w, shown);
+    const cs = chanStart(w, shown, open);
+    // Each post's activity time for the watermark (chanReadFeed), by its row and by its key.
+    const acts = new Map(); for (const s of mine) { const p = { at: chanAt(s), changed: chanChanged(s, -Infinity) }; acts.set(chanKey(s), p); const k = 'post:' + s.id, o = acts.get(k); if (!o || o.at < p.at) acts.set(k, p); }
+    chanActs[w.id] = { key: chanReadKey(open), at: acts };
     // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
     const hat = `<span class="ch-post-av" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent || focusedAgent(focusOf(w)) || '')) || ''}</span>`;
     const me = String(window.WizConfig?.owner?.() || '').trim(), meAv = `<span class="ch-post-me" aria-hidden="true">${esc((me || 'You').slice(0, 1).toUpperCase())}</span>`;
