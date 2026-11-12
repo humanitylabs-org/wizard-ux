@@ -541,8 +541,9 @@ window.WizCore.chats = function createChats(H) {
     if (!needsThreadOn() || !sid || sid === '__new__') return;
     const s = r && typeof r === 'object' ? r : LIVE.session(sid);
     if (!s || !LIVE.isNew?.(s)) return;
+    // No read record yet (a thread made after the synced seen state began): every reply is unread (Codex P2).
     const rec = LIVE.seenRecord?.(s), a = Date.parse(rec?.assistantActivityAt ?? '');
-    c.jumpSince = isFinite(a) ? a : isFinite(rec?.seenAt) ? +rec.seenAt : NaN;
+    c.jumpSince = !rec ? -Infinity : isFinite(a) ? a : isFinite(rec.seenAt) ? +rec.seenAt : NaN;
   }
   const jumpPillsHtml = () => needsThreadOn() ? '<button type="button" class="ch-jump up" data-chjump="up" hidden></button><button type="button" class="ch-jump down" data-chjump="down" hidden></button>' : '';
   // The thread's visible band: under its header (the phone's document scroll has a fixed header and composer).
@@ -566,7 +567,7 @@ window.WizCore.chats = function createChats(H) {
       else if (key && live) c.jumpSeen.add(key);
     };
     nb.querySelectorAll('[data-needs-line]').forEach(n => add(n, 'needs'));
-    if (w && c.jumpFor === w.thread && isFinite(c.jumpSince)) {
+    if (w && c.jumpFor === w.thread && !Number.isNaN(c.jumpSince ?? NaN)) {
       nb.querySelectorAll('.msg.a[data-morph-key^="a"]').forEach(n => {
         const key = n.dataset.morphKey, at = +key.slice(1);
         // the message under an amber line counts once, as amber

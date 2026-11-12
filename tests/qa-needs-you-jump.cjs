@@ -4,7 +4,7 @@
 // tap lands on the nearest (amber first), the count drops, and the pill goes when none are left; Mark done drops the
 // amber count at once; a marker below gets the bottom pill. Main (Archimedes) and routed (Claude) threads. Phone
 // 412x915 (browser and the APK's WizardOS-DocScroll document scroll) and desktop 1440x900 (Classic and AI apps),
-// Nebula + Grove, Channels on. Synthetic transport only; writes are answered in memory.
+// Nebula + Grove, Channels on. Routed threads cover each kind: Claude, a host profile, a container and a restricted agent. Synthetic transport only; writes are answered in memory.
 // QA_WEB=<main>/web QA_EXPECT=broken runs the baseline (no pill); QA_OUT=<dir> keeps the screenshots.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -30,18 +30,29 @@ const ROWS = [
   { id: 'qa-a1', title: 'Old idea', at: now - 3 * 864e5, archived: true },
 ].map(shape);
 const CLAUDE = [{ id: 'qa-c1', title: 'Essay outline', at: now - 390e3, attention: { state: 'needs_you', ask: 'Pick a title' }, preview: 'Which title?' }].map(shape);
+// Routed agents of each kind (host profile, container, restricted), each with its own Needs you or unread thread.
+const ROUTED = {
+  claude: CLAUDE,
+  host: [{ id: 'qa-h1', title: 'Host disk check', at: now - 390e3, attention: { state: 'needs_you', ask: 'Approve cleanup' }, preview: 'Which date works?' }].map(shape),
+  container: [{ id: 'qa-k1', title: 'Container build', at: now - 390e3, preview: 'Here is a plan.' }].map(shape),
+  restricted: [{ id: 'qa-x1', title: 'Locked notes', at: now - 390e3, attention: { state: 'needs_you', ask: 'Pick one' }, preview: 'Which date works?' }].map(shape),
+};
+for (const [id, label] of [['host', 'Host ops'], ['container', 'Box'], ['restricted', 'Locked']]) AGENTS.push({ id, label, harness: 'hermes', privacy: 'standard', status: 'running', appearance: { glyph: id[0], hue: 120 }, model: { provider: 'anthropic', model: 'claude-opus-4' } });
+const ALL = [...ROWS, ...Object.values(ROUTED).flat()];
+// mixed = amber + green (Mark done drops amber); green = unread replies only; amber = top and bottom pill
+const SCEN = { 'qa-y1': 'mixed', 'qa-g1': 'green', 'qa-c1': 'amber', 'qa-h1': 'mixed', 'qa-k1': 'green', 'qa-x1': 'mixed' };
 const para = n => Array.from({ length: n }, (_, i) => `Paragraph ${i + 1}: the launch needs a date, a venue and a short list of people to invite before we can print anything.`).join('\n\n');
 const LONG = [];
 for (let i = 0; i < 8; i++) LONG.push({ role: 'user', content: 'Step ' + (i + 1) + '?', timestamp: now / 1000 - 9000 + i * 600 }, { role: 'assistant', content: para(4), timestamp: now / 1000 - 8990 + i * 600 });
 LONG.push({ role: 'user', content: 'What do you need from me?', timestamp: now / 1000 - 400 }, { role: 'assistant', content: 'Which date works?\n\n' + para(14), timestamp: now / 1000 - 390 });
 const repAt = i => iso((now / 1000 - 8990 + i * 600) * 1000); // reply i of LONG (0..7), then the asking one
 // Read through reply 5: replies 6 and 7 are green on open (the asking reply counts once, as amber).
-const SEEN = { initializedAt: 1, threads: Object.fromEntries(['qa-y1', 'qa-g1'].map(id => ['direct:' + id, { messageCount: 2, status: 'completed', updatedAt: repAt(5), assistantActivityAt: repAt(5), seenAt: now - 864e5 }]).concat(['qa-r1', 'qa-r2'].map(id => ['direct:' + id, { messageCount: 2, status: 'completed', updatedAt: iso(now), assistantActivityAt: iso(now), seenAt: now }]))) };
+const SEEN = { initializedAt: 1, threads: Object.fromEntries([['qa-y1', ''], ['qa-g1', ''], ['qa-h1', 'agent/host/'], ['qa-k1', 'agent/container/'], ['qa-x1', 'agent/restricted/']].map(([id, k]) => [k + 'direct:' + id, { messageCount: 2, status: 'completed', updatedAt: repAt(5), assistantActivityAt: repAt(5), seenAt: now - 864e5 }]).concat(['direct:qa-r1', 'direct:qa-r2', 'agent/claude/direct:qa-c1'].map(id => [id, { messageCount: 2, status: 'completed', updatedAt: iso(now), assistantActivityAt: iso(now), seenAt: now }]))) };
 const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(','), expectBroken = process.env.QA_EXPECT === 'broken';
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const sid of ['qa-y1', 'qa-g1', 'qa-c1']) {
+    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const sid of (process.env.QA_THREADS || Object.keys(SCEN).join(',')).split(',')) {
       const phone = shell.startsWith('phone'), ai = shell === 'ai-apps', stem = `${shell}-${skin}-${sid}`, entry = { stem, errors: [], writes: [], steps: [] }; report.push(entry);
       const ua = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' + (shell === 'phone-doc' ? ' WizardOS-DocScroll' : '');
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', reducedMotion: 'reduce', ...(phone ? { userAgent: ua } : {}) });
@@ -73,10 +84,10 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
           if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: AGENTS } });
-          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: u.searchParams.get('agent') === 'claude' ? CLAUDE : ROWS, has_more: false } });
+          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: ROUTED[u.searchParams.get('agent')] || ROWS, has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
-          if (m) { const s = [...ROWS, ...CLAUDE].find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: {} });
-            return r.fulfill({ json: m[2] ? { messages: ['qa-y1', 'qa-g1', 'qa-c1'].includes(s.id) ? LONG : [{ role: 'user', content: 'Ask for ' + s.title, timestamp: now / 1000 - 600 }, { role: 'assistant', content: s.preview, timestamp: now / 1000 - 590 }] } : { session: s } }); }
+          if (m) { const s = ALL.find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: {} });
+            return r.fulfill({ json: m[2] ? { messages: SCEN[s.id] ? LONG : [{ role: 'user', content: 'Ask for ' + s.title, timestamp: now / 1000 - 600 }, { role: 'assistant', content: s.preview, timestamp: now / 1000 - 590 }] } : { session: s } }); }
           return r.fulfill({ json: ownerRead(p) });
         });
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
@@ -99,7 +110,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
         // The tapped marker is on screen just under the header.
         const landedOn = sel => page.evaluate(sel => { const n = [...document.querySelectorAll(sel)].find(x => x.getClientRects().length); const nb = n.closest('.ch-msgs'), head = n.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect(); const own = nb.scrollHeight > nb.clientHeight + 1; const top = Math.max(head.bottom, own ? nb.getBoundingClientRect().top : 0); const r = n.getBoundingClientRect(); return Math.round(r.top - top); }, sel);
         if (expectBroken) { await toBottom(); await nap(400); entry.ok = !!(await pills()).up; continue; }
-        if (sid === 'qa-g1') {
+        if (SCEN[sid] === 'green') {
           // Green only: lands on the newest reply (read), the two older unread replies above.
           await step('opened', { up: '↑ 2 New', down: '' });
           await tapUp(); const k7 = await landedOn(`.ch-msgs .msg.a[data-morph-key="a${Date.parse(repAt(7))}"]`); assert.ok(Math.abs(k7 - 8) <= 3, `${stem}: first tap lands on the nearer reply (${k7})`);
@@ -107,7 +118,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(
           await tapUp(); const k6 = await landedOn(`.ch-msgs .msg.a[data-morph-key="a${Date.parse(repAt(6))}"]`); assert.ok(Math.abs(k6 - 8) <= 3, `${stem}: second tap lands on the other reply (${k6})`);
           await step('after two taps', { up: '', down: '' });
           await toBottom(); await step('back at the bottom, both seen', { up: '', down: '' });
-        } else if (sid === 'qa-y1') {
+        } else if (SCEN[sid] === 'mixed') {
           // Amber + green: amber goes first; Mark done drops the amber count at once.
           await step('opened on the line', { up: '↑ 2 New', down: '' });
           await toBottom(); await step('scrolled to the end', { up: '↑ 1 Needs you 2 New', down: '' });

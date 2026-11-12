@@ -62,6 +62,10 @@ for (const [agent, kind] of [['hermes', 'main'], ['host-ops', 'host-profile'], [
     const g = harness({ rows: { t1: { ...row, unread: false } } });
     g.api.jumpOpened('w1', 't1', { ...row, unread: false });
     assert.ok(Number.isNaN(g.CH.w1.jumpSince));
+    // Unread with no read record yet: every reply counts as new (Codex P2).
+    const h = harness({ rows: { t1: row } });
+    h.api.jumpOpened('w1', 't1', row);
+    assert.equal(h.CH.w1.jumpSince, -Infinity);
   });
 }
 
