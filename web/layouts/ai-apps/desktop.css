@@ -1050,3 +1050,31 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"][data
  * the Mac app's title-bar drag strip leaves those spots to the page (desktop.js macHoles). Never seen, never hit. */
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] #bar > .aad-mac-holes { position: absolute; inset: 0; pointer-events: none !important; visibility: visible; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] #bar > .aad-mac-holes > i { position: absolute; display: block; pointer-events: none !important; }
+
+/* ---------- narrow desktop, one app at a time (switch wizard/narrow-one-app, wizard-ux issue 1314) ----------
+ * desktop.js sets data-aad-one (app | chats) only while the switch is on and the window is narrow. The sidebar is gone
+ * beside an app ('none'), beside the chat at half width ('open'), or the whole main area as the chats list ('full');
+ * the Apps column keeps its look with Chats as its first row; no split, side by side, Wider or sidebar fold. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="none"] { --aad-side: 0px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="none"] .aad-side { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] { --aad-side: var(--aad-pane-side-width, 100vw); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad-side, .aad-panel) { width: var(--aad-pane-side-width, 100%); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad-top, .aad-orb, #bar) { visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] #stage > .wsp:not([data-aad-role="app"]) { visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-one] :is(.aad-modes, .aad-pw, .aad-tog, .aad-rtog, .aad-grip[data-grip="side"], .aad-grip[data-grip="app"]) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone { flex: none; display: flex; flex-direction: column; padding: 2px 8px 0; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vone { align-items: center; padding: 2px 0 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-top > .aad-oneback { flex: none; max-width: none; margin: 0 0 0 12px; pointer-events: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-onelist { flex: none; max-width: 45%; margin: 0 4px 0 -6px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtog[hidden] { display: none; }
+/* the Chats row: an app row's own look (.aad-vtab), kept out of the rows' list so their drag and numbering never see it */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats {
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px 0 8px; box-sizing: border-box; border-radius: 10px; cursor: pointer;
+  color: var(--aad-ink); background: none; transition: background 120ms ease; user-select: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats.is-on { background: var(--aad-held); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats.is-on .aad-vtn { font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vchats { width: 40px; height: 40px; padding: 0; justify-content: center; }

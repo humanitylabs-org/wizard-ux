@@ -28,7 +28,8 @@
     "wizard/update-bug-reports",
     "wizard/connector-models",
     "wizard/link-token-repair",
-    "wizard/chat-channels"
+    "wizard/chat-channels",
+    "wizard/narrow-one-app"
   ],
   "defaults": [
     "wizard/unified-inbox",
