@@ -840,7 +840,9 @@ window.WizCore.chats = function createChats(H) {
   }
   function chanSeenPaint() {
     if (!channelsOn()) return;
-    for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
+    // Activity too (issue 1336): an opened green thread leaves Ready at once, also in the list pane beside the thread
+    // that the desktop's Live repaint skips while focus is inside it.
+    for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !(chanOpen(x) || chanView === 'activity') || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
   }
   /* Unread is a green dot, needs-you the amber one (issue 1266: the violet dot blended into the shell). A channel line
    * and a chevron post line keep every marker in one slot at the right, just before the chevron, always in this order:

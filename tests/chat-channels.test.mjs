@@ -752,7 +752,10 @@ test('switch off: none of the unread markup is drawn (channels are not drawn at 
 test('opening a post repaints every open feed at once (the desktop list pane beside the thread); switch off: nothing', () => {
   const f = fixture();
   f.env.CH.w = {}; f.env.elOf = () => ({});
-  f.chanSeenPaint(); assert.deepEqual(f.renders, [], 'no feed open: no paint');
+  // Issue 1336: Activity repaints too (an opened green thread leaves Ready at once); the Channels list does not.
+  f.chanSeenPaint(); assert.deepEqual(f.renders, ['list'], 'Activity: painted');
+  f.channelClick(click({ 'data-chview': 'channels' }), 'w', f.w); f.renders.length = 0;
+  f.chanSeenPaint(); assert.deepEqual(f.renders, [], 'the Channels list with no feed open: no paint');
   f.openChannel(f.w, 'launch'); f.renders.length = 0;
   f.chanSeenPaint(); assert.deepEqual(f.renders, ['list']);
   f.env.holdList = () => true; f.renders.length = 0;

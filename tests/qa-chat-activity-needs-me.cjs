@@ -35,7 +35,7 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const on of [false, true]) {
+    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const on of process.env.QA_ONLY_OFF ? [false] : [false, true]) {
       const phone = shell === 'phone', ai = shell === 'ai-apps', stem = `${shell}-${skin}-${on ? 'on' : 'off'}`, entry = { stem, errors: [], writes: [] }; report.push(entry);
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block',
         ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
@@ -83,12 +83,14 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
         await page.evaluate(ids => { for (const id of ids) WizLive.markSeen(id); WizLive.emit(); dispatchEvent(new Event('wos:experience')); }, READ);
         if (!ai) await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const vis = sel => page.locator(sel).filter({ visible: true }).first(), shot = n => page.screenshot({ path: path.join(out, `${stem}-${n}.png`) });
+        // Switch off: the list's own markup and pixels, to compare with a run on main (QA_WEB) for a byte-identical list.
+        const offList = async sel => { const l = vis(sel); entry.listHtml = await l.evaluate(e => e.outerHTML); await l.screenshot({ path: path.join(out, `${stem}-list.png`), animations: 'disabled' }); };
         await page.evaluate(() => document.fonts.ready); await nap(600);
         if (ai) {
           await vis('.aad-side .aad-rw[data-sid="qa-g1"]').waitFor();
           entry.chips = await page.locator('.aad-agents').filter({ visible: true }).count();
           entry.sections = await page.locator('.aad-side .aad-sec .aad-sec-w').filter({ visible: true }).allInnerTexts();
-          if (!on) { assert.equal(entry.chips, 1, 'switch off: the agent chips'); assert.ok(!entry.sections.includes('Recent')); await shot('activity'); entry.pass = true; continue; }
+          if (!on) { assert.equal(entry.chips, 1, 'switch off: the agent chips'); assert.ok(!entry.sections.includes('Recent')); await shot('activity'); await offList('.aad-side .aad-scroll'); entry.pass = true; continue; }
           assert.equal(entry.chips, 0, 'no agent chips');
           assert.deepEqual(entry.sections, ['Working', 'Ready', 'Recent', 'Snoozed', 'Archived']);
           entry.ready = await page.locator('#aad-sec-ready .aad-rw').evaluateAll(n => n.map(x => x.dataset.sid));
@@ -115,7 +117,7 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
           await vis('.ch-list [data-chopen="qa-g1"]').waitFor();
           entry.strip = await page.locator('.ch-focus-strip').filter({ visible: true }).count();
           entry.sections = await page.locator('.ch-list .ch-sec-h > span:first-child').filter({ visible: true }).allInnerTexts();
-          if (!on) { assert.ok(!entry.sections.includes('Recent'), 'switch off: no Recent'); await shot('activity'); entry.pass = true; continue; }
+          if (!on) { assert.ok(!entry.sections.includes('Recent'), 'switch off: no Recent'); await shot('activity'); await offList('.ch-list'); entry.pass = true; continue; }
           assert.equal(entry.strip, 0, 'no agent chip strip');
           assert.deepEqual(entry.sections.map(s => s.trim().toLowerCase()), ['working', 'ready', 'recent', 'snoozed', 'archived']);
           const inSec = k => page.locator(`.ch-list .ch-sec[data-sec="${k}"] [data-chopen]`).evaluateAll(n => [...new Set(n.map(x => x.dataset.chopen))]);
@@ -134,6 +136,7 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
           await vis('.ch-list [data-chopen="qa-y1"]').click(); await nap(700); await back(); await nap(500);
           await page.waitForFunction(() => ![...document.querySelectorAll('.ch-list .ch-sec[data-sec="ready"] [data-chopen="qa-g1"]')].some(e => e.getClientRects().length), null, { timeout: 4000 }).catch(() => {});
           entry.readyAfter = await inSec('ready');
+          entry.gNew = await page.evaluate(() => WizLive.isNew(WizLive.session('qa-g1')));
           assert.ok(!entry.readyAfter.includes('qa-g1'), 'green left Ready'); assert.ok(entry.readyAfter.includes('qa-y1'), 'yellow stayed');
           await shot('after-open');
           // Channels: Agents folded just above Archive; an agent opens its feed.
