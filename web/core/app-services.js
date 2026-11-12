@@ -84,6 +84,8 @@
     const root = base.pathname.endsWith('/') ? base.pathname : base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1);
     return root !== '/' ? url.pathname.startsWith(root) : url.pathname === base.pathname;
   }
+  // The window's app path for its page's own links (browser boundary link.open): the same root within() grants.
+  function appHome(base) { const p = base.pathname.endsWith('/') ? base.pathname : base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1); return p !== '/' ? p : ''; }
   function valid(st, doc) {
     if (!st || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st)) return false;
     try {
@@ -139,7 +141,7 @@
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     // Browser owner boundary (wizard-os#133): a sandboxed frame gets its Back/appearance/field channel. Every legacy
     // service below fails closed for it on its own (valid() cannot read an opaque document).
-    const detachBoundary = window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary.attach(frame) : null;
+    const detachBoundary = window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary.attach(frame, { home: appHome(url) }) : null;
     const stopNav = detachBoundary ? (st.boundaryNav = true, trackNav(st)) : null;
     // A sandboxed document that answers on a new channel learns a pending shell update, as a connecting one does.
     const onBoundaryReady = () => { if (available && boundaryLive(st)) window.WizBrowserBoundary.notice(frame, 'update', { available }); };
@@ -1472,6 +1474,18 @@
         // The page's own address, only as the base for relative links (each link must still stay inside the app).
         let base = null; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u.href; } } catch (_) {}
         return setTools(st, args?.tools, base);
+      }
+      // A link the page's own tap opens outside its window (a new tab, another site, another app, window.open):
+      // browser-boundary.js already checked a real tap in this focused, visible window. The shell opens it the way it
+      // does for a same-origin app (core/links.js follow: the link sheet, an app window, the owner's browser, the image
+      // viewer or a download). Only the address crosses; a relative one resolves against the page's own address.
+      if (method === 'link.open') {
+        const href = typeof args?.href === 'string' && args.href.length <= 8192 ? args.href : '';
+        if (!href) return false;
+        let base = st.url; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
+        let u; try { u = new URL(href, base); } catch (_) { return false; }
+        if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
+        return window.WizLinks?.follow ? window.WizLinks.follow(st.frame, u.href, { browse: args?.browse === true }) === true : false;
       }
       // Sharing out: browser-boundary.js already checked a real tap in this visible window. The shell's own share
       // sheet always opens (never `direct`), so the owner picks where it goes; the app gets only the outcome.

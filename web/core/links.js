@@ -311,11 +311,34 @@
       bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
     }
 
-    return {
+    const api = {
       el, open: go, back, close,
       isOpen: () => open,
       state: () => ({ open, depth: stack.length, url: cur()?.url || '', title: cur()?.title || '' }),
     };
+    // The shell's own sheet (the mount that names its Reader) also opens sandboxed apps' links (follow, below).
+    if (arguments[0]?.readerApp) primary = api;
+    return api;
+  }
+
+  /* Browser owner boundary (wizard-os#133, box switch): guardFrame cannot patch a sandboxed app page, so the page hands
+   * a tapped link that leaves its window to the shell (core/app-services.js `link.open`, only right after a real tap in
+   * that window) and it opens here by guardFrame's rules: `data-wizard-browse` in the owner's browser, an image of this
+   * Wizard in the viewer, a file as a download, another site by the sheet's outside route, a page of this Wizard
+   * through the deep link, the shell's route (an app window, a link desk) or the sheet. */
+  let primary = null;
+  function follow(frame, href, { browse: toBrowser = false } = {}) {
+    const u = abs(href); if (!u || !/^https?:$/.test(u.protocol)) return false;
+    if (toBrowser) { browse(u); return true; }
+    if (inApp(u) && isImage(u) && viewImage(u)) return true;
+    if (isFile(u)) return download(u);
+    const sheet = primary;
+    if (!sheet) { if (inApp(u)) return false; outside(u); return true; }
+    if (!inApp(u)) return sheet.open(u.href) !== false;
+    const DL = window.WizCore && window.WizCore.deeplink;
+    if (DL && DL.route(u.href, frame)) return true;
+    if (sheet.route && sheet.route(u.href, frame)) return true;
+    return sheet.open(u.href) !== false;
   }
 
   // Chat bubbles: every http(s) link goes through the sheet (same origin) or the system browser.
@@ -461,5 +484,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, follow, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();

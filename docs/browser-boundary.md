@@ -267,13 +267,26 @@ On:
   address outside the path or a window with no shell channel gets the browser's own `WebSocket`, as before. Proof:
   `tests/qa-browser-boundary-backend.cjs`, `tests/qa-browser-boundary-xhr.cjs`, `tests/qa-browser-boundary-stream.cjs`,
   `tests/qa-browser-boundary-websocket.cjs`.
+- Links and pop-ups: the sandbox has no `allow-popups` or `allow-top-navigation`, and the shell cannot patch an opaque
+  page's links (`WizLinks.guardFrame`), so a link that opens a new tab or the whole page (`target` `_blank`, `_top`,
+  `_parent` or a name no frame of the page has), `window.open`, a link to another site, a link to a page outside the window's app path and an image of this
+  Wizard did nothing or loaded into the app's window. Now `core/app-client.js` hands such a tap to the shell
+  (`link.open`, the address only) and it opens by guardFrame's rules (`WizLinks.follow` in `core/links.js`, on the
+  shell's own sheet): `data-wizard-browse` in the owner's browser, an image in the viewer, a file as a download,
+  another site by the sheet's outside route, a page of this Wizard through the deep link or the shell's route (an app
+  window, a link desk), else the sheet. The shell names the window's app path in each hello (`home`, from
+  `WizAppServices.attach`'s path) so the page knows which links leave it. Like a browser's pop-up rule it needs a real
+  tap in that focused, visible window; a page alone, or a tap elsewhere in the shell, opens nothing. In-page anchors,
+  the app's own pages and same-origin downloads stay the page's; a link aimed at the page's own named frame stays
+  there; a form aimed at `_top` / `_parent` stays in its window. Proof: `tests/qa-browser-boundary-links.cjs` (real Chromium, the real link sheet).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
-- The app orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed; every other app service is
-  answered.
+- The app orb (`orb.set`, no shell view draws it) and voice commands (above) stay closed. `WizardApp.media.view` (the
+  shell's photo viewer) and `WizardApp.nav.*` (open a thread, a context draft, finish back) still answer `false` /
+  throw under the boundary (a plain link to a photo or a thread works, above); every other app service is answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
 - Each real app still needs checking one by one from an opaque origin (wizard-os#385); `fetch` (also streamed),
