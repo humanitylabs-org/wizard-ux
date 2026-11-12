@@ -218,7 +218,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aiApps, 'desktop'); assert.equal(w.html.dataset.viewChrome, 'desktop', 'the shared view chrome (the three-level sheet)');
   assert.equal(w.st.inset, 84, 'hosted apps keep room for the floating orb'); assert.equal(typeof w.st.insetOrb, 'function', 'and the orb says where it is (the orb bar)');
   assert.ok(w.q('link').getAttribute('href').endsWith('/desktop.css'), 'its own stylesheet, desktop-scoped');
-  assert.equal(w.html.dataset.aadSide, 'open', 'open from 900 px up');
+  assert.equal(w.html.dataset.aadSide, 'open', 'open from 680 px up');
   assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
   // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); the sections (round 5: Ready open)
   assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 16: no ⌂ (Home = ✕, Esc, ⌥`)');
@@ -338,7 +338,27 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   const withoutSigilMarkup = js.replace('micG.innerHTML', 'micGlyph').replace('micG.innerHTML = html', 'micGlyph = html');
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(withoutSigilMarkup), 'no independent markup, timers, storage or fetches beyond the shared sigil glyph');
   assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS, MIC \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
-  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;/);
+  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;/);
+});
+
+test('desktop: the sidebar stays open down to 680 px wide, the rail below (James, 12 Nov 2026: half / third of the screen)', async () => {
+  const had = globalThis.innerWidth;
+  const at = async width => {
+    globalThis.innerWidth = width;
+    const w = world({ shell: 'desktop' }), store = {};
+    Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n, storage: { get: k => k in store ? store[k] : null, set: (k, v) => { store[k] = v; } },
+      keys: { on: () => () => {}, guide: () => () => {} }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk: () => {}, command: () => {} },
+      desk: { settings: () => {}, home: () => {} } });
+    w.api.apps.inset = () => () => {};
+    const off = (await layout()).default(w.api);
+    const side = w.html.dataset.aadSide; off?.();
+    return side;
+  };
+  try {
+    assert.equal(await at(700), 'open', 'open at 700 px');
+    assert.equal(await at(680), 'open', 'open at exactly 680 px');
+    assert.equal(await at(660), 'rail', 'the rail below 680 px');
+  } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
 
 test('desktop core hooks: the adapter lists chats with Chats\' own actions, shows the Chats desk, a New chat in it; Settings over the page', () => {
@@ -2318,6 +2338,26 @@ test('a reload with an app in front: the thread the Chats desk holds docks besid
   const dj = noComments(read('web/desktop/desktop.js'));
   assert.match(dj, /const shownBeside = \(\) => \{[^\n]*H0\.routeShows\(i\)[^\n]*\};/);
   assert.match(dj, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\),[^\n]*\.\.\.\(homeOpen \? \[\] : shownBeside\(\)\)\],/);
+});
+
+/* James, 12 Nov 2026: the sidebar stays open down to 680 px. A chat docked beside an app panel keeps the old 900 px
+ * breakpoint, so the app is never squeezed to nothing between the chat and the open-apps column (Codex review on PR 1313). */
+test('desktop at 760 px: a docked chat alone keeps the sidebar open; a chat docked beside an app folds it to the rail', async () => {
+  const had = globalThis.innerWidth; globalThis.innerWidth = 760;
+  try {
+    const { w } = deskWorld();
+    const stage = new El('div'); stage.id = 'stage';
+    const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+    const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+    (await layout()).default(w.api);
+    w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.run();
+    assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.html.dataset.aadSplit, undefined);
+    assert.equal(w.html.dataset.aadSide, 'open', 'a chat alone: open at 760 px');
+    w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
+    assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.html.dataset.aadSplit, 'on');
+    assert.equal(w.html.dataset.aadSide, 'rail', 'a chat beside an app: the rail below 900 px');
+    assert.ok(parseFloat(w.html.style.getPropertyValue('--aad-pane-app-width')) > 100, 'the app keeps a usable column');
+  } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
 
 /* James, 6 Nov 2026 ("Messenger became unclickable"): an app panel beside the docked chat, a reply sent in the chat (its
