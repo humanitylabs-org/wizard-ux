@@ -77,7 +77,10 @@
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
   let desktop = null;
-  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); desktop?.changed(); };
+  // The AI apps main column's open channel feed is saved too (wizard-ux issue 1339: a reload, an update's included,
+  // brought the column back empty). feedBase is a var: this first runs before its line below (undefined = not yet read).
+  const feedSaved = store.get('feed', null);
+  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); if (feedBase !== undefined) store.set('feed', feedBase?.chan ? { id: feedBase.id, chan: feedBase.chan, focus: feedBase.focus || null } : null); window.WosWorkspaceSync?.current?.changed(); desktop?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   /* No desks (a layout holds the panel, e.g. the Orb desktop): whatever opens shows in ONE panel on the right over
    * Home instead of on a desk. A chat panel's window lives outside the desks (never tiled, never synced); an app is a
@@ -135,7 +138,7 @@
    * display in the chat list with the channel list remaining visible on the sidebar"). It is drawn by one more stand-in
    * list window of its own (feedBase, off the desks and never saved), so opening a channel never touches the Focus of
    * the window behind the sidebar: its channel list and Activity rows stay exactly as they were. */
-  let feedBase = null;
+  var feedBase = null;
   const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : undefined);
   // Any Chats window by id: a desk window, the sidebar's stand-in or the feed, or one of their list panes (id::list/side).
   const chatsWin = id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined);
@@ -673,6 +676,11 @@
    * The list pane is a second Chats "window" (id::list) that always shows the list. */
   const listWins = {}, sidePanes = new WeakSet();
   let sideHost = null, feedHost = null; // the layout's Channels pane (chatChannels) and channel feed (chatFeed), repainted with the lists on live changes
+  // A reload (an update's too) opens the channel feed the main column showed (wizard-ux issue 1339); Chats still decides
+  // whether it holds (the switch on, the channel still there).
+  { const f = feedSaved, k = v => !!v && typeof v === 'object' && typeof v.kind === 'string' && typeof v.key === 'string';
+    if (f && typeof f === 'object' && /^feed-[a-z0-9]+$/.test(String(f.id)) && f.chan && typeof f.chan.id === 'string')
+      feedBase = { id: f.id, app: 'chats', thread: null, focus: k(f.focus) ? { kind: f.focus.kind, key: f.focus.key } : null, chan: { id: f.chan.id, prev: k(f.chan.prev) ? { kind: f.chan.prev.kind, key: f.chan.prev.key } : null } }; }
   // (a layout's sidebar pane is one more such list window, id::side: the AI apps Channels pane, wizard-ux issue 1256)
   function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } else if (sideWin(id)) { if (v === '__new__') newChat(); else openThread(v); } } } }); }
   // The window behind the sidebar's Channels pane: the main Chats window, else the stand-in (created on demand). When a

@@ -2152,9 +2152,10 @@ export default function desktop(api) {
     // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
     if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : feedOn() ? FEED : null);
-    // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
-    // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
-    else if (chatThread === FEED ? !feedOn() : !chatThread) { if (chatThread === FEED) feedGone(); chatThread = behindThread(); }
+    // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the channel feed or
+    // the thread the Chats desk still holds docks beside it as before, never laid out as Home under the panel (cut off,
+    // at its top). A feed left open is what the column showed (wizard-ux issue 1339).
+    else if (chatThread === FEED ? !feedOn() : !chatThread) { if (chatThread === FEED) feedGone(); chatThread = !chatThread && feedOn() ? FEED : behindThread(); }
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }

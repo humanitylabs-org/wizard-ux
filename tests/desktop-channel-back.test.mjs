@@ -144,7 +144,7 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
   // opening a chat from the sidebar, the rail or ⌥↓ forgets the feed's app: that chat keeps the front
   for (const re of [/noteWant = !!s\.note; feedFocus = null; stepAt = s\.id;/, /feedFocus = null; railLast = key; stepAt = id;/, /feedFocus = null; stepAt = nx\.id;/]) assert.match(js, re);
   // the feed gone on a repaint (its channel closed while it was in the column): the same hand-back
-  assert.match(js, /else if \(chatThread === FEED \? !feedOn\(\) : !chatThread\) \{ if \(chatThread === FEED\) feedGone\(\); chatThread = behindThread\(\); \}/);
+  assert.match(js, /else if \(chatThread === FEED \? !feedOn\(\) : !chatThread\) \{ if \(chatThread === FEED\) feedGone\(\); chatThread = !chatThread && feedOn\(\) \? FEED : behindThread\(\); \}/);
   // no app open: nothing to give the front back to
   const bare = desk({ app: '' }); bare.pane = null; bare.open(); bare.close(); assert.equal(bare.focus, 'chats');
 });
