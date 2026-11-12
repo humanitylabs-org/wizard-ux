@@ -417,7 +417,8 @@ window.WizCore.chats = function createChats(H) {
     save(); H.layout(o.id); return true;
   }
   function rememberedFocus(w, agent) {
-    const o = W[owner(w.id)] || w, m = o?.agentFocus?.[agent];
+    // With channels on, the agent tab opens the agent (its label never names a channel, wizard-ux issue 1340).
+    const o = W[owner(w.id)] || w, m = typeof channelsOn === 'function' && channelsOn() ? null : o?.agentFocus?.[agent];
     return m?.kind === 'space' && spaces().some(s => s.id === m.key && spaceAgent(s) === agent) ? m : { kind: 'agent', key: agent };
   }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
@@ -1969,7 +1970,8 @@ window.WizCore.chats = function createChats(H) {
     const f = focusOf(w), on = o.kind === 'all' ? !f : strip && o.kind === 'agent' ? focusedAgent(f) === o.key : f?.kind === o.kind && f.key === o.key;
     // An agent tab names the Space it will open: the focused one, or the one it remembers while All is in front
     // (James, 25 Oct 2026: SS stays in that slot until he picks All Archimedes in its picker).
-    const shown = strip && o.kind === 'agent' ? (on ? f : rememberedFocus(w, o.key)) : null;
+    // With channels on, a channel is a feed, not a Focus: the tab always names the agent (wizard-ux issue 1340).
+    const shown = strip && o.kind === 'agent' && !(typeof channelsOn === 'function' && channelsOn()) ? (on ? f : rememberedFocus(w, o.key)) : null;
     const label = shown?.kind === 'space' ? spaces().find(s => s.id === shown.key)?.name || o.label : o.label;
     const caret = strip && on && o.kind === 'agent' ? '<i class="ch-focus-caret" aria-hidden="true">⌄</i>' : '';
     return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ' aria-haspopup="dialog" aria-expanded="false"' : ''}${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(label !== o.label ? o.label + ' · ' + label : o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(label)}</span>${caret}${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.unread || ''}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
