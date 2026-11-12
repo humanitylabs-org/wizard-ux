@@ -12,13 +12,21 @@
  */
 (() => {
   'use strict';
+  const MARK = 'wos.browser-boundary.v1';
   const meta = document.querySelector('meta[name="wizard-shell-token"]');
   const token = (meta && meta.getAttribute('content')) || '';
   // Out of the DOM either way, so nothing that reads the page later finds it.
   if (meta) meta.remove();
+  // This device remembers that the box has the boundary on (never the token), so a shell or pinned app opened from
+  // the offline copy, which has no token, still sandboxes app frames (core/browser-boundary.js). Only the box's own
+  // answer changes it: `off` is the shipped value nginx leaves when the switch is off; an empty value (a frame, a
+  // warm-up read, the offline copy on a box that is on) leaves it as it is.
+  const remember = on => { try { if (on) localStorage.setItem(MARK, '1'); else localStorage.removeItem(MARK); } catch (_) {} };
+  if (token === 'off') { remember(false); return; }
   if (!/^[a-f0-9]{64}$/.test(token)) return;
   // Only the top-level shell document. A shell page loaded in a frame never gets a token from nginx anyway.
   try { if (window.top !== window) return; } catch (_) { return; }
+  remember(true);
   const HEADER = 'X-Wizard-Shell-Token';
   // Owner routes on this origin: the Agent Service (everything it serves that is not a static shell file) and the
   // App Manager listener mounted beside the shell.

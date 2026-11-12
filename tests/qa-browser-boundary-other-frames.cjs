@@ -2,7 +2,8 @@
 // Real Chromium: a shell page that loads the real core/browser-boundary.js, core/links.js and core/app-services.js, with
 // the boundary on (WizShellBoundary set the way shell-token.js does) and off. On: a page opened in the link sheet is
 // opaque and cannot reach the shell, its owner call goes out tokenless with Origin: null, and no hidden app frame is
-// warmed for voice commands. Off: everything stays as before (same-origin sheet, voice frame warmed).
+// warmed for voice commands. Remembered: no token in the page (the offline copy), but this device remembers the box
+// turned the boundary on (the mark core/shell-token.js keeps): the same as on. Off: everything stays as before.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-other-frames.cjs
 const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -30,7 +31,7 @@ ${on ? `<script>window.WizShellBoundary = Object.freeze({ on: true, header: 'X-W
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   seen.push({ path: u.pathname, origin: req.headers.origin || '', token: req.headers['x-wizard-shell-token'] || '' });
-  if (u.pathname === '/on' || u.pathname === '/off') { res.setHeader('content-type', 'text/html'); return res.end(shell(u.pathname === '/on')); }
+  if (u.pathname === '/on' || u.pathname === '/off' || u.pathname === '/remembered') { res.setHeader('content-type', 'text/html'); return res.end(shell(u.pathname === '/on')); }
   if (u.pathname === '/notes/' || u.pathname === '/notes/page') { res.setHeader('content-type', 'text/html'); return res.end(APP); }
   if (u.pathname.startsWith('/wizard-os-home/')) {
     const file = path.join(WEB, u.pathname.slice('/wizard-os-home/'.length));
@@ -40,6 +41,7 @@ const server = http.createServer((req, res) => {
 });
 async function run(browser, base, mode) {
   const page = await browser.newPage();
+  if (mode === 'remembered') await page.addInitScript(() => { if (window === top) localStorage.setItem('wos.browser-boundary.v1', '1'); });
   const errors = []; page.on('pageerror', e => errors.push(String(e)));
   seen.length = 0;
   await page.goto(`${base}/${mode}`);
@@ -60,7 +62,7 @@ async function run(browser, base, mode) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch();
-  const on = await run(browser, base, 'on'), off = await run(browser, base, 'off');
+  const on = await run(browser, base, 'on'), off = await run(browser, base, 'off'), mem = await run(browser, base, 'remembered');
   await browser.close(); server.close();
   const checks = [
     ['on: link sheet frame is sandboxed without same-origin', !!on.sandbox && !on.sandbox.split(/\s+/).includes('allow-same-origin')],
@@ -74,10 +76,13 @@ async function run(browser, base, mode) {
     ['off: link sheet frame has no sandbox (unchanged)', off.sandbox === null],
     ['off: page in the sheet is same-origin (unchanged)', off.probe?.origin === base && off.probe?.parentDoc === true],
     ['off: the voice frame is still warmed (unchanged)', off.voiceFrames === 1],
-    ['no page errors', !on.errors.length && !off.errors.length],
+    ['remembered (offline copy, no token): link sheet frame is sandboxed', !!mem.sandbox && !mem.sandbox.split(/\s+/).includes('allow-same-origin')],
+    ['remembered: page in the sheet is opaque and cannot read the shell', mem.probe?.origin === 'null' && String(mem.probe?.parentDoc).startsWith('blocked:')],
+    ['remembered: no hidden voice frame is warmed', mem.voiceFrames === 0],
+    ['no page errors', !on.errors.length && !off.errors.length && !mem.errors.length],
   ];
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) failed++; }
-  if (failed) console.log(JSON.stringify({ on, off }, null, 1));
+  if (failed) console.log(JSON.stringify({ on, off, mem }, null, 1));
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

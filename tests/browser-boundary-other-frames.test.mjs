@@ -80,3 +80,29 @@ test('boundary on: link sheet and voice frames are covered by the box switch', (
   assert.match(read('core/links.js'), /if \(window\.WizBrowserBoundary\?\.enabled\) frame\.setAttribute\('sandbox', window\.WizBrowserBoundary\.sandbox\);/);
   assert.match(read('core/app-services.js'), /const wanted = window\.WizBrowserBoundary\?\.enabled \? new Map\(\) :/);
 });
+
+// The offline copy of the shell or a pinned app (app-session.html) has no token. core/browser-boundary.js still turns on
+// when this device remembers the box turned the boundary on (core/shell-token.js keeps that mark).
+function boundary({ shellToken = false, mark = null, framed = false } = {}) {
+  const g = { setTimeout, clearTimeout, crypto: globalThis.crypto, JSON, Promise, Object, String, Map, Set };
+  g.window = g; g.top = framed ? {} : g;
+  if (shellToken) g.WizShellBoundary = { on: true };
+  g.localStorage = mark === 'throws' ? { getItem() { throw new Error('denied'); } } : { getItem: k => (k === 'wos.browser-boundary.v1' ? mark : null) };
+  g.addEventListener = () => {}; g.document = { activeElement: null };
+  vm.createContext(g); vm.runInContext(read('core/browser-boundary.js'), g);
+  return g.WizBrowserBoundary;
+}
+
+test('offline copy: the remembered mark turns the frame sandbox on without a token; nothing else does', () => {
+  assert.equal(boundary({ mark: '1' })?.enabled, true);
+  assert.equal(boundary({ mark: '1' }).sandbox, SANDBOX);
+  assert.equal(boundary({ shellToken: true })?.enabled, true);
+  assert.equal(boundary(), undefined, 'no token, no mark: off as before');
+  assert.equal(boundary({ mark: '0' }), undefined);
+  assert.equal(boundary({ mark: 'throws' }), undefined);
+  assert.equal(boundary({ mark: '1', framed: true }), undefined, 'never inside a frame');
+  const html = read('app-session.html');
+  assert.ok(html.indexOf('<script src="core/browser-boundary.js"></script>') > 0, 'the offline pinned-app page loads it');
+  assert.ok(html.indexOf('core/browser-boundary.js') < html.indexOf('core/single-app-session.js') && html.indexOf('core/browser-boundary.js') < html.indexOf('core/links.js'));
+  assert.match(read('core/offline-session-config.js'), /core\/browser-boundary\.js/, 'and it is in the offline copy');
+});

@@ -4,7 +4,7 @@ Issue: humanitylabs-org/wizard-os#133. App Manager side and the box switch: wiza
 Agent Service side: wizard-agent-service `server/browser-boundary.mjs`.
 
 Off unless the box ran `wam browser-boundary on` (it sets `WIZARD_BROWSER_BOUNDARY=1` and `WIZARD_SHELL_TOKEN_FILE`
-for this container). Off: no token file, the page's `<meta name="wizard-shell-token" content="">` stays empty,
+for this container). Off: no token file, the page's `<meta name="wizard-shell-token" content="off">` stays as shipped,
 `core/shell-token.js` wraps nothing, and nginx serves the pages exactly as before.
 
 On:
@@ -16,6 +16,13 @@ On:
   set these headers. The answer is `Cache-Control: no-store`, so the service worker and the HTTP cache never keep
   it; a shell opened from the offline copy has no token (its owner calls then fail until the next online load).
   A shell page that ends up in a frame anyway never arms the wrapper (`window.top !== window`).
+- Offline copy: the token never reaches the offline copy of the shell or of a pinned app (`app-session.html`), so
+  each device remembers the box's answer instead (`localStorage` `wos.browser-boundary.v1`, never the token).
+  `shell-token.js` sets it on a page with a valid token and clears it only when the page says `off`, the value the
+  pages ship with and that nginx leaves alone while the switch is off; an empty value (a frame, a warm-up read, the
+  offline copy on a box that is on) leaves it as it is. `core/browser-boundary.js` turns the frame sandbox on with
+  the token or with that mark, so an offline shell or pinned app still sandboxes app frames (its owner calls then
+  fail until the next online load).
 - `core/shell-token.js` is the first script on both pages. It takes the token out of the page, keeps it in a closure,
   and adds `X-Wizard-Shell-Token` to `fetch` and `XMLHttpRequest` calls from the top-level shell to owner routes on
   this origin: `/wizard/`, `/api/`, `/v1/`, `<prefix>api/` and `<prefix>store-install/`. App paths (`/notes/`, …)
