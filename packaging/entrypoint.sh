@@ -16,6 +16,29 @@ case "$WIZARD_SHELL_LISTEN" in 127.0.0.1:*)
 esac
 export WIZARD_AGENT_SERVICE_ORIGIN WIZARD_SHELL_LISTEN
 cp /etc/wizard-shell/static.conf /tmp/wizard-static.conf
+# Browser owner boundary (wizard-os#133, wizard-app-manager docs/browser-boundary.md). Off unless
+# WIZARD_BROWSER_BOUNDARY=1; then WIZARD_SHELL_TOKEN_FILE must hold the shell token (64 lowercase hex), or the shell
+# refuses to start rather than serve a page that cannot reach the owner's routes. On, nginx writes the token into
+# the shell page (index.html / desktop.html <meta name="wizard-shell-token">) for a real top-level page load only.
+old_umask=$(umask); umask 077
+if [ "${WIZARD_BROWSER_BOUNDARY:-}" = 1 ]; then
+  token=$(tr -d ' \t\r\n' 2>/dev/null < "${WIZARD_SHELL_TOKEN_FILE:-/nonexistent}") || token=
+  printf '%s' "$token" | grep -Eqx '[0-9a-f]{64}' \
+    || { printf 'WIZARD_BROWSER_BOUNDARY=1 needs WIZARD_SHELL_TOKEN_FILE with the shell token (64 lowercase hex)\n' >&2; exit 2; }
+  # A real page load: a top-level navigation (navigate/document), or the same navigation passed on by the shell's own
+  # service worker (Chrome sends it as navigate/empty). A frame (navigate/iframe), fetch, worker or warm-up read: none.
+  printf 'map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { "navigate:document" "%s"; "navigate:empty" "%s"; default ""; }\n' "$token" "$token" > /tmp/wizard-boundary.conf
+  cat > /tmp/wizard-boundary-static.conf <<'CONF'
+sub_filter '<meta name="wizard-shell-token" content="">' '<meta name="wizard-shell-token" content="$wizard_shell_token">';
+sub_filter_once on;
+add_header Vary "Sec-Fetch-Mode, Sec-Fetch-Dest" always;
+CONF
+  unset token
+else
+  printf 'map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { default ""; }\n' > /tmp/wizard-boundary.conf
+  : > /tmp/wizard-boundary-static.conf
+fi
+umask "$old_umask"
 cp /etc/wizard-shell/proxy.conf /tmp/wizard-proxy.conf
 cp /etc/wizard-shell/proxy-mcp.conf /tmp/wizard-proxy-mcp.conf
 # Substitute only these two names; nginx's own $variables stay as they are.

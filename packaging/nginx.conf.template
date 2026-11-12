@@ -29,6 +29,11 @@ http {
   }
   # Only a successful answer may be kept for a year; an error (a file missing mid-deploy) is never cached.
   map $status $wizard_cache_ok { 200 $wizard_cache; 304 $wizard_cache; default "no-store"; }
+  # Browser owner boundary (wizard-os#133): entrypoint.sh writes this file. Off (the default) it maps the shell token to
+  # "" for every request; on, a real top-level page load gets the token. A page carrying the
+  # token is never stored by the browser.
+  include /tmp/wizard-boundary.conf;
+  map $wizard_shell_token $wizard_doc_cache { "" $wizard_cache_ok; default "no-store"; }
   # Chat attachments and files: kept only when the service actually sent them (never a 401/404/5xx).
   map $status $wizard_attach_cache { 200 "private, max-age=31536000, immutable"; 304 "private, max-age=31536000, immutable"; default "no-store"; }
   map $status $wizard_file_cache { 200 "private, max-age=86400"; 304 "private, max-age=86400"; default "no-store"; }

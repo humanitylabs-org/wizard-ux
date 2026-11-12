@@ -639,6 +639,13 @@
       ],
       "note": "Shared imported-share chooser/double-Back custody policy."
     },
+    "core/shell-token.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Browser owner boundary (wizard-os#133): adds the shell-only token to owner calls when the box switched it on; no-op otherwise."
+    },
     "core/shell.js": {
       "loadedBy": [
         "phone",
@@ -1011,6 +1018,7 @@
     "core/share-wizard.css",
     "core/share-wizard.js",
     "core/sheetback.js",
+    "core/shell-token.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
