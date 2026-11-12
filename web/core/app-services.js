@@ -139,7 +139,7 @@
     const onBoundaryReady = () => { if (available && boundaryLive(st)) window.WizBrowserBoundary.notice(frame, 'update', { available }); };
     if (detachBoundary) frame.addEventListener('wizard:boundary-ready', onBoundaryReady);
     const detachServices = st.detach;
-    st.detach = () => { detachReading?.(); stopNav?.(); detachBoundary?.(); frame.removeEventListener('wizard:boundary-ready', onBoundaryReady); detachServices(); queueSweep(); };
+    st.detach = () => { detachReading?.(); stopNav?.(); detachBoundary?.(); if (detachBoundary) frame.removeEventListener('wizard:boundary-ready', onBoundaryReady); detachServices(); queueSweep(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});
