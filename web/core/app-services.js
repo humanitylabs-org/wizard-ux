@@ -105,6 +105,12 @@
     mo.observe(st.frame, { attributes: true, attributeFilter: ['src'] });
     return () => mo.disconnect();
   }
+  // The Store removed this window's app after the window opened (web/store/store-remove.js markRemoved, shell storage
+  // `wos.app-removed.v1`): the window is still here until the app list refreshes, but it never writes the app's data
+  // again, so the data the Store deleted stays deleted and a reinstall starts empty.
+  function removedSince(st) {
+    try { const at = JSON.parse(window.localStorage.getItem('wos.app-removed.v1') || '{}')?.[st.appId]?.at; return Number.isFinite(at) && at >= st.since; } catch (_) { return false; }
+  }
   function boundaryLive(st) {
     if (!st || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st) || st.frame.hasAttribute('srcdoc') || st.navOk !== true) return false;
     if (window.WizBrowserBoundary?.ready?.(st.frame) !== true) return false;
@@ -125,7 +131,7 @@
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now(), since: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.boundaryNav) { st.navOk = st.navExpect; st.navExpect = false; } if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -1524,12 +1530,13 @@
       // The app's own saved settings (its localStorage stand-in, core/app-client.js): always the window's installed
       // app id, never one the page names.
       if (method === 'storage.load') return window.WizBrowserBoundary.appStorage.load(st.appId);
-      if (method === 'storage.save') return window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
+      if (method === 'storage.save') return !removedSince(st) && window.WizBrowserBoundary.appStorage.save(st.appId, args?.ops);
       // Its IndexedDB (the stand-in in core/app-client.js), the same way. After a change, the app's other windows read
       // that database again before their next transaction.
       if (method === 'idb.load') return window.WizBrowserBoundary.appIdb.load(st.appId, args?.name);
       if (method === 'idb.list') return window.WizBrowserBoundary.appIdb.list(st.appId);
       if (method === 'idb.commit' || method === 'idb.drop') {
+        if (method === 'idb.commit' && removedSince(st)) return false;
         const B = window.WizBrowserBoundary, name = args?.name;
         return (method === 'idb.commit' ? B.appIdb.commit(st.appId, name, args?.ops, args?.base) : B.appIdb.drop(st.appId, name)).then(v => {
           const ok = v === true || !!v?.idb;

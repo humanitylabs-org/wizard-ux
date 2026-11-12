@@ -1,7 +1,7 @@
 // Store "Remove app": the exact-identity request, its outcomes and the confirmation contents. Fixture fetches only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {removalPlan, removeInstalledApp, canRemove, confirmView} from '../web/store/store-remove.js';
+import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetAppData, markRemoved, settleRemoved, pendingForgets, forgetRemoved} from '../web/store/store-remove.js';
 const A='a'.repeat(40), B='b'.repeat(40);
 const base=new URL('https://box.example/wizard-os-home/');
 const esc=s=>String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -88,4 +88,65 @@ test('the confirmation names the app, the data it deletes and what else it affec
  assert.match(confirmView(null,{name:'Ledger'},{esc,error:'This Wizard’s App Manager needs updating before apps can be removed here.'}),/needs updating/);
  assert.match(confirmView(plan,{name:'Ledger',installed:{repo:'example/ledger',commit:A}},{esc,busy:true}),/Removing…/);
  assert.match(confirmView(plan,{name:'<b>x</b>',installed:{repo:'example/ledger',commit:A}},{esc}),/&lt;b&gt;x&lt;\/b&gt;/);
+});
+
+// wizard-os#133: after a confirmed removal the Store deletes this device's copy of the app's sandboxed-window data
+// (core/browser-boundary.js appStorage + appIdb). Real-Chromium proof: tests/qa-browser-boundary-forget.cjs.
+function fakeIdb({exists=true,stores=['dbs','rows'],failTx=false}={}) {
+ const log={opened:0,created:false,deletes:[],closed:0};
+ const later=fn=>queueMicrotask(fn);
+ const db={objectStoreNames:stores,close(){log.closed++;},transaction(names,mode){
+  const tx={oncomplete:null,onabort:null,onerror:null,error:failTx?new Error('quota'):null,objectStore:n=>({delete:r=>log.deletes.push([n,mode,r])})};
+  log.tx=names; later(()=>failTx?tx.onabort?.():tx.oncomplete?.()); return tx;}};
+ return {log,open(name){log.opened++;log.name=name;const r={result:null,error:null,transaction:{abort(){r.error={name:'AbortError'};later(()=>r.onerror?.());}}};
+  later(()=>{if(!exists){log.created=true;r.onupgradeneeded?.();if(r.error)return;}r.result=db;r.onsuccess?.();});return r;}};
+}
+const keyRange={bound:(lo,hi,lo2,hi2)=>({lo,hi,lo2,hi2})};
+function fakeStorage(seed){const m=new Map(Object.entries(seed));return {m,removeItem:k=>m.delete(k)};}
+
+test('forgetAppData deletes exactly the removed app\'s saved settings and shell databases on this device',async()=>{
+ const storage=fakeStorage({'wos.app-storage.v1.ledger':'{"a":"1"}','wos.app-storage.v1.ledger-two':'{"b":"2"}','wos.skin':'nebula'});
+ const idb=fakeIdb();
+ assert.equal(await forgetAppData('ledger',{storage,idb,keyRange}),true);
+ assert.deepEqual([...storage.m.keys()].sort(),['wos.app-storage.v1.ledger-two','wos.skin']);
+ assert.equal(idb.log.name,'wos-app-idb-v1');
+ assert.deepEqual(idb.log.tx,['dbs','rows']);
+ // [id] .. [id + '\0'] (upper bound open): every key that starts with this app id, never 'ledger-two'.
+ assert.deepEqual(idb.log.deletes,[['dbs','readwrite',{lo:['ledger'],hi:['ledger\u0000'],lo2:false,hi2:true}],['rows','readwrite',{lo:['ledger'],hi:['ledger\u0000'],lo2:false,hi2:true}]]);
+ assert.equal(idb.log.closed,1);
+});
+
+test('forgetAppData never creates the shell database, refuses bad ids and reports a failed delete',async()=>{
+ const none=fakeIdb({exists:false});
+ assert.equal(await forgetAppData('ledger',{storage:fakeStorage({}),idb:none,keyRange}),true);
+ assert.equal(none.log.created,true,'the open would have created it'); assert.deepEqual(none.log.deletes,[],'and it was aborted, nothing written');
+ const s=fakeStorage({'wos.app-storage.v1.x':'1'}), idb=fakeIdb();
+ for(const bad of ['', '../x', 'Ledger', null, 'a'.repeat(65)]) assert.equal(await forgetAppData(bad,{storage:s,idb,keyRange}),false);
+ assert.equal(idb.log.opened,0); assert.equal(s.m.size,1);
+ assert.equal(await forgetAppData('ledger',{storage:fakeStorage({}),idb:fakeIdb({failTx:true}),keyRange}),false);
+ // Without IndexedDB (an old browser) the settings still go.
+ const only=fakeStorage({'wos.app-storage.v1.ledger':'1'});
+ assert.equal(await forgetAppData('ledger',{storage:only,idb:undefined,keyRange}),true); assert.equal(only.m.size,0);
+});
+
+function memStorage(){const m=new Map();return {m,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)};}
+test('the removed-apps note: marked before deleting, settled after, pending again after a failed delete, kept 30 days',async()=>{
+ const storage=memStorage(), now=1_800_000_000_000, note=()=>JSON.parse(storage.getItem('wos.app-removed.v1'));
+ storage.setItem('wos.app-storage.v1.ledger','{"a":"1"}');
+ assert.equal(await forgetRemoved('ledger',{storage,now,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(note(),{ledger:{at:now}}); assert.equal(storage.getItem('wos.app-storage.v1.ledger'),null);
+ assert.deepEqual(pendingForgets({storage,now}),[]);
+ // Both tries fail: the note stays pending, so the Store tries again on its next load.
+ const fail=fakeIdb({failTx:true});
+ assert.equal(await forgetRemoved('cards',{storage,now:now+1,idb:fail,keyRange}),false);
+ assert.equal(fail.log.opened,2,'one more try');
+ assert.deepEqual(pendingForgets({storage,now:now+2}),['cards']);
+ // A retry never moves `at` (the windows opened since are not blocked by an old removal).
+ assert.equal(await forgetRemoved('cards',{retry:true,storage,now:now+50,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(note().cards,{at:now+1}); assert.deepEqual(pendingForgets({storage,now:now+51}),[]);
+ // Old notes and junk drop out; bad ids are refused.
+ storage.setItem('wos.app-removed.v1',JSON.stringify({ledger:{at:now},'Bad Id':{at:now},x:{at:'soon'}}));
+ assert.equal(markRemoved('fresh',{storage,now:now+31*864e5}),true);
+ assert.deepEqual(note(),{fresh:{at:now+31*864e5,pending:true}});
+ assert.equal(markRemoved('../x',{storage,now}),false); assert.equal(settleRemoved('nope',{storage,now}),false);
 });
