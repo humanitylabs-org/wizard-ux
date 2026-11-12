@@ -736,6 +736,14 @@ window.WizCore.chats = function createChats(H) {
     actUndoT = setTimeout(() => { el.remove(); if (actUndoEl === el) actUndoEl = null; }, ACT_UNDO_MS);
     return true;
   }
+  // Undo of a thread's archive: after that archive's write settled (pending: its promise), the restore, then every list.
+  async function actRestore(sid, pending) {
+    await Promise.resolve(pending).catch(() => {});
+    const ok = await LIVE.restore(sid);
+    if (!ok) toast('!', 'Couldn’t undo · still archived', 3200);
+    paintListsNow();
+    return ok;
+  }
   /* A channel's read watermark (wizard-ux issue 1316, which supersedes the opening place and New line of 1263 and 1269;
    * James, 12 Nov 2026: "Just track their scroll position in the channel as what they have read. If they've scrolled
    * to the bottom of the channel, mark the whole thing as read"). Slack's model: each channel keeps the newest activity
@@ -2913,12 +2921,15 @@ window.WizCore.chats = function createChats(H) {
     if (a === 'done' && w?.thread === sid) leaveFinishedThread(w, sid);
     else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
-    // With Channels on, an archive offers Undo for about five seconds (issue 1336), in place of the plain toast.
-    if (!(a === 'done' && typeof actUndo === 'function' && actUndo(msg[1], () => { void LIVE.restore(sid).then(() => { for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.(); }); paintListsNow(); })))
+    // With Channels on, an archive offers Undo for about five seconds (issue 1336), in place of the plain toast. Undo
+    // waits for the archive's own write to settle (a restore while it is in flight is refused as busy), then restores.
+    let archiving = null;
+    if (!(a === 'done' && typeof actUndo === 'function' && actUndo(msg[1], () => actRestore(sid, archiving))))
       toast(msg[0], msg[1], 1600);
     // Same frame as the tap (James, 7 Nov 2026, reported again): LIVE patches its list synchronously and only then awaits
     // the write, so start it, paint every list now (open sheet / swipe / long-press holds must not defer it), reconcile after.
     const write = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid);
+    archiving = write;
     paintListsNow();
     const ok = await write;
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);

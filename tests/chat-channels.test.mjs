@@ -2119,3 +2119,19 @@ test('issue 1336: the switch-off path keeps today\'s Activity: sections, focus s
   assert.match(src, /if \(!\(a === 'done' && typeof actUndo === 'function' && actUndo\(msg\[1\],[^\n]+\n\s+toast\(msg\[0\], msg\[1\], 1600\);/);
   assert.match(src, /function activityClick\(e, w\) \{\n\s+if \(!w \|\| w\.thread \|\| typeof channelsOn !== 'function' \|\| !channelsOn\(\)\) return false;/);
 });
+
+test('issue 1336 (Codex P2): Undo waits for the archive still in flight, then restores; a refused restore says so', async () => {
+  const f = fixture(), order = [];
+  let settle; const pending = new Promise(r => { settle = r; });
+  f.env.paintListsNow = () => order.push('paint');
+  let restoreOk = true;
+  f.env.LIVE.restore = async sid => { order.push('restore:' + sid); return restoreOk; };
+  const run = actFn(f, 'actRestore')('b', pending.then(() => order.push('archived')));
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(order, [], 'nothing restores while the archive write is in flight');
+  settle(true); assert.equal(await run, true);
+  assert.deepEqual(order, ['archived', 'restore:b', 'paint']);
+  restoreOk = false; order.length = 0;
+  assert.equal(await actFn(f, 'actRestore')('b', Promise.reject(new Error('offline'))), false, 'a failed archive still lets Undo try');
+  assert.deepEqual(order, ['restore:b', 'paint']); assert.equal(f.toasts.at(-1), 'Couldn’t undo · still archived');
+});
