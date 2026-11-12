@@ -941,8 +941,13 @@
     let done = false;
     return () => { if (!done) { done = true; use.running--; } };
   }
-  // Under the boundary a sandboxed app sets its own badge and title bar, shares out and transcribes over the boundary
-  // channel (browser-boundary.js).
+  // Under the boundary a sandboxed app sets its own badge and title bar, shares out (also to Wizard), transcribes and
+  // holds shell updates over the boundary channel (browser-boundary.js).
+  function holdFor(st, reason) {
+    if (st.holds.size >= 64) throw fault('Too many update holds');
+    const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
+    return id;
+  }
   if (window.WizBrowserBoundary?.serve) {
     window.WizBrowserBoundary.serve((frame, method, args) => {
       const st = frames.get(frame);
@@ -971,6 +976,23 @@
         const title = typeof args?.options?.title === 'string' ? args.options.title.slice(0, 1024) : undefined;
         return window.WosChat?.shareFile ? window.WosChat.shareFile(file, { title, direct: false }) : 'unsupported';
       }
+      // Share to Wizard: browser-boundary.js already checked a real tap in this visible window. The shell's own Send to
+      // <agent> sheet opens; the owner reads it and sends or cancels. It sends only while this same document is still
+      // the verified app in this window (gen), and a shell update waits while the sheet is open.
+      if (method === 'share.wizard') {
+        if (!window.WizShareWizard) return 'unsupported';
+        const data = { files: args?.files ?? [], text: args?.text ?? '', title: args?.title ?? '' };
+        window.WizShareWizard.valid(data);
+        const gen = window.WizBrowserBoundary.gen(frame);
+        // This hold is the shell's own sheet's: it lasts until the sheet settles, also across a reload of the window.
+        const id = holdFor(st, 'Share to Wizard'); (st.sheetHolds ||= new Set()).add(id);
+        return Promise.resolve(window.WizShareWizard.wizard(data, () => boundaryLive(st) && window.WizBrowserBoundary.gen(frame) === gen))
+          .finally(() => { st.sheetHolds.delete(id); if (st.holds.delete(id)) changed(); });
+      }
+      // Update holds: the app's unsaved work makes a shell update wait. They belong to the document now in the window and
+      // end with it (onReset). No keep callback crosses the boundary, so such a hold always waits (never skipped).
+      if (method === 'update.hold') return holdFor(st, args?.reason);
+      if (method === 'update.release') { const id = args?.id; if (typeof id !== 'string' || !st.holds.delete(id)) return false; changed(); return true; }
       // The box's one transcriber, within a per-app budget (an app could otherwise spend the owner's transcription
       // provider without limit). No microphone or provider credential crosses the frame.
       if (method === 'voice.transcribe') {
@@ -979,7 +1001,15 @@
       }
       throw fault('Not available');
     });
-    window.WizBrowserBoundary.onReset(frame => { const st = frames.get(frame); if (st?.tools) setTools(st, null); });
+    window.WizBrowserBoundary.onReset(frame => {
+      const st = frames.get(frame); if (!st) return;
+      if (st.tools) setTools(st, null);
+      // A new document: the old one's holds end with it (its client places its holds again on the new channel). An open
+      // Send to sheet is the shell's, not the document's: its hold stays until the sheet settles.
+      let gone = false;
+      for (const id of [...st.holds.keys()]) if (!st.sheetHolds?.has(id)) { st.holds.delete(id); st.drafts?.delete(id); gone = true; }
+      if (gone) changed();
+    });
   }
   // The shell is about to load a page in this window itself (location.replace keeps src as it was): see trackNav.
   const expectLoad = frame => { const st = frames.get(frame); if (st) st.navExpect = true; };

@@ -34,15 +34,18 @@ function fixture({ id = 'morning-report', src, ready = true, boundary = true } =
     onReset(fn) { this.resets.add(fn); return () => this.resets.delete(fn); },
     ready: f => f === frame && B.readyNow,
     tool: (f, tid, value) => { taps.push({ f, tid, value }); return true; },
-    attach: () => () => {}, enabled: true };
-  const shared = [], heard = [];
-  const window = { WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}),
+    attach: () => () => {}, enabled: true, genNow: 1, gen: f => (f === frame ? B.genNow : null) };
+  const shared = [], heard = [], sheets = [];
+  // The shell's Send to <agent> sheet: records what it shows and whether it may still send when the owner taps Send.
+  const WizShareWizard = { valid: d => { if (!d?.files?.length && !d?.text?.trim()) throw new Error('Nothing to share'); return d; },
+    wizard: (d, authorize) => new Promise(resolve => sheets.push({ d, authorize, send: () => resolve(authorize() ? 'sent' : 'unsupported') })) };
+  const window = { WizShareWizard, WizCore: { apps: () => ({ APPS: [app] }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } }, dispatchEvent() {}, ...(boundary ? { WizBrowserBoundary: B } : {}),
     WosChat: { sharePayload: async p => { shared.push(p); return 'shared'; }, shareFile: async (file, o) => { shared.push({ file, ...o }); return 'shared'; } },
     WizConfig: { ready: Promise.resolve(), voicePrompt: () => '', transcribe: async (file, o) => { heard.push(o); return { text: ' hi ' }; } } };
   vm.runInNewContext(source, { window, location, URL, MutationObserver, Blob, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {}, createElement: t => new El(t) }, CustomEvent: class {}, navigator: {}, JSON });
   const detach = window.WizAppServices.attach(frame, { appId: id, path: app.url, isVisible: () => true });
-  return { B, frame, bar, counts, taps, legacy, detach, shared, heard, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
+  return { B, frame, bar, counts, taps, legacy, detach, shared, heard, sheets, services: window.WizAppServices, call: (m, a) => B.served(frame, m, a), reset: () => { for (const fn of B.resets) fn(frame); },
     load: () => { for (const fn of loads) fn({}); }, setSrc: () => { for (const o of [...observers]) o.fn([]); } };
 }
 const box = f => f.bar.children.find(c => c.className === 'wtools');
@@ -93,7 +96,7 @@ test('not ready on its channel, outside its app path, or a shell-owned count: re
     assert.throws(() => f.call('badge.set', { n: 9 })); assert.equal(id in f.counts, false);
   }
   const f = fixture();
-  assert.throws(() => f.call('share.wizard', { text: 'x' }), /Not available/);
+  assert.throws(() => f.call('capture.pending', {}), /Not available/);
   f.B.readyNow = false;
   assert.throws(() => f.call('badge.set', { n: 1 }), /not verified/, 'a frame whose new document has not answered yet');
 });
@@ -158,4 +161,44 @@ test('transcription: the box\'s transcriber, within a per-app budget', async () 
   const h = fixture({ id: 'podcasts' });
   const big = { size: 151 * 1024 * 1024, [Symbol.toStringTag]: 'Blob' };
   assert.throws(() => h.call('voice.transcribe', { file: big }), /budget/);
+});
+
+test('share to Wizard: the shell\'s own sheet, sent only while the same document is the verified app; it holds updates', async () => {
+  const f = fixture();
+  const holds = () => [...f.services.inspect()[0].holds];
+  const p = f.call('share.wizard', { text: 'Buy milk', title: 'Note', agent: 'other', files: [] });
+  assert.equal(f.sheets.length, 1);
+  assert.deepEqual({ ...f.sheets[0].d }, { files: [], text: 'Buy milk', title: 'Note' }, 'only files, text and title cross');
+  assert.deepEqual(holds(), ['Share to Wizard'], 'a shell update waits while the sheet is open');
+  f.sheets[0].send(); assert.equal(await p, 'sent'); assert.deepEqual(holds(), []);
+  // The window reloads while the sheet is open: the app's own holds end, the sheet's hold stays until it settles.
+  const o = f.call('share.wizard', { text: 'open' }); f.call('update.hold', { reason: 'Unsaved' });
+  f.reset(); assert.deepEqual(holds(), ['Share to Wizard']);
+  f.sheets.at(-1).send(); await o; assert.deepEqual(holds(), []);
+  // The window loaded another document meanwhile: Send does nothing.
+  const q = f.call('share.wizard', { text: 'x' }); f.B.genNow = 2; f.sheets.at(-1).send();
+  assert.equal(await q, 'unsupported');
+  const r = f.call('share.wizard', { text: 'y' }); f.B.readyNow = false; f.sheets.at(-1).send();
+  assert.equal(await r, 'unsupported');
+  f.B.readyNow = true;
+  assert.throws(() => f.call('share.wizard', { text: '  ' }), /Nothing to share/);
+  const off = fixture({ ready: false });
+  assert.throws(() => off.call('share.wizard', { text: 'x' }), /not verified/);
+});
+
+test('update holds: the app\'s unsaved work makes a shell update wait, until it lets go or its document goes', () => {
+  const f = fixture();
+  const holds = () => [...f.services.inspect()[0].holds];
+  const id = f.call('update.hold', { reason: 'Unsaved note' });
+  assert.equal(typeof id, 'string'); assert.ok(id.length <= 32);
+  assert.deepEqual(holds(), ['Unsaved note']); assert.equal(f.services.update.busy(), true);
+  assert.equal(f.call('update.release', { id: 'as-not-mine' }), false);
+  assert.equal(f.call('update.release', { id }), true); assert.equal(f.call('update.release', { id }), false);
+  assert.deepEqual(holds(), []); assert.equal(f.services.update.busy(), false);
+  f.call('update.hold', { reason: 'x'.repeat(500) }); assert.equal(holds()[0].length, 160);
+  f.reset(); assert.deepEqual(holds(), [], 'a new document: the old one\'s holds end');
+  for (let i = 0; i < 64; i++) f.call('update.hold', {});
+  assert.throws(() => f.call('update.hold', {}), /Too many/);
+  const off = fixture({ ready: false });
+  assert.throws(() => off.call('update.hold', {}), /not verified/);
 });

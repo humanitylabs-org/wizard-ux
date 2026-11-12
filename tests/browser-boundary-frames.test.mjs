@@ -201,7 +201,7 @@ test('field insertion: pinned field gets the text once, a field typed in meanwhi
 test('client requests: only the served methods, and it waits for the first hello', async () => {
   const sh = shell(), f = frame(sh);
   f.a.WizBoundaryClient.connect({ onBack: () => false });
-  await assert.rejects(f.a.WizBoundaryClient.request('share.wizard', {}), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('capture.pending', {}), e => e.code === 'unavailable');
   const r = f.a.WizBoundaryClient.request('ready', null, 2000);
   sh.B.attach(f.el);
   assert.deepEqual(clone(await r), { version: 1, hosted: true });
@@ -221,7 +221,7 @@ test('badge and title bar: served by the one registered server; taps come back; 
   assert.equal(await f.a.WizBoundaryClient.request('badge.set', { n: 3 }, 2000), null, 'only a boolean ever crosses back');
   assert.equal(await f.a.WizBoundaryClient.request('titlebar.set', { tools: [{ id: 'older', kind: 'button' }] }, 2000), true);
   await assert.rejects(f.a.WizBoundaryClient.request('titlebar.set', { bad: true }, 2000), e => e.code === 'refused' && /Invalid/.test(e.message));
-  await assert.rejects(f.a.WizBoundaryClient.request('share.wizard', {}, 2000), e => e.code === 'unavailable');
+  await assert.rejects(f.a.WizBoundaryClient.request('identity.info', {}, 2000), e => e.code === 'unavailable');
   // Sharing out needs the browser's transient user activation (a real tap in the app); this shell has none.
   await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'x' }, 2000), e => e.code === 'refused' && /tap/.test(e.message));
   assert.deepEqual(calls.map(c => c.slice(0, 2)), [[true, 'badge.set'], [true, 'titlebar.set'], [true, 'titlebar.set']]);
@@ -517,4 +517,46 @@ test('share and transcription: async answers are protocol data only, share needs
   assert.equal(later.length, 4);
   for (const r of later) r({ text: 'new channel' });
   assert.deepEqual((await Promise.all(slow)).map(clone), [1, 2, 3, 4].map(() => ({ text: 'new channel' })));
+});
+
+test('share to Wizard needs a tap in the window; update holds are placed again on every new channel', async () => {
+  const sh = shell(), f = frame(sh);
+  f.a.WizBoundaryClient.connect({ onBack: () => false });
+  sh.B.attach(f.el);
+  await tick();
+  const calls = []; let n = 0; const held = new Set();
+  sh.B.serve((el, method, args) => {
+    calls.push([method, clone(args)]);
+    if (method === 'share.wizard') return Promise.resolve('sent');
+    if (method === 'update.hold') { const id = 'as-' + (++n); held.add(id); return id; }
+    if (method === 'update.release') return held.delete(args.id);
+    return true;
+  });
+  sh.B.onReset(() => held.clear());
+  // Share to Wizard opens a shell sheet: no tap, refused before the server sees it.
+  await assert.rejects(f.a.WizBoundaryClient.request('share.wizard', { text: 'a' }, 2000), e => e.code === 'refused' && /tap/.test(e.message));
+  assert.equal(calls.some(c => c[0] === 'share.wizard'), false);
+  sh.g.navigator = { userActivation: { isActive: true } }; sh.g.document.activeElement = f.el;
+  assert.equal(await f.a.WizBoundaryClient.request('share.wizard', { text: 'a' }, 2000), 'sent');
+  // A hold: the app gets its own id; the shell's id stays inside the client.
+  const h = await f.a.WizBoundaryClient.request('update.hold', { reason: 'Unsaved note', keepId: 'keep-1' }, 2000);
+  assert.match(h, /^hold-/); assert.deepEqual([...held], ['as-1']);
+  assert.equal(calls.at(-1)[1].keepId, undefined, 'no keep callback id crosses');
+  // The shell loads the window again (a new channel) and drops its holds; the same document places its hold again.
+  sh.B.attach(f.el); f.load(); await tick(); await tick(); await tick();
+  assert.deepEqual([...held], ['as-2']);
+  // Releasing the app's id lets go of the shell's current one.
+  assert.equal(await f.a.WizBoundaryClient.request('update.release', { id: h }, 2000), true);
+  await tick(); await tick();
+  assert.deepEqual([...held], []);
+  assert.equal(await f.a.WizBoundaryClient.request('update.release', { id: h }, 2000), false, 'only once');
+  // Released while the hold is being placed again on a new channel: the shell's id is let go as soon as it arrives.
+  const id = await f.a.WizBoundaryClient.request('update.hold', { reason: 'x' }, 2000);
+  assert.equal(held.size, 1);
+  f.load(); await tick(); await tick();
+  const placing = calls.filter(c => c[0] === 'update.hold').length;
+  await f.a.WizBoundaryClient.request('update.release', { id }, 2000);
+  for (let i = 0; i < 6; i++) await tick();
+  assert.ok(calls.filter(c => c[0] === 'update.hold').length >= placing);
+  assert.deepEqual([...held], []);
 });

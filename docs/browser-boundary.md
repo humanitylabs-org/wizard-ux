@@ -108,15 +108,23 @@ On:
   per-app budget (2 at once, 30 files or 150 MB in any 10 minutes); the app gets only `{ text }` or `{ unavailable }`.
   An answer is never sent to a newer document in that window (it is dropped when the channel changed), and a window
   has at most 4 of these open at once. Proof: `tests/qa-browser-boundary-share-transcribe.cjs` (real Chromium).
+- Share to Wizard and update holds: `WizardApp.share.wizard` needs the same tap in that focused, visible window and
+  opens the shell's own Send to <agent> sheet (`WizShareWizard`), where the owner reads it and sends or cancels. Only
+  `files`, `text` and `title` cross; the sheet sends only while the same document is still the verified app in that
+  window (`WizBrowserBoundary.gen(frame)`), and a shell update waits while it is open. `WizardApp.update.hold` makes a
+  shell update wait for the app's unsaved work (`update.hold` / `update.release`, at most 64 per window). Holds belong
+  to the document now in the window: every new channel drops them in the shell, and the app's client places its
+  holds again on its next channel (the app's own hold id stays the same). No keep callback crosses the boundary, so
+  such a hold is never skipped. Proof: `tests/qa-browser-boundary-share-wizard-holds.cjs` (real Chromium).
 - Browser proof: `tests/qa-browser-boundary-frames.cjs` (real Chromium: opaque origin, `parent.document` and shell
   storage blocked, owner call tokenless with `Origin: null`, Back and theme by postMessage). Unit tests:
   `tests/browser-boundary-frames.test.mjs`.
 
 Not covered yet (next slices, all on #133), so nobody should turn the box switch on yet:
 - Dictation into rich-text (contenteditable) fields of a sandboxed app (text inputs and text areas work), and the
-  app services `share.wizard`, receiving shares, capture, orb, vault, identity, update holds and voice commands are
-  closed under the boundary (only `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file` and
-  `voice.transcribe` are answered).
+  app services receiving shares, capture, orb, vault, identity, the update-available notice and voice commands are
+  closed under the boundary (only `ready`, `badge.set`, `titlebar.set`, `share.text`, `share.file`, `share.wizard`,
+  `voice.transcribe`, `update.hold` and `update.release` are answered).
 - Desktop: a layout's ⌥ keys that press an app's own marked controls (`data-wz-key`), the layouts' own ⌥ keys
   (⌥H, ⌥K, ⌥\, Orbs hold-⌥ letters) and the app kit's live skin layer while a sandboxed app has the keyboard; the phone shell has no key forwarding (it has no desktop keys).
   Pages in the link sheet lose their own storage and pop-ups.

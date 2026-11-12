@@ -26,8 +26,10 @@
  *  - service.request: the bounded app services the shell answers under the boundary: `ready`; the ones that act
  *    only on the app's own window, `badge.set` and `titlebar.set`; sharing out (`share.text`, `share.file`), which
  *    also needs the browser's transient user activation in that focused, visible frame and always opens the shell's own share
- *    sheet, where the owner picks (the shell's confirm); and `voice.transcribe` (the box's transcriber, within a
- *    per-app budget). They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
+ *    sheet, where the owner picks (the shell's confirm); `share.wizard` (the same tap, then the shell's own Send to
+ *    <agent> sheet, where the owner reads the text and sends or cancels); `voice.transcribe` (the box's transcriber,
+ *    within a per-app budget); and `update.hold` / `update.release` (the app's unsaved work makes a shell update wait,
+ *    for that window's current document only). They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
  *    status, a transcript), and an answer is dropped if the frame got a new channel (a load) meanwhile. A title-bar
  *    tap goes back as `tool` on the current channel. Every new channel (a load) first clears that window's
@@ -44,9 +46,10 @@
   try { if (window.top !== window) return; } catch (_) { return; }
   const VERSION = 1, TYPE = 'wizard:boundary', ASK_MS = 1200, SANDBOX = 'allow-scripts allow-forms allow-downloads';
   const sessions = new Map(), pending = new Map(), fieldListeners = new Set(), inputListeners = new Set();
-  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'voice.transcribe'];
-  // Sharing out opens a shell sheet: only right after a real tap or key in that app window, never from a page alone.
-  const TAPPED = ['share.text', 'share.file'], INFLIGHT = 4;
+  const resetListeners = new Set(), SERVED = ['badge.set', 'titlebar.set', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'update.hold', 'update.release'];
+  // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
+  // from a page alone.
+  const TAPPED = ['share.text', 'share.file', 'share.wizard'], INFLIGHT = 4;
   // What may cross back to the app: protocol data only, never a shell object.
   function shape(v) {
     if (typeof v === 'boolean') return v;
@@ -226,6 +229,8 @@
     owns: frame => sessions.has(frame),
     // Whether the app document now in this frame answered on its current channel (`wizard:boundary-ready` fires then).
     ready: frame => { const st = sessions.get(frame); return !!(connected(st) && st.ready); },
+    // Which document is in the frame now (it changes on every load): a long request checks it is still the same one.
+    gen: frame => { const st = sessions.get(frame); return connected(st) ? st.gen : null; },
     attach,
     // Shell-side admission for a later bounded app service: registered element + its WindowProxy + current channel.
     admits(frame, source, channel) { const st = sessions.get(frame); return !!(connected(st) && st.ready && frame.contentWindow === source && st.channel === channel); },
