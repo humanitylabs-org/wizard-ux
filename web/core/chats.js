@@ -2319,11 +2319,14 @@ window.WizCore.chats = function createChats(H) {
     const ready = M.activitySort(pick(g.ready, nt?.awake), order, { at, needs }), recent = M.activitySort(pick(g.recent, nt?.later), 'newest', { at });
     const row = x => x.n ? noteRow(x.v) : chatRow(x.v, null);
     const page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
-    const sec = (k, label, n, inner, open = !!secOpen[k]) => `<section class="ch-sec ch-act${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${n || ''}</small><i aria-hidden="true"></i></button>${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`;
-    const sortBar = () => `<div class="ch-rdy-bar ch-act-sort" role="radiogroup" aria-label="Sort">${ACT_SORTS().map(([v, l]) => `<button type="button" role="radio" data-chactsort="${v}" aria-checked="${order === v}"${order === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>`;
+    // side = a control on the header line beside the fold button (a button cannot hold a select)
+    const sec = (k, label, n, inner, open = !!secOpen[k], side = '') => { const h = `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${n || ''}</small><i aria-hidden="true"></i></button>`;
+      return `<section class="ch-sec ch-act${open ? ' open' : ''}" data-sec="${k}">${side ? `<div class="ch-sec-hl">${h}${side}</div>` : h}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`; };
+    // The one sort is a compact menu on Ready's header line (wizard-ux issue 1354), like the AI apps sidebar's: no pill row.
+    const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort Ready">${ACT_SORTS().map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
     const older = g.older ? `<button class="ch-more ch-act-older" data-chactolder>Show older · ${g.older}</button>` : '';
     return sec('working', 'Working', g.working.length, () => g.working.length ? g.working.map(s => chatRow(s, null)).join('') : '<span class="ch-none">None</span>')
-      + sec('ready', 'Ready', ready.length, () => sortBar() + (ready.length ? page('ready', ready) : '<span class="ch-none">Nothing needs you.</span>'))
+      + sec('ready', 'Ready', ready.length, () => ready.length ? page('ready', ready) : '<span class="ch-none">Nothing needs you.</span>', !!secOpen.ready, sortSel)
       + sec('recent', 'Recent', 0, () => (recent.length ? page('recent', recent) : '<span class="ch-none">Nothing else this week.</span>') + older)
       + sec('snoozed', 'Snoozed', g.snoozed.length, () => g.snoozed.length ? page('snoozed', g.snoozed.map(v => ({ id: v.id, v }))) : '<span class="ch-none">Nothing snoozed.</span>')
       + sec('archived', 'Archived', g.archive.length, () => g.archive.length ? page('archived', g.archive.map(v => ({ id: v.id, v }))) : '<span class="ch-none">Nothing archived.</span>');
@@ -2331,10 +2334,15 @@ window.WizCore.chats = function createChats(H) {
   // The sort and Show older taps (Activity with Channels on); false = not one of them.
   function activityClick(e, w) {
     if (!w || w.thread || typeof channelsOn !== 'function' || !channelsOn()) return false;
-    const so = e.target.closest('[data-chactsort]');
-    if (so) { const v = so.dataset.chactsort; if (!['newest', 'oldest', 'priority'].includes(v)) return true; readyOrder = v; try { localStorage.setItem(READY_ORDER_KEY, v); } catch (_) {} LIVE.putPrefs?.({ readyOrder: v }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } return true; }
+    if (e.target.closest('[data-chactorder]')) return true;   // the sort menu: its change event picks (actSetOrder)
     if (e.target.closest('[data-chactolder]')) { actOlder = true; renderChatList(w, elOf(w.id)); return true; }
     return false;
+  }
+  // Ready's sort menu picked an order: stored as Chats' own Ready order (this device and the box), every list repaints.
+  function actSetOrder(v) {
+    if (!['newest', 'oldest', 'priority'].includes(v)) return;
+    readyOrder = v; try { localStorage.setItem(READY_ORDER_KEY, v); } catch (_) {} LIVE.putPrefs?.({ readyOrder: v });
+    for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); }
   }
   function renderChatList(w, el) {
     if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.loadCounts();
@@ -2517,6 +2525,7 @@ window.WizCore.chats = function createChats(H) {
       // The auto-archive picker is a saved setting, not a draft: show the saved value after every repaint, or a
       // window painted before the choice changed (another desk, another device, first paint) keeps saying "1 week".
       const arch = root.querySelector('[data-archafter]'); if (arch && arch.value !== String(LIVE.archiveAfterDays)) arch.value = String(LIVE.archiveAfterDays);
+      const aso = root.querySelector('[data-chactorder]'), asv = aso && window.WizChatsListModel?.activitySortOf(readyOrder); if (aso && aso.value !== asv) aso.value = asv;
       if (c.listPending) { if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null; }
       else anchorListPlace(el.querySelector('.ch-scroll'), place);
     } else {
@@ -4591,6 +4600,7 @@ window.WizCore.chats = function createChats(H) {
     });
     root.addEventListener('change', e => {
       if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
+      if (e.target.matches('[data-chactorder]') && typeof actSetOrder === 'function') actSetOrder(e.target.value);
     });
     root.addEventListener('keydown', e => {
       if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }

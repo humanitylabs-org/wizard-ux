@@ -25,7 +25,7 @@ function phone({ order = 'newest', open = {}, older = false } = {}) {
   vm.runInContext(between(chats, '  const ACT_SORTS = () =>', '  // The sort and Show older taps').replace('let actOlder = false;', ''), c);
   return c;
 }
-const secs = html => [...html.matchAll(/<section class="ch-sec ch-act( open)?" data-sec="([^"]+)"><button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(true|false)"><span>([^<]+)<\/span><small>([^<]*)<\/small>/g)].map(m => [m[4], m[5], m[3] === 'true']);
+const secs = html => [...html.matchAll(/<section class="ch-sec ch-act( open)?" data-sec="([^"]+)">(?:<div class="ch-sec-hl">)?<button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(true|false)"><span>([^<]+)<\/span><small>([^<]*)<\/small>/g)].map(m => [m[4], m[5], m[3] === 'true']);
 const rowsIn = (html, k) => [...(html.split(`data-sec="${k}"`)[1] || '').split('</section>')[0].matchAll(/<row ([^>]+)>/g)].map(m => m[1]);
 
 test('phone / Classic Activity: Working, Ready, Recent, then folded Snoozed and Archived, with their counts', () => {
@@ -35,9 +35,19 @@ test('phone / Classic Activity: Working, Ready, Recent, then folded Snoozed and 
   assert.deepEqual(rowsIn(html, 'recent'), ['r1', 'r2'], 'the rest, newest first, about a week back');
   assert.match(html, /<button class="ch-more ch-act-older" data-chactolder>Show older · 1<\/button>/);
   assert.doesNotMatch(html, /<row s1>|<row a1>/, 'Snoozed and Archived fold shut');
-  assert.deepEqual([...html.matchAll(/data-chactsort="([^"]+)" aria-checked="(true|false)"[^>]*>([^<]+)</g)].map(m => [m[1], m[2], m[3]]),
-    [['newest', 'true', 'Newest first'], ['oldest', 'false', 'Oldest first'], ['priority', 'false', 'Needs you first']], 'the one sort sits on Ready');
+  assert.deepEqual([...html.matchAll(/<option value="([^"]+)"( selected)?>([^<]+)</g)].map(m => [m[1], !!m[2], m[3]]),
+    [['newest', true, 'Newest first'], ['oldest', false, 'Oldest first'], ['priority', false, 'Needs you first']], 'the one sort sits on Ready');
+  // wizard-ux issue 1354: one compact menu on Ready's header line (beside the fold button), not a row of pills under it
+  assert.match(html, /data-sec="ready"><div class="ch-sec-hl"><button class="ch-sec-h" data-sectoggle="ready"[^]*?<\/button><label class="ch-act-sort"><select data-chactorder aria-label="Sort Ready">/);
+  assert.doesNotMatch(html, /ch-rdy-bar|data-chactsort|role="radio"/, 'no pill row');
+  assert.equal((html.match(/<select/g) || []).length, 1, 'one menu, on Ready only');
   assert.doesNotMatch(html, /A to Z|data-workorder|data-rdyorder|By status|By project|One list/, 'no Working sort and no layout choices');
+});
+
+test('phone / Classic Activity: the sort menu shows the saved order and stays on the header line when Ready is folded (issue 1354)', () => {
+  const html = phone({ order: 'priority', open: { ready: false } }).activityBody({ id: 'w' }, ROWS(), null);
+  assert.match(html, /<option value="priority" selected>Needs you first</); assert.doesNotMatch(html, /<option value="newest" selected>/);
+  assert.match(html, /data-sec="ready"><div class="ch-sec-hl"><button class="ch-sec-h" data-sectoggle="ready" aria-expanded="false">[^]*?<\/button><label class="ch-act-sort">[^]*?<\/label><\/div><\/section>/);
 });
 
 test('phone Activity: Needs you first and Oldest first; Show older and unread notifications in Ready', () => {
