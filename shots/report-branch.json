@@ -1,0 +1,536 @@
+[
+  {
+    "stem": "phone-nebula-off",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 1,
+    "sections": [
+      "Working",
+      "Ready",
+      "Past week",
+      "Archive"
+    ],
+    "pass": true
+  },
+  {
+    "stem": "phone-nebula-on",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 0,
+    "sections": [
+      "Working",
+      "Ready",
+      "Recent",
+      "Snoozed",
+      "Archived"
+    ],
+    "ready": [
+      "qa-c1",
+      "qa-g1",
+      "qa-y1"
+    ],
+    "recent": [
+      "qa-r1",
+      "qa-r2"
+    ],
+    "sorts": [
+      "Newest first",
+      "Oldest first",
+      "Needs you first"
+    ],
+    "claudeLine": "Essay outline 30m # General · Claude",
+    "marks": [
+      [
+        "qa-c1",
+        "Unread",
+        "rgb(185, 176, 216)"
+      ],
+      [
+        "qa-g1",
+        "Unread",
+        "rgb(185, 176, 216)"
+      ],
+      [
+        "qa-y1",
+        "Needs you",
+        "rgb(185, 176, 216)"
+      ]
+    ],
+    "readyAfter": [
+      "qa-c1",
+      "qa-y1"
+    ],
+    "gNew": false,
+    "channelRows": [
+      "launch",
+      "__general__",
+      "ch-chan-add",
+      "chan-agents"
+    ],
+    "agentFeed": "Claude",
+    "agentPosts": 1,
+    "agentBox": "Message Claude",
+    "undo": {
+      "text": "Archived Undo",
+      "bg": "rgb(5, 3, 12)",
+      "image": true,
+      "alpha": 255
+    },
+    "restored": true,
+    "pass": true
+  },
+  {
+    "stem": "phone-grove-off",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 1,
+    "sections": [
+      "Working",
+      "Ready",
+      "Past week",
+      "Archive"
+    ],
+    "pass": true
+  },
+  {
+    "stem": "phone-grove-on",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 0,
+    "sections": [
+      "Working",
+      "Ready",
+      "Recent",
+      "Snoozed",
+      "Archived"
+    ],
+    "ready": [
+      "qa-c1",
+      "qa-g1",
+      "qa-y1"
+    ],
+    "recent": [
+      "qa-r1",
+      "qa-r2"
+    ],
+    "sorts": [
+      "Newest first",
+      "Oldest first",
+      "Needs you first"
+    ],
+    "claudeLine": "Essay outline 30m # General · Claude",
+    "marks": [
+      [
+        "qa-c1",
+        "Unread",
+        "rgb(181, 203, 185)"
+      ],
+      [
+        "qa-g1",
+        "Unread",
+        "rgb(181, 203, 185)"
+      ],
+      [
+        "qa-y1",
+        "Needs you",
+        "rgb(181, 203, 185)"
+      ]
+    ],
+    "readyAfter": [
+      "qa-c1",
+      "qa-y1"
+    ],
+    "gNew": false,
+    "channelRows": [
+      "launch",
+      "__general__",
+      "ch-chan-add",
+      "chan-agents"
+    ],
+    "agentFeed": "Claude",
+    "agentPosts": 1,
+    "agentBox": "Message Claude",
+    "undo": {
+      "text": "Archived Undo",
+      "bg": "rgb(5, 11, 7)",
+      "image": true,
+      "alpha": 255
+    },
+    "restored": true,
+    "pass": true
+  },
+  {
+    "stem": "classic-nebula-off",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 1,
+    "sections": [
+      "WORKING",
+      "READY",
+      "PAST WEEK",
+      "ARCHIVE"
+    ],
+    "pass": true
+  },
+  {
+    "stem": "classic-nebula-on",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 0,
+    "sections": [
+      "WORKING",
+      "READY",
+      "RECENT",
+      "SNOOZED",
+      "ARCHIVED"
+    ],
+    "ready": [
+      "qa-c1",
+      "qa-g1",
+      "qa-y1"
+    ],
+    "recent": [
+      "qa-r1",
+      "qa-r2"
+    ],
+    "sorts": [
+      "Newest first",
+      "Oldest first",
+      "Needs you first"
+    ],
+    "claudeLine": "Essay outline 31m # General · Claude · Outline ready.",
+    "marks": [
+      [
+        "qa-c1",
+        "Unread",
+        "rgb(125, 116, 163)"
+      ],
+      [
+        "qa-g1",
+        "Unread",
+        "rgb(125, 116, 163)"
+      ],
+      [
+        "qa-y1",
+        "Needs you",
+        "rgb(125, 116, 163)"
+      ]
+    ],
+    "readyAfter": [
+      "qa-c1",
+      "qa-y1"
+    ],
+    "gNew": false,
+    "channelRows": [
+      "launch",
+      "__general__",
+      "ch-chan-add",
+      "chan-agents"
+    ],
+    "agentFeed": "Claude",
+    "agentPosts": 1,
+    "agentBox": "Message Claude",
+    "undo": {
+      "text": "Archived Undo",
+      "bg": "rgb(5, 3, 12)",
+      "image": true,
+      "alpha": 255
+    },
+    "restored": true,
+    "pass": true
+  },
+  {
+    "stem": "classic-grove-off",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 1,
+    "sections": [
+      "WORKING",
+      "READY",
+      "PAST WEEK",
+      "ARCHIVE"
+    ],
+    "pass": true
+  },
+  {
+    "stem": "classic-grove-on",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen"
+    ],
+    "strip": 0,
+    "sections": [
+      "WORKING",
+      "READY",
+      "RECENT",
+      "SNOOZED",
+      "ARCHIVED"
+    ],
+    "ready": [
+      "qa-c1",
+      "qa-g1",
+      "qa-y1"
+    ],
+    "recent": [
+      "qa-r1",
+      "qa-r2"
+    ],
+    "sorts": [
+      "Newest first",
+      "Oldest first",
+      "Needs you first"
+    ],
+    "claudeLine": "Essay outline 31m # General · Claude · Outline ready.",
+    "marks": [
+      [
+        "qa-c1",
+        "Unread",
+        "rgb(127, 154, 134)"
+      ],
+      [
+        "qa-g1",
+        "Unread",
+        "rgb(127, 154, 134)"
+      ],
+      [
+        "qa-y1",
+        "Needs you",
+        "rgb(127, 154, 134)"
+      ]
+    ],
+    "readyAfter": [
+      "qa-c1",
+      "qa-y1"
+    ],
+    "gNew": false,
+    "channelRows": [
+      "launch",
+      "__general__",
+      "ch-chan-add",
+      "chan-agents"
+    ],
+    "agentFeed": "Claude",
+    "agentPosts": 1,
+    "agentBox": "Message Claude",
+    "undo": {
+      "text": "Archived Undo",
+      "bg": "rgb(5, 11, 7)",
+      "image": true,
+      "alpha": 255
+    },
+    "restored": true,
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-nebula-off",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen"
+    ],
+    "chips": 1,
+    "sections": [
+      "Working",
+      "Ready",
+      "Archive"
+    ],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-nebula-on",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen"
+    ],
+    "chips": 0,
+    "sections": [
+      "Working",
+      "Ready",
+      "Recent",
+      "Snoozed",
+      "Archived"
+    ],
+    "ready": [
+      "qa-c1",
+      "qa-g1",
+      "qa-y1"
+    ],
+    "claudeLine": "# General · Claude",
+    "dots": [
+      [
+        "qa-c1",
+        "aad-st is-new",
+        "oklch(0.855837 0.161676 150)"
+      ],
+      [
+        "qa-g1",
+        "aad-st is-new",
+        "oklch(0.855837 0.161676 150)"
+      ],
+      [
+        "qa-y1",
+        "aad-st is-needs",
+        "rgb(255, 190, 85)"
+      ]
+    ],
+    "sorts": [
+      "Newest first",
+      "Oldest first",
+      "Needs you first"
+    ],
+    "readyAfter": [
+      "qa-c1",
+      "qa-y1"
+    ],
+    "undo": {
+      "text": "Archived Undo",
+      "bg": "rgb(5, 3, 12)",
+      "image": true,
+      "alpha": 255
+    },
+    "restored": true,
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-grove-off",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen"
+    ],
+    "chips": 1,
+    "sections": [
+      "Working",
+      "Ready",
+      "Archive"
+    ],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-grove-on",
+    "errors": [],
+    "writes": [
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen",
+      "PATCH /wizard/hermes/api/sessions/qa-r1",
+      "PUT /wizard/thread-seen"
+    ],
+    "chips": 0,
+    "sections": [
+      "Working",
+      "Ready",
+      "Recent",
+      "Snoozed",
+      "Archived"
+    ],
+    "ready": [
+      "qa-c1",
+      "qa-g1",
+      "qa-y1"
+    ],
+    "claudeLine": "# General · Claude",
+    "dots": [
+      [
+        "qa-c1",
+        "aad-st is-new",
+        "oklch(0.844499 0.155401 150)"
+      ],
+      [
+        "qa-g1",
+        "aad-st is-new",
+        "oklch(0.844499 0.155401 150)"
+      ],
+      [
+        "qa-y1",
+        "aad-st is-needs",
+        "rgb(240, 180, 90)"
+      ]
+    ],
+    "sorts": [
+      "Newest first",
+      "Oldest first",
+      "Needs you first"
+    ],
+    "readyAfter": [
+      "qa-c1",
+      "qa-y1"
+    ],
+    "undo": {
+      "text": "Archived Undo",
+      "bg": "rgb(5, 11, 7)",
+      "image": true,
+      "alpha": 255
+    },
+    "restored": true,
+    "pass": true
+  }
+]
