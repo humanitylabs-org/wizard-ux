@@ -60,7 +60,8 @@
  *    gets it at once through the frame's name (frameAttributes(url, appId) / storageName(appId)), with the app's own
  *    path (the page drops it outside that path), because a page reads its settings while it loads, before any message
  *    can arrive; `storage.load` answers a window that got none, and
- *    `storage.save` takes the page's changes (set, remove, clear) for the window's own app id only.
+ *    `storage.save` takes the page's changes (set, remove, clear) for the window's own app id only. Its IndexedDB the
+ *    same way (appIdb: `idb.load`, `idb.commit`, `idb.drop`, `idb.list`; another window of the app hears `notice` `idb`).
  *  - net: an opaque page's own fetch to its app's backend goes out with `Origin: null` and no cookies, and the browser
  *    hides the answer (CORS), so app-client.js sends a `fetch` to this host as `net.fetch` and the shell makes it.
  *    core/app-services.js makes it only inside the window's own app path (the same rule as its links), never to an
@@ -92,7 +93,7 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'];
+    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
@@ -125,6 +126,8 @@
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && 'capture' in v) return { capture: plain(v.capture) };
     // The app's own saved settings (storage.load): string keys and values only.
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.store instanceof Map) return { store: Object.fromEntries([...v.store].filter(([k, x]) => typeof k === 'string' && typeof x === 'string')) };
+    // The app's own IndexedDB (idb.load, idb.list): what this app stored there, as it stored it (appIdb below).
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && 'idb' in v) return { idb: v.idb };
     // An app's own backend answer (net.fetch): status, the headers a page may see, the body bytes and the final address.
     if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.net && typeof v.net === 'object') return { net: netShape(v.net) };
     // An app's own socket that opened (ws.open): the subprotocol and extensions the server chose.
@@ -461,6 +464,130 @@
     const base = typeof id === 'string' && STORE_ID.test(id) ? storeBase(id) : '';
     return base ? STORE_NAME + JSON.stringify({ p: base, l: Object.fromEntries(storeRead(id)) }) : '';
   }
+  /* A sandboxed app's IndexedDB (its stand-in in core/app-client.js; the browser refuses IndexedDB to an opaque page).
+   * The shell keeps each installed app's databases in its own IndexedDB (`wos-app-idb-v1`), keyed by the window's
+   * installed app id, never one the page names: `dbs` holds each database's version, object stores and indexes under
+   * [app, name], `rows` each record under [app, name, store, key]. The page sends a finished transaction's changes as
+   * one list (idb.commit), written all together or not at all; 64 MB per app, 256 MB for all apps together. One app's
+   * loads and changes run one at a time, in order. */
+  const IDB = 'wos-app-idb-v1', IDB_APP = 64 * 1024 * 1024, IDB_ALL = 256 * 1024 * 1024, IDB_NAME = 256, IDB_OPS = 20000;
+  let idbHomeP = null;
+  const idbQueue = new Map();
+  const idbReq = r => new Promise((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+  function idbHome() {
+    return idbHomeP || (idbHomeP = new Promise((ok, no) => {
+      const r = indexedDB.open(IDB, 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('dbs'); r.result.createObjectStore('rows'); };
+      r.onsuccess = () => { const d = r.result; d.onversionchange = () => { d.close(); idbHomeP = null; }; ok(d); };
+      r.onerror = () => { idbHomeP = null; no(r.error); };
+    }));
+  }
+  const idbOk = (id, name) => typeof id === 'string' && STORE_ID.test(id) && typeof name === 'string' && name.length <= IDB_NAME;
+  function idbSerial(id, fn) {
+    const p = (idbQueue.get(id) || Promise.resolve()).then(fn);
+    const tail = p.catch(() => {});
+    idbQueue.set(id, tail);
+    tail.then(() => { if (idbQueue.get(id) === tail) idbQueue.delete(id); });
+    return p;
+  }
+  // [app, name, store] < [app, name, store, any key] < [app, name, store + '\0']: one store's rows; likewise one database.
+  const idbStoreRows = (id, name, s) => IDBKeyRange.bound([id, name, s], [id, name, s + '\u0000'], false, true);
+  const idbDbRows = (id, name) => IDBKeyRange.bound([id, name], [id, name + '\u0000'], false, true);
+  const idbPath = (p, index) => {
+    if (p === null && !index) return null;
+    if (typeof p === 'string' && p.length <= 1024) return p;
+    if (Array.isArray(p) && p.length && p.length <= 32 && p.every(x => typeof x === 'string' && x.length <= 1024)) return [...p];
+    throw new Error('bad key path');
+  };
+  // About how much a record takes, for the space limits.
+  function idbBytes(v, seen = new Set()) {
+    if (v === null || v === undefined) return 1;
+    if (typeof v === 'string') return 2 * v.length + 4;
+    if (typeof v !== 'object') return 8;
+    if (seen.has(v)) return 8;
+    seen.add(v);
+    if (isBlob(v)) return v.size + 64;
+    if (BINARY(v)) return v.byteLength + 16;
+    let n = 16;
+    if (v instanceof Map) { for (const [k, x] of v) n += idbBytes(k, seen) + idbBytes(x, seen); return n; }
+    if (v instanceof Set) { for (const x of v) n += idbBytes(x, seen); return n; }
+    for (const k of Object.keys(v)) n += 2 * k.length + idbBytes(v[k], seen);
+    return n;
+  }
+  function idbLoad(id, name) {
+    if (!idbOk(id, name)) return Promise.resolve({ idb: null });
+    return idbSerial(id, async () => {
+      const tx = (await idbHome()).transaction(['dbs', 'rows'], 'readonly');
+      const m = await idbReq(tx.objectStore('dbs').get([id, name]));
+      if (!m) return { idb: null };
+      const os = tx.objectStore('rows'), rows = [];
+      for (const [s] of m.stores) {
+        const r = idbStoreRows(id, name, s), [keys, vals] = await Promise.all([idbReq(os.getAllKeys(r)), idbReq(os.getAll(r))]);
+        rows.push([s, keys.map((k, i) => [k[3], vals[i].v])]);
+      }
+      return { idb: { version: m.version, stores: m.stores.map(([s, x]) => [s, { keyPath: x.keyPath, autoIncrement: x.autoIncrement, next: x.next, indexes: x.indexes }]), rows } };
+    });
+  }
+  // The changes of one transaction, in order: { o: 'version', v }, { o: 'store', s, keyPath, autoIncrement },
+  // { o: 'unstore', s }, { o: 'index', s, i, keyPath, unique, multiEntry }, { o: 'unindex', s, i }, { o: 'next', s, n },
+  // { o: 'put', s, k, v }, { o: 'del', s, k }, { o: 'clear', s }. True when all were written; false (nothing written)
+  // when a change is not acceptable or the space is full.
+  function idbCommit(id, name, ops) {
+    if (!idbOk(id, name) || !Array.isArray(ops) || !ops.length || ops.length > IDB_OPS) return Promise.resolve(false);
+    return idbSerial(id, () => new Promise(done => {
+      let tx = null;
+      const stop = () => { try { tx?.abort(); } catch (_) {} done(false); };
+      idbHome().then(async d => {
+        tx = d.transaction(['dbs', 'rows'], 'readwrite');
+        tx.oncomplete = () => done(true);
+        tx.onabort = () => done(false);
+        const dbs = tx.objectStore('dbs'), rows = tx.objectStore('rows');
+        const m = (await idbReq(dbs.get([id, name]))) || { version: 0, stores: [], size: 0 };
+        const stores = new Map(m.stores);
+        const info = s => { const x = typeof s === 'string' && stores.get(s); if (!x) throw new Error('no such store'); return x; };
+        for (const op of ops) {
+          if (!op || typeof op !== 'object' || (op.s !== undefined && (typeof op.s !== 'string' || op.s.length > IDB_NAME))) throw new Error('bad change');
+          if (op.o === 'version') { if (!Number.isSafeInteger(op.v) || op.v < 1) throw new Error('bad version'); m.version = op.v; }
+          else if (op.o === 'store') { if (typeof op.s !== 'string' || stores.has(op.s)) throw new Error('bad store'); stores.set(op.s, { keyPath: idbPath(op.keyPath ?? null), autoIncrement: op.autoIncrement === true, next: 1, indexes: [], size: 0 }); }
+          else if (op.o === 'unstore') { info(op.s); rows.delete(idbStoreRows(id, name, op.s)); stores.delete(op.s); }
+          else if (op.o === 'index') { const x = info(op.s); if (typeof op.i !== 'string' || op.i.length > IDB_NAME || x.indexes.some(([n]) => n === op.i)) throw new Error('bad index'); x.indexes = [...x.indexes, [op.i, { keyPath: idbPath(op.keyPath, true), unique: op.unique === true, multiEntry: op.multiEntry === true }]]; }
+          else if (op.o === 'unindex') { const x = info(op.s); x.indexes = x.indexes.filter(([n]) => n !== op.i); }
+          else if (op.o === 'next') { const x = info(op.s); if (!Number.isFinite(op.n) || op.n < 1) throw new Error('bad key generator'); x.next = op.n; }
+          else if (op.o === 'put' || op.o === 'del') {
+            const x = info(op.s), key = [id, name, op.s, op.k], old = await idbReq(rows.get(key));
+            if (op.o === 'put') { const n = idbBytes(op.k) + idbBytes(op.v); rows.put({ v: op.v, n }, key); x.size += n - (old?.n || 0); }
+            else if (old) { rows.delete(key); x.size -= old.n || 0; }
+          }
+          else if (op.o === 'clear') { const x = info(op.s); rows.delete(idbStoreRows(id, name, op.s)); x.size = 0; }
+          else throw new Error('bad change');
+        }
+        m.stores = [...stores];
+        m.size = m.stores.reduce((n, [, x]) => n + (x.size || 0), 0);
+        const [keys, all] = await Promise.all([idbReq(dbs.getAllKeys()), idbReq(dbs.getAll())]);
+        let app = 0, total = 0;
+        keys.forEach((k, i) => { if (k[0] === id && k[1] === name) return; total += all[i]?.size || 0; if (k[0] === id) app += all[i]?.size || 0; });
+        if (app + m.size > IDB_APP || total + m.size > IDB_ALL) return stop();
+        dbs.put(m, [id, name]);
+      }).catch(stop);
+    }));
+  }
+  function idbDrop(id, name) {
+    if (!idbOk(id, name)) return Promise.resolve(false);
+    return idbSerial(id, () => idbHome().then(d => new Promise(done => {
+      const tx = d.transaction(['dbs', 'rows'], 'readwrite');
+      tx.oncomplete = () => done(true); tx.onabort = () => done(false);
+      tx.objectStore('rows').delete(idbDbRows(id, name));
+      tx.objectStore('dbs').delete([id, name]);
+    }))).catch(() => false);
+  }
+  function idbList(id) {
+    if (typeof id !== 'string' || !STORE_ID.test(id)) return Promise.resolve({ idb: [] });
+    return idbSerial(id, async () => {
+      const os = (await idbHome()).transaction('dbs').objectStore('dbs'), r = IDBKeyRange.bound([id], [id + '\u0000'], false, true);
+      const [keys, vals] = await Promise.all([idbReq(os.getAllKeys(r)), idbReq(os.getAll(r))]);
+      return { idb: keys.map((k, i) => ({ name: k[1], version: vals[i].version })) };
+    });
+  }
   const attr = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   window.WizBrowserBoundary = Object.freeze({
     enabled: true,
@@ -476,6 +603,8 @@
     storageName,
     // For core/app-services.js only, always with the frame's own installed app id (never one the page names).
     appStorage: Object.freeze({ load: id => ({ store: storeRead(id) }), save: storeApply }),
+    // Likewise its IndexedDB (appIdb above): load, commit, drop and list, always for the frame's own installed app id.
+    appIdb: Object.freeze({ load: idbLoad, commit: idbCommit, drop: idbDrop, list: idbList }),
     // For core/app-services.js net.fetch: whether a URL is an owner route on this origin (never fetched for an app).
     ownerRoute,
     netMax: NET_MAX,
@@ -584,6 +713,11 @@
         if (data.event === 'end') { send(st, 'notice', { kind, key: data.key, event: 'end' }); return true; }
         if (data.event === 'error') { send(st, 'notice', { kind, key: data.key, event: 'error', message: typeof data.message === 'string' ? data.message.slice(0, 200) : '' }); return true; }
         return false;
+      }
+      if (kind === 'idb') {
+        // Another window of this app changed one of its IndexedDB databases: only its name crosses.
+        if (typeof data?.name !== 'string' || data.name.length > 256) return false;
+        send(st, 'notice', { kind, name: data.name }); return true;
       }
       if (kind === 'ws') {
         // This document's own socket (ws.open): a message from its server (text or bytes) or its close (code, reason,

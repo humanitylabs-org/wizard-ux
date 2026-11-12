@@ -38,7 +38,9 @@
  * it only inside this window's app path. One open on a channel that is replaced fails instead of being sent again. A
  * streamed answer's body comes as `notice` `net` (onNet: bytes, end, error), and every open one ends on a new channel.
  * The app's own WebSocket (`ws.open`, `ws.send`, `ws.close`) goes the same way: the shell opens it, and the server's
- * messages and close come as `notice` `ws` (onNet with `ws: true`); every socket ends on a new channel.
+ * messages and close come as `notice` `ws` (onNet with `ws: true`); every socket ends on a new channel. The app's own
+ * IndexedDB is kept by the shell (`idb.load`, `idb.commit`, `idb.drop`, `idb.list`); `notice` `idb` (onIdb) says another
+ * window of the app changed a database.
  */
 (() => {
   'use strict';
@@ -49,10 +51,10 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'], STICKY = ['badge.set', 'titlebar.set'];
+    'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, serial = 0, claimed = new Set();
+  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, onIdb = null, serial = 0, claimed = new Set();
   // App keys (data-wz-key): WizardApp's own live list and press (core/app-client.js keys), used only while the shell's
   // layout presses app keys (`app` in hello / keys).
   let appKeys = null, appPress = null, appOn = false, appSent = '', appQueued = false, appKeyNow = [];
@@ -219,6 +221,7 @@
     if (d.op === 'notice') {
       if (d.kind === 'refresh' && ['visible', 'focus', 'poll', 'agent'].includes(d.reason)) { try { onRefresh?.(d.reason); } catch (_) {} }
       if (d.kind === 'share') { try { onShare?.(); } catch (_) {} }
+      if (d.kind === 'idb' && typeof d.name === 'string' && d.name.length <= 256) { try { onIdb?.(d.name); } catch (_) {} }
       if (d.kind === 'capture' && CAPTURE_EVENTS.includes(d.event) && (d.id === undefined || (typeof d.id === 'string' && d.id.length <= 128))) {
         try { onCapture?.({ event: d.event, id: d.id, value: d.value, info: d.info && typeof d.info === 'object' ? d.info : undefined }); } catch (_) {}
       }
@@ -358,8 +361,8 @@
   }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, onNet: net, keys: listKeys, press } = {}) {
-      onNet = typeof net === 'function' ? net : null;
+    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, onNet: net, onIdb: idb, keys: listKeys, press } = {}) {
+      onNet = typeof net === 'function' ? net : null; onIdb = typeof idb === 'function' ? idb : null;
       appKeys = typeof listKeys === 'function' ? listKeys : null; appPress = typeof press === 'function' ? press : null;
       onCapture = typeof recording === 'function' ? recording : null; onReady = typeof hello === 'function' ? hello : null;
       back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;

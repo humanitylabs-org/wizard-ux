@@ -206,8 +206,23 @@ On:
   link or form that leaves that path clears it first (a navigation the app's own scripts make is theirs: they hold the
   data anyway). A window that started without them (the Welcome's frames) asks once and fires a `storage` event; a
   change the shell could not keep (all apps full) is undone in the page, with a `storage` event.
-  Not covered: IndexedDB, Cache Storage and cookies; the copy stays after an app is removed. Proof:
+  Not covered: Cache Storage; the copy stays after an app is removed. Proof:
   `tests/qa-browser-boundary-storage.cjs`.
+- IndexedDB: the browser refuses it to an opaque page (`open` throws), so `core/app-client.js` puts a stand-in in its
+  place with the same classes (`instanceof IDBRequest` holds, so libraries such as idb work), requests and events:
+  object stores with in-line or out-of-line keys and key generators, indexes (unique, multiEntry), the browser's own
+  `IDBKeyRange` and `indexedDB.cmp`, cursors in all four directions with `update`/`delete`, `getAll`/`count`,
+  `deleteDatabase` and `databases()`. The shell keeps each app's databases in its own IndexedDB (`wos-app-idb-v1`,
+  browser-boundary.js `appIdb`), keyed by the window's installed app id, never one the page names. Opening a
+  database reads it whole once (`idb.load`); requests run on the page's copy, in order, one transaction at a time; a
+  readwrite transaction's changes go to the shell as one list when it ends (`idb.commit`, written all together or not
+  at all) and `complete` fires only after that. Over 64 MB for the app (256 MB for all apps) the transaction aborts
+  with `QuotaExceededError` and nothing of it stays. After a change, the app's other windows read that database again
+  before their next transaction (`notice` `idb`). Values are copies (structuredClone), Blobs included (Music's offline
+  clips). Not covered: the databases stay after an app is removed; an upgrade does not wait for other open
+  connections (they get `versionchange`). `document.cookie` throws in an opaque page too, so the page gets a jar of
+  its own for that document (what it writes it reads back; nothing reaches its server, and the owner's cookies stay
+  out of reach). Proof: `tests/qa-browser-boundary-idb.cjs`.
 - The app's own backend: an opaque page's own `fetch` to this host goes out with `Origin: null` and no cookies, and the
   browser hides the answer (CORS), so most apps could not load their data. `core/app-client.js` sends a `fetch` to this
   host through the shell (`net.fetch`) and gives the page a normal `Response` (status, headers, body, `url`,
@@ -249,9 +264,9 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
-- Apps that use IndexedDB or cookies read by their own scripts still need work from an opaque origin
-  (wizard-os#385); `fetch` (also streamed), `XMLHttpRequest`, `EventSource` and `WebSocket` to the app's own backend,
-  `localStorage` and `sessionStorage` work (above). The
+- Each real app still needs checking one by one from an opaque origin (wizard-os#385); `fetch` (also streamed),
+  `XMLHttpRequest`, `EventSource` and `WebSocket` to the app's own backend, `localStorage`, `sessionStorage`,
+  IndexedDB and `document.cookie` work (above). The
   Troubleshooter's own `/troubleshoot/api/` calls already work (wizard-troubleshooter#44: a per-box page key), once
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly
