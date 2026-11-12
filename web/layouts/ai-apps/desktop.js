@@ -1617,8 +1617,13 @@ export default function desktop(api) {
     // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
     if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
     else if (h.app) chatThread = FEED;
+    // With an app centred (or full) the feed comes to the front, as opening a chat does; closing the feed gives the
+    // front back to the app, in the same view (wizard-ux issue 1344)
+    const f = panes.get().focus;
+    if (f !== 'chats') { feedFocus = f; panes.set({ focus: 'chats' }); }
     paintTop();
   }
+  let feedFocus = null;
   api.listen(globalThis, 'wos:channel-feed', e => feedOpened(e?.detail?.open || null));
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
@@ -1647,7 +1652,10 @@ export default function desktop(api) {
     // full stay as they were, so the desk ends as it was before the feed opened (wizard-ux issues 1330, 1325).
     if (panes.get().mode !== 'tiled' && chatThread !== FEED && !feedBack()) windowMode('tiled', 'chats');
     // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
+    // (the feed was brought in front of a centred app: the app gets the front back, issue 1344)
+    if (chatThread === FEED && feedFocus) { if (pane && panes.get().focus === 'chats') panes.set({ focus: feedFocus }); feedFocus = null; }
     if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
+    if (!feedBack()) feedFocus = null; // a plain chat closing: no feed to give the front back from
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
   }

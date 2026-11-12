@@ -5,6 +5,7 @@
 // is read or written). Per skin and per view (tiled = the app beside Home, pair = 50/50): note the desk's layout ->
 // open # Launch -> a post -> Esc (the feed) -> Esc -> the desk is exactly as noted (view icon, chat column, app panel and
 // their boxes). QA_EXPECT=broken (QA_WEB=<main worktree>/web) asserts main's 50/50 falls back to tiled.
+// Centred (wizard-ux issue 1344): the feed comes to the front like a chat; QA_EXPECT=broken asserts it stays behind the app.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -13,7 +14,7 @@ const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'h
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'desktop-channel-esc-view-evidence');
 const SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 const EXPECT = process.env.QA_EXPECT || 'fixed'; // 'broken': main before issue 1330 (Esc drops 50/50 for tiled)
-const VIEWS = (process.env.QA_VIEWS || 'tiled,pair').split(',');
+const VIEWS = (process.env.QA_VIEWS || 'tiled,pair,centre').split(',');
 const DESK = { wins: { wqa1: { id: 'wqa1', app: 'pages', appId: 'pages' } }, ws: [{ id: 'dqa1', wins: ['wqa1'], focus: 'wqa1', mono: false }], home: false };
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
@@ -117,8 +118,14 @@ const report = { origin, web, cases: [] };
         // A channel's feed in the chat column, then a post's thread.
         await vis('.aad-chan [data-chview="channels"]').click();
         await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').click();
+        if (EXPECT === 'broken' && view === 'centre') {
+          await nap(1500); entry.feedOpen = await layout();
+          assert.equal(await page.locator('.aad-feed .ch-post-b[data-chopen="qa-p12"]').filter({ visible: true }).count(), 0, 'main: the feed is behind the centred app');
+          assert.equal(entry.feedOpen.chat, null, 'main: no chat column in front'); entry.pass = true; continue;
+        }
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p12"]').waitFor({ timeout: 8000 }); await nap(800);
         entry.feedOpen = await layout(); assert.ok(entry.feedOpen.feed && entry.feedOpen.chatColumn, 'the feed in the chat column');
+        if (view === 'centre') { assert.ok(entry.feedOpen.chat?.[1] > 300, 'centred: the feed in front ' + JSON.stringify(entry.feedOpen)); assert.equal(entry.feedOpen.view, 'centre', 'still centred'); }
         await page.screenshot({ path: path.join(out, stem + '-2-feed.png') });
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p12"]').click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-thread')].some(t => t.getClientRects().length && /Synthetic ask for Launch post 12/.test(t.innerText)), null, { timeout: 8000 });

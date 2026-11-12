@@ -87,7 +87,7 @@ test('wiring: the Back sits left of the title, every sidebar open clears it, the
 test('closeChat: channel steps keep the view mode; a plain chat still goes back to tiled', () => {
   const src = between(js, '  function closeChat() {', '  function setWide(on) {');
   const run = ({ thread, fromFeed = false, mode = 'pair' }) => {
-    const c = { FEED: '__feed__', docked: true, chatThread: thread, noteWant: false, draftWant: false, calls: [], mode,
+    const c = { FEED: '__feed__', docked: true, chatThread: thread, noteWant: false, draftWant: false, calls: [], mode, feedFocus: null, pane: null,
       panes: { get: () => ({ mode: c.mode }) }, feedBack: () => (fromFeed ? { id: 'launch', name: 'Launch' } : null),
       windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
       api: { sessions: { channelBack: () => { c.calls.push('channelBack'); return true; }, newChat: () => c.calls.push('newChat') } } };
@@ -103,4 +103,40 @@ test('closeChat: channel steps keep the view mode; a plain chat still goes back 
     assert.equal(plain.mode, 'tiled', `a plain chat closing from ${mode}: tiled, as before`);
   }
   assert.equal(run({ thread: '__feed__', mode: 'tiled' }).calls.includes('mode:tiled:chats'), false);
+});
+
+// A channel opened with an app centred (wizard-ux issue 1344): its feed comes to the front the way a chat does (the
+// chat slot takes the focus), and closing the feed gives the front back to the app, in the same view.
+test('feedOpened brings the feed to the front; closing the feed gives it back to the app', () => {
+  const opened = between(js, '  function feedOpened(open) {', "  api.listen(globalThis, 'wos:channel-feed'");
+  const close = between(js, '  function closeChat() {', '  function setWide(on) {');
+  const desk = ({ mode = 'centre', focus = 'app', app = 'pages', fromFeed = false } = {}) => {
+    const c = { FEED: '__feed__', docked: true, chatThread: null, noteWant: false, draftWant: false, calls: [], mode, focus, pane: app ? { id: app } : null,
+      panes: { get: () => ({ mode: c.mode, focus: c.focus }), set: v => { if (v.mode) c.mode = v.mode; if (v.focus) { c.focus = v.focus; c.calls.push('focus:' + v.focus); } } },
+      here: () => ({ app }), mainChats: () => ({ desk: 1 }), feedBack: () => (fromFeed ? { id: 'launch' } : null),
+      windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
+      api: { route: () => ({ view: 'thread', thread: '__new__' }), sessions: { channelBack: () => true, newChat: () => c.calls.push('newChat') } } };
+    vm.createContext(c);
+    vm.runInContext(`${opened}\n${close}\nthis.open = () => feedOpened({ id: 'launch' }); this.close = () => closeChat();
+      Object.defineProperty(this, 'thread', { get: () => chatThread, set: v => { chatThread = v; } });`, c);
+    return c;
+  };
+  for (const mode of ['centre', 'full', 'pair']) {
+    const c = desk({ mode });
+    c.open();
+    assert.equal(c.thread, '__feed__'); assert.equal(c.focus, 'chats', `${mode}: the feed in front`); assert.equal(c.mode, mode, `${mode}: the view stays`);
+    c.close();
+    assert.equal(c.focus, 'app', `${mode}: Esc on the feed brings the app back to the front`); assert.equal(c.mode, mode, `${mode}: still ${mode}`);
+  }
+  const chatFirst = desk({ focus: 'chats' }); chatFirst.open(); chatFirst.close();
+  assert.equal(chatFirst.focus, 'chats', 'the chat was in front before: it stays'); assert.ok(!chatFirst.calls.some(x => x.startsWith('focus:')));
+  // a post's thread opened from the feed, back to the feed: the feed keeps the front; then the feed closed: the app
+  const post = desk(); post.open(); post.thread = 'qa-p12';
+  const viaPost = desk({ fromFeed: true }); viaPost.open(); viaPost.thread = 'qa-p12'; viaPost.close();
+  assert.equal(viaPost.focus, 'chats', 'the post back to its feed keeps the feed in front');
+  viaPost.thread = '__feed__'; viaPost.close(); assert.equal(viaPost.focus, 'app', 'then the feed closed: the app');
+  // a plain chat closing forgets the feed's app (no stale hand-back later)
+  post.close(); post.focus = 'chats'; post.thread = '__feed__'; post.close(); assert.equal(post.focus, 'chats');
+  // no app open: nothing to give the front back to
+  const bare = desk({ app: '' }); bare.pane = null; bare.open(); bare.close(); assert.equal(bare.focus, 'chats');
 });
