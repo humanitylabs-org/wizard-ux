@@ -34,6 +34,30 @@ public class DownloadsPolicyTest {
         assertEquals(null, DownloadsPolicy.dispositionName("attachment; filename=\"\""));
     }
 
+    @Test public void repeatedNamesGetAFreeVariant() {
+        java.util.Set<String> used = new java.util.HashSet<>(java.util.Arrays.asList("report.pdf", "report (1).pdf", "notes"));
+        assertEquals("report (2).pdf", DownloadsPolicy.uniqueName("report.pdf", used::contains));
+        assertEquals("notes (1)", DownloadsPolicy.uniqueName("notes", used::contains));
+        assertEquals("new.pdf", DownloadsPolicy.uniqueName("new.pdf", used::contains));
+    }
+
+    @Test public void quietDownloadsFinishingAwayGetWizardsOwnNote() throws Exception {
+        DownloadsPolicy.Item it = item(5, "done", 1);
+        it.quiet = true;
+        assertTrue(DownloadsPolicy.awayNotice(it, false));
+        assertFalse(DownloadsPolicy.awayNotice(it, true));       // the page shows its own banner
+        it.quiet = false;
+        assertFalse(DownloadsPolicy.awayNotice(it, false));      // Android's own notification already says it
+        DownloadsPolicy.Item running = item(6, "running", 1);
+        running.quiet = true;
+        assertFalse(DownloadsPolicy.awayNotice(running, false));
+        // quiet survives the saved list but is never sent to the page
+        List<DownloadsPolicy.Item> l = new ArrayList<>();
+        DownloadsPolicy.Item q = item(7, "done", 2); q.quiet = true; l.add(q);
+        assertTrue(DownloadsPolicy.parse(DownloadsPolicy.serialize(l)).get(0).quiet);
+        assertFalse(new JSONObject(DownloadsPolicy.listJson(l)).getJSONArray("items").getJSONObject(0).has("quiet"));
+    }
+
     @Test public void savedNamesAreSafeOnDisk() {
         assertEquals("a_b_c.pdf", DownloadsPolicy.saveName("a:b?c.pdf"));
         assertEquals("evil.txt", DownloadsPolicy.saveName("../../evil.txt"));

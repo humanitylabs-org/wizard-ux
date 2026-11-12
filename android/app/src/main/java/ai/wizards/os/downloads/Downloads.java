@@ -51,7 +51,10 @@ public final class Downloads {
     }
 
     /** A new download was just enqueued. */
-    public static synchronized void track(Context c, long id, String name, String mime) {
+    public static synchronized void track(Context c, long id, String name, String mime) { track(c, id, name, mime, false); }
+
+    /** {@code quiet}: enqueued with VISIBILITY_HIDDEN because Wizard's own banner shows it (issue 1342). */
+    public static synchronized void track(Context c, long id, String name, String mime, boolean quiet) {
         List<DownloadsPolicy.Item> items = load(c);
         items.removeIf(i -> i.id == id);
         DownloadsPolicy.Item it = new DownloadsPolicy.Item();
@@ -59,6 +62,7 @@ public final class Downloads {
         it.name = DownloadsPolicy.displayName(name);
         it.mime = mime == null ? "" : mime;
         it.status = "pending";
+        it.quiet = quiet;
         it.started = System.currentTimeMillis();
         items.add(it);
         save(c, items);
@@ -82,7 +86,33 @@ public final class Downloads {
             save(c, items);
             done = it;
         }
+        boolean listening = !LISTENERS.isEmpty(); // a shell activity is in front (listeners are removed in onPause)
         emit("failed".equals(done.status) ? "failed" : "done", done);
+        if (DownloadsPolicy.awayNotice(done, listening)) awayNotice(c, done);
+    }
+
+    /** Whether a download WizardOS started and that is still running will be saved under {@code name}. */
+    public static synchronized boolean inFlightName(Context c, String name) {
+        for (DownloadsPolicy.Item it : load(c)) if (it.inFlight() && it.name.equals(name)) return true;
+        return false;
+    }
+
+    /** Wizard's own quiet tray note for a quiet download that finished while the app was away. Tap opens Wizard. */
+    private static void awayNotice(Context c, DownloadsPolicy.Item it) {
+        try {
+            android.app.NotificationManager nm = c.getSystemService(android.app.NotificationManager.class);
+            if (nm == null) return;
+            if (nm.getNotificationChannel("downloads") == null)
+                nm.createNotificationChannel(new android.app.NotificationChannel("downloads", "Downloads", android.app.NotificationManager.IMPORTANCE_LOW));
+            Intent open = c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+            android.app.PendingIntent pi = open == null ? null : android.app.PendingIntent.getActivity(c, 72, open,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            boolean failed = "failed".equals(it.status);
+            nm.notify("download", (int) (it.id & 0x7fffffff), new android.app.Notification.Builder(c, "downloads")
+                    .setSmallIcon(failed ? android.R.drawable.stat_notify_error : android.R.drawable.stat_sys_download_done)
+                    .setContentTitle(failed ? "Download failed" : "Downloaded").setContentText(it.name)
+                    .setContentIntent(pi).setAutoCancel(true).build());
+        } catch (RuntimeException e) { Log.i(TAG, "away notice: " + e.getMessage()); }
     }
 
     /** The list for the sheet; in-flight rows are brought up to date from DownloadManager first. */

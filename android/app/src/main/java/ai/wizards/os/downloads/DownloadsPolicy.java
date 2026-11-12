@@ -31,6 +31,7 @@ public final class DownloadsPolicy {
         public String status = "pending";
         public long started;      // ms epoch
         public long finished;     // ms epoch, 0 while in flight
+        public boolean quiet;     // started without Android's own notification (Wizard's banner showed it): kept, never sent to the page
 
         public boolean inFlight() { return "pending".equals(status) || "running".equals(status) || "paused".equals(status); }
 
@@ -54,6 +55,7 @@ public final class DownloadsPolicy {
             it.status = knownStatus(o.optString("status", "pending"));
             it.started = o.optLong("started", 0);
             it.finished = o.optLong("finished", 0);
+            it.quiet = o.optBoolean("quiet", false);
             return it;
         }
     }
@@ -99,6 +101,29 @@ public final class DownloadsPolicy {
         String n = displayName(raw).replaceAll("[\\\\/:*?\"<>|]", "_");
         while (n.startsWith(".")) n = "_" + n.substring(1); // never a hidden file
         return n;
+    }
+
+    /**
+     * A free name for Downloads: DownloadManager never overwrites and fails with ERROR_FILE_ALREADY_EXISTS, so a second
+     * "report.pdf" becomes "report (1).pdf". {@code taken} says whether a name is already used.
+     */
+    public static String uniqueName(String name, java.util.function.Predicate<String> taken) {
+        if (taken == null || !taken.test(name)) return name;
+        int dot = name.lastIndexOf('.');
+        String stem = dot > 0 ? name.substring(0, dot) : name, ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 1; i < 1000; i++) {
+            String n = stem + " (" + i + ")" + ext;
+            if (!taken.test(n)) return n;
+        }
+        return stem + " (" + System.currentTimeMillis() + ")" + ext;
+    }
+
+    /**
+     * A quiet download (no Android notification) that ends while no Wizard page is listening (the app is in the
+     * background) gets Wizard's own quiet tray note, so its finish is never silent. One the page heard needs none.
+     */
+    public static boolean awayNotice(Item it, boolean pageListening) {
+        return it != null && it.quiet && !pageListening && !it.inFlight();
     }
 
     private static List<String> splitParams(String h) {
@@ -228,7 +253,9 @@ public final class DownloadsPolicy {
         JSONArray a = new JSONArray();
         for (Item it : items) {
             try {
-                a.put(it.toJson().put("total", it.total));
+                JSONObject o = it.toJson().put("total", it.total);
+                if (it.quiet) o.put("quiet", true);
+                a.put(o);
             } catch (JSONException e) { throw new IllegalStateException(e); }
         }
         return a.toString();
