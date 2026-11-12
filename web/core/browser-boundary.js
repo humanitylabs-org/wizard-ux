@@ -52,7 +52,8 @@
  *  - notice(frame, kind, data): the shell's own notices to a ready app, on its current channel: `update` (a new
  *    shell is ready; only its version string crosses), `refresh` (read your data again; only the reason crosses) and
  *    `share` (a share was handed to this app: pull it; nothing else crosses) and `capture` (a recording event or this
- *    app's current recording, plain data and audio only).
+ *    app's current recording, plain data and audio only) and `net` (a piece of a streamed answer to one of this
+ *    document's own backend calls: bytes, end or error).
  *  - appStorage: a sandboxed page has no localStorage of its own (the browser refuses it to an opaque origin), so the
  *    app kit (core/app-client.js) gives it a stand-in and the shell keeps the data, per installed app id, in its own
  *    storage (`wos.app-storage.v1.<appId>`, 512K characters per app, 1.5M for all apps together). A new app window
@@ -66,7 +67,10 @@
  *    owner route (ownerRoute, the same list as core/shell-token.js, so no token is ever added). Only GET and HEAD
  *    follow a redirect, and only to an answer inside that path; any other method's redirect is never followed.
  *    `net.abort` stops one of the window's own open calls. At most NET_INFLIGHT at once per window, apart from the other services, and
- *    NET_MAX bytes each way. What crosses back is the status, the headers the browser shows a page and the body.
+ *    NET_MAX bytes each way. What crosses back is the status, the headers the browser shows a page and the body. A
+ *    streamed call (`stream`: server-sent events, a reply written as it goes) gets its status and headers first and its
+ *    body as `net` notices (bytes, end, error); `net.ack` says how much the page has taken, so the shell reads on only
+ *    while little waits in between.
  * Off (the default): nothing is defined and every frame is exactly as before.
  */
 (() => {
@@ -83,7 +87,7 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch', 'net.abort'];
+    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
@@ -135,7 +139,8 @@
     const status = Number.isInteger(r.status) && r.status >= 200 && r.status <= 599 ? r.status : 502;
     const headers = Array.isArray(r.headers) ? r.headers.slice(0, 200).filter(h => Array.isArray(h) && h.length === 2 && typeof h[0] === 'string' && typeof h[1] === 'string' && h[0].length <= 256 && h[1].length <= 16384).map(h => [h[0], h[1]]) : [];
     const body = Object.prototype.toString.call(r.body) === '[object ArrayBuffer]' && r.body.byteLength <= NET_MAX ? r.body : null;
-    return { status, statusText: typeof r.statusText === 'string' ? r.statusText.slice(0, 256) : '', headers, body, url: typeof r.url === 'string' && r.url.length <= 8192 ? r.url : '', redirected: r.redirected === true };
+    // stream: the body follows as `net` notices (notice below), so none comes with the head.
+    return { status, statusText: typeof r.statusText === 'string' ? r.statusText.slice(0, 256) : '', headers, body: r.stream === true ? null : body, ...(r.stream === true ? { stream: true } : {}), url: typeof r.url === 'string' && r.url.length <= 8192 ? r.url : '', redirected: r.redirected === true };
   }
   // Plain data only: JSON values, Blobs (recorded audio) and binary PCM. No functions, no shell objects, bounded size.
   const BINARY = v => Object.prototype.toString.call(v) === '[object ArrayBuffer]' || ArrayBuffer.isView(v);
@@ -366,7 +371,9 @@
       // frame no longer has focus (a click or key in the frame gives it focus).
       if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', d.method.startsWith('capture.') ? 'Recording needs a tap in the app' : 'Share needs a tap in the app');
       const net = d.method === 'net.fetch', slot = net ? 'netInflight' : 'inflight';
-      if ((st[slot] || 0) >= (net ? NET_INFLIGHT : INFLIGHT)) return answer(undefined, 'busy', 'Too many app requests at once');
+      // Stopping a call or taking a streamed answer's pieces is answered at once and never waits for a slot.
+      const quick = d.method === 'net.abort' || d.method === 'net.ack';
+      if (!quick && (st[slot] || 0) >= (net ? NET_INFLIGHT : INFLIGHT)) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
       // Whether this request came right after a real tap or key in this focused, visible window (see TAPPED).
       const tapped = activated() && visible(st.frame) && focusedFrame(st.frame), lifted = tapped || frameActivated(st.frame);
@@ -552,6 +559,18 @@
         if (typeof data.id === 'string' && data.id.length <= 128) out.id = data.id;
         for (const k of ['value', 'info']) { const x = plain(data[k]); if (x !== undefined) out[k] = x; }
         send(st, 'notice', out); return true;
+      }
+      if (kind === 'net') {
+        // A streamed answer of this document's own backend call (net.fetch with stream): a piece of its body (bytes
+        // only), its end, or an error (a short message). Nothing else crosses.
+        if (typeof data?.key !== 'string' || !data.key || data.key.length > 64) return false;
+        if (data.event === 'chunk') {
+          if (Object.prototype.toString.call(data.chunk) !== '[object ArrayBuffer]' || data.chunk.byteLength > NET_MAX) return false;
+          send(st, 'notice', { kind, key: data.key, event: 'chunk', chunk: data.chunk }); return true;
+        }
+        if (data.event === 'end') { send(st, 'notice', { kind, key: data.key, event: 'end' }); return true; }
+        if (data.event === 'error') { send(st, 'notice', { kind, key: data.key, event: 'error', message: typeof data.message === 'string' ? data.message.slice(0, 200) : '' }); return true; }
+        return false;
       }
       if (kind === 'update') {
         const v = data?.available, version = typeof v?.version === 'string' ? v.version.slice(0, 128) : '';

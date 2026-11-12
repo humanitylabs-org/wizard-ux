@@ -35,7 +35,8 @@
  * Saved settings (`storage.load`, `storage.save`): the page's localStorage stand-in (core/app-client.js) keeps the
  * shell's copy for this window's app up to date.
  * The app's own backend (`net.fetch`): app-client.js sends the page's fetch to this host through the shell, which makes
- * it only inside this window's app path. One open on a channel that is replaced fails instead of being sent again.
+ * it only inside this window's app path. One open on a channel that is replaced fails instead of being sent again. A
+ * streamed answer's body comes as `notice` `net` (onNet: bytes, end, error), and every open one ends on a new channel.
  */
 (() => {
   'use strict';
@@ -46,10 +47,10 @@
     'share.receive', 'share.targets', 'share.pending', 'share.ack', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget',
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
-    'storage.load', 'storage.save', 'net.fetch', 'net.abort'], STICKY = ['badge.set', 'titlebar.set'];
+    'storage.load', 'storage.save', 'net.fetch', 'net.abort', 'net.ack'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
-  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, serial = 0, claimed = new Set();
+  let channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, serial = 0, claimed = new Set();
   // App keys (data-wz-key): WizardApp's own live list and press (core/app-client.js keys), used only while the shell's
   // layout presses app keys (`app` in hello / keys).
   let appKeys = null, appPress = null, appOn = false, appSent = '', appQueued = false, appKeyNow = [];
@@ -187,6 +188,8 @@
         if (wait.method === 'net.fetch') { clearTimeout(wait.timer); requests.delete(id); wait.reject(error('failed', 'Connection to the app server was interrupted')); continue; }
         send({ op: 'service.request', id, method: wait.method, args: wait.args });
       }
+      // Streamed answers end with the old channel too (the shell stopped them).
+      try { onNet?.({ event: 'reset' }); } catch (_) {}
       for (const go of [...waiters]) go();
       // Holds: the shell dropped them with the old channel. One still being placed is re-sent above with the requests.
       for (const h of holds.values()) { h.shell = null; if (!h.placing) place(h); }
@@ -215,6 +218,10 @@
       if (d.kind === 'share') { try { onShare?.(); } catch (_) {} }
       if (d.kind === 'capture' && CAPTURE_EVENTS.includes(d.event) && (d.id === undefined || (typeof d.id === 'string' && d.id.length <= 128))) {
         try { onCapture?.({ event: d.event, id: d.id, value: d.value, info: d.info && typeof d.info === 'object' ? d.info : undefined }); } catch (_) {}
+      }
+      if (d.kind === 'net' && typeof d.key === 'string' && d.key.length <= 64 && ['chunk', 'end', 'error'].includes(d.event)
+        && (d.event !== 'chunk' || Object.prototype.toString.call(d.chunk) === '[object ArrayBuffer]')) {
+        try { onNet?.({ key: d.key, event: d.event, chunk: d.event === 'chunk' ? d.chunk : undefined, message: typeof d.message === 'string' ? d.message.slice(0, 200) : '' }); } catch (_) {}
       }
       if (d.kind === 'update' && (d.available === null || (d.available && typeof d.available === 'object' && typeof d.available.version === 'string'))) {
         try { onUpdate?.(d.available ? Object.freeze({ version: d.available.version.slice(0, 128) }) : null); } catch (_) {}
@@ -343,7 +350,8 @@
   }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, keys: listKeys, press } = {}) {
+    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, onNet: net, keys: listKeys, press } = {}) {
+      onNet = typeof net === 'function' ? net : null;
       appKeys = typeof listKeys === 'function' ? listKeys : null; appPress = typeof press === 'function' ? press : null;
       onCapture = typeof recording === 'function' ? recording : null; onReady = typeof hello === 'function' ? hello : null;
       back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;

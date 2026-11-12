@@ -687,6 +687,27 @@ test('notices: update and refresh reach the ready app on its current channel, as
   assert.ok(sh.log.filter(l => l.to === 'app').every(l => l.target === '*'));
 });
 
+// Slice 37: pieces of a streamed answer (net notices): bytes, end or a short error only, for one call key.
+test('notices: a streamed answer\'s pieces reach the app as bytes / end / error only, and a new channel ends its streams', async () => {
+  const sh = shell(), f = frame(sh);
+  const got = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => false, onNet: d => got.push(d) });
+  sh.B.attach(f.el);
+  await tick(); await tick();
+  got.length = 0; // the first hello's reset (nothing open yet)
+  assert.equal(sh.B.notice(f.el, 'net', { key: 'nf-1', event: 'chunk', chunk: new ArrayBuffer(4) }), true);
+  assert.equal(sh.B.notice(f.el, 'net', { key: 'nf-1', event: 'chunk', chunk: 'text' }), false, 'bytes only');
+  assert.equal(sh.B.notice(f.el, 'net', { key: '', event: 'end' }), false, 'a call key');
+  assert.equal(sh.B.notice(f.el, 'net', { key: 'nf-1', event: 'open' }), false, 'unknown event');
+  assert.equal(sh.B.notice(f.el, 'net', { key: 'nf-1', event: 'error', message: 'x'.repeat(500), stack: 'shell' }), true);
+  assert.equal(sh.B.notice(f.el, 'net', { key: 'nf-1', event: 'end', extra: 1 }), true);
+  await tick(); await tick();
+  // (The test channel copies messages as JSON, so the bytes themselves are checked in real Chromium.)
+  assert.deepEqual(clone(got), [{ key: 'nf-1', event: 'error', message: 'x'.repeat(200) }, { key: 'nf-1', event: 'end', message: '' }]);
+  f.load(); await tick(); await tick();
+  assert.deepEqual(clone(got.at(-1)), { event: 'reset' }, 'a new channel: open streams end');
+});
+
 // Slice 20: receiving shares. The app registers and pulls for its own window; a waiting share is announced on its
 // channel; a pending item crosses as its own share fields only.
 test('receiving shares: served methods, item fields only, and a share notice that makes the app pull', async () => {

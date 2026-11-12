@@ -652,3 +652,64 @@ test('app backend: only GET and HEAD follow a redirect; a POST\'s redirect is ne
   await assert.rejects(slow, /aborted/);
   assert.equal(f.call('net.abort', { key: 'nf-1' }), false);
 });
+
+// Slice 37: a streamed answer (stream: true) comes back as its head first, then its body as `net` notices to the
+// window's current document; the page's net.ack lets the shell read on, so a page that stops reading stops the stream.
+const pause = (ms = 0) => new Promise(r => setTimeout(r, ms));
+function piecesBody(n, size) {
+  let i = 0, pulls = 0;
+  const body = new ReadableStream({ pull(c) { pulls++; if (i++ < n) c.enqueue(new Uint8Array(size).fill(i)); else c.close(); } }, { highWaterMark: 0 });
+  return { body, pulls: () => pulls };
+}
+test('app backend stream: head first, then the body in pieces as notices, then end', async () => {
+  const src = piecesBody(2, 3);
+  const { f } = netFixture(() => new Response(src.body, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+  const v = await f.call('net.fetch', { key: 'nf-s', url: 'https://wizard.example/morning-report/api/events', stream: true });
+  assert.equal(v.net.status, 200); assert.equal(v.net.stream, true); assert.equal(v.net.body, null);
+  assert.equal(f.notices.length, 0, 'no piece before the head has gone back');
+  for (let i = 0; i < 20 && !f.notices.some(n => n.event === 'end'); i++) await pause(5);
+  assert.deepEqual(f.notices.map(n => [n.kind, n.key, n.event, n.chunk ? [...new Uint8Array(n.chunk)] : null]),
+    [['net', 'nf-s', 'chunk', [1, 1, 1]], ['net', 'nf-s', 'chunk', [2, 2, 2]], ['net', 'nf-s', 'end', null]]);
+  assert.equal(f.call('net.abort', { key: 'nf-s' }), false, 'an ended stream is no longer open');
+  // Without stream (or without a key) the whole body comes with the answer, as before.
+  const whole = netFixture(() => new Response('{"a":1}'));
+  const w = await whole.f.call('net.fetch', { url: 'https://wizard.example/morning-report/api/x', stream: true });
+  assert.equal(new TextDecoder().decode(w.net.body), '{"a":1}'); assert.equal(w.net.stream, undefined);
+});
+test('app backend stream: the shell reads on only while the page keeps up (net.ack), and net.abort / a new document stop it', async () => {
+  const src = piecesBody(40, 256 * 1024);
+  const { f } = netFixture(() => new Response(src.body, { status: 200 }));
+  await f.call('net.fetch', { key: 'nf-big', url: 'https://wizard.example/morning-report/api/big', stream: true });
+  await pause(40);
+  const sent = () => f.notices.filter(n => n.event === 'chunk').reduce((a, n) => a + n.chunk.byteLength, 0);
+  assert.equal(sent(), 1024 * 1024, 'it stops at the window until the page takes some');
+  assert.equal(f.call('net.ack', { key: 'nf-other', n: 1e9 }), false, 'only a stream this window has open');
+  assert.equal(f.call('net.ack', { key: 'nf-big', n: 512 * 1024 }), true);
+  await pause(40);
+  assert.equal(sent(), 1536 * 1024);
+  assert.equal(f.call('net.abort', { key: 'nf-big' }), true);
+  f.call('net.ack', { key: 'nf-big', n: 1e9 });
+  await pause(40);
+  assert.equal(sent(), 1536 * 1024, 'stopped: nothing more is read or sent');
+  assert.ok(!f.notices.some(n => n.event === 'end'));
+  // A new document: its old streams stop and the new page gets none of their pieces.
+  const again = netFixture(() => new Response(piecesBody(40, 256 * 1024).body, { status: 200 }));
+  await again.f.call('net.fetch', { key: 'nf-r', url: 'https://wizard.example/morning-report/api/big', stream: true });
+  await pause(20);
+  const before = again.f.notices.length; assert.ok(before > 0);
+  again.f.reset(); again.f.B.genNow = 2; again.f.call('net.ack', { key: 'nf-r', n: 1e9 });
+  await pause(40);
+  assert.equal(again.f.notices.length, before);
+  assert.equal(again.f.call('net.abort', { key: 'nf-r' }), false);
+});
+test('app backend stream: at most 16 open calls per window; an error mid-stream reaches the page as an error', async () => {
+  const { f } = netFixture(() => new Response(new ReadableStream({ start() {} }), { status: 200 }));
+  for (let i = 0; i < 16; i++) await f.call('net.fetch', { key: 'nf-' + i, url: 'https://wizard.example/morning-report/api/live', stream: true });
+  await assert.rejects(f.call('net.fetch', { key: 'nf-16', url: 'https://wizard.example/morning-report/api/live', stream: true }), /Too many open/);
+  assert.equal(f.call('net.abort', { key: 'nf-3' }), true);
+  await f.call('net.fetch', { key: 'nf-16', url: 'https://wizard.example/morning-report/api/live', stream: true });
+  const broken = netFixture(() => new Response(new ReadableStream({ pull(c) { c.error(new Error('reset by peer')); } }), { status: 200 }));
+  await broken.f.call('net.fetch', { key: 'nf-e', url: 'https://wizard.example/morning-report/api/live', stream: true });
+  await pause(20);
+  assert.deepEqual(broken.f.notices.map(n => [n.event, n.message]), [['error', 'reset by peer']]);
+});
