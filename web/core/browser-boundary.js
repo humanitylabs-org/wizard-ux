@@ -25,7 +25,7 @@
  *    only posts messages cannot press them at all.
  *  - service.request: the bounded app services the shell answers under the boundary: `ready`; the ones that act
  *    only on the app's own window, `badge.set` and `titlebar.set`; sharing out (`share.text`, `share.file`), which
- *    also needs the browser's transient user activation and a visible frame and always opens the shell's own share
+ *    also needs the browser's transient user activation in that focused, visible frame and always opens the shell's own share
  *    sheet, where the owner picks (the shell's confirm); and `voice.transcribe` (the box's transcriber, within a
  *    per-app budget). They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
@@ -196,7 +196,9 @@
       const answer = (value, code, message) => { if (connected(st) && st.channel === channel) send(st, 'service.reply', { id: d.id, ...(code ? { error: { code, message } } : { value }) }); };
       if (d.method === 'ready') return answer({ version: VERSION, hosted: true });
       if (!st.ready || !server || !SERVED.includes(d.method)) return answer(undefined, 'unavailable', 'Not available inside the browser boundary yet');
-      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame))) return answer(undefined, 'refused', 'Share needs a tap in the app');
+      // The tap must be in this window: a tap or key elsewhere in the shell also activates the shell, but then this
+      // frame no longer has focus (a click or key in the frame gives it focus).
+      if (TAPPED.includes(d.method) && (!activated() || !visible(st.frame) || !focusedFrame(st.frame))) return answer(undefined, 'refused', 'Share needs a tap in the app');
       if ((st.inflight || 0) >= INFLIGHT) return answer(undefined, 'busy', 'Too many app requests at once');
       let value;
       try { value = server(st.frame, d.method, d.args); } catch (err) { return answer(undefined, 'refused', String(err?.message || 'Refused').slice(0, 200)); }

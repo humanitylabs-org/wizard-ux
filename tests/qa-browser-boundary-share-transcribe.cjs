@@ -21,6 +21,8 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
   })();
   document.getElementById('share').onclick = async () => { results.tapped = await WizardApp.share.text(note()); };
   document.getElementById('file').onclick = async () => { results.file = await WizardApp.share.file(new File(['12345678'], 'list.txt', { type: 'text/plain' }), { title: 'List' }); };
+  // Asks later, after the owner tapped somewhere else in the shell.
+  window.later = () => setTimeout(async () => { results.later = await WizardApp.share.text({ text: 'sneaky' }); }, 400);
   window.burst = async n => { const out = []; for (let i = 0; i < n; i++) { try { await WizardApp.voice.transcribe(new Blob(['x'], { type: 'audio/webm' })); out.push('ok'); } catch (e) { out.push(e.message); } } return out; };
 </script></body></html>`;
 // Not the installed app it claims to be (outside that app's path): same calls, with a real tap.
@@ -44,7 +46,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
     transcribe: async (file, o) => { heard.push({ size: file.size, language: o.language }); return { text: 'heard ' + file.size }; } };</script>
 <script src="/wizard-os-home/core/app-services.js"></script>
 <style>iframe{width:400px;height:80px;border:0}</style></head>
-<body><div class="win" id="w1"><header class="wbar"><span>Notes</span></header>
+<body><button id="shellbtn">Shell button</button><div class="win" id="w1"><header class="wbar"><span>Notes</span></header>
 <iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/notes/"></iframe></div>
 <div class="win" id="w2"><header class="wbar"><span>Other</span></header>
 <iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/evil/"></iframe></div>
@@ -93,6 +95,12 @@ const server = http.createServer((req, res) => {
   const sh3 = await page.evaluate(() => shared.at(-1));
   ok(file === 'shared' && sh3.kind === 'file' && sh3.size === 8 && sh3.name === 'list.txt' && sh3.title === 'List' && sh3.direct === false,
     'a file share opens the shell\'s sheet with the app\'s file: ' + JSON.stringify({ file, sh3 }));
+  // A tap elsewhere in the shell activates the shell too; the app asking right then still gets nothing.
+  await frameOf('/notes/').evaluate(() => later());
+  await page.click('#shellbtn');
+  const later = await until('/notes/', () => results.later);
+  const shLater = await page.evaluate(() => shared.length);
+  ok(later === 'unsupported' && shLater === 2, 'a tap outside the app window does not let the app open the share sheet: ' + JSON.stringify({ later, shared: shLater }));
   // The page that is not its window's installed app gets nothing, even with a real tap.
   const evilHeard = await frameOf('/evil/').evaluate(() => results.heard);
   await frameOf('/evil/').click('#share');

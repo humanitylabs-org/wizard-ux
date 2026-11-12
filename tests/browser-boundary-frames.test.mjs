@@ -496,6 +496,10 @@ test('share and transcription: async answers are protocol data only, share needs
   await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'a' }, 2000), e => e.code === 'refused');
   assert.equal(calls.some(c => c[0] === 'share.text'), false);
   sh.g.navigator = { userActivation: { isActive: true } };
+  // A tap elsewhere in the shell activates it too, but this frame does not have focus then.
+  await assert.rejects(f.a.WizBoundaryClient.request('share.text', { text: 'a' }, 2000), e => e.code === 'refused');
+  assert.equal(calls.some(c => c[0] === 'share.text'), false);
+  sh.g.document.activeElement = f.el;
   assert.equal(await f.a.WizBoundaryClient.request('share.text', { text: 'a' }, 2000), 'shared');
   assert.equal(calls.at(-1)[1].base, 'https://box.example.ts.net/notes/', 'the page\'s own address for a relative link');
   await assert.rejects(f.a.WizBoundaryClient.request('share.file', { options: {} }, 2000), e => e.code === 'refused' && /Share failed/.test(e.message));
