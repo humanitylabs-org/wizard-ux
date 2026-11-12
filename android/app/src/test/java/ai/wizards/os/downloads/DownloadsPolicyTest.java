@@ -17,6 +17,63 @@ public class DownloadsPolicyTest {
         return it;
     }
 
+    @Test public void serverNameWinsOverTheUrlsRandomId() { // issue 1342: Messenger's header carried the real name
+        // Messenger web.py for a long or non-ASCII name: a safe ASCII filename plus the real one in filename*.
+        String h = "attachment; filename=\"R_sum_long.pdf\"; filename*=UTF-8''R%C3%A9sum%C3%A9%20long.pdf";
+        assertEquals("Résumé long.pdf", DownloadsPolicy.dispositionName(h));
+        assertEquals("report.pdf", DownloadsPolicy.dispositionName("attachment; filename=\"report.pdf\""));
+        assertEquals("report.pdf", DownloadsPolicy.dispositionName("inline; filename=report.pdf"));
+        assertEquals("a;b.pdf", DownloadsPolicy.dispositionName("attachment; filename=\"a;b.pdf\""));
+        assertEquals("x\"y.pdf", DownloadsPolicy.dispositionName("attachment; FILENAME=\"x\\\"y.pdf\""));
+        assertEquals("caf\u00e9.txt", DownloadsPolicy.dispositionName("attachment; filename*=iso-8859-1'en'caf%E9.txt"));
+        // unreadable filename* falls back to filename; no name at all is null (Android's guess then applies)
+        assertEquals("plain.pdf", DownloadsPolicy.dispositionName("attachment; filename*=UTF-8''bad%G1; filename=\"plain.pdf\""));
+        assertEquals("plain.pdf", DownloadsPolicy.dispositionName("attachment; filename*=KOI8-R''x; filename=plain.pdf"));
+        assertEquals(null, DownloadsPolicy.dispositionName("attachment"));
+        assertEquals(null, DownloadsPolicy.dispositionName(null));
+        assertEquals(null, DownloadsPolicy.dispositionName("attachment; filename=\"\""));
+    }
+
+    @Test public void repeatedNamesGetAFreeVariant() {
+        java.util.Set<String> used = new java.util.HashSet<>(java.util.Arrays.asList("report.pdf", "report (1).pdf", "notes"));
+        assertEquals("report (2).pdf", DownloadsPolicy.uniqueName("report.pdf", used::contains));
+        assertEquals("notes (1)", DownloadsPolicy.uniqueName("notes", used::contains));
+        assertEquals("new.pdf", DownloadsPolicy.uniqueName("new.pdf", used::contains));
+    }
+
+    @Test public void quietDownloadsFinishingAwayGetWizardsOwnNote() throws Exception {
+        DownloadsPolicy.Item it = item(5, "done", 1);
+        it.quiet = true;
+        assertTrue(DownloadsPolicy.awayNotice(it, false));
+        assertFalse(DownloadsPolicy.awayNotice(it, true));       // the page shows its own banner
+        it.quiet = false;
+        assertFalse(DownloadsPolicy.awayNotice(it, false));      // Android's own notification already says it
+        DownloadsPolicy.Item running = item(6, "running", 1);
+        running.quiet = true;
+        assertFalse(DownloadsPolicy.awayNotice(running, false));
+        // quiet survives the saved list but is never sent to the page
+        List<DownloadsPolicy.Item> l = new ArrayList<>();
+        DownloadsPolicy.Item q = item(7, "done", 2); q.quiet = true; l.add(q);
+        assertTrue(DownloadsPolicy.parse(DownloadsPolicy.serialize(l)).get(0).quiet);
+        assertFalse(new JSONObject(DownloadsPolicy.listJson(l)).getJSONArray("items").getJSONObject(0).has("quiet"));
+    }
+
+    @Test public void savedNamesAreSafeOnDisk() {
+        assertEquals("a_b_c.pdf", DownloadsPolicy.saveName("a:b?c.pdf"));
+        assertEquals("evil.txt", DownloadsPolicy.saveName("../../evil.txt"));
+        assertEquals("_profile", DownloadsPolicy.saveName(".profile"));
+        assertEquals("Résumé.pdf", DownloadsPolicy.saveName("Résumé.pdf"));
+        assertEquals("download", DownloadsPolicy.saveName(null));
+    }
+
+    @Test public void downloadsSkipAndroidsPopUpWhenWizardShowsThem() throws Exception { // issue 1342
+        String main = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/java/ai/wizards/os/MainActivity.java")), "UTF-8");
+        assertTrue(main.contains("shellShows ? android.app.DownloadManager.Request.VISIBILITY_HIDDEN"));
+        assertTrue(main.contains("DownloadsPolicy.dispositionName(disposition)"));
+        String manifest = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/AndroidManifest.xml")), "UTF-8");
+        assertTrue(manifest.contains("android.permission.DOWNLOAD_WITHOUT_NOTIFICATION")); // VISIBILITY_HIDDEN throws without it
+    }
+
     @Test public void namesAreSafeToShow() {
         assertEquals("report.pdf", DownloadsPolicy.displayName("/sdcard/Download/report.pdf"));
         assertEquals("evil.txt", DownloadsPolicy.displayName("..\\..\\evil.txt"));
