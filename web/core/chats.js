@@ -465,7 +465,7 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     // The row the window shows (a routed post can share its id with a main thread), as openChat's markSeen does.
     void LIVE.markHandled(s);
-    paintListsNow(); chanSeenPaint();
+    paintListsNow(); chanSeenPaint(); needsRepaint(sid);
     toast('✓', 'Cleared', 1400);
     return true;
   }
@@ -497,15 +497,31 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(wid), q = reply?.quote;
     if (!needsThreadOn() || !q || q.role !== 'assistant' || !sid || c.needsFor !== sid || !(Math.abs((+q.at || 0) - c.needsAt) < 1500)) return false;
     const s = rowOf(owner(wid), sid) || LIVE.session(sid); if (!needsAsk(s) || !LIVE.markHandled) return false;
-    void LIVE.markHandled(s); paintListsNow(); chanSeenPaint();
+    void LIVE.markHandled(s); paintListsNow(); chanSeenPaint(); needsRepaint(sid);
     return true;
+  }
+  // The open thread repaints on the tap's frame too (AI review of 1331: the line and Mark done stayed until a reopen).
+  function needsRepaint(sid) {
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread && x.thread === sid) renderThreadNow(x); }
   }
   // Opening a thread with an open Needs you lands on that message (once per open), its amber line at the top.
   function needsLand(w, nav) {
     const c = ch(w.id); if (!needsThreadOn() || c.needsLandNav === nav) return;
     c.needsLandNav = nav;
-    const go = n => { const line = c.readNav === nav && c.needsFor === w.thread ? elOf(w.id)?.querySelector('.ch-msgs [data-needs-line]') : null;
-      if (line) line.scrollIntoView({ block: 'start' }); else if (n > 0) requestAnimationFrame(() => go(n - 1)); };
+    const find = () => c.readNav === nav && c.needsFor === w.thread ? elOf(w.id)?.querySelector('.ch-msgs [data-needs-line]') : null;
+    // Lands just under the thread's header, not under it (AI review of 1331: on a phone the document scrolls and the
+    // fixed header hid the line; on desktop it clipped the ask). A few frames re-check it while the layout settles.
+    const place = line => {
+      const nb = line.closest('.ch-msgs'), sc = nb ? scrollBox(nb) : null, head = line.closest('.ch-thread')?.querySelector('.ch-head');
+      if (!sc || typeof sc.scrollTo !== 'function') { line.scrollIntoView({ block: 'start' }); return 0; }
+      const base = Math.max(sc === nb ? nb.getBoundingClientRect().top : 0, head ? head.getBoundingClientRect().bottom : 0);
+      const off = line.getBoundingClientRect().top - threadViewportTop(nb, base) - 8;
+      if (Math.abs(off) > 1) sc.scrollTo({ top: sc.scrollTop + off, behavior: 'auto' });
+      return off;
+    };
+    const settle = (line, n) => { if (n > 0 && line.isConnected && find() === line && Math.abs(place(line)) > 1) requestAnimationFrame(() => settle(line, n - 1)); };
+    const go = n => { const line = find();
+      if (line) { place(line); requestAnimationFrame(() => settle(line, 6)); } else if (n > 0) requestAnimationFrame(() => go(n - 1)); };
     requestAnimationFrame(() => go(4));
   }
   function chanPrefs() {
