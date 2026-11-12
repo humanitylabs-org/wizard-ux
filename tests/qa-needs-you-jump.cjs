@@ -119,7 +119,7 @@ const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps,ai-narro
           // Issue 1380 kick-back: neither may sit on the thread's Mark done · Snooze · Archive row, and each of those buttons is whole
           // inside the thread column and takes a tap at its centre.
           const hits = (x, y) => x.left < y.right && x.right > y.left && x.top < y.bottom && x.bottom > y.top, box = n => n.getBoundingClientRect();
-          const acts = [...document.querySelectorAll('.ch-tacts > button')].filter(n => n.getClientRects().length), col = d?.closest('.ch-thread') || l?.closest('.ch-thread');
+          const acts = [...document.querySelectorAll('.ch-tacts > button')].filter(n => { const q = n.getBoundingClientRect(); return q.height && q.top >= 0 && q.bottom <= innerHeight; }) /* on screen (phone: the row ends the thread) */, col = d?.closest('.ch-thread') || l?.closest('.ch-thread');
           const cr = col ? box(col) : null, R = n => { const q = box(n); return [q.left, q.top, q.right, q.bottom].map(Math.round).join(','); };
           const actOver = acts.flatMap(n => [d, l].filter(Boolean).filter(c => hits(box(c), box(n))).map(c => `${c.matches('[data-chlatest]') ? 'Latest' : 'pill'} ${R(c)} on ${n.textContent.trim()} ${R(n)}`));
           const actCut = acts.filter(n => { const q = box(n); return cr && (q.left < cr.left - 0.5 || q.right > cr.right + 0.5); }).map(n => `${n.textContent.trim()} ${R(n)} col ${cr.left}-${cr.right}`);
