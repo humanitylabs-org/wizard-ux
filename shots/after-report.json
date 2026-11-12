@@ -1,0 +1,110 @@
+{
+  "tag": "after",
+  "items": [],
+  "runs": [
+    {
+      "path": "/wizard/hermes/api/sessions",
+      "model": "synthetic-hotkeys",
+      "provider": "openai-codex"
+    },
+    {
+      "path": "/wizard/hermes/v1/runs",
+      "model": "synthetic-hotkeys",
+      "provider": "openai-codex"
+    }
+  ],
+  "errors": [],
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/wizard/files/upload",
+      "body": "\u001aEߣ�B��\u0001B��\u0001B�\u0004B�\bB��webmB��\u0004B��\u0002\u0018S�g\u0001�������\u0015I�f�*ױ�\u000fB@M��ChromeWA�Chrome\u0016T�k���ׁ\u0001sŇ�y�@�q��\u0002��A_OPUSc��OpusHead\u0001\u0001\u0000\u0000��\u0000\u0000\u0000\u0000\u0000፵�G;�\u0000��\u0001bd� \u001fC�u\u0001��������\u0000���\u0000\u0000��\u0003���������\u0000<��\u0003���������\u0000x��\u0003���������\u0000��"
+    },
+    {
+      "method": "POST",
+      "path": "/wizard-os-home/api/transcribe",
+      "body": "------WebKitFormBoundaryaIUTh5udyqZYNaW2\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.webm\"\r\nContent-Type: audio/webm;codecs=opus\r\n\r\n\u001aEߣ�B��\u0001B��\u0001B�\u0004B�\bB��webmB��\u0004B��\u0002\u0018S�g\u0001�������\u0015I�f�"
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/hermes/api/sessions",
+      "body": {
+        "source": "wizard-mobile",
+        "id": "wizard_1794500046227_80bf8b63d8c6",
+        "model": "synthetic-hotkeys",
+        "provider": "openai-codex"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/hermes/v1/runs",
+      "body": {
+        "session_id": "wizard_1794500046227_80bf8b63d8c6",
+        "input": "Synthetic voice post",
+        "instructions": "[WizardOS context] The user sent this by voice, aimed at this thread from Wizard UX on their phone. Window in front: # General channel (chat thread). When they say \"this\", \"here\", or \"it\", they likely mean that window. Use this as background only.",
+        "wizard_file_ids": [
+          "qa-up-1"
+        ],
+        "model": "synthetic-hotkeys",
+        "provider": "openai-codex",
+        "require_model_lock": true
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/wizard/thread-seen",
+      "body": {
+        "initializedAt": 1,
+        "threads": {
+          "direct:wizard_1794500046227_80bf8b63d8c6": {
+            "updatedAt": "2026-11-12T16:14:02.568Z",
+            "previewFingerprint": "1ycqg66",
+            "seenAt": 1794500046455
+          }
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/wizard/thread-seen",
+      "body": {
+        "initializedAt": 1,
+        "threads": {
+          "direct:wizard_1794500046227_80bf8b63d8c6": {
+            "updatedAt": "2026-11-12T16:14:02.568Z",
+            "previewFingerprint": "1ycqg66",
+            "seenAt": 1794500046455
+          }
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/wizard/thread-seen",
+      "body": {
+        "initializedAt": 1,
+        "threads": {
+          "direct:wizard_1794500046227_80bf8b63d8c6": {
+            "updatedAt": "2026-11-12T16:14:02.568Z",
+            "previewFingerprint": "1ycqg66",
+            "seenAt": 1794500046455
+          }
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/wizard/thread-seen",
+      "body": {
+        "initializedAt": 1,
+        "threads": {
+          "direct:wizard_1794500046227_80bf8b63d8c6": {
+            "updatedAt": "2026-11-12T16:14:02.568Z",
+            "previewFingerprint": "1ycqg66",
+            "seenAt": 1794500046455
+          }
+        }
+      }
+    }
+  ]
+}
