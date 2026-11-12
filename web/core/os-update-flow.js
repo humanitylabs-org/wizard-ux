@@ -43,7 +43,7 @@
   const waits = () => mac() || st()?.waits_for_work === true;
   const OS = 'WizardOS';
   const TAKES = 'Usually 5–15 minutes';
-  const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1', WAITING = 'wos.osu.waiting.v1';
+  const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1', WAITING = 'wos.osu.waiting.v1', MIN = 'wos.osu.min.v1';
   const ls = {
     get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (_) { return null; } },
     set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
@@ -242,7 +242,14 @@
 
   // ---- the banner (same component as "Interface updated") ----
   function banner() {
-    if (updating()) return null;
+    const u = updating();
+    if (u) {
+      if (!minimized(u)) return null;
+      // Minimized: the same pill says what it's doing, with a progress bar; a tap opens the panel again.
+      const back = u.phase === 'restoring', n = step(u);
+      return { key: 'up' + u.target, text: back ? `Putting ${OS} back…` : `Updating ${OS} · ${STEPS[n]}…`, busy: true,
+        bar: back ? -1 : Math.round((n + 0.5) / STEPS.length * 100), open: true };
+    }
     const r = result(), s0 = st();
     // A newer release is ready: the last update's news is old; say the new one instead.
     if (r && !(s0?.update_available && s0.latest && s0.latest !== r.target)) {
@@ -275,13 +282,19 @@
       if (shell === 'desktop') document.querySelector('#bar .bar-r').prepend(el); else document.body.appendChild(el);
       el.addEventListener('click', onBanner);
     }
-    const html = `<span class="dv-um">${esc(b.text)}</span>`
+    const bar = b.bar == null ? '' : `<span class="wdl-bar osu-bar${b.bar < 0 ? ' indet' : ''}" role="progressbar" aria-label="Update progress" aria-valuemin="0" aria-valuemax="100"${b.bar >= 0 ? ` aria-valuenow="${b.bar}"` : ''}><i style="width:${b.bar < 0 ? 40 : b.bar}%"></i></span>`;
+    el.classList.toggle('osu-pill-busy', !!b.busy);
+    if (b.open) { el.setAttribute('role', 'button'); el.tabIndex = 0; el.title = 'Show the update'; }
+    else { el.setAttribute('role', 'status'); el.removeAttribute('tabindex'); el.removeAttribute('title'); }
+    const html = (b.busy ? '<i class="osu-ring" aria-hidden="true"></i>' : '') + `<span class="dv-um">${esc(b.text)}</span>` + bar
       + (b.later ? `<button type="button" class="later" data-osuf="${b.laterAct}">${esc(b.later)}</button>` : '')
       + (b.go ? `<button type="button" data-osuf="${b.act}">${esc(b.go)}</button>` : '')
       + (b.x ? `<button type="button" class="later" data-osuf="x" aria-label="Dismiss">×</button>` : '');
     if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
   }
   function onBanner(e) {
+    const u = updating();
+    if (u && minimized(u)) { minimize(u, false); render(); document.querySelector('#wosUpdating .osu-min')?.focus(); return; }
     const a = e.target.closest('[data-osuf]')?.dataset.osuf; if (!a) return;
     const s = st(), r = result();
     if (a === 'later') { ls.set(LATER, s?.latest || ''); toast('✓', 'Later · You can update any time in Settings'); }
@@ -307,11 +320,16 @@
 
   // ---- the panel while updating ----
   const STEPS = ['Backing up', 'Restarting', 'Installing', 'Verifying'];
+  // Minimized per update: the panel steps aside for the pill in the top bar (phone: the strip), on this device only.
+  const minKey = u => String(u.target || '');   // cleared once nothing updates, so a later run starts open
+  const minimized = u => !!u && ls.get(MIN) === minKey(u);
+  function minimize(u, on) { ls.set(MIN, on ? minKey(u) : null); }
   function renderPanel(u) {
     let el = document.getElementById('wosUpdating');
     const root = document.documentElement;
     if (!u) {
       el?.remove();
+      if (ls.get(MIN)) ls.set(MIN, null);
       if (root.dataset.wosUpdating) { delete root.dataset.wosUpdating; placeholders(false); tellPaused(false); }
       return;
     }
@@ -322,7 +340,9 @@
       el = document.createElement('div'); el.id = 'wosUpdating'; el.className = 'osu-busy';
       el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
       document.body.appendChild(el);
+      el.addEventListener('click', e => { if (e.target.closest('.osu-min')) { const v = updating(); if (v) { minimize(v, true); render(); } } });
     }
+    el.hidden = minimized(u);
     el.dataset.shell = desktop() ? 'desktop' : 'phone';
     const n = step(u), back = u.phase === 'restoring';
     const mins = u.since && isFinite(u.since) ? Math.max(0, Math.round((Date.now() - u.since) / 60e3)) : null;
@@ -330,9 +350,10 @@
     const title = back ? `Putting ${OS} back how it was` : `Updating ${OS} to ${u.target}`;
     const line = back ? 'The update didn’t finish. Your Mac is restoring the backup it made first; your chats and files are safe.'
       : `${TAKES} · Your chats and files are safe`;
-    const leave = desktop() ? 'Nothing to do here. Keep reading your chats, or close the Wizard window (⌘W); the update carries on.' : 'Nothing to do here. You can leave this screen; your Mac carries on updating.';
+    const leave = desktop() ? 'Minimize to keep using Wizard: messages you send wait and go out when it’s done.' : 'Minimize to keep reading; messages you send go out when it’s done.';
     const steps = back ? '' : `<ol class="osu-steps">${STEPS.map((s, i) => `<li class="${i < n ? 'done' : i === n ? 'now' : 'next'}"><i aria-hidden="true"></i><span>${esc(s)}${i === n ? '…' : ''}</span></li>`).join('')}</ol>`;
-    const html = `<b class="osu-busy-t">${esc(title)}</b>${steps}<p class="osu-busy-l">${esc(line)}</p><p class="osu-busy-n">${esc([ran, leave].filter(Boolean).join(' · '))}</p>`;
+    const min = `<button type="button" class="osu-min" aria-label="Minimize" title="Minimize"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 8h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>`;
+    const html = `${min}<b class="osu-busy-t">${esc(title)}</b>${steps}<p class="osu-busy-l">${esc(line)}</p><p class="osu-busy-n">${esc([ran, leave].filter(Boolean).join(' · '))}</p>`;
     if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
   }
   // The composer says why it won't send (the draft stays).
@@ -355,6 +376,12 @@
     if (e.target.closest?.('form[data-chform], [data-compose]')) stop(e);
   }, true);
   window.addEventListener('click', e => { if (paused() && e.target.closest?.('.ch-send, form[data-chform] button[type="submit"]')) stop(e); }, true);
+
+  window.addEventListener('keydown', e => {
+    const u = updating(); if (!u) return;
+    if (e.key === 'Escape' && !minimized(u) && !document.querySelector('dialog[open]')) { minimize(u, true); render(); }
+    else if ((e.key === 'Enter' || e.key === ' ') && e.target?.id === 'dvOsu' && minimized(u)) { e.preventDefault(); minimize(u, false); render(); }
+  });
 
   // ---- loop ----
   let fastT = 0;

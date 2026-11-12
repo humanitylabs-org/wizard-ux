@@ -195,6 +195,22 @@ dialog.wz-sheet.osu-sheet::backdrop { background: color-mix(in srgb, var(--wz-ba
 @media (prefers-reduced-motion: reduce) { .osu-steps li.now i { animation: none; } }
 .osu-busy-l, .osu-busy-n { margin: 0; line-height: 1.4; }
 .osu-busy-n { font-size: var(--wz-text-sm); color: var(--wz-text-secondary, var(--ink-3)); }
+/* Minimize: the panel steps aside for the pill (desktop top bar) or the strip (phone), which carries the step, a
+ * spinner and the Downloads progress bar (core/downloads.css .wdl-bar); a tap opens the panel again. */
+.osu-busy[hidden] { display: none; }
+.osu-busy .osu-min { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center;
+  color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface); cursor: pointer; }
+.osu-busy .osu-min:hover { color: var(--wz-text, var(--ink)); }
+.osu-busy .osu-min:focus-visible, #dvOsu.osu-pill-busy:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 2px; }
+.osu-busy-t { padding-right: 36px; }
+#dvOsu.osu-pill-busy { cursor: pointer; overflow: hidden; --wdl-line: var(--wz-border, var(--line-2)); --wdl-accent: var(--wz-accent, var(--violet-2)); }
+#dvOsu.osu-pill-busy[data-shell="desktop"] { padding-right: 10px; }
+#dvOsu.osu-pill-busy[data-shell="phone"] { padding: 10px 14px 12px; }
+#dvOsu .osu-ring { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--wz-accent, var(--violet-2)); border-right-color: transparent;
+  box-sizing: border-box; animation: osu-spin 1s linear infinite; }
+#dvOsu .osu-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; margin: 0; border-radius: 0; }
+#dvOsu[data-shell="phone"] .osu-bar { height: 3px; }
+@media (prefers-reduced-motion: reduce) { #dvOsu .osu-ring { animation: none; } }
 /* While it updates, the outage is expected: no connection pills, offline card, saved-copy notes or reload banner. */
 html[data-wos-updating] .wx-banner.net, html[data-wos-updating] #wxOffline, html[data-wos-updating] .ch-saved,
 html[data-wos-updating] #dvWeb { display: none !important; }
