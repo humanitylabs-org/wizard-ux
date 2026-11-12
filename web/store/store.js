@@ -5,7 +5,7 @@
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease} from './store-install.js';
-import {removalPlan, removeInstalledApp, canRemove, confirmView} from './store-remove.js';
+import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetAppData} from './store-remove.js';
 import {githubStatus, githubStart, githubSignOut, githubSheet, normalizeStatus, shouldPoll} from './store-github.js';
 await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
@@ -391,6 +391,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       r.error = now === 'unknown' ? 'Wizard couldn’t confirm the removal. Refresh to check.' : now === 'present' && gone ? `Removal finished, but Wizard still lists ${r.name}. Refresh to check.` : r.error;
       refresh(); return;
     }
+    // Gone for sure: its data the shell kept on this device for its sandboxed windows goes with it.
+    await forgetAppData(r.id);
     // Finishing action: leave the review and the removed app's page in one go, back to where the owner came from.
     if (top() === 'sheet' && S.stack.at(-1).arg === sheet) pop();
     if (top() === 'detail' && S.stack.at(-1).arg === r.from) pop();

@@ -45,6 +45,40 @@ export async function removeInstalledApp(plan, { base = new URL('../', import.me
   throw fail(j.error || CHECK, true);
 }
 
+/* After a confirmed removal: this device's copy of the app's own data that the shell kept for it while its window was
+ * sandboxed (wizard-os#133; core/browser-boundary.js appStorage and appIdb): its saved settings
+ * (`wos.app-storage.v1.<id>`) and its databases (shell IndexedDB `wos-app-idb-v1`, keys starting with the app id).
+ * The confirm sheet says the app data is deleted, so these go too; a later reinstall starts empty. Never creates the
+ * shell database when it is not there. Resolves true when nothing of the app is left (or there was nothing). */
+export async function forgetAppData(id, { storage = globalThis.localStorage, idb = globalThis.indexedDB, keyRange = globalThis.IDBKeyRange } = {}) {
+  if (!ID.test(id || '')) return false;
+  let ok = true;
+  try { storage?.removeItem?.('wos.app-storage.v1.' + id); } catch (_) { ok = false; }
+  if (!idb?.open || !keyRange?.bound) return ok;
+  try {
+    const d = await new Promise((res, rej) => {
+      const r = idb.open('wos-app-idb-v1');
+      r.onupgradeneeded = () => { try { r.transaction.abort(); } catch (_) {} };   // not there: leave it so
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => { const e = r.error; if (e?.name === 'AbortError') res(null); else rej(e); };
+      r.onblocked = () => rej(new Error('blocked'));
+    });
+    if (!d) return ok;
+    try {
+      const names = [...(d.objectStoreNames || [])].filter(n => n === 'dbs' || n === 'rows');
+      if (!names.length) return ok;
+      // [id] < [id, …] < [id + '\0']: exactly this app's rows, never another id that starts the same way.
+      const range = keyRange.bound([id], [id + '\u0000'], false, true);
+      await new Promise((res, rej) => {
+        const tx = d.transaction(names, 'readwrite');
+        for (const n of names) tx.objectStore(n).delete(range);
+        tx.oncomplete = res; tx.onabort = tx.onerror = () => rej(tx.error);
+      });
+    } finally { d.close(); }
+  } catch (_) { ok = false; }
+  return ok;
+}
+
 // Only an exact App Manager install (repository and full commit), under its own registry id, that is not part of
 // Wizard. The server decides again.
 export function canRemove(installed, complete) {

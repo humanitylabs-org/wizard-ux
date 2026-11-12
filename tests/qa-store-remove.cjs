@@ -18,6 +18,16 @@ const catalog=[ledger,cardsA,cardsB,helper];
 const plan=(over={})=>({app:'ledger',name:'Ledger',installed:true,removable:true,protected:false,reason:'',identity:{repo:'example/ledger',commit:C,source:'standard'},dependents:[{id:'reports',name:'Reports'}],empties:[],backups:1,...over});
 const ident={repo:'example/ledger',commit:C};
 const expectedBody={repo:'example/ledger',commit:C,dependents:['reports'],empties:[]};
+// The data the shell keeps on this device for an app's sandboxed windows (wizard-os#133, core/browser-boundary.js):
+// saved settings in localStorage and databases in the shell IndexedDB, same keys and schema.
+const seedAppData=()=>new Promise((ok,no)=>{for(const id of ['ledger','cards'])localStorage.setItem('wos.app-storage.v1.'+id,JSON.stringify({theme:'dark'}));
+ const r=indexedDB.open('wos-app-idb-v1',1);r.onupgradeneeded=()=>{r.result.createObjectStore('dbs');r.result.createObjectStore('rows');};
+ r.onerror=()=>no(r.error);r.onsuccess=()=>{const d=r.result,tx=d.transaction(['dbs','rows'],'readwrite');
+  for(const id of ['ledger','cards']){tx.objectStore('dbs').put({version:1,rev:1,stores:[['s',{keyPath:null,autoIncrement:false,next:1,indexes:[],size:9}]],size:9},[id,'db']);tx.objectStore('rows').put({v:'x',n:9},[id,'db','s','k']);}
+  tx.oncomplete=()=>{d.close();ok();};tx.onabort=()=>no(tx.error);};});
+const readAppData=()=>new Promise((ok,no)=>{const r=indexedDB.open('wos-app-idb-v1');r.onerror=()=>no(r.error);r.onsuccess=()=>{const d=r.result,tx=d.transaction(['dbs','rows']);
+ const a=tx.objectStore('dbs').getAllKeys(),b=tx.objectStore('rows').getAllKeys();
+ tx.oncomplete=()=>{d.close();ok({settings:['ledger','cards'].filter(id=>localStorage.getItem('wos.app-storage.v1.'+id)!==null),dbs:a.result.map(k=>k[0]),rows:b.result.map(k=>k[0])});};};});
 const VIEWPORTS=[{width:390,height:844,touch:true},{width:1280,height:800,touch:false}];
 const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skins/obsidian/skin.css'}];
 (async()=>{
@@ -133,6 +143,7 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
     await tap(f.locator('#sheet .rm-cancel')); await f.locator('#detail [data-open="ledger"]').waitFor();
    }
    assert.equal(st.posts.length,0);
+   await page.evaluate(seedAppData);
    // Request-level refusals, failures and unknown outcomes keep the review and the app; nothing claims removal.
    for(const [mode,why] of [['refused',/changed since you opened it/],['failed',/still installed/],['unknown',/Refresh to check/],['mismatch',/different app/],['stale',/still lists Ledger/]]) {
     st.mode=mode; await openReview(); await tap(f.locator('#sheet [data-remove-confirm]'));
@@ -152,6 +163,8 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
    assert.doesNotMatch(await f.locator('#toast').innerText().catch(()=>''),/removed/,'unknown-gone claims nothing');
    st.installed.add('ledger'); await tap(f.locator('#sheet .rm-cancel'));
    await f.evaluate(()=>document.querySelector('#refresh').click()); await f.locator('#detail [data-open="ledger"]').waitFor({timeout:15000});
+   // Without a confirmed removal the app's own data on this device stays.
+   assert.deepEqual(await page.evaluate(readAppData),{settings:['ledger','cards'],dbs:['cards','ledger'],rows:['cards','ledger']},'unconfirmed removals keep app data');
    // Success: a double tap posts once, the registry is read back, the shell refreshes and the owner lands on the list.
    st.mode='success'; const before=st.posts.length; await openReview();
    const go=f.locator('#sheet [data-remove-confirm]');
@@ -162,6 +175,8 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
    assert.equal(st.posts.length-before,1,'one removal request');
    assert.equal(await f.locator('#detail').isHidden(),true); assert.equal(await f.locator('#sheet').isHidden(),true);
    assert.match(await f.locator('#toast').innerText(),/Ledger removed/);
+   // Confirmed removal: Ledger's data on this device is gone, Cards keeps its own.
+   assert.deepEqual(await page.evaluate(readAppData),{settings:['cards'],dbs:['cards'],rows:['cards']},'removed app data is deleted');
    assert.equal(await f.locator('.row[data-app^="ledger|"] [data-get]').innerText(),'Get');
    assert.ok((await page.evaluate(()=>window.changed)).includes('ledger'));
    await shot('after-remove-list'); await noOverflow('after remove');
