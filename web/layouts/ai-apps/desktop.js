@@ -14,7 +14,8 @@
  *     Ready count (round 5, the phone's ☰ count).
  *   - Collapsed, it is a 120 px rail (round 12: words, not icons; was a 52 px icon rail, ChatGPT / Perplexity): ◫, +, 🔍, the open apps' icons, All apps, and the cog
  *     at the bottom. ◫ or Ctrl / ⌘ + Shift + S (ChatGPT's key) toggles it; the choice is kept on this device. It stays
- *     open from 680 px up (none of them fold it there); narrower it rests as the rail and opens over the page.
+ *     open from 680 px up (none of them fold it there; James, 12 Nov 2026: was 900), or 900 px while a chat is docked
+ *     beside an app panel; narrower it rests as the rail and opens over the page.
  *   - The main area beside it: a 52 px top row (what is in front on the left, a thread's title or an app's name; a small
  *     home button in its middle, always there (round 5, as on the phone); on the right, on Home only (round 5), the
  *     workspace switcher, where they put Temporary / Incognito), then the chat or the app.
@@ -75,7 +76,7 @@ import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sections
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
 
-export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680;
+export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;
 /** Round 9 (Miguel, 2 Nov 2026): the panels resizable by drag, within these limits (px). Round 15: the sidebar, the
  * open-apps column on the right (Arc's vertical tabs; 52 px folded) and the app panel docked left of it. */
 export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400] };
@@ -431,9 +432,17 @@ export default function desktop(api) {
 
   /* ---------- the sidebar's width: open, the rail, or open over the page (narrow) ---------- */
   let folded = api.storage.get('folded') === true, peek = false;
-  const narrow = () => (globalThis.innerWidth || 1440) < DOCKED_FROM;
+  // A chat docked beside an app panel needs that room: there the sidebar keeps the old 900 px breakpoint, so the app
+  // is never squeezed to nothing between the docked chat and the open-apps column (#1313 review).
+  const narrow = () => (globalThis.innerWidth || 1440) < (root.dataset.aadChat && root.dataset.aadSplit ? CROWDED_FROM : DOCKED_FROM);
+  const sideWant = () => narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
+  /** the sidebar again after a resize or a chat docking beside an app (or leaving): only when its mode changes */
+  function syncSide() {
+    if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; }
+    if (sideWant() !== root.dataset.aadSide) paintSide();
+  }
   function paintSide(relayout = true) {
-    const mode = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
+    const mode = sideWant();
     const was = root.dataset.aadSide;
     if (relayout && was && was !== mode) flip([top, orbBox, ...shownDesks()], () => { root.dataset.aadSide = mode; });
     else root.dataset.aadSide = mode;
@@ -482,7 +491,7 @@ export default function desktop(api) {
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
   api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
-  api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
+  api.listen(globalThis, 'resize', syncSide);
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
    * A thin separator on its inner edge (a hairline in the accent on hover); drag it, or ←/→ (⇧ for bigger steps) with it
@@ -1491,7 +1500,7 @@ export default function desktop(api) {
     if (!docked && !wasDocked && !!(pane && chat) !== !!root.dataset.aadSplit) flip([homeComposer(), orbBox], setState); else setState();
     if (docked && !wasDocked) anim('dock');
     applySizes(); watchPaneWins();
-    if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
+    if (was !== `${!!root.dataset.aadSplit}${docked}`) { syncSide(); retileSoon(); }
     // One physical pane owns both the layout header and the app window. Moving
     // the header (not cloning it) preserves its tools/listeners and iframe state.
     const headerHost = pane?.el || top;
