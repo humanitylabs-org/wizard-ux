@@ -702,6 +702,17 @@ test('app backend stream: the shell reads on only while the page keeps up (net.a
   assert.equal(again.f.notices.length, before);
   assert.equal(again.f.call('net.abort', { key: 'nf-r' }), false);
 });
+test('app backend stream: one large read (4 MB at once) still waits for the page between its pieces', async () => {
+  const { f } = netFixture(() => new Response(new ReadableStream({ start(c) { c.enqueue(new Uint8Array(4 * 1024 * 1024)); c.close(); } }), { status: 200 }));
+  await f.call('net.fetch', { key: 'nf-one', url: 'https://wizard.example/morning-report/api/blob', stream: true });
+  await pause(40);
+  const sent = () => f.notices.filter(n => n.event === 'chunk').reduce((a, n) => a + n.chunk.byteLength, 0);
+  assert.equal(sent(), 1024 * 1024, 'not the whole read at once');
+  f.call('net.ack', { key: 'nf-one', n: 1024 * 1024 }); await pause(40);
+  assert.equal(sent(), 2048 * 1024);
+  for (let i = 0; i < 3; i++) { f.call('net.ack', { key: 'nf-one', n: 4 * 1024 * 1024 }); await pause(40); } // the page takes everything
+  assert.equal(sent(), 4 * 1024 * 1024); assert.equal(f.notices.at(-1).event, 'end');
+});
 test('app backend stream: at most 16 open calls per window; an error mid-stream reaches the page as an error', async () => {
   const { f } = netFixture(() => new Response(new ReadableStream({ start() {} }), { status: 200 }));
   for (let i = 0; i < 16; i++) await f.call('net.fetch', { key: 'nf-' + i, url: 'https://wizard.example/morning-report/api/live', stream: true });

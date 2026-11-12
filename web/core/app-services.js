@@ -1293,13 +1293,16 @@
     (st.netFlows ||= new Map()).set(key, { ack: n => { if (Number.isFinite(n) && n > flow.acked) { flow.acked = Math.min(n, flow.sent); wake(); } } });
     let ended = false;
     try {
-      for (;;) {
-        while (live() && flow.sent - flow.acked >= NET_WINDOW) await new Promise(r => { flow.wake = r; });
-        if (!live()) break;
+      // Waits while the page has NET_WINDOW bytes or more not yet taken (between reads and between the pieces of one
+      // large read alike); false once the call is over.
+      const room = async () => { while (live() && flow.sent - flow.acked >= NET_WINDOW) await new Promise(r => { flow.wake = r; }); return live(); };
+      read: for (;;) {
+        if (!await room()) break;
         const { done, value } = await reader.read();
         if (!live()) break;
         if (done) { ended = true; B.notice(st.frame, 'net', { key, event: 'end' }); break; }
         for (let at = 0; at < value.byteLength; at += NET_PIECE) {
+          if (!await room()) break read;
           const piece = value.slice(at, at + NET_PIECE);
           if (!B.notice(st.frame, 'net', { key, event: 'chunk', chunk: piece.buffer })) throw fault('App document changed');
           flow.sent += piece.byteLength;
