@@ -614,8 +614,11 @@ export default function desktop(api) {
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
   const settings = () => { unpeek(); api.desk.settings(); };
   // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
-  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
-  api.listen(newBtn, 'click', newOrPost); api.listen(rNew, 'click', newOrPost);
+  // The sidebar's tab decides (wizard-ux issues 1308, 1310): Activity, a blank new chat (a feed left in the column closes);
+  // Channels with a channel open, its box; the Channels list with none open, + / ⌥N start a new channel.
+  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelView?.() !== 'activity' && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
+  const plus = () => { if (!feedOn() && api.sessions.channelNew?.()) { closeMenu(); return; } newOrPost(); };
+  api.listen(newBtn, 'click', plus); api.listen(rNew, 'click', plus);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
   // the cog's count (System notices set to Badge, …): WosBell.attention, as on the stock desktop's cog and the phone's gear
   const setCounts = [setBtn, rSet].map(b => { const c = el('b', 'aad-count aad-setn', { 'aria-hidden': 'true' }); c.hidden = true; b.append(c); return c; });
@@ -1815,7 +1818,7 @@ export default function desktop(api) {
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
     if ((code === 'KeyH' || code === 'Backquote') && !sh) return once(() => (focusOn() && focusStash ? focusOut : focusIn)());
     if (code === 'KeyS' && !sh) return once(settings);
-    if (code === 'KeyN' && !sh) return once(newOrPost);
+    if (code === 'KeyN' && !sh) return once(plus);
     if (code === 'KeyK' && !sh) return once(() => setSearch(true));
     if (code === 'KeyL' && !sh) return once(toggleSide);
     if (code === 'KeyR' && !sh) return once(toggleTabs);
