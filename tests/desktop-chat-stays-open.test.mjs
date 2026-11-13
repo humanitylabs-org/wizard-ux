@@ -80,7 +80,9 @@ for (const desktopHost of [true, false]) for (const agent of ['', 'philosopher']
   vm.runInContext(read('web/core/chats-list-model.js'), c);
   vm.runInContext(read('web/live.js'), c);
   const L = c.LIVE = c.WizLive; L.ok = true; L.seen = {initializedAt:1,threads:{}};
-  const row = {id:'same',runtime:'direct',title:'Synthetic',status:'completed',updatedAt:'2026-11-06T00:00:00Z',lastAssistantAt:'2026-11-06T00:00:00Z',messageCount:2};
+  // Dated relative to now: a fixed day aged past the 7-day automatic Archive (archived threads read as read) on 13 Nov 2026.
+  const at = new Date(Date.now() - 36e5).toISOString();
+  const row = {id:'same',runtime:'direct',title:'Synthetic',status:'completed',updatedAt:at,lastAssistantAt:at,messageCount:2};
   if (agent) { L.agentSessions[agent] = [row]; L.pinAgent('same',agent); } else L.sessions = [row];
   c.rowOf = () => row; c.desks = [{wins:['chat']}]; c.idx = 0; c.isHosted = () => false; c.attended = () => true;
   vm.runInContext(cut(core, '  function markVisibleThreadsSeen(', '\n  const elOf'), c);
