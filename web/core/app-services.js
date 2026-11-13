@@ -291,8 +291,36 @@
     authorize(); // No signature/plaintext to a reloaded, navigated, detached or uninstalled document.
     return result;
   }
+  /* Which installed app opens which IndexedDB database on this device while its window is same-origin
+   * (`wos.app-idb-owners.v1`: { name: { app } }, app '' = more than one app opened it). When the box turns the browser
+   * boundary on, the sandboxed page can no longer open them, and core/browser-boundary.js copies a database over to
+   * the one app that alone opened it (wizard-os#133). Only names; the shell's own databases are never noted. */
+  const IDB_OWNERS = 'wos.app-idb-owners.v1', IDB_OWNERS_MAX = 512, idbNoted = new Set(), idbWatched = new WeakSet();
+  function noteIdb(appId, name) {
+    if (typeof name !== 'string' || !name || name.length > 256 || /^wos/i.test(name) || /^wizard-app-capture/i.test(name) || idbNoted.has(appId + '\n' + name)) return;
+    let o = {}; try { o = JSON.parse(window.localStorage.getItem(IDB_OWNERS) || '{}') || {}; } catch (_) { o = {}; }
+    if (typeof o !== 'object' || Array.isArray(o)) o = {};
+    const had = Object.prototype.hasOwnProperty.call(o, name) ? o[name] : null;
+    if (!had && Object.keys(o).length >= IDB_OWNERS_MAX) return;
+    const app = !had || had.app === appId ? appId : '';
+    idbNoted.add(appId + '\n' + name);
+    if (had && had.app === app) return;
+    o[name] = { app };
+    try { window.localStorage.setItem(IDB_OWNERS, JSON.stringify(o)); } catch (_) {}
+  }
+  // The app's own window (same-origin, verified): its page's indexedDB.open notes the name, then opens as before.
+  function watchIdb(st, source) {
+    try {
+      const f = source.indexedDB, open = f?.open;
+      if (!f || typeof open !== 'function' || idbWatched.has(f)) return;
+      const appId = st.appId;
+      Object.defineProperty(f, 'open', { configurable: true, writable: true, value: function (name, ...rest) { try { noteIdb(appId, String(name)); } catch (_) {} return open.call(this, name, ...rest); } });
+      idbWatched.add(f);
+    } catch (_) {}
+  }
   function connect(source, client) {
     const st = from(source); if (!valid(st)) return null;
+    watchIdb(st, source);
     const doc = source.document;
     if (st.doc && st.doc !== doc) reset(st);
     st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
