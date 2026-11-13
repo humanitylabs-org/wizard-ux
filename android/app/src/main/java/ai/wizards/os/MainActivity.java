@@ -90,7 +90,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private ai.wizards.os.device.DeviceBridge device;
     private Bridge shellBridge; // window.WizardOSNative
     private NativeGate gate; // non-null: the browser owner boundary is on and the bridges are the shell origin's only
-    private static boolean boundaryReloaded; // one reload per app run when the box turns the boundary on
+    // Every open Wizard window (the shell, pinned app sessions): all of them gate at once when the boundary turns on.
+    private static final java.util.Set<MainActivity> LIVE = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
 
     /**
      * WizardOSNative and WizardOSDevice. Off (the default): both go into the WebView as they always have, which puts them
@@ -100,6 +101,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      */
     private void installNativeBridges(WebView target) {
         gate = null;
+        LIVE.add(this);
         String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
         if (NativeGate.on(this, origin)) { armGate(target, origin); return; }
         target.addJavascriptInterface(shellBridge, "WizardOSNative");
@@ -129,12 +131,23 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private void browserBoundary(boolean on) {
         if (web == null) return;
         String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
-        boolean changed = NativeGate.remember(this, origin, on);
+        NativeGate.remember(this, origin, on);
         // Turning off needs nothing now: the gate keeps working, and the next WebView registers the bridges as before.
-        // Turning on: from now on, and reload once so the page already open stops handing the bridges to its frames.
-        if (!on || gate != null || !changed) return;
+        // Turning on: every open window gates now, not only the one whose shell said so.
+        if (!on) return;
+        for (MainActivity a : new java.util.ArrayList<>(LIVE)) a.gateNow(origin);
+    }
+
+    /**
+     * Gates this window's WebView and reloads it, because bridge changes only reach the next page load: the page and
+     * frames already open keep the old bridges until then. At most once per WebView (after that the gate is in place),
+     * so a page can never make it reload again.
+     */
+    private void gateNow(String origin) {
+        if (web == null || gate != null || isFinishing() || isDestroyed()) return;
+        if (!origin.equals(ai.wizards.os.device.AppState.primaryOrigin(this))) return;
         armGate(web, origin);
-        if (gate != null && !boundaryReloaded) { boundaryReloaded = true; web.reload(); }
+        if (gate != null) web.reload();
     }
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
@@ -1136,6 +1149,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     @Override
     protected void onDestroy() {
+        LIVE.remove(this);
         if (device != null) device.onDestroy();
         main.removeCallbacks(reachMark); main.removeCallbacks(reachGiveUp); main.removeCallbacks(reachRetry); main.removeCallbacks(netSettled);
         if (netWatch != null) { try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(netWatch); } catch (RuntimeException ignored) {} netWatch = null; }
