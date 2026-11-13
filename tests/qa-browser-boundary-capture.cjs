@@ -18,6 +18,7 @@ const { chromium } = require('../tools/qa-playwright.cjs');
 const WEB = process.env.QA_WEB ? path.resolve(process.env.QA_WEB) : path.join(__dirname, '..', 'web');
 const SHOT = process.env.QA_SHOT || '';
 const APP = who => `<!doctype html><html><head><meta charset="utf-8"><script src="/wizard-os-home/core/app-client.js"></script>
+<script>const focus = 'an app global named focus';</script>
 <style>body{font:14px system-ui;margin:8px}button{font:inherit}</style></head>
 <body><button id="rec">Record</button> <button id="prep">Prepare</button> <button id="keep">Keep focus</button> <span id="t">${who}</span><script>
   window.out = { levels: [], pcm: [], chunks: [], states: [] };

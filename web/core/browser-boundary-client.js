@@ -186,8 +186,10 @@
   // A tap gives this window focus, as it does without the boundary, also when the page keeps focus where it is
   // (mousedown preventDefault on a toolbar button, e.g. Outline's Go Live): the shell takes a recording, share or
   // link only after a tap in the focused window, and a tap that never focused it would be refused.
+  // Window's own focus, taken now: an app's own global named `focus` must not stand in for it (Codex P2).
+  const winFocus = typeof globalThis.focus === 'function' ? globalThis.focus : null;
   addEventListener('pointerdown', e => {
-    if (e.isTrusted && typeof document.hasFocus === 'function' && !document.hasFocus()) { try { focus(); } catch (_) {} }
+    if (e.isTrusted && winFocus && typeof document.hasFocus === 'function' && !document.hasFocus()) { try { winFocus.call(globalThis); } catch (_) {} }
     if (channel) send({ op: 'input', kind: 'pointer' });
   }, true);
   addEventListener('message', e => {
