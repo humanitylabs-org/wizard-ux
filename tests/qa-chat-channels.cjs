@@ -172,7 +172,7 @@ const report = { origin, web, cases: [] };
         await vis('.ch-chan-h').waitFor();
         assert.match(await vis('.ch-chan-h').innerText(), /#\s*Launch/);
         const posts = async () => page.locator('.ch-chan-feed .ch-post-b').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.chopen));
-        entry.feedOpen = await posts(); assert.deepEqual(entry.feedOpen, ['qa-l1', 'qa-l2'], 'Open: oldest to newest, archived left out');
+        entry.feedOpen = await posts(); assert.deepEqual(entry.feedOpen, ['qa-l3', 'qa-l1', 'qa-l2'], 'every post, oldest to newest (issue 1440: no Open filter)');
         // The post is the first owner message (clamped at 4 lines, "more"), with its picture as a thumbnail; no title card.
         await vis('.ch-post-b[data-chopen="qa-l1"] .ch-post-t:not(.ch-post-wait)').waitFor({ timeout: 8000 });
         const p1 = vis('.ch-post-b[data-chopen="qa-l1"]');
@@ -199,9 +199,7 @@ const report = { origin, web, cases: [] };
         await vis('.ch-chan-h').waitFor();
         assert.match(await vis('.ch-post-r[data-chopen="qa-l2"]').innerText(), /1 reply[\s\S]*Working/); // the reply it shows, not message_count 4 (issue 1266)
         await page.screenshot({ path: path.join(out, stem + '-feed-expanded.png') });
-        await vis('[data-chchanf="needs"]').click(); assert.deepEqual(await posts(), ['qa-l1']);
-        await vis('[data-chchanf="all"]').click(); assert.deepEqual(await posts(), ['qa-l3', 'qa-l1', 'qa-l2']);
-        await vis('[data-chchanf="open"]').click();
+        assert.equal(await page.locator('[data-chchanf]').count(), 0, 'no Open / Needs you / All row (issue 1440)');
         // The unread post's reply line: "1 new reply" (the replies he sees, issue 1266) with the green unread dot first; the working one is unchanged.
         entry.unreadLine = (await vis('.ch-post-r.unread[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
         assert.match(entry.unreadLine, /^1 new reply/);
@@ -219,7 +217,7 @@ const report = { origin, web, cases: [] };
         await page.evaluate(() => { window.unreadWatch = true; });
         entry.back = [await back()]; await nap(150);
         if (!phone && await page.locator('.ch-thread').filter({ visible: true }).count()) { entry.back.push(await back()); await nap(150); }
-        await vis('.ch-chan-h').waitFor(); assert.deepEqual(await posts(), ['qa-l1', 'qa-l2'], 'Back from the thread lands on the channel');
+        await vis('.ch-chan-h').waitFor(); assert.deepEqual(await posts(), ['qa-l3', 'qa-l1', 'qa-l2'], 'Back from the thread lands on the channel');
         entry.readLine = (await vis('.ch-post-r[data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ').trim();
         assert.match(entry.readLine, /^1 reply/, 'read: the marker is gone on the channel Back lands on');
         assert.equal(await page.locator('.ch-post.unread[data-morph-key="post:qa-l1"]').count(), 0);

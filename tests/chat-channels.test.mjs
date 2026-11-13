@@ -148,24 +148,39 @@ test('General keeps the agent Focus and holds only chats in no Space; a Focus ta
   assert.equal(f.chanOpen(f.w), null);
 });
 
-test('feed filters Open (default) / Needs you / All, posts truncate at about 240 characters with more', async () => {
+test('issue 1440: no Open / Needs you / All row; every post shows, marked for the jump pills; posts truncate at about 240 characters with more', async () => {
   const long = 'x'.repeat(300), say = (...t) => [{ role: 'user', text: long }, ...t.map(x => ({ role: 'assistant', text: x }))];
   const rows = [row('a', 5, { request: long, messageCount: 5 }), row('b', 3, { attention: { state: 'needs_you' }, messageCount: 2 }), row('c', 1, { archived: true })];
   const f = fixture({ history: { a: say('one', 'two', 'three', 'four'), b: say('ok') } }); f.openChannel(f.w, 'launch');
   const open = f.chanOpen(f.w), ids = h => [...h.matchAll(/class="ch-post-b" data-chopen="([^"]+)"/g)].map(m => m[1]);
   f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r));
   let html = f.channelFeed(f.w, open, rows);
-  assert.deepEqual(ids(html), ['a', 'b']); assert.match(html, /data-chchanf="open" aria-pressed="true"/);
+  assert.deepEqual(ids(html), ['a', 'b', 'c'], 'every post, the done one too'); assert.match(html, /Done/);
+  assert.doesNotMatch(html, /data-chchanf|ch-rdy-bar/, 'no filter row');
+  assert.match(html, /class="ch-post" data-chmark="needs" data-morph-key="post:b"/, 'the needs-you post is an amber marker');
+  assert.doesNotMatch(html, /data-chmark="[^"]*" data-morph-key="post:(a|c)"/, 'read posts carry no marker');
   assert.match(html, /4 replies/); assert.match(html, /1 reply</); assert.match(html, /Needs you/);
   assert.match(html, /data-chpostmore="a" aria-expanded="false">more/);
   assert.match(html, /class="ch-post-t clamp">x{300}</, 'long text is clamped at 4 lines by CSS');
   f.channelClick(click({ 'data-chpostmore': 'a' }), 'w', f.w);
   assert.match(f.channelFeed(f.w, open, rows), /class="ch-post-t">x{300}</);
-  f.channelClick(click({ 'data-chchanf': 'needs' }), 'w', f.w);
-  assert.deepEqual(ids(f.channelFeed(f.w, open, rows)), ['b']);
-  f.channelClick(click({ 'data-chchanf': 'all' }), 'w', f.w);
-  html = f.channelFeed(f.w, open, rows);
-  assert.deepEqual(ids(html), ['a', 'b', 'c']); assert.match(html, /Done/);
+  // The old filter taps do nothing any more; the feed's pills go to the shared jump.
+  const before = f.channelFeed(f.w, open, rows);
+  assert.equal(f.channelClick(click({ 'data-chchanf': 'needs' }), 'w', f.w), false);
+  assert.equal(f.channelFeed(f.w, open, rows), before);
+  const went = []; f.env.jumpGo = (id, dir) => { went.push([id, dir]); return true; };
+  assert.equal(f.channelClick(click({ 'data-chjump': 'up' }), 'w', f.w), true);
+  assert.deepEqual(went, [['w', 'up']]);
+});
+
+test('issue 1440 main vs routed: a host-profile, container or restricted channel marks its own posts for the pills', () => {
+  const agents = { h1: 'host', k1: 'container', r1: 'restricted', a: '' };
+  for (const [cid, sid, kind] of [['launch', 'a', 'main'], ['host-ops', 'h1', 'host-profile'], ['box', 'k1', 'container'], ['locked', 'r1', 'restricted']]) {
+    const f = fixture({ agents }); f.openChannel(f.w, cid);
+    const html = f.channelFeed(f.w, f.chanOpen(f.w), [row(sid, 1, { attention: { state: 'needs_you' } }), row(sid + 'x', 2)]);
+    assert.match(html, new RegExp(`data-chmark="needs" data-morph-key="post:${sid}"`), `${kind}: its needs-you post is an amber marker`);
+    assert.doesNotMatch(html, /data-chchanf/, `${kind}: no filter row`);
+  }
 });
 
 test('the Activity / Channels tab choice is remembered on the device; Activity is the default', () => {
@@ -436,12 +451,11 @@ test('Send paints the post on the same frame, starts a new chat filed into the c
   assert.equal(f.reads.length, 0, 'no history read for a post this device just sent');
 });
 
-test('a model picked in the channel box rides along; the needs-you filter opens so the post is seen', async () => {
-  const f = fixture(); f.openChannel(f.w, 'launch'); f.env.ch('w').chanFilter = 'needs';
+test('a model picked in the channel box rides along', async () => {
+  const f = fixture(); f.openChannel(f.w, 'launch');
   f.setChanModel('w', { model: 'opus', provider: 'anthropic' }); f.env._sendResult = Promise.resolve({ sessionId: 'n2' }); // the box's own pick (issue 1309)
   await f.channelSend('w', form('hi'));
   assert.deepEqual(JSON.parse(JSON.stringify(f.env._sends[0][4].route)), { model: 'opus', provider: 'anthropic' });
-  assert.equal(f.env.ch('w').chanFilter, 'open');
 });
 
 test('an empty box sends nothing; an archived channel has no box and sends nothing; a running take finishes instead', async () => {
@@ -811,7 +825,7 @@ test('issue 1263/1316: posts changed since the watermark, it opens at the first 
   f.openChannel(f.w, 'launch');
   const open = f.chanOpen(f.w), html = f.channelFeed(f.w, open, rows);
   assert.equal(html.match(/class="ch-chan-new"/g)?.length, 1, 'one New line');
-  assert.match(html, /data-morph-key="chan-new"><span>New<\/span><\/div><div class="ch-post unread" data-morph-key="post:p104"/, 'directly above the first unread post');
+  assert.match(html, /data-morph-key="chan-new"><span>New<\/span><\/div><div class="ch-post unread" data-chmark="new" data-morph-key="post:p104"/, 'directly above the first unread post');
   const d = feedDom(html); f.env.elOf = () => d.el;
   const lineY = () => d.nodes.find(n => n.dataset.morphKey === 'chan-new').getBoundingClientRect().top;
   f.chanHold('w'); assert.equal(lineY(), 8, 'the New line near the top of the view');
@@ -1508,21 +1522,6 @@ test('issue 1316: the watermark only moves forward, is written at most once per 
   assert.equal(f.chanReadAt('hermes|launch'), NOW + H, 'scrolling back up never moves it back');
   assert.deepEqual(f.marks, [], 'no per-thread seen write from the feed');
   assert.match(src, /window\.addEventListener\('pagehide', \(\) => \{ if \(chanReadT\) chanReadSave\(true\); \}\)/, 'a pending write is flushed when the page goes');
-});
-
-// PR #1320 review: a narrowed feed never reads what it does not show.
-test('issue 1316 review: the Needs you filter at its end never reads a changed post it leaves out', () => {
-  const f = fixture({ spacesList: [], marksAt: readTo(50) }); const rows = generalRows(20);
-  f.openChannel(f.w, '__general__'); readToEnd(f, rows); f.channelBack(f.w);
-  rows[5].at = NOW + H / 4;                                           // a reply lands on g5 (not needs-you)
-  rows.push(row('g20', -0.5, { owner: 'hermes', startedAt: new Date(NOW + H / 2).toISOString(), attention: { state: 'needs_you' } }));
-  f.openChannel(f.w, '__general__'); f.env.ch('w').chanFilter = 'needs';
-  const html = f.channelFeed(f.w, f.chanOpen(f.w), rows);
-  assert.deepEqual(keysOf(html).filter(k => k !== 'chan-new'), ['post:g20'], 'the filter shows only the needs-you post');
-  const d = feedDom(html); f.env.elOf = () => d.el; f.chanHold('w');
-  assert.equal(f.chanReadAt('general'), NOW + H / 4 - 1, 'read up to just before the hidden g5, not past it');
-  f.channelBack(f.w); f.env.ch('w').chanFilter = 'open';
-  assert.match(generalLine(f, rows), /aria-label="2 unread"/, 'g5 is still new, and g20 after it');
 });
 
 test('issue 1316 review: an agent-focused General has its own mark; reading it never reads All\'s other agents', () => {

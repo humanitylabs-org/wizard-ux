@@ -242,7 +242,7 @@ test('Chats paints the side pane only with the switch on: tabs, then the channel
   assert.match(r, /chanSwitchedOff\(w\)\) H\.layout/, 'switched off inside a feed: the Focus returns');
   assert.match(src, /const head = side \? chanHead\(w, feed\) :/, 'the pane\'s head is the Channels tabs or the feed\'s header only (no search: the sidebar has its own)');
   assert.match(src, /if \(side && !feed && chanView !== 'channels'\) body = '';/, 'Activity: the sidebar draws its own rows');
-  assert.match(src, /const html = side \? `<div data-part="list" class="ch-list ch-side\$\{feed \? ' ch-side-feed' : chanView === 'channels' \? ' ch-side-chan' : ''\}">\$\{head\}<div class="ch-scroll">\$\{body\}<\/div>\$\{feed \? fab : ''\}<\/div>`/);
+  assert.match(src, /const html = side \? `<div data-part="list" class="ch-list ch-side\$\{feed \? ' ch-side-feed' : chanView === 'channels' \? ' ch-side-chan' : ''\}">\$\{head\}<div class="ch-scroll">\$\{body\}<\/div>\$\{feed && typeof jumpPillsHtml === 'function' \? jumpPillsHtml\(\) : ''\}\$\{feed \? fab : ''\}<\/div>`/);
   assert.match(src, /readyBack, channelBack, chanOpen, channelOf,/, 'channelOf is on the Chats API');
   const host = read('web/core/skin-host.js');
   assert.match(host, /channels: node => live\(\) && node\?\.nodeType === 1 && \[\.\.\.a\.mounts\]\.some\(m => m\.contains\(node\)\) \? !!shell\.chatChannels\?\.\(node\) : false,/, 'only the layout\'s own mounted nodes');
