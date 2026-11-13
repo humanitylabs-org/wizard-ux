@@ -486,10 +486,44 @@
       return u.pathname.endsWith('/') ? u.pathname : u.pathname.slice(0, u.pathname.lastIndexOf('/') + 1);
     } catch (_) { return ''; }
   }
+  /* Turning the boundary on (wizard-os#133): until then the app's page kept its settings in this origin's own
+   * localStorage, which its sandboxed page can no longer reach. core/app-services.js notes which installed app wrote
+   * which key while its window was same-origin (`wos.app-ls-owners.v1`: { key: { app } }, app '' = more than one app).
+   * Before the app's sandboxed page starts (storageName, storage.load), each key that app alone wrote is copied once
+   * into its own copy, unless the copy already has the key (`wos.app-ls-carried.v1` { app: [keys] } notes it, so a key
+   * the app removes later never comes back). The shell's own keys (STORE_SHELL, the same rule as app-services.js
+   * LS_SHELL) are never copied. The old keys stay as they were. True when something was copied. */
+  const LS_OWNERS = 'wos.app-ls-owners.v1', LS_CARRIED = 'wos.app-ls-carried.v1';
+  const STORE_SHELL = /^(?:wos|wux\.|wz\.|wizard\.|wizard-pwa-install:|wizardapp\.)/i;
+  function storeCarry(id) {
+    try {
+      if (typeof id !== 'string' || !STORE_ID.test(id)) return false;
+      const owners = readJson(LS_OWNERS), carried = readJson(LS_CARRIED);
+      const done = new Set(Array.isArray(carried[id]) ? carried[id].filter(k => typeof k === 'string') : []);
+      const keys = Object.keys(owners).filter(k => owners[k]?.app === id && !done.has(k) && !STORE_SHELL.test(k));
+      if (!keys.length) return false;
+      const m = storeRead(id);
+      let others = 0;
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(STORE) && k !== STORE + id) others += (localStorage.getItem(k) || '').length; }
+      let n = storeSize(m), added = 0;
+      for (const k of keys) {
+        if (m.has(k)) { done.add(k); continue; } // The app's newer value under the boundary wins.
+        const v = localStorage.getItem(k);
+        if (v === null) continue; // Gone from the old storage: nothing to carry (yet).
+        const size = k.length + v.length;
+        if (n + size > STORE_MAX || others + n + size > STORE_ALL) continue; // No room: tried again next time.
+        m.set(k, v); n += size; added++; done.add(k);
+      }
+      if (added) localStorage.setItem(STORE + id, JSON.stringify(Object.fromEntries(m)));
+      const c = readJson(LS_CARRIED); c[id] = [...done]; localStorage.setItem(LS_CARRIED, JSON.stringify(c));
+      return added > 0;
+    } catch (_) { return false; }
+  }
   // What a new app window starts with: the frame's name (the page reads it before it can hear anything), with the
   // app's own path. '' = not an installed app here.
   function storageName(id) {
     const base = typeof id === 'string' && STORE_ID.test(id) ? storeBase(id) : '';
+    if (base) storeCarry(id);
     return base ? STORE_NAME + JSON.stringify({ p: base, l: Object.fromEntries(storeRead(id)) }) : '';
   }
   /* A sandboxed app's IndexedDB (its stand-in in core/app-client.js; the browser refuses IndexedDB to an opaque page).
@@ -542,12 +576,83 @@
     for (const k of Object.keys(v)) n += 2 * k.length + idbBytes(v[k], seen);
     return n;
   }
+  /* Turning the boundary on (wizard-os#133): until then the app's page kept its databases in this origin's own
+   * IndexedDB, which its sandboxed page can no longer open. core/app-services.js notes which installed app opened which
+   * database while its window was same-origin (`wos.app-idb-owners.v1`: { name: { app } }, app '' = more than one app
+   * opened it). The first time the app's sandboxed page opens a database the shell has no copy of, and that app alone
+   * opened it before, the shell copies it over once: version, stores, indexes and every record (`wos.app-idb-carried.v1`
+   * notes it, so a database the app deletes later never comes back). The shell's own databases (wos-…, the recorder's
+   * wizard-app-capture-v1) are never carried; the old database stays as it was. True when a copy was written. */
+  const IDB_OWNERS = 'wos.app-idb-owners.v1', IDB_CARRIED = 'wos.app-idb-carried.v1';
+  const idbShellName = n => /^wos/i.test(n) || /^wizard-app-capture/i.test(n);
+  const readJson = k => { try { const o = JSON.parse(localStorage.getItem(k) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (_) { return {}; } };
+  async function idbCarry(id, name) {
+    const mark = id + '\n' + name;
+    try {
+      if (idbShellName(name) || readJson(IDB_OWNERS)[name]?.app !== id || readJson(IDB_CARRIED)[mark]) return false;
+      if (typeof indexedDB.databases !== 'function' || !(await indexedDB.databases()).some(d => d.name === name)) return false;
+      const done = () => { const c = readJson(IDB_CARRIED); c[mark] = Date.now(); try { localStorage.setItem(IDB_CARRIED, JSON.stringify(c)); } catch (_) {} };
+      const old = await new Promise((ok, no) => {
+        const r = indexedDB.open(name);
+        // It went away since databases(): never create it here.
+        r.onupgradeneeded = () => { try { r.transaction.abort(); } catch (_) {} };
+        r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); r.onblocked = () => no(new Error('blocked'));
+      });
+      const ops = [{ o: 'version', v: old.version }];
+      try {
+        const names = [...old.objectStoreNames];
+        if (names.length) {
+          const tx = old.transaction(names, 'readonly');
+          for (const s of names) {
+            const os = tx.objectStore(s);
+            ops.push({ o: 'store', s, keyPath: os.keyPath ?? null, autoIncrement: os.autoIncrement === true });
+            for (const i of [...os.indexNames]) { const x = os.index(i); ops.push({ o: 'index', s, i, keyPath: x.keyPath, unique: x.unique === true, multiEntry: x.multiEntry === true }); }
+            const [keys, vals] = await Promise.all([idbReq(os.getAllKeys()), idbReq(os.getAll())]);
+            let next = 1;
+            keys.forEach((k, j) => { ops.push({ o: 'put', s, k, v: vals[j] }); if (typeof k === 'number' && k >= next) next = Math.floor(k) + 1; });
+            if (os.autoIncrement) ops.push({ o: 'next', s, n: next });
+          }
+          // The real key generator can be ahead of the highest key left (the newest records were deleted): ask it with
+          // one add per store in a transaction that is then aborted, which writes nothing and puts the generator back.
+          const auto = names.filter(s => ops.some(x => x.o === 'store' && x.s === s && x.autoIncrement));
+          if (auto.length) {
+            const gen = await new Promise(ok => {
+              const got = {}; let t;
+              try { t = old.transaction(auto, 'readwrite'); } catch (_) { return ok(got); }
+              t.onabort = () => ok(got); t.oncomplete = () => ok(got);
+              let left = auto.length;
+              for (const s of auto) {
+                try {
+                  const os = t.objectStore(s), q = os.add(os.keyPath === null ? 0 : {});
+                  q.onsuccess = () => { if (typeof q.result === 'number') got[s] = q.result; if (!--left) t.abort(); };
+                  q.onerror = e => { e.preventDefault(); if (!--left) t.abort(); };
+                } catch (_) { if (!--left) t.abort(); }
+              }
+            });
+            for (const x of ops) if (x.o === 'next' && Number.isSafeInteger(gen[x.s]) && gen[x.s] > x.n) x.n = gen[x.s];
+          }
+        }
+      } finally { old.close(); }
+      // In pieces of at most IDB_OPS changes, each on the revision the last one wrote; all or nothing.
+      let base = 0;
+      for (let i = 0; i < ops.length; i += IDB_OPS) {
+        const r = await idbWrite(id, name, ops.slice(i, i + IDB_OPS), base);
+        if (!r || typeof r !== 'object') {
+          if (base) await new Promise(ok => { idbHome().then(d => { const t = d.transaction(['dbs', 'rows'], 'readwrite'); t.oncomplete = t.onabort = ok; t.objectStore('rows').delete(idbDbRows(id, name)); t.objectStore('dbs').delete([id, name]); }, ok); });
+          done(); return false;
+        }
+        base = r.idb.rev;
+      }
+      done(); return true;
+    } catch (_) { return false; }
+  }
   function idbLoad(id, name) {
     if (!idbOk(id, name)) return Promise.resolve({ idb: null });
     return idbSerial(id, async () => {
-      const tx = (await idbHome()).transaction(['dbs', 'rows'], 'readonly');
-      const m = await idbReq(tx.objectStore('dbs').get([id, name]));
+      let m = await idbReq((await idbHome()).transaction('dbs', 'readonly').objectStore('dbs').get([id, name]));
+      if (!m && await idbCarry(id, name)) m = await idbReq((await idbHome()).transaction('dbs', 'readonly').objectStore('dbs').get([id, name]));
       if (!m) return { idb: null };
+      const tx = (await idbHome()).transaction(['dbs', 'rows'], 'readonly');
       const os = tx.objectStore('rows'), rows = [];
       for (const [s] of m.stores) {
         const r = idbStoreRows(id, name, s), [keys, vals] = await Promise.all([idbReq(os.getAllKeys(r)), idbReq(os.getAll(r))]);
@@ -564,7 +669,11 @@
   // is not acceptable or the space is full.
   function idbCommit(id, name, ops, base) {
     if (!idbOk(id, name) || !Array.isArray(ops) || !ops.length || ops.length > IDB_OPS || !Number.isSafeInteger(base)) return Promise.resolve(false);
-    return idbSerial(id, () => new Promise(done => {
+    return idbSerial(id, () => idbWrite(id, name, ops, base));
+  }
+  // One commit, already in this app's turn (idbSerial).
+  function idbWrite(id, name, ops, base) {
+    return new Promise(done => {
       let tx = null, rev = 0;
       const stop = (why = false) => { done(why); try { tx?.abort(); } catch (_) {} };
       idbHome().then(async d => {
@@ -601,7 +710,7 @@
         if (app + m.size > IDB_APP || total + m.size > IDB_ALL) return stop();
         dbs.put(m, [id, name]);
       }).catch(() => stop());
-    }));
+    });
   }
   function idbDrop(id, name) {
     if (!idbOk(id, name)) return Promise.resolve(false);
@@ -634,7 +743,7 @@
     },
     storageName,
     // For core/app-services.js only, always with the frame's own installed app id (never one the page names).
-    appStorage: Object.freeze({ load: id => ({ store: storeRead(id) }), save: storeApply }),
+    appStorage: Object.freeze({ load: id => { storeCarry(id); return { store: storeRead(id) }; }, save: storeApply }),
     // Likewise its IndexedDB (appIdb above): load, commit, drop and list, always for the frame's own installed app id.
     appIdb: Object.freeze({ load: idbLoad, commit: idbCommit, drop: idbDrop, list: idbList }),
     // For core/app-services.js net.fetch: whether a URL is an owner route on this origin (never fetched for an app).

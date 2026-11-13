@@ -597,12 +597,15 @@
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
     if (!runId) throw new HttpError(502, 'Wizard returned no send receipt');
-    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null });
+    // A 202 the box holds for a graceful restart (queue_reason restart_pending, wizard/graceful-restart): saved there,
+    // not running yet. The thread then says so (live.js PEND -> s.restartPending), never Starting… or Working.
+    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null, restartPending: run.status === 'queued' && run.queue_reason === 'restart_pending' });
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
     delete it.useServerCopy;
     Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
+    if (res.restartPending) it.restartPending = true; else delete it.restartPending;
     delete it.audio; delete it.pendingBlobs;
     await put(it);
     admitting.delete(it.id);
@@ -651,7 +654,8 @@
         if (await holdLate(due)) continue;
         await attempt(due);
       }
-      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3) await del(it.id);
+      // A send a graceful restart still holds is kept until the restart is over (live.js pendOver; wizard-ux issue 1362).
+      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3 && !(it.restartPending && window.WizReach?.restart?.())) await del(it.id);
     } finally { pumping = false; schedule(); }
   }
   function schedule(ms) {
@@ -970,6 +974,15 @@
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
   addEventListener('wos:sending-paused', e => { if (!e.detail?.paused) wake(); });
+  // A graceful restart is over (WizReach dispatches wizreachchange): sends it held are ordinary sent receipts again, so
+  // a later restart never reads them as held, and the cleanup that kept them for the hold runs now (issue 1362).
+  addEventListener('wizreachchange', () => {
+    if (window.WizReach?.restart?.()) return;
+    const held = [...items.values()].filter(it => it.restartPending);
+    if (!held.length) return;
+    for (const it of held) delete it.restartPending;
+    Promise.all(held.map(it => put(it).catch(() => {}))).then(() => { emit(); pump(); });
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.WosOutbox = api;
   load().then(() => schedule(0));

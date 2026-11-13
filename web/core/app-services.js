@@ -291,8 +291,74 @@
     authorize(); // No signature/plaintext to a reloaded, navigated, detached or uninstalled document.
     return result;
   }
+  /* Which installed app opens which IndexedDB database on this device while its window is same-origin
+   * (`wos.app-idb-owners.v1`: { name: { app } }, app '' = more than one app opened it). When the box turns the browser
+   * boundary on, the sandboxed page can no longer open them, and core/browser-boundary.js copies a database over to
+   * the one app that alone opened it (wizard-os#133). Only names; the shell's own databases are never noted. */
+  const IDB_OWNERS = 'wos.app-idb-owners.v1', IDB_OWNERS_MAX = 512, idbNoted = new Set(), idbWatched = new WeakSet();
+  function noteIdb(appId, name) {
+    if (typeof name !== 'string' || !name || name.length > 256 || /^wos/i.test(name) || /^wizard-app-capture/i.test(name) || idbNoted.has(appId + '\n' + name)) return;
+    let o = {}; try { o = JSON.parse(window.localStorage.getItem(IDB_OWNERS) || '{}') || {}; } catch (_) { o = {}; }
+    if (typeof o !== 'object' || Array.isArray(o)) o = {};
+    const had = Object.prototype.hasOwnProperty.call(o, name) ? o[name] : null;
+    if (!had && Object.keys(o).length >= IDB_OWNERS_MAX) return;
+    const app = !had || had.app === appId ? appId : '';
+    idbNoted.add(appId + '\n' + name);
+    if (had && had.app === app) return;
+    o[name] = { app };
+    try { window.localStorage.setItem(IDB_OWNERS, JSON.stringify(o)); } catch (_) {}
+  }
+  // The app's own window (same-origin, verified): its page's indexedDB.open notes the name, then opens as before.
+  function watchIdb(st, source) {
+    try {
+      const f = source.indexedDB, open = f?.open;
+      if (!f || typeof open !== 'function' || idbWatched.has(f)) return;
+      const appId = st.appId;
+      Object.defineProperty(f, 'open', { configurable: true, writable: true, value: function (name, ...rest) { try { noteIdb(appId, String(name)); } catch (_) {} return open.call(this, name, ...rest); } });
+      idbWatched.add(f);
+    } catch (_) {}
+  }
+  /* Likewise its saved settings: which installed app writes which localStorage key from its same-origin window
+   * (`wos.app-ls-owners.v1`: { key: { app } }, app '' = more than one app wrote it). With the boundary on,
+   * core/browser-boundary.js copies a key once into the one app's own copy (wizard-os#133). Only names. The shell's own
+   * keys (LS_SHELL; the same rule is in browser-boundary.js) are never noted, even when an app page writes them. */
+  const LS_OWNERS = 'wos.app-ls-owners.v1', LS_OWNERS_MAX = 2048, lsNoted = new Set(), lsWatched = new WeakSet();
+  const LS_SHELL = /^(?:wos|wux\.|wz\.|wizard\.|wizard-pwa-install:|wizardapp\.)/i;
+  function noteLs(appId, key) {
+    if (typeof key !== 'string' || !key || key.length > 1024 || LS_SHELL.test(key) || lsNoted.has(appId + '\n' + key)) return;
+    let o = {}; try { o = JSON.parse(window.localStorage.getItem(LS_OWNERS) || '{}') || {}; } catch (_) { o = {}; }
+    if (typeof o !== 'object' || Array.isArray(o)) o = {};
+    const had = Object.prototype.hasOwnProperty.call(o, key) ? o[key] : null;
+    if (!had && Object.keys(o).length >= LS_OWNERS_MAX) return;
+    const app = !had || had.app === appId ? appId : '';
+    lsNoted.add(appId + '\n' + key);
+    if (had && had.app === app) return;
+    o[key] = { app };
+    try { window.localStorage.setItem(LS_OWNERS, JSON.stringify(o)); } catch (_) {}
+  }
+  // The page's localStorage.setItem notes the key (its own realm's Storage, so the shell's writes are never seen here).
+  function watchLs(st, source) {
+    try {
+      const proto = source.Storage?.prototype, set = proto?.setItem, ls = source.localStorage;
+      if (!proto || typeof set !== 'function' || lsWatched.has(proto)) return;
+      const appId = st.appId;
+      Object.defineProperty(proto, 'setItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) noteLs(appId, String(key)); } catch (_) {} return set.call(this, key, ...rest); } });
+      lsWatched.add(proto);
+    } catch (_) {}
+  }
+  // Named writes (localStorage.x = …) and writes before the page says hello: the shell hears them as storage events
+  // naming the page's address; noted only when exactly one verified same-origin app window holds that address.
+  window.addEventListener?.('storage', e => {
+    try {
+      if (!e || e.key == null || e.newValue == null || e.storageArea !== window.localStorage) return;
+      const u = new URL(e.url), ids = new Set();
+      for (const st of frames.values()) if (st.url.origin === ORIGIN && within(u, st.url) && valid(st)) ids.add(st.appId);
+      if (ids.size === 1) noteLs([...ids][0], e.key);
+    } catch (_) {}
+  });
   function connect(source, client) {
     const st = from(source); if (!valid(st)) return null;
+    watchIdb(st, source); watchLs(st, source);
     const doc = source.document;
     if (st.doc && st.doc !== doc) reset(st);
     st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
@@ -1551,6 +1617,13 @@
         let base = st.url; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
         let u; try { u = new URL(href, base); } catch (_) { return false; }
         if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
+        // A download link to the app's own file (the browser ignores `download` for an opaque page): saved by the shell,
+        // as for a same-origin app, only inside the window's own app path.
+        if (args?.download === true) {
+          if (!within(u, st.url) || window.WizBrowserBoundary?.ownerRoute?.(u.href)) return false;
+          const name = typeof args.name === 'string' ? args.name.replace(/[\\/\u0000-\u001f]/g, '').slice(0, 255) : '';
+          return window.WizLinks?.download ? window.WizLinks.download(u.href, name) === true : false;
+        }
         return window.WizLinks?.follow ? window.WizLinks.follow(st.frame, u.href, { browse: args?.browse === true }) === true : false;
       }
       // Sharing out: browser-boundary.js already checked a real tap in this visible window. The shell's own share

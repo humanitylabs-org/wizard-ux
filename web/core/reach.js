@@ -296,6 +296,25 @@
   function restartChanged() {
     window.dispatchEvent?.(new Event('wizreachchange'));
     try { window.WosOutbox?.paintNotice?.(); } catch (_) {}
+    restartKeepWatch();
+  }
+  // A thread or list repaint (a Working timer tick, a look change) rebuilds the message box and drops the note from
+  // it. While a restart is known, put it back at once whenever a shown box lost it (wizard-ux issue 1362).
+  let restartKeep = null, restartKeepBusy = false;
+  function restartKeepMissing() {
+    for (const f of document.querySelectorAll?.('.ch-compose') || []) if (f.getClientRects?.().length && !f.querySelector('[data-restart-notice]')) return true;
+    return false;
+  }
+  function restartKeepWatch() {
+    if (!restartState() || typeof MutationObserver !== 'function' || document.body?.nodeType !== 1) { restartKeep?.disconnect(); restartKeep = null; return; }
+    if (restartKeep) return;
+    // Observer callbacks run as a microtask after the repaint, before the page is drawn: no frame without the note.
+    restartKeep = new MutationObserver(() => {
+      if (restartKeepBusy || !restartState() || !restartKeepMissing()) return;
+      restartKeepBusy = true;
+      try { window.WosOutbox?.paintNotice?.(); } catch (_) {} finally { restartKeepBusy = false; }
+    });
+    restartKeep.observe(document.body, { childList: true, subtree: true });
   }
   function restartSet(next, downAt) {
     const before = JSON.stringify([restart, restartDownAt > 0]);
@@ -337,10 +356,25 @@
   // it a run the list has not caught up with yet (the thread then shows “Replying…”). A send the restart holds
   // (queued / not yet submitted) is saved, not running, as the Chats list shows it during a restart (chats.js 'held').
   const RESTART_BUSY = ['running', 'stopping'], RESTART_SAVED = ['queued', 'submitting'];
+  /** True when a chat row is a send this restart holds: saved on the box (queued) or still on its way (submitting, or
+   *  this device's own Starting… over a thread that had no run going), with nothing actually running in it. The one
+   *  rule for the thread, its header, the Chats list and the overdue note (wizard-ux issue 1362). False without a
+   *  known restart, so nothing changes while the switch is off. */
+  function restartHeld(s) {
+    if (!s || s.archived || s.background || !restartState()) return false;
+    // A row this device sent shows Starting… (status running) until the list catches up; restartPending says the box's
+    // receipt was a 202 held for the restart (live.js PEND), so that one is saved too.
+    if (!RESTART_SAVED.includes(s.status) && !(s.status === 'running' && s.restartPending === true)) return false;
+    // live.js lays its optimistic send status over the box's own (s.orig): a run the box reports is real work.
+    const real = s.orig && typeof s.orig.status === 'string' ? s.orig.status : s.status;
+    if (RESTART_BUSY.includes(real) || (!!s.runId && real !== 'queued' && RESTART_BUSY.includes(s.lastRunStatus))) return false;
+    if (s.helperStatus?.phase === 'running' && s.helperStatus.pending > 0) return false;
+    return s.queueReason !== 'provider_access';
+  }
   function restartRunning() {
     try {
       const L = window.WizLive, rows = L?.unified?.() || [], model = window.WizChatsListModel;
-      const busy = s => !RESTART_SAVED.includes(s.status) && ((model?.isListWorking ? model.isListWorking(s) : RESTART_BUSY.includes(s.status))
+      const busy = s => !RESTART_SAVED.includes(s.status) && !restartHeld(s) && ((model?.isListWorking ? model.isListWorking(s) : RESTART_BUSY.includes(s.status))
         || (!!s.runId && RESTART_BUSY.includes(s.lastRunStatus)) || !!L?.pendingRun?.(s.id));
       return rows.filter(s => s && !s.archived && !s.hidden && busy(s)).map(s => String(s.title || 'Untitled chat'));
     } catch (_) { return []; }
@@ -373,6 +407,9 @@
         el.addEventListener('click', e => { const b = e.target.closest?.('[data-restart-choice]'); if (b && !b.disabled) void restartChoose(b.dataset.restartChoice); });
         host.appendChild(el);
       }
+      // No message box on screen (the phone Chats list, a desktop with no chat open): the host is a dock layer or the
+      // page itself, so the note floats on its own panel (tweak.css .float), never over the header (issue 1362).
+      el.classList?.toggle('float', !host.classList?.contains('ch-compose'));
       if (el.innerHTML !== html) el.innerHTML = html;
     }
   }
@@ -394,6 +431,7 @@
     label,
     directUrl,
     restart: restartState,
+    restartHeld,
     restartChoose,
     paintRestart,
     failure() {

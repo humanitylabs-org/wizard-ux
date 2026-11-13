@@ -24,6 +24,9 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
 <a id="inapp" href="b.html">Own page</a>
 <a id="named" href="https://example.com/named" target="report">Named pop-up</a>
 <a id="toinner" href="c.html?inner=1" target="inner">Into my own frame</a>
+<a id="dl" href="clip.webm?t=1" download="my clip.webm">Download clip</a>
+<a id="dlcd" href="export/7" download>Export</a>
+<a id="dlother" href="/other/file.txt" download>Other app file</a>
 <button id="pop">window.open</button> <button id="popnamed">window.open named</button>
 <iframe name="inner" src="about:blank" style="width:120px;height:24px"></iframe>
 <p id="later">later</p>
@@ -82,6 +85,8 @@ const server = http.createServer((req, res) => {
   if (u.pathname === '/notes/') return html(APP);
   if (u.pathname === '/notes/b.html') return html(B_PAGE);
   if (u.pathname === '/evil/') return html(EVIL);
+  if (u.pathname === '/notes/clip.webm') { res.setHeader('content-type', 'audio/webm'); return res.end('CLIP-BYTES-' + u.search); }
+  if (u.pathname === '/notes/export/7') { res.setHeader('content-type', 'text/plain'); res.setHeader('content-disposition', "attachment; filename*=UTF-8''hunt%207.txt"); return res.end('EXPORT'); }
   if (u.pathname.startsWith('/wizard-os-home/')) {
     const file = path.join(WEB, u.pathname.slice('/wizard-os-home/'.length));
     if (file.startsWith(WEB) && fs.existsSync(file)) { res.setHeader('content-type', 'text/javascript'); return res.end(fs.readFileSync(file)); }
@@ -148,6 +153,25 @@ const server = http.createServer((req, res) => {
   await settle();
   s = await shell();
   ok(!s.opened.some(x => x === 'https://example.com/later'), 'a tap outside the app window does not let it open a pop-up: ' + JSON.stringify(s.opened));
+  // A download of the app's own file is saved (the browser ignores `download` for an opaque page, so on main the file
+  // loaded into the window in place of the app), under the link's name, else the answer's.
+  const download = async sel => {
+    await ensure();
+    const got = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
+    await frameOf('/notes/').click(sel);
+    const d = await got; await settle();
+    if (!d) return null;
+    const file = await d.path().catch(() => null);
+    return { name: d.suggestedFilename(), body: file ? fs.readFileSync(file, 'utf8') : '' };
+  };
+  let d = await download('#dl');
+  ok(d && d.name === 'my clip.webm' && d.body === 'CLIP-BYTES-?t=1' && frameOf('/notes/') && !frameOf('/notes/clip.webm'), 'a download of the app\'s own file is saved under its name and the app stays in its window: ' + JSON.stringify(d));
+  d = await download('#dlcd');
+  ok(d && d.name === 'hunt 7.txt' && d.body === 'EXPORT' && frameOf('/notes/'), 'a download without a name takes the answer\'s file name: ' + JSON.stringify(d));
+  const routedDl = (await shell()).routed.length;
+  await tap('#dlother');
+  s = await shell();
+  ok(frameOf('/notes/') && !hits.some(h => h === '/other/file.txt') && s.routed.length === routedDl + 1, 'a download link to another app\'s file goes to the shell and never loads into the window: ' + JSON.stringify(s.routed.slice(routedDl)));
   // In-page anchors and the app's own pages stay the page's.
   await tap('#anchor');
   ok(await frameOf('/notes/').evaluate(() => location.hash) === '#later', 'an in-page anchor stays the page\'s');

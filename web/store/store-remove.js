@@ -54,6 +54,28 @@ export async function forgetAppData(id, { storage = globalThis.localStorage, idb
   if (!ID.test(id || '')) return false;
   let ok = true;
   try { storage?.removeItem?.('wos.app-storage.v1.' + id); } catch (_) { ok = false; }
+  // The databases its same-origin page opened (core/app-services.js noteIdb) are no longer its own: turning the browser
+  // boundary on later never copies them to a reinstall.
+  try {
+    const o = JSON.parse(storage?.getItem?.('wos.app-idb-owners.v1') || '{}');
+    if (o && typeof o === 'object' && !Array.isArray(o)) {
+      const left = Object.fromEntries(Object.entries(o).filter(([, v]) => v?.app !== id));
+      if (Object.keys(left).length !== Object.keys(o).length) { if (Object.keys(left).length) storage.setItem('wos.app-idb-owners.v1', JSON.stringify(left)); else storage.removeItem('wos.app-idb-owners.v1'); }
+    }
+  } catch (_) { ok = false; }
+  // Likewise the settings keys its same-origin page wrote (core/app-services.js noteLs) and the note of what was copied.
+  try {
+    const o = JSON.parse(storage?.getItem?.('wos.app-ls-owners.v1') || '{}');
+    if (o && typeof o === 'object' && !Array.isArray(o)) {
+      const left = Object.fromEntries(Object.entries(o).filter(([, v]) => v?.app !== id));
+      if (Object.keys(left).length !== Object.keys(o).length) { if (Object.keys(left).length) storage.setItem('wos.app-ls-owners.v1', JSON.stringify(left)); else storage.removeItem('wos.app-ls-owners.v1'); }
+    }
+    const c = JSON.parse(storage?.getItem?.('wos.app-ls-carried.v1') || '{}');
+    if (c && typeof c === 'object' && !Array.isArray(c) && Object.prototype.hasOwnProperty.call(c, id)) {
+      delete c[id];
+      if (Object.keys(c).length) storage.setItem('wos.app-ls-carried.v1', JSON.stringify(c)); else storage.removeItem('wos.app-ls-carried.v1');
+    }
+  } catch (_) { ok = false; }
   if (!idb?.open || !keyRange?.bound) return ok;
   try {
     const d = await new Promise((res, rej) => {
