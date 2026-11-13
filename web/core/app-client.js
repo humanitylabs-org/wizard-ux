@@ -53,7 +53,7 @@
    * the shell (`link.open`), which opens it the way it does for a same-origin app: the link sheet, that app's window,
    * the owner's browser, the image viewer or a download. The shell takes it only right after a real tap in this
    * window, as a browser's pop-up rule. Registered before the saved-settings listener below, which leaves a link it took
-   * alone. Same-origin downloads stay the page's (the sandbox allows them). */
+   * alone. A download of the app's own file is saved by the page itself (below). */
   if (opaque) (() => {
     const LEAVE = /^_(blank|top|parent)$/i, IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
     const url = href => { try { const u = new URL(String(href), document.baseURI || location.href); return /^https?:$/.test(u.protocol) ? u : null; } catch (_) { return null; } };
@@ -71,11 +71,33 @@
       return !!home && (!u.pathname.startsWith(home) || /%(?:2f|5c|2e|25)/i.test(u.pathname));
     };
     const hand = (u, browse) => { boundaryClient().then(c => c?.request('link.open', { href: u.href, browse }, 8000)).catch(() => {}); };
+    /* A download link to the app's own file (Music's Download clip): the page is opaque, so to the browser even this
+     * host is another origin, and it ignores `download` there: the file loaded into the window in place of the app.
+     * The page's own fetch (the shell's, inside the app path) takes the file, and a blob: address of this page saves it
+     * under the link's name (else the answer's, else the address's). */
+    const own = u => { const home = window.WizBoundaryClient?.home || ''; return u.origin === location.origin && (!home || (u.pathname.startsWith(home) && !/%(?:2f|5c|2e|25)/i.test(u.pathname))); };
+    const saveName = (given, res, u) => {
+      if (given) return given;
+      const cd = res.headers.get('content-disposition') || '';
+      let m = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/.exec(cd);
+      try { if (m) return decodeURIComponent(m[1].trim()); } catch (_) {}
+      m = /filename\s*=\s*"?([^";]+)"?/i.exec(cd); if (m) return m[1].trim();
+      try { return decodeURIComponent(u.pathname.split('/').pop() || '') || 'download'; } catch (_) { return 'download'; }
+    };
+    const save = (u, given) => {
+      Promise.resolve().then(() => window.fetch(u.href, { credentials: 'include' })).then(async res => {
+        if (!res.ok) throw new Error('download answered ' + res.status);
+        const name = saveName(String(given || '').trim(), res, u), href = URL.createObjectURL(await res.blob()), x = document.createElement('a');
+        x.href = href; x.download = name; x.style.display = 'none';
+        (document.body || document.documentElement).appendChild(x); x.click(); x.remove();
+        setTimeout(() => URL.revokeObjectURL(href), 60000);
+      }).catch(err => { try { console.warn('Wizard: download failed', err); } catch (_) {} });
+    };
     addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target?.closest?.('a[href], area[href]'); if (!a) return;
       const u = url(a.getAttribute('href')); if (!u) return;
-      if (a.hasAttribute('download') && u.origin === location.origin) return;
+      if (a.hasAttribute('download') && own(u)) { e.preventDefault(); e.stopPropagation(); save(u, a.getAttribute('download')); return; }
       // An in-page anchor stays the page's.
       if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search && u.hash && !pops(a.getAttribute('target'))) return;
       if (!leaves(u, a.getAttribute('target'))) return;

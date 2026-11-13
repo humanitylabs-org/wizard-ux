@@ -285,9 +285,13 @@ On:
   another site by the sheet's outside route, a page of this Wizard through the deep link or the shell's route (an app
   window, a link desk), else the sheet. The shell names the window's app path in each hello (`home`, from
   `WizAppServices.attach`'s path) so the page knows which links leave it. Like a browser's pop-up rule it needs a real
-  tap in that focused, visible window; a page alone, or a tap elsewhere in the shell, opens nothing. In-page anchors,
-  the app's own pages and same-origin downloads stay the page's; a link aimed at the page's own named frame stays
-  there; a form aimed at `_top` / `_parent` stays in its window. Proof: `tests/qa-browser-boundary-links.cjs` (real Chromium, the real link sheet).
+  tap in that focused, visible window; a page alone, or a tap elsewhere in the shell, opens nothing. In-page anchors
+  and the app's own pages stay the page's; a link aimed at the page's own named frame stays there; a form aimed at
+  `_top` / `_parent` stays in its window. A `download` link to a file inside the app path (Music's Download clip) is
+  saved by the page: the browser ignores `download` for an opaque page and loaded the file into the window in place of
+  the app, so app-client.js fetches it (through the shell, as any own call) and saves it from a `blob:` address of the
+  page, under the link's name, else the answer's `Content-Disposition` name. A download link outside the app path goes
+  to the shell like any other link that leaves. Proof: `tests/qa-browser-boundary-links.cjs` (real Chromium, the real link sheet).
 - Photo viewer and navigation: `WizardApp.media.view`, `nav.back`, `nav.openThread` and `nav.openContextDraft` go to the
   shell as `media.view` / `nav.*` and run on the same rules as for a same-origin app (`core/app-services.js`
   `mediaView`, `navBack`, `threadOpen`, `contextDraft`: the window in view, hosted threads only for the apps the
