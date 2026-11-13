@@ -317,4 +317,6 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly
   those browser-marked loads through without the token (wizard-agent-service#479).
-- Native bridges (Android/Mac) still reach every frame (wizard-os#387).
+- Native bridges: on Android, `WizardOSNative` and `WizardOSDevice` (`addJavascriptInterface`) still reach every
+  frame, sandboxed app windows included (wizard-ux#1430; draft wizard-ux#871). On the Mac, native calls are already
+  main-frame only, but a reply can still reach a reloaded shell page (try-wizard#95; draft try-wizard#61).
