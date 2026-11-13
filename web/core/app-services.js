@@ -336,13 +336,31 @@
     o[key] = { app };
     try { window.localStorage.setItem(LS_OWNERS, JSON.stringify(o)); } catch (_) {}
   }
+  /* A key already copied into the app's own copy (`wos.app-ls-carried.v1` { app: [keys] }) that its same-origin page
+   * sets or removes again (the boundary was turned off in between) is marked `wos.app-ls-changed.v1` { app: [keys] },
+   * so the next turn-on copies that newer value, or the removal, over the copy's older one (wizard-ux#1434). Checked
+   * once per key and tab; another tab's copy (a write of the carried note) starts the checks again. */
+  const LS_CARRIED = 'wos.app-ls-carried.v1', LS_CHANGED = 'wos.app-ls-changed.v1', lsSeen = new Set();
+  const lsRead = k => { try { const o = JSON.parse(window.localStorage.getItem(k) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (_) { return {}; } };
+  function lsChanged(appId, key) {
+    if (typeof key !== 'string' || !key || key.length > 1024 || LS_SHELL.test(key) || lsSeen.has(appId + '\n' + key)) return;
+    lsSeen.add(appId + '\n' + key);
+    const carried = lsRead(LS_CARRIED)[appId];
+    if (!Array.isArray(carried) || !carried.includes(key)) return;   // not copied yet: the copy takes the value then
+    const ch = lsRead(LS_CHANGED), list = Array.isArray(ch[appId]) ? ch[appId].filter(k => typeof k === 'string') : [];
+    if (list.includes(key)) return;
+    ch[appId] = [...list, key];
+    try { window.localStorage.setItem(LS_CHANGED, JSON.stringify(ch)); } catch (_) {}
+  }
   // The page's localStorage.setItem notes the key (its own realm's Storage, so the shell's writes are never seen here).
   function watchLs(st, source) {
     try {
       const proto = source.Storage?.prototype, set = proto?.setItem, ls = source.localStorage;
       if (!proto || typeof set !== 'function' || lsWatched.has(proto)) return;
       const appId = st.appId;
-      Object.defineProperty(proto, 'setItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) noteLs(appId, String(key)); } catch (_) {} return set.call(this, key, ...rest); } });
+      Object.defineProperty(proto, 'setItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) { noteLs(appId, String(key)); lsChanged(appId, String(key)); } } catch (_) {} return set.call(this, key, ...rest); } });
+      const drop = proto.removeItem;
+      if (typeof drop === 'function') Object.defineProperty(proto, 'removeItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) lsChanged(appId, String(key)); } catch (_) {} return drop.call(this, key, ...rest); } });
       lsWatched.add(proto);
     } catch (_) {}
   }
@@ -350,10 +368,13 @@
   // naming the page's address; noted only when exactly one verified same-origin app window holds that address.
   window.addEventListener?.('storage', e => {
     try {
-      if (!e || e.key == null || e.newValue == null || e.storageArea !== window.localStorage) return;
+      if (!e || e.key == null || e.storageArea !== window.localStorage) return;
+      if (e.key === LS_CARRIED) { lsNoted.clear(); lsSeen.clear(); return; }   // another tab copied: check again
       const u = new URL(e.url), ids = new Set();
       for (const st of frames.values()) if (st.url.origin === ORIGIN && within(u, st.url) && valid(st)) ids.add(st.appId);
-      if (ids.size === 1) noteLs([...ids][0], e.key);
+      if (ids.size !== 1) return;
+      if (e.newValue != null) noteLs([...ids][0], e.key);
+      lsChanged([...ids][0], e.key);
     } catch (_) {}
   });
   function connect(source, client) {

@@ -182,7 +182,8 @@
     try {
       if (!SWEEP_FROM || !apps.some(a => a?.source === 'apps.json') || Date.now() - sweptAt < 6e5) return;
       const keys = Object.keys(localStorage);
-      const kept = keys.some(k => k.startsWith('wos.app-storage.v1.') || k === 'wos.app-removed.v1' || k === 'wos.app-gone.v1')
+      // Also the notes of what an app's same-origin page wrote (store-remove.js APP_NOTES), whatever data it had.
+      const kept = keys.some(k => k.startsWith('wos.app-storage.v1.') || /^wos\.app-(?:removed|gone|ls-owners|idb-owners|ls-carried|ls-changed)\.v1$/.test(k))
         || !indexedDB.databases || (await indexedDB.databases()).some(d => d.name === 'wos-app-idb-v1');
       if (!kept) return;
       sweptAt = Date.now();
