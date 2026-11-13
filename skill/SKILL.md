@@ -1,6 +1,6 @@
 ---
 name: wizard-interface
-description: Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches like Channels in Chats or Thread tracker, updates, Chats, Home, apps, voice). Load it before wizard-guide for these; it is generated from this Wizard's interface.
+description: "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches like Channels in Chats or Thread tracker, updates, Chats, Home, apps, voice). Load it before wizard-guide for these; it is generated from this Wizard's interface."
 ---
 
 # Wizard interface manual

@@ -224,7 +224,8 @@ const line = (...parts) => parts.filter(Boolean).map(stop).join(' ').replace(/\.
 const where = sc => [sc.desktop && `Desktop: ${sc.desktop}`, sc.phone && `Phone: ${sc.phone}`, sc.when && `(${sc.when})`];
 export function render(data, help) {
   const h = help, o = [];
-  o.push('---', 'name: wizard-interface', `description: ${h.description}`, '---', '');
+  // JSON string = a valid double-quoted YAML scalar (the description contains ': ').
+  o.push('---', 'name: wizard-interface', `description: ${JSON.stringify(h.description)}`, '---', '');
   o.push(...h.intro, '');
   o.push('## Screens', '');
   for (const id of h.screenOrder || data.screens) {
