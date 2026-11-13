@@ -40,7 +40,7 @@ function shellKeys() {
     for (const m of s.matchAll(/\b([A-Za-z_$][\w$]*)\s*[:=]\s*(['"`])([^'"`]*)\2/g)) if (!consts.has(m[1])) consts.set(m[1], m[3]);
     const resolve = v => v.replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (all, n) => consts.has(n) ? consts.get(n) : all);
     for (const m of s.matchAll(/\b(?:setItem|getItem|removeItem)\(\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
-      for (const c of s.matchAll(new RegExp(`\\b${m[1].replace(/\$/g, '\\$')}\\s*[:=]\\s*(['"\`])([^'"\`]+)\\1`, 'g'))) add(resolve(c[2]), f);
+      for (const c of s.matchAll(new RegExp(`\\b${m[1].replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')}\\s*[:=]\\s*(['"\`])([^'"\`]+)\\1`, 'g'))) add(resolve(c[2]), f);
     }
     for (const m of s.matchAll(/\b(?:setItem|getItem|removeItem)\(\s*(['"`])([^'"`]+)/g)) add(resolve(m[2]), f);
   };
