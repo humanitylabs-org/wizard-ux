@@ -505,3 +505,49 @@ test('the restart note survives a repaint of the message box: put back at once w
   await idle.settle(); await idle.settle();
   assert.equal(idle.observers.some(o => o.target === idle.ctx.document.body), false);
 });
+// Third review: a new chat whose first message the restart holds dropped out of the Chats list after 2 minutes (the
+// PEND_MAX window), while the real wait is 10 minutes or more. This device keeps it under Saved for the whole hold, on
+// main and on every routed kind; without a known restart the 2-minute window stays, and a send that is not held too.
+for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box', 'container'], ['locked', 'restricted']]) {
+  test(`${kind}: a held new chat stays listed past 2 minutes while the restart is known, then the usual window applies`, async () => {
+    const live = read('live.js');
+    const start = live.indexOf('  const PEND = new Map()'), end = live.indexOf('  const commandId =', start);
+    const { runWithChatsModel } = await import('./fixtures/chats-list-model.mjs');
+    let now = 1_800_000_000_000, restart = { phase: 'waiting' };
+    const FakeDate = class extends Date { static now() { return now; } };
+    const sent = (id, held) => ({ id: 'ob-' + id, kind: 'new', sessionId: id, state: 'sent', sentAt: now, createdAt: now - 500, runId: 'wizardq_' + id, text: 'Find a ferry time', ...(agent ? { agent } : {}), ...(held ? { restartPending: true } : {}) });
+    const L = { sessions: [], agentSessions: agent ? { [agent]: [] } : {} };
+    const OB = { _items: new Map([['ob-held', sent('wizard_held', true)], ['ob-plain', sent('wizard_plain', false)]]) };
+    const c = { L, OB, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => !!a && a !== 'hermes', AGENT_OF: new Map(), Date: FakeDate,
+      WizReach: { restart: () => restart } };
+    runWithChatsModel(live.slice(start, end) + '\nthis.api = { syncPending, applyPend, PEND };', c);
+    const list = () => (agent ? L.agentSessions[agent] : L.sessions);
+    const ids = () => list().map(s => s.id).sort();
+    c.api.syncPending(OB);
+    assert.deepEqual(ids(), ['wizard_held', 'wizard_plain'], 'both new chats listed at once from this device');
+    assert.equal(list().find(s => s.id === 'wizard_held').restartPending, true);
+    now += 5 * 60e3; // past PEND_MAX (2 min), still inside the restart's wait
+    for (const s of list()) c.api.applyPend(s);
+    c.api.syncPending(OB);
+    assert.deepEqual(ids(), ['wizard_held'], 'the held new chat stays; a send the restart does not hold keeps the 2-minute window');
+    // A page loaded later (reload, PWA cold start) still lists it from the outbox while the restart is known.
+    const L2 = { sessions: [], agentSessions: agent ? { [agent]: [] } : {} }, c2 = { ...c, L: L2 };
+    runWithChatsModel(live.slice(start, end) + '\nthis.api = { syncPending, applyPend, PEND };', c2);
+    c2.api.syncPending(OB);
+    assert.deepEqual((agent ? L2.agentSessions[agent] : L2.sessions).map(s => s.id), ['wizard_held'], 'a fresh load keeps it too');
+    restart = null; // the restart is over: the usual window applies and the box's own list takes over
+    for (const s of list()) c.api.applyPend(s);
+    c.api.syncPending(OB);
+    assert.deepEqual(ids(), [], 'released once the restart is over');
+  });
+}
+test('the outbox keeps a held send past its 10-minute retention only while the restart is known', () => {
+  const ob = read('outbox.js');
+  assert.match(ob, /now\(\) - it\.sentAt > 10 \* 60e3 && !\(it\.restartPending && window\.WizReach\?\.restart\?\.\(\)\)\) await del\(it\.id\)/);
+});
+test('phone Chats list: with no message box the note sits on its own opaque panel above the dock and takes taps', () => {
+  const css = readFileSync(new URL('../web/tweaks/wizard/graceful-restart/tweak.css', import.meta.url), 'utf8');
+  const rule = css.split('\n').find(l => l.startsWith('html[data-tweaks~="wizard/graceful-restart"] .voice > .ch-restart-notice'));
+  assert.ok(rule, 'a rule for the note in the voice dock layer');
+  for (const want of ['position: absolute', 'pointer-events: auto', 'background: var(--bg', 'bottom: calc(']) assert.ok(rule.includes(want), want);
+});

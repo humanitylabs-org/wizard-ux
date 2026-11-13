@@ -650,7 +650,8 @@
         if (await holdLate(due)) continue;
         await attempt(due);
       }
-      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3) await del(it.id);
+      // A send a graceful restart still holds is kept until the restart is over (live.js pendOver; wizard-ux issue 1362).
+      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3 && !(it.restartPending && window.WizReach?.restart?.())) await del(it.id);
     } finally { pumping = false; schedule(); }
   }
   function schedule(ms) {
