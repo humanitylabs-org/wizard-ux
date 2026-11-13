@@ -88,6 +88,54 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private android.net.ConnectivityManager.NetworkCallback netWatch;
     /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
     private ai.wizards.os.device.DeviceBridge device;
+    private Bridge shellBridge; // window.WizardOSNative
+    private NativeGate gate; // non-null: the browser owner boundary is on and the bridges are the shell origin's only
+    private static boolean boundaryReloaded; // one reload per app run when the box turns the boundary on
+
+    /**
+     * WizardOSNative and WizardOSDevice. Off (the default): both go into the WebView as they always have, which puts them
+     * in every frame. With the browser owner boundary on for this box (the shell said so, Bridge.browserBoundary), app
+     * windows are sandboxed and must not reach them, so only the gate goes in and the shell's own origin gets both back
+     * from a document-start script (NativeGate; wizard-os#133, issue 1430).
+     */
+    private void installNativeBridges(WebView target) {
+        gate = null;
+        String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
+        if (NativeGate.on(this, origin)) { armGate(target, origin); return; }
+        target.addJavascriptInterface(shellBridge, "WizardOSNative");
+        target.addJavascriptInterface(device, "WizardOSDevice");
+    }
+
+    /** Takes effect on the next page load. Without document-start scripts (a very old WebView) the shell gets no bridge. */
+    private void armGate(WebView target, String origin) {
+        target.removeJavascriptInterface("WizardOSNative");
+        target.removeJavascriptInterface("WizardOSDevice");
+        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            android.util.Log.w("WizardOSGate", "browser boundary on, WebView lacks DOCUMENT_START_SCRIPT: no native bridge");
+            return;
+        }
+        NativeGate g = new NativeGate(NativeGate.named(shellBridge, device));
+        try {
+            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(target, g.shim(), java.util.Collections.singleton(origin));
+        } catch (RuntimeException e) {
+            android.util.Log.w("WizardOSGate", "browser boundary on, no document-start script: no native bridge", e);
+            return;
+        }
+        target.addJavascriptInterface(g, NativeGate.NAME);
+        gate = g;
+    }
+
+    /** The shell (core/shell-token.js, top-level page only) says whether this box has the boundary on. */
+    private void browserBoundary(boolean on) {
+        if (web == null) return;
+        String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
+        boolean changed = NativeGate.remember(this, origin, on);
+        // Turning off needs nothing now: the gate keeps working, and the next WebView registers the bridges as before.
+        // Turning on: from now on, and reload once so the page already open stops handing the bridges to its frames.
+        if (!on || gate != null || !changed) return;
+        armGate(web, origin);
+        if (gate != null && !boundaryReloaded) { boundaryReloaded = true; web.reload(); }
+    }
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
@@ -251,7 +299,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         s.setUserAgentString(s.getUserAgentString() + UA_TAG + " WizardOS-DocScroll");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
-        web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        shellBridge = new Bridge(); // WizardOSNative: registered with WizardOSDevice below (installNativeBridges)
         if (this instanceof AppSessionActivity && androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
             androidx.webkit.WebViewCompat.addDocumentStartJavaScript(web,
                 "if(window!==top){try{top.WizHomeScreenPolicy?.installPresentationStorage(window)}catch(_){}}",
@@ -265,7 +313,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         ai.wizards.os.photos.BackupScheduler.schedule(this);
         if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
-        web.addJavascriptInterface(device, "WizardOSDevice");
+        installNativeBridges(web);
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
@@ -1112,6 +1160,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
     private final class Bridge {
+        /** Browser owner boundary on or off for this box (core/shell-token.js); see installNativeBridges. */
+        @JavascriptInterface public void browserBoundary(boolean on) {
+            main.post(() -> MainActivity.this.browserBoundary(on));
+        }
+
         /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
         @JavascriptInterface public void openInBrowser(String url) {
             final Uri u = Uri.parse(String.valueOf(url));

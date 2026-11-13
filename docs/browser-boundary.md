@@ -27,6 +27,16 @@ On:
   and adds `X-Wizard-Shell-Token` to `fetch` and `XMLHttpRequest` calls from the top-level shell to owner routes on
   this origin: `/wizard/`, `/api/`, `/v1/`, `<prefix>api/` and `<prefix>store-install/`. App paths (`/notes/`, …)
   and other origins never get it, so no app backend learns it.
+- Android app: `addJavascriptInterface` puts `WizardOSNative` / `WizardOSDevice` into every frame, sandboxed or not.
+  The top-level shell page tells the app the box's answer (`WizardOSNative.browserBoundary(on)` from
+  `shell-token.js`: on with a valid token, off with the shipped `off`; frames and empty values say nothing). On, the
+  app reloads once and from then on registers only `WizardOSGate`, which answers a call only with a per-WebView key.
+  A document-start script for the box's own origin (`NativeGate.shim`) takes the key and rebuilds both objects in the
+  shell page with the same methods and synchronous answers. A sandboxed app frame (opaque origin) never gets the
+  script: it sees no `WizardOSNative` or `WizardOSDevice`, and the gate refuses it. Off, nothing changes. Proof:
+  `NativeGateTest` (unit) and `DeviceBridgeE2eTest.boundaryKeepsNativeBridgesOutOfAppFrames` (emulator). The other
+  Android WebViews (`WizardNative`, `EverywhereNative`, `ScreenNative`) load only the app's own
+  `file:///android_asset/assist/` pages with network loads blocked, so no app page reaches them.
 
 ## Sandboxed app frames (on only with the box switch)
 

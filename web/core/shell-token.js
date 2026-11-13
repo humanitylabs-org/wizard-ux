@@ -27,9 +27,12 @@
   // The shell's own pages that run in a frame (Store, Agents, Setup, Settings › Connections). They get no token from nginx (a frame load
   // never does); the top-level shell arms them instead (armFrame below). Same list as core/browser-boundary.js.
   const SHELL_PAGE = /^\/(?:wizard-os-home|wizard-ux)\/(?:store|agents|setup|store-install\/_connections)\/(?:index\.html)?$/;
-  if (token === 'off') { remember(false); return; }
   let framed = true;
   try { framed = window.top !== window; } catch (_) { framed = true; }
+  // The Android app keeps its native bridges out of app frames while the box has the boundary on (NativeGate,
+  // issue 1430). Only the top-level shell page tells it; a frame's `off` or empty value says nothing about the box.
+  const tellNative = on => { if (framed) return; try { window.WizardOSNative?.browserBoundary?.(on); } catch (_) {} };
+  if (token === 'off') { remember(false); tellNative(false); return; }
   if (framed) {
     // A shell page in a frame: ask the top-level shell (same origin, so it is reachable) to send this page's owner
     // calls with the token. A sandboxed (opaque) frame cannot reach `top` at all, so an app page never gets here.
@@ -38,6 +41,7 @@
   }
   if (!/^[a-f0-9]{64}$/.test(token)) return;
   remember(true);
+  tellNative(true);
   const HEADER = 'X-Wizard-Shell-Token';
   // Owner routes on this origin: the Agent Service (everything it serves that is not a static shell file) and the
   // App Manager listener mounted beside the shell.
