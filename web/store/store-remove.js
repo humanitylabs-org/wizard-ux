@@ -70,10 +70,12 @@ export async function forgetAppData(id, { storage = globalThis.localStorage, idb
       const left = Object.fromEntries(Object.entries(o).filter(([, v]) => v?.app !== id));
       if (Object.keys(left).length !== Object.keys(o).length) { if (Object.keys(left).length) storage.setItem('wos.app-ls-owners.v1', JSON.stringify(left)); else storage.removeItem('wos.app-ls-owners.v1'); }
     }
-    const c = JSON.parse(storage?.getItem?.('wos.app-ls-carried.v1') || '{}');
-    if (c && typeof c === 'object' && !Array.isArray(c) && Object.prototype.hasOwnProperty.call(c, id)) {
-      delete c[id];
-      if (Object.keys(c).length) storage.setItem('wos.app-ls-carried.v1', JSON.stringify(c)); else storage.removeItem('wos.app-ls-carried.v1');
+    for (const note of ['wos.app-ls-carried.v1', 'wos.app-ls-changed.v1']) {
+      const c = JSON.parse(storage?.getItem?.(note) || '{}');
+      if (c && typeof c === 'object' && !Array.isArray(c) && Object.prototype.hasOwnProperty.call(c, id)) {
+        delete c[id];
+        if (Object.keys(c).length) storage.setItem(note, JSON.stringify(c)); else storage.removeItem(note);
+      }
     }
   } catch (_) { ok = false; }
   if (!idb?.open || !keyRange?.bound) return ok;
@@ -141,10 +143,18 @@ export async function forgetRemoved(id, { retry = false, ...opts } = {}) {
  * apart or more, both missed it (`wos.app-gone.v1`:
  * { id: { at, reads } }, the first miss). Back in a list: its note goes. Resolves the ids whose data was deleted. */
 const GONE = 'wos.app-gone.v1', GONE_WAIT = 24 * 36e5, GONE_READS = 2, PREFIX = 'wos.app-storage.v1.';
-// The app ids this device keeps data for: saved settings, and databases (shell IndexedDB, never created here).
+// The shell's notes that name an app: which settings keys and databases its same-origin page wrote (owners: { name:
+// { app } }) and which keys were copied for it (carried, changed: { app: [keys] }). forgetAppData clears each one, so
+// an app removed before the boundary is turned on loses them too, whatever data it had (wizard-ux#1434).
+export const APP_NOTES = { owners: ['wos.app-ls-owners.v1', 'wos.app-idb-owners.v1'], byApp: ['wos.app-ls-carried.v1', 'wos.app-ls-changed.v1'] };
+// The app ids this device keeps data for: saved settings, the notes above, and databases (shell IndexedDB, never
+// created here).
 export async function keptAppIds({ storage = globalThis.localStorage, idb = globalThis.indexedDB } = {}) {
   const ids = new Set();
   try { for (let i = 0; i < (storage?.length || 0); i++) { const k = storage.key(i); if (k?.startsWith(PREFIX) && ID.test(k.slice(PREFIX.length))) ids.add(k.slice(PREFIX.length)); } } catch (_) {}
+  const note = k => { try { const o = JSON.parse(storage?.getItem?.(k) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (_) { return {}; } };
+  for (const k of APP_NOTES.owners) for (const v of Object.values(note(k))) if (typeof v?.app === 'string' && ID.test(v.app)) ids.add(v.app);
+  for (const k of APP_NOTES.byApp) for (const id of Object.keys(note(k))) if (ID.test(id)) ids.add(id);
   if (!idb?.open) return ids;
   try {
     const d = await new Promise((res, rej) => {
