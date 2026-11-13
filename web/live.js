@@ -735,6 +735,7 @@
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const PEND_MAX = 2 * 60e3;
+  const PLACEHOLDER_TITLES = new Set(['', 'New chat', 'Untitled chat', 'Chat']);
   // A send a graceful restart holds (the 202 restart_pending receipt, p.held / it.restartPending) stays this device's
   // until the restart is over, however long the wait: the box may list a new chat's held first message late or not at
   // all, and the chat must stay under Saved meanwhile (wizard-ux issue 1362). Without a known restart: PEND_MAX.
@@ -778,6 +779,9 @@
     // (STOPPING) keeps its Stopping… through outbox repaints too, not only through list reads (applyLocal).
     if ((CANCELLING.has(s.id) || (s.runId && STOPPING.has(s.runId))) && WORKING.has(s.status)) s.status = 'stopping';
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
+    // A new chat the box already lists under a stand-in name ("New chat" until its first turn runs, which a restart
+    // can hold for minutes) shows the owner's own words from the tap, like the row this device made (issue 1432).
+    if (p.kind === 'new' && p.text && PLACEHOLDER_TITLES.has(String(s.title || '').trim())) s.title = p.text.slice(0, 60);
     // Accepted but held by a graceful restart (outbox restartPending): saved on the box, not running (wizard-ux issue 1362).
     if (p.held) s.restartPending = true; else delete s.restartPending;
   }

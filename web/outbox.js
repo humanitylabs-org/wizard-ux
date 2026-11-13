@@ -843,6 +843,9 @@
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
           pendingBlobs: { ...(it.pendingBlobs || {}), ...keepPending(o.files) } });
       }
+      // A follow-up in a chat whose last send a graceful restart holds (WizReach.restartHeld) is a new turn in the same
+      // chat, saved like that send, never a steer of the saved run (its message box reads as idle; wizard-ux issue 1432).
+      if (it.steerRunId && it.kind === 'reply' && window.WizReach?.restartHeld?.(window.WizLive?.session?.(it.sessionId))) it.steerRunId = '';
       // Only the delivery caller (including an explicit Send-to-agent choice) may
       // promote a command. Recovery and reconnect never create this authorization.
       it.deliveryRequested = true;
