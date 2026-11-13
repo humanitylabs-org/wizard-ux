@@ -7,8 +7,8 @@ html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice .rs-acts > butto
 html[data-tweaks~="wizard/graceful-restart"] :is(.ch-row, .ch-head) .emo.sti.held { color: var(--ink-2); }
 html[data-tweaks~="wizard/graceful-restart"] .ch-held-line { display: flex; align-items: center; gap: 6px; margin: 4px 2px 8px; font-size: .82rem; color: var(--ink-2); }
 html[data-tweaks~="wizard/graceful-restart"] .ch-held-line svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* With no message box on screen (the phone Chats list, Home), the note sits in the voice dock's layer. That layer covers
-   the whole screen and takes no taps, so the note gets its own opaque panel above the dock and the new-chat button,
-   clear of the header, and takes taps itself (wizard-ux issue 1362, third review). Same place as the custody notice. */
-html[data-tweaks~="wizard/graceful-restart"] .voice > .ch-restart-notice { position: absolute; z-index: 1; left: 16px; right: 16px; bottom: calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 84px); margin: 0; padding: 10px 12px; box-sizing: border-box; pointer-events: auto; background: var(--bg, #160f24); border: 1px solid var(--line, #433453); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
-html[data-tweaks~="wizard/graceful-restart"] .dbar > .ch-restart-notice { position: absolute; z-index: 1; left: 12px; bottom: calc(100% + 8px); max-width: 440px; margin: 0; padding: 10px 12px; box-sizing: border-box; pointer-events: auto; background: var(--bg, #160f24); border: 1px solid var(--line, #433453); border-radius: 12px; }
+/* With no message box on screen (the phone Chats list, a desktop with no chat open) the note's host is the voice dock's
+   layer or the page itself (outbox paintNotice), which covers the whole screen or sits in the top bar and takes no
+   taps. The note then floats on its own opaque panel above the dock and the new-chat button, clear of the header,
+   and takes taps itself (wizard-ux issue 1362, third review; reach.js paintRestart sets .float). */
+html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice.float { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); bottom: calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 84px); flex-basis: auto; margin: 0; padding: 10px 12px; box-sizing: border-box; pointer-events: auto; background: var(--bg, #160f24); border: 1px solid var(--line, #433453); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }

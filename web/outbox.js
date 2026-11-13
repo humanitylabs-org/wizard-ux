@@ -968,6 +968,15 @@
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
+  // A graceful restart is over (WizReach dispatches wizreachchange): sends it held are ordinary sent receipts again, so
+  // a later restart never reads them as held, and the cleanup that kept them for the hold runs now (issue 1362).
+  addEventListener('wizreachchange', () => {
+    if (window.WizReach?.restart?.()) return;
+    const held = [...items.values()].filter(it => it.restartPending);
+    if (!held.length) return;
+    for (const it of held) delete it.restartPending;
+    Promise.all(held.map(it => put(it).catch(() => {}))).then(() => { emit(); pump(); });
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.WosOutbox = api;
   load().then(() => schedule(0));

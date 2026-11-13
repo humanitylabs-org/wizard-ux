@@ -216,7 +216,7 @@ test('a send held by the restart is Saved, not Working; nothing changes without 
 
 // The outbox: a send that hits the seconds the service is down is retried soon, with the same Idempotency-Key.
 function outbox(origin, rows, restart) {
-  const state = { restart };
+  const state = { restart, on: {} };
   const timers = new Set();
   const indexedDB = { open() {
     const r = {};
@@ -233,7 +233,7 @@ function outbox(origin, rows, restart) {
   } };
   const ctx = { console, Blob, AbortController, AbortSignal, indexedDB, crypto: { randomUUID },
     document: { documentElement: { dataset: {} }, body: null, addEventListener() {} },
-    localStorage: { getItem: () => null, removeItem() {}, setItem() {} }, addEventListener() {}, clearTimeout,
+    localStorage: { getItem: () => null, removeItem() {}, setItem() {} }, addEventListener(type, fn) { (state.on[type] ||= []).push(fn); }, clearTimeout,
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route }, WizConfig: { voicePrompt: () => '' },
@@ -241,7 +241,7 @@ function outbox(origin, rows, restart) {
     WosAgents: { isOther: a => !!a, get: () => ({ permissions: {} }) },
   };
   ctx.window = ctx; vm.runInNewContext(outboxSource, ctx);
-  return { api: ctx.WosOutbox, state, close: () => { for (const t of timers) clearTimeout(t); } };
+  return { api: ctx.WosOutbox, state, fire: type => { for (const fn of state.on[type] || []) fn({ type }); }, close: () => { for (const t of timers) clearTimeout(t); } };
 }
 async function until(fn, tries = 1200) {
   for (let i = 0; i < tries; i++) { const v = fn(); if (v) return v; await new Promise(r => setTimeout(r, 5)); }
@@ -541,13 +541,32 @@ for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box',
     assert.deepEqual(ids(), [], 'released once the restart is over');
   });
 }
-test('the outbox keeps a held send past its 10-minute retention only while the restart is known', () => {
-  const ob = read('outbox.js');
-  assert.match(ob, /now\(\) - it\.sentAt > 10 \* 60e3 && !\(it\.restartPending && window\.WizReach\?\.restart\?\.\(\)\)\) await del\(it\.id\)/);
+test('the outbox keeps a held send past its 10-minute retention only while the restart is known, then drops it', async t => {
+  const old = Date.now() - 20 * 60e3;
+  const rows = new Map([typed({ state: 'sent', sentAt: old, runId: 'wizardq_held', restartPending: true, durable: true })]);
+  const [id] = [...rows.keys()];
+  const page = outbox('http://127.0.0.1:9', rows, { phase: 'waiting' }); t.after(page.close);
+  await page.api.load(); await page.api.pump();
+  assert.ok(!page.api.get(id).compact, 'kept whole while the restart still holds it');
+  assert.equal(page.api.get(id).restartPending, true);
+  // The restart ends (Codex P2): the receipt is ordinary again, so a later restart never reads it as held, and the
+  // retention the hold suspended runs at once, with no other send needed to wake the outbox.
+  page.state.restart = null; page.fire('wizreachchange');
+  await until(() => page.api.get(id)?.compact === true); // retired to its small terminal marker (del)
+  assert.equal(page.api.get(id).restartPending, undefined);
+  // An ordinary send of the same age, with no restart ever known, goes as before.
+  const plain = new Map([typed({ state: 'sent', sentAt: old, runId: 'wizardq_plain', durable: true })]);
+  const [pid] = [...plain.keys()];
+  const p2 = outbox('http://127.0.0.1:9', plain, null); t.after(p2.close);
+  await p2.api.load(); await p2.api.pump();
+  assert.equal(p2.api.get(pid).compact, true);
 });
-test('phone Chats list: with no message box the note sits on its own opaque panel above the dock and takes taps', () => {
+test('no message box on screen (phone Chats list, desktop with no chat): the note floats on its own panel and takes taps', () => {
+  // reach.js marks a note whose host is not a message box (.float); tweak.css gives it the panel (Codex P2: the
+  // desktop fallback host is the top bar or the page, never a .dbar, so the rule keys on the note, not the host).
+  assert.match(read('core/reach.js'), /el\.classList\?\.toggle\('float', !host\.classList\?\.contains\('ch-compose'\)\)/);
   const css = readFileSync(new URL('../web/tweaks/wizard/graceful-restart/tweak.css', import.meta.url), 'utf8');
-  const rule = css.split('\n').find(l => l.startsWith('html[data-tweaks~="wizard/graceful-restart"] .voice > .ch-restart-notice'));
+  const rule = css.split('\n').find(l => l.startsWith('html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice.float'));
   assert.ok(rule, 'a rule for the note in the voice dock layer');
-  for (const want of ['position: absolute', 'pointer-events: auto', 'background: var(--bg', 'bottom: calc(']) assert.ok(rule.includes(want), want);
+  for (const want of ['position: fixed', 'pointer-events: auto', 'background: var(--bg', 'bottom: calc(']) assert.ok(rule.includes(want), want);
 });
