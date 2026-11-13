@@ -52,7 +52,8 @@
     if (NATIVE && inApp(u)) return;
     external(u);
   }
-  function download(u, doc) {
+  // `name`: the file name to suggest ('' lets the browser pick it); without one, the address's last part.
+  function download(u, doc, name) {
     const b = bridge();
     if (NATIVE && typeof b?.download === 'function') { try { b.download(u.href); return true; } catch (_) {} }
     // Android builds before 0.10.4 have no download bridge, and a main-frame file request would arm the
@@ -67,7 +68,7 @@
     }
     // Browsers: an <a download> click.
     const d = doc || document, a = d.createElement('a');
-    a.href = u.href; a.download = decodeURIComponent(u.pathname.split('/').pop() || ''); a.rel = 'noopener';
+    a.href = u.href; a.download = typeof name === 'string' ? name : decodeURIComponent(u.pathname.split('/').pop() || ''); a.rel = 'noopener';
     // Cross-origin inline responses may ignore download; never let them replace the shell or a hosted app.
     if (!inApp(u)) a.target = '_blank';
     d.body.appendChild(a); a.click(); a.remove(); return true;
@@ -484,5 +485,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, follow, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, follow, download: (href, name) => { const u = abs(href); return !!u && /^https?:$/.test(u.protocol) && download(u, null, name); }, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();
