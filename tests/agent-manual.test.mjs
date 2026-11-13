@@ -62,5 +62,8 @@ test('wizard.md ships the manual as the agent skill (name and description, as th
   assert.match(fm, /^skill: skill\/SKILL\.md$/m, 'wizard.md must declare `skill: skill/SKILL.md` so the App Manager installs the manual for the agent');
   const head = read(SKILL_FILE).match(/^---\n([\s\S]*?)\n---\n/)[1];
   assert.match(head, /^name: wizard-interface$/m);
-  assert.match(head, /^description: Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer/m);
+  const description = head.match(/^description: (.*)$/m)[1];
+  assert.match(description, /Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer/);
+  // The agent's skill index shows only the first 57 characters of a description: they must say what it is for.
+  assert.match(description.slice(0, 57), /Wizard setting or screen/);
 });

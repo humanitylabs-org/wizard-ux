@@ -1,13 +1,13 @@
 ---
 name: wizard-interface
-description: Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches like Channels in Chats or Thread tracker, updates, Chats, Home, apps, voice). Generated from the Wizard interface code, so it matches this Wizard's screens.
+description: Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches like Channels in Chats or Thread tracker, updates, Chats, Home, apps, voice). Load it before wizard-guide for these; it is generated from this Wizard's interface.
 ---
 
 # Wizard interface manual
 
 Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.
 
-- Give the exact path the way it reads on screen, e.g. Settings › Appearance › Try new features › Channels in Chats, and how to open Settings on their device: desktop in the AI apps view (the standard one), the cog at the bottom left of the chats sidebar; desktop in the Desks view, the gear in the top bar (⌥,); phone, the gear at the top right of Home.
+- Give the exact path the way it reads on screen, e.g. Settings › Appearance › Try new features › Channels in Chats, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (the standard AI apps view has no top bar; only the older Desks view has a gear in a top bar, ⌥,); on the phone, the gear at the top right of Home. If you don't know which they use, say 'the cog at the bottom left of the chats list (or the gear at the top right of Home on the phone)'.
 - Give the exact path the way it reads on screen, e.g. Settings › Appearance › Try new features › Channels in Chats, and how to get there on the device they use (desktop: the gear at the right of the top bar, or ⌥,; phone: the gear at the top right of Home).
 - Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).
 - You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.
@@ -33,7 +33,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 - **App Store install link**: A link that opens one app's page in the App Store to install it.
 - **Agents**: The Agents app: your agents (main and others), each with its own chats, look and what it may use.
 - **Files**: The Files app: your Wizard's files and folders (on a Mac, the shared Wizard folder).
-- **Settings**: See Settings below. Desktop: AI apps view: the cog at the bottom left of the chats sidebar; Desks view: the gear in the top bar (⌥,). Phone: the gear at the top right of Home.
+- **Settings**: See Settings below. Desktop: the cog at the bottom left under the chats list (AI apps view); the gear in the top bar (Desks view, ⌥,). Phone: the gear at the top right of Home.
 - **Settings › Appearance**: A link straight to the skin picker.
 - **Settings › Resources**: A link straight to the Resources (AI usage) page.
 - **Gestures & help**: Phone: How Wizard works: tap the orb to talk, hold it for a command, swipe it up for apps, down to hide the bars, sideways between desks; Back is always one step back; Practice again. Desktop: the keys guide (⌥/, or hold ⌥ to see the keys on screen). Desktop: Settings › About & updates › Gestures & help, or ⌥/. Phone: Settings › About & updates › Gestures & help, or say 'help'.
@@ -51,7 +51,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 
 ## Settings
 
-Open Settings: desktop AI apps view (the standard desktop), the cog at the bottom left of the chats sidebar; desktop Desks view, the gear at the right of the top bar (⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
+Open Settings: desktop, the cog at the bottom left under the chats list (standard AI apps view; the older Desks view has a gear at the right of its top bar, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
 
 ### System › Your network
 Your network: the computers and devices this Wizard runs on, filled by the apps that report them. (only when an installed app adds something here; with Machines on Home on, Settings › System holds network, AI, security and storage).
