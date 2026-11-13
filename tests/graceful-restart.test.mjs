@@ -498,7 +498,9 @@ test('the restart note survives a repaint of the message box: put back at once w
   assert.deepEqual({ ...keep.opts }, { childList: true, subtree: true });
   const before = painted; keep.fn([]);
   assert.equal(painted, before + 1, 'a box that lost the note gets it back');
-  compose.querySelector = () => ({}); keep.fn([]);
+  const note = { getClientRects: () => [1] };
+  compose.querySelector = () => note; r.ctx.document.querySelectorAll = sel => sel === '.ch-compose' ? [compose] : sel === '[data-restart-notice]' ? [note] : [];
+  keep.fn([]);
   assert.equal(painted, before + 1, 'nothing to do when the note is there');
   // No restart known: nothing watches the page.
   const idle = reach({ health: () => ok({ status: 'ok' }), observe: true, body: { nodeType: 1 } });
