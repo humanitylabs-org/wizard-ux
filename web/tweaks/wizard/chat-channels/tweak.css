@@ -35,7 +35,6 @@ html[data-tweaks~="wizard/chat-channels"] .ch-chan-h b { min-width: 0; overflow:
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-back { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--ink-2); }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 html[data-tweaks~="wizard/chat-channels"] .ch-chan-feed { display: flex; flex-direction: column; gap: 10px; padding: 0 8px 96px; }
-html[data-tweaks~="wizard/chat-channels"] .ch-chan-feed .ch-rdy-bar { position: sticky; top: 0; z-index: 1; padding: 4px 0 6px; background: var(--wz-base, var(--bg)); }
 /* a post (James, 10 Nov 2026): the owner's first message as plain text on the list background, Slack-style — avatar,
    name and time, the text clamped at 4 lines with "more", its pictures as small thumbnails, then the slim reply line */
 html[data-tweaks~="wizard/chat-channels"] .ch-post { display: flex; align-items: flex-start; gap: 10px; padding: 8px 6px 4px; border-radius: 10px; }

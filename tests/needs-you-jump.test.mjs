@@ -13,7 +13,7 @@ const block = src.slice(start, end);
 function harness({ on = true, rows = {}, seen = {} } = {}) {
   const CH = {};
   const ctx = {
-    CH, ch: id => (CH[id] = CH[id] || {}), needsThreadOn: () => on,
+    W: {}, CH, ch: id => (CH[id] = CH[id] || {}), needsThreadOn: () => on,
     LIVE: {
       session: id => rows[id] || null,
       isNew: s => !!s.unread,
@@ -22,7 +22,7 @@ function harness({ on = true, rows = {}, seen = {} } = {}) {
   };
   ctx.getComputedStyle = el => ({ bottom: el.style?.bottom || el.cssBottom });
   vm.createContext(ctx);
-  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel, jumpLandGap, jumpStack, liftLatest };', ctx);
+  vm.runInContext(block + '\nthis.api = { jumpOpened, jumpPillsHtml, jumpTarget, jumpLabel, jumpLandGap, jumpStack, liftLatest, jumpFeed, jumpBand, jumpMarks };', ctx);
   return ctx;
 }
 
@@ -179,4 +179,18 @@ test('the channel lists repaint when the box\'s channels change, from this or an
   const pinned = [ch1('alerts', { pinned: true, pinOrder: 1, kind: 'alerts' }), ch1('launch', { pinned: true, pinOrder: 0 }), a[1]];
   assert.equal(w.tick({ rev: 4, sort: 'za', channels: pinned }), 3, 'another device pinned Launch');
   assert.equal(w.tick({ rev: 5, sort: 'za', channels: pinned.map(c => c.id === 'launch' ? { ...c, pinOrder: 1 } : c.id === 'alerts' ? { ...c, pinOrder: 0 } : c) }), 4, 'another device reordered the pins');
+});
+
+// Issue 1440: a channel's feed (its .ch-scroll list) uses the same pills; it counts marked posts, never messages.
+test('feed: posts marked needs / new above or below the scroller count once each; on screen they drop out', () => {
+  const { jumpFeed, jumpBand, jumpMarks } = harness().api;
+  const post = (top, mark) => ({ dataset: { chmark: mark, morphKey: 'post:' + top }, getBoundingClientRect: () => ({ top, bottom: top + 80, height: 80 }) });
+  const posts = [post(-400, 'needs'), post(-200, 'new'), post(-100, 'new'), post(300, 'needs'), post(900, 'new'), post(1200, 'needs')];
+  const sc = { classList: { contains: c => c === 'ch-scroll' }, getBoundingClientRect: () => ({ top: 100, bottom: 800 }),
+    querySelectorAll: q => (q === '.ch-post[data-chmark]' ? posts : []) };
+  assert.equal(jumpFeed(sc), true); assert.equal(jumpFeed({ classList: { contains: () => false } }), false);
+  const band = jumpBand(sc); assert.equal(band.sc, sc); assert.equal(band.top, 100); assert.equal(band.bottom, 800);
+  const m = jumpMarks('w1', sc, band);
+  assert.deepEqual([...m.up.map(x => x.kind)], ['needs', 'new', 'new'], 'above the band (the post at 300 is on screen: not counted)');
+  assert.deepEqual([...m.down.map(x => x.kind)], ['new', 'needs'], 'below the band');
 });

@@ -547,7 +547,10 @@ window.WizCore.chats = function createChats(H) {
   }
   const jumpPillsHtml = () => needsThreadOn() ? '<button type="button" class="ch-jump up" data-chjump="up" hidden></button><button type="button" class="ch-jump down" data-chjump="down" hidden></button>' : '';
   // The thread's visible band: under its header (the phone's document scroll has a fixed header and composer).
+  // Issue 1440: a channel's feed (its list scroller, .ch-scroll) uses the same pills; its band is the scroller itself.
+  const jumpFeed = nb => !!nb?.classList?.contains('ch-scroll');
   function jumpBand(nb) {
+    if (jumpFeed(nb)) { const r = nb.getBoundingClientRect(); return { sc: nb, top: r.top, bottom: r.bottom }; }
     const sc = scrollBox(nb), doc = sc !== nb, th = nb.closest('.ch-thread'), head = th?.querySelector('.ch-head');
     const top = threadViewportTop(nb, Math.max(doc ? 0 : nb.getBoundingClientRect().top, head ? head.getBoundingClientRect().bottom : 0));
     let bottom = doc ? (window.visualViewport?.height || window.innerHeight) : nb.getBoundingClientRect().bottom;
@@ -558,7 +561,7 @@ window.WizCore.chats = function createChats(H) {
   // Every marker in the open thread, split into above / below the band. Green replies seen on screen drop out.
   function jumpMarks(wid, nb, band) {
     const c = ch(wid), w = W[wid], out = { up: [], down: [] }, now = Date.now(); c.jumpSeen = c.jumpSeen || new Set();
-    const skip = c.jumpTo && now < c.jumpTo.until ? c.jumpTo.n : null, live = threadOnScreen(nb);
+    const skip = c.jumpTo && now < c.jumpTo.until ? c.jumpTo.n : null, live = !jumpFeed(nb) && threadOnScreen(nb);
     const add = (n, kind, key) => {
       const r = n.getBoundingClientRect(); if (!r.height) return;
       if (n === skip) { if (r.bottom > band.top + 1 && r.top < band.bottom - 1) c.jumpTo = null; else return; } // reached: counts normally again
@@ -566,6 +569,8 @@ window.WizCore.chats = function createChats(H) {
       else if (r.top >= band.bottom - 1) out.down.push({ n, kind, y: r.top });
       else if (key && live) c.jumpSeen.add(key);
     };
+    // A feed counts posts, never messages: each marked post once (amber over green), on screen = not counted.
+    if (jumpFeed(nb)) { nb.querySelectorAll('.ch-post[data-chmark]').forEach(n => add(n, n.dataset.chmark === 'needs' ? 'needs' : 'new')); return out; }
     nb.querySelectorAll('[data-needs-line]').forEach(n => add(n, 'needs'));
     if (w && c.jumpFor === w.thread && !Number.isNaN(c.jumpSince ?? NaN)) {
       nb.querySelectorAll('.msg.a[data-morph-key^="a"]').forEach(n => {
@@ -588,7 +593,8 @@ window.WizCore.chats = function createChats(H) {
   function paintJump(el, nb) {
     liftLatest(el);
     const wid = el?.dataset.chats, up = el?.querySelector('[data-chjump="up"]'), dn = el?.querySelector('[data-chjump="down"]');
-    if (!wid || !nb || (!up && !dn) || !threadOnScreen(nb)) return;
+    const feed = jumpFeed(nb);
+    if (!wid || !nb || (!up && !dn) || !(feed ? nb.isConnected && nb.clientHeight > 0 : threadOnScreen(nb))) return;
     const band = jumpBand(nb), m = jumpMarks(wid, nb, band);
     // ↓ Latest already covers a marker that its jump to the end would bring on screen.
     const latest = el.querySelector('[data-chlatest]'), sc = band.sc;
@@ -597,15 +603,17 @@ window.WizCore.chats = function createChats(H) {
     const set = (b, dir, list) => {
       if (!b) return;
       const show = !!list.length && !(dir === 'down' && covered), html = show ? jumpLabel(dir, list) : '';
-      if (b.dataset.sig !== html) { b.innerHTML = html; b.dataset.sig = html; }
+      if (b.dataset.sig !== html || (html && !b.firstChild)) { b.innerHTML = html; b.dataset.sig = html; }
+      if (b.hidden === show) b.hidden = !show; // shown first: a hidden pill has no offsetParent to place it by (issue 1440)
       if (show) {
         const n = list.filter(x => x.kind === 'needs').length, g = list.length - n;
         b.setAttribute('aria-label', `Jump ${dir} to ${[n ? `${n} Needs you` : '', g ? `${g} new ${g === 1 ? 'reply' : 'replies'}` : ''].filter(Boolean).join(' and ')}`);
         // the top pill sits just under the header (fixed on the phone's document scroll, else inside the thread)
         if (dir === 'up') { const p = b.offsetParent; b.style.top = `${Math.round(band.top + 8 - (p ? p.getBoundingClientRect().top : 0))}px`; }
       }
-      if (b.hidden === show) b.hidden = !show;
-      if (dir === 'down') jumpStack(b, show && latest && !latest.hidden ? latest : null);
+      // a feed's ↓ pill sits just above its message box (the scroller's bottom edge)
+      if (dir === 'down' && feed) { const p = b.offsetParent; b.style.bottom = show && p ? `${Math.round(p.getBoundingClientRect().bottom - band.bottom + 12)}px` : ''; }
+      else if (dir === 'down') jumpStack(b, show && latest && !latest.hidden ? latest : null);
     };
     set(up, 'up', m.up); set(dn, 'down', m.down);
   }
@@ -635,18 +643,21 @@ window.WizCore.chats = function createChats(H) {
   }
   // Issue 1380: with markers left above, the ↑ pill comes back at the top: land the target just under it, not behind it.
   function jumpLandGap(nb, m, t) {
-    const above = [...m.up, ...m.down].some(x => x.n !== t.n && x.y < t.y) || [...nb.querySelectorAll('[data-needs-line]')].some(n => n !== t.n && n.getBoundingClientRect().top < t.y);
+    const above = [...m.up, ...m.down].some(x => x.n !== t.n && x.y < t.y) || [...nb.querySelectorAll('[data-needs-line], .ch-post[data-chmark="needs"]')].some(n => n !== t.n && n.getBoundingClientRect().top < t.y);
     if (!above) return 8;
     const up = nb.parentElement?.querySelector('[data-chjump="up"]'), h = up && !up.hidden ? up.getBoundingClientRect().height : 0;
     return 8 + (h || 32) + 8;
   }
   function jumpGo(wid, dir) {
-    const el = elOf(wid), nb = el?.querySelector('.ch-msgs'); if (!nb || !needsThreadOn()) return false;
+    const el = elOf(wid), sc = !W[wid]?.thread ? el?.querySelector('.ch-list > .ch-scroll') : null, feed = !!sc?.querySelector(':scope > .ch-chan-feed');
+    const nb = feed ? sc : el?.querySelector('.ch-msgs'); if (!nb || !needsThreadOn()) return false;
     const band = jumpBand(nb), m = jumpMarks(wid, nb, band), t = jumpTarget(m[dir === 'down' ? 'down' : 'up'], dir);
     if (!t) { paintJump(el, nb); return false; }
     vib(6);
-    const c = ch(wid), off = t.n.getBoundingClientRect().top - band.top - jumpLandGap(nb, m, t);
-    if (t.kind === 'new') c.jumpSeen?.add(t.n.dataset.morphKey);
+    const c = ch(wid), gap = jumpLandGap(nb, m, t), off = t.n.getBoundingClientRect().top - band.top - gap;
+    if (t.kind === 'new' && !feed) c.jumpSeen?.add(t.n.dataset.morphKey);
+    // A feed holds its place (chanHold): the post landed on becomes it, and the scroll counts as the owner's own.
+    if (feed) { const o = (W[owner(wid)] || W[wid])?.chan; if (o) o.at = { key: t.n.dataset.morphKey, y: gap, ...(t.n.dataset.chrow ? { row: t.n.dataset.chrow } : {}) }; chanUser(wid); }
     c.jumpTo = { n: t.n, until: Date.now() + 1500 }; // the pill counts it as reached on the tap's frame
     paintJump(el, nb);
     const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -654,6 +665,8 @@ window.WizCore.chats = function createChats(H) {
     else t.n.scrollIntoView({ block: 'start' });
     return true;
   }
+  // The open channel feed's pills follow every paint, place hold and scroll of the feed (issue 1440).
+  function paintFeedJump(wid, sc) { if (sc?.querySelector?.(':scope > .ch-chan-feed')) paintJump(elOf(wid), sc); }
   function chanPrefs() {
     const st = typeof chanStore === 'function' ? chanStore() : null;
     if (st) return chanStorePrefs(st);
@@ -1200,20 +1213,21 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid], at = w && (W[owner(wid)] || w)?.chan?.at, sc = chanScroller(wid), feed = sc?.querySelector('.ch-chan-feed');
     if (!feed) { chanRO[wid]?.ro.disconnect(); delete chanRO[wid]; return; }
     chanWatch(wid, sc, feed);
-    if (!at || !sc.clientHeight) return;
+    if (!at || !sc.clientHeight) { paintFeedJump(wid, sc); return; }
     ch(wid).listPending = null; // the feed's own place outranks the list's return bookmark
     const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
     // The same key can be drawn twice (a main and a routed thread sharing an id): the place is the copy of its own row
     // (agent|id), wherever a re-sort moved it.
     const same = at.key ? [...feed.querySelectorAll('[data-morph-key]')].filter(n => n.dataset.morphKey === at.key) : [], node = (at.row && same.find(n => n.dataset.chrow === at.row)) || same[0];
-    // The opening place (bar: true) sits below the feed's sticky filter bar (Open · Needs you · All); a place James
-    // scrolled to was measured from the scroller's own top, bar included, so it keeps that offset as is.
+    // The opening place (bar: true) sits below a sticky bar at the feed's top, if one is ever drawn (the Open · Needs you
+    // · All row went in issue 1440); a place James scrolled to was measured from the scroller's own top, so it keeps that.
     const stuck = at.bar && node ? chanStuck(feed) : 0;
     const to = at.end || !node ? max : Math.max(0, Math.min(max, sc.scrollTop + node.getBoundingClientRect().top - sc.getBoundingClientRect().top - (at.y || 0) - stuck));
     if (Math.abs(sc.scrollTop - to) >= 1) sc.scrollTop = to;
     chanSetTop[wid] = sc.scrollTop; // the scroll event this fires is the hold's own, never James's
     // The whole feed in view at its end (a short channel, or the end is the place): read to its newest post (issue 1316).
     if (sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 4) chanReadFeed(wid, sc, feed);
+    paintFeedJump(wid, sc);
   }
   /* Seeing a post is not reading it (wizard-ux issue 1269, which overrides issue 1266; James, 11 Nov 2026: "the green
    * dot gets dismissed when I go into that topic and I see that reply"). The feed, its scrolling and its end never
@@ -1243,12 +1257,12 @@ window.WizCore.chats = function createChats(H) {
     const n = all[i], key = n.dataset.morphKey, twin = all.some(x => x !== n && x.dataset.morphKey === key);
     c.at = { key, y: n.getBoundingClientRect().top - sc.getBoundingClientRect().top, ...(twin && n.dataset.chrow ? { row: n.dataset.chrow } : {}) };
   }
-  const CHAN_FILTERS = ['open', 'needs', 'all'], CHAN_FILTER_LABEL = { open: 'Open', needs: 'Needs you', all: 'All' };
+  /* Issue 1440 (James, 13 Nov 2026): no Open / Needs you / All selector. The feed is every post of the channel; the
+   * thread's own jump pills (issue 1359) point at posts that need you (amber) or have unread replies (green). */
   function channelFeed(w, open, rows) {
-    const c = ch(owner(w.id)), f = CHAN_FILTERS.includes(c.chanFilter) ? c.chanFilter : 'open';
-    const mine = rows.filter(s => inChannel(open, s)), shown = mine.filter(s => f === 'all' || (f === 'needs' ? chanNeeds(s) : !s.archived)).sort(chanPostOrder);
+    const mine = rows.filter(s => inChannel(open, s)), shown = mine.slice().sort(chanPostOrder);
     const cs = chanStart(w, shown, open);
-    // Every post of the channel with its activity time for the watermark (chanReadFeed), shown by the filter or not.
+    // Every post of the channel with its activity time for the watermark (chanReadFeed).
     const on = new Set(shown);
     chanActs[w.id] = { key: chanReadKey(open, open.general ? chanGenAgent(w) : ''), rows: mine.map(s => ({ row: chanKey(s), post: 'post:' + s.id, at: chanAt(s), changed: chanChanged(s, -Infinity), shown: on.has(s) })) };
     // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
@@ -1270,6 +1284,7 @@ window.WizCore.chats = function createChats(H) {
       const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : byAgent && !n ? 'New' : 'New reply'}</span>` : '';
       const state = (isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '') + fresh;
       const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
+      const mk = !isWorking(s) && chanNeeds(s) ? 'needs' : un ? 'new' : ''; // what the feed's jump pills count (issue 1440)
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       // An agent's words keep the chat bubble's inline markdown (wizard-ux issue 1287: bold, italics, links, code; a
       // report opens with a bold sentence, never "**…**"). The owner's own words stay plain text, as typed.
@@ -1288,7 +1303,7 @@ window.WizCore.chats = function createChats(H) {
       const who = byAgent ? (typeof agentName === 'function' ? agentName(firstAgent(s) || open.agent || '') : 'Wizard') : (me || 'You');
       const foot = byAgent && !n ? `<span class="ch-post-rr"><button type="button" class="ch-post-reply" data-chreply="${esc(s.id)}" aria-label="Reply to ${esc(who)}">Reply</button>${marks}</span>`
         : `<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button>`;
-      return `<div class="ch-post${un ? ' unread' : ''}${byAgent ? ' by-agent' : ''}" data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}" data-chtitle="${esc(s.title || '')}">${av}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(who)}</b><time>${esc(ago(at))}</time></span>${byAgent ? '' : body}</button>${byAgent && body ? `<div class="ch-post-tb" data-chopen="${esc(s.id)}">${body}</div>` : ''}${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}${foot}</div></div>`;
+      return `<div class="ch-post${un ? ' unread' : ''}${byAgent ? ' by-agent' : ''}"${mk ? ` data-chmark="${mk}"` : ''} data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}" data-chtitle="${esc(s.title || '')}">${av}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(who)}</b><time>${esc(ago(at))}</time></span>${byAgent ? '' : body}</button>${byAgent && body ? `<div class="ch-post-tb" data-chopen="${esc(s.id)}">${body}</div>` : ''}${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}${foot}</div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
     const sendingPost = p => {
@@ -1300,8 +1315,7 @@ window.WizCore.chats = function createChats(H) {
     const line = '<div class="ch-chan-new" role="separator" aria-label="New posts" data-morph-key="chan-new"><span>New</span></div>';
     const html = shown.map(s => (cs?.newKey && cs.newKey === chanKey(s) ? line : '') + post(s)).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
     if (firstWant.size || replyWant.size) pullFirst();
-    const bar = orderBar('Show posts', 'data-chchanf', CHAN_FILTERS, f, o => CHAN_FILTER_LABEL[o]);
-    return `<div class="ch-chan-feed">${bar}${shown.length || sending.length ? html : `<span class="ch-none">${f === 'needs' ? 'Nothing needs you here.' : f === 'open' ? 'Nothing open here.' : 'No posts in the last 30 days.'}</span>`}${archNote}</div>`;
+    return `<div class="ch-chan-feed">${shown.length || sending.length ? html : '<span class="ch-none">No posts in the last 30 days.</span>'}${archNote}</div>`;
   }
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : '<span class="ch-chan-hash" aria-hidden="true">#</span>'}${esc(open.name)}</b></div>`;
@@ -1389,7 +1403,7 @@ window.WizCore.chats = function createChats(H) {
     const c0 = e.target.closest('[data-chchan]'); if (c0) { openChannel(w, c0.dataset.chchan); return true; }
     const nc = e.target.closest('[data-chchannew]'); if (nc) { chanNewForm(w, nc); return true; }
     if (e.target.closest('[data-chchanback]')) { channelBack(w); return true; }
-    const fl = e.target.closest('[data-chchanf]'); if (fl) { ch(owner(id)).chanFilter = fl.dataset.chchanf; renderChatList(w, elOf(id)); return true; }
+    const jp = e.target.closest('[data-chjump]'); if (jp && typeof jumpGo === 'function') { jumpGo(id, jp.dataset.chjump); return true; } // issue 1440: the feed's pills
     // Reply under an agent's post: its thread opens with the composer ready, so the reply continues that thread.
     const rp = e.target.closest('[data-chreply]'); if (rp) { openChat(id, rp.dataset.chreply); const focus = () => { const ta = (elOf(owner(id)) || elOf(id))?.querySelector('.ch-compose textarea'); if (ta) ta.focus({ preventScroll: true }); return !!ta; }; setTimeout(() => { if (!focus()) setTimeout(focus, 250); }, 60); return true; }
     const mo = e.target.closest('[data-chpostmore]'); if (mo) { const k = mo.dataset.chpostmore; if (chanMore.has(k)) chanMore.delete(k); else chanMore.add(k); renderChatList(w, elOf(id)); return true; }
@@ -1503,7 +1517,6 @@ window.WizCore.chats = function createChats(H) {
     CHAN_SENDING.push(p);
     if (ta) { ta.value = ''; growTa(ta); }
     c.draft = ''; c.files = []; KIT.drafts.clear(key); syncSend(form, c);
-    const o = ch(owner(wid)); if (o.chanFilter === 'needs') o.chanFilter = 'open';
     renderChatList(w, elOf(wid)); chanToEnd(wid); // the post is on screen on this frame
     const how = `typing in the # ${open.name} channel in Chats`;
     const it = await sendChat(wid, text, how, null, { sid: '__new__', away: true, space: open.general || open.agentFeed ? '' : open.id, files, route, instructions: viewContext(wid, how) });
@@ -2693,8 +2706,8 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
       : LST.ok && age > STALE_LIST ? notUp('stale', LST.loading ? spin : dot, ` · ${esc(since)}${LST.loading ? ' · updating…' : ''}`)
       : c.ptrState === 'done' ? syncBar('ok', '', '<span>Up to date</span>', '', 'Up to date') : '';
-    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed ? fab : ''}</div>`
-      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
+    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}</div>`
+      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${fab}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -3860,6 +3873,7 @@ window.WizCore.chats = function createChats(H) {
       if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
       if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) { queueListPlace(id); if (typeof chanScrolled === 'function') chanScrolled(id, e.target); } }
       if (swipeOpen) closeSwipe(true);
+      if (typeof paintFeedJump === 'function' && e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) paintFeedJump(id, e.target); } // issue 1440: the feed's pills
       const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
     }, { capture: true, passive: true });
     // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
