@@ -125,6 +125,18 @@ test('forgetAppData drops the removed app from the notes of databases its same-o
  assert.deepEqual(JSON.parse(m.get('wos.app-idb-owners.v1')),{'shared-db':{app:''}});
 });
 
+test('forgetAppData drops the removed app from the notes of settings keys its same-origin page wrote, and what was copied (wizard-ux#1426)',async()=>{
+ const m=new Map(Object.entries({'wos.app-ls-owners.v1':JSON.stringify({'ledger.theme':{app:'ledger'},'shared.k':{app:''},'two.k':{app:'ledger-two'}}),'wos.app-ls-carried.v1':JSON.stringify({ledger:['ledger.theme'],'ledger-two':['two.k']}),'ledger.theme':'dark'}));
+ const storage={m,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)};
+ assert.equal(await forgetAppData('ledger',{storage,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(JSON.parse(m.get('wos.app-ls-owners.v1')),{'shared.k':{app:''},'two.k':{app:'ledger-two'}},'a reinstall never gets the old settings copied over');
+ assert.deepEqual(JSON.parse(m.get('wos.app-ls-carried.v1')),{'ledger-two':['two.k']});
+ assert.equal(m.get('ledger.theme'),'dark','the old key itself stays (the boundary off shows it as before)');
+ assert.equal(await forgetAppData('ledger-two',{storage,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(JSON.parse(m.get('wos.app-ls-owners.v1')),{'shared.k':{app:''}});
+ assert.equal(m.has('wos.app-ls-carried.v1'),false);
+});
+
 test('forgetAppData never creates the shell database, refuses bad ids and reports a failed delete',async()=>{
  const none=fakeIdb({exists:false});
  assert.equal(await forgetAppData('ledger',{storage:fakeStorage({}),idb:none,keyRange}),true);

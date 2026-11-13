@@ -486,10 +486,44 @@
       return u.pathname.endsWith('/') ? u.pathname : u.pathname.slice(0, u.pathname.lastIndexOf('/') + 1);
     } catch (_) { return ''; }
   }
+  /* Turning the boundary on (wizard-os#133): until then the app's page kept its settings in this origin's own
+   * localStorage, which its sandboxed page can no longer reach. core/app-services.js notes which installed app wrote
+   * which key while its window was same-origin (`wos.app-ls-owners.v1`: { key: { app } }, app '' = more than one app).
+   * Before the app's sandboxed page starts (storageName, storage.load), each key that app alone wrote is copied once
+   * into its own copy, unless the copy already has the key (`wos.app-ls-carried.v1` { app: [keys] } notes it, so a key
+   * the app removes later never comes back). The shell's own keys (STORE_SHELL, the same rule as app-services.js
+   * LS_SHELL) are never copied. The old keys stay as they were. True when something was copied. */
+  const LS_OWNERS = 'wos.app-ls-owners.v1', LS_CARRIED = 'wos.app-ls-carried.v1';
+  const STORE_SHELL = /^(?:wos|wux\.|wz\.|wizard\.|wizard-pwa-install:|wizardapp\.)/i;
+  function storeCarry(id) {
+    try {
+      if (typeof id !== 'string' || !STORE_ID.test(id)) return false;
+      const owners = readJson(LS_OWNERS), carried = readJson(LS_CARRIED);
+      const done = new Set(Array.isArray(carried[id]) ? carried[id].filter(k => typeof k === 'string') : []);
+      const keys = Object.keys(owners).filter(k => owners[k]?.app === id && !done.has(k) && !STORE_SHELL.test(k));
+      if (!keys.length) return false;
+      const m = storeRead(id);
+      let others = 0;
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(STORE) && k !== STORE + id) others += (localStorage.getItem(k) || '').length; }
+      let n = storeSize(m), added = 0;
+      for (const k of keys) {
+        if (m.has(k)) { done.add(k); continue; } // The app's newer value under the boundary wins.
+        const v = localStorage.getItem(k);
+        if (v === null) continue; // Gone from the old storage: nothing to carry (yet).
+        const size = k.length + v.length;
+        if (n + size > STORE_MAX || others + n + size > STORE_ALL) continue; // No room: tried again next time.
+        m.set(k, v); n += size; added++; done.add(k);
+      }
+      if (added) localStorage.setItem(STORE + id, JSON.stringify(Object.fromEntries(m)));
+      const c = readJson(LS_CARRIED); c[id] = [...done]; localStorage.setItem(LS_CARRIED, JSON.stringify(c));
+      return added > 0;
+    } catch (_) { return false; }
+  }
   // What a new app window starts with: the frame's name (the page reads it before it can hear anything), with the
   // app's own path. '' = not an installed app here.
   function storageName(id) {
     const base = typeof id === 'string' && STORE_ID.test(id) ? storeBase(id) : '';
+    if (base) storeCarry(id);
     return base ? STORE_NAME + JSON.stringify({ p: base, l: Object.fromEntries(storeRead(id)) }) : '';
   }
   /* A sandboxed app's IndexedDB (its stand-in in core/app-client.js; the browser refuses IndexedDB to an opaque page).
@@ -709,7 +743,7 @@
     },
     storageName,
     // For core/app-services.js only, always with the frame's own installed app id (never one the page names).
-    appStorage: Object.freeze({ load: id => ({ store: storeRead(id) }), save: storeApply }),
+    appStorage: Object.freeze({ load: id => { storeCarry(id); return { store: storeRead(id) }; }, save: storeApply }),
     // Likewise its IndexedDB (appIdb above): load, commit, drop and list, always for the frame's own installed app id.
     appIdb: Object.freeze({ load: idbLoad, commit: idbCommit, drop: idbDrop, list: idbList }),
     // For core/app-services.js net.fetch: whether a URL is an owner route on this origin (never fetched for an app).
