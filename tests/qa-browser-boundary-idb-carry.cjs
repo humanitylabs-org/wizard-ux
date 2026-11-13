@@ -105,7 +105,7 @@ const server = http.createServer((req, res) => {
     await new Promise((y, n) => {
       const r = indexedDB.open('tasks', 3);
       r.onupgradeneeded = () => { const s = r.result.createObjectStore('tasks', { keyPath: 'id', autoIncrement: true }); s.createIndex('by_due', 'due'); };
-      r.onsuccess = () => { const d = r.result, tx = d.transaction('tasks', 'readwrite'); tx.objectStore('tasks').put({ t: 'milk', due: 2 }); tx.objectStore('tasks').put({ t: 'bank', due: 1 }); tx.oncomplete = () => { d.close(); y(); }; tx.onerror = () => n(tx.error); };
+      r.onsuccess = () => { const d = r.result, tx = d.transaction('tasks', 'readwrite'); tx.objectStore('tasks').put({ t: 'milk', due: 2 }); tx.objectStore('tasks').put({ t: 'bank', due: 1 }); tx.objectStore('tasks').put({ t: 'gone', due: 9 }).onsuccess = e => tx.objectStore('tasks').delete(e.target.result); tx.oncomplete = () => { d.close(); y(); }; tx.onerror = () => n(tx.error); };
       r.onerror = () => n(r.error);
     });
     return show();
@@ -136,7 +136,7 @@ const server = http.createServer((req, res) => {
     const byDue = (await p(s.index('by_due').getAll())).map(x => x.t).join();
     d.close(); return { v: d.version, upgraded, key, byDue };
   }).catch(caught);
-  ok(tasks?.v === 3 && tasks.upgraded === false && tasks.key === 3 && tasks.byDue === 'bank,milk,call', 'its to-do list keeps version, index and key numbering: ' + JSON.stringify(tasks));
+  ok(tasks?.v === 3 && tasks.upgraded === false && tasks.key === 4 && tasks.byDue === 'bank,milk,call', 'its to-do list keeps version, index and key numbering (a new item gets 4, never the deleted 3 again): ' + JSON.stringify(tasks));
   const shared = await m2.evaluate(async () => (await localStore('all', undefined, 'shared-db')).length).catch(caught);
   ok(shared === 0, 'a database two apps opened goes to neither: ' + shared);
   const o2 = await open('other', 'o');
@@ -150,6 +150,16 @@ const server = http.createServer((req, res) => {
   const m3 = await frameOf('m');
   const after = await m3.evaluate(async () => (await localStore('all')).map(r => r.id).join()).catch(caught);
   ok(after === 'c1', 'a clip deleted after the copy stays deleted: ' + after);
+
+  // 4. The old database is left as it was: the boundary off again, its own key generator was not moved by the copy.
+  await page.goto(base + '/');
+  const m4 = await open('music', 'm');
+  const oldKey = await m4.evaluate(async () => {
+    const p = r => new Promise((y, n) => { r.onsuccess = () => y(r.result); r.onerror = () => n(r.error); });
+    const d = await p(indexedDB.open('tasks')), key = await p(d.transaction('tasks', 'readwrite').objectStore('tasks').put({ t: 'old', due: 5 }));
+    d.close(); return key;
+  }).catch(caught);
+  ok(oldKey === 4, 'the old database is untouched (its next key is still 4): ' + oldKey);
 
   ok(!errors.length, 'no page errors: ' + errors.join(' | '));
   await browser.close(); server.close();

@@ -576,7 +576,26 @@
             const [keys, vals] = await Promise.all([idbReq(os.getAllKeys()), idbReq(os.getAll())]);
             let next = 1;
             keys.forEach((k, j) => { ops.push({ o: 'put', s, k, v: vals[j] }); if (typeof k === 'number' && k >= next) next = Math.floor(k) + 1; });
-            if (os.autoIncrement && next > 1) ops.push({ o: 'next', s, n: next });
+            if (os.autoIncrement) ops.push({ o: 'next', s, n: next });
+          }
+          // The real key generator can be ahead of the highest key left (the newest records were deleted): ask it with
+          // one add per store in a transaction that is then aborted, which writes nothing and puts the generator back.
+          const auto = names.filter(s => ops.some(x => x.o === 'store' && x.s === s && x.autoIncrement));
+          if (auto.length) {
+            const gen = await new Promise(ok => {
+              const got = {}; let t;
+              try { t = old.transaction(auto, 'readwrite'); } catch (_) { return ok(got); }
+              t.onabort = () => ok(got); t.oncomplete = () => ok(got);
+              let left = auto.length;
+              for (const s of auto) {
+                try {
+                  const os = t.objectStore(s), q = os.add(os.keyPath === null ? 0 : {});
+                  q.onsuccess = () => { if (typeof q.result === 'number') got[s] = q.result; if (!--left) t.abort(); };
+                  q.onerror = e => { e.preventDefault(); if (!--left) t.abort(); };
+                } catch (_) { if (!--left) t.abort(); }
+              }
+            });
+            for (const x of ops) if (x.o === 'next' && Number.isSafeInteger(gen[x.s]) && gen[x.s] > x.n) x.n = gen[x.s];
           }
         }
       } finally { old.close(); }
