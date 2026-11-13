@@ -318,9 +318,47 @@
       idbWatched.add(f);
     } catch (_) {}
   }
+  /* Likewise its saved settings: which installed app writes which localStorage key from its same-origin window
+   * (`wos.app-ls-owners.v1`: { key: { app } }, app '' = more than one app wrote it). With the boundary on,
+   * core/browser-boundary.js copies a key once into the one app's own copy (wizard-os#133). Only names. The shell's own
+   * keys (LS_SHELL; the same rule is in browser-boundary.js) are never noted, even when an app page writes them. */
+  const LS_OWNERS = 'wos.app-ls-owners.v1', LS_OWNERS_MAX = 2048, lsNoted = new Set(), lsWatched = new WeakSet();
+  const LS_SHELL = /^(?:wos|wux\.|wz\.|wizard\.|wizard-pwa-install:|wizardapp\.)/i;
+  function noteLs(appId, key) {
+    if (typeof key !== 'string' || !key || key.length > 1024 || LS_SHELL.test(key) || lsNoted.has(appId + '\n' + key)) return;
+    let o = {}; try { o = JSON.parse(window.localStorage.getItem(LS_OWNERS) || '{}') || {}; } catch (_) { o = {}; }
+    if (typeof o !== 'object' || Array.isArray(o)) o = {};
+    const had = Object.prototype.hasOwnProperty.call(o, key) ? o[key] : null;
+    if (!had && Object.keys(o).length >= LS_OWNERS_MAX) return;
+    const app = !had || had.app === appId ? appId : '';
+    lsNoted.add(appId + '\n' + key);
+    if (had && had.app === app) return;
+    o[key] = { app };
+    try { window.localStorage.setItem(LS_OWNERS, JSON.stringify(o)); } catch (_) {}
+  }
+  // The page's localStorage.setItem notes the key (its own realm's Storage, so the shell's writes are never seen here).
+  function watchLs(st, source) {
+    try {
+      const proto = source.Storage?.prototype, set = proto?.setItem, ls = source.localStorage;
+      if (!proto || typeof set !== 'function' || lsWatched.has(proto)) return;
+      const appId = st.appId;
+      Object.defineProperty(proto, 'setItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) noteLs(appId, String(key)); } catch (_) {} return set.call(this, key, ...rest); } });
+      lsWatched.add(proto);
+    } catch (_) {}
+  }
+  // Named writes (localStorage.x = …) and writes before the page says hello: the shell hears them as storage events
+  // naming the page's address; noted only when exactly one verified same-origin app window holds that address.
+  window.addEventListener?.('storage', e => {
+    try {
+      if (!e || e.key == null || e.newValue == null || e.storageArea !== window.localStorage) return;
+      const u = new URL(e.url), ids = new Set();
+      for (const st of frames.values()) if (st.url.origin === ORIGIN && within(u, st.url) && valid(st)) ids.add(st.appId);
+      if (ids.size === 1) noteLs([...ids][0], e.key);
+    } catch (_) {}
+  });
   function connect(source, client) {
     const st = from(source); if (!valid(st)) return null;
-    watchIdb(st, source);
+    watchIdb(st, source); watchLs(st, source);
     const doc = source.document;
     if (st.doc && st.doc !== doc) reset(st);
     st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
