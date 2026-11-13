@@ -902,6 +902,24 @@ test('link.open: a window that is not verified, or a shell without its link shee
   assert.equal(g.call('link.open', { href: 'https://example.com/' }), false);
 });
 
+test('link.open with download: the shell saves the window\'s own file under the link\'s name, nothing outside the app path', () => {
+  const saved = [], followed = [];
+  const WizLinks = { download: (href, name) => { saved.push([href, name]); return true; }, follow: (frame, href) => { followed.push(href); return true; } };
+  const f = fixture({ win: { WizLinks } });
+  assert.equal(f.call('link.open', { href: 'clips/7/audio?t=x', download: true, name: 'my clip.webm', base: 'https://wizard.example/morning-report/day/' }), true);
+  assert.equal(f.call('link.open', { href: 'https://wizard.example/morning-report/export', download: true, name: '../a\\b/c\u0001.txt' }), true);
+  assert.equal(f.call('link.open', { href: 'https://wizard.example/morning-report/raw', download: true }), true);
+  assert.deepEqual(saved.map(x => [...x]), [
+    ['https://wizard.example/morning-report/day/clips/7/audio?t=x', 'my clip.webm'],
+    ['https://wizard.example/morning-report/export', '..abc.txt'],
+    ['https://wizard.example/morning-report/raw', '']]);
+  // Another app's file, an owner route, another site: never saved by the shell as a download of this app.
+  for (const href of ['https://wizard.example/other-app/file.webm', 'https://wizard.example/wizard/v1/apps', 'https://example.com/morning-report/x'])
+    assert.equal(f.call('link.open', { href, download: true, name: 'x' }), false, href);
+  assert.equal(saved.length, 3);
+  assert.equal(followed.length, 0);
+});
+
 // Slice 44: the shell's photo viewer and the app's navigation calls (WizardApp.media.view, WizardApp.nav.*).
 test('media.view: the window\'s own photos open in the shell viewer; another site, an owner route or a bad address is left out', () => {
   const opened = [];

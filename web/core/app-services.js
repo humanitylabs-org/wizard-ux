@@ -1551,6 +1551,13 @@
         let base = st.url; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
         let u; try { u = new URL(href, base); } catch (_) { return false; }
         if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
+        // A download link to the app's own file (the browser ignores `download` for an opaque page): saved by the shell,
+        // as for a same-origin app, only inside the window's own app path.
+        if (args?.download === true) {
+          if (!within(u, st.url) || window.WizBrowserBoundary?.ownerRoute?.(u.href)) return false;
+          const name = typeof args.name === 'string' ? args.name.replace(/[\\/\u0000-\u001f]/g, '').slice(0, 255) : '';
+          return window.WizLinks?.download ? window.WizLinks.download(u.href, name) === true : false;
+        }
         return window.WizLinks?.follow ? window.WizLinks.follow(st.frame, u.href, { browse: args?.browse === true }) === true : false;
       }
       // Sharing out: browser-boundary.js already checked a real tap in this visible window. The shell's own share

@@ -53,7 +53,7 @@
    * the shell (`link.open`), which opens it the way it does for a same-origin app: the link sheet, that app's window,
    * the owner's browser, the image viewer or a download. The shell takes it only right after a real tap in this
    * window, as a browser's pop-up rule. Registered before the saved-settings listener below, which leaves a link it took
-   * alone. Same-origin downloads stay the page's (the sandbox allows them). */
+   * alone. A download of the app's own file goes to the shell too (below). */
   if (opaque) (() => {
     const LEAVE = /^_(blank|top|parent)$/i, IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
     const url = href => { try { const u = new URL(String(href), document.baseURI || location.href); return /^https?:$/.test(u.protocol) ? u : null; } catch (_) { return null; } };
@@ -71,11 +71,18 @@
       return !!home && (!u.pathname.startsWith(home) || /%(?:2f|5c|2e|25)/i.test(u.pathname));
     };
     const hand = (u, browse) => { boundaryClient().then(c => c?.request('link.open', { href: u.href, browse }, 8000)).catch(() => {}); };
+    /* A download link to the app's own file (Music's Download clip): the page is opaque, so to the browser even this
+     * host is another origin, and it ignores `download` there: the file loaded into the window in place of the app.
+     * Such a tap goes to the shell (`link.open` with `download`), which saves the file the way it does for a
+     * same-origin app (WizLinks.download: the browser's own download, any size, redirects followed), under the link's
+     * name (empty: the browser picks it). */
+    const own = u => { const home = window.WizBoundaryClient?.home || ''; return u.origin === location.origin && (!home || (u.pathname.startsWith(home) && !/%(?:2f|5c|2e|25)/i.test(u.pathname))); };
+    const fetchDown = (u, name) => { boundaryClient().then(c => c?.request('link.open', { href: u.href, download: true, name: String(name || '').slice(0, 255) }, 8000)).catch(() => {}); };
     addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target?.closest?.('a[href], area[href]'); if (!a) return;
       const u = url(a.getAttribute('href')); if (!u) return;
-      if (a.hasAttribute('download') && u.origin === location.origin) return;
+      if (a.hasAttribute('download') && own(u)) { e.preventDefault(); e.stopPropagation(); fetchDown(u, a.getAttribute('download')); return; }
       // An in-page anchor stays the page's.
       if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search && u.hash && !pops(a.getAttribute('target'))) return;
       if (!leaves(u, a.getAttribute('target'))) return;
