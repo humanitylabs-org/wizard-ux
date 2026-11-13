@@ -183,7 +183,13 @@
   }, true);
   addEventListener('keyup', e => { if (channel && bareAlt(e)) sendKey('keyup', e, false, false); }, true);
   addEventListener('blur', () => { if (channel) send({ op: 'input', kind: 'blur' }); });
-  addEventListener('pointerdown', () => { if (channel) send({ op: 'input', kind: 'pointer' }); }, true);
+  // A tap gives this window focus, as it does without the boundary, also when the page keeps focus where it is
+  // (mousedown preventDefault on a toolbar button, e.g. Outline's Go Live): the shell takes a recording, share or
+  // link only after a tap in the focused window, and a tap that never focused it would be refused.
+  addEventListener('pointerdown', e => {
+    if (e.isTrusted && typeof document.hasFocus === 'function' && !document.hasFocus()) { try { focus(); } catch (_) {} }
+    if (channel) send({ op: 'input', kind: 'pointer' });
+  }, true);
   addEventListener('message', e => {
     const d = e.data;
     if (e.source !== parent || e.origin !== SHELL || !d || typeof d !== 'object' || d.type !== TYPE || d.version !== VERSION) return;
