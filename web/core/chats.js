@@ -3871,8 +3871,9 @@ window.WizCore.chats = function createChats(H) {
     }, { capture: true, passive: true });
     root.addEventListener('scroll', e => {
       if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
-      if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) { queueListPlace(id); if (typeof chanScrolled === 'function') chanScrolled(id, e.target); if (typeof paintFeedJump === 'function') paintFeedJump(id, e.target); } }
+      if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) { queueListPlace(id); if (typeof chanScrolled === 'function') chanScrolled(id, e.target); } }
       if (swipeOpen) closeSwipe(true);
+      if (typeof paintFeedJump === 'function' && e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) paintFeedJump(id, e.target); } // issue 1440: the feed's pills
       const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
     }, { capture: true, passive: true });
     // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
