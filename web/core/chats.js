@@ -272,8 +272,8 @@ window.WizCore.chats = function createChats(H) {
   const agoText = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   // Two chat-list layouts (18 Oct 2026). By day (default): Ready is today, then Yesterday and Past week.
   // By status (Miguel's): Working, Ready, Archive only, kept short by auto-archive. Chosen in the Filter sheet.
-  const SECTIONS_DAY = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['deferred', 'Snoozed'], ['archive', 'Archive']];
-  const SECTIONS_STATUS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['deferred', 'Snoozed'], ['archive', 'Archive']];
+  const SECTIONS_DAY = [['errors', 'Errors'], ['working', 'Working'], ['saved', 'Saved'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['deferred', 'Snoozed'], ['archive', 'Archive']];
+  const SECTIONS_STATUS = [['errors', 'Errors'], ['working', 'Working'], ['saved', 'Saved'], ['ready', 'Ready'], ['deferred', 'Snoozed'], ['archive', 'Archive']];
   const byStatus = () => LIVE.chatLayout === 'status';
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
   /* One persistent Focus (All / agent / owner-created Space), one temporary status chip and search text combine (AND).
@@ -283,7 +283,7 @@ window.WizCore.chats = function createChats(H) {
     unread: { label: 'Unread', syn: ['new', 'unseen', 'unread messages', 'unread chats', 'unread threads'], empty: 'All caught up. Nothing unread.', ids: ag => { const g = LIVE.groups(ag || ''); return new Set(g.needs.concat(g.ready).map(x => x.id)); } },
     needs: { label: 'Needs you', syn: ['needs me', 'need me', 'waiting on me', 'waiting', 'approval', 'approvals', 'approval needed', 'blocked'], empty: 'Nothing is waiting on you.', test: s => !window.WizChatsListModel.isListWorking(s) && !(snoozeLast() && deferredOf(s) && !isWorking(s)) && (['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')) },
     check: { label: 'Check', syn: ['qa', 'q a', 'test', 'to test', 'review', 'to review', 'your call', 'judge'], empty: 'Nothing to check right now.', test: s => !deferredOf(s) && attOf(s)?.state === 'check' },
-    working: { label: 'Working', syn: ['running', 'in progress', 'busy', 'active'], empty: 'Nothing is working right now.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).working || []).map(x => x.id)) },
+    working: { label: 'Working', syn: ['running', 'in progress', 'busy', 'active'], empty: 'Nothing is working right now.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).working || []).filter(x => !globalThis.WizReach?.restartHeld?.(x)).map(x => x.id)) }, // a send a restart holds is Saved (issue 1362)
     yesterday: { label: 'Yesterday', syn: ['from yesterday'], empty: 'Nothing from yesterday.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).yesterday || []).map(x => x.id)) },
     deferred: { label: 'Snoozed', syn: ['snooze', 'defer', 'deferred', 'later', 'boomerang', 'parked'], empty: 'Nothing snoozed.', test: s => deferredOf(s) || Boolean(BOOM()?.nextFor(s.id)) },
   };
@@ -1554,7 +1554,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
-  const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false };
+  const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
@@ -1586,8 +1586,9 @@ window.WizCore.chats = function createChats(H) {
     // attention/status intact so Restore (or a newer reply) recovers it, including approvals/errors.
     if (snoozeLast() && deferredOf(s) && !working) return 'deferred';
     const def = deferredOf(s) && !working && !needs, at = def ? null : attOf(s);
-    // A send queued while a graceful restart holds new sends (wizard/graceful-restart) is saved, not working yet.
-    return working ? (s.pend === 'waiting' ? 'offline' : s.status === 'queued' && globalThis.WizReach?.restart?.() ? 'held' : 'working') : s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    // A send a graceful restart holds (wizard/graceful-restart; WizReach.restartHeld: queued, on its way, or a 202 held
+    // for the restart) is saved, not working yet, also while the service is down for the restart itself.
+    return working ? (globalThis.WizReach?.restartHeld?.(s) ? 'held' : s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
   }
   const stiBadge = (s, cls = '') => { const k = stiKind(s); return `<span class="emo sti ${k}${cls}" title="${STI_TIP[k]}" aria-label="${STI_TIP[k]}">${STI[k]}</span>`; };
   // Loading placeholders: quiet rows/bubbles shaped like the real ones, with a soft shimmer.
@@ -1823,6 +1824,7 @@ window.WizCore.chats = function createChats(H) {
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
   function workLabel(s) {
     if (s?.status === 'queued' && s.queueReason === 'provider_access') return 'AI could not start';
+    if (globalThis.WizReach?.restartHeld?.(s)) return 'Saved · sends after Wizard restarts'; // wizard-ux issue 1362
     if (s.pend && PEND_LABEL[s.pend]) return PEND_LABEL[s.pend];
     return s.status === 'stopping' ? 'Stopping…' : window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working');
   }
@@ -2501,7 +2503,10 @@ window.WizCore.chats = function createChats(H) {
     // The one sort is a compact menu on Ready's header line (wizard-ux issue 1354), like the AI apps sidebar's: no pill row.
     const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort Ready">${ACT_SORTS().map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
     const older = g.older ? `<button class="ch-more ch-act-older" data-chactolder>Show older · ${g.older}</button>` : '';
-    return sec('working', 'Working', g.working.length, () => g.working.length ? g.working.map(s => chatRow(s, null)).join('') : '<span class="ch-none">None</span>')
+    // Sends a graceful restart holds: their own Saved heading, only while there are any (wizard-ux issue 1362).
+    const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s), saved = g.working.filter(heldRow), working = g.working.filter(s => !heldRow(s));
+    return sec('working', 'Working', working.length, () => working.length ? working.map(s => chatRow(s, null)).join('') : '<span class="ch-none">None</span>')
+      + (saved.length ? sec('saved', 'Saved', saved.length, () => saved.map(s => chatRow(s, null)).join(''), secOpen.saved !== false) : '')
       + sec('ready', 'Ready', ready.length, () => ready.length ? page('ready', ready) : '<span class="ch-none">Nothing needs you.</span>', !!secOpen.ready, sortSel)
       + sec('recent', 'Recent', 0, () => (recent.length ? page('recent', recent) : '<span class="ch-none">Nothing else this week.</span>') + older)
       + sec('snoozed', 'Snoozed', g.snoozed.length, () => g.snoozed.length ? page('snoozed', g.snoozed.map(v => ({ id: v.id, v }))) : '<span class="ch-none">Nothing snoozed.</span>')
@@ -2576,10 +2581,13 @@ window.WizCore.chats = function createChats(H) {
     // decide which rows are eligible first.
     const split = n ? { pinned: [], rest: hit } : PIN.partition(hit, s => !s.archived && !(snoozeLast() && deferredOf(s))), pinnedRows = split.pinned;
     const groups = LIVE.workGroups(split.rest);
+    // Sends a graceful restart holds get their own Saved heading, never counted as Working (wizard-ux issue 1362).
+    const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s);
+    if (groups.working?.some(heldRow)) { groups.saved = groups.working.filter(heldRow); groups.working = groups.working.filter(s => !heldRow(s)); }
     // SEARCH_RELEVANCE (chat-search.js): coverage → relevance × bounded recency; Archive/pins are neutral.
     const ranked = n ? BS.rank(hit, n, LIVE.cardAt, snips) : [];
     // Reuse groupWork's classification (including automatic Archive and snooze), not a second status policy.
-    const searchLabels = { errors: 'Error', working: 'Working', ready: 'Ready', yesterday: 'Ready', pastWeek: 'Ready', deferred: 'Snoozed', archive: 'Archive' };
+    const searchLabels = { errors: 'Error', working: 'Working', saved: 'Saved', ready: 'Ready', yesterday: 'Ready', pastWeek: 'Ready', deferred: 'Snoozed', archive: 'Archive' };
     const searchStatus = new Map(n ? Object.entries(groups).flatMap(([k, rows]) => rows.map(s => [s.id, k !== 'archive' && deferredOf(s) && !isWorking(s) ? 'Snoozed' : searchLabels[k]])) : []);
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
@@ -2629,14 +2637,14 @@ window.WizCore.chats = function createChats(H) {
     else body = (filtered ? '' : draftSec)
       + (pinnedRows.length ? `<section class="ch-sec ch-pinned open" data-sec="pinned"><div class="ch-sec-h static"><span>Pinned</span><small>${pinnedRows.length}</small></div><div class="ch-sec-b">${pinnedRows.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
       + (byStatus() ? SECTIONS_STATUS : SECTIONS_DAY).map(([k, label]) => {
-      const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
+      const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k] || [];
       // Ready's order is chosen before paging, so Priority never pages a needs-you row out of the first page.
       const dayOrdered = !n && (k === 'ready' || (!byStatus() && (k === 'yesterday' || k === 'pastWeek')));
       const list = k === 'working' ? workingOrdered(list0) : dayOrdered ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
       const nt = k === 'ready' ? listNotes : null, notesN = nt ? nt.awake.length + nt.later.length : 0;
-      if (!list.length && !extra.n && (k === 'errors' || k === 'deferred' || k === 'yesterday' || k === 'pastWeek' || n || filtered) && !notesN) return '';
+      if (!list.length && !extra.n && (k === 'errors' || k === 'saved' || k === 'deferred' || k === 'yesterday' || k === 'pastWeek' || n || filtered) && !notesN) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n ? true : secOpen[k];
       // Counts are unread only (James, 8 Nov 2026): a finished thread already read adds nothing, so Ready is never an inventory.
@@ -2933,7 +2941,8 @@ window.WizCore.chats = function createChats(H) {
     if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
-    const live = last && working;
+    // A send a graceful restart holds is not live work: no Working timer under it (renderThread sets c.restartHeld).
+    const live = last && working && !c.restartHeld;
     const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
@@ -3561,7 +3570,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function threadState(s, agent) {
     const working = isWorking(s);
-    const sub = !s ? '' : s.status === 'queued' && s.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : s.archived ? 'Archived' : snoozeLast() && stiKind(s) === 'deferred' ? 'Snoozed' : s.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s.status === 'stopping' ? 'Stopping…' : working && s.status === 'queued' && globalThis.WizReach?.restart?.() ? 'Saved · sends after Wizard restarts' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(agent)}` : `${agentName(agent)} is working`)) : s.status === 'waiting_for_approval' ? 'Waiting for your response' : s.deferred ? 'Snoozed' : `Updated ${ago(s.lastAssistantAt || s.updatedAt)}`;
+    const sub = !s ? '' : s.status === 'queued' && s.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : s.archived ? 'Archived' : snoozeLast() && stiKind(s) === 'deferred' ? 'Snoozed' : s.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s.status === 'stopping' ? 'Stopping…' : working && globalThis.WizReach?.restartHeld?.(s) ? 'Saved · sends after Wizard restarts' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(agent)}` : `${agentName(agent)} is working`)) : s.status === 'waiting_for_approval' ? 'Waiting for your response' : s.deferred ? 'Snoozed' : `Updated ${ago(s.lastAssistantAt || s.updatedAt)}`;
     return { working, sub };
   }
   function renderThread(w, el, keep) {
@@ -3574,7 +3583,7 @@ window.WizCore.chats = function createChats(H) {
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
     const incognitoAction = isNew && INC && window.WizCore.incognitoOptIn?.enabled(agentRec(TAG)) ? '<button type="button" class="pbtn ch-incog-toggle" role="switch" aria-checked="false" data-incog-start aria-label="Incognito"><span>Incognito</span><span class="sw" aria-hidden="true"><i></i></span></button>' : '';
     const privTag = !winAgent(w) && TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
-    const state = threadState(s, TAG), working = state.working;
+    const state = threadState(s, TAG), working = state.working, held = working && !!globalThis.WizReach?.restartHeld?.(s);
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
     const storedTurns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
     const turns = storedTurns && reconcileSent(storedTurns, OUTBOX ? OUTBOX.forThread(w.thread) : [], s);
@@ -3623,6 +3632,7 @@ window.WizCore.chats = function createChats(H) {
       const rnHtml = r => `<div class="ch-renamed"><span>${r.by === 'you' ? 'You renamed this from' : 'Renamed from'} “${esc(r.from)}”</span></div>`;
       const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
       const need = typeof needsMark === 'function' && !isNew && s ? needsMark(w.id, w.thread, s, shown) : { k: -1, html: '' }; // issue 1331
+      c.restartHeld = held; // turnHtml: a held send's last turn is not live (wizard-ux issue 1362)
       msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
         + shown.map((tn, k, arr) => {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
@@ -3635,6 +3645,8 @@ window.WizCore.chats = function createChats(H) {
           : (!runErr && s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : ''))
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c, s)).join('')
+        // A send a graceful restart holds: one quiet saved line, never a Working timer (wizard-ux issue 1362).
+        + (held ? `<div class="ch-held-line" role="status" data-restart-held>${STI.held}<span>Saved · sends after Wizard restarts</span></div>` : '')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
     msgs += syncStream(w, c, turns, TAG);

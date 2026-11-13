@@ -23,18 +23,19 @@ function el(tag = 'div') {
     querySelector(sel) { return sel === '[data-restart-notice]' ? this.children.find(c => 'restartNotice' in c.dataset) || null : null; } };
   return node;
 }
-function reach({ on = true, health, post, rows, live = {}, model, observe = false } = {}) {
+function reach({ on = true, health, post, rows, live = {}, model, observe = false, body = {}, extra = {} } = {}) {
   let now = 1_800_000_000_000;
   const calls = [], hosts = [el('form')], timers = [];
   const dataset = { shell: 'phone', tweaks: on ? 'wizard/chat-channels ' + SWITCH : 'wizard/chat-channels' };
   const listeners = {}, observers = [];
-  const document = { documentElement: { dataset, ...(observe ? { nodeType: 1 } : {}) }, hidden: false, body: {},
+  const document = { documentElement: { dataset, ...(observe ? { nodeType: 1 } : {}) }, hidden: false, body,
     querySelectorAll: sel => sel === '[data-restart-notice]' ? hosts.flatMap(h => h.children.filter(c => 'restartNotice' in c.dataset)) : [],
     createElement: tag => el(tag), addEventListener() {} };
   const ctx = { document, navigator: { onLine: true }, location: { hostname: 'wizard.example.com' }, Event, AbortController,
     Date: { now: () => now }, dispatchEvent() {}, console,
     addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
-    ...(observe ? { MutationObserver: class { constructor(fn) { this.fn = fn; } observe(target, opts) { observers.push({ fn: this.fn, target, opts }); } } } : {}),
+    ...(observe ? { MutationObserver: class { constructor(fn) { this.fn = fn; } observe(target, opts) { observers.push({ fn: this.fn, target, opts }); } disconnect() {} } } : {}),
+    ...extra,
     ...(model ? { WizChatsListModel: model } : {}),
     setTimeout(fn, ms) { timers.push(ms); return timers.length; }, clearTimeout() {},
     fetch: async (url, init = {}) => {
@@ -193,10 +194,10 @@ test('Restart now shows as restarting now once the gate carries the choice', asy
 });
 
 // The list: a send queued while a hold is on is saved, not Working. Real chats.js lines, sliced.
-function rowRule(restart) {
+function rowRule(restart, restartHeld = s => !!restart && ['queued', 'submitting'].includes(s.status)) {
   const line = t => { const i = chats.indexOf('\n  ' + t); assert.ok(i >= 0, t); return chats.slice(i + 1, chats.indexOf('\n', i + 1)); };
   const block = (a, b) => { const i = chats.indexOf('\n  ' + a); assert.ok(i >= 0, a); const j = chats.indexOf('\n  ' + b, i); assert.ok(j > i, b); return chats.slice(i + 1, j); };
-  const c = vm.createContext({ WizReach: { restart: () => restart }, snoozeLast: () => false, handledNow: () => false });
+  const c = vm.createContext({ WizReach: { restart: () => restart, restartHeld }, snoozeLast: () => false, handledNow: () => false });
   c.globalThis = c;
   vm.runInContext([line('const WORKING_ST ='), line('const isWorking ='), line('const ATT ='), line('const deferredOf ='), line('const attOf ='), line('const STI_TIP ='),
     block('function stiKind(s)', 'const stiBadge ='), 'this.kind = stiKind; this.tip = STI_TIP;'].join('\n'), c);
@@ -210,7 +211,7 @@ test('a send held by the restart is Saved, not Working; nothing changes without 
   assert.equal(on.kind(running), 'working'); // a chat that really runs still says so
   assert.equal(off.kind(queued), 'working');
   assert.match(chats, /held: svg\(/);
-  assert.match(chats, /working && s\.status === 'queued' && globalThis\.WizReach\?\.restart\?\.\(\) \? 'Saved · sends after Wizard restarts'/);
+  assert.match(chats, /working && globalThis\.WizReach\?\.restartHeld\?\.\(s\) \? 'Saved · sends after Wizard restarts'/);
 });
 
 // The outbox: a send that hits the seconds the service is down is retried soon, with the same Idempotency-Key.
@@ -271,6 +272,7 @@ test('a send that hits the restart waits a few seconds, not minutes, and lands o
   assert.ok(waiting.nextAt - Date.now() <= 3000, 'retried within 3 s during a restart'); // without it: 30 s (BACKOFF[3])
   const sent = await until(() => page.api.get(id)?.state === 'sent' && page.api.get(id));
   assert.equal(sent.runId, 'wizardq_after_restart');
+  assert.equal(sent.restartPending, undefined, 'a plain 202 (no restart reason) is not marked held');
   const runs = f.calls.filter(c => c.path === '/wizard/hermes/v1/runs');
   assert.equal(runs.length, 2);
   assert.deepEqual(runs.map(c => c.key), [id, id]); // the service dedupes by this key: never sent twice
@@ -342,4 +344,164 @@ test('the switch is listed in the catalog, off by default', () => {
   assert.ok(!catalog.defaults.includes(SWITCH));
   const manifest = JSON.parse(read('tweaks/wizard/graceful-restart/manifest.json'));
   assert.equal(manifest.id, SWITCH);
+});
+
+/* Re-review (12 Nov): a message sent during the hold still showed Working in its thread ("Working · 1s … 29s"), a new
+ * chat showed the working spinner (its row stays `submitting` from the outbox), and the Chats list put both under
+ * Working. One rule now decides "held" (WizReach.restartHeld) for the thread, its header, the list and the note. */
+const heldRows = {
+  queued: { id: 'q', status: 'queued' },                                       // the box holds it (202 queued)
+  newChat: { id: 'n', status: 'submitting', synthetic: true },                 // a new chat the outbox has not landed
+  sentHeld: { id: 'r', status: 'running', orig: { status: 'completed' }, restartPending: true }, // this device's 202 restart_pending
+};
+const notHeld = {
+  running: { id: 'a', status: 'running' },
+  justSent: { id: 'b', status: 'running', orig: { status: 'completed' } },     // accepted before the hold: really runs
+  followUp: { id: 'c', status: 'running', orig: { status: 'running' }, restartPending: true },
+  stopping: { id: 'd', status: 'stopping' },
+  helper: { id: 'e', status: 'queued', helperStatus: { phase: 'running', pending: 1 } },
+  background: { id: 'f', status: 'queued', background: 'helper' },
+  signIn: { id: 'g', status: 'queued', queueReason: 'provider_access' },
+  archived: { id: 'h', status: 'queued', archived: true },
+  done: { id: 'i', status: 'completed' },
+};
+test('restartHeld: queued, a new chat on its way and a 202 held for the restart are saved; real runs are not', async () => {
+  const h = reach({ health: () => holding() });
+  await h.settle(); await h.settle();
+  for (const [k, s] of Object.entries(heldRows)) assert.equal(h.api.restartHeld(s), true, k);
+  for (const [k, s] of Object.entries(notHeld)) assert.equal(h.api.restartHeld(s), false, k);
+  const off = reach({ on: false, health: () => holding() });
+  await off.settle();
+  for (const [k, s] of Object.entries(heldRows)) assert.equal(off.api.restartHeld(s), false, 'switch off: ' + k);
+  const none = reach({ health: () => ok({ status: 'ok' }) });
+  await none.settle(); await none.settle();
+  for (const [k, s] of Object.entries(heldRows)) assert.equal(none.api.restartHeld(s), false, 'no restart: ' + k);
+});
+test('the row icon, header and list label use the one rule: a new chat and a held reply are Saved, not Working', async () => {
+  const h = reach({ health: () => holding() });
+  await h.settle(); await h.settle();
+  const on = rowRule({ phase: 'waiting' }, h.api.restartHeld);
+  for (const [k, s] of Object.entries(heldRows)) assert.equal(on.kind(s), 'held', k);
+  assert.equal(on.kind(notHeld.running), 'working');
+  assert.equal(on.kind(notHeld.justSent), 'working');
+  // While the service is down for the restart, a waiting send is saved too, not "Offline · will retry".
+  assert.equal(on.kind({ ...heldRows.newChat, pend: 'waiting' }), 'held');
+  assert.equal(rowRule(null, () => false).kind({ ...heldRows.newChat, pend: 'waiting' }), 'offline');
+  assert.match(chats, /if \(globalThis\.WizReach\?\.restartHeld\?\.\(s\)\) return 'Saved · sends after Wizard restarts';/);
+});
+test('the open thread draws no Working timer for a held send: its last turn is not live, one quiet saved line', () => {
+  assert.match(chats, /const state = threadState\(s, TAG\), working = state\.working, held = working && !!globalThis\.WizReach\?\.restartHeld\?\.\(s\);/);
+  assert.match(chats, /c\.restartHeld = held;/);
+  // The real turnHtml: the last turn of a working thread is live (Working line) unless the restart holds its send.
+  const i = chats.indexOf('\n  function turnHtml('), j = chats.indexOf('\n  }\n', i);
+  const ctx = vm.createContext({ PW: { workHtml: (c, tn, live) => live ? '<details class="steps live">Working · 3s</details>' : '' }, esc: String, md: String, clip: String,
+    replyCard: () => '', userMedia: () => '', timeTag: () => '', quoteBtn: () => '', msgIds: () => '', noteHtml: () => '', runContextHtml: () => '', window: { WizConfig: { agent: () => 'Wizard' } } });
+  vm.runInContext(chats.slice(i, j + 4) + '\nthis.turnHtml = turnHtml;', ctx);
+  const tn = { u: { text: 'Add sandwiches', at: 1 }, a: null, media: [], notes: [], steers: [] };
+  assert.match(ctx.turnHtml({ texts: [], media: [] }, tn, true, true), /Working · 3s/);
+  assert.doesNotMatch(ctx.turnHtml({ texts: [], media: [], restartHeld: true }, tn, true, true), /Working/);
+  assert.match(chats, /\(held \? `<div class="ch-held-line" role="status" data-restart-held>\$\{STI\.held\}<span>Saved · sends after Wizard restarts<\/span><\/div>` : ''\)/);
+  assert.match(read('tweaks/wizard/graceful-restart/tweak.css'), /html\[data-tweaks~="wizard\/graceful-restart"\] \.ch-held-line \{/);
+});
+test('Chats list: held sends sit under their own Saved heading, never counted under Working', async () => {
+  const { listFixture, sectionKeys } = await import('./fixtures/chats-list-render.mjs');
+  const rows = [{ id: 'live', title: 'Long research', section: 'working', status: 'running' },
+    { id: 'held1', title: 'Add sandwiches', section: 'working', status: 'queued' },
+    { id: 'held2', title: 'New chat', section: 'working', status: 'submitting' },
+    { id: 'r', title: 'Weekend', section: 'ready', status: 'completed' }];
+  const held = s => ['held1', 'held2'].includes(s.id);
+  for (const status of [false, true]) {
+    const on = listFixture({ status, inputRows: rows, reach: { restartHeld: held } }).render('');
+    assert.deepEqual(sectionKeys(on).slice(0, 3), ['working', 'saved', 'ready'], 'by status: ' + status);
+    const sec = k => on.slice(on.indexOf(`data-sec="${k}"`), on.indexOf('</section>', on.indexOf(`data-sec="${k}"`)));
+    assert.match(sec('working'), /<small>1<\/small>/);
+    assert.match(sec('working'), /data-chopen="live"/);
+    assert.doesNotMatch(sec('working'), /held1|held2/);
+    assert.match(sec('saved'), /<span>Saved<\/span><small>2<\/small>/);
+    // Without a restart (or with the switch off) nothing moves: no Saved heading.
+    const off = listFixture({ status, inputRows: rows, reach: { restartHeld: () => false } }).render('');
+    assert.ok(!sectionKeys(off).includes('saved'));
+    assert.match(off.slice(off.indexOf('data-sec="working"')), /<small>3<\/small>/);
+  }
+});
+test('AI apps sidebar lists: held rows move to `saved` (kind saved, no spinner mark); the key exists only then', async () => {
+  const { modelContext } = await import('./fixtures/chats-list-model.mjs');
+  const c = modelContext({}); const M = c.WizChatsListModel;
+  const groups = { working: [{ id: 'live', title: 'Long', status: 'running' }, { id: 'held', title: 'Add sandwiches', status: 'queued' }], ready: [], archive: [] };
+  const facts = held => ({ live: { isNew: () => false, cardAt: () => '', readyRank: () => 5 }, chats: { stiKind: s => held.includes(s.id) ? 'held' : 'working', threadActions: () => [] } });
+  const l = M.sessionList(groups, facts(['held']));
+  assert.deepEqual(l.working.map(r => r.id), ['live']);
+  assert.deepEqual(l.saved.map(r => [r.id, r.kind]), [['held', 'saved']]);
+  const a = M.activityList(groups, facts(['held']));
+  assert.deepEqual(a.working.map(r => [r.id, r.mark]), [['live', 'working']]);
+  assert.deepEqual(a.saved.map(r => [r.id, r.kind, r.mark]), [['held', 'saved', '']]);
+  assert.equal('saved' in M.sessionList(groups, facts([])), false);
+  assert.equal('saved' in M.activityList(groups, facts([])), false);
+  const desk = read('layouts/ai-apps/desktop.js');
+  assert.match(desk, /function savedSec\(rows, cur\)/);
+  assert.equal((desk.match(/out\.push\(\.\.\.savedSec\(s\.saved, h\.thread\)\)/g) || []).length, 2, 'Activity and the stock sidebar both draw it');
+  // Its search and titles find a held chat too (Codex P2): the sidebar's search lists include `saved`.
+  assert.match(desk, /const LKINDS = \[\.\.\.KINDS, 'recent', 'saved'\];/);
+  // The Working filter (Chats' status filter) leaves held sends out, as the Working heading does (Codex P2).
+  assert.match(chats, /working: \{ label: 'Working',[^\n]*\.working \|\| \[\]\)\.filter\(x => !globalThis\.WizReach\?\.restartHeld\?\.\(x\)\)/);
+});
+// Main and every routed kind (host-profile, container, restricted): the same 202 restart_pending receipt from that
+// agent's own ?agent= route marks the send, live.js carries it to that agent's own row, and the row reads as saved.
+for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box', 'container'], ['locked', 'restricted']]) {
+  test(`${kind}: a 202 the box holds for the restart is marked on the send and carried to the row as saved`, async t => {
+    const calls = [];
+    const server = createServer(async (req, res) => {
+      for await (const _ of req) { /* drain */ }
+      calls.push(req.url);
+      res.writeHead(202, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ run_id: 'wizardq_held', status: 'queued', queue_reason: 'restart_pending' }));
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); });
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const rows = new Map([typed(agent ? { agent } : {})]); const [id] = [...rows.keys()];
+    const page = outbox(origin, rows, { phase: 'waiting' }); t.after(page.close);
+    await page.api.load();
+    const sent = await until(() => page.api.get(id)?.state === 'sent' && page.api.get(id));
+    assert.equal(sent.runId, 'wizardq_held');
+    assert.equal(sent.restartPending, true);
+    assert.equal(calls[0].split('?')[0], '/wizard/hermes/v1/runs');
+    assert.equal(new URL(calls[0], origin).searchParams.get('agent') || '', agent, 'sent on that agent\'s own route');
+    // live.js PEND: the held flag rides on that agent's row while the send is held, and goes when the hold releases.
+    const live = read('live.js');
+    const start = live.indexOf('  const PEND = new Map()'), end = live.indexOf('  const commandId =', start);
+    const { runWithChatsModel } = await import('./fixtures/chats-list-model.mjs');
+    const row = { id: 'wizard_mid', status: 'completed' };
+    const L = agent ? { sessions: [{ id: 'wizard_mid', status: 'completed' }], agentSessions: { [agent]: [row] } } : { sessions: [row], agentSessions: {} };
+    const OB = { _items: new Map([[id, sent]]) };
+    const c = { L, OB, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => !!a && a !== 'hermes', AGENT_OF: new Map(), Date };
+    runWithChatsModel(live.slice(start, end) + '\nthis.api = { syncPending, applyPend, PEND };', c);
+    c.api.syncPending(OB);
+    assert.equal(row.status, 'running'); // this device's Starting… overlay on that agent's own row
+    assert.equal(row.restartPending, true);
+    const h = reach({ health: () => holding() }); await h.settle(); await h.settle();
+    assert.equal(h.api.restartHeld(row), true);
+    assert.equal(rowRule({ phase: 'waiting' }, h.api.restartHeld).kind(row), 'held');
+    // The box's next read lists it queued: still held, by the box's own word.
+    OB._items.set(id, { ...sent, restartPending: undefined }); c.api.syncPending(OB);
+    assert.equal(row.restartPending, undefined);
+    assert.equal(h.api.restartHeld({ ...row, status: 'queued', orig: { status: 'queued' } }), true);
+  });
+}
+test('the restart note survives a repaint of the message box: put back at once while a restart is known', async () => {
+  let painted = 0; const compose = { getClientRects: () => [1], querySelector: () => null };
+  const r = reach({ health: () => holding(), observe: true, body: { nodeType: 1 }, extra: { WosOutbox: { paintNotice: () => { painted++; } } } });
+  r.ctx.document.querySelectorAll = sel => sel === '.ch-compose' ? [compose] : [];
+  await r.settle(); await r.settle();
+  const keep = r.observers.find(o => o.target === r.ctx.document.body);
+  assert.ok(keep, 'watching the page while a restart is known');
+  assert.deepEqual({ ...keep.opts }, { childList: true, subtree: true });
+  const before = painted; keep.fn([]);
+  assert.equal(painted, before + 1, 'a box that lost the note gets it back');
+  compose.querySelector = () => ({}); keep.fn([]);
+  assert.equal(painted, before + 1, 'nothing to do when the note is there');
+  // No restart known: nothing watches the page.
+  const idle = reach({ health: () => ok({ status: 'ok' }), observe: true, body: { nodeType: 1 } });
+  await idle.settle(); await idle.settle();
+  assert.equal(idle.observers.some(o => o.target === idle.ctx.document.body), false);
 });

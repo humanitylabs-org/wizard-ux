@@ -155,8 +155,17 @@ function sessionList(groups, facts) {
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
   const ready = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || [])];
   const rows = (list, kind) => list.map(s => sessionRow(s, kind, facts));
-  return { working: rows(groups.working || [], 'working'), ready: rows(ready.filter(s => !snoozed(s)), 'ready'),
-    snoozed: rows([...(groups.deferred || []), ...ready.filter(snoozed)], 'snoozed'), archive: rows((groups.archive || []).slice(0, 200), 'archive') };
+  return splitSaved({ working: rows(groups.working || [], 'working'), ready: rows(ready.filter(s => !snoozed(s)), 'ready'),
+    snoozed: rows([...(groups.deferred || []), ...ready.filter(snoozed)], 'snoozed'), archive: rows((groups.archive || []).slice(0, 200), 'archive') });
+}
+/** Sends a graceful restart holds (row state 'held', chats.stiKind; wizard-ux issue 1362) leave Working for their own
+ * `saved` list, as rows of kind 'saved' with no working marker. The key exists only while there are any. Pure. */
+function splitSaved(o) {
+  const held = (o.working || []).filter(r => r.state === 'held');
+  if (!held.length) return o;
+  o.working = o.working.filter(r => r.state !== 'held');
+  o.saved = held.map(r => ({ ...r, kind: 'saved', ...(r.mark === 'working' ? { mark: '' } : {}) }));
+  return o;
 }
 /** Raw session rank also used by WizLive's public compatibility helpers. */
 function sessionRank(s, { approval = ['waiting_for_approval', 'unknown'].includes(s.status), snoozeLast = false, failed = false } = {}) {
@@ -234,8 +243,8 @@ function activityList(groups, facts, opts = {}) {
   const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
   const g = activityGroups(groups, { needs, unread, at }, opts); if (!g) return null;
   const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }) }));
-  return { working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
-    snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') };
+  return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
+    snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') });
 }
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */

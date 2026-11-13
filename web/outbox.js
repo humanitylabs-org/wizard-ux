@@ -597,12 +597,15 @@
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
     if (!runId) throw new HttpError(502, 'Wizard returned no send receipt');
-    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null });
+    // A 202 the box holds for a graceful restart (queue_reason restart_pending, wizard/graceful-restart): saved there,
+    // not running yet. The thread then says so (live.js PEND -> s.restartPending), never Starting… or Working.
+    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null, restartPending: run.status === 'queued' && run.queue_reason === 'restart_pending' });
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
     delete it.useServerCopy;
     Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
+    if (res.restartPending) it.restartPending = true; else delete it.restartPending;
     delete it.audio; delete it.pendingBlobs;
     await put(it);
     admitting.delete(it.id);
