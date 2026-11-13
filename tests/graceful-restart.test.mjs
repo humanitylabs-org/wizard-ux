@@ -272,6 +272,7 @@ test('a send that hits the restart waits a few seconds, not minutes, and lands o
   assert.ok(waiting.nextAt - Date.now() <= 3000, 'retried within 3 s during a restart'); // without it: 30 s (BACKOFF[3])
   const sent = await until(() => page.api.get(id)?.state === 'sent' && page.api.get(id));
   assert.equal(sent.runId, 'wizardq_after_restart');
+  assert.equal(sent.restartPending, undefined, 'a plain 202 (no restart reason) is not marked held');
   const runs = f.calls.filter(c => c.path === '/wizard/hermes/v1/runs');
   assert.equal(runs.length, 2);
   assert.deepEqual(runs.map(c => c.key), [id, id]); // the service dedupes by this key: never sent twice
@@ -439,45 +440,54 @@ test('AI apps sidebar lists: held rows move to `saved` (kind saved, no spinner m
   const desk = read('layouts/ai-apps/desktop.js');
   assert.match(desk, /function savedSec\(rows, cur\)/);
   assert.equal((desk.match(/out\.push\(\.\.\.savedSec\(s\.saved, h\.thread\)\)/g) || []).length, 2, 'Activity and the stock sidebar both draw it');
+  // Its search and titles find a held chat too (Codex P2): the sidebar's search lists include `saved`.
+  assert.match(desk, /const LKINDS = \[\.\.\.KINDS, 'recent', 'saved'\];/);
+  // The Working filter (Chats' status filter) leaves held sends out, as the Working heading does (Codex P2).
+  assert.match(chats, /working: \{ label: 'Working',[^\n]*\.working \|\| \[\]\)\.filter\(x => !globalThis\.WizReach\?\.restartHeld\?\.\(x\)\)/);
 });
-test('a 202 the box holds for the restart is marked on the outbox item; live.js carries it to the row', async t => {
-  const calls = [];
-  const server = createServer(async (req, res) => {
-    for await (const _ of req) { /* drain */ }
-    calls.push(req.url);
-    res.writeHead(202, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(req.url.includes('agent=') || calls.length > 1 ? { run_id: 'wizardq_ran', status: 'queued' } : { run_id: 'wizardq_held', status: 'queued', queue_reason: 'restart_pending' }));
+// Main and every routed kind (host-profile, container, restricted): the same 202 restart_pending receipt from that
+// agent's own ?agent= route marks the send, live.js carries it to that agent's own row, and the row reads as saved.
+for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box', 'container'], ['locked', 'restricted']]) {
+  test(`${kind}: a 202 the box holds for the restart is marked on the send and carried to the row as saved`, async t => {
+    const calls = [];
+    const server = createServer(async (req, res) => {
+      for await (const _ of req) { /* drain */ }
+      calls.push(req.url);
+      res.writeHead(202, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ run_id: 'wizardq_held', status: 'queued', queue_reason: 'restart_pending' }));
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); });
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const rows = new Map([typed(agent ? { agent } : {})]); const [id] = [...rows.keys()];
+    const page = outbox(origin, rows, { phase: 'waiting' }); t.after(page.close);
+    await page.api.load();
+    const sent = await until(() => page.api.get(id)?.state === 'sent' && page.api.get(id));
+    assert.equal(sent.runId, 'wizardq_held');
+    assert.equal(sent.restartPending, true);
+    assert.equal(calls[0].split('?')[0], '/wizard/hermes/v1/runs');
+    assert.equal(new URL(calls[0], origin).searchParams.get('agent') || '', agent, 'sent on that agent\'s own route');
+    // live.js PEND: the held flag rides on that agent's row while the send is held, and goes when the hold releases.
+    const live = read('live.js');
+    const start = live.indexOf('  const PEND = new Map()'), end = live.indexOf('  const commandId =', start);
+    const { runWithChatsModel } = await import('./fixtures/chats-list-model.mjs');
+    const row = { id: 'wizard_mid', status: 'completed' };
+    const L = agent ? { sessions: [{ id: 'wizard_mid', status: 'completed' }], agentSessions: { [agent]: [row] } } : { sessions: [row], agentSessions: {} };
+    const OB = { _items: new Map([[id, sent]]) };
+    const c = { L, OB, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => !!a && a !== 'hermes', AGENT_OF: new Map(), Date };
+    runWithChatsModel(live.slice(start, end) + '\nthis.api = { syncPending, applyPend, PEND };', c);
+    c.api.syncPending(OB);
+    assert.equal(row.status, 'running'); // this device's Starting… overlay on that agent's own row
+    assert.equal(row.restartPending, true);
+    const h = reach({ health: () => holding() }); await h.settle(); await h.settle();
+    assert.equal(h.api.restartHeld(row), true);
+    assert.equal(rowRule({ phase: 'waiting' }, h.api.restartHeld).kind(row), 'held');
+    // The box's next read lists it queued: still held, by the box's own word.
+    OB._items.set(id, { ...sent, restartPending: undefined }); c.api.syncPending(OB);
+    assert.equal(row.restartPending, undefined);
+    assert.equal(h.api.restartHeld({ ...row, status: 'queued', orig: { status: 'queued' } }), true);
   });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); });
-  const origin = `http://127.0.0.1:${server.address().port}`;
-  const rows = new Map([typed()]); const [id] = [...rows.keys()];
-  const page = outbox(origin, rows, { phase: 'waiting' }); t.after(page.close);
-  await page.api.load();
-  const sent = await until(() => page.api.get(id)?.state === 'sent' && page.api.get(id));
-  assert.equal(sent.runId, 'wizardq_held');
-  assert.equal(sent.restartPending, true);
-  // A plain 202 (no restart reason) is not held.
-  const rows2 = new Map([typed()]); const [id2] = [...rows2.keys()];
-  const page2 = outbox(origin, rows2, { phase: 'waiting' }); t.after(page2.close);
-  await page2.api.load();
-  const sent2 = await until(() => page2.api.get(id2)?.state === 'sent' && page2.api.get(id2));
-  assert.equal(sent2.restartPending, undefined);
-  // live.js PEND: the held flag rides on the row while the send is held, and goes when the hold releases.
-  const live = read('live.js');
-  const start = live.indexOf('  const PEND = new Map()'), end = live.indexOf('  const commandId =', start);
-  const { runWithChatsModel } = await import('./fixtures/chats-list-model.mjs');
-  const L = { sessions: [{ id: 'wizard_mid', status: 'completed' }], agentSessions: {} }, OB = { _items: new Map([[id, sent]]) };
-  const c = { L, OB, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => !!a && a !== 'hermes', AGENT_OF: new Map(), Date };
-  runWithChatsModel(live.slice(start, end) + '\nthis.api = { syncPending, applyPend, PEND };', c);
-  c.api.syncPending(OB);
-  assert.equal(L.sessions[0].status, 'running'); // this device's Starting… overlay
-  assert.equal(L.sessions[0].restartPending, true);
-  const h = reach({ health: () => holding() }); await h.settle(); await h.settle();
-  assert.equal(h.api.restartHeld(L.sessions[0]), true);
-  OB._items.set(id, { ...sent2, sessionId: 'wizard_mid', createdAt: sent.createdAt + 1 }); c.api.syncPending(OB);
-  assert.equal(L.sessions[0].restartPending, undefined);
-});
+}
 test('the restart note survives a repaint of the message box: put back at once while a restart is known', async () => {
   let painted = 0; const compose = { getClientRects: () => [1], querySelector: () => null };
   const r = reach({ health: () => holding(), observe: true, body: { nodeType: 1 }, extra: { WosOutbox: { paintNotice: () => { painted++; } } } });

@@ -138,7 +138,8 @@ export default function desktop(api) {
   const actOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (_) { return false; } };
   const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
   const ACT_EMPTY = { working: 'Nothing working.', ready: 'Nothing needs you.', recent: 'Nothing else this week.', snoozed: 'Nothing snoozed.', archive: 'Nothing archived.' };
-  const LKINDS = [...KINDS, 'recent'];
+  // (+ 'saved': sends a graceful restart holds, wizard-ux issue 1362; listed only while there are any)
+  const LKINDS = [...KINDS, 'recent', 'saved'];
   let actOlder = false;
   const oneSplit = () => (globalThis.innerWidth || 1440) >= ONE.split;
   // (one app at a time: no split, no side by side, no second app; the saved arrangement is kept for the wide window)
