@@ -27,7 +27,7 @@ for (const includeSession of [true,false]) test(`a working row clears its retain
 test('held optional discovery does not block production refresh paint or routed refresh',async()=>{
  const ctx=fixture();let release,discovered=false,routed=0,emits=0;
  ctx.req=()=>{discovered=true;return new Promise(resolve=>{release=()=>resolve({json:async()=>({...payload,sessions:[],results:[]})});});};
- Object.assign(ctx,{STALE_AFTER:60000,FULL_EVERY:60000,SNAP_EVERY:60000,AGENT_WAIT:0,MAX:100,OVER:new Map(),fetchDispositions:async()=>({}),fetchSeen:async()=>({threads:{}}),fetchSessions:async()=>({sessions:[{id:'normal',status:'completed'}],complete:true}),otherAgent:()=>false,seenKeyOf:s=>s.id,applyLocal(){},addSynthetic(){},merge:()=>({threads:{}}),readLocal:()=>({threads:{}}),writeLocal(){},preload(){},writeSnap(){}});
+ Object.assign(ctx,{STALE_AFTER:60000,FULL_EVERY:60000,SNAP_EVERY:60000,AGENT_WAIT:0,MAX:100,OVER:new Map(),fetchDispositions:async()=>({}),fetchSeen:async()=>({threads:{}}),fetchSessions:async()=>({sessions:[{id:'normal',status:'completed'}],complete:true}),otherAgent:()=>false,seenKeyOf:s=>s.id,applyLocal(){},addSynthetic(){},merge:()=>({threads:{}}),readLocal:()=>({threads:{}}),writeLocal(){},resendSeen(){},preload(){},writeSnap(){}});
  const start=live.indexOf('    async refresh() {');const end=live.indexOf('    /* Each non-default agent',start);
  vm.runInContext('this.refreshHolder={'+live.slice(start,end)+'};',ctx);
  const state={ok:true,at:Date.now(),fullAt:Date.now(),snapAt:Date.now(),cached:true,sessions:[],seen:{threads:{}},emit(){emits++;},refreshAgents:async()=>{routed++;}};
