@@ -965,6 +965,18 @@ export default function desktop(api) {
 
   /* ---------- paint the sidebar (only when what it lists changed: renders come often while a chat works) ---------- */
   const label = text => el('h3', 'aad-lab', { text });
+  // Sends a graceful restart holds (wizard-ux issue 1362, wizard/graceful-restart): their own Saved heading under
+  // Working, only while there are any (the list model's `saved`), so a held send never counts as Working.
+  function savedSec(rows, cur) {
+    if (!rows?.length) return [];
+    const on = secOpen.saved !== false;
+    const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': 'saved', 'aria-expanded': String(on), 'aria-controls': 'aad-sec-saved', 'aria-label': `Saved, ${rows.length}${on ? '' : ', folded'}` });
+    hd.append(el('span', 'aad-sec-w', { text: 'Saved' }), el('span', 'aad-sec-m', { 'aria-hidden': 'true', text: String(rows.length) }), icon('down', 'aad-ico aad-sec-c'));
+    api.listen(hd, 'click', () => { secOpen.saved = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
+    const body = el('div', 'aad-sec-b', { id: 'aad-sec-saved', role: 'group', 'aria-label': 'Saved' }); body.hidden = !on;
+    if (on) body.append(...rows.map(r => chatRow(r, cur)));
+    return [hd, body];
+  }
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
@@ -973,7 +985,7 @@ export default function desktop(api) {
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
       secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]
-      .concat((typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join()]))] : []));
+      .concat([(s.saved || []).map(r => [r.id, r.title, r.mark || ''])], (typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join()]))] : []));
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -1010,6 +1022,7 @@ export default function desktop(api) {
           api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'act-sort'); });
           row.append(hd, sort); out.push(row, body);
         } else out.push(hd, body);
+        if (k === 'working' && typeof savedSec === 'function') out.push(...savedSec(s.saved, h.thread));
       }
     } else {
       // The sidebar and its search are Chats only; app search belongs to the global launcher.
@@ -1076,6 +1089,7 @@ export default function desktop(api) {
           sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
           api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'working-sort'); });
           row.append(hd, sort); out.push(row, body);
+          if (typeof savedSec === 'function') out.push(...savedSec(s.saved, h.thread));
         } else out.push(hd, body);
       }
     }

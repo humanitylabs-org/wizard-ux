@@ -741,10 +741,12 @@
     // (STOPPING) keeps its Stopping… through outbox repaints too, not only through list reads (applyLocal).
     if ((CANCELLING.has(s.id) || (s.runId && STOPPING.has(s.runId))) && WORKING.has(s.status)) s.status = 'stopping';
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
+    // Accepted but held by a graceful restart (outbox restartPending): saved on the box, not running (wizard-ux issue 1362).
+    if (p.held) s.restartPending = true; else delete s.restartPending;
   }
   function unPend(s) {
     if (s.orig) { for (const [k, v] of Object.entries(s.orig)) { if (v === undefined) delete s[k]; else s[k] = v; } }
-    delete s.orig; delete s.pend; delete s.pendText;
+    delete s.orig; delete s.pend; delete s.pendText; delete s.restartPending;
   }
   // Re-read the outbox: which threads are held, and in what state. Returns true when anything changed.
   function syncPending(OB) {
@@ -768,7 +770,7 @@
       if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
       const text = String(it.text || it.typed || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
       if (it.agent && otherAgent(it.agent)) AGENT_OF.set(sid, it.agent);
-      PEND.set(sid, { acknowledged: known?.key === it.id && known.acknowledged, key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '', agent: it.agent && otherAgent(it.agent) ? it.agent : '' });
+      PEND.set(sid, { acknowledged: known?.key === it.id && known.acknowledged, key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '', agent: it.agent && otherAgent(it.agent) ? it.agent : '', held: it.state === 'sent' && it.restartPending === true });
     }
     // An orb send still being transcribed/routed: Working from the send tap (outranks an older message's state).
     for (const [sid, t] of TAPS) {
