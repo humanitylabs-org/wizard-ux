@@ -1016,7 +1016,7 @@
   }
   function linkDesk(u, rel, srcId) {
     const src = W[srcId];
-    if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
+    if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
@@ -1172,7 +1172,7 @@
   function framePage(w, rel) {
     w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
     let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
-    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
     return true;
   }
   function placeApp(mine, obj, opts = {}, refresh) {
@@ -1571,7 +1571,7 @@
   function renderFrameCore(w, a) {
     if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
+    return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(frameUrl, a.id) : ''} ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
@@ -1579,7 +1579,7 @@
   function probeFrame(f, url) {
     const wrap = f.closest('.frame-wrap'); if (!wrap) return;
     fetch(url, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' }).then(r => {
-      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } } }
+      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (e) { f.src = url; } } }
       else { wrap.classList.add('coming'); setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000); }
     }).catch(() => setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000));
   }
@@ -1632,7 +1632,8 @@
   function watchFrames(root) {
     $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el, W[el.closest('.win')?.dataset.win]?.url));
     $$('iframe.appframe', root).forEach(f => {
-      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden) bridgeFrame(f); }); } return; }
+      // A sandboxed repair page (browser boundary) is never read: core/reach.js talks to it over the boundary channel.
+      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden && !(window.WizBrowserBoundary?.owns(f) && f.hasAttribute('sandbox'))) bridgeFrame(f); }); } return; }
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
@@ -1647,10 +1648,12 @@
         try { if (f.contentWindow.location.href !== 'about:blank') unveil(); } catch (e) { unveil(); }
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
         window.__frameLog = (window.__frameLog || []).concat(why).slice(-40); // bounded: the shell may run for weeks
+        // Browser boundary: a sandboxed app is never readable, so unreadable is not refused. It talks by postMessage.
+        if (window.WizBrowserBoundary?.enabled && f.hasAttribute('sandbox')) { wrap?.classList.remove('blocked'); return; }
         if (why === 'about:blank') {
           // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
           // popstate fires). That press belongs to the shell: take the step and restore the app in place.
-          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); ensureGuard(true); try { f.contentWindow.location.replace(u); } catch (e) {} }
+          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); ensureGuard(true); try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(u); } catch (e) {} }
           return;
         }
         if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
@@ -2117,7 +2120,7 @@
    * list and open thread, app frames reload where they are, built-in views remount. Nothing closes or moves. */
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
-    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return; }
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); window.WizReach?.reloadRepair(el.querySelector('iframe')); return; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       window.WizCore.refreshApps?.();
       Promise.resolve(LIVE?.refresh?.()).catch(() => {}).then(() => {
@@ -2520,7 +2523,7 @@
     parking=true;
     try{
       if(V.files.some(f=>f.uploading)||CHATS.composerBusy(V.replyTo.wid,V.replyTo.sid))throw Error('Wait for attachments before borrowing');
-      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
+      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid,V.replyTo.box||undefined);
       if(!(V.snap.route?.model&&V.snap.route?.provider)){V.snap.route=null;throw Error('Choose a model before parking the reply');}
       let parkedNativeId=null;
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
@@ -2808,9 +2811,18 @@
       const agent = snap.route?.agent || '';
       return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
     }
-    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__');
-    // A take pinned to a channel keeps that channel's agent: another agent's channel in front by Send never re-routes it.
-    if (typeof snap.view?.space === 'string' && snap.route && (live?.agent || '') !== (snap.route.agent || '')) return snap.route;
+    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid, pin.box || undefined) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__', snap.view?.box || undefined); // a channel take: the box it started in (issue 1309)
+    // A take pinned to a channel goes to that channel's agent ('' = the main agent: General with no agent picked),
+    // on the model picked for it. Another agent's channel in front by Send, or a model or agent left over from another
+    // agent's thread at the start of the take, never re-routes it (wizard-ux issue 1312).
+    if (typeof snap.view?.space === 'string') {
+      const want = typeof snap.view.chanAgent === 'string' ? snap.view.chanAgent : snap.route?.agent || '';
+      if (live && (live.agent || '') === want) return live;
+      if (snap.route && (snap.route.agent || '') === want) return snap.route;
+      // The box's own pick (wizard-ux issue 1309), never the window's New chat pick.
+      const box = pin ? pin.box : snap.view.box, nm = box ? CHATS.boxModel?.(box) || null : null;
+      return window.WosModels.snapshot('', nm && (nm.agent || '') === want ? nm : null, want);
+    }
     return live;
   }
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
@@ -2877,7 +2889,7 @@
       }
       const text = words.filter(Boolean).join(' ');
       if (!text) { recDone(nid); target?.release(); V.field = null; setVoice('idle'); txHide(); toast('◌', 'No speech detected · nothing inserted'); return; }
-      const inserted = FIELDS.insert(target, text);
+      const inserted = await FIELDS.insert(target, text);
       target?.release(); V.field = null;
       if (!inserted) {
         // Never re-resolve a lost field or use the agent outbox as an audio recovery mechanism.
@@ -3223,7 +3235,7 @@
     // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
     // channel, exactly like its message box (whose words and pictures ride with it), pinned to that channel's Space,
     // and the window stays on the feed. A routed agent's channel keeps that agent's own voice path (below).
-    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '' } : {};
+    const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '', chanAgent: CHATS.winAgent(w) || '' } : {};
     if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
       // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
       const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });
@@ -3875,7 +3887,8 @@
   window.WosBack = Object.freeze({ names: phoneBack.names, escape(e) { e.preventDefault?.(); e.stopImmediatePropagation?.(); if (!e.repeat && !e.isComposing) return onBack(); } });
   function hostedBack(f) {
     const frame = winEl(f.id)?.querySelector('iframe');
-    const result = window.WizAppServices?.back(frame);
+    // A sandboxed app (browser boundary) answers later; at its root the shell's next Back step runs then.
+    const result = window.WizAppServices?.back(frame, () => backStep(f.id));
     return result || 'notReady';
   }
   function backStep(skipHosted, { outside = false } = {}) {
@@ -4294,7 +4307,7 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
-    /* Layouts on the phone (the Orbs view's Home, layouts/orb/phone.js): the apps (the same rows and kinds as the
+    /* Layouts on the phone (skin layout API; the Orb and Apps views that used most of it went in issue 1338): the apps (the same rows and kinds as the
      * desktop's), opening one (its desk, or a new one), what is running (the app on each desk, one per app: the Orbs
      * satellites), the Home desk's section and the dock orb's box. */
     apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
@@ -4321,6 +4334,8 @@
     phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },
     /* The AI apps view (layouts/ai-apps): its drawer's chats (Working, Ready; the rest for its search), each with the
      * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
+    // Activity with Channels on (wizard-ux issue 1336): every agent's chats as Working, Ready, Recent, Snoozed, Archived.
+    activityList: (o = {}) => window.WizChatsListModel.activityList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }, { order: o.order, older: !!o.older, now: Date.now() }),
     sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     sessionAct: (sid, act) => {
       // Move to channel… (wizard-ux issue 1292): Chats' own picker, over the view as it is (no trip to Chats).
@@ -4329,6 +4344,7 @@
         if (!here) { openApp(APP.wizard, {}, { stay: true }); here = find(); }
         return !!here && !!CHATS.moveToChannel?.(here, sid); }
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+      if (act === 'markdone') return !!CHATS.markDone?.(Object.keys(W).find(id => mainChats(W[id])) || '', sid); // in place (issue 1317)
       const w = showChats(); if (!w) return false;
       if (act === 'rename') { CHATS.openRenameSheet(w.id, sid); return true; }
       CHATS.threadAct(w.id, sid, act); return true;
@@ -4337,6 +4353,10 @@
     newChat: () => { const w = showChats(); if (!w) return false; CHATS.openChat(w.id, '__new__'); return true; },
     // New chat with a channel's feed in front (wizard-ux issue 1291): that feed's own box, never General.
     chatChannelPost: () => { const w = W[desks[idx]?.focus]; return w?.app === 'chats' && !w.thread && !!CHATS.chanCompose?.(w.id); },
+    // + on the Channels list with no channel open (wizard-ux issues 1308, 1328): the new-channel form opens (true).
+    chatChannelNew: () => { const w = W[desks[idx]?.focus]; return w?.app === 'chats' && !w.thread && !!CHATS.chanNew?.(w.id); },
+    // The Chats list's tab: 'activity' or 'channels' ('' with the switch off). It decides what + does (issue 1310).
+    chatChannelView: () => CHATS.chanView?.() || '',
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
     // Now playing (api.media): an app's own name and mark, and bringing that app to the front.
@@ -4349,6 +4369,4 @@
     if (!w?.appId || sheet || menuFor || CHATS.isHosted(f)) return null;
     return track.querySelector(`.win[data-win="${f}"] iframe.appframe`);
   }
-  // An app's claim shows whenever the active layout draws an agent orb (it wears it while that app is in front).
-  window.WizAppServices?.orb?.presenter(() => document.documentElement.dataset.layout === 'two-orb');
 })();

@@ -62,7 +62,7 @@ async function scenario(b, name, layout, setup) {
   await setup(p);
   // Real touch tap on the orb with a throttled CPU (a mid-range phone). No picker may open.
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
-  const sel = layout === 'two-orb' ? '#agentOrb' : '#orbWrap';
+  const sel = '#orbWrap';
   for (let i = 0; i < 3; i++) {
     const o = await p.locator(sel).boundingBox();
     await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2);
@@ -113,7 +113,6 @@ async function openThread(p, full) {
     ok(await p.evaluate(() => document.querySelector('#device').classList.contains('orb-corner')), 'full-screen thread puts the orb in the corner');
   });
   await scenario(b, 'thread on a desk (dock orb)', '', p => openThread(p, false));
-  await scenario(b, 'two-orb layout (agent orb)', 'two-orb', async p => { await openThread(p, false); await p.waitForSelector('#agentOrb:not([hidden])', { timeout: 10000 }).catch(() => {}); });
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

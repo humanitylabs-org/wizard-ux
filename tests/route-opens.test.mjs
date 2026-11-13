@@ -1,7 +1,7 @@
 // One left/right open model (Miguel, 4 Nov 2026, AI apps round 21): a layout may place every open the shell starts by
 // itself (a notification's Open, a link tapped in a reply, a launcher pick, an app's Reply / chat, the view bound beside
 // a thread) through the layout API's apps.routeOpens. Guards:
-//   - nobody holding it = stock: routeOpen() answers null and the shell runs its own go, byte for byte (Desks, Orb, Apps);
+//   - nobody holding it = stock: routeOpen() answers null and the shell runs its own go, byte for byte (Desks);
 //   - a holder sees (kind, detail, go), its go() result comes back as { value }; opens it starts while it runs are never
 //     routed again (no loop); teardown releases it; shows(desk) admits an app's Reply on a desk shown beside the chat;
 //   - every shell entry point asks it first on both shells, with the stock path as go (source pins);
@@ -47,7 +47,7 @@ test('off (no layout holds it): every open is stock; the hooks answer null / fal
 });
 
 test('on: the layout places opens; go() is the stock way and its value comes back; no loop; released on teardown', async () => {
-  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('orb'); await settle();
+  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('ai-apps'); await settle();
   const api = H.api; assert.ok(api?.apps?.routeOpens, 'layouts get apps.routeOpens');
   const seen = []; let inner = 'unset';
   const off = api.apps.routeOpens({
@@ -80,7 +80,7 @@ test('on: the layout places opens; go() is the stock way and its value comes bac
 });
 
 test('a routed app can place its original checked opener on a desk exactly once', async () => {
-  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('orb'); await H.host.whenLayoutReady();
+  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('ai-apps'); await H.host.whenLayoutReady();
   H.adapter.openAppDesk = (id, place) => { assert.equal(id, 'app-store'); return place(3); };
   H.api.apps.routeOpens({ open(kind, d, go) { H.api.apps.openDesk(d.id, go); go(7); return true; } });
   const placed = [];
@@ -91,7 +91,7 @@ test('a routed app can place its original checked opener on a desk exactly once'
 });
 
 test('the layout API lists the new app hooks (and only layouts get them)', async () => {
-  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('orb'); await settle();
+  const H = hostWorld(); H.host.attach(H.adapter); H.host.setLayout('ai-apps'); await settle();
   for (const k of ['routeOpens', 'path', 'openLink']) assert.equal(typeof H.api.apps[k], 'function', k);
   H.host.setLayout('classic'); await settle();
 });

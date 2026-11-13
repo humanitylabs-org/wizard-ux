@@ -104,3 +104,64 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-ag .ag-sig { width: 100%; hei
 html[data-tweaks~="wizard/chat-channels"] .ch-post-rr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; margin-top: 2px; color: var(--ink-3); font-size: .75rem; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-rr .ch-post-sts { display: inline-flex; align-items: center; gap: 8px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-reply { min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: .8125rem; font-weight: 500; }
+
+/* Activity as a short what-needs-me list (wizard-ux issue 1336). One marker per row at its right end, the same three
+   meanings everywhere: the spinner (working), amber (needs you, until addressed) and green (unread, until opened); the
+   violet unread time and dot go. */
+html[data-tweaks~="wizard/chat-channels"] .ch-row .ch-act-ind { flex: none; align-self: center; display: inline-flex; padding-left: 8px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }
+/* Ready's one sort: a compact "Newest first ⌄" menu on the header line, beside the fold arrow (issue 1354) */
+html[data-tweaks~="wizard/chat-channels"] .ch-sec-hl { position: relative; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort select { appearance: none; -webkit-appearance: none; field-sizing: content; min-height: 28px; max-width: 150px; padding: 0 22px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort select:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort select:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 0; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort select option { color: var(--ink); background: var(--bg); }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-sort::after { content: ""; position: absolute; right: 9px; top: 50%; width: 5px; height: 5px; margin-top: -4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: var(--ink-3); transform: rotate(45deg); pointer-events: none; }
+html[data-tweaks~="wizard/chat-channels"] .ch-act-older { display: block; width: 100%; }
+/* Agents in the Channels list: a folded row above Archive, each agent with its sigil */
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-agents { margin-top: 8px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-sig { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-sig .ag-sig, html[data-tweaks~="wizard/chat-channels"] .ch-chan-sig svg { width: 100%; height: 100%; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-h .ch-chan-sig { margin-right: 6px; vertical-align: -4px; }
+/* Undo after an archive: opaque, above the bottom bar and the shell's toast, for about five seconds */
+html[data-tweaks~="wizard/chat-channels"] .ch-undo { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 88px); z-index: 2147483000; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); min-height: 44px; padding: 0 6px 0 16px; border: 1px solid var(--line, var(--wz-border)); border-radius: 12px; background: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)), var(--wz-base, var(--bg)); color: var(--ink, var(--wz-text)); box-shadow: 0 8px 24px color-mix(in srgb, var(--ink, var(--wz-text)) 18%, transparent); font-size: .875rem; }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo button { flex: none; min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, var(--violet-2)); font: inherit; font-weight: 600; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo button:hover { background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 12%, transparent); }
+html[data-tweaks~="wizard/chat-channels"] .ch-undo button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: -2px; }
+/* The AI apps sidebar's Activity rows: green replaces the accent (purple) unread dot; amber for needs you */
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw { --ch-new: var(--green, var(--wz-success)); }
+@supports (color: oklch(from red l c h)) { html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw { --ch-new: oklch(from var(--green, var(--wz-success)) l c 150); } }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-st.is-needs { width: 8px; height: 8px; background: var(--amber, var(--wz-warning)); }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-more-older { display: block; width: calc(100% - 16px); margin: 4px 8px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, currentColor); font: inherit; font-size: .8125rem; text-align: left; padding: 0 8px; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-more-older:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+/* the one-line phone list (wizard/desktop-chats): the marker takes the accent unread dot's slot after the time; the
+   spinner shows only there (the other lists keep the row's own status icon at its left) */
+html[data-tweaks~="wizard/chat-channels"] .ch-row .ch-act-ind .ch-spin { display: none; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind { order: 6; margin: 0 2px 0 -2px; padding-left: 0; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind .ch-spin { display: inline-block; width: 10px; height: 10px; box-sizing: border-box; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { background: transparent; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:has(.ch-act-ind)::after { content: none; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-sec-m { margin-left: 6px; font-size: .75rem; opacity: .6; }
+/* Jump to Needs you (wizard-ux issue 1359): the pill at the top centre of a thread (and at the bottom for markers below),
+ * mirroring ↓ Latest. Opaque: the raised surface laid over the base colour. Its top is set from the header's bottom. */
+html[data-tweaks~="wizard/chat-channels"] .ch-jump { --ch-new: var(--green); position: absolute; left: 50%; top: 64px; z-index: 7; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); height: 32px; padding: 0 14px; border-radius: 16px; border: 1px solid var(--wz-border); background-color: var(--wz-base); background-image: linear-gradient(var(--wz-surface-raised), var(--wz-surface-raised)); color: var(--wz-text); font-size: 0.8125rem; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: 0 6px 18px color-mix(in srgb, var(--wz-base) 70%, transparent); }
+@supports (color: oklch(from red l c h)) { html[data-tweaks~="wizard/chat-channels"] .ch-jump { --ch-new: oklch(from var(--green) l c 150); } }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump[hidden] { display: none; }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump.down { top: auto; bottom: 78px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump-k { display: inline-flex; align-items: center; gap: 6px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-jump-arr { font-size: 0.9375rem; line-height: 1; }
+html[data-tweaks~="wizard/chat-channels"] .ch-thread:has(.ch-reply.ch-reply-q) .ch-jump.down { bottom: 142px; }
+html[data-tweaks~="wizard/chat-channels"].wos-doc-scroll .wos-doc-thread .ch-jump { position: fixed; z-index: 51; }
+html[data-tweaks~="wizard/chat-channels"].wos-doc-scroll .wos-doc-thread .ch-jump.down { bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + max(var(--safe-b, 0px), var(--wos-doc-bottom, 0px)) + 12px); }
+/* Needs you in the thread (wizard-ux issue 1331, part of Channels since issue 1358): the amber line above the message that asks, with Mark done beside
+ * it; Mark done is the strong button only where a Needs you is open, and Archive turns quiet (a rare action now). */
+html[data-tweaks~="wizard/chat-channels"] .ch-needs-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 6px; padding: 4px 0 4px 10px; border-left: 2px solid var(--amber); font-size: 0.8125rem; line-height: 1.35; }
+html[data-tweaks~="wizard/chat-channels"] .ch-needs-line .ch-post-st.needs { flex: none; }
+html[data-tweaks~="wizard/chat-channels"] .ch-needs-ask { flex: 1 1 12em; min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+html[data-tweaks~="wizard/chat-channels"] .ch-needs-done, html[data-tweaks~="wizard/chat-channels"] .ch-tacts button.ch-tact-md { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-weight: 700; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-needs-done { flex: none; min-height: 30px; padding: 0 12px; font-size: 0.8125rem; }
+html[data-tweaks~="wizard/chat-channels"] .ch-needs-done svg, html[data-tweaks~="wizard/chat-channels"] .ch-tacts button.ch-tact-md svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-tweaks~="wizard/chat-channels"] .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent; font-weight: 600; }

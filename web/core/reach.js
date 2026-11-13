@@ -62,6 +62,8 @@
    *  'read'. Only a confirmed-healthy diagnosis differs: a send names the unsent message instead of the connection,
    *  a read stays neutral. Any real outage, or no diagnosis yet, keeps its connection wording for both. */
   function label(operation, { count = 1, diagnosis } = {}) {
+    // Graceful restart (switch wizard/graceful-restart): a send that hit the restart is saved, not refused.
+    if (!diagnosis && operation === 'send' && restartState()) return count > 1 ? `${count} messages saved · send after Wizard restarts` : 'Saved · sends after Wizard restarts';
     const d = diagnosis || window.WizReach.failure();
     if (operation === 'send' && d.layer === 'send') return count > 1 ? `${count} messages not sent · retrying` : 'Message not sent · retrying';
     return d.short;
@@ -149,9 +151,13 @@
   let openedAt = -Infinity;
   function rememberDirect(body) { try { if (typeof body?.direct === 'string') localStorage.setItem(DIRECT_KEY, body.direct); } catch (_) {} }
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Browser owner boundary (wizard-os#133, core/browser-boundary.js): with the box switch on, the repair page runs
+  // sandboxed like every app page (it shows repair chat output), so the shell can't read it; it proves it loaded by
+  // answering on the boundary channel instead. Off (the default): exactly as before.
+  const boundary = () => (window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary : null);
   // Local entry is part of the cached shell, not a second app or a remote preflight.
   function recoveryHtml() {
-    return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
+    return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden${boundary() ? ' ' + boundary().frameAttributes('/troubleshoot/') : ''} allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
   }
   const recoveries = new Set(), retaps = new Set();
   function mountRecovery(root, url) {
@@ -175,16 +181,38 @@
       if (!desktop() && directBase().confirmed && Date.now() - openedAt < 20000) { openedAt = -Infinity; location.assign(url); }
     };
     const failed = text => { clearTimeout(loadTimer); remoteLoading = false; frame.hidden = true; remoteReady = false; root.classList.remove('repair-ready'); details.open = true; remoteMessage(text); offerDirect(); };
+    const showRepair = () => {
+      remoteReady = true; frame.hidden = false; root.classList.add('repair-ready'); details.open = false; direct.hidden = true;
+      if (last?.wizard?.state === 'ok') clearTimeout(timer);
+      remoteMessage('Connected. The repair home and repair chat are below.');
+    };
+    const sealed = !!boundary() && frame.hasAttribute('sandbox');
+    let readyTimer;
+    if (sealed) {
+      boundary().attach(frame);
+      // The repair page's own answer on this load's channel is the proof (an error page never answers).
+      frame.addEventListener('wizard:boundary-ready', () => {
+        if (!connected() || !frame.getAttribute('src')) return;
+        remoteLoading = false; clearTimeout(loadTimer); clearTimeout(readyTimer);
+        showRepair();
+      });
+    }
     frame.addEventListener('load', () => {
       if (!frame.getAttribute('src')) return; // initial about:blank is not a failed repair-page load
+      if (sealed) {
+        // Every load is a new document that must answer again (the channel was just renewed), also after the page
+        // once answered: a reload or in-frame step that lands on an error page never answers. 8 s, then local help.
+        if (boundary().ready(frame)) return;
+        clearTimeout(readyTimer);
+        readyTimer = setTimeout(() => { if (connected() && !boundary().ready(frame)) failed('The repair page didn’t load. Local connection help is still available.'); }, 8000);
+        return;
+      }
       remoteLoading = false; clearTimeout(loadTimer);
       try {
         const doc = frame.contentDocument;
         // The loaded document itself is the proof; it never waits on the connection checks.
         if (!connected() || !doc || !/\/troubleshoot\//.test(doc.location.pathname) || !doc.querySelector('header h1')) throw Error('Repair page unavailable');
-        remoteReady = true; frame.hidden = false; root.classList.add('repair-ready'); details.open = false; direct.hidden = true;
-        if (last?.wizard?.state === 'ok') clearTimeout(timer);
-        remoteMessage('Connected. The repair home and repair chat are below.');
+        showRepair();
       } catch (_) { failed('The repair page didn’t load. Local connection help is still available.'); }
     });
     // Load the repair page straight away, alongside the checks: a tap on Open Troubleshooter shows it as soon as
@@ -238,14 +266,141 @@
       if (!recoveries.size && cached && cached.layer !== 'send') diagnose(0);
     });
   }
+  // ↻ on the Troubleshooter window: reload the repair page where it is. A sandboxed page can't be read or told to
+  // reload by the shell, so it is loaded again from its address.
+  function reloadRepair(frame) {
+    if (!frame || frame.hidden) return;
+    try { frame.contentWindow.location.reload(); } catch (_) { const src = frame.getAttribute('src'); if (src) frame.src = src; }
+  }
+  /* Graceful Agent Service restart (wizard-ux issue 1362, switch wizard/graceful-restart, off by default; the box
+   * side is wizard-agent-service docs/graceful-restart.md). The only healthy polling here, and only while the switch
+   * is on: /wizard/health carries `restart` while a restarter holds new sends until running chats finish. That read
+   * never renews the restarter's lease (GET /wizard/v1/restart would), so a crashed restarter still loses its hold.
+   * The owner's choice when it is overdue goes back as POST /wizard/v1/restart: wait_s (wait longer) or now. */
+  const RESTART_SWITCH = 'wizard/graceful-restart', RESTART_GRACE = 3 * 60000;
+  const restartOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes(RESTART_SWITCH); } catch (_) { return false; } };
+  let restart = null, restartDownAt = 0, restartTimer = 0, restartAsk = '', restartPolledAt = 0;
+  const restartPick = h => ({ phase: ['waiting', 'ready', 'overdue'].includes(h.phase) ? h.phase : 'waiting',
+    active: Number.isFinite(h.active) ? h.active : null, held: Number(h.held) || 0, oldest: Number(h.oldest_active_s) || 0,
+    waitUntil: typeof h.wait_until === 'string' ? h.wait_until : '', now: h.restart_now === true });
+  /** The restart the shell knows of, or null (switch off, none, or gone for longer than a restart takes). While the
+   *  service is down right after a hold, phase is 'restarting'. */
+  function restartState() {
+    if (!restartOn() || !restart) return null;
+    if (restartDownAt) {
+      if (Date.now() - restartDownAt > RESTART_GRACE) { restart = null; restartDownAt = 0; return null; }
+      return { ...restart, phase: 'restarting' };
+    }
+    return restart;
+  }
+  function restartChanged() {
+    window.dispatchEvent?.(new Event('wizreachchange'));
+    try { window.WosOutbox?.paintNotice?.(); } catch (_) {}
+  }
+  function restartSet(next, downAt) {
+    const before = JSON.stringify([restart, restartDownAt > 0]);
+    restart = next; restartDownAt = downAt;
+    if (JSON.stringify([restart, restartDownAt > 0]) !== before) restartChanged();
+  }
+  async function restartPoll() {
+    clearTimeout(restartTimer); restartTimer = 0; restartPolledAt = Date.now();
+    if (!restartOn()) { if (restart) restartSet(null, 0); return; }
+    if (!document.hidden) {
+      try {
+        const { response, body } = await request('/wizard/health', {}, true);
+        if (!response.ok || !body) throw new Error('health ' + response.status);
+        const h = body.restart;
+        restartSet(h && h.holding === true ? restartPick(h) : null, 0);
+      } catch (_) {
+        // Down right after a hold: the restart itself. Without a hold seen first, a failing read is the ordinary
+        // connection story (failure() below), never a restart.
+        if (restart && !restartDownAt) restartSet(restart, Date.now());
+      }
+    }
+    // Windows and composers open and close between polls: repaint the note where it belongs now.
+    if (restart) try { window.WosOutbox?.paintNotice?.(); } catch (_) {}
+    if (restartOn()) restartTimer = setTimeout(restartPoll, restart ? 5000 : 30000);
+  }
+  async function restartChoose(choice) {
+    if (!restartOn() || !restart || restartAsk) return false;
+    restartAsk = choice; restartChanged();
+    try {
+      const response = await fetch('/wizard/v1/restart', { method: 'POST', cache: 'no-store', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(choice === 'now' ? { now: true } : { wait_s: 600 }) });
+      if (response.ok) { const body = await response.json().catch(() => null); if (body?.holding) restartSet(restartPick(body), 0); }
+      return response.ok;
+    } catch (_) { return false; }
+    finally { restartAsk = ''; restartChanged(); void restartPoll(); }
+  }
+  // Names of the chats still running, from the shell's own list (health carries counts only, never thread ids).
+  // A chat counts as running the way the Chats list's Working does (a live run id, a helper), or when this device sent
+  // it a run the list has not caught up with yet (the thread then shows “Replying…”). A send the restart holds
+  // (queued / not yet submitted) is saved, not running, as the Chats list shows it during a restart (chats.js 'held').
+  const RESTART_BUSY = ['running', 'stopping'], RESTART_SAVED = ['queued', 'submitting'];
+  function restartRunning() {
+    try {
+      const L = window.WizLive, rows = L?.unified?.() || [], model = window.WizChatsListModel;
+      const busy = s => !RESTART_SAVED.includes(s.status) && ((model?.isListWorking ? model.isListWorking(s) : RESTART_BUSY.includes(s.status))
+        || (!!s.runId && RESTART_BUSY.includes(s.lastRunStatus)) || !!L?.pendingRun?.(s.id));
+      return rows.filter(s => s && !s.archived && !s.hidden && busy(s)).map(s => String(s.title || 'Untitled chat'));
+    } catch (_) { return []; }
+  }
+  function restartNoticeHtml() {
+    const st = restartState();
+    if (!st) return '';
+    const n = st.held;
+    const saved = n ? ` · ${n === 1 ? '1 message' : n + ' messages'} saved, sent after the restart` : ' · new messages are saved and sent after the restart';
+    if (st.phase === 'restarting') return `<b>Wizard is restarting</b><span>Messages are saved and send by themselves.</span>`;
+    if (st.now) return `<b>Restarting now</b><span>Chats still running are stopped; your messages are saved.</span>`;
+    if (st.phase !== 'overdue') return `<b>Restarting when chats finish</b><span>${esc(saved.slice(3))}</span>`;
+    const names = restartRunning(), count = st.active ?? names.length;
+    const list = names.slice(0, 3).map(t => `“${esc(t)}”`).join(', ') + (names.length > 3 ? ` and ${names.length - 3} more` : '');
+    const busy = restartAsk ? ' disabled' : '';
+    return `<b>Wizard wants to restart</b><span>${count === 1 ? '1 chat is' : `${count || 'Some'} chats are`} still running${list ? ': ' + list : ''}.</span>`
+      + `<span class="rs-acts"><button type="button" data-restart-choice="wait"${busy}>Wait longer</button><button type="button" data-restart-choice="now"${busy}>Restart now</button></span>`;
+  }
+  /** Called by the outbox's notice painter with the visible composer/voice-dock hosts. */
+  function paintRestart(hosts) {
+    if (!document.body) return;
+    const html = restartNoticeHtml();
+    for (const el of document.querySelectorAll('[data-restart-notice]')) if (!html || !hosts.includes(el.parentElement)) el.remove();
+    if (!html) return;
+    for (const host of hosts) {
+      let el = host.querySelector('[data-restart-notice]');
+      if (!el) {
+        el = document.createElement('div'); el.dataset.restartNotice = ''; el.className = 'ch-restart-notice';
+        el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+        el.addEventListener('click', e => { const b = e.target.closest?.('[data-restart-choice]'); if (b && !b.disabled) void restartChoose(b.dataset.restartChoice); });
+        host.appendChild(el);
+      }
+      if (el.innerHTML !== html) el.innerHTML = html;
+    }
+  }
+  window.addEventListener?.('wos:tweak-choice', () => { setTimeout(() => { void restartPoll(); }, 0); });
+  globalThis.document?.addEventListener?.('visibilitychange', () => { if (!document.hidden && restartOn()) void restartPoll(); });
+  // The skin host paints data-tweaks after this script loads (and again whenever the list changes, on any device), so
+  // the watch starts or stops whenever the switch appears in or leaves that list, not only on a choice in this tab.
+  let restartWasOn = restartOn();
+  const restartWatch = () => { const on = restartOn(); if (on === restartWasOn) return; restartWasOn = on; void restartPoll(); };
+  window.addEventListener?.('wos:prefs', restartWatch);
+  try { if (typeof MutationObserver === 'function' && document.documentElement?.nodeType === 1) new MutationObserver(restartWatch).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
+  if (restartWasOn) void restartPoll();
   window.WizReach = {
     diagnose,
+    reloadRepair,
     recoveryHtml,
     mountRecovery,
     checks,
     label,
     directUrl,
+    restart: restartState,
+    restartChoose,
+    paintRestart,
     failure() {
+      // A send or read that fails while the Agent Service restarts says so calmly, without a connection hunt.
+      // A failure during a known hold is most likely the restart itself: look now instead of at the next poll.
+      if (restartState() && !restartDownAt && Date.now() - restartPolledAt > 2000) void restartPoll();
+      if (restartState()?.phase === 'restarting') return result('restarting', 'Wizard is restarting its Agent Service. Messages are saved on this device and send by themselves when it is back.', 'Restarting · messages saved');
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
       return cached || pending;
     },

@@ -82,7 +82,34 @@
     try { f.contentWindow.postMessage({ type: 'wizard:appearance', appearance: a }, ORIGIN); } catch (e) {}
   }
   function forget(f) { frames.delete(f); themedWin(f)?.classList.remove('wz-themed'); }
+  // Browser boundary (wizard-os#133, core/browser-boundary.js): a sandboxed app frame cannot be read, so it gets the same
+  // context by postMessage through WizBrowserBoundary.theme(), pushed on change. The boundary re-sends the last one on
+  // every reload of the frame and marks the window .wz-themed only after the app acknowledged that revision.
+  // The skin layer goes with it (app-client syncSkinLayer reads it from the parent when same-origin): the shell's skin
+  // stylesheets (core/skins.css and loaded, enabled skin packages) as same-origin paths, then My skin's CSS.
+  const opaqueSig = new WeakMap();
+  function skinLayer() {
+    const sheets = [];
+    for (const l of document.querySelectorAll('link[rel="stylesheet"]')) {
+      if (l.disabled || !(/(^|\/)core\/skins\.css(\?|$)/.test(l.getAttribute('href') || '') || l.dataset.skinPkg)) continue;
+      try { const u = new URL(l.href); if (u.origin === ORIGIN && sheets.length < 24) sheets.push(u.pathname + u.search); } catch (e) {}
+    }
+    const mine = document.getElementById('wosMySkin'), css = mine && !mine.disabled ? String(mine.textContent || '') : '';
+    return { sheets, mine: css.length <= 65536 ? css : '' };
+  }
+  function syncBoundary() {
+    const B = window.WizBrowserBoundary; if (!B?.enabled) return;
+    let layer = null;
+    for (const f of winFrames()) {
+      if (!B.owns(f)) continue;
+      layer = layer || skinLayer();
+      const a = context(f), sig = JSON.stringify({ ...a, revision: 0, layer });
+      if (opaqueSig.get(f) === sig) continue;
+      a.revision = ++revision; opaqueSig.set(f, sig); B.theme(f, a, layer);
+    }
+  }
   function sync() {
+    syncBoundary();
     for (const f of [...frames.keys()]) {
       if (!f.isConnected) { frames.delete(f); continue; }
       let doc = null; try { doc = f.contentDocument; } catch (e) {}
@@ -92,7 +119,7 @@
   }
   function queue(resetTokens) {
     if (resetTokens) tokensCache = null;
-    if (scheduled || !frames.size) return; scheduled = true;
+    if (scheduled || (!frames.size && !window.WizBrowserBoundary?.enabled)) return; scheduled = true;
     queueMicrotask(() => { scheduled = false; sync(); });
   }
 
@@ -128,6 +155,8 @@
     // Full screen / immersive changes the presentation: watch window classes only while themed frames exist.
     new MutationObserver(() => queue(false)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'data-n'] });
     try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => queue(true)); } catch (e) {}
+    // My skin edits and skin sheets coming or going change the skin layer sandboxed apps get (syncBoundary).
+    if (document.head) new MutationObserver(() => { if (window.WizBrowserBoundary?.enabled) queue(false); }).observe(document.head, { childList: true, subtree: true, characterData: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 

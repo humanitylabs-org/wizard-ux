@@ -132,6 +132,11 @@
     checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
     frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
+    // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.
+    const opaque = !!window.WizBrowserBoundary?.enabled;
+    if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
+    // Its saved settings ride along as the frame's name, set before the frame exists (the page reads them as it loads).
+    if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(id); if (seed) frame.name = seed; }
     const saved = read();
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
@@ -144,6 +149,9 @@
       back: () => { window.__wosNativeBack(); return true; }, readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
+      // An opaque frame cannot be read: no route restore or save, no in-frame hooks. Back, appearance and dictation go
+      // through WizAppServices.attach -> WizBrowserBoundary; a load is simply the app being there.
+      if (opaque) { loaded = true; document.title = policy.displayName(app); safeInsets(); return; }
       try {
         if (!policy.within(frame.contentWindow.location.href, app.url)) { unavailable('This app navigated outside its registered view.'); return; }
         loaded = true; document.title = policy.displayName(app);

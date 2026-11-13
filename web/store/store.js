@@ -5,7 +5,7 @@
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease} from './store-install.js';
-import {removalPlan, removeInstalledApp, canRemove, confirmView} from './store-remove.js';
+import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetRemoved, pendingForgets} from './store-remove.js';
 import {githubStatus, githubStart, githubSignOut, githubSheet, normalizeStatus, shouldPoll} from './store-github.js';
 await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
@@ -95,6 +95,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const proved=new Map(S.apps.map(a=>[a,resolveInstalled(a,snapshot,runtipi)]));
     S.apps=mergeConflicts(S.apps,a=>proved.get(a)).sort(compareApps);
     S.complete=snapshot.complete===true && Array.isArray(snapshot.wam) && Array.isArray(snapshot.shell) && inst.status==='fulfilled' && Array.isArray(inst.value.installed);
+    // A removal whose data on this device could not be deleted then: try again, only while the app is still gone.
+    if (S.complete) for (const id of pendingForgets()) if (readback(id) === 'gone') forgetRemoved(id, {retry: true});
     for (const a of S.apps) {
       const i=resolveInstalled(a,snapshot,runtipi); if(i) S.installed.set(key(a),i);
       // Never silently substitute a removed explicit release after Refresh.
@@ -391,12 +393,14 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       r.error = now === 'unknown' ? 'Wizard couldn’t confirm the removal. Refresh to check.' : now === 'present' && gone ? `Removal finished, but Wizard still lists ${r.name}. Refresh to check.` : r.error;
       refresh(); return;
     }
+    // Gone for sure: its data the shell kept on this device for its sandboxed windows goes with it.
+    const clean = await forgetRemoved(r.id);
     // Finishing action: leave the review and the removed app's page in one go, back to where the owner came from.
     if (top() === 'sheet' && S.stack.at(-1).arg === sheet) pop();
     if (top() === 'detail' && S.stack.at(-1).arg === r.from) pop();
     if (S.remove === r) S.remove = null;
     refresh();   // the list/search underneath repaints from the readback (Get, or gone)
-    toast(`<b>${esc(r.name)} removed</b>`);
+    toast(clean ? `<b>${esc(r.name)} removed</b>` : `<b>${esc(r.name)} removed</b> · some of its data on this device is deleted next time you open the Store`);
   }
   async function shareApp(base) {
     if(!base) return;

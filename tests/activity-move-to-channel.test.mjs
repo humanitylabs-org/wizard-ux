@@ -35,7 +35,7 @@ test('Channels off: the menu is unchanged (no move)', () => {
 
 test('the AI apps menus draw it as "Move to channel…" (filing still last); the host passes it to the shell', () => {
   const parts = read('web/layouts/ai-apps/parts.js');
-  assert.match(parts, /export const ACTS = \[\['pin', 'Pin'\], \['rename', 'Rename'\], \['unread', 'Mark unread'\], \['move', 'Move to channel…'\], \['snooze', 'Snooze'\], \['restore', 'Restore'\], \['done', 'Archive'\]\];/);
+  assert.match(parts, /export const ACTS = \[\['pin', 'Pin'\], \['rename', 'Rename'\], \['markdone', 'Mark done'\], \['unread', 'Mark unread'\], \['move', 'Move to channel…'\], \['snooze', 'Snooze'\], \['restore', 'Restore'\], \['done', 'Archive'\]\];/);
   assert.match(parts, /\n  move: \[/, 'its own icon');
   assert.match(read('web/core/skin-host.js'), /const SESSION_ACTS = Object\.freeze\(\[[^\]]*'move'[^\]]*\]\)/);
   assert.match(read('web/layouts/ai-apps/layout.js'), /if \(k === 'rename' \|\| k === 'move'\) closeDrawer\(\);/, 'the phone drawer steps aside for the picker');
@@ -44,7 +44,7 @@ test('the AI apps menus draw it as "Move to channel…" (filing still last); the
 test('both shells open Chats\' own picker through CHATS.moveToChannel, without taking the owner to Chats', () => {
   const dj = read('web/desktop/desktop.js'), aj = read('web/app.js');
   const d = cut("    sessionAct: (sid, act) => {", "\n    },", dj), a = cut("    sessionAct: (sid, act) => {", "\n    },", aj);
-  // one brace-free line: tests/orb-layout pins `sessionAct: (sid, act) => {[^}]*CHATS.threadAct(`
+  // one brace-free line: tests/layout-host-api pins `sessionAct: (sid, act) => {[^}]*CHATS.threadAct(`
   assert.match(d, /if \(act === 'move'\) return !!CHATS\.moveToChannel\?\.\(\(findWin\(mainChats\) \|\| sideMain\(\)\)\?\.id, sid\);/);
   assert.ok(d.indexOf("act === 'move'") < d.indexOf('skinShowChats'), 'desktop: before any Chats navigation');
   assert.match(a, /if \(act === 'move'\) \{ const find = \(\) => Object\.keys\(W\)\.find\(id => mainChats\(W\[id\]\) && deskOf\(id\) >= 0\); let here = find\(\);/);

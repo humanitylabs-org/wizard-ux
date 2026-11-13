@@ -99,6 +99,8 @@ requester text is ignored. Native sanitizes that display label; it never derives
 Desktop shells and standalone clients return `{unavailable:true}`, without a fake signature or a
 Mac bridge call. Phone routing, Wizard Link and cached Messenger grants are out of scope. Same-origin
 hosted apps remain trusted by the shell's existing architecture; this is not a hostile-script sandbox.
+With the browser owner boundary on (`docs/browser-boundary.md`), a sandboxed app reaches the same calls over the
+boundary channel: same catalog rule, the sheet only while its window is in front, answers only to the asking document.
 
 There are **two identities, never three**: the phone's owner Wizard ID, and the box's Wizard device/inbox
 key. This bridge only uses the owner key. The phone signs the addressable kind-30078 `d=wizard-devices`

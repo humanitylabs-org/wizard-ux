@@ -4,9 +4,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const cut = (a,b) => src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
-function fixture(agentIds, collections, focus = null, remembered = {}) {
-  const env = { spaceAgent: s => s?.agent || 'hermes', focusAgents: () => agentIds.map(id=>({id})), visibleSpaces:()=>collections, spaces:()=>collections,
-    focusOf:()=>focus, focusedAgent:f=>f?.kind==='agent'?f.key:f?.kind==='space'?'hermes':'',
+function fixture(agentIds, collections, focus = null, remembered = {}, channels = false, spaceOwner = 'hermes') {
+  const env = { channelsOn: () => channels, spaceAgent: s => s?.agent || 'hermes', focusAgents: () => agentIds.map(id=>({id,label:id==='hermes'?'Archimedes':id})), visibleSpaces:()=>collections, spaces:()=>collections,
+    focusOf:()=>focus, focusedAgent:f=>f?.kind==='agent'?f.key:f?.kind==='space'?spaceOwner:'',
     esc:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
     AGS:()=>({colour:()=>'',sigil:()=>'',isPrivate:()=>false}),agentRec:id=>({id}),
     LIVE:{unified:()=>[],spaceSessions:()=>({rows:[]}),workGroups:()=>({archive:[]}),isNew:()=>false}, matchesFocus:()=>true, rememberedFocus:(w,a)=>remembered[a]||{kind:'agent',key:a} };
@@ -44,4 +44,28 @@ test('under All an agent tab still names the Space it remembers',()=>{
   assert.match(html,/all:" aria-pressed="true"/);
   assert.match(html,/agent:hermes"[^>]*aria-pressed="false"[^]*?<span>SS<\/span>/);
   assert.doesNotMatch(fixture(['hermes','private'],[{id:'ss',name:'SS'}]),/<span>SS<\/span>/);
+});
+// wizard-ux issue 1340: with channels on, a channel is a feed, never the agent tab's name (phone strip read
+// "WizardOS Apps" after General, where "Archimedes" belongs).
+test('with channels on, an agent tab always names its agent, never a channel (main and routed agents)',()=>{
+  // Main (hermes) plus a routed agent of each runtime kind, each with its own remembered channel.
+  for (const [ag, kind] of [['hermes','main'],['host-ops','host'],['box','container'],['locked','restricted']]) {
+    const label = ag==='hermes' ? 'Archimedes' : ag, sp=[{id:'apps-'+ag,name:'WizardOS Apps '+kind,agent:ag}], rem={[ag]:{kind:'space',key:'apps-'+ag}};
+    const ids = ag==='hermes' ? ['hermes','other'] : ['hermes',ag];
+    for (const focus of [null,{kind:'agent',key:ag},{kind:'space',key:'apps-'+ag}]) {
+      const html=fixture(ids,sp,focus,rem,true,ag);
+      assert.match(html,new RegExp(`agent:${ag}"[^>]*><span>${label}</span>`),kind+' '+JSON.stringify(focus));
+      assert.doesNotMatch(html,/WizardOS Apps/,kind);
+    }
+    // Switch off: the Spaces behaviour stays (the tab names the remembered Space).
+    assert.match(fixture(ids,sp,null,rem,false,ag),new RegExp(`<span>WizardOS Apps ${kind}</span>`),kind+' off');
+  }
+});
+test('with channels on, the agent tab opens the agent, not the channel it last had (main and routed agents)',()=>{
+  for (const ag of ['hermes','host-ops','box','locked']) {
+    const run=on=>{const env={channelsOn:()=>on,W:{w:{id:'w',agentFocus:{[ag]:{kind:'space',key:'apps'}}}},owner:id=>id,spaces:()=>[{id:'apps',name:'WizardOS Apps',agent:ag}],spaceAgent:s=>s?.agent||'hermes'};
+      vm.createContext(env);vm.runInContext(cut('  function rememberedFocus(', '  function addFilter('),env);return JSON.parse(JSON.stringify(env.rememberedFocus({id:'w'},ag)));};
+    assert.deepEqual(run(true),{kind:'agent',key:ag},ag);
+    assert.deepEqual(run(false),{kind:'space',key:'apps'},ag+' off');
+  }
 });

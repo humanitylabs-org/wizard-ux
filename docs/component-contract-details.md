@@ -29,7 +29,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Share out (people → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / settle / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
-| Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
+| Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (resolves false: no view draws a host orb since ux#1338) | own volume/FAB | off on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy | bound identity | late/closed denied |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable failures |
@@ -122,3 +122,7 @@ AI usage (from COMPONENTS.md): Claude extra is the OAuth prepaid balance, never 
 Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
 
 ServerSwitchGuard (Android Wizard switch): names the unfinished work; finished kept meetings never block.
+
+Plumbing file notes (moved from COMPONENTS.md): `WosMedia` lives in `media-watch.js`; `WizWorkspaces` (`workspaces.js`) is the saved Wizards switcher. `WizBrowserBoundary` (`browser-boundary.js`, shell) and `WizBoundaryClient` (`browser-boundary-client.js`, app side) are the browser owner boundary's sandboxed-frame channel (wizard-os#133, [doc](browser-boundary.md)).
+
+Thread tracker order (moved from COMPONENTS.md): oldest first (running, then acked fold, last).

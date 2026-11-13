@@ -24,17 +24,13 @@
    * names that shell's own entry instead (css '' = none), so a shell never downloads another shell's layout code. */
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
-    Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
-    // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
-    // phone = the same orb scene on Home only (layouts/orb/phone.js).
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: 'phone-boot.css', js: 'phone.js' }) }) }),
-    // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
-    Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
     Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true, files: Object.freeze({ desktop: Object.freeze({ css: 'desktop-boot.css', js: 'desktop.js' }) }) }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
   ]);
-  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
+  // The Orb, Apps and Two orbs layouts were removed (wizard-ux issue 1338): a stored 'orb', 'apps' or 'two-orb' is unknown,
+  // so boot treats it as Classic (phone) or the standard AI apps view (desktop).
+  const VIEW_LAYOUTS = new Set(['ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutFile = (L, kind) => { const f = L.files?.[env().shell]; return f ? f[kind] || '' : kind === 'css' ? 'layout.css' : 'layout.js'; };
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
@@ -756,7 +752,8 @@
     // (round 7) a desktop app panel beside the orb's column (AI apps: the app on the right, the orb in the chat): no orb
     // over it, so no room kept for one (no lift, no band)
     let fi = frameInset;
-    if (fi && isDoc && document.documentElement.dataset.shell === 'desktop') { try { const o = frameOrb?.(), r = f.getBoundingClientRect(); if (o && r.width && (o.x < r.left || o.x > r.right)) fi = 0; } catch (_) {} }
+    // (no room for an orb that is not over the frame: beside a document, or below it in a desktop app bar)
+    if (fi && document.documentElement.dataset.shell === 'desktop') { try { const o = frameOrb?.(), r = f.getBoundingClientRect(); if (o && r.width && (isDoc && (o.x < r.left || o.x > r.right) || o.y - o.d / 2 >= r.bottom - 1)) fi = 0; } catch (_) {} }
     let d = null; try { d = f.contentDocument; } catch (_) { return; }
     if (!d?.documentElement) return;
     d.documentElement.style.setProperty('--wos-inset-b', fi + 'px');
@@ -926,7 +923,11 @@
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
         // (a focused agent's list carries no inbox notifications: they belong to All, as in Chats)
-        list: opts => { const l = live() ? (opts?.focused === true && shell.sessionListFocused ? shell.sessionListFocused() : shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = opts?.focused === true && shell.agentFocus?.().id ? (o.ready || []) : withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
+        // { activity: true } (Channels on, wizard-ux issue 1336): every agent's chats as Working, Ready, Recent (+ older:
+        // how many more Show older adds; { older: true } lists them), Snoozed and Archive, in the one Activity sort;
+        // unread notifications wait in Ready, read ones sit in Recent.
+        list: opts => { if (opts?.activity === true && live() && shell.activityList) return activityRows(shell.activityList({ order: readReadyOrder(), older: opts.older === true }));
+          const l = live() ? (opts?.focused === true && shell.sessionListFocused ? shell.sessionListFocused() : shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = opts?.focused === true && shell.agentFocus?.().id ? (o.ready || []) : withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
         open: id => { if (!live() || typeof id !== 'string' || !id) return; if (id.startsWith(NOTE_ID)) inboxAct(NOTE_ID_OPEN, id.slice(NOTE_ID.length)); else shell.openThread(id); },
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
         // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.
@@ -966,6 +967,8 @@
         channelPost: () => live() ? !!shell.chatChannelPost?.() : false,
         // + / ⌥N on the Channels list with no channel open (wizard-ux issue 1308): the new-channel form opens (true).
         channelNew: () => live() ? !!shell.chatChannelNew?.() : false,
+        // The Chats list's tab: 'activity' or 'channels' ('' with the switch off). It decides what + does (issue 1310).
+        channelView: () => live() ? shell.chatChannelView?.() || '' : '',
       }),
       /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
        * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
@@ -1179,7 +1182,7 @@
     for (const k of ['mobile', 'desktop']) { let x = null; try { x = C.apps(k)?.APP?.[id]; } catch (_) {} if (x && !x.system && H.canOffer(x)) return x; }
     return null;
   }
-  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename', 'move']);
+  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename', 'move', 'markdone']);
   /* Notification rows in sessions.list() (round 5): the items Chats lists while a package shows the inbox as threads
    * (host.inboxList), as Ready rows. New = unread (Snooze, Archive), snoozed = read (Restore, Archive), the actions the
    * inbox's handler takes; open = the notification as a chat (its Badge | Chats picker above it). */
@@ -1217,6 +1220,14 @@
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
   function readWorkingOrder() { return window.WizLive?.workingOrder?.() || 'alphabetical'; }
   function readReadyOrder() { try { const v = localStorage.getItem(READY_ORDER_KEY); return READY_ORDERS.includes(v) ? v : 'newest'; } catch (_) { return 'newest'; } }
+  function activityRows(l) {
+    if (!l) return null;
+    const M = window.WizChatsListModel, o = structuredClone(l), order = readReadyOrder();
+    const notes = noteRows().map(r => ({ ...r, mark: r.snoozed ? '' : r.rank === 1 ? 'needs' : 'new' }));
+    o.ready = M.activitySort([...(o.ready || []), ...notes.filter(r => !r.snoozed)], order);
+    o.recent = M.activitySort([...(o.recent || []), ...notes.filter(r => r.snoozed)], 'newest');
+    return o;
+  }
   function withNoteRows(ready) {
     return window.WizChatsListModel.readySort([...ready, ...noteRows()], readReadyOrder());
   }

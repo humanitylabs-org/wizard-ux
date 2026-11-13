@@ -1,5 +1,8 @@
 /* Shared focused-field dictation. A seal is a DOM capability, never a selector to re-resolve.
  * Hosts admit registered, visible same-origin app documents; unregistered frames are not traversed.
+ * A sandboxed app frame (browser owner boundary, wizard-os#133; only when the box turned it on) has no readable
+ * document: it reports a focused field by postMessage (WizBrowserBoundary.fieldState), the seal is the app's own pin
+ * (WizBrowserBoundary.pinField) and insert() then answers a Promise<boolean>. Callers await it.
  * No submit, routing or agent fallback belongs here. */
 (() => {
   'use strict';
@@ -21,9 +24,15 @@
     while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
     return el;
   }
-  function create({ document: topDoc = document, frames = () => [], admit = () => true, onChange = () => {}, controls = () => false } = {}) {
+  function create({ document: topDoc = document, frames = () => [], admit = () => true, onChange = () => {}, controls = () => false, boundary = () => topDoc.defaultView?.WizBrowserBoundary || null } = {}) {
     const bound = new WeakSet(), versions = new WeakMap();
     let current = null;
+    const sandboxed = frame => { const B = boundary(); return B?.enabled === true && B.owns(frame) ? B : null; };
+    // A sandboxed frame's field: the frame element stands in for the field (admit sees the frame).
+    function validRemote(c) {
+      const B = c?.remote && sandboxed(c.frame), s = B && B.fieldState(c.frame);
+      return !!s && s.gen === c.gen && c.frame.isConnected && frames().includes(c.frame) && admit(c, c.frame);
+    }
     function context(doc) {
       if (doc === topDoc) return { doc, frame: null, href: doc.location.href, version: versions.get(doc) || 0 };
       for (const frame of frames()) {
@@ -39,6 +48,8 @@
       let el = deepActive(topDoc), doc = topDoc;
       if (el?.tagName === 'IFRAME') {
         if (!frames().includes(el)) return null;
+        const B = sandboxed(el);
+        if (B) { const s = B.fieldState(el), c = s?.focused ? { doc: null, frame: el, el, remote: true, gen: s.gen } : null; return c && validRemote(c) ? c : null; }
         try { doc = el.contentDocument; el = deepActive(doc); } catch (_) { return null; }
       }
       const target = editable(el), c = target && context(doc);
@@ -48,7 +59,7 @@
       const a = active();
       // Keyboard activation of orb/recording controls must not lose the last focused field.
       const el = deepActive(topDoc);
-      current = a || (controls(el) && current && validContext(current, current.el) ? current : null);
+      current = a || (controls(el) && current && (current.remote ? validRemote(current) : validContext(current, current.el)) ? current : null);
       onChange(current);
       return current;
     }
@@ -73,6 +84,17 @@
     }
     function capture() {
       const a = refresh(); if (!a) return null;
+      if (a.remote) {
+        // The app seals its own field; the pin answers later (or null), and insert() waits for it.
+        const pin = Promise.resolve(sandboxed(a.frame)?.pinField(a.frame)).catch(() => null);
+        const seal = { ...a, pin, released: false, busy: false, releaseAsked: false };
+        seal.release = () => {
+          if (seal.busy) { seal.releaseAsked = true; return; }
+          if (seal.released) return;
+          seal.released = true; pin.then(h => h?.release());
+        };
+        return seal;
+      }
       const el = a.el, seal = { ...a, value: el.matches('input, textarea') ? el.value : el.innerHTML, changed: false, released: false };
       const changed = () => { seal.changed = true; };
       el.addEventListener('input', changed);
@@ -89,7 +111,15 @@
       seal.release = () => { seal.released = true; seal.observer?.disconnect(); el.removeEventListener('input', changed); };
       return seal;
     }
+    async function insertRemote(seal, text) {
+      if (seal.released || seal.busy || !validRemote(seal)) return false;
+      seal.busy = true; let h = null;
+      try { h = await seal.pin; return !!h && await h.insert(String(text)) === true; }
+      catch (_) { return false; }
+      finally { seal.busy = false; seal.released = true; h?.release(); refresh(); }
+    }
     function insert(seal, text) {
+      if (seal?.remote) return insertRemote(seal, text);
       if (!seal || seal.released || !validContext(seal, seal.el)) return false;
       const el = seal.el, plain = el.matches('input, textarea');
       // Plain fields: the sealed node is still here, so the words always land in it. Android keyboards fire
@@ -140,6 +170,8 @@
       refresh(); return true;
     }
     bind(topDoc);
+    // A sandboxed app said its field focus changed: repaint the orb.
+    try { boundary()?.onField?.(() => refresh()); } catch (_) {}
     return { bind, refresh, capture, insert, get current() { return current; } };
   }
   window.WizCore = window.WizCore || {};

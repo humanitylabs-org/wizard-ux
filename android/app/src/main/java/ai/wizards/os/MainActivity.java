@@ -523,17 +523,28 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         Uri u = Uri.parse(url);
         if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
         try {
-            String name = android.webkit.URLUtil.guessFileName(url, disposition, mime);
+            // The server's own name first (filename* included); Android's guess reads only a lone attachment; filename="x"
+            // and otherwise names the file after the URL, e.g. Messenger's long random media id (issue 1342).
+            String given = ai.wizards.os.downloads.DownloadsPolicy.dispositionName(disposition);
+            String name = ai.wizards.os.downloads.DownloadsPolicy.saveName(given != null ? given : android.webkit.URLUtil.guessFileName(url, disposition, mime));
+            final java.io.File dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+            name = ai.wizards.os.downloads.DownloadsPolicy.uniqueName(name, n -> new java.io.File(dir, n).exists()
+                    || ai.wizards.os.downloads.Downloads.inFlightName(this, n)); // DownloadManager never overwrites: the same file twice would fail
+            // When the shell's Downloads port is live, Wizard's own banner and sheet show the download: Android's heads-up
+            // notification over the app only duplicates it (issue 1342). Otherwise (no shell listening) keep Android's.
+            // A quiet one that finishes while Wizard is in the background gets Wizard's own quiet tray note (Downloads.onComplete).
+            boolean shellShows = downloadsReply != null && downloadsReplyEpoch == downloadsEpoch;
             android.app.DownloadManager.Request r = new android.app.DownloadManager.Request(u)
                     .setMimeType(mime)
                     .setTitle(name)
-                    .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setNotificationVisibility(shellShows ? android.app.DownloadManager.Request.VISIBILITY_HIDDEN
+                            : android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name);
             if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
             String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
             if (cookie != null) r.addRequestHeader("Cookie", cookie);
             long downloadId = ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
-            try { ai.wizards.os.downloads.Downloads.track(this, downloadId, name, mime); } catch (RuntimeException ignored) { } // the list is extra; the download itself already runs
+            try { ai.wizards.os.downloads.Downloads.track(this, downloadId, name, mime, shellShows); } catch (RuntimeException ignored) { } // the list is extra; the download itself already runs
             Toast.makeText(this, "Downloading " + name + " · it'll be in Downloads", Toast.LENGTH_SHORT).show();
         } catch (RuntimeException e) {
             openOutside(u); // no download manager / storage refused: let the browser fetch it

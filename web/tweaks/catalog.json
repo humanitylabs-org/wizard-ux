@@ -16,8 +16,6 @@
     "miguel/reply-summary",
     "miguel/now-playing",
     "miguel/calm-offline",
-    "miguel/orb-shell",
-    "miguel/apps-home",
     "miguel/ai-apps",
     "wizard/thread-tracker",
     "wizard/desktop-chats",
@@ -29,8 +27,8 @@
     "wizard/update-bug-reports",
     "wizard/connector-models",
     "wizard/link-token-repair",
-    "wizard/cli-install-links",
-    "wizard/chat-channels"
+    "wizard/chat-channels",
+    "wizard/graceful-restart"
   ],
   "defaults": [
     "wizard/unified-inbox",

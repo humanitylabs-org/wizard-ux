@@ -192,7 +192,10 @@
     const unreadAt = Math.max(l.unreadAt ?? -1, r.unreadAt ?? -1);
     const la = Date.parse(l.assistantActivityAt ?? ''), ra = Date.parse(r.assistantActivityAt ?? '');
     const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
-    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
+    // Mark done (wizard-ux issue 1317): the newer "handled through" of the two is kept, whichever record wins.
+    const lh = Date.parse(l.handledThrough ?? ''), rh = Date.parse(r.handledThrough ?? '');
+    const ht = !isFinite(lh) ? (isFinite(rh) ? r.handledThrough : '') : !isFinite(rh) ? l.handledThrough : rh > lh ? r.handledThrough : l.handledThrough;
+    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), ...(ht ? { handledThrough: ht } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
   }
   /* Marking a row read never forgets a newer revision this device already knows was read (wizard-ux issue 1266):
    * the Channels feed can mark a row from a list read older than the record (a stale refresh, another device's
@@ -201,6 +204,13 @@
     const fresh = recordFor(s, seenAt); if (!prior) return fresh;
     const { unreadAt, ...kept } = later(prior, fresh);
     return { ...kept, seenAt: Math.max(seenAt, prior.seenAt || 0) };
+  }
+  /* Mark done (wizard-ux issue 1317): the revision a thread was handled through is its own newest reply time (else
+   * updatedAt), a server time, so device clocks never matter. A later reply moves past it and the markers come back. */
+  const handledRev = s => assistantAt(s) || s.updatedAt || '';
+  function handledOf(s, state) {
+    const r = state?.threads?.[seenKeyOf(s)], h = Date.parse(r?.handledThrough ?? ''), cur = Date.parse(handledRev(s));
+    return isFinite(h) && isFinite(cur) && cur <= h;
   }
   function merge(a, b) {
     if (!a) return b; if (!b) return a;
@@ -1008,6 +1018,53 @@
     return { state, pull, patch, create, move, moves, feed, rows, find, fresh, get off() { return off; } };
   }
   /* ---- end channel store ---- */
+  /* ---- channel reads (wizard-agent-service issue 471) ----
+   * Each channel's read watermark on the box (GET/PUT /wizard/v1/channels/read, the Agent Service's
+   * WIZARD_CHANNEL_READ_SYNC switch), so reading a channel to the bottom on one device clears it on the owner's others.
+   * Chats asks for it only while its wizard/chat-channels switch is on (issue 1358). marks() is the box's marks (key -> ms) or
+   * null (unknown yet, switch off on the box, older service: the device's own marks stay the only ones; asked again
+   * every few minutes). The box keeps every mark forward only, and so does this copy: a read that answers late never
+   * moves a mark back. */
+  const CHANNEL_READS_URL = '/wizard/v1/channels/read';
+  function channelReads({ req, emit, now = () => Date.now(), every = 30e3, offEvery = 5 * 60e3 } = {}) {
+    const KEY = /^(?:general(?:\|[a-z0-9][a-z0-9-]{0,47})?|[a-z0-9][a-z0-9-]{0,47}\|[a-z0-9-]{1,48})$/;
+    let doc = null, off = false, readAt = 0, reading = null;
+    // Newer of each mark; true when something moved.
+    function merge(at) {
+      if (!at || typeof at !== 'object') return false;
+      let moved = false; doc = doc || {};
+      for (const [k, t] of Object.entries(at)) if (KEY.test(k) && Number.isFinite(t) && !(doc[k] >= t)) { doc[k] = t; moved = true; }
+      return moved;
+    }
+    const tell = moved => { if (moved) { try { emit(); } catch (_) {} } };
+    function pull() {
+      if (reading) return reading;
+      readAt = now();
+      reading = (async () => {
+        try { const j = await (await req(CHANNEL_READS_URL, { cache: 'no-store' })).json(); const was = !doc; off = false; tell(merge(j && j.at) || was); }
+        catch (e) { if (e?.status === 404) { const had = !!doc; off = true; doc = null; tell(had); } }
+        finally { reading = null; }
+      })();
+      return reading;
+    }
+    function marks() {
+      if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
+      return off ? null : doc;
+    }
+    // Sends this device's newer marks (the caller already waits a couple of seconds between writes).
+    async function push(at) {
+      const body = {}; for (const [k, t] of Object.entries(at || {})) if (KEY.test(k) && Number.isFinite(t)) body[k] = Math.floor(t);
+      const keys = Object.keys(body).slice(0, 300); if (!keys.length || off) return false;
+      try {
+        const r = await req(CHANNEL_READS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Object.fromEntries(keys.map(k => [k, body[k]])) }) });
+        let j = null; try { j = await r.json(); } catch (_) {}
+        tell(merge(j && j.at)); return true;
+      } catch (e) { if (e?.status === 404) { off = true; doc = null; } return false; }
+    }
+    const fresh = () => { readAt = 0; };
+    return { marks, pull, push, fresh, get off() { return off; } };
+  }
+  /* ---- end channel reads ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -1242,6 +1299,23 @@
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
     },
+    /* Mark done (wizard-ux issue 1317): read as of now (the green markers) and handled through the reply it shows (the
+     * amber Needs you), in the same synced seen record. Rows as for markSeen. Resolves true once the box has it. */
+    markHandled(ids) {
+      const list = (Array.isArray(ids) ? ids : [ids]).map(id => id && typeof id === 'object' ? id : this.session(id)).filter(Boolean);
+      if (!list.length) return Promise.resolve(false);
+      const ts = Date.now();
+      let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
+      const threads = { ...state.threads };
+      for (const s of list) {
+        const k = seenKeyOf(s), rec = seenRecord(threads[k], s, ts), rev = handledRev(s), was = Date.parse(rec.handledThrough ?? '');
+        threads[k] = isFinite(Date.parse(rev)) && !(was > Date.parse(rev)) ? { ...rec, handledThrough: rev } : rec;
+      }
+      state = { ...state, threads };
+      this.seen = state; writeLocal(state); this.emit();
+      return putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); return true; }).catch(() => false);
+    },
+    handled(s) { return !!s && handledOf(s, this.seen); },
     async markUnread(ids) {
       const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       if (!list.length) return false;
@@ -1250,7 +1324,7 @@
       const threads = { ...before.threads };
       for (const s of list) {
         const key = seenKeyOf(s), prior = threads[key];
-        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), unreadAt };
+        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), ...(prior?.handledThrough ? { handledThrough: prior.handledThrough } : {}), unreadAt };
       }
       const pending = { ...before, threads };
       this.seen = pending; writeLocal(pending); this.emit();
@@ -1942,7 +2016,20 @@
       if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
       applyLocal(s); return s;
     } });
-  try { addEventListener('focus', () => L.chanStore.fresh()); document.addEventListener('visibilitychange', () => { if (!document.hidden) L.chanStore.fresh(); }); } catch (e) {}
+  L.chanReads = channelReads({ req, emit: () => L.emit() });
+  /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
+   * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
+   * instead of waiting out the store's 5-minute off interval. */
+  try {
+    let chanFlip = [];
+    window.addEventListener('wos:tweak-choice', e => {
+      if (e?.detail?.id !== 'wizard/chat-channels') return;
+      chanFlip.forEach(clearTimeout);
+      // Off: Channels stop asking at once (the store and read marks are read only while the switch is on).
+      chanFlip = !e.detail.on ? [] : [1500, 5000, 12000].map(ms => setTimeout(() => { L.chanStore.fresh(); L.chanStore.pull(); L.chanReads.fresh(); L.chanReads.pull(); Promise.resolve(L.refresh()).catch(() => {}); }, ms));
+    });
+  } catch (e) {}
+  try { addEventListener('focus', () => { L.chanStore.fresh(); L.chanReads.fresh(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { L.chanStore.fresh(); L.chanReads.fresh(); } }); } catch (e) {}
 
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };

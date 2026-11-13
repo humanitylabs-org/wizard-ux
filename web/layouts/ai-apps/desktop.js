@@ -77,6 +77,13 @@ import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sections
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;
+/** Narrower desktop window, one app at a time (James, 12 Nov 2026, from the approved mockup: Wizard at half or a third of
+ * his screen beside Zoom; wizard-ux issue 1314 was the earlier switch): below `from` px wide the main area shows ONE
+ * thing, an app or Chats, and the Apps column becomes the app bar at the `bar` edge (`barH` px): Chats first, then the
+ * pinned and open apps either side of the orb, All apps last, one click each. Chats keeps its list beside the chat
+ * from `split` px (the sidebar's own DOCKED_FROM), narrower the list, then the chat with Back. The bar's edge lives
+ * here only: the pane geometry places it (dock edge) and desktop.css reads html[data-aad-dock-edge]. */
+export const ONE = Object.freeze({ from: 1100, split: DOCKED_FROM, bar: 'bottom', barH: 64 });
 /** Round 9 (Miguel, 2 Nov 2026): the panels resizable by drag, within these limits (px). Round 15: the sidebar, the
  * open-apps column on the right (Arc's vertical tabs; 52 px folded) and the app panel docked left of it. */
 export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400] };
@@ -90,6 +97,11 @@ export const TIDY_EVERY = 3600e3;
  * from app-declared shortcuts so plain ⌥←/→ remain native word navigation, not a Wizard action. */
 export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
   'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
+/** Browser boundary (wizard-os#133): the view's own ⌥ keys that also come across from a sandboxed app that has the
+ * keyboard, as they do from a same-origin one: ⌥H Home, ⌥K search, ⌥L / ⌥R fold a side, ⌥O workspaces, ⌥A add an app
+ * and ⌥0 the tenth row. Like the desktop's list, only keys that move around the owner's own windows or open the view's
+ * own panels; ⌥N, ⌥S, ⌥W, ⌥↑/↓, ⌥E/X/Z/B, ⌥P and the voice keys stay the app's while it has the keyboard. */
+export const FRAME_KEYS = Object.freeze(['KeyH', 'KeyK', 'KeyL', 'KeyR', 'KeyO', 'KeyA', 'Digit0']);
 /** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
  * never e.key (macOS ⌥ turns letters into symbols): KeyJ → 'j', Slash → '/'; '' for anything else. */
 const APP_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
@@ -117,12 +129,28 @@ export default function desktop(api) {
   let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   let paneGeometry = null, secondEl = null;
   const paneVars = new Set();
+  /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored */
+  const one = () => (globalThis.innerWidth || 1440) < ONE.from;
+  /* Activity as a short what-needs-me list (wizard-ux issue 1336, the Channels switch wizard/chat-channels): no agent
+   * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
+   * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
+   * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
+  const actOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (_) { return false; } };
+  const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
+  const ACT_EMPTY = { working: 'Nothing working.', ready: 'Nothing needs you.', recent: 'Nothing else this week.', snoozed: 'Nothing snoozed.', archive: 'Nothing archived.' };
+  const LKINDS = [...KINDS, 'recent'];
+  let actOlder = false;
+  const oneSplit = () => (globalThis.innerWidth || 1440) >= ONE.split;
+  // (one app at a time: no split, no side by side, no second app; the saved arrangement is kept for the wide window)
+  const paneModel = () => { const m = panes.get(); return one() ? { ...m, mode: 'tiled', ratio: null, weights: {}, slots: ['chats', 'app'], app2: null } : m; };
   function placePanes(s) {
-    const m = panes.get(), focus = root.hasAttribute('data-aad-focus');
-    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end.
-    const edge = ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
-    const sideWidth = focus ? 0 : root.dataset.aadSide === 'open' ? s.side[0] : RAIL;
-    const dockWidth = focus ? 0 : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
+    const m = paneModel(), focus = root.hasAttribute('data-aad-focus');
+    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end. The narrower window's
+    // app bar (ONE) is that dock at ONE.bar, ONE.barH thick; the saved wide-window edge is left as it is.
+    const bar = one(), edge = bar ? ONE.bar : ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
+    const sm = root.dataset.aadSide;
+    const sideWidth = focus || sm === 'none' ? 0 : sm === 'open' ? s.side[0] : sm === 'full' ? vw() : RAIL;
+    const dockWidth = focus ? 0 : bar ? ONE.barH : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
     paneGeometry = panes.geometry({ ...m, dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
       sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!secondEl,
     });
@@ -186,9 +214,9 @@ export default function desktop(api) {
   let noteWant = false;
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
-  const readSessions = () => { sessions = api.sessions.list({ focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
+  const readSessions = () => { sessions = api.sessions.list((typeof actOn === 'function' && actOn()) ? { activity: true, older: actOlder } : { focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
   // (a chat opened from elsewhere may belong to an agent the sidebar is not focused on: look in the whole list too)
-  const titleOf = id => { for (const s of [sessions || readSessions(), api.sessions.list()]) for (const k of KINDS) { const r = ((s || {})[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
+  const titleOf = id => { for (const s of [sessions || readSessions(), api.sessions.list()]) for (const k of (typeof LKINDS !== 'undefined' ? LKINDS : KINDS)) { const r = ((s || {})[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
   // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.
   const ttAgent = id => globalThis.WizLive?.agentOf?.(id) || '';
   const ttDots = id => { const T = globalThis.WosThreadTracker; return T?.on?.() ? T.dots(id, ttAgent(id)) : ''; };
@@ -241,7 +269,7 @@ export default function desktop(api) {
   let agentsDrawn = '';
   function paintAgents() {
     const f = api.agents.focus ? api.agents.focus() : { id: '', agents: [] }, list = f.agents || [];
-    const sig = list.length > 1 ? JSON.stringify([f.id, list.map(a => [a.id, a.label, a.colour, a.private])]) : '';
+    const sig = list.length > 1 && !(typeof actOn === 'function' && actOn()) ? JSON.stringify([f.id, list.map(a => [a.id, a.label, a.colour, a.private])]) : '';
     if (sig === agentsDrawn) return;
     agentsDrawn = sig; agentsRow.hidden = !sig;
     if (!sig) { agentsRow.replaceChildren(); return; }
@@ -273,6 +301,12 @@ export default function desktop(api) {
   const feedOn = () => api.sessions.channelFeedOpen?.() || null;
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
+  // one app at a time, the list alone: its row for the chat already open behind it shows that chat again (another row
+  // opens its chat, and paintOne follows the new thread)
+  api.listen(side, 'click', e => {
+    const w = e.target?.closest?.('.aad-row')?.closest?.('.aad-rw');
+    if (w && one() && !pane && oneList && !oneSplit() && w.dataset.sid === chatThread) { oneList = false; oneSeen = chatThread; paintTop(); }
+  });
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
   /* ---------- round 15 (Miguel, 3 Nov 2026: Arc-style): the top row over the main area ----------
@@ -284,9 +318,12 @@ export default function desktop(api) {
   /* Back to the channel (wizard-ux issue 1302; James, 11 Nov 2026: "if I open a channel and then I click through to a
    * thread there's no way for me to go back to the channel"): a thread opened from a channel's feed in this column shows
    * "‹ # name" at the left of its header, and it does what Esc does (closeChat: the feed again, at its place). A thread
-   * opened from Activity or the sidebar has none. */
+   * opened from Activity or the sidebar shows "‹ Activity" / "‹ Chats" (and the feed "‹ Channels") only while the list
+   * is not beside it (James, 12 Nov 2026: "Make sure the user always has a back button in chats"; listBack below). */
   const cBack = el('button', 'aad-cback', { type: 'button' }); cBack.hidden = true;
   cTop.append(cBack, tt, cX);
+  // narrow desktop (ONE), narrower than ONE.split: the chat (or a new one) alone, Back to the chats list
+  const oneBack = el('button', 'aad-cback aad-oneback', { type: 'button', text: '‹ Chats', 'aria-label': 'Back to the chats list', title: 'Back to the chats list' }); oneBack.hidden = true;
   const pTop = el('div', 'aad-ptop'); pTop.hidden = true;
   const pIcon = el('span', 'aad-pti'), pName = el('span', 'aad-ptn');
   const pTools = el('span', 'aad-ptools'); pTools.hidden = true;
@@ -298,9 +335,15 @@ export default function desktop(api) {
   api.listen(sTop, 'mousedown', e => e.preventDefault()); // like the app bar: never takes the keyboard itself
   const modeBars = [];
   function windowMode(mode, slot = panes.get().focus) {
+    // narrow desktop (ONE): one app at a time, no arrangements; the saved one stays as it is for the wide window
+    if (typeof one === 'function' && one()) return;
+    // Full screen remembers the view it came from: Esc there goes back to it, never to tiled (wizard-ux issue 1325)
+    const was = panes.get().mode; if (mode === 'full' && was !== 'full') fullFrom = was;
     // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
     flip([dockEl, pane?.el, secondEl], () => panes.set({ mode, focus: slot }));
   }
+  // (in memory only: after a reload in full screen, Esc goes to tiled)
+  var fullFrom = 'tiled';
   function modeBar(slot) {
     const bar = el('span', 'aad-modes', { role: 'group', 'aria-label': 'Window arrangement' });
     const nav = el('button', 'aad-ib aad-mode-chats', { type: 'button', 'aria-label': 'Chats list', title: 'Chats list' }); nav.append(icon('side'));
@@ -386,12 +429,24 @@ export default function desktop(api) {
   // round 16 item 7: + at the column's end (in place of All apps): the picker of installed apps neither pinned nor open
   const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Open another app: search all installed apps, including open and pinned apps', title: 'Open another app (Left ⌥Space · ⌥A)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
-  vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
+  // (the app bar's own word for it, ONE: "All apps", the phone's)
+  vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }), el('span', 'aad-vtn aad-vtn-bar', { text: 'All apps', 'aria-hidden': 'true' }));
   const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
   const tidyW = el('span', 'aad-tidy-w');
   tidyBtn.append(icon('snooze', 'aad-ico aad-tidy-i'), tidyW);
   vtFoot.append(vtAll, tidyBtn);
-  vt.id = 'aad-vt'; vt.append(vtHead, vtList, vtFoot);
+  /* Narrower window (ONE): this column is the app bar (desktop.css, html[data-aad-dock-edge]) and Chats is its first
+   * item, the one way back to the chats there (the left sidebar is gone); hidden while the window is wide (outside the
+   * list: the rows' drag and their numbering never see it). Its badge: the chats waiting (Ready's count). */
+  const vOne = el('div', 'aad-vone'); vOne.hidden = true;
+  const vChats = el('div', 'aad-vchats', { role: 'button', tabindex: '0', 'data-app': CHATS, title: 'Chats', 'aria-label': 'Chats' });
+  const vChatsN = el('b', 'aad-vtb', { 'aria-hidden': 'true' }); vChatsN.hidden = true;
+  { const ic = el('span', 'aad-vti'), t0 = el('span', 'aad-tile is-vt', { 'aria-hidden': 'true' }); t0.style.setProperty('--c', 'var(--wz-accent)'); t0.append(el('i', 'sgi sg-chats', { 'aria-hidden': 'true' })); ic.append(t0); vChats.append(ic, el('span', 'aad-vtn', { text: 'Chats' }), vChatsN); }
+  vOne.append(vChats, el('hr', 'aad-vtsep', { 'aria-hidden': 'true' }));
+  // the app bar's gap for the orb (between its two halves; the orb moves into it, as into the composer's slot)
+  const vtOrb = el('i', 'aad-vtorb', { 'aria-hidden': 'true' });
+  vt.id = 'aad-vt'; vt.append(vtHead, vtList, vtFoot, vtOrb);
+  vt.insertBefore(vOne, vtList);
   const toast = el('div', 'aad-toast', { role: 'status' }); toast.hidden = true;
   const toastW = el('span', 'aad-toast-w'), toastU = el('button', 'aad-toast-u', { type: 'button', text: 'Undo' });
   toast.append(toastW, toastU);
@@ -432,13 +487,19 @@ export default function desktop(api) {
 
   /* ---------- the sidebar's width: open, the rail, or open over the page (narrow) ---------- */
   let folded = api.storage.get('folded') === true, peek = false;
+  // one app at a time (ONE): Chats narrower than ONE.split shows its list (oneList) or the chat; the app last in front
+  // (Back from the list returns to it); the chat last seen (a new one shows the chat); the switch's state last painted
+  let oneList = true, oneLast = null, oneSeen, oneWas = false, oneWide = false;
   // A chat docked beside an app panel needs that room: there the sidebar keeps the old 900 px breakpoint, so the app
   // is never squeezed to nothing between the docked chat and the open-apps column (Codex review on PR 1313).
   const narrow = () => (globalThis.innerWidth || 1440) < (root.dataset.aadChat && root.dataset.aadSplit ? CROWDED_FROM : DOCKED_FROM);
-  const sideWant = () => narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
+  // (peek: the list shown over the page, by ◫ on a narrow window or by a chat's Back wherever the list is not beside it:
+  // narrow, folded to the rail, or full screen)
+  const peekable = () => narrow() || folded || panes.get().mode === 'full';
+  const sideWant = () => one() ? (pane ? 'none' : oneSplit() ? 'open' : oneList ? 'full' : 'none') : peek && peekable() ? 'over' : narrow() || folded ? 'rail' : 'open';
   /** the sidebar again after a resize or a chat docking beside an app (or leaving): only when its mode changes */
   function syncSide() {
-    if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; }
+    if ((one() || !peekable()) && peek) { peek = false; offPeek?.(); offPeek = null; }
     if (sideWant() !== root.dataset.aadSide) paintSide();
   }
   function paintSide(relayout = true) {
@@ -455,12 +516,13 @@ export default function desktop(api) {
     rTog.title = 'Open sidebar (⌥L)';
     if (open) paintList(); else paintRail();
     applySizes();
+    paintBack(); // (the list beside the chat or not: its Back follows)
     // the desks' windows are laid out in pixels: lay them out again for the new width
     if (relayout && was !== mode && (was === 'open') !== (mode === 'open')) retileSoon();
   }
   function toggleSide() {
     focusLeave();
-    if (narrow()) { peek = !peek; if (peek) offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); else { offPeek?.(); offPeek = null; } }
+    if (narrow() || peek) { peek = !peek; if (peek) offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); else { offPeek?.(); offPeek = null; } }
     else { folded = !folded; api.storage.set('folded', folded); }
     if (q) setSearch(false);
     paintSide();
@@ -477,12 +539,15 @@ export default function desktop(api) {
   const setWorkingOrder = o => { api.sessions.setWorkingOrder?.(o); readSessions(); paintList(true); paintRail(true); };
   const readyOrder = () => groupOrder(api.sessions.order?.());
   // (round 20 item 9: off = one flat Ready; round 24c: 'status' / 'project' / 'none', the old on/off switch read as status / none, a saved 'subject' as project)
-  const groupBy = () => api.storage.get('groupReady') === true ? 'status' : ['project', 'subject'].includes(api.storage.get('groupBy')) ? 'project' : 'none';
+  const groupBy = () => (typeof actOn === 'function' && actOn()) ? 'none' : api.storage.get('groupReady') === true ? 'status' : ['project', 'subject'].includes(api.storage.get('groupBy')) ? 'project' : 'none';
   const groupReady = () => groupBy() === 'status';
   // round 22: the rows' times stay true ("5m" becomes "6m") without a repaint: one cheap text pass every 10 s
   const tickTimes = () => { const now = Date.now(); for (const t of scroll.querySelectorAll('.aad-time')) { const v = shortTime(t.dataset.at, now); if (v && t.textContent !== v) t.textContent = v; } api.after(10e3, tickTimes); };
   api.after(10e3, tickTimes);
   const setOrder = o => { api.sessions.setOrder?.(groupOrder(o)); paintList(true); paintRail(true); paintSetting(); };
+  // Activity's one sort (issue 1336): Chats' own Ready order, where Priority reads as Needs you first.
+  const actOrder = () => globalThis.WizChatsListModel.activitySortOf(api.sessions.order?.());
+  const setActOrder = o => { api.sessions.setOrder?.(globalThis.WizChatsListModel.activitySortOf(o)); readSessions(); paintList(true); paintRail(true); paintSetting(); };
   const setGroup = m => { m = groupMode(m); api.storage.set('groupBy', m); api.storage.set('groupReady', m === 'status'); paintSetting(); paintList(true); paintRail(true); };
   api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); else paintRail(); paintSetting(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
@@ -490,7 +555,7 @@ export default function desktop(api) {
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
-  api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
+  api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); paintSetting(); paintAgents(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
   api.listen(globalThis, 'resize', syncSide);
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -617,14 +682,15 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; if (chatThread === FEED || feedOn()) { chatThread = null; api.sessions.channelBack?.(); } unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; if (chatThread === NOTE) chatThread = null; if (chatThread === FEED || feedOn()) { chatThread = null; api.sessions.channelBack?.(); } unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; oneList = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
   const settings = () => { unpeek(); api.desk.settings(); };
   // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
-  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
-  // + / ⌥N on the Channels list with no channel open start a new channel (wizard-ux issue 1308).
+  // The sidebar's tab decides (wizard-ux issues 1308, 1310): Activity, a blank new chat (a feed left in the column closes);
+  // Channels with a channel open, its box; the Channels list with none open, + / ⌥N start a new channel.
+  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelView?.() !== 'activity' && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
   const plus = () => { if (!feedOn() && api.sessions.channelNew?.()) { closeMenu(); return; } newOrPost(); };
   api.listen(newBtn, 'click', plus); api.listen(rNew, 'click', plus);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
@@ -776,6 +842,8 @@ export default function desktop(api) {
     if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
     // Channels on (issue 1256): the chat's channel, muted on a second line, as in Chats' Activity
     if (s.channel) title.append(el('span', 'aad-chan-line', { text: `# ${s.channel}` }));
+    // (issue 1336: another agent's thread names it after the channel, "# WizardOS Chats · Philosopher")
+    if (s.channel && s.agentName) title.lastChild?.append?.(` · ${s.agentName}`);
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
     if (dots) b.append(dots);
@@ -783,11 +851,14 @@ export default function desktop(api) {
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
-    if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
+    // (Activity with Channels on, issue 1336: the row's one marker, amber over green; no purple unread dot)
+    const mk = typeof s.mark === 'string' ? s.mark : null;
+    if (mk !== null ? s.kind === 'working' || mk === 'needs' || mk === 'new' : s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : mk === 'needs' ? ' is-needs' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
-    if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}`);
-    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
+    if (mk === 'needs') b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, needs you`);
+    if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}${s.agentName ? `, ${s.agentName}` : ''}`);
+    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; feedFocus = null; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
     if ((s.actions || []).some(k => ACTS.some(([a]) => a === k))) {
@@ -829,8 +900,8 @@ export default function desktop(api) {
   function openSortMenu(btn, kind = 'sort') {
     if (menu?.wrap === btn) { closeMenu(); return; }
     closeMenu();
-    const isWorking = kind === 'working-sort', isSort = kind === 'sort' || isWorking;
-    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isWorking ? 'Sort Working' : isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
+    const isWorking = kind === 'working-sort', isAct = kind === 'act-sort', isSort = kind === 'sort' || isWorking || isAct;
+    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isAct ? 'Sort' : isWorking ? 'Sort Working' : isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
     const item = (on, w0, attrs, fn) => {
       const it = el('button', 'aad-pop-i' + (on ? ' is-on' : ''), { type: 'button', role: 'menuitemradio', 'aria-checked': String(on), ...attrs });
       it.append(on ? icon('check') : el('span', 'aad-ico', { 'aria-hidden': 'true' }), el('span', '', { text: w0 }));
@@ -838,7 +909,8 @@ export default function desktop(api) {
       return it;
     };
     card.append(el('h3', 'aad-pop-h', { text: isSort ? 'Sort' : 'Group' }));
-    if (isWorking) for (const [v, w0] of globalThis.WizChatsListModel.WORKING_SORTS) card.append(item(v === workingOrder(), w0, { 'data-working-order': v }, () => setWorkingOrder(v)));
+    if (isAct) for (const [v, w0] of globalThis.WizChatsListModel.ACTIVITY_SORTS) card.append(item(v === actOrder(), w0, { 'data-act-order': v }, () => setActOrder(v)));
+    else if (isWorking) for (const [v, w0] of globalThis.WizChatsListModel.WORKING_SORTS) card.append(item(v === workingOrder(), w0, { 'data-working-order': v }, () => setWorkingOrder(v)));
     else if (isSort) for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
     else for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
     scene.append(card);
@@ -853,6 +925,20 @@ export default function desktop(api) {
   /* ---------- round 19 item 2: the order in Settings › Chats & app screens (this view's own group there) ---------- */
   const setNode = el('div', 'st-group aad-stg', { 'data-aad-setting': '' });
   function paintSetting() {
+    if ((typeof actOn === 'function' && actOn())) {
+      // Activity with Channels on (issue 1336): the one sort, no grouping (Channels does the grouping now).
+      const ao = actOrder(), ar = el('div', 'st-chats-options', { role: 'radiogroup', 'aria-label': 'Sort Activity' });
+      for (const [v, w0] of globalThis.WizChatsListModel.ACTIVITY_SORTS) {
+        const b = el('button', 'st-row wz-row', { type: 'button', role: 'radio', 'aria-checked': String(v === ao), 'data-aad-act-order': v });
+        const tx = el('span', 'st-tx'); tx.append(el('b', '', { text: w0 }));
+        b.append(el('span', '', { 'aria-hidden': 'true', text: v === ao ? '◉' : '○' }), tx);
+        api.listen(b, 'click', () => setActOrder(v));
+        ar.append(b);
+      }
+      setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), el('p', 'aad-stg-l', { text: 'Sort Activity' }), ar,
+        el('p', 'aad-stg-n', { text: 'Working and Ready follow this order; Recent is always newest first. The same choice as Chats\' own order.' }));
+      return;
+    }
     const o = readyOrder();
     const radios = el('div', 'st-chats-options', { role: 'radiogroup', 'aria-label': 'Order chats within each group' });
     for (const [v, w0] of GROUP_ORDERS) {
@@ -886,14 +972,45 @@ export default function desktop(api) {
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
-      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
+      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]
+      .concat((typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join()]))] : []));
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
-      const seen = new Set(), hitsC = KINDS.flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
+      const seen = new Set(), hitsC = (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
       if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
+    } else if ((typeof actOn === 'function' && actOn())) {
+      // Activity with Channels on (issue 1336): Working, Ready (its one sort on the header), Recent with Show older,
+      // then Snoozed and Archived folded at the very bottom, each with its count.
+      for (const [k, word0] of ACT_SECTIONS) {
+        const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
+        const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
+        hd.append(el('span', 'aad-sec-w', { text: word0 }));
+        // (Ready's count is what waits on the owner: the pill; the others a muted number)
+        if (rows.length && k !== 'recent') hd.append(el(k === 'ready' ? 'b' : 'span', k === 'ready' ? 'aad-sec-n' : 'aad-sec-m', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+        hd.append(icon('down', 'aad-ico aad-sec-c'));
+        hd.setAttribute('aria-label', `${word0}${rows.length && k !== 'recent' ? `, ${rows.length}` : ''}${on ? '' : ', folded'}`);
+        api.listen(hd, 'click', () => { secOpen[k] = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
+        const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
+        if (on) {
+          if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
+          else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : ACT_EMPTY[k] }));
+          if (k === 'recent' && s.older) {
+            const more = el('button', 'aad-more-older', { type: 'button', text: `Show older · ${s.older}` });
+            api.listen(more, 'click', () => { actOlder = true; readSessions(); paintList(true); });
+            body.append(more);
+          }
+        }
+        if (k === 'ready') {
+          const row = el('div', 'aad-sech'), word = (globalThis.WizChatsListModel.ACTIVITY_SORTS.find(([v]) => v === actOrder()) || globalThis.WizChatsListModel.ACTIVITY_SORTS[0])[1];
+          const sort = el('button', 'aad-sortb aad-act-orderb', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': `Sort: ${word}. Change`, title: 'Sort' });
+          sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
+          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'act-sort'); });
+          row.append(hd, sort); out.push(row, body);
+        } else out.push(hd, body);
+      }
     } else {
       // The sidebar and its search are Chats only; app search belongs to the global launcher.
       // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
@@ -999,7 +1116,7 @@ export default function desktop(api) {
   function openChat(id, key) {
     if (panes.get().focus !== 'chats') panes.set({ focus: 'chats' });
     if (q) setSearch(false);
-    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); fromFeed = null; api.sessions.open(id);
+    feedFocus = null; railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); fromFeed = null; api.sessions.open(id);
     paintRail(true);
   }
   function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
@@ -1206,6 +1323,7 @@ export default function desktop(api) {
     return homeComposer();
   }
   function orbSlot() {
+    if (one()) return null;   // (the narrower window's app bar holds the orb at its centre, for Chats too)
     const c = orbComposer();
     const row = c?.querySelector('.ch-row2');
     return row ? gridSlot(row, 3) : null;
@@ -1283,7 +1401,7 @@ export default function desktop(api) {
     api.listen(b, 'keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); pick(); return; }
       if (e.key === 'Delete' && !pinned) { e.preventDefault?.(); closeDesk(d); return; }
-      const all = [...vtList.querySelectorAll('.aad-vtab')], i = all.indexOf(b), j = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+      const all = [...vtList.querySelectorAll('.aad-vtab')], i = all.indexOf(b), j = { ArrowDown: i + 1, ArrowUp: i - 1, ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: all.length - 1 }[e.key];
       if (j != null && all[j]) { e.preventDefault?.(); all[j].focus?.(); }
     });
     api.listen(b, 'contextmenu', e => { e.preventDefault?.(); openAppMenu({ id: d.id, name, ...(open ? { desk: d.desk } : {}), system: !!metaOf(d.id).system, col: colPlace(d, pinned) }, { x: e.clientX, y: e.clientY, el: b }); });
@@ -1382,7 +1500,7 @@ export default function desktop(api) {
     return true;
   }
   api.listen(vtList, 'pointerdown', e => {
-    if (e.button || drag) return;
+    if (e.button || drag || one()) return;   // (the app bar: reordering by its menu's Move left / right; drag is the column's)
     const b = e.target?.closest?.('.aad-vtab'); if (!b || e.target.closest?.('.aad-vtx, .aad-np')) return;
     drag = { b, pid: e.pointerId, x0: e.clientX, y0: e.clientY, y: e.clientY, on: false, to: null, hold: null };
     drag.hold = api.after(DRAG_HOLD_MS, () => { if (drag && !drag.on) { dragStart(); dragMove(drag.y); } });
@@ -1396,8 +1514,10 @@ export default function desktop(api) {
   api.listen(vtList, 'pointercancel', () => dragEnd(false));
   api.listen(vtList, 'lostpointercapture', () => { if (drag?.on) dragEnd(true); });
   function paintVt(force = false) {
-    const mode = vtFolded ? 'rail' : 'open';
+    // (the narrower window's app bar, ONE: its own look, never the folded rail's; the fold choice is kept for wide)
+    const bar = one(), mode = bar ? 'bar' : vtFolded ? 'rail' : 'open';
     if (root.dataset.aadTabs !== mode) { root.dataset.aadTabs = mode; applySizes(); }
+    paintOneChats(); if (vtTog.hidden !== bar) vtTog.hidden = bar;
     vtTog.setAttribute('aria-expanded', String(!vtFolded));
     vtTog.setAttribute('aria-label', vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = vtFolded ? 'Expand (⌥R)' : 'Fold to icons (⌥R)';
     const { pinned, others } = vtTabs();
@@ -1408,19 +1528,59 @@ export default function desktop(api) {
     out.push(...others.map(d => vtTab(d, false)));
     if (!out.length) out.push(el('p', 'aad-vtnone', { text: 'No apps open.' }));
     if (drag) dragEnd(false);
+    // the app bar: Chats and the first half of the apps left of the orb, the rest and All apps right of it (the phone's
+    // orb bar: the orb in one spot, the items either side of it)
+    // (Chats and All apps count too; an odd count gets an empty spot on the right, so the orb sits at the bar's centre)
+    if (bar) {
+      const rows = out.filter(n => n.classList?.contains('aad-vtab')), all = rows.length + 2, left = Math.ceil(all / 2) - 1;
+      rows.forEach((n, i) => { n.dataset.half = i < left ? 'l' : 'r'; });
+      if (all % 2) out.push(el('i', 'aad-vtfill', { 'aria-hidden': 'true', 'data-half': 'r' }));
+    }
+    vtList.setAttribute('aria-orientation', bar ? 'horizontal' : 'vertical');
     vtList.replaceChildren(...out, dropLine);
     markMedia();
   }
+  /* narrower window (ONE): Chats, the app bar's first item, lit while Chats is in front; its badge: chats waiting */
+  function paintOneChats() {
+    const on = one(), front = on && !pane, n = on ? badgeText(CHATS) : '';
+    if (vOne.hidden === on) vOne.hidden = !on;
+    vChats.classList.toggle('is-on', front); vChats.setAttribute('aria-pressed', String(front));
+    if (front) vChats.setAttribute('aria-current', 'page'); else vChats.removeAttribute('aria-current');
+    if (vChatsN.textContent !== n) vChatsN.textContent = n; vChatsN.hidden = !n;
+    const label = 'Chats' + (n ? `, ${n} new` : ''); if (vChats.getAttribute('aria-label') !== label) vChats.setAttribute('aria-label', label);
+  }
+  /** Chats from the column: from an app, Chats as it was (the open chat, else the list); Chats in front again, its first
+   * view (the list, and at half width a new chat beside it) */
+  function oneChats() {
+    if (!one()) return;
+    closeAll(); closeMenu();
+    if (pane) { oneList = !behindThread(); hidePanel(); return; }
+    if (oneSplit()) { if (docked) closeChat(); } else { oneList = true; paintTop(); }
+  }
+  api.listen(vChats, 'click', oneChats);
+  api.listen(vChats, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); oneChats(); } });
+  /** the app last in front, while its desk is still open (Back from the chats list goes there) */
+  const oneApp = () => oneLast && desks().some(d => d.desk === oneLast.desk && d.id === oneLast.id) ? oneLast : null;
+  api.listen(oneBack, 'click', () => { if (!one()) return; if (chatThread === FEED) closeChat(); oneList = true; paintTop(); });
   function toggleTabs() { focusLeave(); vtFolded = !vtFolded; api.storage.set('tabsFolded', vtFolded); flip([top, orbBox, ...shownDesks()], () => paintVt(true)); retileSoon(); }
   api.listen(vtTog, 'click', toggleTabs);
   /** a tab: its app as the panel; the one in front again hides the panel (the desk stays open) */
   function pickVt(d) {
+    // narrower window (ONE): the app in front stays in front (one app at a time; Chats is the bar's first item) and goes
+    // back to its top level, the phone's tap on the tab you are on
+    if (one() && pane && Number(pane.desk) === d.desk) { appTop(); return; }
     // The chat docked beside the panel has the keyboard (a reply was just sent there): the panel's tab brings its app
     // forward, never hides it out from under the pointer (James, 6 Nov 2026: "Messenger became unclickable").
     const chatHasIt = !!pane && docked && Number(api.route().desk) !== d.desk;
     if (frontDesk() === d.desk && !chatHasIt) { if (pane) hidePanel(); else goHome(); return; }
     if (d.id === CHATS) { closeAll(); api.nav.goDesk(d.desk); return; }
     goApp(d.id, d.desk);
+  }
+  /** the app in front at its top level: its own Back, step by step, until it says it is at its root (never past it:
+   * the app stays open); a sandboxed app answers later, so one step there */
+  function appTop() {
+    const f = paneFrame(), S = globalThis.WizAppServices; if (!f || !S?.back) return;
+    for (let i = 0; i < 12; i++) if (S.back(f) !== 'handled') break;
   }
   function closeDesk(d) {
     if (pane && Number(pane.desk) === d.desk) { pane = null; setWide(false); }
@@ -1462,6 +1622,22 @@ export default function desktop(api) {
   const noteOn = () => !!notificationSurface();
   const noteTitle = () => notificationSurface()?.notificationTitle || 'Notification';
   let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
+  /* The app beside a chat survives a reload (wizard-ux issue 1368): a chat opened from the sidebar puts the Chats desk
+   * in front (the route), and the panel was kept only in memory. Saved as { id, desk } whenever it changes; on boot,
+   * with the Chats desk in front, the same app's desk becomes the panel again (the shell draws it on a later paint). */
+  let besideWant = api.storage.get('beside'), besideSaved = JSON.stringify(besideWant ?? null), besideTries = 0;
+  function restoreBeside(h) {
+    const b = besideWant, d = b && typeof b.id === 'string' && (desks().find(x => x.id === b.id && x.desk === b.desk) || desks().find(x => x.id === b.id));
+    if (!d || d.id === CHATS || h.app || h.r.home || !onMainChats(h.r)) { besideWant = null; return; }
+    const el0 = placementOf(d.desk);
+    if (el0) { pane = { id: d.id, el: el0, desk: d.desk }; besideWant = null; }
+    else if (++besideTries > 20) besideWant = null;
+    else api.after(150, () => paintTop());
+  }
+  function keepBeside() {
+    const v = pane ? { id: pane.id, desk: Number(pane.desk) } : null, s = JSON.stringify(v);
+    if (s !== besideSaved) { besideSaved = s; api.storage.set('beside', v); }
+  }
   function paintSplit(chatOn) {
     const h = here();
     if (dropped && (want === h.app || h.app !== dropped.id || Number(h.r.desk) !== dropped.desk)) dropped = null;
@@ -1473,9 +1649,19 @@ export default function desktop(api) {
       want = null;
     }
     if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; const generation = focusGeneration; api.after(60, () => focusFrame(0, generation)); }
+    // (another panel already in front wins over a pending restore: Codex review)
+    if (besideWant) { if (pane) besideWant = null; else restoreBeside(h); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
+    if (!besideWant) keepBeside();
     if (!pane && wide) setWide(false);
-    const model = panes.get(), floating = model.mode !== 'tiled';
+    // narrow desktop (ONE): the app in front fills the main area (as ⤢ Wider); the chat stays open behind it, not beside
+    if (pane) oneLast = { id: pane.id, desk: Number(pane.desk) };
+    const oneFront = one() && !!pane;
+    if (oneFront && !wide) { oneWide = true; setWide(true); } else if (oneWide && !oneFront) {
+      // (an app showing its companion keeps the width it wants wide, as autoWide would have given it: Codex review)
+      oneWide = false; if (pane && paneWins() > 1) wideAuto = true; else if (wide && !wideAuto) setWide(false);
+    }
+    const model = paneModel(), floating = model.mode !== 'tiled';
     const chat = pane || chatOn || floating ? chatsEl() : null; dockEl = chat;
     // (the app's desk or the Chats desk not on the stage yet, the shell draws a desk on its first visit: look again
     // shortly, a few times; no route event follows that drawing)
@@ -1494,7 +1680,7 @@ export default function desktop(api) {
       if (r && !model.slots.includes(r === 'chat' ? 'chats' : r)) w.dataset.aadOmitted = ''; else delete w.dataset.aadOmitted;
     }
     const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
-    docked = !!(model.slots.includes('chats') && (chatOn || floating) && chat);
+    docked = !!(model.slots.includes('chats') && (chatOn || floating) && chat) && !oneFront;
     const setState = () => {
       if (model.slots.includes('app') && pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
       if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
@@ -1534,7 +1720,9 @@ export default function desktop(api) {
   function feedPost(e) {
     const t = e?.target, row = t?.closest?.('[data-chopen], [data-chreply]'), open = feedOn();
     if (!row || !open || t.closest('.ch-post-t a[href]') || t.closest('.ch-sheet')) return;
-    fromFeed = { sid: row.dataset.chopen || row.dataset.chreply, id: open.id, name: open.name };
+    // (its title too: a post older than the loaded Activity list is in no list titleOf reads, wizard-ux issue 1329)
+    const title = row.closest('.ch-post')?.dataset?.chtitle || '';
+    fromFeed = { sid: row.dataset.chopen || row.dataset.chreply, id: open.id, name: open.name, title };
   }
   api.listen(feedBox, 'click', feedPost, true);
   // The channel the chat in the column goes back to, or null: only that post, docked, with its channel still open.
@@ -1542,22 +1730,34 @@ export default function desktop(api) {
     if (!fromFeed || !docked || chatThread !== fromFeed.sid) return null;
     const open = feedOn(); return open && open.id === fromFeed.id ? open : null;
   }
+  // the title of the post opened from the feed: an older post is in no list, and the lists match by id alone (a routed
+  // agent's post may share its id with a main chat), so the post the owner clicked names it first
+  function feedTitle(sid) { return fromFeed && fromFeed.sid === sid ? fromFeed.title || '' : ''; }
   function paintBack() {
     // another chat (or none) in the column: that post's Back is spent; the feed itself keeps it for a reopen
     if (fromFeed && chatThread !== fromFeed.sid && chatThread !== FEED) fromFeed = null;
-    const b = feedBack(); cBack.hidden = !b; if (!b) return;
-    const name = `# ${b.name || ''}`; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
+    const b = feedBack(), up = b ? '' : listBack(); cBack.hidden = !b && !up; if (!b && !up) return;
+    const name = b ? `# ${b.name || ''}` : up; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
   }
-  api.listen(cBack, 'click', () => closeChat());
+  api.listen(cBack, 'click', () => chatBack());
   // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
   function feedOpened(open) {
-    if (!open) { paintTop(); return; }
+    // the feed closed by its own Back to channels: as Esc, the app it was brought in front of gets the front back
+    if (!open) { feedGone(); paintTop(); return; }
+    unpeek(); // (a channel picked in the list shown over the page: its feed in front)
     const h = here(), r = api.route();
     // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
     if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
     else if (h.app) chatThread = FEED;
+    // With an app centred (or full) the feed comes to the front, as opening a chat does; closing the feed gives the
+    // front back to the app, in the same view (wizard-ux issue 1344)
+    const f = panes.get().focus;
+    if (f !== 'chats') { feedFocus = f; panes.set({ focus: 'chats' }); }
     paintTop();
   }
+  let feedFocus = null;
+  // the feed left the column (Esc, ✕, its own Back to channels): the app it was brought in front of gets the front back
+  function feedGone() { if (feedFocus && pane && panes.get().focus === 'chats') panes.set({ focus: feedFocus }); feedFocus = null; }
   api.listen(globalThis, 'wos:channel-feed', e => feedOpened(e?.detail?.open || null));
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
@@ -1574,7 +1774,8 @@ export default function desktop(api) {
       paintSplit(!!chatThread); paintTop();
       api.frame(() => { out?.cancel?.(); if (exitMotion === out) exitMotion = null; });
     };
-    const out = goBack && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    // (one app at a time: Chats replaces the app at once, on the click's own frame; no slide out)
+    const out = goBack && !reduced() && !one() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
     exitMotion = out;
     if (out) closing = api.after(180, finish); else finish();
     return true;
@@ -1582,11 +1783,40 @@ export default function desktop(api) {
   // the chat column goes: Home (a new chat); the app panel (if any) stays
   function closeChat() {
     if (!docked) return false;
-    if (panes.get().mode !== 'tiled') windowMode('tiled', 'chats');
+    // Closing never changes the owner's view (wizard-ux issues 1330, 1325; James: "going back shouldn't change the
+    // user's selected view"): a post's thread back to its feed, the feed closed and a plain chat closed all leave 50/50,
+    // centred or full as they were; the new chat takes the chat slot.
     // the channel's feed: closed (nothing open); from a post opened in it, Back lands on the feed again (paintTop)
+    if (chatThread === FEED) feedGone(); // (brought in front of a centred app: the app gets the front back, issue 1344)
     if (chatThread === FEED) { chatThread = null; anim('undock'); api.sessions.channelBack?.(); paintTop(); return true; }
+    if (!feedBack()) feedFocus = null; // a plain chat closing: no feed to give the front back from
     chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
+  }
+  /* One level up from the column wherever the list is not beside it (James, 12 Nov 2026: "I am missing a back button
+   * here at smaller width ... It either takes them back to the channels or the chats list, wherever is one level above
+   * where they were last"): a narrow window (the rail), the sidebar folded, or full screen. The name of the list it goes
+   * to, or '' (the list beside it, a post's own "‹ # channel" Back, a new chat, or one app at a time's own Back). */
+  function listBack() {
+    if (!docked || !chatThread || chatThread === DRAFT || feedBack()) return '';
+    // one app at a time (ONE): the chat alone, narrower than ONE.split (its list, oneList, is the level above it)
+    if (one()) { if (pane || oneSplit() || oneList) return ''; }
+    else if (root.dataset.aadSide === 'open' && panes.get().mode !== 'full') return '';
+    if (chatThread === FEED) return 'Channels';
+    const v = api.sessions.channelView?.() || '';
+    return v === 'channels' ? 'Channels' : v === 'activity' ? 'Activity' : 'Chats';
+  }
+  // Back (the header's ‹ and Esc): the column one level up (closeChat: a post to its feed, the feed or a chat closed);
+  // a chat that came from the list shows that list again, over the page, at its place (its own Back / a tap outside
+  // closes it). In page only: never a history step, so Back at the root never leaves Wizard.
+  function chatBack() {
+    const up = listBack();
+    // one app at a time: the list fills the window again; the chat stays open behind it (Chats as it was)
+    // (a channel's feed closes, as wide: one level up from it is the channel list; a chat stays open behind its list)
+    if (one() && up) { if (chatThread === FEED) closeChat(); oneList = true; paintTop(); return true; }
+    if (!closeChat()) return false;
+    if (up && !peek && peekable()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); paintSide(); }
+    return true;
   }
   function setWide(on) {
     const w = !!on && !!pane; if (w === wide) { paintWide(); return; } wide = w;
@@ -1706,10 +1936,18 @@ export default function desktop(api) {
   api.back.surface?.(() => {
     // Shared registry has already offered recording and transient overlays.
     if (panes.get().mode === 'full') {
+      // A channel post's thread full screen: Esc is its "‹ # channel" Back, the feed again and still full screen
+      // (wizard-ux issue 1325: going back never changes the owner's view). Full screen shows only the focused slot, so
+      // the panes' focus decides, never a stale focus left in the hidden app's frame (Codex, PR 1390).
+      // The same for a chat from the list, which full screen hides: Back shows the list over it, still full screen.
+      if (panes.get().focus === 'chats' && (feedBack() || listBack())) { chatBack(); return true; }
       // Overlay-first: a sheet or nested view inside the focused app closes before Esc leaves full screen.
       const act = doc.activeElement, frame = pane && (pane.el.contains(act) || (lastSurface === 'app' && !chatsEl()?.contains(act))) ? pane.el.querySelector?.('iframe') : null;
-      if (frame && globalThis.WizAppServices?.back?.(frame) === 'handled') return true;
-      windowMode('tiled'); return true;
+      // 'pending': a sandboxed app (browser boundary) answers later; at its root full screen ends then.
+      // Leaving full screen goes back to the view it came from (50/50, centred or tiled; wizard-ux issue 1325).
+      const r = frame ? globalThis.WizAppServices?.back?.(frame, () => windowMode(fullFrom)) : null;
+      if (r === 'handled' || (r === 'pending' && globalThis.WizBrowserBoundary?.owns(frame))) return true;
+      windowMode(fullFrom); return true;
     }
     const a = doc.activeElement;
     // A mixed Chats/app desk can have a focused iframe without an AI-apps pane.
@@ -1717,7 +1955,10 @@ export default function desktop(api) {
     if (a?.tagName === 'IFRAME' && !pane?.el?.contains(a)) return false;
     const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
     if (appFocused) api.apps.back?.(pane.id);
-    else if (docked) closeChat();
+    // one app at a time, the chat alone (narrower than ONE.split): one level up is the list it came from (a post from a
+    // channel's feed has its own "‹ # channel" first); at the list (the root) Back stays put
+    else if (one() && !pane && !oneSplit() && !feedBack()) { if (!chatBack() && !oneList) { oneList = true; paintTop(); } }
+    else if (docked) chatBack();
     else if (api.sessions?.channelBack?.()) paintList(); // Channels: thread → channel → list (issue 1256)
     return true; // bare AI apps desktop: no DOM change, no legacy navigation
   });
@@ -1766,7 +2007,7 @@ export default function desktop(api) {
     const section = group(row);
     return rows.filter(r => r.parentElement === row.parentElement && group(r) === section).map(r => r.dataset.sid);
   });
-  const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
+  const readyIds = () => (typeof actOn === 'function' && actOn()) ? ((sessions || readSessions()).ready || []).map(r => r.id) : readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
     const ids = readyIds();
@@ -1777,7 +2018,7 @@ export default function desktop(api) {
     const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && h.note ? stepAt : cc && ids.includes(cc) ? cc : null;
     const nx = cur == null && dir < 0 ? { id: ids[ids.length - 1], wrapped: false } : readyStep(ids, cur, dir); if (!nx) return;
     if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
-    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); fromFeed = null; api.sessions.open(nx.id);
+    feedFocus = null; stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); fromFeed = null; api.sessions.open(nx.id);
   }
   /* Round 21 (Miguel, 4 Nov 2026: the keys as obvious as possible): ⌥ + a mnemonic letter, ⇧ only for the reverse /
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
@@ -1955,6 +2196,10 @@ export default function desktop(api) {
    * SDK copy: the same rules read here), only the keys an app may have (isAppKey: a letter or / , . ; not Wizard's);
    * its keycap reads the letter in capitals. */
   const appFront = () => !!pane && !focusOn();
+  // under the browser boundary only the sandboxed app in front reports and holds back its ⌥ keys, while this view runs
+  // (a var: paintTop can run before this line, during setup)
+  var offAppKeys = globalThis.WizBrowserBoundary?.pressAppKeys?.(() => (appFront() ? paneFrame() : null)) || null;
+  const offFrameKeys = globalThis.WizBrowserBoundary?.layoutKeys?.(FRAME_KEYS) || null;
   const appTarget = k => { const f = k ? paneFrame() : null; return f ? frameKeys(f).find(t => t.key === k) || null : null; };
   function pressApp(t) {
     const n = t.el;
@@ -1962,6 +2207,9 @@ export default function desktop(api) {
     try { if (/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName || '') || n.isContentEditable) n.focus?.({ preventScroll: true }); n.click?.(); } catch (_) {}
   }
   function frameKeys(f) {
+    // a sandboxed app (browser boundary, wizard-os#133): the keys it reported, as stand-ins that press over the channel
+    const B = globalThis.WizBrowserBoundary;
+    if (B?.owns?.(f)) { try { return B.appKeys(f).filter(t => t && t.el && isAppKey(t.key)); } catch (_) { return []; } }
     let w = null, d = null; try { w = f.contentWindow; d = f.contentDocument; } catch (_) { return []; }
     if (!d || !w) return [];
     try { const l = w.WizardApp?.keys?.list?.(); if (Array.isArray(l)) return [...l].filter(t => t && t.el && isAppKey(t.key)); } catch (_) {}
@@ -2014,23 +2262,53 @@ export default function desktop(api) {
     // it) stays a chat in that column at its geometry, never Home laid out full width under the app panel (James, 6 Nov 2026).
     if (!h.app && pane && chatThread === NOTE && !h.thread && !h.note && !h.draft && !r.home && r.view === 'thread' && r.thread === '__new__' && onMainChats(r)) { draftWant = true; h.draft = true; }
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : feedOn() ? FEED : null);
-    // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
-    // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
-    else if (chatThread === FEED ? !feedOn() : !chatThread) chatThread = behindThread();
+    // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the channel feed or
+    // the thread the Chats desk still holds docks beside it as before, never laid out as Home under the panel (cut off,
+    // at its top). A feed left open is what the column showed (wizard-ux issue 1339).
+    else if (chatThread === FEED ? !feedOn() : !chatThread) { if (chatThread === FEED) feedGone(); chatThread = !chatThread && feedOn() ? FEED : behindThread(); }
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     const fresh = chatThread !== FEED && !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
-    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? titleOf(chatThread) : '';
+    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? feedTitle(chatThread) || titleOf(chatThread) : '';
     tt.textContent = docked ? t : ''; tt.title = t; paintBack();
     cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : chatThread === FEED ? 'Close the channel (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
-    paintHome();
-    syncOrb(); macHoles?.soon();
+    paintHome(); paintOne(h);
+    syncOrb(); macHoles?.soon(); offAppKeys?.sync?.();
   }
+  /* narrow desktop (ONE): which one thing shows (data-aad-one = app | chats), the sidebar for it (none beside an app;
+   * at half width the list beside the chat; narrower the list or the chat), and the two Backs */
+  function paintOne(h) {
+    const on = one();
+    // (crossing ONE.from: the column becomes the app bar or the column again, laid out for it at once)
+    if (on !== oneWas) { oneWas = on; oneList = true; oneSeen = chatThread; if (on) closeTidy(); paintVt(true); applySizes(); retileSoon(); }
+    oneSig = oneNow();
+    // a chat opened (from the list, a notification, a key) shows that chat
+    if (on && !h.app && chatThread !== oneSeen) { if (chatThread) oneList = false; oneSeen = chatThread; }
+    const v = on ? (pane ? 'app' : 'chats') : '';
+    if ((root.dataset.aadOne || '') !== v) { if (v) root.dataset.aadOne = v; else delete root.dataset.aadOne; }
+    syncSide();
+    // (a post opened from a channel's feed has its own "‹ # channel" Back there, cBack: one Back at a time)
+    const back = on && !pane && !oneSplit() && !oneList && !feedBack() && !listBack();
+    if (oneBack.hidden === back) oneBack.hidden = !back;
+    if (back) { // named for the list it goes to (a channel's feed: Channels; else the list it was opened from)
+      const v = chatThread === FEED ? 'channels' : api.sessions.channelView?.() || '', name = v === 'channels' ? 'Channels' : v === 'activity' ? 'Activity' : 'Chats';
+      if (oneBack.textContent !== `‹ ${name}`) { oneBack.textContent = `‹ ${name}`; oneBack.title = 'Back (Esc)'; oneBack.setAttribute('aria-label', `Back to ${name} (Esc)`); }
+    }
+    const bh = docked ? cTop : top; if (back && oneBack.parentNode !== bh) bh.insertBefore(oneBack, bh.firstChild || null);
+    paintBack(); // (the chat alone or its list: the column's Back follows)
+    paintOneChats();
+  }
+  // the window crossing either of ONE's widths (one app with the app bar, the list beside the chat): all of it again
+  // (Codex review: not only ONE.from)
+  const oneNow = () => `${one()}|${oneSplit()}`;
+  let oneSig = '';
+  const oneCheck = () => { if (oneNow() !== oneSig) paintTop(); };
+  api.listen(globalThis, 'resize', oneCheck);
   /* round 21 (Miguel, 4 Nov 2026): one left/right model for every open the shell starts by itself. An app (a
    * notification's Open, the launcher, a command) or a link an app owns = that app in the right panel, its one window
    * reused and taken to the page; a link no app owns = one link page in the same panel; no view opens beside a thread
@@ -2071,15 +2349,18 @@ export default function desktop(api) {
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
+    offAppKeys?.();
+    offFrameKeys?.();
     offPanes(); for (const v of paneVars) root.style.removeProperty(v);
     for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode']) delete root.dataset[k];
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove(); macHoles?.dispose();
+    oneBack.remove();
     closeMenu(); closeWs(); offRws?.(); globalThis.WizWorkspaces?.close?.(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();
-    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
+    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus', 'aadOne']) delete root.dataset[k];
     for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; delete w.dataset.aadModeHidden; delete w.dataset.aadStack; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
