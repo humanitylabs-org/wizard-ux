@@ -542,12 +542,64 @@
     for (const k of Object.keys(v)) n += 2 * k.length + idbBytes(v[k], seen);
     return n;
   }
+  /* Turning the boundary on (wizard-os#133): until then the app's page kept its databases in this origin's own
+   * IndexedDB, which its sandboxed page can no longer open. core/app-services.js notes which installed app opened which
+   * database while its window was same-origin (`wos.app-idb-owners.v1`: { name: { app } }, app '' = more than one app
+   * opened it). The first time the app's sandboxed page opens a database the shell has no copy of, and that app alone
+   * opened it before, the shell copies it over once: version, stores, indexes and every record (`wos.app-idb-carried.v1`
+   * notes it, so a database the app deletes later never comes back). The shell's own databases (wos-…, the recorder's
+   * wizard-app-capture-v1) are never carried; the old database stays as it was. True when a copy was written. */
+  const IDB_OWNERS = 'wos.app-idb-owners.v1', IDB_CARRIED = 'wos.app-idb-carried.v1';
+  const idbShellName = n => /^wos/i.test(n) || /^wizard-app-capture/i.test(n);
+  const readJson = k => { try { const o = JSON.parse(localStorage.getItem(k) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (_) { return {}; } };
+  async function idbCarry(id, name) {
+    const mark = id + '\n' + name;
+    try {
+      if (idbShellName(name) || readJson(IDB_OWNERS)[name]?.app !== id || readJson(IDB_CARRIED)[mark]) return false;
+      if (typeof indexedDB.databases !== 'function' || !(await indexedDB.databases()).some(d => d.name === name)) return false;
+      const done = () => { const c = readJson(IDB_CARRIED); c[mark] = Date.now(); try { localStorage.setItem(IDB_CARRIED, JSON.stringify(c)); } catch (_) {} };
+      const old = await new Promise((ok, no) => {
+        const r = indexedDB.open(name);
+        // It went away since databases(): never create it here.
+        r.onupgradeneeded = () => { try { r.transaction.abort(); } catch (_) {} };
+        r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); r.onblocked = () => no(new Error('blocked'));
+      });
+      const ops = [{ o: 'version', v: old.version }];
+      try {
+        const names = [...old.objectStoreNames];
+        if (names.length) {
+          const tx = old.transaction(names, 'readonly');
+          for (const s of names) {
+            const os = tx.objectStore(s);
+            ops.push({ o: 'store', s, keyPath: os.keyPath ?? null, autoIncrement: os.autoIncrement === true });
+            for (const i of [...os.indexNames]) { const x = os.index(i); ops.push({ o: 'index', s, i, keyPath: x.keyPath, unique: x.unique === true, multiEntry: x.multiEntry === true }); }
+            const [keys, vals] = await Promise.all([idbReq(os.getAllKeys()), idbReq(os.getAll())]);
+            let next = 1;
+            keys.forEach((k, j) => { ops.push({ o: 'put', s, k, v: vals[j] }); if (typeof k === 'number' && k >= next) next = Math.floor(k) + 1; });
+            if (os.autoIncrement && next > 1) ops.push({ o: 'next', s, n: next });
+          }
+        }
+      } finally { old.close(); }
+      // In pieces of at most IDB_OPS changes, each on the revision the last one wrote; all or nothing.
+      let base = 0;
+      for (let i = 0; i < ops.length; i += IDB_OPS) {
+        const r = await idbWrite(id, name, ops.slice(i, i + IDB_OPS), base);
+        if (!r || typeof r !== 'object') {
+          if (base) await new Promise(ok => { idbHome().then(d => { const t = d.transaction(['dbs', 'rows'], 'readwrite'); t.oncomplete = t.onabort = ok; t.objectStore('rows').delete(idbDbRows(id, name)); t.objectStore('dbs').delete([id, name]); }, ok); });
+          done(); return false;
+        }
+        base = r.idb.rev;
+      }
+      done(); return true;
+    } catch (_) { return false; }
+  }
   function idbLoad(id, name) {
     if (!idbOk(id, name)) return Promise.resolve({ idb: null });
     return idbSerial(id, async () => {
-      const tx = (await idbHome()).transaction(['dbs', 'rows'], 'readonly');
-      const m = await idbReq(tx.objectStore('dbs').get([id, name]));
+      let m = await idbReq((await idbHome()).transaction('dbs', 'readonly').objectStore('dbs').get([id, name]));
+      if (!m && await idbCarry(id, name)) m = await idbReq((await idbHome()).transaction('dbs', 'readonly').objectStore('dbs').get([id, name]));
       if (!m) return { idb: null };
+      const tx = (await idbHome()).transaction(['dbs', 'rows'], 'readonly');
       const os = tx.objectStore('rows'), rows = [];
       for (const [s] of m.stores) {
         const r = idbStoreRows(id, name, s), [keys, vals] = await Promise.all([idbReq(os.getAllKeys(r)), idbReq(os.getAll(r))]);
@@ -564,7 +616,11 @@
   // is not acceptable or the space is full.
   function idbCommit(id, name, ops, base) {
     if (!idbOk(id, name) || !Array.isArray(ops) || !ops.length || ops.length > IDB_OPS || !Number.isSafeInteger(base)) return Promise.resolve(false);
-    return idbSerial(id, () => new Promise(done => {
+    return idbSerial(id, () => idbWrite(id, name, ops, base));
+  }
+  // One commit, already in this app's turn (idbSerial).
+  function idbWrite(id, name, ops, base) {
+    return new Promise(done => {
       let tx = null, rev = 0;
       const stop = (why = false) => { done(why); try { tx?.abort(); } catch (_) {} };
       idbHome().then(async d => {
@@ -601,7 +657,7 @@
         if (app + m.size > IDB_APP || total + m.size > IDB_ALL) return stop();
         dbs.put(m, [id, name]);
       }).catch(() => stop());
-    }));
+    });
   }
   function idbDrop(id, name) {
     if (!idbOk(id, name)) return Promise.resolve(false);

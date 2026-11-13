@@ -116,6 +116,15 @@ test('forgetAppData deletes exactly the removed app\'s saved settings and shell 
  assert.equal(idb.log.closed,1);
 });
 
+test('forgetAppData drops the removed app from the notes of databases its same-origin page opened (wizard-os#133)',async()=>{
+ const m=new Map(Object.entries({'wos.app-idb-owners.v1':JSON.stringify({'trackhunt-offline-v1':{app:'ledger'},tasks:{app:'ledger'},'shared-db':{app:''},'notes-db':{app:'ledger-two'}})}));
+ const storage={m,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k)};
+ assert.equal(await forgetAppData('ledger',{storage,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(JSON.parse(m.get('wos.app-idb-owners.v1')),{'shared-db':{app:''},'notes-db':{app:'ledger-two'}},'a reinstall never gets the old databases copied over');
+ assert.equal(await forgetAppData('ledger-two',{storage,idb:fakeIdb(),keyRange}),true);
+ assert.deepEqual(JSON.parse(m.get('wos.app-idb-owners.v1')),{'shared-db':{app:''}});
+});
+
 test('forgetAppData never creates the shell database, refuses bad ids and reports a failed delete',async()=>{
  const none=fakeIdb({exists:false});
  assert.equal(await forgetAppData('ledger',{storage:fakeStorage({}),idb:none,keyRange}),true);
