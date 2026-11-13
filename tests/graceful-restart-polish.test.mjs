@@ -83,3 +83,45 @@ test('the note comes back at once when no note shows anywhere (phone: thread -> 
   before = painted; keep.fn([]);
   assert.equal(painted, before, 'no repaint while a note shows');
 });
+
+// Codex P2 on PR 1436: the held chat's box reads as idle, so a follow-up typed there must not go out as a steer of the
+// saved (queued) run. The real outbox clears the steer for a held chat, on main and every routed kind; a chat that
+// really runs keeps its steer.
+function outboxCtx(held) {
+  const rows = new Map(), timers = new Set();
+  const indexedDB = { open() {
+    const r = {};
+    queueMicrotask(() => {
+      r.result = { close() {}, objectStoreNames: { contains: () => true }, transaction() {
+        const tx = { objectStore() { return {
+          getAll() { return { result: [...rows.values()].map(x => structuredClone(x)) }; },
+          put(value) { rows.set(value.id, structuredClone(value)); return {}; },
+          delete(id) { rows.delete(id); return {}; },
+        }; } };
+        setImmediate(() => tx.oncomplete?.()); return tx;
+      } }; r.onsuccess();
+    }); return r;
+  } };
+  const sessions = { wizard_held: { id: 'wizard_held', status: 'running', restartPending: true, runId: 'wizardq_held' }, wizard_run: { id: 'wizard_run', status: 'running', runId: 'run_live' } };
+  const ctx = { console, Blob, AbortController, AbortSignal, indexedDB, crypto: { randomUUID: () => globalThis.crypto.randomUUID() },
+    document: { documentElement: { dataset: {} }, body: null, addEventListener() {} },
+    localStorage: { getItem: () => null, removeItem() {}, setItem() {} }, addEventListener() {}, clearTimeout,
+    setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
+    fetch: async () => { throw new TypeError('offline in this test'); },
+    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route }, WizConfig: { voicePrompt: () => '' },
+    WizReach: { restart: () => ({ phase: 'waiting' }), restartHeld: s => held(s) },
+    WizLive: { session: id => sessions[id], agentOf: () => '', pinAgent() {} },
+    WosAgents: { isOther: a => !!a, get: () => ({ permissions: {} }) } };
+  ctx.window = ctx; vm.runInNewContext(read('outbox.js'), ctx);
+  return { api: ctx.WosOutbox, close: () => { for (const t of timers) clearTimeout(t); } };
+}
+for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box', 'container'], ['locked', 'restricted']]) {
+  test(`${kind}: a follow-up in a held chat is a same-chat turn, not a steer of the saved run`, async t => {
+    const page = outboxCtx(s => !!s?.restartPending); t.after(page.close);
+    const send = (sessionId, steerRunId) => page.api.enqueue({ kind: 'reply', sessionId, steerRunId, text: 'and napkins', model: 'm', provider: 'p', ...(agent ? { agent } : {}) });
+    const heldIt = await send('wizard_held', 'wizardq_held');
+    assert.equal(heldIt.steerRunId, '', 'no steer into the run the restart holds');
+    const liveIt = await send('wizard_run', 'run_live');
+    assert.equal(liveIt.steerRunId, 'run_live', 'a chat that really runs is still steered');
+  });
+}
