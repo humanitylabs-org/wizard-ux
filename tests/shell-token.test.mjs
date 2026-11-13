@@ -13,7 +13,7 @@ function store(seed = {}) {
   const data = new Map(Object.entries(seed));
   return { getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, String(v)), removeItem: k => data.delete(k), data };
 }
-function boot({ token = TOKEN, framed = false, localStorage = store(), path = '/wizard-os-home/' } = {}) {
+function boot({ token = TOKEN, framed = false, localStorage = store(), path = '/wizard-os-home/', native } = {}) {
   const calls = [], xhrHeaders = [];
   let meta = token === null ? null : { content: token, removed: false, getAttribute: () => token, remove() { this.removed = true; } };
   const metaRef = meta;
@@ -21,6 +21,7 @@ function boot({ token = TOKEN, framed = false, localStorage = store(), path = '/
   function fetch(input, init) { calls.push({ input, init }); return Promise.resolve('ok'); }
   class FakeXHR { open(m, u) { this.url = u; } setRequestHeader(n, v) { xhrHeaders.push([this.url, n, v]); } send() {} }
   const window = { fetch, XMLHttpRequest: FakeXHR };
+  if (native) window.WizardOSNative = native;
   window.top = framed ? {} : window;
   const ctx = { window, document, localStorage, location: { href: ORIGIN + path, origin: ORIGIN }, URL, Headers, Request };
   vm.runInNewContext(SRC, ctx);
@@ -55,6 +56,21 @@ test('on: owner calls carry the token, app paths and other origins never do', as
   const x = new b.window.XMLHttpRequest(); x.open('POST', '/wizard/attachments'); x.send();
   const y = new b.window.XMLHttpRequest(); y.open('GET', '/notes/api/x'); y.send();
   assert.deepEqual(b.xhrHeaders, [['/wizard/attachments', 'X-Wizard-Shell-Token', TOKEN]]);
+});
+
+test('Android: only the top-level shell page tells the app whether the box has the boundary on (issue 1430)', () => {
+  const told = [];
+  const native = { browserBoundary: on => told.push(on) };
+  boot({ native });
+  assert.deepEqual(told, [true], 'a real token: on');
+  told.length = 0; boot({ token: 'off', native });
+  assert.deepEqual(told, [false], 'the shipped `off`: off');
+  for (const token of ['', null, 'not-a-token']) { told.length = 0; boot({ token, native }); assert.deepEqual(told, [], `${token}: says nothing (offline copy keeps the last answer)`); }
+  for (const token of [TOKEN, 'off', '']) { told.length = 0; boot({ token, framed: true, native }); assert.deepEqual(told, [], `framed ${token}: a frame never speaks for the box`); }
+  // An older app without the method, or one whose bridge throws, changes nothing for the page.
+  assert.doesNotThrow(() => boot({ native: {} }));
+  assert.doesNotThrow(() => boot({ native: { browserBoundary() { throw new Error('x'); } } }));
+  assert.equal(boot({ native: { browserBoundary() { throw new Error('x'); } } }).window.WizShellBoundary.on, true);
 });
 
 test('a framed shell page never arms the wrapper', () => {
