@@ -30,7 +30,7 @@ document.getElementById('add').onclick = async () => {
 fetch('/wizard/v1/settings').then(r => { results.owner = r.status; }, () => { results.owner = 'refused'; });
 load().then(() => { results.loaded = true; }, e => { results.loaded = 'error ' + e; });`,
 };
-const BOOT = `(() => { const send = (type, file) => { if (parent !== window) parent.postMessage({ type, file }, location.origin); };
+const BOOT = `(() => { const send = (type, file) => { if (parent !== window) parent.postMessage({ type, file, at: performance.timeOrigin }, location.origin); };
   addEventListener('error', e => send('wizard:own-view:error', e.target?.src || e.target?.href || e.filename || 'index.html'), true);
   addEventListener('DOMContentLoaded', () => send('wizard:own-view:ready', 'index.html')); })();`;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
