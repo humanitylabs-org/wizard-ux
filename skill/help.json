@@ -365,6 +365,10 @@
       "help": "Settings › About & updates also lists every installed app with its version and the Store's latest, Update now, Retry, Hold, and an Automatic / Ask me choice for app updates.",
       "where": "Settings › Appearance › Try new features › Apps in Updates"
     },
+    "wizard/os-update-waits": {
+      "help": "Before a WizardOS update starts, Wizard checks what the agent is working on and waits only for work the update would stop. Update now then names it and offers Update when it finishes or Update anyway. Wizard for Mac always works this way.",
+      "where": "Settings › Appearance › Try new features › Updates wait for running work"
+    },
     "wizard/update-bug-reports": {
       "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
     },
