@@ -8,6 +8,8 @@
 //    current(), Stop, pending and ack work, and the take's audio arrives as a Blob the app can read.
 //  - A recording prepared in a tap starts after the app's own slow work (the tap itself has expired by then).
 //  - A reload of the window does not stop the recorder; the new page gets no events until it attaches, then does.
+//  - A tap on a button that keeps focus where it is (mousedown preventDefault, like Outline's Go Live) while the
+//    window does not have focus yet still records: the tap gives the window focus, as it does without the boundary.
 //  - A page outside its window's app path can't record or read takes, even with a real tap.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-capture.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: the checks must fail there.
@@ -16,8 +18,9 @@ const { chromium } = require('../tools/qa-playwright.cjs');
 const WEB = process.env.QA_WEB ? path.resolve(process.env.QA_WEB) : path.join(__dirname, '..', 'web');
 const SHOT = process.env.QA_SHOT || '';
 const APP = who => `<!doctype html><html><head><meta charset="utf-8"><script src="/wizard-os-home/core/app-client.js"></script>
+<script>const focus = 'an app global named focus';</script>
 <style>body{font:14px system-ui;margin:8px}button{font:inherit}</style></head>
-<body><button id="rec">Record</button> <button id="prep">Prepare</button> <span id="t">${who}</span><script>
+<body><button id="rec">Record</button> <button id="prep">Prepare</button> <button id="keep">Keep focus</button> <span id="t">${who}</span><script>
   window.out = { levels: [], pcm: [], chunks: [], states: [] };
   const say = s => { document.getElementById('t').textContent = '${who}: ' + s; };
   const code = e => String((e && e.message) || e);
@@ -28,6 +31,9 @@ const APP = who => `<!doctype html><html><head><meta charset="utf-8"><script src
     catch (e) { out.started = 'error:' + code(e); say(out.started); }
   };
   document.getElementById('rec').onclick = () => { window.recording = record(); };
+  // A toolbar button that keeps the focus where it is (Outline's Go Live does this so its editor keeps the caret).
+  document.getElementById('keep').onmousedown = e => e.preventDefault();
+  document.getElementById('keep').onclick = () => { out.started = null; window.recording = record(); };
   document.getElementById('prep').onclick = () => { window.warm = WizardApp.capture.prepare({ kind: 'audio', pcm: true }); out.prepared = !!window.warm.id; };
   window.later = async () => {
     try { const s = window.session = await WizardApp.capture.start({ kind: 'audio', pcm: true, preparedId: window.warm.id }); follow(s); return s.id; }
@@ -165,6 +171,15 @@ const server = http.createServer((req, res) => {
   await page.waitForTimeout(600);
   const heard = await reloaded.evaluate(() => out.levels.length);
   ok(again === later && heard >= 3, 'after attach() the new page follows the same recording: ' + JSON.stringify({ again, heard }));
+  await reloaded.evaluate(() => window.session && window.session.stop()).catch(() => {});
+  // Focus is in the shell, and the app's button keeps focus where it is: the tap itself must still count.
+  await page.click('#shellbtn');
+  const shellFocused = await page.evaluate(() => document.activeElement && document.activeElement.id);
+  await reloaded.click('#keep');
+  await reloaded.evaluate(() => window.recording);
+  const kept = await reloaded.evaluate(() => out.started);
+  ok(shellFocused === 'shellbtn' && /^take-/.test(kept) && await page.evaluate(() => document.activeElement === document.querySelector('#w1 iframe')),
+    'a tap on a button that keeps focus (mousedown preventDefault) still records, and gives the window focus: ' + JSON.stringify({ shellFocused, kept }));
   await reloaded.evaluate(() => window.session && window.session.stop()).catch(() => {});
   // The page outside its window's app path: refused even with a real tap; the recorder is never asked for it.
   const before = (await log()).asked.length;
