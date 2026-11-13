@@ -39,8 +39,14 @@ export const NOT_RENDERED = {
 
 const read = (root, p) => fs.readFileSync(path.join(root, p), 'utf8');
 const tick = () => new Promise(r => setImmediate(r));
-const decode = s => String(s).replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+// Plain text of a rendered fragment. Tags are removed until none are left (a stripped tag can't leave a new one
+// behind), then each entity is decoded once in a single pass, so '&amp;lt;' reads '&lt;', never '<'.
+const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
+const decode = s => {
+  let text = String(s), prev;
+  do { prev = text; text = text.replace(/<[^<>]*>/g, ''); } while (text !== prev);
+  return text.replace(/[<>]/g, '').replace(/&(?:amp|lt|gt|quot|#39);/g, e => ENTITIES[e]).replace(/\s+/g, ' ').trim();
+};
 // Version numbers and counts come from the fixture, not the interface: one key whatever the box runs.
 export const normalize = s => decode(s).replace(/\b\d+(?:\.\d+)+(?:[-.][\w.]+)?\b/g, '{version}').replace(/\b\d+\b/g, '{n}');
 
