@@ -1,0 +1,76 @@
+{
+  "composer": {
+    "stop": false,
+    "ph": "Message Wizard"
+  },
+  "nav": {
+    "n": 79,
+    "miss": 0,
+    "on": false
+  },
+  "titles": [
+    {
+      "head": "New chat"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    },
+    {
+      "head": "Find a ferry time"
+    }
+  ],
+  "listRows": [
+    "Long research\n      Working ·",
+    "Find a ferry time\n      Saved · sends after Wizard",
+    "Weekend plans\n      Saved · sends after Wizard res"
+  ],
+  "desktop": {
+    "nebula": {
+      "inBox": true,
+      "bg": "rgb(5, 3, 12)"
+    },
+    "grove": {
+      "inBox": true,
+      "bg": "rgb(5, 11, 7)"
+    }
+  }
+}
