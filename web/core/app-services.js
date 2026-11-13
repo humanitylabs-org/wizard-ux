@@ -343,14 +343,34 @@
   const LS_CARRIED = 'wos.app-ls-carried.v1', LS_CHANGED = 'wos.app-ls-changed.v1', lsSeen = new Set();
   const lsRead = k => { try { const o = JSON.parse(window.localStorage.getItem(k) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (_) { return {}; } };
   function lsChanged(appId, key) {
-    if (typeof key !== 'string' || !key || key.length > 1024 || LS_SHELL.test(key) || lsSeen.has(appId + '\n' + key)) return;
-    lsSeen.add(appId + '\n' + key);
+    const id = appId + '\n' + key;
+    if (typeof key !== 'string' || !key || key.length > 1024 || LS_SHELL.test(key) || lsSeen.has(id)) return;
     const carried = lsRead(LS_CARRIED)[appId];
-    if (!Array.isArray(carried) || !carried.includes(key)) return;   // not copied yet: the copy takes the value then
+    // Not copied yet: the copy takes the value as it is then.
+    if (!Array.isArray(carried) || !carried.includes(key)) { lsSeen.add(id); return; }
     const ch = lsRead(LS_CHANGED), list = Array.isArray(ch[appId]) ? ch[appId].filter(k => typeof k === 'string') : [];
-    if (list.includes(key)) return;
-    ch[appId] = [...list, key];
-    try { window.localStorage.setItem(LS_CHANGED, JSON.stringify(ch)); } catch (_) {}
+    if (!list.includes(key)) {
+      ch[appId] = [...list, key];
+      try { window.localStorage.setItem(LS_CHANGED, JSON.stringify(ch)); } catch (_) { return; }   // full: tried again on the next write
+    }
+    lsSeen.add(id);
+  }
+  // The page's localStorage.clear() also wipes the shell's notes: they are put back, every key copied for this app
+  // marked changed (so the next turn-on clears them from its copy too).
+  function lsCleared(appId, clear) {
+    const notes = [LS_OWNERS, LS_CARRIED, LS_CHANGED].map(k => [k, window.localStorage.getItem(k)]);
+    const r = clear();
+    try {
+      for (const [k, v] of notes) if (v !== null && window.localStorage.getItem(k) === null) window.localStorage.setItem(k, v);
+      const carried = lsRead(LS_CARRIED)[appId];
+      if (Array.isArray(carried) && carried.length) {
+        const ch = lsRead(LS_CHANGED), list = Array.isArray(ch[appId]) ? ch[appId].filter(k => typeof k === 'string') : [];
+        ch[appId] = [...new Set([...list, ...carried.filter(k => typeof k === 'string')])];
+        window.localStorage.setItem(LS_CHANGED, JSON.stringify(ch));
+      }
+      for (const k of [...lsSeen]) if (k.startsWith(appId + '\n')) lsSeen.delete(k);
+    } catch (_) {}
+    return r;
   }
   // The page's localStorage.setItem notes the key (its own realm's Storage, so the shell's writes are never seen here).
   function watchLs(st, source) {
@@ -361,6 +381,8 @@
       Object.defineProperty(proto, 'setItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) { noteLs(appId, String(key)); lsChanged(appId, String(key)); } } catch (_) {} return set.call(this, key, ...rest); } });
       const drop = proto.removeItem;
       if (typeof drop === 'function') Object.defineProperty(proto, 'removeItem', { configurable: true, writable: true, value: function (key, ...rest) { try { if (this === ls) lsChanged(appId, String(key)); } catch (_) {} return drop.call(this, key, ...rest); } });
+      const wipe = proto.clear;
+      if (typeof wipe === 'function') Object.defineProperty(proto, 'clear', { configurable: true, writable: true, value: function (...rest) { return this === ls ? lsCleared(appId, () => wipe.call(this, ...rest)) : wipe.call(this, ...rest); } });
       lsWatched.add(proto);
     } catch (_) {}
   }

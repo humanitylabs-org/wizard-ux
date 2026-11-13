@@ -26,7 +26,8 @@ function storage() {
   const m = new Map();
   return {
     m, get length() { return m.size; }, key: i => [...m.keys()][i] ?? null,
-    getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k),
+    full: false, getItem: k => (m.has(k) ? m.get(k) : null), removeItem: k => m.delete(k), clear: () => m.clear(),
+    setItem(k, v) { if (this.full && k === 'wos.app-ls-changed.v1') throw new Error('QuotaExceededError'); m.set(k, String(v)); },
   };
 }
 // One device: the same localStorage; the shell tab with the boundary on (storeCarry) and one with it off (an app's
@@ -37,7 +38,8 @@ function device() {
   const offTab = () => {
     const c = vm.createContext({ window: { localStorage: ls }, JSON, Set, Map, Object, Array });
     vm.runInContext(noteSrc + '\nthis.set = (app, k, v) => { window.localStorage.setItem(k, v); noteLs(app, k); lsChanged(app, k); };'
-      + '\nthis.remove = (app, k) => { window.localStorage.removeItem(k); lsChanged(app, k); };', c);
+      + '\nthis.remove = (app, k) => { window.localStorage.removeItem(k); lsChanged(app, k); };'
+      + '\nthis.clear = app => lsCleared(app, () => window.localStorage.clear());', c);
     return c;
   };
   const copy = id => JSON.parse(ls.getItem('wos.app-storage.v1.' + id) || '{}');
@@ -132,4 +134,36 @@ test('a removed app\u2019s carried and changed notes go too, and keep it on the 
   assert.equal(d.ls.getItem('wos.app-ls-changed.v1'), null);
   assert.deepEqual(JSON.parse(d.ls.getItem('wos.app-idb-owners.v1')), { shared: { app: '' } });
   assert.deepEqual([...await keptAppIds({ storage: d.ls, idb: undefined })], ['cards']);
+});
+
+// Codex P2s on this PR: localStorage.clear() while off, and a change note that could not be written (storage full).
+test('off -> clear() -> on: the reset comes along, and the shell\u2019s notes survive the clear', () => {
+  const d = device();
+  let off = d.offTab();
+  off.set('music', 'a', '1'); off.set('music', 'b', '2'); off.set('other', 'o', '3');
+  d.onTab().storeCarry('music'); d.onTab().storeCarry('other');
+  off = d.offTab();
+  off.clear('music');
+  assert.deepEqual(JSON.parse(d.ls.getItem('wos.app-ls-changed.v1')), { music: ['a', 'b'] });
+  assert.deepEqual(JSON.parse(d.ls.getItem('wos.app-ls-carried.v1')), { music: ['a', 'b'], other: ['o'] });
+  off.set('music', 'b', 'new');
+  assert.equal(d.onTab().storeCarry('music'), true);
+  assert.deepEqual(d.copy('music'), { b: 'new' });
+  // A same-origin clear() wipes the whole origin, the shell's copies too (as before this change): nothing comes back.
+  assert.deepEqual(d.copy('other'), {});
+  assert.equal(d.onTab().storeCarry('other'), false);
+});
+
+test('a change note that could not be written is tried again on the next write in the same tab', () => {
+  const d = device();
+  let off = d.offTab();
+  off.set('music', 'a', '1');
+  d.onTab().storeCarry('music');
+  off = d.offTab();
+  d.ls.full = true; off.set('music', 'a', '2'); d.ls.full = false;
+  assert.equal(d.ls.getItem('wos.app-ls-changed.v1'), null);
+  off.set('music', 'a', '3');
+  assert.deepEqual(JSON.parse(d.ls.getItem('wos.app-ls-changed.v1')), { music: ['a'] });
+  d.onTab().storeCarry('music');
+  assert.equal(d.copy('music').a, '3');
 });
