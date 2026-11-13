@@ -7,6 +7,7 @@
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-ls-carry.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: the checks must fail there.
 //   QA_SHOT_BEFORE / QA_SHOT_AFTER=<file.png>: the app window with the boundary off, then on.
+//   QA_SHOT_AGAIN=<file.png>: on again after a change made with the boundary off (wizard-ux#1434).
 const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const WEB = process.env.QA_WEB ? path.resolve(process.env.QA_WEB) : path.join(__dirname, '..', 'web');
@@ -126,6 +127,23 @@ const server = http.createServer((req, res) => {
   const m4 = await open('music', 'm');
   const old = await m4.evaluate(a => [JSON.parse(localStorage.getItem(a)).title, localStorage.getItem('wizard-music.volume'), localStorage.getItem('wos.theme')], ACTIVE).catch(caught);
   ok(Array.isArray(old) && old[0] === 'Cafe song' && old[1] === '7' && old[2] === 'the shell\u2019s', 'the old settings are untouched: ' + JSON.stringify(old));
+
+  // 5. Off -> change -> on (wizard-ux#1434): with the boundary off Music saves a new recording (setItem), a volume (a
+  // named write) and removes a copied setting; turned on again, its sandboxed page sees those newer values.
+  await m4.evaluate(a => {
+    localStorage.setItem(a, JSON.stringify({ title: 'Train song', at: 3 }));
+    localStorage['wizard-music.volume'] = '5';
+    localStorage.removeItem('music.early');
+  }, ACTIVE);
+  await page.waitForTimeout(300);
+  await page.goto(base + '/on');
+  const m5 = await open('music', 'm');
+  const again = await m5.evaluate(() => show()).catch(caught);
+  await page.waitForTimeout(100);
+  if (process.env.QA_SHOT_AGAIN) await page.screenshot({ path: process.env.QA_SHOT_AGAIN });
+  ok(again && JSON.parse(again[ACTIVE] || '{}').title === 'Train song', 'a value set while the boundary was off comes along on the next turn-on: ' + JSON.stringify(again));
+  ok(again?.['wizard-music.volume'] === '5', 'so does a named write made while off: ' + again?.['wizard-music.volume']);
+  ok(again && !('music.early' in again), 'and a removal made while off');
 
   ok(!errors.length, 'no page errors: ' + errors.join(' | '));
   await browser.close(); server.close();

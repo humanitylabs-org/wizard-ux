@@ -216,8 +216,41 @@
     if (!a) return b; if (!b) return a;
     const threads = { ...a.threads };
     for (const [k, r] of Object.entries(b.threads)) threads[k] = later(threads[k], r);
-    const entries = Object.entries(threads).sort((x, y) => y[1].seenAt - x[1].seenAt || x[0].localeCompare(y[0])).slice(0, MAX);
+    // Same order as the box keeps its 500 (Agent Service thread-seen.mjs: the later of seenAt and unreadAt, then key), so
+    // both sides drop the same record at the cap. Ordering by seenAt alone kept a record here that the box had dropped,
+    // and the re-send below then never caught up (wizard-ux issue 1428).
+    const at = r => Math.max(r.seenAt, r.unreadAt ?? -1);
+    const entries = Object.entries(threads).sort((x, y) => at(y[1]) - at(x[1]) || x[0].localeCompare(y[0])).slice(0, MAX);
     return { initializedAt: Math.min(a.initializedAt, b.initializedAt), threads: Object.fromEntries(entries) };
+  }
+  /* Re-sending reads the box does not have yet (after a reconnect or reload; a failed write must not strand a read).
+   * wizard-ux issue 1428: a record the box never keeps (past its cap, a private thread it withholds) made every list
+   * read PUT the whole 138 KB state again and repaint, about 6 times a second on a phone, and Chats never loaded.
+   * Now each record version is re-sent once, one write at a time; a failed write lets it try again on a later read.
+   * A reply that changes nothing here does not repaint. */
+  const SEEN_SENT = new Map(); // seen key -> the seenAt already re-sent
+  let seenSending = false;
+  function sameRecord(a, b) {
+    if (a === b) return true; if (!a || !b) return false;
+    const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every(k => a[k] === b[k]);
+  }
+  function sameSeen(a, b) {
+    if (a === b) return true; if (!a || !b || a.initializedAt !== b.initializedAt) return false;
+    const ka = Object.keys(a.threads); return ka.length === Object.keys(b.threads).length && ka.every(k => sameRecord(a.threads[k], b.threads[k]));
+  }
+  function seenBehind(state, remote) {
+    return Object.entries(state?.threads || {}).filter(([k, r]) => r.seenAt > (remote?.threads?.[k]?.seenAt || 0) && SEEN_SENT.get(k) !== r.seenAt);
+  }
+  function resendSeen(store, state, remote) {
+    if (seenSending) return null;
+    const behind = seenBehind(state, remote); if (!behind.length) return null;
+    for (const [k, r] of behind) SEEN_SENT.set(k, r.seenAt);
+    if (SEEN_SENT.size > MAX * 4) for (const k of [...SEEN_SENT.keys()]) if (!state.threads[k]) SEEN_SENT.delete(k);
+    seenSending = true;
+    return putSeen(state).then(r => {
+      const next = merge(store.seen, r); if (sameSeen(next, store.seen)) return;
+      store.seen = next; writeLocal(next); store.emit();
+    }, () => { for (const [k, r] of behind) if (SEEN_SENT.get(k) === r.seenAt) SEEN_SENT.delete(k); }).finally(() => { seenSending = false; });
   }
   function readLocal() {
     try {
@@ -702,6 +735,7 @@
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const PEND_MAX = 2 * 60e3;
+  const PLACEHOLDER_TITLES = new Set(['', 'New chat', 'Untitled chat', 'Chat']);
   // A send a graceful restart holds (the 202 restart_pending receipt, p.held / it.restartPending) stays this device's
   // until the restart is over, however long the wait: the box may list a new chat's held first message late or not at
   // all, and the chat must stay under Saved meanwhile (wizard-ux issue 1362). Without a known restart: PEND_MAX.
@@ -745,6 +779,9 @@
     // (STOPPING) keeps its Stopping… through outbox repaints too, not only through list reads (applyLocal).
     if ((CANCELLING.has(s.id) || (s.runId && STOPPING.has(s.runId))) && WORKING.has(s.status)) s.status = 'stopping';
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
+    // A new chat the box already lists under a stand-in name ("New chat" until its first turn runs, which a restart
+    // can hold for minutes) shows the owner's own words from the tap, like the row this device made (issue 1432).
+    if (p.kind === 'new' && p.text && PLACEHOLDER_TITLES.has(String(s.title || '').trim())) s.title = p.text.slice(0, 60);
     // Accepted but held by a graceful restart (outbox restartPending): saved on the box, not running (wizard-ux issue 1362).
     if (p.held) s.restartPending = true; else delete s.restartPending;
   }
@@ -1172,8 +1209,8 @@
           }
           this.seen = merged; writeLocal(merged);
           // Retry device-local reads after reconnect/reload; failed writes must not strand a private receipt.
-          if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
-            putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
+          // Once per record version (wizard-ux issue 1428), never on every list read.
+          resendSeen(this, merged, remote);
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           setTimeout(preload, 0); // main-list truth, before unrelated runtimes
           };

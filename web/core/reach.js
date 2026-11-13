@@ -303,6 +303,9 @@
   let restartKeep = null, restartKeepBusy = false;
   function restartKeepMissing() {
     for (const f of document.querySelectorAll?.('.ch-compose') || []) if (f.getClientRects?.().length && !f.querySelector('[data-restart-notice]')) return true;
+    // Leaving a thread for the Chats list hides the box that held the note: put it on its own panel at once, not at the
+    // next poll (wizard-ux issue 1432).
+    if (![...(document.querySelectorAll?.('[data-restart-notice]') || [])].some(n => n.getClientRects?.().length)) return true;
     return false;
   }
   function restartKeepWatch() {

@@ -491,24 +491,34 @@
    * which key while its window was same-origin (`wos.app-ls-owners.v1`: { key: { app } }, app '' = more than one app).
    * Before the app's sandboxed page starts (storageName, storage.load), each key that app alone wrote is copied once
    * into its own copy, unless the copy already has the key (`wos.app-ls-carried.v1` { app: [keys] } notes it, so a key
-   * the app removes later never comes back). The shell's own keys (STORE_SHELL, the same rule as app-services.js
-   * LS_SHELL) are never copied. The old keys stay as they were. True when something was copied. */
-  const LS_OWNERS = 'wos.app-ls-owners.v1', LS_CARRIED = 'wos.app-ls-carried.v1';
+   * the app removes later never comes back). A carried key its same-origin page set or removed again while the boundary
+   * was off (`wos.app-ls-changed.v1` { app: [keys] }, noted by app-services.js) is copied once more, over the copy's
+   * older value (wizard-ux#1434). The shell's own keys (STORE_SHELL, the same rule as app-services.js LS_SHELL) are
+   * never copied. The old keys stay as they were. True when the copy changed. */
+  const LS_OWNERS = 'wos.app-ls-owners.v1', LS_CARRIED = 'wos.app-ls-carried.v1', LS_CHANGED = 'wos.app-ls-changed.v1';
   const STORE_SHELL = /^(?:wos|wux\.|wz\.|wizard\.|wizard-pwa-install:|wizardapp\.)/i;
   function storeCarry(id) {
     try {
       if (typeof id !== 'string' || !STORE_ID.test(id)) return false;
       const owners = readJson(LS_OWNERS), carried = readJson(LS_CARRIED);
       const done = new Set(Array.isArray(carried[id]) ? carried[id].filter(k => typeof k === 'string') : []);
-      const keys = Object.keys(owners).filter(k => owners[k]?.app === id && !done.has(k) && !STORE_SHELL.test(k));
-      if (!keys.length) return false;
+      const again = new Set(Array.isArray(readJson(LS_CHANGED)[id]) ? readJson(LS_CHANGED)[id].filter(k => typeof k === 'string') : []);
+      const keys = Object.keys(owners).filter(k => owners[k]?.app === id && (!done.has(k) || again.has(k)) && !STORE_SHELL.test(k));
+      if (!keys.length && !again.size) return false;
       const m = storeRead(id);
       let others = 0;
       for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(STORE) && k !== STORE + id) others += (localStorage.getItem(k) || '').length; }
       let n = storeSize(m), added = 0;
       for (const k of keys) {
+        const v = localStorage.getItem(k), had = m.has(k) ? k.length + m.get(k).length : 0;
+        if (again.has(k)) { // Set or removed while the boundary was off, after the copy: that is the newer value.
+          if (v === null) { if (had) { m.delete(k); n -= had; added++; } again.delete(k); continue; }
+          const size = k.length + v.length - had;
+          if (n + size > STORE_MAX || others + n + size > STORE_ALL) continue; // No room: tried again next time.
+          if (m.get(k) !== v) { m.set(k, v); added++; }
+          n += size; again.delete(k); done.add(k); continue;
+        }
         if (m.has(k)) { done.add(k); continue; } // The app's newer value under the boundary wins.
-        const v = localStorage.getItem(k);
         if (v === null) continue; // Gone from the old storage: nothing to carry (yet).
         const size = k.length + v.length;
         if (n + size > STORE_MAX || others + n + size > STORE_ALL) continue; // No room: tried again next time.
@@ -516,6 +526,9 @@
       }
       if (added) localStorage.setItem(STORE + id, JSON.stringify(Object.fromEntries(m)));
       const c = readJson(LS_CARRIED); c[id] = [...done]; localStorage.setItem(LS_CARRIED, JSON.stringify(c));
+      const ch = readJson(LS_CHANGED), left = [...again].filter(k => keys.includes(k));
+      if (left.length) ch[id] = left; else delete ch[id];
+      if (Object.keys(ch).length) localStorage.setItem(LS_CHANGED, JSON.stringify(ch)); else localStorage.removeItem(LS_CHANGED);
       return added > 0;
     } catch (_) { return false; }
   }

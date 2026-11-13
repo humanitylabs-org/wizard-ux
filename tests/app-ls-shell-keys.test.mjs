@@ -37,10 +37,15 @@ function shellKeys() {
   const scan = p => {
     const s = fs.readFileSync(p, 'utf8'), f = path.relative(ROOT, p);
     const consts = new Map();
-    for (const m of s.matchAll(/\b([A-Za-z_$][\w$]*)\s*[:=]\s*(['"`])([^'"`]*)\2/g)) if (!consts.has(m[1])) consts.set(m[1], m[3]);
+    // Every string each name is given (name = '…' or name: '…'), looked up by name: no pattern built from file text.
+    const values = new Map();
+    for (const m of s.matchAll(/\b([A-Za-z_$][\w$]*)\s*[:=]\s*(['"`])([^'"`]*)\2/g)) {
+      if (!consts.has(m[1])) consts.set(m[1], m[3]);
+      if (m[3]) values.set(m[1], [...(values.get(m[1]) || []), m[3]]);
+    }
     const resolve = v => v.replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (all, n) => consts.has(n) ? consts.get(n) : all);
     for (const m of s.matchAll(/\b(?:setItem|getItem|removeItem)\(\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
-      for (const c of s.matchAll(new RegExp(`\\b${m[1].replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')}\\s*[:=]\\s*(['"\`])([^'"\`]+)\\1`, 'g'))) add(resolve(c[2]), f);
+      for (const v of values.get(m[1]) || []) add(resolve(v), f);
     }
     for (const m of s.matchAll(/\b(?:setItem|getItem|removeItem)\(\s*(['"`])([^'"`]+)/g)) add(resolve(m[2]), f);
   };
