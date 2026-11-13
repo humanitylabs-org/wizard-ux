@@ -1276,10 +1276,37 @@
   const NET_METHOD = /^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/, NET_CACHE = ['default', 'no-store', 'reload', 'no-cache', 'force-cache'];
   const NET_DROP = /^(?:x-wizard-shell-token|cookie|cookie2|host|origin|referer)$/i;
   const outside = () => Object.assign(fault('Outside this app'), { code: 'outside' });
+  /* An own screen (core/own-views.js: the owner's version of an app, served by the Agent Service at
+   * /wizard/views/<id>/) calls its app through relative `api/…`. The Service answers that with a 307 to the original
+   * app's API folder, which a sandboxed window can't follow (it leaves the window's path), so the shell sends such a
+   * call straight to that folder (the Service's view.api), and only when the folder lies inside the original app's own
+   * path and off every owner route: the same calls the original app's window may make. */
+  const ownApi = st => {
+    if (st.url.origin !== ORIGIN || st.url.pathname !== `/wizard/views/${st.appId}/`) return null;
+    const a = apps().find(a => a.id === st.appId && a.source === 'apps.json' && a.view?.mode === 'own' && a.url === st.url.pathname);
+    const api = a?.view?.api;
+    if (typeof api !== 'string' || !/^\/[A-Za-z0-9_\/-]+\/$/.test(api) || api.includes('//') || !a.originalUrl) return null;
+    try {
+      const u = new URL(api, ORIGIN), home = new URL(a.originalUrl, ORIGIN);
+      return u.pathname === api && within(u, home) && !window.WizBrowserBoundary.ownerRoute(u.href) ? u : null;
+    } catch (_) { return null; }
+  };
+  // Whether a URL is one this window's page may reach through the shell: inside its app path, or an own screen's API
+  // folder; never an owner route.
+  const netOk = (st, u) => {
+    if (window.WizBrowserBoundary.ownerRoute(u.href)) return false;
+    if (within(u, st.url)) return true;
+    const api = ownApi(st); return !!api && within(u, api);
+  };
   const netTarget = (st, href) => {
     let u; try { u = new URL(String(href)); } catch (_) { return null; }
     if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
-    return within(u, st.url) && !window.WizBrowserBoundary.ownerRoute(u.href) ? u : null;
+    const api = ownApi(st), from = st.url.pathname + 'api/';
+    if (api && u.origin === ORIGIN && u.pathname.startsWith(from) && !/%(?:2f|5c|2e|25)/i.test(u.pathname)) {
+      let m; try { m = new URL(api.pathname + u.pathname.slice(from.length) + u.search, ORIGIN); } catch (_) { return null; }
+      return within(m, api) && netOk(st, m) ? m : null;
+    }
+    return netOk(st, u) ? u : null;
   };
   async function boundaryNet(st, args) {
     const B = window.WizBrowserBoundary, MAX = B.netMax;
@@ -1314,7 +1341,8 @@
         cache: NET_CACHE.includes(args.cache) ? args.cache : 'default', referrerPolicy: 'no-referrer', signal: stop.signal });
       if (res.type === 'opaqueredirect') throw fault('Redirect not followed for ' + method);
       // A redirect may not leave the app's path (another app, an owner route): its answer stays with the shell.
-      if (!netTarget(st, res.url || u.href)) { try { res.body?.cancel(); } catch (_) {} throw fault('Redirected outside this app'); }
+      let landed = null; try { landed = new URL(res.url || u.href); } catch (_) {}
+      if (!landed || !netOk(st, landed)) { try { res.body?.cancel(); } catch (_) {} throw fault('Redirected outside this app'); }
       if (!stream || !res.body || method === 'HEAD') return await netAnswer(st, res, u, method, gen, MAX);
       if (!boundaryLive(st) || B.gen(st.frame) !== gen) { try { res.body.cancel(); } catch (_) {} throw fault('App document changed'); }
       // The head goes back first (this answer); the pieces follow as `net` notices once it has been sent.
@@ -1392,7 +1420,9 @@
     let u; try { u = new URL(String(href)); } catch (_) { return null; }
     if (!/^wss?:$/.test(u.protocol) || u.username || u.password || u.hash) return null;
     const h = new URL(u.href); h.protocol = u.protocol === 'wss:' ? 'https:' : 'http:';
-    return netTarget(st, h.href) ? u : null;
+    // The address the shell opens (an own screen's api/… goes to its app's API folder, as for net.fetch).
+    const m = netTarget(st, h.href); if (!m) return null;
+    const w = new URL(m.href); w.protocol = u.protocol; return w;
   };
   // A text message's size as sent: its UTF-8 bytes (a lone surrogate goes as U+FFFD, 3 bytes).
   const utf8 = t => {

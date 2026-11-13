@@ -90,6 +90,15 @@ On:
   App Manager's own view (`store-install/_connections/`, wizard-app-manager `connections_view.py`), owner code like
   Store: it stays same-origin, loads `core/shell-token.js` first and is armed the same way (its static files load
   without the token; its `api/` calls carry it). Proof: `tests/qa-browser-boundary-welcome-settings.cjs`.
+- Own screens (`core/own-views.js`): the owner's own version of an app, served by the Agent Service at
+  `/wizard/views/<id>/`, is an app page like any other, so it loads sandboxed and attached as that app's window. The
+  shell can't read its document any more, so the Service's answer for the page (checked with the shell's own fetch)
+  and the boot script's ready message (from origin `null`, admitted only from that sandboxed window) prove it loaded;
+  an error message from it still falls back to the original screen. With the boundary on the Service lets its files
+  load without the token (`Origin: null` files get `Access-Control-Allow-Origin: *`; the page never), and gives the
+  app list's `view.api`: the original app's API folder. The screen's relative `api/…` calls go there through the
+  shell (`net.fetch`), only when that folder lies inside the original app's path and off every owner route, never to
+  `/wizard/`. Proof: `tests/qa-browser-boundary-own-views.cjs` and wizard-agent-service `tests/app-views.test.ts`.
 - Troubleshooter window (`core/reach.js`): the repair page shows repair chat output, so it loads sandboxed and
   attached like any app page. The shell no longer reads it to prove it loaded: the page's `ready` on the boundary
   channel is the proof (`WizBrowserBoundary.ready(frame)` and the `wizard:boundary-ready` event on the frame; an error
