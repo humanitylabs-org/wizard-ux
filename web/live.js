@@ -702,6 +702,10 @@
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const PEND_MAX = 2 * 60e3;
+  // A send a graceful restart holds (the 202 restart_pending receipt, p.held / it.restartPending) stays this device's
+  // until the restart is over, however long the wait: the box may list a new chat's held first message late or not at
+  // all, and the chat must stay under Saved meanwhile (wizard-ux issue 1362). Without a known restart: PEND_MAX.
+  const pendOver = (sentAt, held) => !!sentAt && Date.now() - sentAt > PEND_MAX && !(held && globalThis.WizReach?.restart?.());
   // Admission is not completion: the newest receipt can arrive with an older thread status.
   // Keep the bounded hold through active acknowledgement, so a late stale poll cannot undo it.
   const confirmed = (s, p) => {
@@ -725,7 +729,7 @@
   const RELEASED = new Set(); // outbox item ids whose hold is over (so a later outbox change doesn't re-hold them)
   function applyPend(s) {
     const p = PEND.get(s.id);
-    if (p && (confirmed(s, p) || (p.sentAt && Date.now() - p.sentAt > PEND_MAX))) { RELEASED.add(p.key); PEND.delete(s.id); unPend(s); return; }
+    if (p && (confirmed(s, p) || pendOver(p.sentAt, p.held))) { RELEASED.add(p.key); PEND.delete(s.id); unPend(s); return; }
     if (!p) { if (s.pend !== undefined) unPend(s); return; }
     if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
     const at = new Date(p.at).toISOString();
@@ -767,7 +771,7 @@
     for (const [sid, p] of PEND) if (!latest.has(sid) && !(p.state === 'sent' && !String(p.key).startsWith('tap:'))) PEND.delete(sid);
     for (const [sid, it] of latest) {
       const known = PEND.get(sid);
-      if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
+      if (RELEASED.has(it.id) || (it.state === 'sent' && !known && pendOver(it.sentAt || 1, it.restartPending === true))) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
       const text = String(it.text || it.typed || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
       if (it.agent && otherAgent(it.agent)) AGENT_OF.set(sid, it.agent);
       PEND.set(sid, { acknowledged: known?.key === it.id && known.acknowledged, key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '', agent: it.agent && otherAgent(it.agent) ? it.agent : '', held: it.state === 'sent' && it.restartPending === true });

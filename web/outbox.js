@@ -650,7 +650,8 @@
         if (await holdLate(due)) continue;
         await attempt(due);
       }
-      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3) await del(it.id);
+      // A send a graceful restart still holds is kept until the restart is over (live.js pendOver; wizard-ux issue 1362).
+      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3 && !(it.restartPending && window.WizReach?.restart?.())) await del(it.id);
     } finally { pumping = false; schedule(); }
   }
   function schedule(ms) {
@@ -967,6 +968,15 @@
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
+  // A graceful restart is over (WizReach dispatches wizreachchange): sends it held are ordinary sent receipts again, so
+  // a later restart never reads them as held, and the cleanup that kept them for the hold runs now (issue 1362).
+  addEventListener('wizreachchange', () => {
+    if (window.WizReach?.restart?.()) return;
+    const held = [...items.values()].filter(it => it.restartPending);
+    if (!held.length) return;
+    for (const it of held) delete it.restartPending;
+    Promise.all(held.map(it => put(it).catch(() => {}))).then(() => { emit(); pump(); });
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.WosOutbox = api;
   load().then(() => schedule(0));

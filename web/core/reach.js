@@ -407,6 +407,9 @@
         el.addEventListener('click', e => { const b = e.target.closest?.('[data-restart-choice]'); if (b && !b.disabled) void restartChoose(b.dataset.restartChoice); });
         host.appendChild(el);
       }
+      // No message box on screen (the phone Chats list, a desktop with no chat open): the host is a dock layer or the
+      // page itself, so the note floats on its own panel (tweak.css .float), never over the header (issue 1362).
+      el.classList?.toggle('float', !host.classList?.contains('ch-compose'));
       if (el.innerHTML !== html) el.innerHTML = html;
     }
   }
