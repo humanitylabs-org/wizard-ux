@@ -32,6 +32,18 @@ test('Mizel skins carry colours only: no layout rule, gated or not', () => {
   }
 });
 
+for (const skin of ['obsidian', 'landscapes']) {
+  test(`${skin} leaves the stock launcher orb and desk targets alone`, () => {
+    const css = read(`web/skins/${skin}/skin.css`);
+    // The retired layout supplied the generated X. Hiding the stock orb without
+    // that pseudo-element leaves an invisible, still-clickable launcher control.
+    assert.doesNotMatch(css, /\[data-sheet=["']launcher["']\][^{]*\.dock[^{}]*\{[^{}]*\b(?:opacity|pointer-events)\s*:/g,
+      `${skin}: launcher state must not hide the orb or disable desk navigation`);
+    assert.doesNotMatch(css, /\.orb-wrap::before\s*\{|@keyframes\s+wosOrbX\b/,
+      `${skin}: no orphaned generated-X paint after layout retirement`);
+  });
+}
+
 async function boot(skin, saved) {
   const storage = new Map([['wos.skin', skin], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', defaultsMigrated: true, machinesHomeMoved: true, ...saved })]]);
   let active = [];

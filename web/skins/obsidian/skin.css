@@ -521,16 +521,7 @@ html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-co
 
 
 
-/* Swipe-up Apps sheet open: the orb turns into a plain X, since tapping it closes the sheet (the only time it changes). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap :is(.orb, .orb-fallback, .orb-app, .orb-badge, .moons) { opacity: 0 !important; transition: opacity 160ms; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap::before { border-radius: 50%; pointer-events: none;
-  background: color-mix(in srgb, var(--ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
-  -webkit-mask: none; box-shadow: inset 0 0 0 0 transparent;
-  background-image: linear-gradient(45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px)), linear-gradient(-45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px));
-  background-size: 22px 22px; background-position: center; background-repeat: no-repeat; animation: wosOrbX 180ms ease-out; }
-
-@keyframes wosOrbX { from { transform: translate(-50%, -50%) rotate(-90deg) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) rotate(0) scale(1); opacity: 1; } }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .desk-dots { opacity: .35; pointer-events: none; }
+/* Apps-sheet orb paint and desk navigation stay owned by the stock shell. */
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { opacity: 1; color: #1b1b1f; }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { stroke: currentColor; }
 
