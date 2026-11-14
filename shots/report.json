@@ -1,0 +1,300 @@
+[
+  {
+    "stem": "classic-nebula-on",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [
+      "qa-g1"
+    ],
+    "afterThread": [
+      "qa-g1"
+    ],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "preview": "# WizardOS Chats · ✎ Draft · Here is a plan.",
+    "tagColor": "rgb(255, 190, 85)",
+    "chanMarks": [
+      [
+        "launch",
+        true
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "pencilBox": {
+      "inside": true,
+      "h": 14
+    },
+    "chanAfterReload": [
+      "launch"
+    ],
+    "afterReload": [
+      "qa-g1"
+    ],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "classic-nebula-off",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [],
+    "afterThread": [],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "chanMarks": [
+      [
+        "launch",
+        false
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "chanAfterReload": [],
+    "afterReload": [],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "classic-grove-on",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [
+      "qa-g1"
+    ],
+    "afterThread": [
+      "qa-g1"
+    ],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "preview": "# WizardOS Chats · ✎ Draft · Here is a plan.",
+    "tagColor": "rgb(240, 180, 90)",
+    "chanMarks": [
+      [
+        "launch",
+        true
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "pencilBox": {
+      "inside": true,
+      "h": 14
+    },
+    "chanAfterReload": [
+      "launch"
+    ],
+    "afterReload": [
+      "qa-g1"
+    ],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "classic-grove-off",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [],
+    "afterThread": [],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "chanMarks": [
+      [
+        "launch",
+        false
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "chanAfterReload": [],
+    "afterReload": [],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-nebula-on",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [
+      "qa-g1"
+    ],
+    "afterThread": [
+      "qa-g1"
+    ],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "tagColor": "rgb(255, 190, 85)",
+    "chanLive": true,
+    "chanMarks": [
+      [
+        "launch",
+        true
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "pencilBox": {
+      "inside": true,
+      "h": 14
+    },
+    "chanAfterReload": [
+      "launch"
+    ],
+    "afterReload": [
+      "qa-g1"
+    ],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-nebula-off",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [],
+    "afterThread": [],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "chanLive": false,
+    "chanMarks": [
+      [
+        "launch",
+        false
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "chanAfterReload": [],
+    "afterReload": [],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-grove-on",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [
+      "qa-g1"
+    ],
+    "afterThread": [
+      "qa-g1"
+    ],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "tagColor": "rgb(240, 180, 90)",
+    "chanLive": true,
+    "chanMarks": [
+      [
+        "launch",
+        true
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "pencilBox": {
+      "inside": true,
+      "h": 14
+    },
+    "chanAfterReload": [
+      "launch"
+    ],
+    "afterReload": [
+      "qa-g1"
+    ],
+    "afterEmpty": [],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-grove-off",
+    "errors": [],
+    "orderBefore": [
+      "qa-g1",
+      "qa-r1",
+      "qa-y1"
+    ],
+    "liveWhileTyping": [],
+    "afterThread": [],
+    "orderAfter": [
+      "qa-r1",
+      "qa-y1",
+      "qa-g1"
+    ],
+    "chanLive": false,
+    "chanMarks": [
+      [
+        "launch",
+        false
+      ],
+      [
+        "__general__",
+        false
+      ]
+    ],
+    "chanAfterReload": [],
+    "afterReload": [],
+    "afterEmpty": [],
+    "pass": true
+  }
+]
