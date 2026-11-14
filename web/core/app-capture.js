@@ -308,10 +308,12 @@
     emit(s, 'warn', 'On-device backup is unavailable (' + storageFailure(e).detail + '). Recording continues to the meeting server.');
     changed();
   }
+  // A phone store that never answers counts as broken too (ux#1448): give each meeting store step a budget.
+  const MEETING_STORE_MS = 4000;
   async function softStore(s, work) {
     if (!s.meetingNative) return work();
     if (s.noLocal) return undefined;
-    try { return await work(); }
+    try { return await bounded(Promise.resolve(work()), MEETING_STORE_MS); }
     catch (e) {
       // Ownership/native errors still refuse; only storage failures fall back.
       if (typeof e?.code === 'string' && !/^(storage_|recovery_timeout)/.test(e.code)) throw e;
@@ -796,14 +798,17 @@
       ack: row => d.recDone(row.nativeId)
     };
   }
+  const MEETING_PCM_MS = 3000;
   function meetingAdapter(b) {
     return { name: 'wizard-meetings',
       async start(opts, hooks, previous) {
         const meetingId = opts.meta?.meetingId || previous?.meta?.meetingId;
         if (typeof meetingId !== 'string' || !meetingId) throw fail('meeting_id_required', 'Create the meeting task before capture.');
+        hooks.stage?.('native status');
         const current = await b.status?.();
         if (current?.recording && current.meetingId !== meetingId) throw fail('busy', 'Microphone held by mizel', { appId: 'mizel' });
-        let pcm = false;
+        hooks.stage?.('native recorder');
+        let pcm = false, gone = false;
         const offs = [b.onLevel?.(hooks.level), b.onState?.(st => safeCall(opts.onNativeState, st)), b.onPcm?.(frame => {
           if (frame.meetingId !== meetingId) return;
           safeCall(opts.onPcm, frame); hooks.chunk(new Blob([frame.pcm]), 'me', frame.startMs);
@@ -816,9 +821,20 @@
             catch (e) { if (e.code !== 'mic_permission') throw e; hooks.stage?.('microphone permission'); const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop()); hooks.stage?.('native recorder'); st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
           }
           safeCall(opts.onNativeState, st);
-          if (b.pcm && st?.livePcm) { await b.pcm(meetingId, true); pcm = true; }
+          if (b.pcm && st?.livePcm) {
+            // The live PCM tee is optional (the native recorder uploads the meeting itself): a hookup that hangs
+            // must not hold the take (ux#1448). Go on without it; a late answer is switched off again on detach.
+            hooks.stage?.('live audio hookup');
+            const hookup = Promise.resolve().then(() => b.pcm(meetingId, true));
+            try { await bounded(hookup, MEETING_PCM_MS, 'pcm_timeout'); pcm = true; }
+            catch (e) {
+              if (e?.code !== 'pcm_timeout') throw e;
+              safeCall(opts.onWarn, 'Live audio did not connect; the meeting keeps recording.');
+              hookup.then(() => { if (gone) return b.pcm(meetingId, false); pcm = true; }).catch(() => {});
+            }
+          }
         } catch (e) { offs.forEach(off => safeCall(off)); throw e; }
-        const detach = async () => { if (pcm) { try { await b.pcm(meetingId, false); } catch (e) { safeCall(opts.onWarn, 'PCM listener cleanup: ' + e.message); } pcm = false; } offs.forEach(off => safeCall(off)); };
+        const detach = async () => { gone = true; if (pcm) { try { await b.pcm(meetingId, false); } catch (e) { safeCall(opts.onWarn, 'PCM listener cleanup: ' + e.message); } pcm = false; } offs.forEach(off => safeCall(off)); };
         const stopNative = async () => {
           const st = await b.status?.();
           if (st?.recording && st.meetingId !== meetingId) throw fail('busy', 'Microphone held by another meeting', { appId: 'mizel' });
@@ -835,7 +851,7 @@
             // The existing bridge owns full-quality 5s uploads + final_seq. PCM tee
             // is a recoverable local *partial* backup, never a replacement upload.
             return { partial: true, ...(final?.mediaMs != null ? {durationMs:final.mediaMs} : {}), meta: { meetingId, status: final, backendOwned: true, backendStopOwned: typeof b.onState === 'function' } }; },
-          cancel: async () => { await stopNative(); await detach(); }, pause: () => b.pause?.(), resume: () => b.resume?.(), detach: () => { offs.forEach(off => safeCall(off)); }
+          cancel: async () => { await stopNative(); await detach(); }, unhook: detach, pause: () => b.pause?.(), resume: () => b.resume?.(), detach: () => { offs.forEach(off => safeCall(off)); }
         };
       },
       async recover(row) { const st = await b.status?.(); return st?.recording && st.meetingId === row.nativeId ? { live: true } : { partial: true, meta: { meetingId: row.nativeId, status: st, backendOwned: true, backendStopOwned: typeof b.onState === 'function' } }; },
@@ -1037,6 +1053,14 @@
       return;
     }
     if (resuming) { safeCall(s.engine.detach); return; }
+    // A meeting recorder that came up late is already uploading the meeting: never stop it. Keep it recoverable
+    // so the app resumes it (ux#1448).
+    if (s.meetingNative) {
+      // unhook also switches the live PCM tee off: nobody listens to it any more (Codex P2).
+      void Promise.resolve().then(() => s.engine.unhook ? s.engine.unhook() : s.engine.detach?.()).catch(() => {});
+      void put({ ...s.row, status: 'recoverable', partial: true, recoveryError: 'start_timeout' }).catch(() => {}).then(() => active ? null : recover()).catch(() => {});
+      return;
+    }
     Promise.resolve().then(() => s.engine.cancel?.()).then(() => remove(s.row.id)).catch(() => {});
   }
   async function start(appId, opts = {}) {
@@ -1055,18 +1079,20 @@
     // Bounded start (James's phone, 31 Oct 2026): a start that never settles must not hold the microphone. Before
     // this bound a hung store/recovery/permission/native await kept `active` set, so every app read the mic as busy
     // until Wizard reloaded, and the app's update hold never ended.
-    let timer;
+    let timer, arm;
     const bound = new Promise((_, reject) => {
-      const arm = ms => { timer = setTimeout(async () => {
+      arm = ms => { timer = setTimeout(async () => {
         if (s.phase !== 'starting' || s.engine || s.settled) return;
         // The owner may still be reading Android's microphone prompt: give that one stage a longer budget.
         if (!s.promptExtended && s.stage === 'microphone permission' && await micPromptOpen()) { s.promptExtended = true; arm(PROMPT_BOUND_MS - START_BOUND_MS); return; }
         if (s.phase !== 'starting' || s.engine || s.settled) return;
         reject(abandonStart(s, !!opts.resumeId));
       }, ms); };
-      if (s.instant) arm(START_BOUND_MS); // meetings, PCM and resume keep their established protocol
     });
     const run = startRun(s, appId, opts, meta, prepared);
+    // Native meetings get the same bound (ux#1448: James's phone sat on Starting… while the recorder already
+    // uploaded). startRun names the adapter before its first await. Browser meetings, PCM and resume keep their protocol.
+    if (s.instant || s.meetingNative) arm(START_BOUND_MS);
     run.catch(() => {}); // after a timeout nobody awaits the late outcome; startRun cleans it up itself
     try { return await Promise.race([run, bound]); } finally { clearTimeout(timer); }
   }
