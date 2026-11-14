@@ -22,11 +22,11 @@ function kit(seed = {}, failure = '') {
 }
 
 // The real draft functions of chats.js, cut out word for word.
-function chats(K, state) {
+function chats(K, state, agent = '') {
   const a = chatsSrc.indexOf('  const draftKey = w =>'), b = chatsSrc.indexOf('  function openMedia(', a);
   assert.ok(a > 0 && b > a, 'draft functions found in chats.js');
   const ctx = { W: state.W, CH: state.CH, ch: id => state.CH[id] || (state.CH[id] = {}), INC: null, KIT: { drafts: K.drafts }, PREVIEW: {}, fileUrl: id => '/f/' + id,
-    winAgent: () => '', chanDraftKey: w => w.chanKey || '', elOf: id => state.el[id] || null };
+    winAgent: () => agent, chanDraftKey: w => w.chanKey || '', elOf: id => state.el[id] || null };
   vm.createContext(ctx);
   vm.runInContext(chatsSrc.slice(a, b) + '\nthis.api = { draftKey, loadDraft, saveDraft, typedInto };', ctx);
   return ctx.api;
@@ -98,3 +98,26 @@ test('a thread paint never takes a channel box\'s field as its own composer', ()
   assert.match(part, /oldTa = ta0 && !ta0\.closest\?\.\('\[data-chchanform\]'\) \? ta0 : null/);
   assert.match(chatsSrc, /if \(el\.dataset\) delete el\.dataset\.draftFor; \/\/ a list holds no thread's box/);
 });
+
+// Main and routed agents (host profile, container, restricted): each agent's channel box, New chat box and thread box keep
+// their own drafts; another agent's or box's state never writes over them.
+for (const [kind, agent] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+  test(`${kind}: a channel send and a New chat never touch the thread's or another box's draft`, () => {
+    const ag = agent || 'hermes', chan = `chan:${ag}:launch`, nw = agent ? 'agentnew:' + agent : 'new', sid = 'p-' + kind, dk = 'direct:' + sid;
+    const K = kit({ [dk]: { text: 'thread half', files: [], at: 1 }, [nw]: { text: 'new half', files: [], at: 2 }, 'chan:other:launch': { text: 'other agent', files: [], at: 3 } });
+    const state = { W: { w1: { id: 'w1', thread: null, chanKey: chan } }, CH: {}, el: { w1: { dataset: {} } } }, api = chats(K, state, agent);
+    api.loadDraft(state.W.w1); api.typedInto('w1', ta('post words', form(chan)));
+    // The channel's own send empties its box state; the window then goes to the thread and to a New chat.
+    state.CH.w1.draft = ''; K.drafts.clear(chan);
+    state.W.w1 = { id: 'w1', thread: sid }; api.saveDraft('w1');
+    assert.equal(api.draftKey(state.W.w1), dk);
+    assert.equal(api.loadDraft(state.W.w1), 'thread half');
+    state.W.w1 = { id: 'w1', thread: '__new__' }; api.saveDraft('w1');
+    assert.equal(api.draftKey(state.W.w1), nw);
+    assert.equal(api.loadDraft(state.W.w1), 'new half');
+    // The old thread box (still painted for the thread) types: saved under the thread, never the New chat.
+    state.el.w1.dataset.draftFor = dk; api.typedInto('w1', ta('thread half+', form('')));
+    assert.equal(K.drafts.get(dk).text, 'thread half+'); assert.equal(K.drafts.get(nw).text, 'new half');
+    assert.equal(K.drafts.get('chan:other:launch').text, 'other agent');
+  });
+}
