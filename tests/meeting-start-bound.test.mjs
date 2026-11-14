@@ -67,3 +67,10 @@ test('a meeting recorder that comes up after the bound keeps recording and stays
   c.lateStart({meetingNative:true,row:{id:'take',native:'wizard-meetings',nativeId:'m1',status:'starting'},engine:{cancel:async()=>{cancelled++;},detach:()=>{detached++;}}},false,fail('start_abandoned','late'));
   await tick();assert.equal(cancelled,0);assert.equal(detached,1);assert.equal(puts[0].status,'recoverable');assert.equal(recovered,1);
 });
+test('a late meeting is unhooked with its live PCM switched off, while the recorder keeps going',async()=>{
+  const m=await meetingStart({pcm:'ok'});await m.time.advance(0);assert.equal(m.engine.livePcm,true);
+  const puts=[];const c=vm.createContext({cleanup(){},remove:async()=>{},safeCall:fn=>fn?.(),put:async r=>puts.push(r),active:null,recover:async()=>{},W:{}});
+  load('  function lateStart(', '  async function start(appId',c);
+  c.lateStart({meetingNative:true,row:{id:'take',native:'wizard-meetings',nativeId:'m1'},engine:m.engine},false,fail('start_abandoned','late'));
+  await tick();assert.deepEqual(m.br.calls,['start','pcm:true','pcm:false'],'PCM off, never stopped');assert.equal(puts[0].status,'recoverable');
+});

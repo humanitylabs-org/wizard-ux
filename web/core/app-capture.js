@@ -851,7 +851,7 @@
             // The existing bridge owns full-quality 5s uploads + final_seq. PCM tee
             // is a recoverable local *partial* backup, never a replacement upload.
             return { partial: true, ...(final?.mediaMs != null ? {durationMs:final.mediaMs} : {}), meta: { meetingId, status: final, backendOwned: true, backendStopOwned: typeof b.onState === 'function' } }; },
-          cancel: async () => { await stopNative(); await detach(); }, pause: () => b.pause?.(), resume: () => b.resume?.(), detach: () => { offs.forEach(off => safeCall(off)); }
+          cancel: async () => { await stopNative(); await detach(); }, unhook: detach, pause: () => b.pause?.(), resume: () => b.resume?.(), detach: () => { offs.forEach(off => safeCall(off)); }
         };
       },
       async recover(row) { const st = await b.status?.(); return st?.recording && st.meetingId === row.nativeId ? { live: true } : { partial: true, meta: { meetingId: row.nativeId, status: st, backendOwned: true, backendStopOwned: typeof b.onState === 'function' } }; },
@@ -1056,7 +1056,8 @@
     // A meeting recorder that came up late is already uploading the meeting: never stop it. Keep it recoverable
     // so the app resumes it (ux#1448).
     if (s.meetingNative) {
-      safeCall(s.engine.detach);
+      // unhook also switches the live PCM tee off: nobody listens to it any more (Codex P2).
+      void Promise.resolve().then(() => s.engine.unhook ? s.engine.unhook() : s.engine.detach?.()).catch(() => {});
       void put({ ...s.row, status: 'recoverable', partial: true, recoveryError: 'start_timeout' }).catch(() => {}).then(() => active ? null : recover()).catch(() => {});
       return;
     }
