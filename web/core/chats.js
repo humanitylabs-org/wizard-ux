@@ -1682,6 +1682,8 @@ window.WizCore.chats = function createChats(H) {
       .observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
+  // The device refused to store drafts (storage full): say so, the words stay in the box on screen (issue 1444).
+  window.addEventListener('wos:drafts-unsaved', () => toast('!', 'Couldn’t save your draft on this device · storage is full, keep this box open or send it', 4200));
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
   // The Snooze toast carries the return time. After-actions (keepThreadOpen) governs send, unread, restore and filing;
   // Archive and Snooze share leaveFinishedThread instead.
@@ -2553,6 +2555,7 @@ window.WizCore.chats = function createChats(H) {
     syncListTitle(w);
     closeStream(ch(w.id));
     if (!el) return;
+    if (el.dataset) delete el.dataset.draftFor; // a list holds no thread's box: the next thread paint reads its own draft (issue 1444)
     if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
     ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
@@ -3671,7 +3674,9 @@ window.WizCore.chats = function createChats(H) {
     const box = el.querySelector('.ch-msgs');
     PW?.capture(box); // save the shared eye-line record before rows above it change
     const dkey = draftKey(w);
-    const oldTa = el.querySelector('textarea');
+    // Only the thread's own box counts: a channel feed's box left in this element (Back from a post lands on its feed)
+    // holds that channel's words, never this thread's (wizard-ux issue 1444: the thread's draft showed as the emptied box).
+    const ta0 = el.querySelector('textarea'), oldTa = ta0 && !ta0.closest?.('[data-chchanform]') ? ta0 : null;
     const draft = oldTa && el.dataset.draftFor === dkey ? oldTa.value : (c.draftFor === dkey ? c.draft || '' : loadDraft(w));
     const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
     // Live status/model paints must not replace a sealed dictation target in this same composer.
@@ -3754,7 +3759,19 @@ window.WizCore.chats = function createChats(H) {
     c.files = d.files.map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
     return d.text;
   }
-  function saveDraft(wid) { if (INC?.active(wid)) return; const w = W[wid], c = ch(wid); if (!w || (!w.thread && !(typeof chanDraftKey === 'function' && chanDraftKey(w)))) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
+  // Saves the window's box only while its words belong to the box the window now shows (c.draftFor): stale words of
+  // another box (a channel's, a thread left) never write over, or empty, this box's draft (wizard-ux issue 1444).
+  function saveDraft(wid) { if (INC?.active(wid)) return; const w = W[wid], c = ch(wid); if (!w || (!w.thread && !(typeof chanDraftKey === 'function' && chanDraftKey(w)))) return; const key = draftKey(w); if (c.draftFor !== key) return; KIT.drafts.set(key, c.draft || '', c.files || []); }
+  // Words typed (or dictated) into a box are saved under that box's own key: a channel box under its channel, a thread's
+  // box under the thread it was painted for, whatever the window's state says by then.
+  function typedInto(id, ta) {
+    const c = ch(id), form = ta.form || ta.closest?.('form'), el = elOf(id);
+    const mk = form?.dataset?.morphKey || '', own = form?.dataset && 'chchanform' in form.dataset ? (mk.startsWith('chanbox:') ? mk.slice(8) : '') : el?.dataset?.draftFor || '';
+    const w = W[id], key = w ? draftKey(w) : '';
+    if (own && own !== key) { if (!INC?.active(id)) KIT.drafts.set(own, ta.value, KIT.drafts.get(own).files); return; }
+    if (own) c.draftFor = own;
+    c.draft = ta.value; saveDraft(id);
+  }
   function openMedia(wid, k) {
     const c = ch(wid), list = c.media || [], m = list[k]; if (!m) return;
     // Photos swipe as one gallery (this thread, oldest first); a file or video opens on its own.
@@ -4804,7 +4821,7 @@ window.WizCore.chats = function createChats(H) {
         if (el?.querySelector('.ch-scroll')) { renderChatList(H.win(id), el); const inp = el.querySelector('[data-chsearch]'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
       }
       if (e.target.matches('[data-clarify-answer]')) { const c = ch(idOf(e.target)); if (c.approval?.kind === 'clarify') c.approval.answer = e.target.value; }
-      if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
+      if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); typedInto(id, e.target); syncSend(e.target.form, ch(id)); }
     });
     root.addEventListener('change', e => {
       if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
@@ -4830,7 +4847,7 @@ window.WizCore.chats = function createChats(H) {
     if (INC?.active(id)) { window.WizComposerInput.insertText(ta, text); INC.input(id, ta); return true; }
     const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
     ta.value = ta.value.slice(0, a) + text + ta.value.slice(b); ta.focus();
-    ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
+    ta.setSelectionRange(a + text.length, a + text.length); typedInto(id, ta); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
   const forget = id => { INC?.close(id, true); const c = CH[id]; if (c) { closeStream(c); for (const t of [c.retryT, c.sentTimer, c.ptrT, listSaveT[id]]) clearTimeout(t); delete listSaveT[id]; } closeHosted(id); clearReading(id); delete CH[id]; };

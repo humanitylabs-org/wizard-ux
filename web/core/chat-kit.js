@@ -532,10 +532,17 @@
     },
     clear(k) { if (!k) return; const all = this.all(); if (k in all) { delete all[k]; write(all); } },
   };
+  // Every draft is kept until its own send, discard or thread deletion: no count cap drops the oldest ones (wizard-ux
+  // issue 1444). A device that can't store them says so once a minute (wos:drafts-unsaved; Chats shows it), while the
+  // words stay in the box on screen. A draft must never block typing.
+  let unsavedAt = 0;
   function write(all) {
-    const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0));
-    for (const x of keys.slice(200)) delete all[x];
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); return true; } catch (e) { return false; /* a draft must never block typing */ }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); return true; }
+    catch (e) {
+      const now = Date.now();
+      if (now - unsavedAt > 60000) { unsavedAt = now; try { window.dispatchEvent(new CustomEvent('wos:drafts-unsaved', { detail: { reason: String(e?.name || 'error') } })); } catch (_) {} }
+      return false;
+    }
   }
 
   /* ================= copy / share / save ================= */
