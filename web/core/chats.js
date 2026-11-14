@@ -843,6 +843,26 @@ window.WizCore.chats = function createChats(H) {
   const actNeeds = s => !!s && chanNeeds(s);
   const actUnread = s => !!s && chanUnread(s);
   const actMark = s => window.WizChatsListModel.activityMark({ working: isWorking(s), needs: actNeeds(s), unread: actUnread(s) });
+  /* Draft marks (wizard-ux issue 1445, switch wizard/draft-marks): an Activity row whose thread has a saved, unsent draft
+   * (words, a file or a reply card: KIT.drafts.keys) says "✎ Draft" ahead of its preview, and a Channels line whose box has
+   * one wears the same pencil. Shown and cleared live (chat-kit fires wos:drafts-keys when a key gains or loses its draft);
+   * rows never move or count differently because of it. */
+  const DRAFT_MARKS = 'wizard/draft-marks';
+  const draftMarksOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(DRAFT_MARKS); } catch (_) { return false; } };
+  const draftAt = k => { try { return !!k && !!KIT.drafts.keys?.().has(k); } catch (_) { return false; } };
+  const rowDraft = s => !!s && draftMarksOn() && draftAt('direct:' + s.id);
+  // A channel's box key is chanDraftKey's: chan:<the channel's agent, else the list's agent>:<channel id>.
+  const chanLineDraft = (c0, ag = '') => !!c0 && draftMarksOn() && draftAt(`chan:${c0.agent || ag || ''}:${c0.id}`);
+  const draftTag = s => rowDraft(s) ? '<span class="ch-draft-tag"><span aria-hidden="true">✎</span> Draft</span> · ' : '';
+  const chanDraftMark = (c0, ag) => chanLineDraft(c0, ag) ? '<span class="ch-chan-draft" role="img" aria-label="Draft" title="Unsent draft">✎</span>' : '';
+  // The lists repaint when a draft appears or goes; a window drawing a channel's feed (its box is the one being typed in) waits.
+  window.addEventListener?.('wos:drafts-keys', () => {
+    if (!draftMarksOn() || !channelsOn()) return;
+    for (const id of Object.keys(CH)) {
+      const x = W[id]; if (!x || x.thread || (chanOpen(x) && !chanElsewhere(x)) || holdList(id)) continue;
+      const el = elOf(id); if (el) renderChatList(x, el);
+    }
+  });
   // A row's marker at its right end (the one-line phone list has no status icon, so its spinner shows here too).
   function actRowMark(s) {
     const m = actMark(s);
@@ -876,7 +896,7 @@ window.WizCore.chats = function createChats(H) {
     const lines = chanAgentsOpen ? list.map(a => {
       const mine = rows.filter(s => !s.archived && rowAgent(s) === a.id), un = chanUnreadN(mine);
       const name = typeof agentName === 'function' ? agentName(a.id) : (a.label || a.id);
-      return `<div class="ch-chan ch-chan-agent${un ? ' unread' : ''}" data-morph-key="chan:${esc(CHAN_AGENT + a.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(CHAN_AGENT + a.id)}" title="Open ${esc(name)}"><span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(a.id)) || ''}</span><b>${esc(name)}</b>${chanMark(mine, false, un)}</button></div></div>`;
+      return `<div class="ch-chan ch-chan-agent${un ? ' unread' : ''}" data-morph-key="chan:${esc(CHAN_AGENT + a.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(CHAN_AGENT + a.id)}" title="Open ${esc(name)}"><span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(a.id)) || ''}</span><b>${esc(name)}</b>${typeof chanDraftMark === 'function' ? chanDraftMark({ id: CHAN_AGENT + a.id, agent: a.id }) : ''}${chanMark(mine, false, un)}</button></div></div>`;
     }).join('') : '';
     return `<section class="ch-sec ch-chan-agents${chanAgentsOpen ? ' open' : ''}" data-sec="chan-agents"><button type="button" class="ch-sec-h" data-chchanagents aria-expanded="${chanAgentsOpen}"><span>Agents</span><small>${list.length}</small><i aria-hidden="true"></i></button>${chanAgentsOpen ? `<div class="ch-sec-b">${lines}</div>` : ''}</section>`;
   }
@@ -1031,12 +1051,12 @@ window.WizCore.chats = function createChats(H) {
       + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
     return marks ? `<span class="ch-chan-ind">${marks}</span>` : '';
   }
-  function channelLine(ch0, rows, now, cur = '', gAg = '') {
+  function channelLine(ch0, rows, now, cur = '', gAg = '', dAg = '') {
     const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
     const un = chanNewCount(ch0, mine, gAg);
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
@@ -1062,15 +1082,15 @@ window.WizCore.chats = function createChats(H) {
     if (typeof chanCarry === 'function' && !chanCarried && Date.now() >= chanCarryAfter && chanStore()) { chanCarried = true; chanCarry(); }
     const now = Date.now(), arch = channelsFor(w, { archived: true }).filter(c => !chanPruned(c, rows, now));
     // The channel whose feed shows in the main column (AI apps sidebar): marked in the list, which stays as it is.
-    const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '', gAg = chanGenAgent(w);
+    const cur = chanElsewhere(w) ? String(H.channelCurrent?.() || '') : '', gAg = chanGenAgent(w), dAg = typeof winAgent === 'function' ? winAgent(w) : ''; // (tests slice the list without it)
     // Archive: folded by default, in the Activity Archive section's own style; its chats stay where they are.
-    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur, gAg)).join('')}</div>` : ''}</section>` : '';
+    const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}</div>` : ''}</section>` : '';
     // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
     // existing name form (openSpacePicker naming) for the agent this list shows.
     const add = chanNewAgent(w) ? '<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>New channel</b></button>' : '';
     // Agents (issue 1336): a folded row just above Archive, so Archive stays last.
     const agents = typeof chanAgentsSec === 'function' ? chanAgentsSec(rows) : '';
-    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur, gAg)).join('')}${add}${agents}${archSec}</div>`;
+    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}${add}${agents}${archSec}</div>`;
   }
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
@@ -1658,7 +1678,7 @@ window.WizCore.chats = function createChats(H) {
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-line"># ${esc(chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span>` : ''}${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-tag"># ${esc(chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span> · ` : ''}${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof actRowMark === 'function' ? actRowMark(s) : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
+      ${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-line">${typeof draftTag === 'function' ? draftTag(s) : ''}# ${esc(chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span>` : ''}${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-tag"># ${esc(chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span> · ` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof draftTag === 'function' ? draftTag(s) : ''}${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof actRowMark === 'function' ? actRowMark(s) : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -4897,7 +4917,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid, box) => { const nm = sid !== '__new__' ? null : box ? boxModel(box) : chanDraftKey(W[wid]) ? chanModel(W[wid]) : PW?.newModel(ch(wid)); return window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', nm, sid === '__new__' ? (winAgent(W[wid]) || nm?.agent || '') : ''); }, winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, activityNeeds: actNeeds, activityUnread: actUnread, activityMark: actMark, agentLabelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', chanModel: wid => chanModel(W[wid]), boxModel, setChanModel, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid, box) => { const nm = sid !== '__new__' ? null : box ? boxModel(box) : chanDraftKey(W[wid]) ? chanModel(W[wid]) : PW?.newModel(ch(wid)); return window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', nm, sid === '__new__' ? (winAgent(W[wid]) || nm?.agent || '') : ''); }, winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, lookupScope, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, channelBack, chanOpen, channelOf, activityNeeds: actNeeds, activityUnread: actUnread, activityMark: actMark, activityDraft: s => channelsOn() && rowDraft(s), agentLabelOf, moveToChannel, chanSpaceOf, chanCompose, chanNew, chanView: () => channelsOn() ? chanView : '', chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', chanModel: wid => chanModel(W[wid]), boxModel, setChanModel, setFocus, focusOf, focusMatches, focusRows, focusAgentId, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts, canMarkDone, markDone };
 };

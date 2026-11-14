@@ -2243,3 +2243,18 @@ test('issue 1358: turning Channels on re-reads the box a few times; turning them
   flip('wizard/chat-channels', false);
   assert.equal(timers.filter(t => t.live).length, 0, 'off: pending re-reads are cancelled and none are added');
 });
+
+test('draft marks (issue 1445): a Channels line whose box holds a draft wears the pencil, per agent, only with the switch on', () => {
+  const f = fixture({ rows: [row('a', 1), row('d', 2), row('h1', 1, { owner: 'host' }), row('k1', 1, { owner: 'container' }), row('r1', 1, { owner: 'restricted' })] });
+  const keys = new Set(['chan:hermes:launch', 'chan:host:host-ops', 'chan:restricted:locked']);
+  f.env.KIT.drafts.keys = () => keys;
+  const lines = () => Object.fromEntries(f.channelsBody(f.w, f.rows).split(/<div class="ch-chan(?=[ "])/).slice(1).map(h => [/data-chchan="([^"]+)"/.exec(h)?.[1], h.includes('class="ch-chan-draft"')]));
+  assert.ok(Object.values(lines()).every(v => !v), 'switch off: no pencil');
+  f.env.document.documentElement.dataset.tweaks += ' wizard/draft-marks';
+  const on = lines();
+  assert.deepEqual({ launch: on.launch, voice: on.voice, host: on['host-ops'], box: on.box, locked: on.locked }, { launch: true, voice: false, host: true, box: false, locked: true });
+  keys.delete('chan:hermes:launch'); keys.add('chan::__general__');
+  const after = lines();
+  assert.equal(after.launch, false, 'sent or discarded: gone');
+  assert.equal(Object.entries(after).find(([k]) => /general/i.test(k))?.[1], true, 'General (main agent) box key chan::<id>');
+});

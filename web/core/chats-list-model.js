@@ -242,7 +242,8 @@ function activityList(groups, facts, opts = {}) {
   const c = facts.chats, at = s => msOf(facts.live.cardAt?.(s)) || msOf(s.updatedAt) || msOf(s.createdAt);
   const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
   const g = activityGroups(groups, { needs, unread, at }, opts); if (!g) return null;
-  const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }) }));
+  const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }),
+    ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (switch wizard/draft-marks, wizard-ux issue 1445)
   return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
     snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') });
 }
