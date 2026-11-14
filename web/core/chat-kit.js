@@ -531,13 +531,38 @@
       return kept.text === keptText && JSON.stringify(kept.files) === JSON.stringify(keptFiles) && JSON.stringify(kept.reply) === JSON.stringify(cur.reply || rp);
     },
     clear(k) { if (!k) return; const all = this.all(); if (k in all) { delete all[k]; write(all); } },
+    // The keys that hold a draft worth showing (words, a file or a reply card), read once per stored value: list rows ask
+    // this for every row on every paint (draft marks, wizard-ux issue 1445).
+    keys() {
+      let raw = ''; try { raw = localStorage.getItem(DRAFT_KEY) || ''; } catch (e) {}
+      if (raw !== keysRaw) { keysRaw = raw; keysSet = draftKeys(this.all()); }
+      return keysSet;
+    },
   };
+  let keysRaw = null, keysSet = new Set(), keysSig = null;
+  function draftKeys(all) {
+    const out = new Set();
+    for (const k of Object.keys(all || {})) {
+      const d = all[k];
+      if (d && (String(typeof d.text === 'string' ? d.text : '').trim() || (Array.isArray(d.files) && d.files.some(f => f && SAFE_ID.test(String(f.id || '')))) || reply.clean(d.reply))) out.add(k);
+    }
+    return out;
+  }
+  // A key gained or lost its draft: lists showing draft marks repaint (wos:drafts-keys), never on each keystroke.
+  function keysMoved(all) {
+    const sig = [...draftKeys(all)].sort().join('\n');
+    if (keysSig === null) { keysSig = sig; return; }
+    if (sig === keysSig) return;
+    keysSig = sig;
+    try { window.dispatchEvent(new CustomEvent('wos:drafts-keys')); } catch (_) {}
+  }
   // Every draft is kept until its own send, discard or thread deletion: no count cap drops the oldest ones (wizard-ux
   // issue 1444). A device that can't store them says so once a minute (wos:drafts-unsaved; Chats shows it), while the
   // words stay in the box on screen. A draft must never block typing.
   let unsavedAt = 0;
   function write(all) {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); return true; }
+    if (keysSig === null) keysMoved(drafts.all()); // the state before this first write
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); keysMoved(all); return true; }
     catch (e) {
       const now = Date.now();
       if (now - unsavedAt > 60000) { unsavedAt = now; try { window.dispatchEvent(new CustomEvent('wos:drafts-unsaved', { detail: { reason: String(e?.name || 'error') } })); } catch (_) {} }

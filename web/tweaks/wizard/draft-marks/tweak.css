@@ -1,0 +1,7 @@
+/* Draft marks (wizard-ux issue 1445): the pencil of a saved, unsent draft on Activity rows and Channels lines. */
+html[data-tweaks~="wizard/draft-marks"] .ch-draft-tag { color: var(--wz-warning, #f2b35b); font-weight: 500; white-space: nowrap; }
+html[data-tweaks~="wizard/draft-marks"] .ch-chan-draft { flex: none; margin-left: auto; padding-left: 8px; color: var(--wz-warning, #f2b35b); font-size: .875rem; line-height: 1; }
+html[data-tweaks~="wizard/draft-marks"] .ch-chan-draft + .ch-chan-ind { margin-left: 0; }
+/* AI apps sidebar: "✎ Draft" leads the row's second line (the channel), or is the line when the row has no channel. */
+html[data-tweaks~="wizard/draft-marks"][data-layout="ai-apps"] .aad-rw[data-draft] .aad-chan-line::before { content: "✎ Draft · "; color: var(--wz-warning, #f2b35b); font-weight: 500; }
+html[data-tweaks~="wizard/draft-marks"][data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { content: "✎ Draft"; }

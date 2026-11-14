@@ -555,6 +555,8 @@ export default function desktop(api) {
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'wos:thread-tracker', () => paintList());
+  // A draft appeared or went (wizard-ux issue 1445): the Activity rows' ✎ Draft follows at once.
+  api.listen(globalThis, 'wos:drafts-keys', () => { if (root.dataset.aadSide === 'rail' || !(typeof actOn === 'function' && actOn())) return; readSessions(); paintList(); });
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
   api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); paintSetting(); paintAgents(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
   api.listen(globalThis, 'resize', syncSide);
@@ -845,6 +847,8 @@ export default function desktop(api) {
     if (s.channel) title.append(el('span', 'aad-chan-line', { text: `# ${s.channel}` }));
     // (issue 1336: another agent's thread names it after the channel, "# WizardOS Chats · Philosopher")
     if (s.channel && s.agentName) title.lastChild?.append?.(` · ${s.agentName}`);
+    // A saved, unsent draft (switch wizard/draft-marks, wizard-ux issue 1445): "✎ Draft" leads the second line (its CSS)
+    if (s.draft) { wrap.dataset.draft = ''; if (!s.channel) title.append(el('span', 'aad-chan-line aad-draft-line')); }
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
     if (dots) b.append(dots);
@@ -859,6 +863,7 @@ export default function desktop(api) {
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
     if (mk === 'needs') b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, needs you`);
     if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}${s.agentName ? `, ${s.agentName}` : ''}`);
+    if (s.draft) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, unsent draft`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; feedFocus = null; stepAt = s.id; fromFeed = null; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
@@ -986,7 +991,7 @@ export default function desktop(api) {
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
       secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]
-      .concat([(s.saved || []).map(r => [r.id, r.title, r.mark || ''])], (typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join()]))] : []));
+      .concat([(s.saved || []).map(r => [r.id, r.title, r.mark || ''])], (typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join(), !!r.draft]))] : []));
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
