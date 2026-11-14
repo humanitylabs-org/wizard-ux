@@ -524,7 +524,6 @@ public class ShareActivity extends Activity {
         int skipped = 0;
         for (int k = 0; k < uris.size(); k++) {
             Uri u = uris.get(k);
-            if (items.length() >= ShareStore.MAX_ITEMS) { skipped++; continue; }
             JSONObject f = files.get(k);
             File out = new File(dir, items.length() + ".bin");
             long n = 0;
