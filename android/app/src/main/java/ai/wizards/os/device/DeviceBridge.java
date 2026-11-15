@@ -341,6 +341,15 @@ public final class DeviceBridge implements RecorderService.Listener {
         ReplyWatcher.watch(activity, sessionId, runId, title);
     }
 
+    /** A Snooze: like watchRun, plus its return time (ms since epoch, as text), so it is not read before then. */
+    @JavascriptInterface
+    public void watchRunAt(String sessionId, String runId, String title, String dueAtMs) {
+        askNotifications();
+        long due = 0;
+        try { due = Long.parseLong(dueAtMs == null ? "0" : dueAtMs.trim()); } catch (NumberFormatException ignored) { }
+        ReplyWatcher.watch(activity, sessionId, runId, title, due);
+    }
+
     /** Reply notifications on the shade, so the page can clear the ones for threads James has since read. */
     @JavascriptInterface
     public String replyNotes() { return ReplyWatcher.active(activity); }
