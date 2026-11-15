@@ -35,7 +35,7 @@
     win: value => value === wid ? threadWindow : null,
     root: () => win, save: () => checkpoint(), layout() {}, toast,
     title: () => policy.displayName(app || {id, name:'Thread'}),
-    viewContext: () => ({kind:'thread', appId:id}),
+    viewContext: () => ({kind:'thread', appId:threadWindow.appId}),
     visible: () => frame?.isConnected ? [wid] : [], front: () => wid,
     openLink: url => links?.open(url),
     captureBusy: () => !!window.WizAppCapture?.getState?.()?.active,
@@ -134,6 +134,7 @@
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
     checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
+    threadWindow.appId = next.id || id;   // hosted Chats threads are allowed per current app id (ux#1471)
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
     frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
     // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.

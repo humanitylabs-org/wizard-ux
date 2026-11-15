@@ -45,16 +45,17 @@ async function session(pinned, apps) {
   const pwin = {};
   const pctx = vm.createContext({ window: pwin, document: { documentElement: { setAttribute() {} } }, location: { origin: 'https://box.example', search: '?' + params }, URL, URLSearchParams, Object, Proxy, Reflect, localStorage: { getItem: () => null, setItem() {} } });
   vm.runInContext(read('core/home-screen-policy.js'), pctx);
-  let frame = null, attached = null; const texts = [];
+  let frame = null, attached = null, hosted = null; const texts = [];
   function el(tag) { return { tag, dataset: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], setAttribute() {}, addEventListener() {},
     set textContent(v) { texts.push(v); }, appendChild(c) { this.children.push(c); if (c.tag === 'iframe') frame = c; }, append(...c) { this.children.push(...c); }, replaceChildren() { this.children = []; } }; }
   const host = el('host');
   const document = { documentElement: el('html'), getElementById: () => host, addEventListener() {}, createElement: el, title: '' };
   const window = { WizHomeScreenPolicy: pwin.WizHomeScreenPolicy, WizCore: { apps: () => r, appsLoaded: () => Promise.resolve() }, WosSelMenu: { back: () => false },
-    WizAppServices: { attach: (f, o) => { attached = o; return () => {}; }, guardBack() {} } };
+    WizAppServices: { attach: (f, o) => { attached = o; return () => {}; }, guardBack() {} },
+    WizChatsHost: { create: o => { hosted = o; return { bind() {}, forget() {}, isHosted: () => false }; } } };
   const ctx = vm.createContext({ window, document, localStorage: { getItem: () => null, setItem() {} }, location: { origin: 'https://box.example' }, URL, addEventListener() {}, setInterval() {}, setTimeout() {} });
   vm.runInContext(read('core/single-app-session.js'), ctx); await new Promise(setImmediate);
-  return { frame, attached, texts };
+  return { frame, attached, texts, hostThreadAppId: hosted?.win('single-app')?.appId };
 }
 
 test('a pin made under a renamed app id mounts the renamed app with its current id', async () => {
@@ -62,6 +63,7 @@ test('a pin made under a renamed app id mounts the renamed app with its current 
   assert.ok(s.frame, 'the app frame is mounted');
   assert.equal(s.frame.src, '/wizard-search/');
   assert.equal(s.attached.appId, 'wizard-search');
+  assert.equal(s.hostThreadAppId, 'wizard-search', 'hosted Chats threads are checked against the current id');
   assert.ok(!s.texts.includes('App unavailable'));
 });
 
@@ -69,4 +71,16 @@ test('a pin for an app no installed app claims still shows App unavailable', asy
   const s = await session('gone-app', [search]);
   assert.equal(s.frame, null);
   assert.ok(s.texts.includes('App unavailable'));
+});
+
+test('an offline-declared app is published for offline pins under its earlier ids too', async () => {
+  const puts = [];
+  const caches = { open: async () => ({ match: async () => null, put: async (u, r) => puts.push(await r.text()) }) };
+  const window = {};
+  const ctx = vm.createContext({ window, globalThis: null, caches, Response: class { constructor(b) { this.b = b; } text() { return this.b; } }, navigator: {}, URL });
+  ctx.globalThis = ctx;
+  vm.runInContext(read('core/offline-session.js'), ctx);
+  const offline = ctx.WizOfflineSession || window.WizOfflineSession;
+  await offline.publish([{ id: 'wizard-search', source: 'apps.json', homeScreen: { offline: true }, renamedFrom: ['old-search'] }, { id: 'plain', source: 'apps.json', renamedFrom: ['old-plain'] }]);
+  assert.deepEqual(JSON.parse(puts[0]).ids, ['old-search', 'wizard-search']);
 });
