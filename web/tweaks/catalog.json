@@ -28,7 +28,8 @@
     "wizard/link-token-repair",
     "wizard/chat-channels",
     "wizard/graceful-restart",
-    "wizard/draft-marks"
+    "wizard/draft-marks",
+    "wizard/app-updates-hourly"
   ],
   "defaults": [
     "wizard/unified-inbox",
