@@ -8,6 +8,20 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class EverywherePolicyTest {
+    /** wizard-os#649: the floating orb wears the app orb's skin; only a plain id and skins.js's filter shape get through. */
+    @Test public void orbLookIsTheSkinOrNebula() {
+        assertEquals("{\"skin\":\"ember\",\"filter\":\"hue-rotate(115.0deg) saturate(1.150) brightness(1.050)\"}",
+                EverywherePolicy.look("ember", "hue-rotate(115.0deg) saturate(1.150) brightness(1.050)"));
+        assertEquals("{\"skin\":\"grove\",\"filter\":\"hue-rotate(-160.0deg) saturate(0.850) brightness(1.080)\"}",
+                EverywherePolicy.look("grove", " hue-rotate(-160.0deg) saturate(0.850) brightness(1.080) "));
+        assertEquals("{\"skin\":\"nebula\",\"filter\":\"none\"}", EverywherePolicy.look("nebula", ""));
+        assertEquals("{\"skin\":\"landscapes-light\",\"filter\":\"none\"}", EverywherePolicy.look("landscapes-light", "url(x)"));
+        assertEquals(EverywherePolicy.DEFAULT_LOOK, EverywherePolicy.look(null, null));
+        assertEquals(EverywherePolicy.DEFAULT_LOOK, EverywherePolicy.look("x\"});alert(1);({", "none"));
+        assertEquals("{\"skin\":\"ember\",\"filter\":\"none\"}",
+                EverywherePolicy.look("ember", "hue-rotate(1deg) saturate(1) brightness(1)\"});alert(1"));
+    }
+
     @Test public void hiddenWhileWizardOsIsInFront() {
         assertFalse(EverywherePolicy.bubbleVisible(true, true, true));
         assertTrue(EverywherePolicy.bubbleVisible(true, true, false));

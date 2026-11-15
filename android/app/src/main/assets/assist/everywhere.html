@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-skin="nebula">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -17,6 +17,18 @@
   #orbBox canvas,#orbBox img{-webkit-mask-image:radial-gradient(circle closest-side,#000 72%,transparent 100%);mask-image:radial-gradient(circle closest-side,#000 72%,transparent 100%)}
   #orb{position:absolute;inset:0;width:100%;height:100%}
   #orbFallback{position:absolute;inset:18%;width:64%;height:64%;border-radius:50%}
+  /* The app orb's look (wizard-os#649): the skin's orb colour (web/core/skins.css --sk-orb) and, in James's five skins,
+     the white icon in the orb that replaces the centre dot and the top-left shine (orb.js coreTarget). Native passes
+     the skin through E.look(); before it does, the page wears Nebula, the default skin. */
+  #orb,#orbFallback{filter:var(--sk-orb,none)}
+  .orb-app{position:absolute;left:50%;top:50%;width:26%;height:26%;transform:translate(-50%,-50%);display:none;
+    place-items:center;pointer-events:none}
+  html:is([data-skin="nebula"],[data-skin="grove"],[data-skin="tide"],[data-skin="ember"],[data-skin="signal"]) .orb-app{display:grid}
+  html:is([data-skin="nebula"],[data-skin="grove"],[data-skin="tide"],[data-skin="ember"],[data-skin="signal"]) #mic{display:none}
+  body:is(.live,.busy) .orb-app{display:none}
+  .orb-app svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 3px color-mix(in srgb,black 55%,transparent))}
+  .orb-app .cap{fill:white}
+  .orb-app .arm{fill:none;stroke:white;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
   #mic{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;opacity:0;
     transition:opacity .25s;filter:drop-shadow(0 0 6px rgba(0,0,0,.8))}
   body.kb #mic{opacity:.92}
@@ -50,6 +62,7 @@
 <div id="orbBox">
   <canvas id="orb" width="64" height="64" aria-hidden="true"></canvas>
   <img id="orbFallback" src="robert-thread-orb.png" alt="" hidden>
+  <span class="orb-app" aria-hidden="true"><svg viewBox="0 0 24 24"><rect class="cap" x="8.4" y="2" width="7.2" height="13" rx="3.6"/><path class="arm" d="M4.8 11.2a7.2 7.2 0 0 0 14.4 0M12 18.4V22"/></svg></span>
   <svg id="mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
   <div id="processing" role="status" aria-label="Processing recording"></div>
   <span id="badge"></span>
@@ -100,6 +113,13 @@ const E = window.E = {
     Orb.setMode(busy ? 'think' : S.mode);
     if (!live) Orb.setLevel(0);
     const f = +o.failed || 0; $('badge').textContent = f; $('badge').classList.toggle('on', f > 0);
+  },
+  /* The app orb's look: { skin, filter } (wizard-os#649). Native has already checked both. */
+  look(o) {
+    o = o || {};
+    const root = document.documentElement;
+    if (/^[a-z0-9][a-z0-9-]{0,39}$/.test(o.skin || '')) root.dataset.skin = o.skin;
+    root.style.setProperty('--sk-orb', /^hue-rotate\([-\d.]+deg\) saturate\([\d.]+\) brightness\([\d.]+\)$/.test(o.filter || '') ? o.filter : 'none');
   },
   level(v) { Orb.setLevel(S.paused ? 0 : +v || 0); },
 };

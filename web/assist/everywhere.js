@@ -39,6 +39,13 @@ const E = window.E = {
     if (!live) Orb.setLevel(0);
     const f = +o.failed || 0; $('badge').textContent = f; $('badge').classList.toggle('on', f > 0);
   },
+  /* The app orb's look: { skin, filter } (wizard-os#649). Native has already checked both. */
+  look(o) {
+    o = o || {};
+    const root = document.documentElement;
+    if (/^[a-z0-9][a-z0-9-]{0,39}$/.test(o.skin || '')) root.dataset.skin = o.skin;
+    root.style.setProperty('--sk-orb', /^hue-rotate\([-\d.]+deg\) saturate\([\d.]+\) brightness\([\d.]+\)$/.test(o.filter || '') ? o.filter : 'none');
+  },
   level(v) { Orb.setLevel(S.paused ? 0 : +v || 0); },
 };
 N.log('everywhere page ready webgl=' + (window.Orb && Orb.webgl));

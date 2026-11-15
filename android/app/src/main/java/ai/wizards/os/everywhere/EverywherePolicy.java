@@ -11,6 +11,25 @@ public final class EverywherePolicy {
 
     private EverywherePolicy() {}
 
+    /** The floating orb's look before WizardOS has said which skin it wears: Nebula, the default skin. */
+    static final String DEFAULT_LOOK = "{\"skin\":\"nebula\",\"filter\":\"none\"}";
+    private static final String SKIN_ID = "[a-z0-9][a-z0-9-]{0,39}";
+    private static final String ORB_FILTER =
+            "hue-rotate\\(-?\\d{1,3}(\\.\\d{1,3})?deg\\) saturate\\(\\d(\\.\\d{1,3})?\\) brightness\\(\\d(\\.\\d{1,3})?\\)";
+
+    /**
+     * The app orb's look as the web shell reports it (wizard-os#649): the skin id and the skin's orb colour filter
+     * (web/core/skins.js --sk-orb). The result is pasted into the overlay page as a JS literal, so only a plain skin
+     * id and the exact filter shape skins.js writes get through; anything else is Nebula / no filter.
+     */
+    static String look(String skin, String filter) {
+        String s = skin == null ? "" : skin.trim();
+        if (!s.matches(SKIN_ID)) return DEFAULT_LOOK;
+        String f = filter == null ? "" : filter.trim();
+        if (!f.matches(ORB_FILTER)) f = "none";
+        return "{\"skin\":\"" + s + "\",\"filter\":\"" + f + "\"}";
+    }
+
     /** Network trouble, gateway restarts and overload are retried; anything else needs a human. */
     static boolean transientFailure(int status) {
         return status == 0 || status == 408 || status == 425 || status == 429 || status >= 500;
