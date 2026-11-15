@@ -99,6 +99,15 @@ public final class BridgedNotifyPolicy {
         return t.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Only message notifications are cleared: no category, or a message / social one, and never an ongoing one. A call,
+     * a missed call or an upload from the same app stays, even when it carries that person's name.
+     */
+    public static boolean messageLike(String category, boolean ongoing) {
+        if (ongoing) return false;
+        return category == null || category.isEmpty() || "msg".equals(category) || "social".equals(category);
+    }
+
     /** True when this notification is the network app's notification for the chat that was read. */
     public static boolean matches(Read r, String pkg, CharSequence title, CharSequence conversationTitle, CharSequence subText) {
         if (r == null || pkg == null || !packagesFor(r.network).contains(pkg)) return false;

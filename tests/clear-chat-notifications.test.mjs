@@ -16,11 +16,11 @@ function el(tag) {
   return e;
 }
 
-function fixture({ on = false, access = false, visible = true, native = true } = {}) {
+function fixture({ on = false, access = false, visible = true, native = true, provides = ['messaging'], appId = 'messenger' } = {}) {
   const origin = 'https://wizard.example', calls = [], winListeners = {}, docListeners = {}, timers = [], observers = [];
   const source = { location: new URL(origin + '/messenger/'), document: { documentElement: {} }, addEventListener() {}, postMessage() {} };
   const frame = { tagName: 'IFRAME', isConnected: true, src: source.location.href, contentWindow: source, addEventListener() {}, removeEventListener() {}, hasAttribute: () => false, getAttribute: () => frame.src };
-  const app = { id: 'messenger', kind: 'wizard', name: 'Messenger', url: '/messenger/' };
+  const app = { id: appId, kind: 'wizard', name: 'Messenger', url: '/messenger/', source: 'apps.json', provides };
   const root = { dataset: { tweaks: on ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats' } };
   const body = el('body'), byId = {};
   const state = { access };
@@ -72,6 +72,15 @@ test('a read from an app window that is not on screen is refused', () => {
   f.view.visible = true; f.c.document.hidden = true;
   assert.equal(f.service.notifications.chatRead({ network: 'line', names: ['Mike'] }), false);
   assert.deepEqual(reads(f), []);
+});
+
+test('only an app that declares messaging may ask, whatever its id', () => {
+  for (const f of [fixture({ on: true, access: true, provides: [] }), fixture({ on: true, access: true, provides: ['chats'], appId: 'notes' })]) {
+    assert.equal(f.service.notifications.chatRead({ network: 'line', names: ['Mike'] }), false);
+    assert.deepEqual(reads(f), []);
+  }
+  const other = fixture({ on: true, access: true, appId: 'my-chat-app' });
+  assert.equal(other.service.notifications.chatRead({ network: 'line', names: ['Mike'] }), true);
 });
 
 test('malformed reads never reach native, and a burst is capped', () => {

@@ -155,9 +155,11 @@
   }
   // Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): an app in front says the
   // owner read a chat ({network, names}); the WizardOS Android app clears that chat app's notification from the tray
-  // (core/android-relay.js chatRead). Only while the app's window is on screen, since reading needs it there.
+  // (core/android-relay.js chatRead). Only a messaging app (its own wizard.md `provides: [messaging]`, from the box's
+  // trusted list) and only while its window is on screen, since reading needs it there.
   function chatRead(st, data) {
     if (document.hidden || st?.isVisible?.() !== true) return false;
+    if (!apps().some(a => a.id === st.appId && a.source === 'apps.json' && a.provides?.includes('messaging'))) return false;
     return window.WizAndroidRelay?.chatRead?.(data) === true;
   }
   // App badge: an installed app's own unread count on its desk mark / bar badge (same slot Notifications uses).

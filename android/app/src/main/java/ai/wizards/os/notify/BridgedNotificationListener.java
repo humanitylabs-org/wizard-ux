@@ -106,6 +106,8 @@ public final class BridgedNotificationListener extends NotificationListenerServi
             if (sbn == null || !pkgs.contains(sbn.getPackageName())) continue;
             Notification n = sbn.getNotification();
             if (n == null || (n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) continue;
+            boolean ongoing = sbn.isOngoing() || (n.flags & Notification.FLAG_FOREGROUND_SERVICE) != 0;
+            if (!BridgedNotifyPolicy.messageLike(n.category, ongoing)) continue;
             Bundle x = n.extras;
             CharSequence title = x == null ? null : x.getCharSequence(Notification.EXTRA_TITLE);
             CharSequence conv = x == null ? null : x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);

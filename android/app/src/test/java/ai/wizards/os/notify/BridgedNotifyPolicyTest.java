@@ -41,6 +41,15 @@ public class BridgedNotifyPolicyTest {
     }
 
     @Test
+    public void onlyMessageNotificationsAreCleared() {
+        assertTrue(BridgedNotifyPolicy.messageLike(null, false));
+        assertTrue(BridgedNotifyPolicy.messageLike("msg", false));
+        assertTrue(BridgedNotifyPolicy.messageLike("social", false));
+        for (String c : new String[]{"call", "missed_call", "progress", "service", "event", "reminder", "promo"}) assertFalse(c, BridgedNotifyPolicy.messageLike(c, false));
+        assertFalse("an ongoing notification (a call in progress) stays", BridgedNotifyPolicy.messageLike("msg", true));
+    }
+
+    @Test
     public void refusesWhatItCannotUse() {
         assertNull(BridgedNotifyPolicy.parse(null));
         assertNull(BridgedNotifyPolicy.parse("not json"));
