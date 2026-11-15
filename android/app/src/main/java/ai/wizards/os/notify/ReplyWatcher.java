@@ -59,7 +59,10 @@ public final class ReplyWatcher {
 
     public static int count(Context c) { synchronized (LOCK) { return list(c).length(); } }
 
-    public static void watch(Context c, String session, String run, String title) {
+    public static void watch(Context c, String session, String run, String title) { watch(c, session, run, title, 0); }
+
+    /** dueAt: a Snooze's return time in ms (0 = unknown), so it is not read before anything can have come back. */
+    public static void watch(Context c, String session, String run, String title, long dueAt) {
         if (session == null || session.isEmpty() || run == null || run.isEmpty()) return;
         Context app = c.getApplicationContext();
         synchronized (LOCK) {
@@ -71,7 +74,7 @@ public final class ReplyWatcher {
             }
             try {
                 out.put(new JSONObject().put("s", session).put("r", run).put("t", title == null ? "" : title)
-                        .put("at", System.currentTimeMillis()).put("asked", false));
+                        .put("at", System.currentTimeMillis()).put("asked", false).put("due", Math.max(0, dueAt)));
             } catch (JSONException ignored) { }
             save(app, out);
         }
@@ -139,20 +142,48 @@ public final class ReplyWatcher {
             loop.postDelayed(new Runnable() {
                 @Override public void run() {
                     pollOnce(app);
-                    if (count(app) > 0) loop.postDelayed(this, AppState.front() ? 8000 : 5000);
+                    long wait = soonest(app);
+                    if (wait >= 0) loop.postDelayed(this, ReplyPolicy.nextDelay(wait));
                 }
             }, 3000);
         }
         scheduleJob(app);
     }
 
+    /** When each watch was last read in this process (key session + run); a new process reads each once. */
+    private static final java.util.Map<String, Long> LAST = new java.util.HashMap<>();
+
+    private static long lastPoll(String s, String r) { synchronized (LAST) { Long t = LAST.get(s + "\n" + r); return t == null ? 0 : t; } }
+
+    private static long waitOf(JSONObject w, long now, boolean front) {
+        String s = w.optString("s"), r = w.optString("r");
+        return ReplyPolicy.waitMs(boomerang(r), w.optBoolean("asked"), w.optLong("at"), w.optLong("due"), lastPoll(s, r), now, front);
+    }
+
+    /** Ms until the next watch wants a read; -1 when nothing is watched. */
+    static long soonest(Context c) {
+        JSONArray a;
+        synchronized (LOCK) { a = list(c); }
+        long now = System.currentTimeMillis(), best = -1;
+        boolean front = AppState.front();
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject w = a.optJSONObject(i);
+            if (w == null) continue;
+            long t = waitOf(w, now, front);
+            if (best < 0 || t < best) best = t;
+        }
+        return best;
+    }
+
     static void scheduleJob(Context c) {
         JobScheduler js = c.getSystemService(JobScheduler.class);
         if (js == null || js.getPendingJob(JOB_ID) != null) return;
+        // The backstop after a kill waits as long as the soonest watch allows (a far Snooze: hours, not 15 minutes).
+        long wait = Math.max(60_000, Math.min(6 * ReplyPolicy.MAX_WAIT, soonest(c)));
         JobInfo j = new JobInfo.Builder(JOB_ID, new ComponentName(c, ReplyJob.class))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setMinimumLatency(60_000)
-                .setOverrideDeadline(15 * 60_000)
+                .setMinimumLatency(wait)
+                .setOverrideDeadline(wait + 15 * 60_000)
                 .build();
         try { js.schedule(j); } catch (RuntimeException e) { Log.w(TAG, "job: " + e); }
     }
@@ -168,11 +199,15 @@ public final class ReplyWatcher {
         synchronized (LOCK) { a = list(c); }
         if (a.length() == 0) return;
         String origin = AppState.origin(c);
+        long now = System.currentTimeMillis();
+        boolean front = AppState.front();
         for (int i = 0; i < a.length(); i++) {
             JSONObject w = a.optJSONObject(i);
             if (w == null) continue;
             String s = w.optString("s"), r = w.optString("r");
-            if (System.currentTimeMillis() - w.optLong("at") > (boomerang(r) ? BOOMERANG_MAX_AGE : MAX_AGE)) { drop(c, s, r); continue; }
+            if (now - w.optLong("at") > (boomerang(r) ? BOOMERANG_MAX_AGE : MAX_AGE)) { drop(c, s, r); continue; }
+            if (waitOf(w, now, front) > 1000) continue; // not due yet: no network read, no wake-up
+            synchronized (LAST) { LAST.put(s + "\n" + r, now); }
             JSONObject run;
             try {
                 run = Http.json("GET", origin + "/wizard/hermes/v1/runs/" + URLEncoder.encode(r, "UTF-8"), origin, null, null);
