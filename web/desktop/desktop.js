@@ -139,11 +139,29 @@
    * list window of its own (feedBase, off the desks and never saved), so opening a channel never touches the Focus of
    * the window behind the sidebar: its channel list and Activity rows stay exactly as they were. */
   var feedBase = null;
-  const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : undefined);
+  /* The AI apps sidebar's list drawn by another installed Chats look (Settings › Chats › Default Chats, switch
+   * wizard/sidebar-chats-view, wizard-ux issue 1443): one more stand-in owner (off the desks, never saved) naming that
+   * provider, so the main Chats window and its thread stay as they are. Its list window is viewBase.id + '::side'. */
+  var viewBase = null, viewLook = false;
+  // The switch, read inline from the root like the other switches; it only acts where a layout owns the chat list.
+  function sideViewOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } }
+  function sideLook() { return !!ownsChatList && sideViewOn() && CHATS.views.defaultId() !== 'wizard-chats'; }
+  /* With the look in the sidebar, the main Chats window is the one the layout docks in its chat column: the first desk
+   * whose front window is a Chats window (deskApps' 'wizard'), whatever look it was opened with, drawn as standard Chats. */
+  function sideMainWin() {
+    for (const d of ws) { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (w && w.app === 'chats' && !w.agent) return w; }
+    return null;
+  }
+  const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : typeof viewBase !== 'undefined' && viewBase && viewBase.id === id ? viewBase : undefined);
   // Any Chats window by id: a desk window, the sidebar's stand-in or the feed, or one of their list panes (id::list/side).
   const chatsWin = id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined);
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
+    // The sidebar look's taps (wizard-ux issue 1443): a thread opens in the main chat, as from a stock sidebar row.
+    viewOpen: (key, sid) => { if (!viewKey(key)) return false; openThread(sid); return true; },
+    viewTarget: key => (viewKey(key) ? sideMain().id : ''),
+    // With the look in the sidebar, the main chat column stays standard Chats (its list and thread); other windows keep theirs.
+    mainLook: w => (sideLook() && W[w?.id] === w && w === sideMainWin() ? 'wizard-chats' : ''),
     win: chatsWin,
     root: () => stage,
     save,
@@ -233,7 +251,7 @@
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   /* Agents MVP: a Chats window pinned to a non-default agent (w.agent) wears that agent's sigil and name. */
   const agentWin = w => !!(w && w.app === 'chats' && w.agent);
-  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === CHATS.views.defaultId());
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && (typeof sideLook === 'function' && sideLook() ? w === sideMainWin() : CHATS.views.providerFor(w) === CHATS.views.defaultId()));
   function agentApp(w) {
     const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
     const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
@@ -697,6 +715,8 @@
     return w;
   }
   // The main column's feed window: the sidebar's pane opens channels there (null for every other window).
+  // The sidebar look's list window (issue 1443).
+  const viewKey = key => !!viewBase && String(key) === viewBase.id + '::side';
   const feedPane = w => { const id = String(w?.id || ''); return !!ownsChatList && /::side$/.test(id) && !(feedBase && id === feedBase.id + '::side'); };
   function feedPaneFor(w) {
     if (!feedPane(w)) return null;
@@ -1885,7 +1905,8 @@
     editUnsent: it => { closeSettings(); editUnsent(it); },
     openLink: (url, title) => { closeSettings(); return openAppLink(url, title); },
     openStore: id => { closeSettings(); newWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
-    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save(); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save();
+      try { globalThis.dispatchEvent(new CustomEvent('wos:chats-view')); } catch (_) {} }, // the AI apps sidebar follows (issue 1443)
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();
@@ -3254,6 +3275,26 @@
       return { id: open.id, name: open.name };
     },
     chatFeedOpen: () => { const o = feedOpen(); return o ? { id: o.id, name: o.name } : null; },
+    /* The AI apps sidebar's list by the owner's Default Chats (wizard-ux issue 1443, switch wizard/sidebar-chats-view):
+     * that installed provider mounted into the layout's node as a list region. False (node emptied) with the switch off,
+     * built-in Chats picked, or the provider failed: the layout then draws its own rows. */
+    chatsView: host => {
+      const look = sideLook();
+      if (look !== viewLook) { viewLook = look; for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) CHATS.renderChats(w); } // the main column: standard again, or its look back
+      const id = sideViewOn() ? CHATS.views.defaultId() : 'wizard-chats';
+      if (!host || host.nodeType !== 1 || !stage.contains(host) || id === 'wizard-chats' || !CHATS.views.usable?.(id)) {
+        if (viewBase) { CHATS.forget(viewBase.id + '::side'); viewBase = null; }
+        if (host?.dataset?.chats) { delete host.dataset.chats; host.replaceChildren?.(); }
+        return false;
+      }
+      if (viewBase && viewBase.chatsProvider !== id) { CHATS.forget(viewBase.id + '::side'); viewBase = null; }
+      if (!viewBase) viewBase = { id: 'cview-' + uid(), app: 'chats', thread: null, chatsProvider: id };
+      const key = viewBase.id + '::side';
+      host.dataset.chats = key;
+      // (paint: Chats draws nothing here while the provider loads; after a failure it says so and the layout's own rows return)
+      CHATS.views.mount(listWin(viewBase.id, 'side'), host, () => { host.replaceChildren(); if (!CHATS.views.usable?.(id) || CHATS.views.defaultId() !== id) queueMicrotask(() => { try { globalThis.dispatchEvent(new CustomEvent('wos:chats-view')); } catch (_) {} }); });
+      return CHATS.views.usable(id);
+    },
     // Back: the main column's feed closes first; then (a feed the earlier design left in the sidebar) the sidebar's own.
     chatChannelPost: () => chanPost(),
     chatChannelNew: () => chanNew(),

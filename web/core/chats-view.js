@@ -48,9 +48,11 @@
       }
     }
     for (const id of installed.keys()) if (!keep.has(id)) { installed.delete(id); providers.delete(id); loads.delete(id); }
-    const choice = snapshot.slots?.chats?.default || snapshot.parking?.find(r => r.slot === 'chats')?.active;
+    const choice = snapshot.slots?.chats?.default || snapshot.parking?.find(r => r.slot === 'chats')?.active, was = selected;
     selected = installed.has(choice) ? choice : DEFAULT;
     if (fixture) { try { const dev = localStorage.getItem('wos.chatsview.default'); if (installed.has(dev)) selected = dev; } catch (_) {} }
+    // (a layout drawing its own list region follows the new Default Chats: the desktop AI apps sidebar, issue 1443)
+    if (selected !== was) { try { window.dispatchEvent(new CustomEvent('wos:chats-view')); } catch (_) {} }
   }
   function ensure(id) {
     if (providers.has(id)) return Promise.resolve(providers.get(id));
@@ -80,7 +82,8 @@
     const regions = new Map(), bypass = new Set(), failed = new Set();
     let core;
     const owner = id => H.owner ? H.owner(id) : id;
-    const providerFor = w => w?.agent ? DEFAULT : w?.chatsProvider || DEFAULT;
+    // (H.mainLook: a shell may keep a window on the standard look, e.g. the desktop's main chat while its sidebar shows the picked look)
+    const providerFor = w => w?.agent ? DEFAULT : H.mainLook?.(w) || w?.chatsProvider || DEFAULT;
     function release(key) {
       const r = regions.get(key); if (!r) return;
       regions.delete(key);
@@ -114,11 +117,12 @@
           live: window.WizLive, outbox: window.WosOutbox,
           ready: () => window.WizLive?.groups(),
           isUnread: s => !!window.WizLive?.isNew(s),
-          openThread: sid => core.openChat(owner(key), sid),
+          // (a shell may route a stand-in list's taps to its own main Chats: the desktop sidebar, wizard-ux issue 1443)
+          openThread: sid => { if (!H.viewOpen?.(key, sid)) core.openChat(owner(key), sid); },
           openOnDesk: (sid, options) => H.openThread?.(sid, options),
           back: () => { const target = H.win(owner(key)); if (target?.thread) core.chatsBack(target); },
-          send: (...args) => core.sendChat(owner(key), ...args),
-          voice: () => H.recordReply?.(owner(key), H.win(owner(key))?.thread),
+          send: (...args) => core.sendChat(H.viewTarget?.(key) || owner(key), ...args),
+          voice: () => { const t = H.viewTarget?.(key) || owner(key); return H.recordReply?.(t, H.win(t)?.thread); },
           renderDefault: () => { bypass.add(el); try { r.paint(); } finally { bypass.delete(el); } },
           element: tag => document.createElement(tag),
           listen: (type, fn) => listen(el, type, fn),
@@ -145,7 +149,12 @@
     core = window.WizCore.chats({ ...H, renderView: render });
     const forget = core.forget;
     core.forget = id => { release(id); release(id + '::list'); return forget(id); };
-    core.views = Object.freeze({ providerFor, defaultId: () => selected, name: id => installed.get(id)?.name || 'Chats' });
+    core.views = Object.freeze({ providerFor, defaultId: () => selected, name: id => installed.get(id)?.name || 'Chats',
+      /* A layout's own list region (the desktop AI apps sidebar, wizard-ux issue 1443): w is a list window whose owner
+       * names the provider (w.chatsProvider). paint runs whenever the provider does not draw (while it loads, or after
+       * it failed and Chats took over). usable(id): installed and not failed on this page. */
+      usable: id => installed.has(id) && !failed.has(id),
+      mount: (w, el, paint) => render(w, el, paint, 'list') });
     // Retained shared Chats bodies, not a shell's window/desk markup. A layout
     // may supply another slot under the same event root without losing drafts,
     // selection, reading state or the existing provider instance.

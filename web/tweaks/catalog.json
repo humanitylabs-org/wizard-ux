@@ -30,7 +30,8 @@
     "wizard/graceful-restart",
     "wizard/draft-marks",
     "wizard/app-updates-hourly",
-    "wizard/clear-chat-notifications"
+    "wizard/clear-chat-notifications",
+    "wizard/sidebar-chats-view"
   ],
   "defaults": [
     "wizard/unified-inbox",

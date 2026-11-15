@@ -56,7 +56,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chat state | `WizLive` (`live.js`): rename/read fence, `chanStore`; `WizCore.chats` dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `--wos-chats-group-switch` hook; Pins/compact independent |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open after send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Mic, retry, model, place | `WosChatPower` (`chat-power.js`; `chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply` → `recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `.css` `lab-row`) |
