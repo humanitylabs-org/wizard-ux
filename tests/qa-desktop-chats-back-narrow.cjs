@@ -162,6 +162,34 @@ const report = { origin, web, cases: [] };
         assert.ok(await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').isVisible(), 'the channel list');
         assert.equal(await page.locator('.aad-feed .ch-chan-feed').filter({ visible: true }).count(), 0, 'the feed closed');
         if (!listBeside) assert.equal(s.side, over, 'the channel list');
+        // 3. (wizard-ux issue 1452) a channel left open on a wide window, then the window narrows: the list fills it, and
+        // a channel picked there opens (it used to stay on the list: the feed behind it was already "seen")
+        if (oneW) {
+          const feedShows = (name, timeout = 8000) => page.waitForFunction(n => [...document.querySelectorAll('.aad-feed')].some(f => f.getClientRects().length && f.getBoundingClientRect().width > 200 && f.innerText.includes('Synthetic ask for ' + n)), name, { timeout });
+          // (one more click if a list repaint swallowed the first, 1 run in ~20 here; the broken build never opens at all)
+          const pick = async (id, name) => {
+            await vis('.aad-chan [data-chview="channels"]').click(); await nap(300);
+            await vis(`.aad-chan .ch-chan-open[data-chchan="${id}"]`).click();
+            if (!(await feedShows(name, 3000).then(() => true, () => false))) { await vis(`.aad-chan .ch-chan-open[data-chchan="${id}"]`).click(); await feedShows(name); }
+          };
+          await page.setViewportSize({ width: 1440, height: 820 }); await nap(900);
+          await pick('launch', 'Launch post 2'); await nap(600);
+          await page.setViewportSize({ width, height: 820 }); await nap(1000);
+          await showList();
+          s = await step('narrowed-list'); assert.equal(s.side, listBeside ? 'open' : 'full', `${stem}: the list after narrowing`);
+          await pick('voice', 'Voice keys'); await nap(700);
+          s = await step('narrowed-feed');
+          assert.equal(s.side, listBeside ? 'open' : 'none', `${stem}: the channel picked after narrowing opens (the list does not stay over it)`);
+          assert.equal(s.back, listBeside ? '' : '‹ Channels', `${stem}: its Back names the channel list`);
+          if (!listBeside) {
+            await vis('.aad-cback, .aad-oneback').click(); await nap(700);
+            s = await step('narrowed-feed-back'); assert.equal(s.side, 'full', 'Back: the channel list');
+            assert.ok(await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').isVisible(), 'the channel list it came from');
+            await pick('launch', 'Launch post 2'); await nap(700);
+            s = await step('narrowed-feed-again'); assert.equal(s.side, 'none', 'another channel opens too'); assert.equal(s.back, '‹ Channels');
+            await vis('.aad-cback, .aad-oneback').click(); await nap(700);
+          }
+        }
         for (let i = 0; i < 4; i++) { await page.keyboard.press('Escape'); await nap(200); }
         assert.equal(page.url(), startUrl, 'root Back stays in Wizard');
         // (the shell arms one guard entry on the first tap, app-services.js, so the browser's Back never leaves Wizard)

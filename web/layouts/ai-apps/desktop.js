@@ -1765,6 +1765,10 @@ export default function desktop(api) {
     // the feed closed by its own Back to channels: as Esc, the app it was brought in front of gets the front back
     if (!open) { feedGone(); paintTop(); return; }
     unpeek(); // (a channel picked in the list shown over the page: its feed in front)
+    // one app at a time, the list alone (narrower than ONE.split): a channel picked there shows its feed, also when a
+    // feed was already open behind the list (opened wide before the window narrowed, or restored); paintOne only sees
+    // the column's thread change, and FEED stays FEED (wizard-ux issue 1452)
+    if (one() && !pane && !oneSplit()) { oneList = false; oneSeen = FEED; }
     const h = here(), r = api.route();
     // (no main Chats window yet, as on a desk holding only an app: the new chat makes the column the feed lies over)
     if (h.thread || h.note || h.draft || !mainChats() || (!h.app && (r.home || r.view !== 'thread'))) { noteWant = false; draftWant = false; chatThread = null; api.sessions.newChat(); }
@@ -1976,8 +1980,9 @@ export default function desktop(api) {
     const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
     if (appFocused) api.apps.back?.(pane.id);
     // one app at a time, the chat alone (narrower than ONE.split): one level up is the list it came from (a post from a
-    // channel's feed has its own "‹ # channel" first); at the list (the root) Back stays put
-    else if (one() && !pane && !oneSplit() && !feedBack()) { if (!chatBack() && !oneList) { oneList = true; paintTop(); } }
+    // channel's feed has its own "‹ # channel" first); at the list (the root) Back goes to the app that was in front
+    // before Chats, while it is open (wizard-ux issues 1314, 1452), else it stays put: never out of Wizard
+    else if (one() && !pane && !oneSplit() && !feedBack()) { const was = oneList && oneApp(); if (was) goApp(was.id, was.desk); else if (!chatBack() && !oneList) { oneList = true; paintTop(); } }
     else if (docked) chatBack();
     else if (api.sessions?.channelBack?.()) paintList(); // Channels: thread → channel → list (issue 1256)
     return true; // bare AI apps desktop: no DOM change, no legacy navigation

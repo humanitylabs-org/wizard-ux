@@ -2876,7 +2876,7 @@ test('skin-host agents.focus / setFocus run in their own scope (no out-of-scope 
  * beside Zoom): from 1100 px today's layout, unchanged; narrower, an app fills the main area with no sidebar and no chat
  * docked beside it, the Apps column is the app bar along the bottom (Chats first, the orb at its centre, All apps last),
  * one click switches Chats <-> an app, and Chats shows the list beside the chat from 680 px (DOCKED_FROM), narrower the
- * list, then the chat alone with a visible Back at the top left (Esc the same; at the list Back stays put). */
+ * list, then the chat alone with a visible Back at the top left (Esc the same; at the list Back goes to the app before). */
 test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats first, one click each; Chats two panes at 720, one with Back at 600', async () => {
   const had = globalThis.innerWidth;
   const run = async width => {
@@ -2939,8 +2939,12 @@ test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats f
     s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click')); s.w.run();   // from the app: Chats as it was, the chat
     assert.equal(s.w.html.dataset.aadOne, 'chats'); assert.equal(s.w.html.dataset.aadSide, 'none'); assert.ok([s.w.q('.aad-cback'), s.w.q('.aad-oneback')].filter(b => b && !b.hidden).length === 1, 'one visible Back');
     assert.equal(s.w.escape(), true, 'Esc is Back'); assert.equal(s.w.html.dataset.aadSide, 'full', 'the list again');
-    assert.equal(s.w.escape(), true, 'at the list'); assert.equal(s.w.html.dataset.aadSide, 'full', 'Back never exits at the root');
-    s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click'));
-    assert.equal(s.w.html.dataset.aadSide, 'full');
+    // at the list Back goes to the app that was in front before Chats (Notes, wizard-ux issues 1314, 1452)
+    const left = s.w.st.gone.length;
+    assert.equal(s.w.escape(), true, 'at the list'); assert.equal(s.w.st.gone.at(-1), 5, 'Back from the list: the app before'); assert.equal(s.w.st.gone.length, left + 1);
+    s.w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; s.w.emit('route', s.w.st.route); s.w.run();
+    assert.equal(s.w.html.dataset.aadOne, 'app');
+    s.w.q('.aad-vchats').dispatchEvent(new FakePointerEvent('click')); s.w.run();
+    assert.equal(s.w.html.dataset.aadOne, 'chats');
   } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
