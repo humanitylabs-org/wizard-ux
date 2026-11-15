@@ -140,6 +140,7 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
     const c = { FEED: '__feed__', docked: true, chatThread: null, noteWant: false, draftWant: false, calls: [], mode, focus, pane: app ? { id: app } : null,
       panes: { get: () => ({ mode: c.mode, focus: c.focus }), set: v => { if (v.mode) c.mode = v.mode; if (v.focus) { c.focus = v.focus; c.calls.push('focus:' + v.focus); } } },
       here: () => ({ app }), mainChats: () => ({ desk: 1 }), feedBack: () => (fromFeed ? { id: 'launch' } : null), unpeek: () => c.calls.push('unpeek'),
+      one: () => false, oneSplit: () => true, oneList: true, oneSeen: undefined,
       windowMode: (m, s) => { c.calls.push(`mode:${m}:${s}`); c.mode = m; }, anim: () => {}, paintTop: () => c.calls.push('paint'),
       api: { route: () => ({ view: 'thread', thread: '__new__' }), sessions: { channelBack: () => true, newChat: () => c.calls.push('newChat') } } };
     vm.createContext(c);
@@ -255,4 +256,30 @@ test('listBack: the list one level up whenever it is not beside the chat; chatBa
   assert.match(js, /else if \(docked\) chatBack\(\);/);
   // full screen shows the list over it when Back asks for it
   assert.match(css, /\[data-aad-mode="full"\]:not\(\[data-aad-side="over"\]\) \.aad-side/);
+});
+
+// A narrow window (one app at a time, the list alone; wizard-ux issue 1452): a channel picked in the list shows its feed,
+// also when a feed was already open behind the list (opened wide, then the window narrowed). paintOne alone only sees
+// the column's thread change, and the feed is always FEED, so the list stayed over it and the click did nothing.
+test('narrow window: a channel picked in the list shows its feed, also over a feed already open behind it', () => {
+  const opened = between(js, '  function feedOpened(open) {', "  api.listen(globalThis, 'wos:channel-feed'");
+  const run = ({ width = 420, pane = null, oneList = true, oneSeen = '__feed__' } = {}) => {
+    const c = { FEED: '__feed__', chatThread: '__feed__', noteWant: false, draftWant: false, calls: [], pane, oneList, oneSeen, feedFocus: null,
+      one: () => width < 1100, oneSplit: () => width >= 680,
+      panes: { get: () => ({ mode: 'tiled', focus: 'chats' }), set: () => {} },
+      here: () => ({ app: pane?.id || null }), mainChats: () => ({ desk: 1 }), unpeek: () => {}, paintTop: () => c.calls.push('paint'),
+      api: { route: () => ({ view: 'thread', thread: '__new__' }), sessions: { newChat: () => c.calls.push('newChat') } } };
+    vm.createContext(c);
+    vm.runInContext(`${opened}\nfeedOpened({ id: 'voice' }); this.after = { oneList, oneSeen };`, c);
+    return c;
+  };
+  for (const width of [640, 420]) {
+    const c = run({ width });
+    assert.equal(c.after.oneList, false, `${width}: the feed shows, not the list`); assert.equal(c.after.oneSeen, '__feed__');
+    assert.ok(c.calls.includes('paint'), 'painted');
+    assert.equal(run({ width, oneSeen: undefined }).after.oneList, false, `${width}: a first channel too`);
+    assert.equal(run({ width, pane: { id: 'notes', desk: 5 } }).after.oneList, true, `${width}: an app in front keeps its own level`);
+  }
+  // with the list beside the chat (from 680) or a wide window the list never covers the feed: nothing changes
+  for (const width of [960, 1440]) assert.equal(run({ width }).after.oneList, true, `${width}: unchanged`);
 });

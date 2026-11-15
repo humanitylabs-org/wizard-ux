@@ -4,7 +4,7 @@
 // Per width: 1440 = today's layout (the Apps column at the right, no app bar). Under 1100: no left sidebar beside an app,
 // the app fills the main area above the bottom app bar (Chats first, the orb at its centre, All apps last), the split /
 // pane modes are not offered; one click Chats <-> the app; Chats from 680 = list beside the chat, narrower = list, then the
-// chat with a visible Back (Esc the same; at the list it stays); the app keeps its state (an unsent field).
+// chat with a visible Back (Esc the same; at the list Back goes to the app before); the app keeps its state (an unsent field).
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
@@ -97,8 +97,14 @@ const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
           await page.keyboard.press('Escape'); await settle();
           assert.ok(await box(page, '.aad-side'), stem + ': Esc shows the list');
           await shot('5-list-again');
+          // at the list, Back goes to the app that was in front before Chats, its word still there (issues 1314, 1452)
           await page.keyboard.press('Escape'); await settle();
-          assert.ok(await box(page, '.aad-side'), stem + ': at the list Back stays put');
+          await page.waitForFunction(() => document.documentElement.dataset.aadOne === 'app');
+          assert.equal(await store.inputValue(), 'unsent words', stem + ': Back from the list: the app before, as it was');
+          assert.ok(await page.evaluate(() => !!window.__wux), stem + ': still in Wizard');
+          await page.click('.aad-vt .aad-vchats'); await settle();
+          if (!(await box(page, '.aad-side'))) { await page.locator(BACK).filter({ visible: true }).first().click(); await settle(); }
+          assert.ok(await box(page, '.aad-side'), stem + ': Chats again, its list');
           // the same chat's row again: the chat (still open behind the list)
           await page.locator('.aad-side .aad-rw[data-sid="qa-a"] .aad-row').filter({ visible: true }).first().click(); await settle();
           assert.equal(await box(page, '.aad-side'), null, stem + ': its row shows the chat again');
