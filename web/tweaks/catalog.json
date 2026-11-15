@@ -31,7 +31,8 @@
     "wizard/draft-marks",
     "wizard/app-updates-hourly",
     "wizard/clear-chat-notifications",
-    "wizard/sidebar-chats-view"
+    "wizard/sidebar-chats-view",
+    "wizard/app-panel-left"
   ],
   "defaults": [
     "wizard/unified-inbox",
