@@ -146,6 +146,16 @@ export default function desktop(api) {
   const oneSplit = () => (globalThis.innerWidth || 1440) >= ONE.split;
   // (one app at a time: no split, no side by side, no second app; the saved arrangement is kept for the wide window)
   const paneModel = () => { const m = panes.get(); return one() ? { ...m, mode: 'tiled', ratio: null, weights: {}, slots: ['chats', 'app'], app2: null } : m; };
+  /* The app panel on the left (wizard-os#639, switch wizard/app-panel-left, off by default): one button in the panel's
+   * header (and ⌥⇧M) mirrors the main area, the app panel next to the sidebar and a docked chat beside it on the right,
+   * kept per device in the pane model (appSide). Off, or in the narrower one-app window, the panel stays on the right. */
+  const leftOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/app-panel-left'); } catch (_) { return false; } };
+  const appSideOf = m => leftOn() && !one() && m.appSide === 'start' ? 'start' : 'end';
+  function flipAppSide() {
+    if (!leftOn() || one()) return;
+    const to = panes.get().appSide === 'start' ? 'end' : 'start';
+    flip([dockEl, pane?.el, secondEl], () => panes.set({ appSide: to }));
+  }
   function placePanes(s) {
     const m = paneModel(), focus = root.hasAttribute('data-aad-focus');
     // Horizontal dock interaction is not admitted yet: keep the saved model but render at end. The narrower window's
@@ -154,10 +164,11 @@ export default function desktop(api) {
     const sm = root.dataset.aadSide;
     const sideWidth = focus || sm === 'none' ? 0 : sm === 'open' ? s.side[0] : sm === 'full' ? vw() : RAIL;
     const dockWidth = focus ? 0 : bar ? ONE.barH : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
-    paneGeometry = panes.geometry({ ...m, dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+    paneGeometry = panes.geometry({ ...m, appSide: appSideOf(m), dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
       sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!secondEl,
     });
     root.dataset.aadPaneSide = m.side; root.dataset.aadDockEdge = edge;
+    root.dataset.aadAppSide = appSideOf(m);
     root.dataset.aadPaneTiled = String(paneGeometry.tiled);
     root.dataset.aadMode = m.mode;
     const put = (k, v) => { const key = '--aad-pane-' + k; paneVars.add(key); if (root.style.getPropertyValue(key) !== v + 'px') root.style.setProperty(key, v + 'px'); };
@@ -377,6 +388,9 @@ export default function desktop(api) {
     modeBars.push({ slot, bar }); return bar;
   }
   cTop.insertBefore(modeBar('chats'), cX); pTop.insertBefore(modeBar('app'), pW); sTop.append(modeBar('app2'));
+  const pSide = el('button', 'aad-ib aad-pside', { type: 'button', 'aria-keyshortcuts': 'Alt+Shift+M' }); pSide.append(icon('side')); pSide.hidden = true;
+  api.listen(pSide, 'click', e => { e.stopPropagation(); flipAppSide(); });
+  pTop.insertBefore(pSide, pW);
   top.append(cTop, pTop);
   /* Wizard for Mac (wizard-os#548): the Mac app's title-bar drag strip covers #bar and lets a click through only on a
    * control INSIDE #bar (try-wizard WizardDragView reads #bar's box and the buttons in it). The chat's and the app panel's
@@ -657,7 +671,7 @@ export default function desktop(api) {
     const g = el('div', 'aad-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': GRIP_NAMES[id], title: GRIP_NAMES[id] + ' · double-click: back to default', 'data-grip': id });
     grips.append(g); grip[id] = g;
     // the sidebar grows to the right, the open-apps column and the app panel to the left
-    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : (id === 'side' ? 1 : -1) * (root.dataset.aadPaneSide === 'end' ? -1 : 1);
+    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : (id === 'side' ? 1 : -1) * (root.dataset.aadPaneSide === 'end' || (id === 'app' && root.dataset.aadAppSide === 'start') ? -1 : 1);
     let drag = null, cancelFrame = null;
     // (the pointer's latest x, applied once a frame: a fast mouse sends several moves a frame)
     const step = t => {
@@ -1746,6 +1760,8 @@ export default function desktop(api) {
     sTop.hidden = !secondEl; sName.textContent = second ? appName(second.id) : '';
     for (const { bar } of modeBars) for (const b of bar.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === model.mode));
     pTop.hidden = !pane || !model.slots.includes('app'); cX.hidden = !docked;
+    { const left = appSideOf(model) === 'start', t = left ? 'Move the app to the right (⌥⇧M)' : 'Move the app to the left (⌥⇧M)';
+      pSide.hidden = !leftOn() || one(); pSide.setAttribute('aria-label', t); pSide.title = t; pSide.setAttribute('aria-pressed', String(left)); }
     paintFeed(chat);
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
@@ -2103,6 +2119,7 @@ export default function desktop(api) {
     // The snooze sheet keeps ⌥Z to close; Someday is an explicit button, never an arrow shortcut.
     if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
     if (sh && MODE_KEYS[code]) return once(() => windowMode(MODE_KEYS[code]));
+    if (sh && code === 'KeyM' && leftOn() && !one()) return once(flipAppSide);
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
@@ -2228,6 +2245,7 @@ export default function desktop(api) {
       const n = bar.querySelector('[data-mode="' + mode + '"]');
       if (shown(n)) out.push({ el: n, key: '⇧' + code.slice(3), at: 'below', word: MODE_LABELS[mode] });
     }
+    if (shown(pSide)) out.push({ el: pSide, key: '⇧M', at: 'below', word: 'Move the app' });
     midH();
     if (docked) {
       for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
@@ -2393,6 +2411,11 @@ export default function desktop(api) {
   readSessions(); paintSide(false); paintVt(true); paintTop(); paintBadges();
   const offHost = host?.onChange(() => { paintTop(); watchPaneWins(); });
   const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); });
+  // (the app-panel-left switch turned on or off: lay the panes out again, also on a first load where the switches land late)
+  let leftWas = leftOn();
+  const leftCheck = () => { if (leftOn() === leftWas) return; leftWas = leftOn(); paintTop(); applySizes(); retileSoon(); };
+  api.listen(globalThis, 'wos:experience', leftCheck);
+  const leftMo = globalThis.MutationObserver ? new MutationObserver(leftCheck) : null; leftMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
   globalThis.dispatchEvent?.(new Event('resize'));
   if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
@@ -2401,7 +2424,8 @@ export default function desktop(api) {
     offAppKeys?.();
     offFrameKeys?.();
     offPanes(); for (const v of paneVars) root.style.removeProperty(v);
-    for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode']) delete root.dataset[k];
+    for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode', 'aadAppSide']) delete root.dataset[k];
+    leftMo?.disconnect();
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove(); macHoles?.dispose();
