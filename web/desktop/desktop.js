@@ -152,7 +152,9 @@
    * 1460: off, a sidebar tap went to a second Chats window on a desk of its own, and the main column stayed blank). */
   function mainStd() { return !!ownsChatList && CHATS.views.defaultId() !== 'wizard-chats'; }
   function sideMainWin() {
-    for (const d of ws) { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (w && w.app === 'chats' && !w.agent) return w; }
+    // (on that desk, the first Chats window in window order: the one the layout's mainChatWindow draws, even when a
+    // second Chats window on the same desk has the focus)
+    for (const d of ws) { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (w && w.app === 'chats' && !w.agent) return Object.values(W).find(x => x.app === 'chats' && !x.agent && d.wins.includes(x.id)) || w; }
     return null;
   }
   const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : typeof viewBase !== 'undefined' && viewBase && viewBase.id === id ? viewBase : undefined);

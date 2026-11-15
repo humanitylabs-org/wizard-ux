@@ -146,6 +146,11 @@ test('AI apps + another Default Chats, switch off: the docked Chats window is th
     assert.equal(r.mainLook(r.other), '', 'other windows keep their look');
     assert.equal(r.sideLook(), !!tweaks, 'the sidebar mounts the look only with the switch on');
   }
+  // two Chats windows on the docked desk, the second focused: the first one is the main chat, as the layout draws it
+  const two = run({ owns: true, tweaks: '', def: 'look' });
+  two.W['w-2'] = { id: 'w-2', app: 'chats', thread: null }; two.ws[0].wins.push('w-2'); two.ws[0].focus = 'w-2';
+  assert.equal(two.mainChats(two.docked), true, 'the first Chats window on the desk (the layout\'s mainChatWindow)');
+  assert.equal(two.mainChats(two.W['w-2']), false, 'not the focused second one');
   // Classic (no layout owns the list): unchanged, the window with the picked look is the main one
   const c = run({ owns: false, tweaks: '', def: 'look' });
   assert.equal(c.mainChats(c.other), true); assert.equal(c.mainChats(c.docked), true);
