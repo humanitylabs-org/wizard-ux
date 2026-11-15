@@ -1333,6 +1333,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         @JavascriptInterface
         public String everywhere() { return ai.wizards.os.everywhere.EverywhereService.status(MainActivity.this); }
 
+        /** The skin WizardOS's own orb wears (id + its orb colour filter), so the floating orb matches it. */
+        @JavascriptInterface
+        public void everywhereLook(String skin, String filter) {
+            ai.wizards.os.everywhere.EverywhereService.setLook(MainActivity.this, skin, filter);
+        }
+
         @JavascriptInterface
         public void setEverywhere(boolean on) {
             runOnUiThread(() -> {
