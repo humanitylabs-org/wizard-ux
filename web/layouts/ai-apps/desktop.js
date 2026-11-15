@@ -136,6 +136,8 @@ export default function desktop(api) {
    * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
    * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
   const actOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (_) { return false; } };
+  // The sidebar's list by the owner's Default Chats look (Settings › Chats; wizard-ux issue 1443), off by default.
+  const viewOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } };
   const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
   const ACT_EMPTY = { working: 'Nothing working.', ready: 'Nothing needs you.', recent: 'Nothing else this week.', snoozed: 'Nothing snoozed.', archive: 'Nothing archived.' };
   // (+ 'saved': sends a graceful restart holds, wizard-ux issue 1362; listed only while there are any)
@@ -298,6 +300,22 @@ export default function desktop(api) {
    * chat list with the channel list remaining visible on the sidebar"): its feed is one more chat in the column (FEED),
    * drawn by api.sessions.channelFeed into feedBox over the docked Chats window. A post opens its thread there; Back
    * (Esc, ✕) from the thread returns to the feed, and from the feed to nothing open. The sidebar list never changes. */
+  /* Another Chats look (wizard/sidebar-chats-view, wizard-ux issue 1443): with an installed provider picked under
+   * Settings › Chats › Default Chats, api.sessions.chatsView mounts it into viewBox in place of this sidebar's own rows
+   * (and of the rail's, at the rail's real width: the provider handles a narrow column). Search keeps the stock hits.
+   * Built-in Chats, the switch off or a provider that fails: false, and the rows below come back as they were. */
+  const viewBox = el('div', 'aad-cview'); viewBox.hidden = true;
+  let viewShown = false;
+  function paintView(inRail) {
+    const at = inRail ? rail : panel;
+    if (viewBox.parentNode !== at) { at.insertBefore(viewBox, inRail ? rSet : scroll); rList.hidden = false; scroll.hidden = false; }
+    const on = (viewOn() || viewShown) && !!api.sessions.chatsView?.(viewBox);
+    viewShown = on;
+    const show = on && !(q && !inRail);
+    if (viewBox.hidden === show) viewBox.hidden = !show;
+    if (inRail) rList.hidden = show; else { scroll.hidden = show; if (show) chanBox.hidden = true; }
+    return show;
+  }
   const FEED = '__feed__', feedBox = el('div', 'aad-feed'); feedBox.hidden = true;
   const feedOn = () => api.sessions.channelFeedOpen?.() || null;
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
@@ -559,6 +577,10 @@ export default function desktop(api) {
   api.listen(globalThis, 'wos:drafts-keys', () => { if (root.dataset.aadSide === 'rail' || !(typeof actOn === 'function' && actOn())) return; readSessions(); paintList(); });
   // a switch turned on or off (Channels, issue 1256): the pane, the "# channel" lines and the Focus a feed held
   api.listen(globalThis, 'wos:experience', () => { if (chatThread === FEED && !feedOn()) paintTop(); paintSetting(); paintAgents(); if (root.dataset.aadSide === 'rail') return; paintChan(); readSessions(); paintList(true); });
+  // the Default Chats look changed, failed or the switch flipped (issue 1443): the sidebar (or rail) follows
+  const viewRepaint = () => { if (root.dataset.aadSide === 'rail') paintRail(true); else paintList(true); };
+  api.listen(globalThis, 'wos:chats-view', viewRepaint);
+  api.listen(globalThis, 'wos:experience', () => { if (root.dataset.aadSide === 'rail') paintRail(true); });
   api.listen(globalThis, 'resize', syncSide);
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -987,6 +1009,7 @@ export default function desktop(api) {
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
     if (typeof paintChan === 'function') paintChan();
+    if (typeof paintView === 'function' && paintView(false)) return;
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
@@ -1161,6 +1184,7 @@ export default function desktop(api) {
 
   function paintRail(force = false) {
     if (root.dataset.aadSide !== 'rail') return;
+    if (typeof paintView === 'function' && paintView(true)) return;
     // round 22 (Miguel, 4 Nov 2026: never both, it reads as double counting): One list = Ready alone; By status = each
     // status alone (plain chats as 'Other'), no Ready total over them
     const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();

@@ -969,6 +969,11 @@
         channelNew: () => live() ? !!shell.chatChannelNew?.() : false,
         // The Chats list's tab: 'activity' or 'channels' ('' with the switch off). It decides what + does (issue 1310).
         channelView: () => live() ? shell.chatChannelView?.() || '' : '',
+        /* The owner's Default Chats look (Settings › Chats, switch wizard/sidebar-chats-view, wizard-ux issue 1443): that
+         * installed provider's list painted into node (one of this layout's mounted nodes), its taps opening threads in
+         * the main chat. True while it owns the node; false (node emptied) for built-in Chats, the switch off or a
+         * failed provider, and the layout draws its own rows. 'wos:chats-view' asks for a repaint. */
+        chatsView: node => live() && node?.nodeType === 1 && [...a.mounts].some(m => m.contains(node)) ? !!shell.chatsView?.(node) : false,
       }),
       /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
        * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
