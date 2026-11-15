@@ -135,8 +135,8 @@
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
     const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now(), since: Date.now() };
     if (!registered(st)) return () => {};
-    const load = () => { if (st.boundaryNav) { st.navOk = st.navExpect; st.navExpect = false; } if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
-    st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
+    const load = () => { if (st.boundaryNav) { st.navOk = st.navExpect; st.navExpect = false; } if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); stoppedCheck(st); };
+    st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); stoppedShow(st, false); if (st.badged) setBadge(st.appId, 0); };
     frames.set(frame, st); frame.addEventListener('load', load);
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     // Browser owner boundary (wizard-os#133): a sandboxed frame gets its Back/appearance/field channel. Every legacy
@@ -151,7 +151,63 @@
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});
+    stoppedCheck(st, true);
     return st.detach;
+  }
+  /* A stopped app says so (wizard-ux issue 1464). With the app stopped, its address answers 502/503 with an empty
+   * body (Tailscale Serve with nothing behind it), which showed as a blank white window. The box's own list says
+   * `status: stopped` before the page loads; a same-origin page that loads blank (or opaque, under the browser
+   * boundary) is asked once more. An owner edge's own "restarting" page (X-Wizard-Waiting) is left alone. */
+  const DOWN = new Set([502, 503, 504]);
+  const appName = st => apps().find(a => a.id === st.appId)?.name || st.appId;
+  const listedStopped = st => apps().some(a => a.id === st.appId && a.status === 'stopped');
+  function pageUrl(frame) {
+    let href = ''; try { href = frame.contentWindow.location.href; } catch (_) {}
+    if (!href || href === 'about:blank') href = frame.getAttribute?.('src') || frame.src || '';
+    try { return new URL(href, ORIGIN); } catch (_) { return null; }
+  }
+  function blankPage(frame) {
+    try { const d = frame.contentDocument; if (!d) return true; const b = d.body; return !b || (!b.childElementCount && !String(b.textContent || '').trim()); } catch (_) { return true; }
+  }
+  async function answersDown(href) {
+    if (typeof fetch !== 'function') return false;
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), 8000);
+    try {
+      const r = await fetch(href, { cache: 'no-store', credentials: 'same-origin', redirect: 'manual', headers: { Accept: 'text/html' }, ...(ctl ? { signal: ctl.signal } : {}) });
+      try { r.body?.cancel?.(); } catch (_) {}
+      return DOWN.has(r.status) && !r.headers?.get?.('x-wizard-waiting');
+    } catch (_) { return false; } finally { if (t) clearTimeout(t); }
+  }
+  // Same-origin pages are asked (the box's list can be stale: a start does not rewrite it). Another origin can't be
+  // asked, so its listed status decides until the owner taps Try again once in that window.
+  async function stoppedCheck(st, early) {
+    const frame = st.frame, check = st.stopCheck = (st.stopCheck || 0) + 1, u = pageUrl(frame);
+    const listed = listedStopped(st) && !st.stopTried;
+    let down = listed;
+    if (!early && u && u.origin === ORIGIN && within(u, st.url)) down = blankPage(frame) ? await answersDown(u.href) : false;
+    if (frames.get(frame) !== st || check !== st.stopCheck) return;
+    if (down || !early) stoppedShow(st, down);
+  }
+  const STOP_CSS = '.wos-app-stopped{position:absolute;inset:0;z-index:4;display:grid;place-content:center;justify-items:center;gap:10px;padding:0 24px;text-align:center;background:var(--bg,Canvas);color:var(--ink,CanvasText)}.wos-app-stopped h3{margin:0;font-size:1.1rem}.wos-app-stopped p{margin:0;max-width:32ch;color:var(--ink-2,GrayText);font-size:.9rem;line-height:1.45}.wos-app-stopped button{margin-top:6px;padding:.6em 1.2em;border-radius:999px;border:1px solid var(--line-2,currentColor);background:transparent;color:inherit;font:inherit;font-weight:650}';
+  function stoppedShow(st, on) {
+    const frame = st.frame, host = frame.parentElement;
+    if (!on) { st.stopEl?.remove(); st.stopEl = null; return; }
+    if (!host || typeof document === 'undefined' || !document.createElement) return;
+    if (!document.getElementById('wos-app-stopped-css')) { const s = document.createElement('style'); s.id = 'wos-app-stopped-css'; s.textContent = STOP_CSS; document.head?.appendChild(s); }
+    if (st.stopEl?.isConnected) return;
+    const el = document.createElement('div'); el.className = 'wos-app-stopped'; el.setAttribute('role', 'status');
+    const h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
+    h.textContent = appName(st) + ' is stopped.'; p.textContent = 'Ask your Wizard to start it, then tap Try again.';
+    b.type = 'button'; b.textContent = 'Try again';
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await window.WizCore?.refreshApps?.(); } catch (_) {}
+      if (frames.get(frame) !== st) return;
+      st.stopTried = true; stoppedShow(st, false);
+      const u = pageUrl(frame);
+      try { expectLoad(frame); frame.contentWindow.location.replace(u ? u.href : st.url.href); } catch (_) { frame.src = u ? u.href : st.url.href; }
+    });
+    el.append(h, p, b); host.appendChild(el); st.stopEl = el;
   }
   // Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): an app in front says the
   // owner read a chat ({network, names}); the WizardOS Android app clears that chat app's notification from the tray
