@@ -120,3 +120,42 @@ test('the switch ships off: listed in the catalog, never a default, scoped CSS',
   const dj = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'), lj = fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
   assert.match(dj, /includes\('wizard\/sidebar-chats-view'\)/); assert.match(lj, /includes\('wizard\/sidebar-chats-view'\)/);
 });
+
+// wizard-ux issue 1460: with the switch OFF and another look picked, the AI apps desktop must still treat its docked
+// Chats window as the main chat (drawn as standard Chats), or sidebar taps open a hidden second Chats window.
+test('AI apps + another Default Chats, switch off: the docked Chats window is the main chat (issue 1460)', () => {
+  const dj = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const lines = dj.split('\n');
+  const from = lines.findIndex(l => l.startsWith('  function sideViewOn()')), to = lines.findIndex((l, i) => i > from && l.startsWith('  const sideWin = id =>'));
+  const main = lines.find(l => l.startsWith('  const mainChats = w =>')), look = lines.find(l => l.startsWith('    mainLook: w =>'));
+  assert.ok(from > 0 && to > from && main && look, 'slices found');
+  const run = ({ owns, tweaks, def }) => {
+    const docked = { id: 'w-dock', app: 'chats', thread: null }, other = { id: 'w-look', app: 'chats', thread: '__new__', chatsProvider: 'look' }, agent = { id: 'w-ag', app: 'chats', agent: 'box' };
+    const ctx = { ownsChatList: owns, document: { documentElement: { dataset: { tweaks } } }, W: { 'w-dock': docked, 'w-look': other, 'w-ag': agent },
+      ws: [{ wins: ['w-dock'], focus: 'w-dock' }, { wins: ['w-look'], focus: 'w-look' }, { wins: ['w-ag'], focus: 'w-ag' }],
+      CHATS: { views: { defaultId: () => def, providerFor: w => w.chatsProvider || def } } };
+    vm.runInNewContext(`${lines.slice(from, to).join('\n')}\n${main}\nthis.mainLook = { ${look} }.mainLook;\nthis.mainChats = mainChats; this.sideLook = sideLook;`, ctx);
+    return { ...ctx, docked, other, agent };
+  };
+  for (const tweaks of ['', 'wizard/sidebar-chats-view']) {
+    const r = run({ owns: true, tweaks, def: 'look' });
+    assert.equal(r.mainChats(r.docked), true, `${tweaks || 'switch off'}: the docked window is the main chat`);
+    assert.equal(r.mainChats(r.other), false, `${tweaks || 'switch off'}: a look window on another desk is not`);
+    assert.equal(r.mainChats(r.agent), false, 'agent windows never are');
+    assert.equal(r.mainLook(r.docked), 'wizard-chats', 'the docked window draws standard Chats');
+    assert.equal(r.mainLook(r.other), '', 'other windows keep their look');
+    assert.equal(r.sideLook(), !!tweaks, 'the sidebar mounts the look only with the switch on');
+  }
+  // two Chats windows on the docked desk, the second focused: the first one is the main chat, as the layout draws it
+  const two = run({ owns: true, tweaks: '', def: 'look' });
+  two.W['w-2'] = { id: 'w-2', app: 'chats', thread: null }; two.ws[0].wins.push('w-2'); two.ws[0].focus = 'w-2';
+  assert.equal(two.mainChats(two.docked), true, 'the first Chats window on the desk (the layout\'s mainChatWindow)');
+  assert.equal(two.mainChats(two.W['w-2']), false, 'not the focused second one');
+  // Classic (no layout owns the list): unchanged, the window with the picked look is the main one
+  const c = run({ owns: false, tweaks: '', def: 'look' });
+  assert.equal(c.mainChats(c.other), true); assert.equal(c.mainChats(c.docked), true);
+  assert.equal(c.mainLook(c.docked), '');
+  // built-in Chats picked on AI apps: unchanged rule
+  const b = run({ owns: true, tweaks: '', def: 'wizard-chats' });
+  assert.equal(b.mainChats(b.docked), true); assert.equal(b.mainChats(b.other), false); assert.equal(b.mainLook(b.docked), '');
+});

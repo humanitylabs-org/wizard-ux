@@ -145,11 +145,16 @@
   var viewBase = null, viewLook = false;
   // The switch, read inline from the root like the other switches; it only acts where a layout owns the chat list.
   function sideViewOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } }
-  function sideLook() { return !!ownsChatList && sideViewOn() && CHATS.views.defaultId() !== 'wizard-chats'; }
-  /* With the look in the sidebar, the main Chats window is the one the layout docks in its chat column: the first desk
-   * whose front window is a Chats window (deskApps' 'wizard'), whatever look it was opened with, drawn as standard Chats. */
+  function sideLook() { return mainStd() && sideViewOn(); }
+  /* Where a layout owns the chat list (AI apps) and another look is picked as Default Chats, the main Chats window is
+   * the one the layout docks in its chat column: the first desk whose front window is a Chats window (deskApps'
+   * 'wizard'), whatever look it was opened with, drawn as standard Chats. With the switch on or off (wizard-ux issue
+   * 1460: off, a sidebar tap went to a second Chats window on a desk of its own, and the main column stayed blank). */
+  function mainStd() { return !!ownsChatList && CHATS.views.defaultId() !== 'wizard-chats'; }
   function sideMainWin() {
-    for (const d of ws) { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (w && w.app === 'chats' && !w.agent) return w; }
+    // (on that desk, the first Chats window in window order: the one the layout's mainChatWindow draws, even when a
+    // second Chats window on the same desk has the focus)
+    for (const d of ws) { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (w && w.app === 'chats' && !w.agent) return Object.values(W).find(x => x.app === 'chats' && !x.agent && d.wins.includes(x.id)) || w; }
     return null;
   }
   const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : typeof viewBase !== 'undefined' && viewBase && viewBase.id === id ? viewBase : undefined);
@@ -161,7 +166,7 @@
     viewOpen: (key, sid) => { if (!viewKey(key)) return false; openThread(sid); return true; },
     viewTarget: key => (viewKey(key) ? sideMain().id : ''),
     // With the look in the sidebar, the main chat column stays standard Chats (its list and thread); other windows keep theirs.
-    mainLook: w => (sideLook() && W[w?.id] === w && w === sideMainWin() ? 'wizard-chats' : ''),
+    mainLook: w => (mainStd() && W[w?.id] === w && w === sideMainWin() ? 'wizard-chats' : ''),
     win: chatsWin,
     root: () => stage,
     save,
@@ -251,7 +256,7 @@
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   /* Agents MVP: a Chats window pinned to a non-default agent (w.agent) wears that agent's sigil and name. */
   const agentWin = w => !!(w && w.app === 'chats' && w.agent);
-  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && (typeof sideLook === 'function' && sideLook() ? w === sideMainWin() : CHATS.views.providerFor(w) === CHATS.views.defaultId()));
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && (typeof mainStd === 'function' && mainStd() ? w === sideMainWin() : CHATS.views.providerFor(w) === CHATS.views.defaultId()));
   function agentApp(w) {
     const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
     const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
@@ -3279,7 +3284,7 @@
      * that installed provider mounted into the layout's node as a list region. False (node emptied) with the switch off,
      * built-in Chats picked, or the provider failed: the layout then draws its own rows. */
     chatsView: host => {
-      const look = sideLook();
+      const look = mainStd();
       if (look !== viewLook) { viewLook = look; for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) CHATS.renderChats(w); } // the main column: standard again, or its look back
       const id = sideViewOn() ? CHATS.views.defaultId() : 'wizard-chats';
       if (!host || host.nodeType !== 1 || !stage.contains(host) || id === 'wizard-chats' || !CHATS.views.usable?.(id)) {

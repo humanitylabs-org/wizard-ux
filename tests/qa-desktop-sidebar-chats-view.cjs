@@ -9,7 +9,8 @@
 //                the collapsed rail hands the provider the rail's real width; opening the sidebar again moves it back
 //   on-throws    a provider that fails to mount: a toast, and the stock rows come back (built-in Chats)
 //   on-builtin   built-in Chats picked: the stock rows, nothing mounted
-//   off-fixture  the switch off with the other look picked: the stock rows, exactly as on main
+//   off-fixture  the switch off with the other look picked: the stock rows, exactly as on main; a row tap opens
+//                that thread in the main chat column, never in a hidden second Chats window (issue 1460)
 // QA_CASES=on-fixture,... picks cases; QA_OUT=<dir> keeps the screenshots; QA_EXPECT=broken (main) asserts the sidebar
 // keeps the stock rows with the look picked and the switch on.
 const assert = require('node:assert/strict');
@@ -134,6 +135,23 @@ const CASES = (process.env.QA_CASES || 'on-fixture,on-throws,on-builtin,off-fixt
           // on-builtin, off-fixture, and main (QA_EXPECT=broken) for on-fixture: the stock rows, nothing mounted
           assert.ok(!s.view, name + ': nothing mounted ' + JSON.stringify(s));
           assert.equal(s.stockRows.length, 3, name + ': the stock rows ' + JSON.stringify(s));
+        }
+        if (name === 'off-fixture' || name === 'on-builtin') {
+          // wizard-ux issue 1460: a stock sidebar row opens in the main chat column (switch off, another look picked),
+          // never in a second Chats window that the layout does not show (main: QA_EXPECT=broken asserts the bug)
+          await page.locator('.aad-scroll .aad-rw[data-sid="qa-a2"]').first().click();
+          await page.waitForFunction(() => [...document.querySelectorAll('#stage .ch-thread .msg')].some(n => n.getClientRects().length && /Here is a plan/.test(n.textContent)), null, { timeout: 8000 }).catch(() => {}); await nap(500);
+          const w = await winsNow(), chats = w.wins.filter(x => x[1] === 'chats');
+          const tapped = await page.evaluate(() => ({ chat: document.documentElement.hasAttribute('data-aad-chat'),
+            reply: [...document.querySelectorAll('#stage .ch-thread .msg')].some(n => n.getClientRects().length && /Here is a plan/.test(n.textContent)),
+            appsChats: [...document.querySelectorAll('.aad-vtab')].filter(n => n.getClientRects().length && /^\s*Chats\s*$/.test(n.textContent || '')).length }));
+          entry.tapped = { ...tapped, windows: w }; await shot('6-row-tapped');
+          if (broken && name === 'off-fixture') assert.ok(chats.length > 1 && tapped.appsChats > 0, 'main: the row opened in a hidden second Chats window ' + JSON.stringify(entry.tapped));
+          else {
+            assert.equal(chats.length, 1, 'one Chats window, no hidden second one: ' + JSON.stringify(w));
+            assert.ok(tapped.chat && tapped.reply, 'the tapped thread shows in the main chat column: ' + JSON.stringify(entry.tapped));
+            assert.equal(tapped.appsChats, 0, 'no extra Chats item under Apps');
+          }
         }
         assert.deepEqual(entry.errors, [], 'no page errors');
         entry.pass = true;
