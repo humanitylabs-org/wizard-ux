@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 const read = p => readFileSync(new URL('../web/core/'+p,import.meta.url),'utf8');
-const names = {movies:'Movies',food:'Food',meditate:'Meditate',outline:'Outline','connected-accounts':'Connected accounts'};
+const names = {movies:'Movies',food:'Food',meditate:'Meditate',outline:'Outline','connected-accounts':'Connected accounts','wizard-search':'Search'};
 async function fixture(ids = Object.keys(names)) {
   const window = {
     WizCore:{norm:s=>String(s).toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()},

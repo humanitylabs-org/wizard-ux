@@ -35,7 +35,7 @@
     win: value => value === wid ? threadWindow : null,
     root: () => win, save: () => checkpoint(), layout() {}, toast,
     title: () => policy.displayName(app || {id, name:'Thread'}),
-    viewContext: () => ({kind:'thread', appId:id}),
+    viewContext: () => ({kind:'thread', appId:threadWindow.appId}),
     visible: () => frame?.isConnected ? [wid] : [], front: () => wid,
     openLink: url => links?.open(url),
     captureBusy: () => !!window.WizAppCapture?.getState?.()?.active,
@@ -134,19 +134,21 @@
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
     checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
+    threadWindow.appId = next.id || id;   // hosted Chats threads are allowed per current app id (ux#1471)
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
     frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
     // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.
     const opaque = !!window.WizBrowserBoundary?.enabled;
     if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
     // Its saved settings ride along as the frame's name, set before the frame exists (the page reads them as it loads).
-    if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(id); if (seed) frame.name = seed; }
+    // A pin made before its app was renamed (ux#1471) resolves through the registry's aliases: services use the app's current id.
+    if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(next.id || id); if (seed) frame.name = seed; }
     const saved = read();
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
     win.appendChild(frame);
     const mountedFrame = frame;
-    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url,
+    detach = window.WizAppServices?.attach(frame, { appId:next.id || id, path:next.url,
       openThread: (sid, opts) => chats?.openHosted(wid, frame, sid, opts) === true,
       isVisible: () => !!frame?.isConnected && !chats?.isHosted(wid) && frame === mountedFrame && document.visibilityState === 'visible',
       isFront:() => frame === mountedFrame && mountedFrame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible' && document.hasFocus(),

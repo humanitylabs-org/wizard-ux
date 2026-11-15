@@ -47,7 +47,13 @@
   const APP_ID_ALIASES = window.WizCore.appIdAliases = Object.freeze({
     cinequeue: 'movies', usuals: 'food', meditation: 'meditate',
     'outline-streaming-demo': 'outline', 'voice-outline': 'outline', 'wizard-connectors': 'connected-accounts',
+    'search-preview': 'wizard-search',
   });
+  // The earlier ids an installed app declares (wizard.md renamed_from, carried in the box's apps.json): lookup aliases
+  // only, so a home-screen pin, link or handoff made under the old id opens the renamed app (ux#1471).
+  const APP_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const renamedFrom = a => a.source === 'apps.json' && Array.isArray(a.renamed_from)
+    ? [...new Set(a.renamed_from.filter(v => typeof v === 'string' && APP_ID.test(v) && v !== String(a.id)))].slice(0, 8) : [];
   const DEV_KEY = 'wux.apps.dev.v1';
   let DEV = (() => { try { return new Set(JSON.parse(localStorage.getItem(DEV_KEY) || '[]')); } catch (_) { return new Set(); } })();
   // Reviewed legacy migrations, not supplied by apps or guessed from cache prefixes.
@@ -78,6 +84,7 @@
     ...(a.desktop_only ? { desktopOnly: true } : {}),
     phoneOnly: a.phone_only === true || deviceSurface(a)?.phoneOnly === true, source: a.source || '', system: a.system === true,
     status: a.status,
+    renamedFrom: renamedFrom(a),
     // Declared by the installed app itself (wizard.md home_screen); sanitized, never keyed by app id.
     homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
@@ -241,6 +248,8 @@
       APPS.splice(0, APPS.length, ...list);
       for (const k of Object.keys(APP)) delete APP[k];
       for (const a of APPS) APP[a.id] = a;
+      // A declared rename never shadows an app that still has that id.
+      for (const a of APPS) for (const old of a.renamedFrom || []) if (!APP[old]) APP[old] = a;
       for (const [old, id] of Object.entries(APP_ID_ALIASES)) {
         if (!APP[old] && APP[id]) APP[old] = APP[id];
         // Unrenamed box (only the retired id installed): canonical handoffs such as Android's `food` still resolve.
