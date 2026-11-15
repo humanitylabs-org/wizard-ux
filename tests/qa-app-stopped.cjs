@@ -3,7 +3,8 @@
 // stopped and saw a completely blank white page). Real Chromium, a disposable synthetic transport (no box is read or
 // written), Messenger's address answering like Tailscale Serve with nothing behind it: HTTP 502, empty body.
 // Cases (QA_CASES=phone,desktop): the phone shell opens Messenger; the classic desktop restores a Messenger window.
-// Fixed: the window says "Messenger is stopped." with Try again; once the app answers, Try again opens it.
+// Fixed: the window says "Messenger is stopped." with Start (wizard-ux issue 1475); Start calls the App Manager's
+// stand-in owner route POST store-install/_start/messenger, polls it to `running`, and the window loads Messenger.
 // QA_EXPECT=broken (QA_WEB=<main worktree>/web) asserts main shows an empty page and no message.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -22,7 +23,7 @@ const report = { origin, web, expect: EXPECT, cases: [] };
   const browser = await chromium.launch();
   try {
     for (const kind of CASES) {
-      const stem = `app-stopped-${kind}-${EXPECT}`, entry = { stem, errors: [], refused: [] }; report.cases.push(entry);
+      const stem = `app-stopped-${kind}-${EXPECT}`, entry = { stem, errors: [], refused: [], starts: [] }; report.cases.push(entry);
       const phone = kind === 'phone';
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, serviceWorkers: 'block', ...(phone ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}) });
       let up = false;
@@ -44,6 +45,11 @@ const report = { origin, web, expect: EXPECT, cases: [] };
           const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
           if (u.origin !== origin) { entry.refused.push({ method, url: q.url(), reason: 'external' }); return r.abort(); }
           if (p.startsWith(APP.url)) return up ? r.fulfill({ body: PAGE, contentType: 'text/html' }) : r.fulfill({ status: 502, body: '' });
+          if (p === prefix + 'store-install/_start/messenger') {
+            entry.starts.push({ method, body: q.postData(), store: q.headers()['x-wizard-store'] || '' });
+            if (method === 'POST') return r.fulfill({ status: 202, json: { app: 'messenger', state: 'starting', status: 'stopped' } });
+            up = true; return r.fulfill({ json: { app: 'messenger', state: 'running', status: 'running' } });
+          }
           if (!['GET', 'HEAD'].includes(method)) {
             if (method === 'PUT' && p === '/wizard/thread-seen') return r.fulfill({ json: { ok: true, state: q.postDataJSON() } });
             if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
@@ -82,13 +88,14 @@ const report = { origin, web, expect: EXPECT, cases: [] };
         }
         assert.equal(entry.panel, 1, 'the window says the app is stopped');
         const text = await panel.innerText();
-        assert.match(text, /Messenger is stopped\./); assert.match(text, /Ask your Wizard to start it/);
-        // The app is started again (by the agent or the owner); Try again opens it.
-        up = true;
-        await panel.getByRole('button', { name: 'Try again' }).click();
+        assert.match(text, /Messenger is stopped\./); assert.doesNotMatch(text, /Ask your Wizard/);
+        // Start starts it through the App Manager route and the window loads Messenger by itself.
+        await panel.getByRole('button', { name: 'Start' }).click();
         await page.frameLocator('iframe[data-own-app="messenger"] >> visible=true').locator('#up').waitFor({ timeout: 10000 });
         await nap(600);
         assert.equal(await page.locator('.wos-app-stopped').count(), 0, 'the message goes once Messenger answers');
+        assert.deepEqual(entry.starts.map(x => x.method), ['POST', 'GET'], 'POST the start, then GET the job');
+        assert.equal(entry.starts[0].body, '{}'); assert.equal(entry.starts[0].store, '1');
         await page.screenshot({ path: path.join(out, stem + '-2-started.png') });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
