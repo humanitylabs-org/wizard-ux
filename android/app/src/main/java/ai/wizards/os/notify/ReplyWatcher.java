@@ -177,9 +177,12 @@ public final class ReplyWatcher {
 
     static void scheduleJob(Context c) {
         JobScheduler js = c.getSystemService(JobScheduler.class);
-        if (js == null || js.getPendingJob(JOB_ID) != null) return;
+        if (js == null) return;
         // The backstop after a kill waits as long as the soonest watch allows (a far Snooze: hours, not 15 minutes).
-        long wait = Math.max(60_000, Math.min(6 * ReplyPolicy.MAX_WAIT, soonest(c)));
+        long now = System.currentTimeMillis(), wait = Math.max(60_000, Math.min(6 * ReplyPolicy.MAX_WAIT, soonest(c)));
+        // A pending job stays unless a newer watch wants a read sooner than it would run (a reply after a far Snooze).
+        if (js.getPendingJob(JOB_ID) != null && prefs(c).getLong("jobAt", 0) <= now + wait + 60_000) return;
+        prefs(c).edit().putLong("jobAt", now + wait).apply();
         JobInfo j = new JobInfo.Builder(JOB_ID, new ComponentName(c, ReplyJob.class))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setMinimumLatency(wait)

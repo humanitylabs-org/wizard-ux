@@ -86,7 +86,9 @@ test('wizard-os#648: the phone watcher gets the return time, and a hidden phone 
   const watched = [], timers = []
   const job = { id: 'b', kind: 'return', thread: 'wizard_t', when: { once: '2099-01-01T00:00:00.000Z' }, timezone: 'UTC', prompt: '', target: { message: null, excerpt: '' } }
   const dev = { watchRun: (...a) => watched.push(['old', ...a]), watchRunAt: (...a) => watched.push(['at', ...a]) }
-  const { B, calls, sandbox } = load([job], { WizardOSDevice: dev, setInterval: fn => { timers.push(fn); return 1 }, WizLive: { session: () => ({ title: 'Quote', status: 'completed' }) } })
+  let clock = Date.now()
+  class FakeDate extends Date { static now() { return clock } }
+  const { B, calls, sandbox } = load([job], { Date: FakeDate, WizardOSDevice: dev, setInterval: fn => { timers.push(fn); return 1 }, WizLive: { session: () => ({ title: 'Quote', status: 'completed' }) } })
   await B.refresh()
   assert.deepEqual(watched, [['at', 'wizard_t', 'wzb_b', '◷ Snooze · Quote', String(Date.parse('2099-01-01T00:00:00.000Z'))]])
   const reads = () => calls.filter(c => c.method === 'GET').length
@@ -94,7 +96,11 @@ test('wizard-os#648: the phone watcher gets the return time, and a hidden phone 
   sandbox.document.hidden = true
   for (const fn of timers) fn()
   await new Promise(r => setTimeout(r, 0))
-  assert.equal(reads(), before, 'a hidden phone page reads no schedules')
+  assert.equal(reads(), before, 'a hidden phone page reads no schedules every 15 s')
+  clock += 10 * 60000 + 1
+  for (const fn of timers) fn()
+  await new Promise(r => setTimeout(r, 0))
+  assert.equal(reads(), before + 1, 'every 10 minutes it still looks, so a Snooze set on another device is armed')
   sandbox.document.hidden = false
   for (const fn of timers) fn()
   await new Promise(r => setTimeout(r, 0))
