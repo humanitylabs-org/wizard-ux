@@ -3073,7 +3073,8 @@
     if (pageSlug) { newWin({app:'pages',appId:'pages',pageSlug}); return true; }
     const a = u.origin === location.origin && appAt(u.href); if (!a) return false;
     const rel = u.pathname + u.search + u.hash, same = new URL(a.url, location.href);
-    if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false }); return true; }
+    // (a #fragment on the app's own address is a deep link, e.g. /wizardos-tracker/#item/…: the window goes there too)
+    if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false, ...(u.hash && u.hash !== same.hash ? { path: rel } : {}) }); return true; }
     return openAppLink(rel, a.name);
   };
   if (LINKS) window.WizLinks.intercept(document.body, LINKS);
