@@ -29,7 +29,8 @@
     "wizard/chat-channels",
     "wizard/graceful-restart",
     "wizard/draft-marks",
-    "wizard/app-updates-hourly"
+    "wizard/app-updates-hourly",
+    "wizard/clear-chat-notifications"
   ],
   "defaults": [
     "wizard/unified-inbox",

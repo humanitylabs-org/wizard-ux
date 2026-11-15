@@ -1504,5 +1504,29 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             int d = Math.max(5, Math.min(ms, 60));
             v.vibrate(VibrationEffect.createOneShot(d, VibrationEffect.DEFAULT_AMPLITUDE));
         }
+
+        /* ---- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications, off by default):
+         * the shell turns the listener on with the switch, asks for Notification access, and hands it chats the owner
+         * read in Messenger (notify/BridgedNotificationListener). ---- */
+        @JavascriptInterface
+        public String chatNotifyState() { return ai.wizards.os.notify.BridgedNotificationListener.state(MainActivity.this); }
+        @JavascriptInterface
+        public void chatNotifySwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, on);
+        }
+        @JavascriptInterface
+        public void chatNotifyAccess() {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            runOnUiThread(() -> {
+                ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, true);
+                ai.wizards.os.notify.BridgedNotificationListener.openAccess(MainActivity.this);
+            });
+        }
+        @JavascriptInterface
+        public int chatNotifyRead(String json) {
+            if (MainActivity.this instanceof AppSessionActivity) return 0;
+            return ai.wizards.os.notify.BridgedNotificationListener.chatRead(json);
+        }
     }
 }
