@@ -89,7 +89,7 @@
   window.__wosSessionCheckpoint = checkpoint;
   window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
   window.__wosNativeBack = () => {
-    // Wizard's own share sheets sit above the app that opened them (wizard-music#67): one Back closes the sheet
+    // Wizard's own share sheets sit above the app that opened them (a song shared from Now Playing): one Back closes the sheet
     // and leaves the app exactly where it was, as in the full shell (WizEscapeBack owners 'share-wizard', 'share').
     if (window.WizShareWizard?.isOpen) { const r = window.WizShareWizard.back?.(); return typeof r === 'string' && r ? r : 'share-wizard'; }
     if (window.WosShareSheet?.isOpen?.()) { const r = window.WosShareSheet.back(); return typeof r === 'string' && r ? r : 'share'; }
