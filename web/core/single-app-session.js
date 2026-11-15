@@ -140,13 +140,14 @@
     const opaque = !!window.WizBrowserBoundary?.enabled;
     if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
     // Its saved settings ride along as the frame's name, set before the frame exists (the page reads them as it loads).
-    if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(id); if (seed) frame.name = seed; }
+    // A pin made before its app was renamed (ux#1471) resolves through the registry's aliases: services use the app's current id.
+    if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(next.id || id); if (seed) frame.name = seed; }
     const saved = read();
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
     win.appendChild(frame);
     const mountedFrame = frame;
-    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url,
+    detach = window.WizAppServices?.attach(frame, { appId:next.id || id, path:next.url,
       openThread: (sid, opts) => chats?.openHosted(wid, frame, sid, opts) === true,
       isVisible: () => !!frame?.isConnected && !chats?.isHosted(wid) && frame === mountedFrame && document.visibilityState === 'visible',
       isFront:() => frame === mountedFrame && mountedFrame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible' && document.hasFocus(),
