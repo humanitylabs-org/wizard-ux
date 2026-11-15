@@ -80,3 +80,17 @@ test('route checkpoint is synchronous before immediate Home/process death, not t
  const saved=JSON.parse(f.data.get(f.key));assert.equal(saved.href,'https://box.test/wizard-signal/#sources');assert.equal(saved.state.route,'sources');
  assert.equal([...f.data.keys()].some(k=>/^wos\.(wins4|strip|idx4|recent)$/.test(k)),false);
 });
+test('single task: Back closes Wizard\'s share sheet before the app gets it (wizard-music#67)',async()=>{
+ let sheet=true,wizardSheet=false,asked=0;
+ const f=fixture('wizard-signal',null,{
+  WosShareSheet:{isOpen:()=>sheet,back(){if(!sheet)return null;sheet=false;return 'share-sheet'}},
+  WizShareWizard:{get isOpen(){return wizardSheet},back(){wizardSheet=false;return 'share-wizard'}}});
+ f.window.WizAppServices.back=()=>{asked++;return 'handled'};
+ const frame=await f.ready();frame.events.load();
+ // Now Playing → Share → Back: only the sheet closes; the app (Now Playing) is not asked.
+ assert.equal(f.window.__wosNativeBack(),'share-sheet');assert.equal(sheet,false);assert.equal(asked,0);
+ // The next Back is the app's own (closes Now Playing).
+ assert.equal(f.window.__wosNativeBack(),'app');assert.equal(asked,1);
+ wizardSheet=true;
+ assert.equal(f.window.__wosNativeBack(),'share-wizard');assert.equal(wizardSheet,false);assert.equal(asked,1);
+});
