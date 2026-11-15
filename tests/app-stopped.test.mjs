@@ -65,3 +65,12 @@ test('an app on another origin cannot be asked: the listed status decides until 
  for(const h of f.panel().children[2].listeners.click) await h();
  await f.fire(); assert.equal(f.panel(),null,'a stale list costs one tap, never a locked app');
 });
+test('an empty page whose app answers by the time it is asked loads again once (no blank window left)',async()=>{
+ const f=fixture({answer:{status:200,headers:{}}}); await f.fire();
+ assert.equal(f.panel(),null); assert.deepEqual(f.loads,['https://wizard.example/messenger/']);
+ await f.fire(); assert.equal(f.loads.length,1,'only once: a page that is really empty never loops');
+});
+test('an opaque page (browser boundary) that answers is not reloaded',async()=>{
+ const f=fixture({answer:{status:200,headers:{}}}); f.frame.contentDocument=null; await f.fire();
+ assert.equal(f.panel(),null); assert.equal(f.loads.length,0);
+});

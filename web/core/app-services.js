@@ -166,8 +166,9 @@
     if (!href || href === 'about:blank') href = frame.getAttribute?.('src') || frame.src || '';
     try { return new URL(href, ORIGIN); } catch (_) { return null; }
   }
+  // 'opaque' when the page can't be read (browser boundary), else whether it loaded with nothing in it.
   function blankPage(frame) {
-    try { const d = frame.contentDocument; if (!d) return true; const b = d.body; return !b || (!b.childElementCount && !String(b.textContent || '').trim()); } catch (_) { return true; }
+    try { const d = frame.contentDocument; if (!d) return 'opaque'; const b = d.body; return !b || (!b.childElementCount && !String(b.textContent || '').trim()); } catch (_) { return 'opaque'; }
   }
   async function answersDown(href) {
     if (typeof fetch !== 'function') return false;
@@ -183,10 +184,17 @@
   async function stoppedCheck(st, early) {
     const frame = st.frame, check = st.stopCheck = (st.stopCheck || 0) + 1, u = pageUrl(frame);
     const listed = listedStopped(st) && !st.stopTried;
-    let down = listed;
-    if (!early && u && u.origin === ORIGIN && within(u, st.url)) down = blankPage(frame) ? await answersDown(u.href) : false;
+    let down = listed, blank = false;
+    if (!early && u && u.origin === ORIGIN && within(u, st.url)) down = (blank = blankPage(frame)) ? await answersDown(u.href) : false;
     if (frames.get(frame) !== st || check !== st.stopCheck) return;
     if (down || !early) stoppedShow(st, down);
+    if (down) st.stopReloaded = false;
+    // The app came up between the empty answer and the check: load it again once, so no blank window is left.
+    else if (blank === true && !st.stopReloaded) { st.stopReloaded = true; stoppedReload(st, u); }
+  }
+  function stoppedReload(st, u) {
+    const frame = st.frame, href = u ? u.href : st.url.href;
+    try { expectLoad(frame); frame.contentWindow.location.replace(href); } catch (_) { frame.src = href; }
   }
   const STOP_CSS = '.wos-app-stopped{position:absolute;inset:0;z-index:4;display:grid;place-content:center;justify-items:center;gap:10px;padding:0 24px;text-align:center;background:var(--bg,Canvas);color:var(--ink,CanvasText)}.wos-app-stopped h3{margin:0;font-size:1.1rem}.wos-app-stopped p{margin:0;max-width:32ch;color:var(--ink-2,GrayText);font-size:.9rem;line-height:1.45}.wos-app-stopped button{margin-top:6px;padding:.6em 1.2em;border-radius:999px;border:1px solid var(--line-2,currentColor);background:transparent;color:inherit;font:inherit;font-weight:650}';
   function stoppedShow(st, on) {
@@ -204,8 +212,7 @@
       try { await window.WizCore?.refreshApps?.(); } catch (_) {}
       if (frames.get(frame) !== st) return;
       st.stopTried = true; stoppedShow(st, false);
-      const u = pageUrl(frame);
-      try { expectLoad(frame); frame.contentWindow.location.replace(u ? u.href : st.url.href); } catch (_) { frame.src = u ? u.href : st.url.href; }
+      stoppedReload(st, pageUrl(frame));
     });
     el.append(h, p, b); host.appendChild(el); st.stopEl = el;
   }
