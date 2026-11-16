@@ -1,0 +1,11 @@
+{
+  "id": "wizard/graceful-restart",
+  "name": "Calm Agent Service restarts",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "While Wizard waits to restart its Agent Service until running chats finish, the shell shows a quiet \"Restarting when chats finish\" note instead of errors, a message sent meanwhile shows as saved and sends after the restart, and if the restart is overdue you see what is still running and choose Wait longer or Restart now. Needs the box's graceful restart (wizard-ux issue 1362)."
+}

@@ -35,22 +35,37 @@
       if (host && !old) { const p = document.createElement('p'); p.className = 'own-view-note'; p.setAttribute('role', 'status'); p.textContent = text; f.parentElement.insertBefore(p, f); }
     }
   }
+  // Browser boundary (wizard-os#133): a sandboxed (opaque) own screen can't be read by the shell, and its messages come
+  // from origin `null`. Its readiness is then the Service's answer for the page plus its boot script's ready message.
+  const opaque = f => !!window.WizBrowserBoundary?.enabled && f.hasAttribute('sandbox') && !String(f.getAttribute('sandbox')).split(/\s+/).includes('allow-same-origin');
+  // Every opaque document is proved again: from its second load on, only a message from a document that started
+  // after the previous load (its boot script's `at`, the document's time origin) counts, and a new watchdog runs.
+  const now = () => performance.timeOrigin + performance.now();
+  const watchdog = (f, id) => { clearTimeout(f._ownTimer); f._ownTimer = setTimeout(() => { if (f.isConnected && !f.dataset.ownReady) failure(id, 'index.html'); }, 12000); };
   async function watch(f) {
     const a = app(f.dataset.ownApp); if (!own(a) || mounted.has(f) || broken.has(a.id)) return;
-    mounted.add(f);
-    const timer = setTimeout(() => { if (f.isConnected && !f.dataset.ownReady) failure(a.id, 'index.html'); }, 12000);
-    f.addEventListener('load', () => {
-      if (!f.isConnected || broken.has(a.id)) { clearTimeout(timer); return; }
+    mounted.add(f); f._ownApi = a.view.api || ''; f._ownSince = -Infinity; f._ownLast = undefined;
+    watchdog(f, a.id);
+    if (f._ownOnLoad) { f.removeEventListener('load', f._ownOnLoad); f.removeEventListener('error', f._ownOnError); }
+    f.addEventListener('load', f._ownOnLoad = () => {
+      if (!f.isConnected || broken.has(a.id)) { clearTimeout(f._ownTimer); return; }
+      if (opaque(f)) {
+        const prev = f._ownLast; f._ownLast = now();
+        if (prev !== undefined) {
+          f._ownSince = prev;
+          if (!(f._ownReadyAt > prev)) { delete f.dataset.ownReady; watchdog(f, a.id); }
+        }
+        return;
+      }
       // HTTP error documents have load events too. A successful own document has
       // the Service's boot script (also required by the readiness watchdog).
       try { if (!f.contentDocument?.querySelector('script[src="/wizard/views/_boot.js"]')) failure(a.id, 'index.html'); } catch (_) { failure(a.id, 'index.html'); }
     });
-    f.addEventListener('error', () => failure(a.id, 'index.html'));
+    f.addEventListener('error', f._ownOnError = () => failure(a.id, 'index.html'));
     try {
       const r = await fetch(a.view.url, { credentials: 'same-origin', cache: 'no-store' });
       if (f.isConnected && (!r.ok || !(r.headers.get('content-type') || '').includes('text/html'))) failure(a.id, 'index.html');
     } catch (_) { if (f.isConnected) failure(a.id, 'index.html'); }
-    f._ownTimer = timer;
   }
   const scan = () => document.querySelectorAll('iframe[data-own-app]').forEach(watch);
   addEventListener('wizard:apps', () => {
@@ -61,15 +76,25 @@
       const badge = bar?.querySelector('[data-own-original]');
       if (own(a) && !badge) bar?.insertAdjacentHTML('beforeend', marker(a));
       if (!own(a)) { badge?.remove(); host?.querySelector('.own-view-note')?.remove(); broken.delete(a.id); }
-      if (url !== f.getAttribute('src')) {
-        clearTimeout(f._ownTimer); delete f.dataset.ownReady; mounted.delete(f); f.src = url; watch(f);
+      // A sandboxed own screen whose API folder (view.api) changed, e.g. first known after a cached app list, loads
+      // again so its first api/ calls go there.
+      const api = own(a) && opaque(f) && f._ownApi !== undefined && (a.view.api || '') !== f._ownApi;
+      if (url !== f.getAttribute('src') || api) {
+        clearTimeout(f._ownTimer); delete f.dataset.ownReady; delete f._ownReadyAt; mounted.delete(f); f.src = url; watch(f);
       }
     }
   });
   addEventListener('message', e => {
-    if (e.origin !== location.origin || !['wizard:own-view:ready', 'wizard:own-view:error'].includes(e.data?.type)) return;
+    if (!['wizard:own-view:ready', 'wizard:own-view:error'].includes(e.data?.type)) return;
     const f = [...document.querySelectorAll('iframe[data-own-app]')].find(f => f.contentWindow === e.source);
+    if (!f || (e.origin !== location.origin && !(e.origin === 'null' && opaque(f)))) return;
     const a = f && app(f.dataset.ownApp); if (!own(a) || broken.has(a.id) || !f.getAttribute('src')?.startsWith(a.view.url)) return;
+    if (e.origin === 'null') {
+      // A sandboxed document's message: an earlier document's (it started before the previous load) is stale.
+      const at = typeof e.data.at === 'number' ? e.data.at : now();
+      if (!(at > f._ownSince)) return;
+      f._ownReadyAt = Math.max(f._ownReadyAt || -Infinity, at);
+    }
     if (e.data.type === 'wizard:own-view:error') failure(a.id, e.data.file);
     else { f.dataset.ownReady = 'true'; clearTimeout(f._ownTimer); }
   });

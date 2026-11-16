@@ -18,7 +18,7 @@ const chatsWinSrc = desktop.match(/^  const chatsWin = .+;$/m)?.[0];
 assert.ok(chatsWinSrc, 'desktop resolves any Chats window by id');
 
 // agent: the channel's own agent (main, a host-profile, a container or a restricted agent) — each keeps its own channel.
-function shell({ foreground, feed = null, feedShown = false, agent = 'hermes', chan = { id: 'apps', name: 'WizardOS Apps', agent }, rowChannel = '' } = {}) {
+function shell({ view = 'channels', foreground, feed = null, feedShown = false, agent = 'hermes', chan = { id: 'apps', name: 'WizardOS Apps', agent }, rowChannel = '' } = {}) {
   const calls = [], composed = [];
   const feedWin = { id: 'feed-1::side', app: 'chats', get thread() { return null; } };
   const ctx = {
@@ -30,6 +30,7 @@ function shell({ foreground, feed = null, feedShown = false, agent = 'hermes', c
     LIVE: { session: id => ({ id }), isWorking: () => false },
     W: foreground ? { [foreground.id]: foreground } : {}, sideWin: () => undefined, listWin: () => feedWin,
     CHATS: {
+      chanView: () => view,
       chanOpen: w => (w?.chan ? chan : null),
       chanSpaceOf: w => (w && !w.thread && (w.chan || w === feedWin) ? (chan.general ? '' : chan.id) : null),
       channelOf: () => rowChannel,
@@ -62,6 +63,16 @@ for (const agent of ['hermes', 'host-ops', 'box', 'locked']) {
     assert.equal(s.chanPost(), true); assert.deepEqual(j(s.composed), ['feed-1::side'], 'New chat goes to the feed box');
   });
 }
+
+// wizard-ux issue 1310 (James, 12 Nov 2026): the AI apps sidebar on Activity with General's feed left in the column.
+test('the sidebar on Activity: ⌥V, the orb and New chat start a normal new chat, never a post in the leftover feed', async () => {
+  const s = shell({ view: 'activity', foreground: { id: 'main', app: 'chats', thread: '__new__' }, feed: { id: '__general__', name: 'General' }, feedShown: true });
+  assert.equal(s.chanFront(), null);
+  await s.talkNew('⌥V'); assert.deepEqual(j(s.calls), [['talk', 'start', true, '⌥V']]);
+  assert.equal(s.chanPost(), false); assert.equal(s.composed.length, 0, 'General\'s box is not focused');
+  const back = shell({ view: 'channels', foreground: { id: 'main', app: 'chats', thread: '__new__' }, feed: { id: '__general__', name: 'General' }, feedShown: true });
+  assert.equal(back.chanPost(), true, 'back on Channels › General: + focuses its box'); assert.deepEqual(j(back.composed), ['feed-1::side']);
+});
 
 test('a post\'s thread open from a channel: ⌥V replies in that thread; New chat is not hijacked', async () => {
   const c = shell({ foreground: { id: 'w1', app: 'chats', thread: 'post-7', chan: { id: 'apps' } }, rowChannel: 'WizardOS Apps' });
@@ -115,7 +126,7 @@ test('the orb / ⌥S path and New chat keys reach the channel: wiring in desktop
   assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),/);
   assert.match(read('web/core/skin-host.js'), /channelPost: \(\) => live\(\) \? !!shell\.chatChannelPost\?\.\(\) : false,/);
   assert.match(read('web/app.js'), /chatChannelPost: \(\) => \{ const w = W\[desks\[idx\]\?\.focus\]; return w\?\.app === 'chats' && !w\.thread && !!CHATS\.chanCompose\?\.\(w\.id\); \},/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelPost\?\.\(\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box');
+  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelView\?\.\(\) !== 'activity' && \(api\.sessions\.channelPost\?\.\(\) \|\| api\.sessions\.channelNew\?\.\(\)\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box or the new-channel form');
   const aad = read('web/layouts/ai-apps/desktop.js');
   assert.match(aad, /api\.listen\(newBtn, 'click', plus\); api\.listen\(rNew, 'click', plus\);/);
   assert.match(aad, /code === 'KeyN' && !sh\) return once\(plus\)/);

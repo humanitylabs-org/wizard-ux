@@ -50,9 +50,11 @@ const refCache = new Map();
             return r.fulfill({ status: 404, body: 'Missing fixture asset' });
           }
           if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
-          const row = { id: 'qa-thread', title: 'Synthetic archive conversation', runtime: 'direct', status: 'completed', updated_at: '2026-11-06T10:00:00Z', updatedAt: '2026-11-06T10:00:00Z', message_count: 2, messageCount: 2 };
+          // Dated from now: a fixed day aged out of the sidebar's 7-day recent window on 13 Nov 2026 (same trap as PR #1392).
+          const AT = new Date(Date.now() - 2 * 864e5).toISOString(), TS = Math.floor(Date.parse(AT) / 1000);
+          const row = { id: 'qa-thread', title: 'Synthetic archive conversation', runtime: 'direct', status: 'completed', updated_at: AT, updatedAt: AT, message_count: 2, messageCount: 2 };
           if (u.pathname === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: [row], has_more: false } });
-          if (u.pathname.includes('/sessions/qa-thread/messages')) return r.fulfill({ json: { messages: [{ role: 'user', content: 'Synthetic question', timestamp: 1793959200 }, { role: 'assistant', content: 'Synthetic answer remains visible', timestamp: 1793959201 }] } });
+          if (u.pathname.includes('/sessions/qa-thread/messages')) return r.fulfill({ json: { messages: [{ role: 'user', content: 'Synthetic question', timestamp: TS }, { role: 'assistant', content: 'Synthetic answer remains visible', timestamp: TS + 1 }] } });
           if (u.pathname.endsWith('/sessions/qa-thread')) return r.fulfill({ json: { session: row } });
           return r.fulfill({ json: ownerRead(u.pathname) });
         });

@@ -5,7 +5,9 @@
 (() => {
   'use strict';
   const CACHE = 'wizard-os-home-registry', URL_ = '/wizard-os-home/offline-apps.json';
-  const idsOf = list => (list || []).filter(a => a?.homeScreen?.offline && /^[a-z0-9][a-z0-9-]{0,63}$/.test(String(a.id))).map(a => a.id).sort();
+  // A renamed app's earlier ids (wizard.md renamed_from) count too: a pin made under the old id opens offline (ux#1471).
+  const idsOf = list => [...new Set((list || []).filter(a => a?.homeScreen?.offline && /^[a-z0-9][a-z0-9-]{0,63}$/.test(String(a.id)))
+    .flatMap(a => [a.id, ...(a.renamedFrom || []).filter(v => /^[a-z0-9][a-z0-9-]{0,63}$/.test(String(v)))]))].sort();
   async function publish(list) {
     if (!globalThis.caches) return false;
     // A registry that carries no installed app at all (offline cache miss) must not erase the last good list.

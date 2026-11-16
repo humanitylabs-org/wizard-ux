@@ -91,8 +91,3 @@ test('Machines home / data.read.sessions: the Ready count is the unread pill, no
     assert.doesNotMatch(line, /\(G\.ready \|\| \[\]\)\.length/, f);
   }
 });
-
-test('the word beside a Chats number is "unread", never "ready"', () => {
-  for (const f of ['web/layouts/orb/phone.js', 'web/layouts/apps/layout.js', 'web/layouts/apps/desktop.js']) assert.doesNotMatch(src(f), /\$\{n\} ready/, f);
-  assert.match(src('web/layouts/orb/phone.js'), /\$\{n > 99 \? '99\+' : n\} unread/);
-});

@@ -23,9 +23,24 @@ test('full mode is a last-priority surface, after recording and transient overla
  const start=ui.indexOf('  api.back.surface?.(() => {'), end=ui.indexOf('    const a = doc.activeElement;',start);
  assert.ok(start>0 && end>start);
  const prefix=ui.slice(start,end).replace('  api.back.surface?.(() => {','');
- const surface=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode,doc:{activeElement:null},pane:null,lastSurface:'chat',chatsEl:()=>null});
+ const surface=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode,fullFrom:'tiled',doc:{activeElement:null},pane:null,lastSurface:'chat',chatsEl:()=>null});
  registry.push(()=>{closes++;});registry.run({recording:()=>true,surface});assert.equal(mode,'full');assert.equal(closes,0);
  registry.run({surface});assert.equal(closes,1);assert.equal(mode,'full');registry.run({surface});assert.equal(mode,'tiled');
+ // full screen entered from 50/50 or centred: Esc goes back to that view, not tiled (wizard-ux issue 1325)
+ for(const from of ['pair','centre']){mode='full';const back=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode,fullFrom:from,doc:{activeElement:null},pane:null,lastSurface:'chat',chatsEl:()=>null});assert.equal(back(),true);assert.equal(mode,from,'Esc from full goes back to '+from);}
+});
+// windowMode remembers the view full screen came from (wizard-ux issue 1325)
+test('entering full screen remembers the view it came from; tiled by default', () => {
+ const window = { WizCore: {}, localStorage: { getItem: () => null, setItem() {} } };
+ vm.runInNewContext(coreSource, { window }); const panes = window.WizCore.panes;
+ const start=ui.indexOf('  function windowMode('), end=ui.indexOf('  function modeBar(',start);
+ const ctx={panes,dockEl:{},pane:null,secondEl:null,flip:(n,fn)=>fn()};vm.createContext(ctx);
+ vm.runInContext(ui.slice(start,end)+';this.windowMode=windowMode;this.from=()=>fullFrom;',ctx);
+ assert.equal(ctx.from(),'tiled');
+ ctx.windowMode('pair','app');ctx.windowMode('full','app');assert.equal(ctx.from(),'pair');
+ ctx.windowMode('full','chats');assert.equal(ctx.from(),'pair','full again keeps the view before full');
+ ctx.windowMode('centre','chats');ctx.windowMode('full','chats');assert.equal(ctx.from(),'centre');
+ ctx.windowMode('tiled','chats');ctx.windowMode('full','chats');assert.equal(ctx.from(),'tiled');
 });
 test('shifted mode shortcuts precede app dispatch but yield to existing modal guards; native plain Alt keys unchanged',()=>{
  assert.match(ui,/MODE_KEYS = \{ KeyU: 'centre', KeyJ: 'pair', KeyF: 'full', KeyT: 'tiled' \}/);

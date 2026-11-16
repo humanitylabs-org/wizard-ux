@@ -202,7 +202,7 @@
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
         const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8);
-        if (cur.a?.text) cur.notes.push(cur.a.text);
+        if (cur.a?.text) { cur.notes.push(cur.a.text); (cur.said ||= []).push(cur.a); }
         cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
@@ -210,7 +210,31 @@
         if (kind === 'failed_turn') cur.a.failed = true;
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
+    for (const t of out) { liftAnswer(t); delete t.said; }
     return out;
+  }
+  // The model often writes its whole answer in a message that also carries a tool call (a notes patch), then ends the
+  // turn with a one-line postscript. That answer must not fold into the work log behind the postscript (ux#1319):
+  // a short final reply with a much longer earlier reply in the same turn shows both, the long one first.
+  const POSTSCRIPT_MAX = 500, LIFT_MIN = 1000;
+  function liftAnswer(t) {
+    const a = t.a, said = t.said;
+    if (!a || !a.final || a.failed || !said?.length || String(a.text).length >= POSTSCRIPT_MAX) return;
+    const long = said.reduce((x, y) => (String(y.text).length > String(x.text).length ? y : x));
+    const n = String(long.text).length;
+    if (n < LIFT_MIN || n < 3 * String(a.text).length) return;
+    const k = t.notes.lastIndexOf(long.text);
+    if (k >= 0) t.notes.splice(k, 1);
+    // Both messages number their inline images from wizard-inline-0: give the earlier one's markers their own names
+    // (trailing dashes, as helm does, so md's MEDIA_IMAGE still places them).
+    let text = String(long.text); const media = { ...(a.inlineMedia || {}) };
+    for (const [m, url] of Object.entries(long.inlineMedia || {})) {
+      let k2 = m; while (k2 in media || String(a.text).includes(`"${k2}"`) || (k2 !== m && text.includes(`"${k2}"`))) k2 += '-';
+      if (k2 !== m) text = text.split(`"${m}")`).join(`"${k2}")`);
+      media[k2] = url;
+    }
+    t.a = { ...a, text: `${text}\n\n${a.text}`, plainText: `${long.plainText ?? long.text}\n\n${a.plainText ?? a.text}`,
+      inlineMedia: media, ...(!a.ask && long.ask ? { ask: long.ask } : {}) };
   }
   // What the work between a request and its answer was made of (the work receipt reads this, chat-work.js):
   // named tool calls (display_label from the Agent Service), their results, the plan and clarify questions.
@@ -507,11 +531,43 @@
       return kept.text === keptText && JSON.stringify(kept.files) === JSON.stringify(keptFiles) && JSON.stringify(kept.reply) === JSON.stringify(cur.reply || rp);
     },
     clear(k) { if (!k) return; const all = this.all(); if (k in all) { delete all[k]; write(all); } },
+    // The keys that hold a draft worth showing (words, a file or a reply card), read once per stored value: list rows ask
+    // this for every row on every paint (draft marks, wizard-ux issue 1445).
+    keys() {
+      let raw = ''; try { raw = localStorage.getItem(DRAFT_KEY) || ''; } catch (e) {}
+      if (raw !== keysRaw) { keysRaw = raw; keysSet = draftKeys(this.all()); }
+      return keysSet;
+    },
   };
+  let keysRaw = null, keysSet = new Set(), keysSig = null;
+  function draftKeys(all) {
+    const out = new Set();
+    for (const k of Object.keys(all || {})) {
+      const d = all[k];
+      if (d && (String(typeof d.text === 'string' ? d.text : '').trim() || (Array.isArray(d.files) && d.files.some(f => f && SAFE_ID.test(String(f.id || '')))) || reply.clean(d.reply))) out.add(k);
+    }
+    return out;
+  }
+  // A key gained or lost its draft: lists showing draft marks repaint (wos:drafts-keys), never on each keystroke.
+  function keysMoved(all) {
+    const sig = [...draftKeys(all)].sort().join('\n');
+    if (keysSig === null) { keysSig = sig; return; }
+    if (sig === keysSig) return;
+    keysSig = sig;
+    try { window.dispatchEvent(new CustomEvent('wos:drafts-keys')); } catch (_) {}
+  }
+  // Every draft is kept until its own send, discard or thread deletion: no count cap drops the oldest ones (wizard-ux
+  // issue 1444). A device that can't store them says so once a minute (wos:drafts-unsaved; Chats shows it), while the
+  // words stay in the box on screen. A draft must never block typing.
+  let unsavedAt = 0;
   function write(all) {
-    const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0));
-    for (const x of keys.slice(200)) delete all[x];
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); return true; } catch (e) { return false; /* a draft must never block typing */ }
+    if (keysSig === null) keysMoved(drafts.all()); // the state before this first write
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); keysMoved(all); return true; }
+    catch (e) {
+      const now = Date.now();
+      if (now - unsavedAt > 60000) { unsavedAt = now; try { window.dispatchEvent(new CustomEvent('wos:drafts-unsaved', { detail: { reason: String(e?.name || 'error') } })); } catch (_) {} }
+      return false;
+    }
   }
 
   /* ================= copy / share / save ================= */

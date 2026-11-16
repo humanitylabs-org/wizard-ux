@@ -1,0 +1,11 @@
+{
+  "id": "wizard/draft-marks",
+  "name": "Draft marks in Activity and Channels",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "With Channels on, an Activity row whose thread has a saved, unsent draft says \"✎ Draft\" ahead of its last message, and a channel in the Channels list whose message box holds one wears the same pencil, so you can see where you left words half-typed. Words, an attached file or a reply card all count; the mark comes with the first keystroke and goes on send or discard, without a reload (wizard-ux issue 1445)."
+}

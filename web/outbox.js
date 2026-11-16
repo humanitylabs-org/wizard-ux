@@ -508,6 +508,12 @@
       // Refuse to mutate without a durable dispatch journal, even if audio was uploaded.
       halt(it);
       if (await holdLate(it)) return;
+      // Graceful restart (wizard/graceful-restart): a steer has no idempotency ledger, so never dispatch one into a
+      // restart that is about to happen (ready, or the owner chose Restart now) or is happening (service down). Nothing
+      // left: it waits like any send and, once the service is back, the rejected-steer path below makes it a same-thread
+      // turn under its own Idempotency-Key. While turns still run (waiting/overdue) a steer reaches them as usual.
+      const restartNear = window.WizReach?.restart?.();
+      if (restartNear && (restartNear.phase === 'restarting' || restartNear.phase === 'ready' || restartNear.now)) throw new HttpError(503, 'Saved · sends after Wizard restarts');
       it.steerDispatch = 'started'; admitting.add(it.id); await put(it);
       if (!it.durable) { delete it.steerDispatch; throw new HttpError(409, 'Device save failed · steering not dispatched; original kept'); }
       let receipt;
@@ -591,12 +597,15 @@
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
     if (!runId) throw new HttpError(502, 'Wizard returned no send receipt');
-    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null });
+    // A 202 the box holds for a graceful restart (queue_reason restart_pending, wizard/graceful-restart): saved there,
+    // not running yet. The thread then says so (live.js PEND -> s.restartPending), never Starting… or Working.
+    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null, restartPending: run.status === 'queued' && run.queue_reason === 'restart_pending' });
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
     delete it.useServerCopy;
     Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
+    if (res.restartPending) it.restartPending = true; else delete it.restartPending;
     delete it.audio; delete it.pendingBlobs;
     await put(it);
     admitting.delete(it.id);
@@ -623,7 +632,9 @@
       if (transcriptionTimedOut(it, e)) { it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.'; }
       // The device lost this recording's bytes: no network retry can fix that, so stop and say so plainly.
       else if (e.localAudio) { it.state = 'failed'; it.nextAt = 0; it.audioUnreadable = true; }
-      else if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      // During a known Agent Service restart (wizard/graceful-restart) the outage lasts seconds: try again soon, with
+      // the same Idempotency-Key (it.id), so the message lands once the service is back instead of minutes later.
+      else if (transient(e)) { it.state = 'waiting'; const wait = BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; it.nextAt = now() + (window.WizReach?.restart?.() ? Math.min(3000, wait) : wait); }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }
@@ -643,7 +654,8 @@
         if (await holdLate(due)) continue;
         await attempt(due);
       }
-      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3) await del(it.id);
+      // A send a graceful restart still holds is kept until the restart is over (live.js pendOver; wizard-ux issue 1362).
+      for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3 && !(it.restartPending && window.WizReach?.restart?.())) await del(it.id);
     } finally { pumping = false; schedule(); }
   }
   function schedule(ms) {
@@ -686,6 +698,7 @@
     const dock = document.querySelector('#voice') || document.querySelector('.dbar') || document.querySelector('#voicePill')?.parentElement;
     if (dock && !hosts.length) hosts.push(dock);
     for (const el of document.querySelectorAll('[data-custody-notice]')) if (!hosts.includes(el.parentElement)) el.remove();
+    window.WizReach?.paintRestart?.(hosts); // graceful restart note (wizard/graceful-restart), same hosts
     for (const host of hosts) {
       let el = host.querySelector('[data-custody-notice]');
       if (!text) { el?.remove(); continue; }
@@ -835,6 +848,9 @@
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
           pendingBlobs: { ...(it.pendingBlobs || {}), ...keepPending(o.files) } });
       }
+      // A follow-up in a chat whose last send a graceful restart holds (WizReach.restartHeld) is a new turn in the same
+      // chat, saved like that send, never a steer of the saved run (its message box reads as idle; wizard-ux issue 1432).
+      if (it.steerRunId && it.kind === 'reply' && window.WizReach?.restartHeld?.(window.WizLive?.session?.(it.sessionId))) it.steerRunId = '';
       // Only the delivery caller (including an explicit Send-to-agent choice) may
       // promote a command. Recovery and reconnect never create this authorization.
       it.deliveryRequested = true;
@@ -961,6 +977,15 @@
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
   addEventListener('wos:sending-paused', e => { if (!e.detail?.paused) wake(); });
+  // A graceful restart is over (WizReach dispatches wizreachchange): sends it held are ordinary sent receipts again, so
+  // a later restart never reads them as held, and the cleanup that kept them for the hold runs now (issue 1362).
+  addEventListener('wizreachchange', () => {
+    if (window.WizReach?.restart?.()) return;
+    const held = [...items.values()].filter(it => it.restartPending);
+    if (!held.length) return;
+    for (const it of held) delete it.restartPending;
+    Promise.all(held.map(it => put(it).catch(() => {}))).then(() => { emit(); pump(); });
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.WosOutbox = api;
   load().then(() => schedule(0));

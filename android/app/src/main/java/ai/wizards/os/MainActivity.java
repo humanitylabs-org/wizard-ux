@@ -88,6 +88,67 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private android.net.ConnectivityManager.NetworkCallback netWatch;
     /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
     private ai.wizards.os.device.DeviceBridge device;
+    private Bridge shellBridge; // window.WizardOSNative
+    private NativeGate gate; // non-null: the browser owner boundary is on and the bridges are the shell origin's only
+    // Every open Wizard window (the shell, pinned app sessions): all of them gate at once when the boundary turns on.
+    private static final java.util.Set<MainActivity> LIVE = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    /**
+     * WizardOSNative and WizardOSDevice. Off (the default): both go into the WebView as they always have, which puts them
+     * in every frame. With the browser owner boundary on for this box (the shell said so, Bridge.browserBoundary), app
+     * windows are sandboxed and must not reach them, so only the gate goes in and the shell's own origin gets both back
+     * from a document-start script (NativeGate; wizard-os#133, issue 1430).
+     */
+    private void installNativeBridges(WebView target) {
+        gate = null;
+        LIVE.add(this);
+        String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
+        if (NativeGate.on(this, origin)) { armGate(target, origin); return; }
+        target.addJavascriptInterface(shellBridge, "WizardOSNative");
+        target.addJavascriptInterface(device, "WizardOSDevice");
+    }
+
+    /** Takes effect on the next page load. Without document-start scripts (a very old WebView) the shell gets no bridge. */
+    private void armGate(WebView target, String origin) {
+        target.removeJavascriptInterface("WizardOSNative");
+        target.removeJavascriptInterface("WizardOSDevice");
+        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            android.util.Log.w("WizardOSGate", "browser boundary on, WebView lacks DOCUMENT_START_SCRIPT: no native bridge");
+            return;
+        }
+        NativeGate g = new NativeGate(NativeGate.named(shellBridge, device));
+        try {
+            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(target, g.shim(), java.util.Collections.singleton(origin));
+        } catch (RuntimeException e) {
+            android.util.Log.w("WizardOSGate", "browser boundary on, no document-start script: no native bridge", e);
+            return;
+        }
+        target.addJavascriptInterface(g, NativeGate.NAME);
+        gate = g;
+    }
+
+    /** The shell (core/shell-token.js, top-level page only) says whether this box has the boundary on. */
+    private void browserBoundary(boolean on) {
+        if (web == null) return;
+        String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
+        NativeGate.remember(this, origin, on);
+        // Turning off needs nothing now: the gate keeps working, and the next WebView registers the bridges as before.
+        // Turning on: every open window gates now, not only the one whose shell said so.
+        if (!on) return;
+        for (MainActivity a : new java.util.ArrayList<>(LIVE)) a.gateNow(origin);
+    }
+
+    /**
+     * Gates this window's WebView and reloads it, because bridge changes only reach the next page load: the page and
+     * frames already open keep the old bridges until then. At most once per WebView (after that the gate is in place),
+     * so a page can never make it reload again.
+     */
+    private void gateNow(String origin) {
+        if (web == null || gate != null || isFinishing() || isDestroyed()) return;
+        if (!origin.equals(ai.wizards.os.device.AppState.primaryOrigin(this))) return;
+        armGate(web, origin);
+        if (gate != null) web.reload();
+    }
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
@@ -251,7 +312,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         s.setUserAgentString(s.getUserAgentString() + UA_TAG + " WizardOS-DocScroll");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
-        web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        shellBridge = new Bridge(); // WizardOSNative: registered with WizardOSDevice below (installNativeBridges)
         if (this instanceof AppSessionActivity && androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
             androidx.webkit.WebViewCompat.addDocumentStartJavaScript(web,
                 "if(window!==top){try{top.WizHomeScreenPolicy?.installPresentationStorage(window)}catch(_){}}",
@@ -265,7 +326,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         ai.wizards.os.photos.BackupScheduler.schedule(this);
         if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
-        web.addJavascriptInterface(device, "WizardOSDevice");
+        installNativeBridges(web);
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
@@ -523,17 +584,28 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         Uri u = Uri.parse(url);
         if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
         try {
-            String name = android.webkit.URLUtil.guessFileName(url, disposition, mime);
+            // The server's own name first (filename* included); Android's guess reads only a lone attachment; filename="x"
+            // and otherwise names the file after the URL, e.g. Messenger's long random media id (issue 1342).
+            String given = ai.wizards.os.downloads.DownloadsPolicy.dispositionName(disposition);
+            String name = ai.wizards.os.downloads.DownloadsPolicy.saveName(given != null ? given : android.webkit.URLUtil.guessFileName(url, disposition, mime));
+            final java.io.File dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+            name = ai.wizards.os.downloads.DownloadsPolicy.uniqueName(name, n -> new java.io.File(dir, n).exists()
+                    || ai.wizards.os.downloads.Downloads.inFlightName(this, n)); // DownloadManager never overwrites: the same file twice would fail
+            // When the shell's Downloads port is live, Wizard's own banner and sheet show the download: Android's heads-up
+            // notification over the app only duplicates it (issue 1342). Otherwise (no shell listening) keep Android's.
+            // A quiet one that finishes while Wizard is in the background gets Wizard's own quiet tray note (Downloads.onComplete).
+            boolean shellShows = downloadsReply != null && downloadsReplyEpoch == downloadsEpoch;
             android.app.DownloadManager.Request r = new android.app.DownloadManager.Request(u)
                     .setMimeType(mime)
                     .setTitle(name)
-                    .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setNotificationVisibility(shellShows ? android.app.DownloadManager.Request.VISIBILITY_HIDDEN
+                            : android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name);
             if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
             String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
             if (cookie != null) r.addRequestHeader("Cookie", cookie);
             long downloadId = ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
-            try { ai.wizards.os.downloads.Downloads.track(this, downloadId, name, mime); } catch (RuntimeException ignored) { } // the list is extra; the download itself already runs
+            try { ai.wizards.os.downloads.Downloads.track(this, downloadId, name, mime, shellShows); } catch (RuntimeException ignored) { } // the list is extra; the download itself already runs
             Toast.makeText(this, "Downloading " + name + " · it'll be in Downloads", Toast.LENGTH_SHORT).show();
         } catch (RuntimeException e) {
             openOutside(u); // no download manager / storage refused: let the browser fetch it
@@ -1077,6 +1149,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     @Override
     protected void onDestroy() {
+        LIVE.remove(this);
         if (device != null) device.onDestroy();
         main.removeCallbacks(reachMark); main.removeCallbacks(reachGiveUp); main.removeCallbacks(reachRetry); main.removeCallbacks(netSettled);
         if (netWatch != null) { try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(netWatch); } catch (RuntimeException ignored) {} netWatch = null; }
@@ -1101,6 +1174,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
     private final class Bridge {
+        /** Browser owner boundary on or off for this box (core/shell-token.js); see installNativeBridges. */
+        @JavascriptInterface public void browserBoundary(boolean on) {
+            main.post(() -> MainActivity.this.browserBoundary(on));
+        }
+
         /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
         @JavascriptInterface public void openInBrowser(String url) {
             final Uri u = Uri.parse(String.valueOf(url));
@@ -1254,6 +1332,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         /** {"enabled","overlay","notifications","mic"} for the Wizard Everywhere switch in Settings. */
         @JavascriptInterface
         public String everywhere() { return ai.wizards.os.everywhere.EverywhereService.status(MainActivity.this); }
+
+        /** The skin WizardOS's own orb wears (id + its orb colour filter), so the floating orb matches it. */
+        @JavascriptInterface
+        public void everywhereLook(String skin, String filter) {
+            ai.wizards.os.everywhere.EverywhereService.setLook(MainActivity.this, skin, filter);
+        }
 
         @JavascriptInterface
         public void setEverywhere(boolean on) {
@@ -1425,6 +1509,30 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (v == null || !v.hasVibrator()) return;
             int d = Math.max(5, Math.min(ms, 60));
             v.vibrate(VibrationEffect.createOneShot(d, VibrationEffect.DEFAULT_AMPLITUDE));
+        }
+
+        /* ---- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications, off by default):
+         * the shell turns the listener on with the switch, asks for Notification access, and hands it chats the owner
+         * read in Messenger (notify/BridgedNotificationListener). ---- */
+        @JavascriptInterface
+        public String chatNotifyState() { return ai.wizards.os.notify.BridgedNotificationListener.state(MainActivity.this); }
+        @JavascriptInterface
+        public void chatNotifySwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, on);
+        }
+        @JavascriptInterface
+        public void chatNotifyAccess() {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            runOnUiThread(() -> {
+                ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, true);
+                ai.wizards.os.notify.BridgedNotificationListener.openAccess(MainActivity.this);
+            });
+        }
+        @JavascriptInterface
+        public int chatNotifyRead(String json) {
+            if (MainActivity.this instanceof AppSessionActivity) return 0;
+            return ai.wizards.os.notify.BridgedNotificationListener.chatRead(json);
         }
     }
 }

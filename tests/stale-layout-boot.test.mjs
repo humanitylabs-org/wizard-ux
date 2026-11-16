@@ -61,13 +61,12 @@ test('unsupported cache cleanup is narrow and repeated phone loads stay classic'
     assert.deepEqual(Object.fromEntries(again.lsMap), untouched);
   }
 });
-for (const shell of ['phone', 'desktop']) for (const id of ['orb', 'apps', ...(shell === 'desktop' ? ['ai-apps'] : [])]) for (const input of ['stored', 'query']) {
+for (const shell of ['phone', 'desktop']) for (const id of shell === 'desktop' ? ['ai-apps'] : []) for (const input of ['stored', 'query']) {
   test(`${shell} supported ${id} ${input} still paints and requests its layout at boot`, () => {
     const f = boot({ shell, ...(input === 'stored' ? { initialStorage: { 'wos.layout': id } } : { query: '?layout=' + id }) });
     assert.equal(f.boot.layout, id); assert.equal(f.boot.dataset, id);
-    // each shell requests only its own entry (core/skin-host.js files: phone orb -> phone-boot.css (Orb tokens only) + phone.js; desktop AI apps ->
-    // desktop-boot.css + desktop.js); the rest keep layout.css / layout.js
-    const [css, js] = { 'phone:orb': ['phone-boot.css', 'phone.js'], 'desktop:ai-apps': ['desktop-boot.css', 'desktop.js'] }[shell + ':' + id] || ['layout.css', 'layout.js'];
+    // each shell requests only its own entry (core/skin-host.js files: desktop AI apps -> desktop-boot.css + desktop.js)
+    const [css, js] = { 'desktop:ai-apps': ['desktop-boot.css', 'desktop.js'] }[shell + ':' + id] || ['layout.css', 'layout.js'];
     if (css) assert.ok(f.boot.css.some(h => h.includes('/layouts/' + id + '/' + css)));
     else assert.ok(!f.boot.css.some(h => h.includes('/layouts/' + id + '/')), 'no blocking sheet for a layout that brings its own');
     assert.ok(f.imports.some(h => h.includes('/layouts/' + id + '/' + js)));
@@ -75,12 +74,24 @@ for (const shell of ['phone', 'desktop']) for (const id of ['orb', 'apps', ...(s
     assert.equal(f.lsMap.get('wos.layout'), id);
   });
 }
-test('unsupported query preserves supported phone cache and unknown cached values are not swept', () => {
-  for (const id of ['orb', 'apps', 'future-layout']) {
+test('unsupported query keeps the phone on Classic and unknown cached values are not swept', () => {
+  for (const id of ['orb', 'apps', 'two-orb', 'future-layout']) {
     const f = boot({ initialStorage: { 'wos.layout': id }, query: '?layout=ai-apps' });
-    assert.equal(f.host.layout, id === 'future-layout' ? 'classic' : id); assert.equal(f.lsMap.get('wos.layout'), id);
+    assert.equal(f.host.layout, 'classic'); assert.equal(f.lsMap.get('wos.layout'), id);
   }
 });
+// The Orb, Apps and Two orbs layouts went in wizard-ux issue 1338: a saved one (or an old link) loads cleanly, with no
+// request for its files: Classic on the phone, the standard AI apps view on the desktop.
+for (const shell of ['phone', 'desktop']) for (const id of ['orb', 'apps', 'two-orb']) for (const input of ['stored', 'query']) {
+  test(`${shell} removed ${id} ${input} falls back to the standard view without requesting it`, () => {
+    // desktopView null = a device with no saved choice (the fixture otherwise seeds a saved Desks on the desktop)
+    const f = boot({ shell, ...(input === 'stored' ? { initialStorage: { 'wos.layout': id } } : { query: '?layout=' + id, desktopView: null }) });
+    const want = shell === 'desktop' ? 'ai-apps' : 'classic';
+    assert.equal(f.boot.layout, want); assert.equal(f.host.layout, want);
+    assert.ok(!f.boot.css.some(h => h?.includes('/layouts/' + id + '/')), 'no sheet of the removed layout');
+    assert.ok(!f.imports.some(h => h.includes('/layouts/' + id + '/')), 'no script of the removed layout');
+  });
+}
 test('host shell inventory agrees with the AI apps manifest; Settings uses manifest descriptions', () => {
   const f = boot(), item = f.host.layouts.find(l => l.id === 'ai-apps'), manifest = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
   assert.deepEqual(Array.from(item.shells || []), manifest.shells); assert.match(item.desc, /desktop only/); assert.doesNotMatch(item.desc, /\(phone\)/);

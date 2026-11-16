@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app Downloads: Wizard's own banner/sheet shows a download, so DownloadManager may run it without Android's notification (VISIBILITY_HIDDEN; normal install-time permission). -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Mizel recorder: retry uploads the moment the network returns; network-constrained upload job. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -214,6 +216,18 @@
         <!-- ===== Mizel meeting recorder (feature/mizel-recorder) =====
              Captures the phone mic in 5 s WAV chunks while a meeting records; uploads them through a durable
              outbox; Pause releases the mic. Started only from the app (page bridge) while it is in front. -->
+        <!-- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): off and absent
+             from Android's Notification access list until the owner turns the switch on (the shell enables it). -->
+        <service
+            android:name=".notify.BridgedNotificationListener"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Clear chat notifications"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".mizel.MeetingRecorderService"
             android:exported="false"

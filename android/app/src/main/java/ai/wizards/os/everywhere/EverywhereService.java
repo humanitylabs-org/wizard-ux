@@ -86,6 +86,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final String ACTION_SHOW = "ai.wizards.os.everywhere.SHOW";
     /** Hidden from the long-press menu (an app refuses to work with something drawn over it). Opening WizardOS clears it. */
     static final String KEY_HIDDEN = "hidden";
+    /** The app orb's look (skin + colour filter), so the floating orb wears the same one (wizard-os#649). */
+    static final String KEY_LOOK = "look";
     static final String EXTRA_FRONT = "front", EXTRA_KB = "kb", EXTRA_IME_TOP = "imeTop", EXTRA_SURFACE = "surface";
     static final String CH_RUNNING = "everywhere";
     static final String CH_UNSENT = "unsent";
@@ -235,6 +237,17 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     static boolean appRecording() { return appVoice != null; }
     public static boolean appIsRecording() { return appRecording(); }
+
+    /** WizardOS reports the skin its own orb wears; the floating orb takes the same look, now and after a restart. */
+    public static void setLook(Context c, String skin, String filter) {
+        String look = EverywherePolicy.look(skin, filter);
+        if (look.equals(prefs(c).getString(KEY_LOOK, ""))) return;
+        prefs(c).edit().putString(KEY_LOOK, look).apply();
+        EverywhereService s = liveService;
+        if (s != null) s.main.post(s::pushLook);
+    }
+
+    private void pushLook() { js("E.look(" + prefs(this).getString(KEY_LOOK, EverywherePolicy.DEFAULT_LOOK) + ")"); }
 
     /** JSON for Settings. */
     public static String status(Context c) {
@@ -515,7 +528,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     if (r.getUrl().toString().startsWith("file:///android_asset/assist/")) return null;
                     return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
                 }
-                @Override public void onPageFinished(WebView v, String url) { pageReady = true; place(); lastState = ""; pushState(); orbAsleep = null; syncOrbSleep(); }
+                @Override public void onPageFinished(WebView v, String url) { pageReady = true; place(); pushLook(); lastState = ""; pushState(); orbAsleep = null; syncOrbSleep(); }
             });
             web.setOnTouchListener(new Touch());
             web.loadUrl("file:///android_asset/assist/everywhere.html");

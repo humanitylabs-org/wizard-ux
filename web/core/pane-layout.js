@@ -15,7 +15,7 @@
     let x = gap;
     return shares.map(s => { const w = Math.round(avail * (s > 0 ? s * scale : free)); const r = { x, width: w }; x += w + gap; return r; });
   }
-  const defaults = () => ({ mode: 'tiled', focus: 'chats', slots: ['chats', 'app'], ratio: null, side: 'start', weights: {}, app2: null,
+  const defaults = () => ({ mode: 'tiled', focus: 'chats', slots: ['chats', 'app'], ratio: null, side: 'start', appSide: 'end', weights: {}, app2: null,
     dock: { edge: 'end', insets: { top: 0, bottom: 0, start: 0, end: 0 } } });
   function normalize(input = {}) {
     if (!input || typeof input !== 'object') input = {};
@@ -26,7 +26,7 @@
     const insets = {}; for (const k of Object.keys(d.dock.insets)) insets[k] = clamp(Number(input.dock?.insets?.[k]) || 0, 0, 10000);
     return { mode: ['tiled', 'centre', 'pair', 'full'].includes(input.mode) ? input.mode : 'tiled',
       focus: ['chats', 'app', 'app2'].includes(input.focus) ? input.focus : 'chats',
-      slots: slots.length ? slots : d.slots, ratio, side: input.side === 'end' ? 'end' : 'start', weights,
+      slots: slots.length ? slots : d.slots, ratio, side: input.side === 'end' ? 'end' : 'start', appSide: input.appSide === 'start' ? 'start' : 'end', weights,
       app2: typeof input.app2 === 'string' && input.app2 ? input.app2 : null,
       dock: { edge: ['start', 'end', 'top', 'bottom'].includes(input.dock?.edge) ? input.dock.edge : 'end', insets } };
   }
@@ -42,14 +42,16 @@
     const sidebar = box(m.side === 'start' ? area.x : area.x + area.width - sw, area.y, sw, area.height);
     const content = box(area.x + (m.side === 'start' ? sw : 0), area.y, area.width - sw, area.height);
     const chatOn = !!env.chatOn, appOn = !!env.appOn;
+    // The app panel at the start of the main area, the chat after it (wizard-os#639): mirrored like side 'end', the sidebar stays.
+    const appFirst = m.side === 'end' || m.appSide === 'start';
     // The chat keeps at least its old column (a third, 30% beside an app) and takes all the room the app leaves, so
     // its messages fill the main area up to the 768px reading column, never a narrow strip with empty canvas beside
     // it (issue 1233).
     const chatMin = chatOn ? (appOn ? clamp(W * .30, 360, 480) : clamp(W * .33333, 400, 560)) : 0;
     const appWidth = appOn ? (env.wide && !chatOn ? content.width : Math.min(env.appWidth ?? 560, Math.max(0, content.width - chatMin))) : 0;
     const chatWidth = chatOn ? Math.max(0, content.width - appWidth) : 0;
-    const chat = box(m.side === 'start' ? content.x : content.x + content.width - chatWidth, content.y, chatWidth, content.height);
-    const app = box(m.side === 'start' ? content.x + content.width - appWidth : content.x, content.y, appWidth, content.height);
+    const chat = box(!appFirst ? content.x : content.x + content.width - chatWidth, content.y, chatWidth, content.height);
+    const app = box(!appFirst ? content.x + content.width - appWidth : content.x, content.y, appWidth, content.height);
     const panes = { chats: chat, app };
     const active = m.slots.filter(s => s === 'chats' ? chatOn : s === 'app' ? appOn : !!env.app2On);
     // Modes never rewrite the tiled arrangement. A later set({mode:'tiled'})
@@ -57,7 +59,7 @@
     if (m.mode !== 'tiled') {
       const stage = box(ix, iy, aw, ah), focus = active.includes(m.focus) ? m.focus : active.includes('chats') ? 'chats' : active[0];
       const visible = m.mode === 'pair' ? active.filter(s => s === focus || s === active.find(s => s !== focus)) : active.filter(s => s === focus);
-      const ordered = m.side === 'end' && visible.includes('chats') ? [...visible.filter(s => s !== 'chats'), 'chats'] : visible;
+      const ordered = appFirst && visible.includes('chats') ? [...visible.filter(s => s !== 'chats'), 'chats'] : visible;
       const result = { chats: box(ix, iy, 0, 0), app: box(ix, iy, 0, 0), app2: box(ix, iy, 0, 0) };
       if (m.mode === 'pair') {
         // Pair fills the existing content stage, reserving navigation rails.
@@ -76,7 +78,7 @@
     }
     // Null ratio is the exact legacy overlay arrangement. Explicit ratios/weights use tiled slots.
     if ((m.ratio != null || Object.keys(m.weights).length || active.includes('app2')) && active.length) {
-      const ordered = m.side === 'end' && active.includes('chats') ? [...active.filter(s => s !== 'chats'), 'chats'] : active;
+      const ordered = appFirst && active.includes('chats') ? [...active.filter(s => s !== 'chats'), 'chats'] : active;
       const shares = ordered.map(s => m.weights[s] || (m.ratio != null && active.includes('chats') ? s === 'chats' ? m.ratio : (1 - m.ratio) / Math.max(1, active.length - 1) : 1));
       const tracks = columns(content.width, shares);
       ordered.forEach((s, j) => { panes[s] = box(content.x + tracks[j].x, content.y, tracks[j].width, content.height); });

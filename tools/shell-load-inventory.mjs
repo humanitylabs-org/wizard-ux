@@ -4,7 +4,7 @@
 // modules' static imports / api.asset() names. No network, no owner data.
 //   node tools/shell-load-inventory.mjs [webDir=web] [--json]
 // Shells: phone (index.html, stock phone), desktop-classic (desktop.html, Classic), desktop-ai-apps
-// (desktop.html wearing AI apps), phone-orb / desktop-orb (the Orb view, a per-device tweak).
+// (desktop.html wearing AI apps). The Orb and Apps views went in wizard-ux issue 1338.
 // Not counted: owner-generated data.js / summaries.js, icons/manifest, skins, app frames, API reads.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -88,8 +88,7 @@ function measure(name, html, layout, shell) {
     dupModules: files.filter(f => f.dupOfClassic).map(f => f.file), missing: files.filter(f => f.missing).map(f => f.file),
     layoutFiles: lay.map(f => ({ file: f.file, bytes: f.bytes })), files: files.map(f => f.file) };
 }
-const SHELLS = [['phone', 'index.html', null, 'phone'], ['desktop-classic', 'desktop.html', null, 'desktop'], ['desktop-ai-apps', 'desktop.html', 'ai-apps', 'desktop'],
-  ['phone-orb', 'index.html', 'orb', 'phone'], ['desktop-orb', 'desktop.html', 'orb', 'desktop']];
+const SHELLS = [['phone', 'index.html', null, 'phone'], ['desktop-classic', 'desktop.html', null, 'desktop'], ['desktop-ai-apps', 'desktop.html', 'ai-apps', 'desktop']];
 const rows = SHELLS.map(s => measure(...s));
 if (asJson) process.stdout.write(JSON.stringify({ web, rows }, null, 2) + '\n');
 else {

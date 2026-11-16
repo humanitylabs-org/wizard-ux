@@ -242,7 +242,7 @@ test('Chats paints the side pane only with the switch on: tabs, then the channel
   assert.match(r, /chanSwitchedOff\(w\)\) H\.layout/, 'switched off inside a feed: the Focus returns');
   assert.match(src, /const head = side \? chanHead\(w, feed\) :/, 'the pane\'s head is the Channels tabs or the feed\'s header only (no search: the sidebar has its own)');
   assert.match(src, /if \(side && !feed && chanView !== 'channels'\) body = '';/, 'Activity: the sidebar draws its own rows');
-  assert.match(src, /const html = side \? `<div data-part="list" class="ch-list ch-side\$\{feed \? ' ch-side-feed' : chanView === 'channels' \? ' ch-side-chan' : ''\}">\$\{head\}<div class="ch-scroll">\$\{body\}<\/div>\$\{feed \? fab : ''\}<\/div>`/);
+  assert.match(src, /const html = side \? `<div data-part="list" class="ch-list ch-side\$\{feed \? ' ch-side-feed' : chanView === 'channels' \? ' ch-side-chan' : ''\}">\$\{head\}<div class="ch-scroll">\$\{body\}<\/div>\$\{feed && typeof jumpPillsHtml === 'function' \? jumpPillsHtml\(\) : ''\}\$\{feed \? fab : ''\}<\/div>`/);
   assert.match(src, /readyBack, channelBack, chanOpen, channelOf,/, 'channelOf is on the Chats API');
   const host = read('web/core/skin-host.js');
   assert.match(host, /channels: node => live\(\) && node\?\.nodeType === 1 && \[\.\.\.a\.mounts\]\.some\(m => m\.contains\(node\)\) \? !!shell\.chatChannels\?\.\(node\) : false,/, 'only the layout\'s own mounted nodes');
@@ -252,7 +252,7 @@ test('Chats paints the side pane only with the switch on: tabs, then the channel
   assert.match(js, /panel\.append\(head, agentsRow, chanBox, scroll, foot\)/);
   assert.match(js, /const paintChan = \(\) => \{ const on = !q && !!api\.sessions\.channels\?\.\(chanBox\);/, 'hidden while the sidebar searches');
   assert.match(js, /if \(s\.channel\) title\.append\(el\('span', 'aad-chan-line', \{ text: `# \$\{s\.channel\}` \}\)\);/);
-  assert.match(js, /else if \(docked\) closeChat\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: a docked thread or feed first');
+  assert.match(js, /else if \(docked\) chatBack\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: a docked thread or feed first');
   // The design change of 11 Nov 2026: the feed is a chat in the column (FEED), Back from a post lands on it, Esc closes it.
   assert.match(js, /if \(!h\.app\) chatThread = h\.thread \|\| \(h\.note \? NOTE : h\.draft \? DRAFT : feedOn\(\) \? FEED : null\);/, 'no thread in the column and a channel open: its feed');
   assert.match(js, /if \(chatThread === FEED\) \{ chatThread = null; anim\('undock'\); api\.sessions\.channelBack\?\.\(\); paintTop\(\); return true; \}/, 'Esc / ✕ on the feed: nothing open');

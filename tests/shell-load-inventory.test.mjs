@@ -24,14 +24,7 @@ test('the phone loads no desktop code: no pane geometry, desktop host, desktop s
   const r = of('phone');
   assert.deepEqual(has(r, /^(layouts\/|desktop\/|core\/desktop-host\.js$|core\/pane-layout\.js$)/), []);
 });
-test('the phone Orb view loads its phone entry, never the desktop Orb scene', () => {
-  const r = of('phone-orb');
-  assert.deepEqual(has(r, /^layouts\/orb\/layout\.(js|css)$/), []);
-  assert.ok(r.files.includes('layouts/orb/phone.js') && r.files.includes('layouts/orb/phone.css'));
-  // The phone entry still gets the Orb tokens and first-frame Home rules (the tweak sheet), never the desktop scene.
-  assert.ok(r.files.includes('layouts/orb/phone-boot.css') && r.files.includes('tweaks/miguel/orb-shell/tweak.css'));
-});
-test('CSS @imports count as requests: the desktop Orb sheet pulls in its tweak sheet', () => {
-  const r = of('desktop-orb');
-  assert.ok(r.files.includes('layouts/orb/layout.css') && r.files.includes('tweaks/miguel/orb-shell/tweak.css'));
+test('the removed Orb, Apps and Two orbs layouts are gone from the registry and from disk (wizard-ux issue 1338)', () => {
+  for (const r of rows) assert.deepEqual(has(r, /^layouts\/(orb\/(layout|phone)|apps\/(layout|desktop)|two-orb\/)/), [], r.shell);
+  assert.deepEqual(rows.map(r => r.shell), ['phone', 'desktop-classic', 'desktop-ai-apps']);
 });

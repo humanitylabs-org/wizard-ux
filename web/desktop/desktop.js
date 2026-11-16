@@ -77,7 +77,10 @@
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
   let desktop = null;
-  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); desktop?.changed(); };
+  // The AI apps main column's open channel feed is saved too (wizard-ux issue 1339: a reload, an update's included,
+  // brought the column back empty). feedBase is a var: this first runs before its line below (undefined = not yet read).
+  const feedSaved = store.get('feed', null);
+  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); if (feedBase !== undefined) store.set('feed', feedBase?.chan ? { id: feedBase.id, chan: feedBase.chan, focus: feedBase.focus || null } : null); window.WosWorkspaceSync?.current?.changed(); desktop?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   /* No desks (a layout holds the panel, e.g. the Orb desktop): whatever opens shows in ONE panel on the right over
    * Home instead of on a desk. A chat panel's window lives outside the desks (never tiled, never synced); an app is a
@@ -135,12 +138,35 @@
    * display in the chat list with the channel list remaining visible on the sidebar"). It is drawn by one more stand-in
    * list window of its own (feedBase, off the desks and never saved), so opening a channel never touches the Focus of
    * the window behind the sidebar: its channel list and Activity rows stay exactly as they were. */
-  let feedBase = null;
-  const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : undefined);
+  var feedBase = null;
+  /* The AI apps sidebar's list drawn by another installed Chats look (Settings › Chats › Default Chats, switch
+   * wizard/sidebar-chats-view, wizard-ux issue 1443): one more stand-in owner (off the desks, never saved) naming that
+   * provider, so the main Chats window and its thread stay as they are. Its list window is viewBase.id + '::side'. */
+  var viewBase = null, viewLook = false;
+  // The switch, read inline from the root like the other switches; it only acts where a layout owns the chat list.
+  function sideViewOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } }
+  function sideLook() { return mainStd() && sideViewOn(); }
+  /* Where a layout owns the chat list (AI apps) and another look is picked as Default Chats, the main Chats window is
+   * the one the layout docks in its chat column: the first desk whose front window is a Chats window (deskApps'
+   * 'wizard'), whatever look it was opened with, drawn as standard Chats. With the switch on or off (wizard-ux issue
+   * 1460: off, a sidebar tap went to a second Chats window on a desk of its own, and the main column stayed blank). */
+  function mainStd() { return !!ownsChatList && CHATS.views.defaultId() !== 'wizard-chats'; }
+  function sideMainWin() {
+    // (on that desk, the first Chats window in window order: the one the layout's mainChatWindow draws, even when a
+    // second Chats window on the same desk has the focus)
+    for (const d of ws) { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (w && w.app === 'chats' && !w.agent) return Object.values(W).find(x => x.app === 'chats' && !x.agent && d.wins.includes(x.id)) || w; }
+    return null;
+  }
+  const sideWin = id => (sideBase && sideBase.id === id ? sideBase : feedBase && feedBase.id === id ? feedBase : typeof viewBase !== 'undefined' && viewBase && viewBase.id === id ? viewBase : undefined);
   // Any Chats window by id: a desk window, the sidebar's stand-in or the feed, or one of their list panes (id::list/side).
   const chatsWin = id => W[id] || sideWin(id) || (/::(list|side)$/.test(id) && (W[id.slice(0, -6)] || sideWin(id.slice(0, -6))) ? listWin(id.slice(0, -6), id.slice(-4)) : undefined);
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
+    // The sidebar look's taps (wizard-ux issue 1443): a thread opens in the main chat, as from a stock sidebar row.
+    viewOpen: (key, sid) => { if (!viewKey(key)) return false; openThread(sid); return true; },
+    viewTarget: key => (viewKey(key) ? sideMain().id : ''),
+    // With the look in the sidebar, the main chat column stays standard Chats (its list and thread); other windows keep theirs.
+    mainLook: w => (mainStd() && W[w?.id] === w && w === sideMainWin() ? 'wizard-chats' : ''),
     win: chatsWin,
     root: () => stage,
     save,
@@ -156,7 +182,9 @@
     keepThreadOpen: true,
     // A new chat sent from the Chats window a layout docks beside an app (AI apps: Resolve this on a notification) stays
     // in that column, never the list / Home laid out full width under the app panel (James, 6 Nov 2026).
-    keepNewOpen: id => !homeOpen && !!globalThis.WosSkinHost?.routeShows?.(wsOf(id)),
+    // Every New chat sent on the desktop stays open in its new thread (wizard-ux issue 1311, James 12 Nov 2026), in the
+    // classic desks and the AI apps column alike (it used to leave to the list, which AI apps draws as its background).
+    keepNewOpen: () => true,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
@@ -228,7 +256,7 @@
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   /* Agents MVP: a Chats window pinned to a non-default agent (w.agent) wears that agent's sigil and name. */
   const agentWin = w => !!(w && w.app === 'chats' && w.agent);
-  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === CHATS.views.defaultId());
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && (typeof mainStd === 'function' && mainStd() ? w === sideMainWin() : CHATS.views.providerFor(w) === CHATS.views.defaultId()));
   function agentApp(w) {
     const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
     const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
@@ -434,7 +462,7 @@
     const f = winEl(w.id)?.querySelector('iframe'); if (!f) { render(); return true; }
     let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
     // (replace: a page change never adds a Back step of its own)
-    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(appOf(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(appOf(w), rel) || rel; try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
     return true;
   }
   function closeWorkflow(w) {
@@ -664,13 +692,18 @@
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
     if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
+    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(url, a.id) : ''} src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
    * The list pane is a second Chats "window" (id::list) that always shows the list. */
   const listWins = {}, sidePanes = new WeakSet();
   let sideHost = null, feedHost = null; // the layout's Channels pane (chatChannels) and channel feed (chatFeed), repainted with the lists on live changes
+  // A reload (an update's too) opens the channel feed the main column showed (wizard-ux issue 1339); Chats still decides
+  // whether it holds (the switch on, the channel still there).
+  { const f = feedSaved, k = v => !!v && typeof v === 'object' && typeof v.kind === 'string' && typeof v.key === 'string';
+    if (f && typeof f === 'object' && /^feed-[a-z0-9]+$/.test(String(f.id)) && f.chan && typeof f.chan.id === 'string')
+      feedBase = { id: f.id, app: 'chats', thread: null, focus: k(f.focus) ? { kind: f.focus.kind, key: f.focus.key } : null, chan: { id: f.chan.id, prev: k(f.chan.prev) ? { kind: f.chan.prev.kind, key: f.chan.prev.key } : null } }; }
   // (a layout's sidebar pane is one more such list window, id::side: the AI apps Channels pane, wizard-ux issue 1256)
   function listWin(id, kind = 'list') { const k = kind === 'side' ? id + '::side' : id; return listWins[k] || (listWins[k] = { id: id + '::' + (kind === 'side' ? 'side' : 'list'), get thread() { return null; }, set thread(v) { if (v) { const w = W[id]; if (w) { w.thread = v; save(); CHATS.renderChats(w); syncChatsPane(id); } else if (sideWin(id)) { if (v === '__new__') newChat(); else openThread(v); } } } }); }
   // The window behind the sidebar's Channels pane: the main Chats window, else the stand-in (created on demand). When a
@@ -687,6 +720,8 @@
     return w;
   }
   // The main column's feed window: the sidebar's pane opens channels there (null for every other window).
+  // The sidebar look's list window (issue 1443).
+  const viewKey = key => !!viewBase && String(key) === viewBase.id + '::side';
   const feedPane = w => { const id = String(w?.id || ''); return !!ownsChatList && /::side$/.test(id) && !(feedBase && id === feedBase.id + '::side'); };
   function feedPaneFor(w) {
     if (!feedPane(w)) return null;
@@ -845,6 +880,8 @@
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
       try { const d = f.contentDocument; bad = !d || /^chrome-error:|^about:blank/.test(d.URL || '') && f.getAttribute('src') !== 'about:blank'; } catch (e) { bad = true; }
+      // Browser boundary: a sandboxed app is never readable, so unreadable is not refused. It talks by postMessage.
+      if (window.WizBrowserBoundary?.enabled && f.hasAttribute('sandbox')) bad = false;
       el.querySelector('.frame-fallback')?.classList.toggle('on', bad);
       // Clicking inside a same-origin app focuses its window; Esc inside it still reaches the shell.
       try {
@@ -1378,7 +1415,7 @@
   function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
-    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return true; }
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); window.WizReach?.reloadRepair(el.querySelector('iframe')); return true; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       refreshData().then(() => {
         if (!W[id]) return;
@@ -1873,7 +1910,8 @@
     editUnsent: it => { closeSettings(); editUnsent(it); },
     openLink: (url, title) => { closeSettings(); return openAppLink(url, title); },
     openStore: id => { closeSettings(); newWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
-    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save(); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save();
+      try { globalThis.dispatchEvent(new CustomEvent('wos:chats-view')); } catch (_) {} }, // the AI apps sidebar follows (issue 1443)
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();
@@ -2128,7 +2166,8 @@
     const post = (sid, open) => real(sid) && CHATS.channelOf?.(LIVE.session(sid)) === open.name;
     const mine = f?.app === 'chats' ? CHATS.chanOpen?.(f) : null;
     if (mine) return !f.thread ? { wid: f.id, sid: '__new__' } : post(f.thread, mine) ? { wid: f.id, sid: f.thread } : null;
-    const open = feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
+    // The AI apps sidebar's tab decides (wizard-ux issue 1310): on Activity a feed left in the main column is not in front.
+    const open = CHATS.chanView?.() === 'activity' ? null : feedOpen(); if (!open || (f && f.app !== 'chats')) return null;
     if (feedHost?.isConnected && feedHost.dataset.chats === feedBase.id + '::side' && !feedHost.closest('[hidden]')) return { wid: feedBase.id + '::side', sid: '__new__' };
     return f && post(f.thread, open) ? { wid: f.id, sid: f.thread } : null;
   }
@@ -2174,7 +2213,7 @@
       vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
       dictationFinishing = true; // model options may not have loaded while an app is foreground
       try {
-        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '');
+        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '', forceNew ? undefined : vBox || undefined);
         vRoute = vConversation ? null : resolveRoute(); vRouteAt = vConversation ? null : resolveRoute; // re-read at Send (wizard-ux#1218)
         if (vRouteAt && typeof vSpace === 'string') vRouteAt = chanRoute(resolveRoute, () => vRoute); // a channel take keeps its agent
         if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
@@ -2269,7 +2308,7 @@
     strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
     dictationFinishing = true;
     const box = sid === '__new__' ? CHATS.chanBox?.(wid) || '' : '';
-    try { vRouteAt = () => CHATS.modelRoute(wid,sid); vRoute = vRouteAt(); if (box) vRouteAt = chanRoute(vRouteAt, () => vRoute); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
+    try { vRouteAt = () => CHATS.modelRoute(wid,sid,box || undefined); vRoute = vRouteAt(); if (box) vRouteAt = chanRoute(vRouteAt, () => vRoute); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
@@ -2388,7 +2427,7 @@
       const text = it?.text || '';
       if (!text) { toast('🎙', 'Transcription failed · recording kept below', 2600); return 'retained'; }
       window.__wuxLastDictation = text;
-      if (fields().insert(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
+      if (await fields().insert(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
       try {
         await navigator.clipboard.writeText(text);
         if (it.durable) O.remove(it.id);
@@ -2474,7 +2513,8 @@
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
     if (f && f.app !== 'chats') { if (ws[cur].mono) { toggleMono(); return 'mono'; } }
     if (f?.app === 'frame') {
-      const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
+      // A sandboxed app (browser boundary) answers later; at its root its workflow/preview closes then.
+      const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'), () => { if (!(f.workflow && closeWorkflow(f)) && f.preview) closeWin(f.id); });
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
       // Shell-owned previews and sign-in workflows return to their opener;
       // ordinary installed apps at root stay mounted.
@@ -2913,6 +2953,25 @@
   }
   addEventListener('keydown', e => onKey(e), true);
   addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);
+  // Browser boundary (wizard-os#133): a sandboxed app is never readable, so its clicks and the shell's keys typed in it
+  // arrive by postMessage. The shell cannot tell a real key from one the app made up (user activation only says some
+  // input happened), so only keys that move between and around the owner's own windows come across: Esc, the ⌥ guide,
+  // desks, Home, window steps and swaps, full screen, sizes, a new desktop. Keys that speak, send, open a chat, act on
+  // a chat, open search or pick buttons (⌥V S C D N X G Space…) stay the app's while it has the keyboard; a click
+  // outside it gives them back. The app holds back exactly these codes (no double action), as onKey's hit() did.
+  if (window.WizBrowserBoundary?.onInput) {
+    window.WizBrowserBoundary.keys(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Backquote',
+      'BracketLeft', 'BracketRight', 'ArrowLeft', 'ArrowRight', 'KeyF', 'KeyT', 'Minus', 'Equal', 'Slash']);
+    window.WizBrowserBoundary.onInput((f, ev) => {
+      const el = f.closest?.('[data-win]'); if (!el) return;
+      if (ev.kind === 'pointer') return desktopHost.focus(el.dataset.win, { scroll: false });
+      if (ev.kind === 'blur') return keyHints.hide();
+      // The field stand-in carries only what onKey's pass-throughs read (a text field, read-only or not).
+      const t = ev.field ? { tagName: 'INPUT', type: 'text', readOnly: ev.readOnly, isContentEditable: false } : f;
+      const e = { ...ev, target: t, composedPath: () => [t], isComposing: false, keyCode: 0, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {} };
+      if (ev.type === 'keyup') { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); } else onKey(e, true);
+    });
+  }
   addEventListener('blur', () => keyHints.hide());
   addEventListener('pointerdown', e => { if (!keyHints.mine(e.target)) keyHints.hide(); }, true);
   // Composer: ⌘/Ctrl+Enter sends (shared Chats binds it); Enter stays a newline, as in the phone.
@@ -3040,7 +3099,8 @@
     if (pageSlug) { newWin({app:'pages',appId:'pages',pageSlug}); return true; }
     const a = u.origin === location.origin && appAt(u.href); if (!a) return false;
     const rel = u.pathname + u.search + u.hash, same = new URL(a.url, location.href);
-    if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false }); return true; }
+    // (a #fragment on the app's own address is a deep link, e.g. /wizardos-tracker/#item/…: the window goes there too)
+    if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false, ...(u.hash && u.hash !== same.hash ? { path: rel } : {}) }); return true; }
     return openAppLink(rel, a.name);
   };
   if (LINKS) window.WizLinks.intercept(document.body, LINKS);
@@ -3166,6 +3226,8 @@
     // An unmatched command's words, sent on as a new chat (the launcher's own ask path; the layout says so itself).
     askAgent: text => { void ask(text, 'an orb command with no local match, sent on as a message', null, null, true); return true; },
     agentHere: () => ({ id: '', label: window.WizConfig.agent(), main: true }),
+    // Activity with Channels on (wizard-ux issue 1336): every agent's chats as Working, Ready, Recent, Snoozed, Archived.
+    activityList: (o = {}) => window.WizChatsListModel.activityList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }, { order: o.order, older: !!o.older, now: Date.now() }),
     /* Working / Ready rows (the rest too, for the AI apps view's search), each with the actions Chats' own row offers
      * (Pin, Rename, Mark unread, Snooze, Done, Restore), acted on through Chats' own paths; the Orb view reads the same. */
     sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
@@ -3218,9 +3280,30 @@
       return { id: open.id, name: open.name };
     },
     chatFeedOpen: () => { const o = feedOpen(); return o ? { id: o.id, name: o.name } : null; },
+    /* The AI apps sidebar's list by the owner's Default Chats (wizard-ux issue 1443, switch wizard/sidebar-chats-view):
+     * that installed provider mounted into the layout's node as a list region. False (node emptied) with the switch off,
+     * built-in Chats picked, or the provider failed: the layout then draws its own rows. */
+    chatsView: host => {
+      const look = mainStd();
+      if (look !== viewLook) { viewLook = look; for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) CHATS.renderChats(w); } // the main column: standard again, or its look back
+      const id = sideViewOn() ? CHATS.views.defaultId() : 'wizard-chats';
+      if (!host || host.nodeType !== 1 || !stage.contains(host) || id === 'wizard-chats' || !CHATS.views.usable?.(id)) {
+        if (viewBase) { CHATS.forget(viewBase.id + '::side'); viewBase = null; }
+        if (host?.dataset?.chats) { delete host.dataset.chats; host.replaceChildren?.(); }
+        return false;
+      }
+      if (viewBase && viewBase.chatsProvider !== id) { CHATS.forget(viewBase.id + '::side'); viewBase = null; }
+      if (!viewBase) viewBase = { id: 'cview-' + uid(), app: 'chats', thread: null, chatsProvider: id };
+      const key = viewBase.id + '::side';
+      host.dataset.chats = key;
+      // (paint: Chats draws nothing here while the provider loads; after a failure it says so and the layout's own rows return)
+      CHATS.views.mount(listWin(viewBase.id, 'side'), host, () => { host.replaceChildren(); if (!CHATS.views.usable?.(id) || CHATS.views.defaultId() !== id) queueMicrotask(() => { try { globalThis.dispatchEvent(new CustomEvent('wos:chats-view')); } catch (_) {} }); });
+      return CHATS.views.usable(id);
+    },
     // Back: the main column's feed closes first; then (a feed the earlier design left in the sidebar) the sidebar's own.
     chatChannelPost: () => chanPost(),
     chatChannelNew: () => chanNew(),
+    chatChannelView: () => CHATS.chanView?.() || '',
     chatChannelBack: () => {
       if (feedBase && feedOpen()) { const ok = !!CHATS.channelBack(listWin(feedBase.id, 'side')); if (ok) feedOpened(feedBase.id + '::side'); return ok; }
       const w = sideBase || findWin(mainChats) ? sideMain() : null; return !!w && !!CHATS.channelBack(listWin(w.id, 'side'));

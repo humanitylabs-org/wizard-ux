@@ -143,7 +143,6 @@ const report = { origin, web, cases: [] };
         assert.equal(await page.evaluate(() => localStorage.getItem('wos.chats.channel-prefs.v1')), null, 'nothing kept on this device');
         // The Launch feed: the store-only post is there with its own words, between the live ones by time.
         await vis('.ch-chan-open[data-chchan="launch"]').click(); await vis('.ch-chan-h').waitFor();
-        await vis('[data-chchanf="all"]').click();
         await vis('.ch-post-b[data-chopen="qa-old"]').waitFor({ timeout: 8000 });
         const posts = () => page.locator('.ch-chan-feed .ch-post-b').filter({ visible: true }).evaluateAll(b => b.map(x => x.dataset.chopen));
         entry.feed = await posts(); assert.deepEqual(entry.feed, ['qa-old', 'qa-l1', 'qa-l2']);

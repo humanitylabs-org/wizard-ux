@@ -7,9 +7,7 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/now-playing', 'miguel/ai-apps'].includes(id) ? 'desktop' : 'phone'));
-  // The Orbs view and its switch act on both shells (the phone: Home only).
-  if (id === 'miguel/orb-shell') test(`${id}: shipped contract on the phone shell too`, () => contract(id, check, 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing', 'miguel/ai-apps'].includes(id) ? 'desktop' : 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
@@ -112,7 +110,8 @@ test('a saved legacy two-orb layout or framed composition turns nothing on now i
   for (const storage of [new Map([['wos.layout','two-orb']]), new Map([['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation:'framed'}})]])]) {
     const f = wizardExperience(storage); await f.E.refresh();
     assert.deepEqual(f.active(), []); assert.equal(f.E.state.error, '');
-    assert.equal(f.window.WosSkinHost.layout, 'classic');
+    // The layout itself is gone (wizard-ux issue 1338): skin-host's boot treats a stored 'two-orb' as unknown (tests/stale-layout-boot).
+    assert.ok(!/id: 'two-orb'/.test(read('web/core/skin-host.js')));
     assert.equal(storage.has('wos.two-orbs.migrated.v1') || storage.has('wos.app-borders.migrated.v1'), false, 'no migration ran');
   }
 });
@@ -351,7 +350,7 @@ test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rend
   assert.equal(E.chooseAuthor, undefined);
 });
 
-const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions'];
+const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home'];
 test('retired Orb radial and the switches removed in wizard-ux issue 1239: saved mixes and recipes never request a removed package', async () => {
   const mixes = [
     new Map(),

@@ -35,6 +35,31 @@ public class DeviceBridgeE2eTest {
         }
     }
 
+    /**
+     * Browser owner boundary (wizard-os#133, wizard-ux issue 1430): once the shell says the box has it on, the shell page
+     * keeps WizardOSNative/WizardOSDevice with working answers, and a sandboxed app frame sees neither and gets nothing
+     * from the gate.
+     */
+    @Test public void boundaryKeepsNativeBridgesOutOfAppFrames() throws Exception {
+        Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        c.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().clear().commit();
+        c.getSharedPreferences("wizard_browser_boundary", Context.MODE_PRIVATE).edit().clear().commit();
+        try (Fixture fixture = new Fixture(true)) {
+            c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+            assertNotNull("Connect screen's address field never appeared", waitPastSystemDialogs(device, By.desc("Wizard address"), 30000));
+            device.findObject(By.desc("Wizard address")).setText(fixture.origin());
+            device.findObject(By.text("Connect")).click();
+            androidx.test.uiautomator.UiObject2 ok = waitPastSystemDialogs(device, By.textStartsWith("Boundary verified"), 45000);
+            if (ok == null) {
+                androidx.test.uiautomator.UiObject2 failed = device.findObject(By.textStartsWith("FAILED"));
+                fail(failed != null ? failed.getText() : "boundary page never finished");
+            }
+        } finally {
+            c.getSharedPreferences("wizard_browser_boundary", Context.MODE_PRIVATE).edit().clear().commit();
+        }
+    }
+
     /** CI emulators raise "Pixel Launcher isn't responding" over the app; tap Wait and keep looking. */
     private static androidx.test.uiautomator.UiObject2 waitPastSystemDialogs(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
         long end = System.currentTimeMillis() + ms;
@@ -50,7 +75,10 @@ public class DeviceBridgeE2eTest {
     private static final class Fixture implements AutoCloseable {
         final ServerSocket socket = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"));
         volatile boolean running = true;
-        Fixture() throws IOException {
+        final boolean boundary;
+        Fixture() throws IOException { this(false); }
+        Fixture(boolean boundary) throws IOException {
+            this.boundary = boundary;
             new Thread(() -> { while (running) try { respond(socket.accept()); } catch (IOException ignored) {} }, "DeviceFixture").start();
         }
         String origin() { return "http://localhost:" + socket.getLocalPort(); }
@@ -81,7 +109,25 @@ public class DeviceBridgeE2eTest {
                     + "main().catch(e=>document.getElementById('status').textContent='FAILED '+e.message);</script>";
                 String child = "<!doctype html><script>if(window.wizardDevicePort){wizardDevicePort.onmessage=()=>parent.postMessage('child-replied',location.origin);wizardDevicePort.postMessage(JSON.stringify({v:1,id:'child',method:'device.packages.status',params:{}}));}setTimeout(()=>parent.postMessage('child-refused',location.origin),1500);</script>";
                 String wrongPath = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='padding-top:120px'><p id='status'>Checking wrong path</p><script>let replied=false;wizardDevicePort.onmessage=()=>{replied=true;document.getElementById('status').textContent='FAILED native reply';};wizardDevicePort.postMessage(JSON.stringify({v:1,id:'wrong',method:'device.packages.status',params:{}}));setTimeout(()=>{if(!replied)document.getElementById('status').textContent='Wrong path refused';},1500);</script>";
-                byte[] bytes = (request.startsWith("GET /wizard-os-home/") ? html : request.startsWith("GET /probe ") ? child : request.startsWith("GET /not-shell ") ? wrongPath : "{}").getBytes(StandardCharsets.UTF_8);
+                // Boundary page: first load (bridges as always) tells the app the box is on; the app reloads with the gate.
+                String boundaryHtml = "<!doctype html><title>WizardOS</title><!-- core/ synthetic fixture -->"
+                    + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='padding-top:120px'><p id='status'>Checking boundary</p>"
+                    + "<script>const S=document.getElementById('status');function check(v,m){if(!v)throw Error(m);}"
+                    + "async function main(){check(typeof WizardOSNative==='object'&&typeof WizardOSDevice==='object','shell has no bridges');"
+                    + "if(!sessionStorage.getItem('armed')){sessionStorage.setItem('armed','1');check(typeof window.WizardOSGate==='undefined','gate while off');WizardOSNative.browserBoundary(true);S.textContent='Arming boundary';return;}"
+                    + "check(typeof window.WizardOSGate==='undefined','gate left on the shell page');"
+                    + "check(typeof WizardOSDevice.version()==='number','device answer');check(typeof WizardOSNative.platform()==='string','native answer');"
+                    + "check(typeof WizardOSDevice.recStart==='function'&&typeof WizardOSDevice.nope==='undefined','method list');"
+                    + "const got=new Promise((res,rej)=>{addEventListener('message',e=>{if(e.data&&e.data.probe)res(e.data);});setTimeout(()=>rej(Error('app frame silent')),10000);});"
+                    + "const f=document.createElement('iframe');f.setAttribute('sandbox','allow-scripts');f.src='/probe-sandboxed';document.body.append(f);const r=await got;"
+                    + "check(r.native==='undefined'&&r.device==='undefined','app frame sees '+r.native+'/'+r.device);"
+                    + "check(r.gate==='refused'||r.gate==='none','gate answered the app frame: '+r.gate);"
+                    + "WizardOSNative.browserBoundary(false);S.textContent='Boundary verified ('+r.gate+')';}"
+                    + "main().catch(e=>S.textContent='FAILED '+e.message);</script>";
+                String sandboxed = "<!doctype html><script>let gate='none';try{if(window.WizardOSGate){const a=WizardOSGate.call('','WizardOSDevice','version','[]');"
+                    + "gate=JSON.parse(a).e==='refused'?'refused':'answered '+a;if(WizardOSGate.methods('','WizardOSDevice'))gate='listed';}}catch(e){gate='threw '+e.message;}"
+                    + "parent.postMessage({probe:1,native:typeof WizardOSNative,device:typeof WizardOSDevice,gate},'*');</script>";
+                byte[] bytes = (request.startsWith("GET /wizard-os-home/") ? (boundary ? boundaryHtml : html) : request.startsWith("GET /probe-sandboxed ") ? sandboxed : request.startsWith("GET /probe ") ? child : request.startsWith("GET /not-shell ") ? wrongPath : "{}").getBytes(StandardCharsets.UTF_8);
                 OutputStream out = client.getOutputStream();
                 out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
                 out.write(bytes); out.flush();

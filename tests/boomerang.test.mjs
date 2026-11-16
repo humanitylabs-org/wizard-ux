@@ -82,6 +82,42 @@ test('the phone reply watcher is armed with the wzb_ watch id', async () => {
   assert.deepEqual(watched, [['wizard_t', 'wzb_b', '◷ Snooze · Quote']])
 })
 
+test('wizard-os#648: the phone watcher gets the return time, and a hidden phone page stops reading', async () => {
+  const watched = [], timers = []
+  const job = { id: 'b', kind: 'return', thread: 'wizard_t', when: { once: '2099-01-01T00:00:00.000Z' }, timezone: 'UTC', prompt: '', target: { message: null, excerpt: '' } }
+  const dev = { watchRun: (...a) => watched.push(['old', ...a]), watchRunAt: (...a) => watched.push(['at', ...a]) }
+  let clock = Date.now()
+  class FakeDate extends Date { static now() { return clock } }
+  const { B, calls, sandbox } = load([job], { Date: FakeDate, WizardOSDevice: dev, setInterval: fn => { timers.push(fn); return 1 }, WizLive: { session: () => ({ title: 'Quote', status: 'completed' }) } })
+  await B.refresh()
+  assert.deepEqual(watched, [['at', 'wizard_t', 'wzb_b', '◷ Snooze · Quote', String(Date.parse('2099-01-01T00:00:00.000Z'))]])
+  const reads = () => calls.filter(c => c.method === 'GET').length
+  const before = reads()
+  sandbox.document.hidden = true
+  for (const fn of timers) fn()
+  await new Promise(r => setTimeout(r, 0))
+  assert.equal(reads(), before, 'a hidden phone page reads no schedules every 15 s')
+  clock += 10 * 60000 + 1
+  for (const fn of timers) fn()
+  await new Promise(r => setTimeout(r, 0))
+  assert.equal(reads(), before + 1, 'every 10 minutes it still looks, so a Snooze set on another device is armed')
+  sandbox.document.hidden = false
+  for (const fn of timers) fn()
+  await new Promise(r => setTimeout(r, 0))
+  assert.ok(reads() > before, 'a visible page still reads them')
+})
+
+test('wizard-os#648: a hidden desktop tab keeps reading (it notifies on its own)', async () => {
+  const timers = []
+  const { calls, sandbox } = load([], { setInterval: fn => { timers.push(fn); return 1 } })
+  await new Promise(r => setTimeout(r, 0))
+  const before = calls.length
+  sandbox.document.hidden = true
+  for (const fn of timers) fn()
+  await new Promise(r => setTimeout(r, 0))
+  assert.ok(calls.length > before)
+})
+
 test('wall-clock time in the chosen zone becomes the right instant', () => {
   const { B } = load()
   assert.equal(B._wallToUtc('2026-10-22', '09:00', 'Asia/Bangkok'), '2026-10-22T02:00:00.000Z')

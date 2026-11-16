@@ -4,7 +4,7 @@ import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../../web/core/chats.js', import.meta.url), 'utf8');
-export function listFixture({ status = false, query = '', busy = false, footer = true, inputRows = null, pinned = [], unread = () => false } = {}) {
+export function listFixture({ status = false, query = '', busy = false, footer = true, inputRows = null, pinned = [], unread = () => false, reach = null } = {}) {
   const state = { q: query }, writes = [], groups = Object.fromEntries(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive'].map(k => [k, [{ id: k, title: 'match', section: k }]]));
   const rows = inputRows || Object.values(groups).flat(), el = { querySelector: () => null, innerHTML: '', firstElementChild: null };
   const w = { id: 'synthetic', thread: null };
@@ -17,7 +17,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
     syncListTitle: no, closeStream: no, winAgent: empty, STATUS: {}, focusOf: () => null, notes: () => ({ awake: [], later: [] }), focusMatches: () => true,
     PIN: { partition: rows => ({ pinned: rows.filter(s => pinned.includes(s.id)), rest: rows.filter(s => !pinned.includes(s.id)) }) }, snoozeLast: () => false, owner: () => w.id, newDrafts: () => [], esc: String,
     matchFilters: () => [], OUTBOX: null, sendPill: empty, PW: null, byStatus: () => status, readyOrdered: identity, workingOrdered: identity, workingOrderBar: () => '<div class="ch-rdy-bar" aria-label="Order Working"></div>',
-    SEC_PAGE: 40, STALE_LIST: 120000, waitsOn: () => false, deferredOf: () => false, isWorking: () => false, attOf: () => null,
+    ...(reach ? { WizReach: reach } : {}), SEC_PAGE: 40, STALE_LIST: 120000, waitsOn: () => false, deferredOf: () => false, isWorking: () => false, attOf: () => null,
     archSel: empty, readyBody: (list, row) => list.map(row).join(''), chatRow: (s, snip, tag) => `<div class="ch-row" data-chopen="${s.id}">${tag ? `<span class="ch-search-status">${tag}</span>` : ''}</div>`,
     listPlace: () => null, storedListPlace: () => null, compactOn: () => false, focusedAgent: empty, focusStrip: empty,
     clearReading: no, keptSheet: no, restoreSheet: no, restoreListPlace: () => true, bindFocusStrip: no,

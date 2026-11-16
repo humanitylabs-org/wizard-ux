@@ -66,20 +66,6 @@ test('phone navigation keeps active and inactive app marks smaller and inside th
   assert.match(active[1], /max-height:\s*54%;/);
 });
 
-test('two-orb active marks preserve the Hermes light badge and black portrait', () => {
-  const css = read('web/layouts/two-orb/layout.css');
-  assert.match(css, /#orbApp :is\(img, \.sgi, svg\)\s*\{[^}]*max-width:\s*24px;[^}]*max-height:\s*24px;[^}]*\}/s,
-    'all active-orb marks keep the same containment cap');
-  assert.match(css, /#orbApp :is\(img, \.sgi:not\(\.sg-hermes\), svg\)\s*\{[^}]*filter:\s*brightness\(0\) invert\(1\);[^}]*\}/s,
-    'only ordinary masks are whitened in the active orb');
-  assert.match(css, /#orbApp \.sgi:not\(\.sg-hermes\)\s*\{[^}]*background:\s*(?:#fff|white);[^}]*\}/s,
-    'the layout never paints over the Hermes badge');
-  assert.match(css, /:is\(\.to-face, \.to-chip-sig\) \.sgi\s*\{[^}]*width:\s*82%;[^}]*height:\s*82%;[^}]*\}/s,
-    'all agent marks keep the approved optical box');
-  assert.match(css, /:is\(\.to-face, \.to-chip-sig\) \.sgi:not\(\.sg-hermes\)\s*\{[^}]*filter:\s*brightness\(0\) invert\(1\)[^}]*\}/s,
-    'agent-orb whitening also excludes the full-colour Hermes badge');
-});
-
 test('Cloudflare wears the warm cloud', () => {
   const S = sigil(), s = S.of({ id: 'wizard-cloudflare', name: 'Cloudflare (Testing)' });
   assert.equal(s.glyph, 'cloud');

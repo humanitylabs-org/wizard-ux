@@ -18,7 +18,7 @@
   const agent = () => { try { return window.WizConfig?.agent() || 'Wizard'; } catch (e) { return 'Wizard'; } };
   let netOpen = false;
   /* Connection trouble is only ever a small pill at the top, after a grace so a momentary blip shows nothing. The
-   * checks open only when the owner taps the pill (or Troubleshoot); they never open by themselves, and a voice or
+   * checks open only when the owner taps the pill; Troubleshoot on the pill opens the Troubleshooter; neither opens by itself, and a voice or
    * capture starting tucks them away again. (James, 1 Nov: an automatic pop-up for a short outage is too much.) */
   function captureBusy() {
     const shared = window.WizAppCapture?.getState?.();
@@ -169,7 +169,9 @@
     if (!(net === 'offline' || net === 'reconnecting')) netOpen = false;
     if ((net === 'offline' || net === 'reconnecting') && alerted()) {
       if (captureBusy()) captureChanged();
-      // Tucked away: one small pill that says what still works. Tapping it brings the checks back.
+      // Tucked away: one small pill that says what still works. Tapping it brings the checks back; its Troubleshoot
+      // button opens the real Troubleshooter in one tap (issue 1472: the only visible way there during an outage, so
+      // tests/offline-pill-troubleshoot.test.mjs fails if a redesign drops it).
       if (!offOpen) {
         const kind = net === 'offline' ? 'offline' : 'reconnecting';
         const diagnosis = window.WizReach?.failure();
@@ -177,7 +179,7 @@
         // The same request-neutral words every read surface uses (WizReach.label); a device that is simply offline
         // also says what still happens to what you write.
         const short = String(window.WizReach?.label?.('read', { diagnosis }) || diagnosis?.short || 'Reconnecting…').replace(/ · retrying$/, '');
-        parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxoffopen aria-label="${esc(short)}. Show connection checks">${esc(short)}</button></span></div>`);
+        parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxoffopen aria-label="${esc(short)}. Show connection checks">${esc(short)}</button><span class="wx-actions"><button type="button" data-wxtroubleshoot aria-label="Open the Troubleshooter">Troubleshoot</button></span></span></div>`);
       }
     }
     else if (net === 'restored' && !offHappy) parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);

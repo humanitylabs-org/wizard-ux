@@ -134,6 +134,11 @@
   // The Importer drops its own title inside the Welcome card, which already says "Bring your AI".
   const embedUrl = u => { try { const x = new URL(u, location.href); x.searchParams.set('embedded', '1'); return x.href; } catch (e) { return u; } };
   const agent = () => { try { return window.WizConfig?.agent?.() || 'Wizard'; } catch (e) { return 'Wizard'; } };
+  // Browser owner boundary (wizard-os#133, box switch): the provider sign-in and the Importer are app pages, so they run
+  // sandboxed (opaque origin) like any app window; the attribute must be in the markup so the first load is sandboxed.
+  // The app id puts the app's saved settings in the frame's name, as an app window gets them (core/browser-boundary.js).
+  const sbx = (u, id) => { const B = window.WizBrowserBoundary; return B?.enabled ? ' ' + B.frameAttributes(u, id) : ''; };
+  let frameOff = () => {};
 
   function dots() {
     const all = order(), i = all.indexOf(step);
@@ -172,7 +177,7 @@
     if (provider) {
       const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
       return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
-        <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}" title="${esc(p.name)} sign-in"></iframe></div>
+        <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
         <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : 'This continues by itself once you are signed in.'}</p>`;
     }
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
@@ -197,7 +202,7 @@
     if (bringOpen) {
       const a = H.app(IMPORTER);
       return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Bring your AI</h2></header>
-        <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}" title="Importer"></iframe></div>
+        <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}"${sbx(embedUrl(a?.url || ''), IMPORTER)} title="Importer"></iframe></div>
         <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
     }
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Bring your AI</h2><p>Optional. Used ChatGPT, Claude or another agent? Bring your memories, chats and skills so ${esc(agent())} knows you from day one.</p></header>
@@ -219,7 +224,18 @@
     card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
-    if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); back(); } }, true); } catch (e) {} });
+    frameOff(); frameOff = () => {};
+    const B = window.WizBrowserBoundary;
+    if (fr && B?.enabled && fr.hasAttribute('sandbox')) {
+      // Sandboxed: the shell never reads the page. Esc comes over the boundary channel instead (core/browser-boundary.js).
+      // The page is an installed app's own page, so it is attached as that app's window (core/app-services.js): its
+      // calls to its own backend, saved settings and IndexedDB go through the shell as in any app window. Without that
+      // an opaque sign-in page's fetch goes out with Origin null and no cookie, and signing in never finishes.
+      const id = step === 'ai' ? provider : IMPORTER, url = H?.app?.(id)?.url, here = () => !!el && fr.isConnected && card.contains(fr);
+      const offApp = url && window.WizAppServices?.attach?.(fr, { appId: id, path: url, isFront: here, isVisible: here, back: () => { if (!here()) return false; back(); return true; } });
+      const detach = B.attach(fr), stop = B.onInput((f, ev) => { if (f === fr && fr.isConnected && ev.kind === 'key' && ev.type === 'keydown' && ev.key === 'Escape') back(); });
+      frameOff = () => { stop(); if (typeof offApp === 'function') offApp(); detach(); };
+    } else if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); back(); } }, true); } catch (e) {} });
     // The name field takes focus with a mouse and keyboard; on a phone the keyboard waits for a tap on the field.
     const fine = (() => { try { return matchMedia('(pointer: fine)').matches; } catch (e) { return false; } })();
     if (focus) requestAnimationFrame(() => { const nm = fine && card.querySelector('.wl-naming input:not([disabled])');
@@ -269,6 +285,7 @@
 
   function close() {
     clearTimeout(pollT);
+    frameOff(); frameOff = () => {};
     if (!el) return;
     el.remove(); el = null;
     document.documentElement.classList.remove('wl-open');

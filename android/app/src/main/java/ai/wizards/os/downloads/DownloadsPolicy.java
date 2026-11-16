@@ -31,6 +31,7 @@ public final class DownloadsPolicy {
         public String status = "pending";
         public long started;      // ms epoch
         public long finished;     // ms epoch, 0 while in flight
+        public boolean quiet;     // started without Android's own notification (Wizard's banner showed it): kept, never sent to the page
 
         public boolean inFlight() { return "pending".equals(status) || "running".equals(status) || "paused".equals(status); }
 
@@ -54,6 +55,7 @@ public final class DownloadsPolicy {
             it.status = knownStatus(o.optString("status", "pending"));
             it.started = o.optLong("started", 0);
             it.finished = o.optLong("finished", 0);
+            it.quiet = o.optBoolean("quiet", false);
             return it;
         }
     }
@@ -71,6 +73,102 @@ public final class DownloadsPolicy {
             n = n.substring(0, MAX_NAME - ext.length()) + ext;
         }
         return n;
+    }
+
+    /**
+     * The file name a server gave in Content-Disposition (attachment or inline), or null when it gave none.
+     * RFC 6266: filename* (RFC 5987, e.g. UTF-8''R%C3%A9sum%C3%A9.pdf) wins over filename. Android's own
+     * URLUtil.guessFileName only reads a lone `attachment; filename="x"`, so Messenger's header (which adds filename*
+     * for long or non-ASCII names) fell back to the URL's random media id (wizard-ux issue 1342).
+     */
+    public static String dispositionName(String disposition) {
+        if (disposition == null) return null;
+        String star = null, plain = null;
+        for (String part : splitParams(disposition)) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+            String key = part.substring(0, eq).trim().toLowerCase(Locale.ROOT);
+            String val = part.substring(eq + 1).trim();
+            if (key.equals("filename*") && star == null) star = extValue(val);
+            else if (key.equals("filename") && plain == null) plain = unquote(val);
+        }
+        String n = star != null && !star.trim().isEmpty() ? star : plain;
+        return n == null || n.trim().isEmpty() ? null : n;
+    }
+
+    /** A name safe to save under Downloads: displayName, plus no characters Android's file systems refuse. */
+    public static String saveName(String raw) {
+        String n = displayName(raw).replaceAll("[\\\\/:*?\"<>|]", "_");
+        while (n.startsWith(".")) n = "_" + n.substring(1); // never a hidden file
+        return n;
+    }
+
+    /**
+     * A free name for Downloads: DownloadManager never overwrites and fails with ERROR_FILE_ALREADY_EXISTS, so a second
+     * "report.pdf" becomes "report (1).pdf". {@code taken} says whether a name is already used.
+     */
+    public static String uniqueName(String name, java.util.function.Predicate<String> taken) {
+        if (taken == null || !taken.test(name)) return name;
+        int dot = name.lastIndexOf('.');
+        String stem = dot > 0 ? name.substring(0, dot) : name, ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 1; i < 1000; i++) {
+            String n = stem + " (" + i + ")" + ext;
+            if (!taken.test(n)) return n;
+        }
+        return stem + " (" + System.currentTimeMillis() + ")" + ext;
+    }
+
+    /**
+     * A quiet download (no Android notification) that ends while no Wizard page is listening (the app is in the
+     * background) gets Wizard's own quiet tray note, so its finish is never silent. One the page heard needs none.
+     */
+    public static boolean awayNotice(Item it, boolean pageListening) {
+        return it != null && it.quiet && !pageListening && !it.inFlight();
+    }
+
+    private static List<String> splitParams(String h) {
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < h.length(); i++) {
+            char c = h.charAt(i);
+            if (c == '"') quoted = !quoted;
+            else if (c == '\\' && quoted && i + 1 < h.length()) { cur.append(c).append(h.charAt(++i)); continue; }
+            if (c == ';' && !quoted) { out.add(cur.toString()); cur.setLength(0); }
+            else cur.append(c);
+        }
+        out.add(cur.toString());
+        return out;
+    }
+
+    private static String unquote(String v) {
+        if (v.length() >= 2 && v.startsWith("\"") && v.endsWith("\"")) v = v.substring(1, v.length() - 1).replaceAll("\\\\(.)", "$1");
+        return v;
+    }
+
+    /** RFC 5987 ext-value: charset'lang'pct-encoded. Only UTF-8 and ISO-8859-1 are read; anything else is ignored. */
+    private static String extValue(String v) {
+        v = unquote(v);
+        int a = v.indexOf('\''), b = a < 0 ? -1 : v.indexOf('\'', a + 1);
+        if (b < 0) return null;
+        String cs = v.substring(0, a).trim().toUpperCase(Locale.ROOT);
+        java.nio.charset.Charset charset;
+        if (cs.equals("UTF-8")) charset = java.nio.charset.StandardCharsets.UTF_8;
+        else if (cs.equals("ISO-8859-1")) charset = java.nio.charset.StandardCharsets.ISO_8859_1;
+        else return null;
+        String enc = v.substring(b + 1);
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        for (int i = 0; i < enc.length(); i++) {
+            char c = enc.charAt(i);
+            if (c == '%') {
+                if (i + 2 >= enc.length()) return null;
+                int hi = Character.digit(enc.charAt(i + 1), 16), lo = Character.digit(enc.charAt(i + 2), 16);
+                if (hi < 0 || lo < 0) return null;
+                bytes.write(hi * 16 + lo); i += 2;
+            } else if (c > 0x7f) return null;
+            else bytes.write(c);
+        }
+        return new String(bytes.toByteArray(), charset);
     }
 
     static String knownStatus(String s) {
@@ -155,7 +253,9 @@ public final class DownloadsPolicy {
         JSONArray a = new JSONArray();
         for (Item it : items) {
             try {
-                a.put(it.toJson().put("total", it.total));
+                JSONObject o = it.toJson().put("total", it.total);
+                if (it.quiet) o.put("quiet", true);
+                a.put(o);
             } catch (JSONException e) { throw new IllegalStateException(e); }
         }
         return a.toString();

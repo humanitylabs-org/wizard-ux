@@ -42,7 +42,9 @@
     const d=DEV();if(!d||typeof d.watchRun!=='function'||r.status!=='scheduled')return;
     const s=live()?.session?.(r.session_id);if(!force&&s&&['submitting','queued','running','stopping','waiting_for_approval'].includes(s.status))return;
     if(!force&&Date.now()-(watchedAt.get(r.id)||0)<30*60000)return;
-    try{d.watchRun(r.session_id,WATCH+r.id,('◷ Snooze · '+titleOf(r)).slice(0,60));watchedAt.set(r.id,Date.now())}catch{}
+    // With its return time, the watcher reads nothing before then (wizard-os issue 648); an older app has only watchRun.
+    const title=('◷ Snooze · '+titleOf(r)).slice(0,60),due=Date.parse(r.due_at||'');
+    try{typeof d.watchRunAt==='function'&&due>0?d.watchRunAt(r.session_id,WATCH+r.id,title,String(due)):d.watchRun(r.session_id,WATCH+r.id,title);watchedAt.set(r.id,Date.now())}catch{}
   }
   // Something came back: bring an archived or deferred thread back to Ready, and tell the owner on this screen.
   function arrived(list){
@@ -164,6 +166,10 @@
     if(target.closest('[data-boom-change]')){open({sessionId:r.session_id,targetKind:r.target_kind,anchorAt:r.anchor_at,context:r.context,note:r.note,title:titleOf(r)},r);return true}
     try{if(target.closest('[data-boom-done]')){await acknowledge(id);return true}if(target.closest('[data-boom-cancel]')){await cancel(id);return true}}catch{window.dispatchEvent(new CustomEvent('wos:boomerang-error'))}
     return false}
-  function start(){if(poll)return;void refresh();poll=setInterval(refresh,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()});addEventListener('focus',()=>void refresh())}
+  // In the phone app the native watcher tells the owner when a Snooze is back, so a hidden page reads only every
+  // 10 minutes (wizard-os issue 648), enough to arm a Snooze set on another device.
+  const HIDDEN_EVERY=10*60000;let readAt=0;
+  const due=()=>{if(document.hidden&&DEV()&&Date.now()-readAt<HIDDEN_EVERY)return false;readAt=Date.now();return true};
+  function start(){if(poll)return;readAt=Date.now();void refresh();poll=setInterval(()=>{if(due())void refresh()},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()});addEventListener('focus',()=>void refresh())}
   window.WosBoomerang={someday,start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
 })();

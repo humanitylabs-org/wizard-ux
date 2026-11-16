@@ -263,12 +263,13 @@ html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-ms
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main :is(.ch-swrow, .ch-latest) { width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin-left: auto; margin-right: auto; }
 /* ↓ Latest (round 6): never on the composer however tall it grows: in the thread's flow just above it, centred */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-thread > .ch-latest {
-  position: relative !important; inset: auto !important; transform: none !important; flex: none; align-self: center; width: auto; margin: -46px auto 14px !important; z-index: 3;
+  position: relative !important; inset: auto !important; transform: none !important; flex: none; align-self: center; width: auto; margin: calc(-46px - var(--ch-latest-lift, 0px)) auto calc(14px + var(--ch-latest-lift, 0px)) !important; z-index: 3;
 }
+/* issue 1380: chats.js sets --ch-latest-lift when ↓ Latest would sit on Mark done · Snooze · Archive; it rises above that row */
 /* Snooze / Archive (round 6, Miguel: they peeked half-hidden behind the composer's top edge when it grew): a clean row
  * right above the composer, right-aligned, that stays there (sticky) when the composer grows or the chat scrolls */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs > .ch-tacts {
-  position: sticky; bottom: 0; z-index: 2; margin: 4px 0 0; padding: 12px 0 4px; background: linear-gradient(to top, var(--aad-main) 62%, transparent);
+  position: sticky; bottom: 0; z-index: 2; margin: 4px 0 0; padding: 12px 0 4px; background: linear-gradient(to top, var(--aad-main) 62%, transparent); flex-wrap: wrap; row-gap: 8px;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose {
   width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin: 0 auto 24px; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important;
@@ -990,7 +991,10 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #
 }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role] > .win > :is(.wbody, .wbar) { transition: none; }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-mode="tiled"]) :is(.aad-grip, .aad-pload) { display: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"] :is(.aad-side, .aad-vt, .aad-top, #bar) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"] :is(.aad-vt, .aad-top, #bar) { display: none !important; }
+/* (a chat's Back in full screen shows the list over it, still full screen: James, 12 Nov 2026) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"]:not([data-aad-side="over"]) .aad-side { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"][data-aad-side="over"] .aad-side { left: 0; top: 0; bottom: 0; }
 /* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane in the sidebar (api.sessions.channels).
  * Activity: its tabs over the sidebar's own rows, each row with a muted "# channel" second line (56 px, two lines).
  * Channels and a channel's feed: the pane fills the sidebar in place of the rows; the feed's message box at its foot. */
@@ -1050,3 +1054,64 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"][data
  * the Mac app's title-bar drag strip leaves those spots to the page (desktop.js macHoles). Never seen, never hit. */
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] #bar > .aad-mac-holes { position: absolute; inset: 0; pointer-events: none !important; visibility: visible; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-native-chrome="mac"] #bar > .aad-mac-holes > i { position: absolute; display: block; pointer-events: none !important; }
+
+/* ---------- a narrower window, one app at a time (desktop.js ONE: under 1100 px; James, 12 Nov 2026) ----------
+ * desktop.js sets data-aad-one (app | chats) while the window is narrower than ONE.from. The sidebar is gone beside an
+ * app ('none'), beside the chat from 680 px ('open'), or the whole main area as the chats list ('full'); the Apps
+ * column is the app bar (data-aad-tabs="bar", below) with Chats first; no split, side by side, Wider or sidebar fold. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="none"] { --aad-side: 0px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="none"] .aad-side { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] { --aad-side: var(--aad-pane-side-width, 100vw); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad-side, .aad-panel) { width: var(--aad-pane-side-width, 100%); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad-top, #bar) { visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"]:not([data-aad-tabs="bar"]) .aad-orb { visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] #stage > .wsp:not([data-aad-role="app"]) { visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-one] :is(.aad-modes, .aad-pw, .aad-tog, .aad-rtog, .aad-grip[data-grip="side"], .aad-grip[data-grip="app"]) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone { flex: none; display: flex; flex-direction: column; padding: 2px 8px 0; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vone { align-items: center; padding: 2px 0 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-top > .aad-oneback { flex: none; max-width: none; margin: 0 0 0 12px; pointer-events: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-onelist { flex: none; max-width: 45%; margin: 0 4px 0 -6px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtog[hidden] { display: none; }
+/* the Chats row: an app row's own look (.aad-vtab), kept out of the rows' list so their drag and numbering never see it */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats {
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px 0 8px; box-sizing: border-box; border-radius: 10px; cursor: pointer;
+  color: var(--aad-ink); background: none; transition: background 120ms ease; user-select: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats.is-on { background: var(--aad-held); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats.is-on .aad-vtn { font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vchats:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vchats { width: 40px; height: 40px; padding: 0; justify-content: center; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-vtn-bar, .aad-vtorb, .aad-vtfill) { display: none; }
+/* The app bar: the Apps column's own rows, laid along the dock edge desktop.js ONE.bar gives the pane geometry (the bar's
+ * box: --aad-pane-dock-*; its edge: data-aad-dock-edge). Chats, then half the apps, the orb's spot, the other half, All
+ * apps; each an icon over its name, the badge on the icon's corner. A side rail later = another edge plus its column
+ * rules here. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vt { flex-direction: row; align-items: center; justify-content: center; gap: 2px; padding: 0 8px; box-shadow: 0 -1px 0 var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] :is(.aad-vone, .aad-vtl, .aad-vtf) { display: contents; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] :is(.aad-vth, .aad-tidy, .aad-tidyx, .aad-vtsep, .aad-vtnone, .aad-vtdrop, .aad-grip[data-grip="tabs"]) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall > .aad-vtn:not(.aad-vtn-bar) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtx { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] :is(.aad-vchats, .aad-vtab, .aad-vall, .aad-vtfill) {
+  flex: 1 1 0; min-width: 0; max-width: 96px; width: auto; height: 52px; margin: 0; padding: 6px 2px 4px; box-sizing: border-box; border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtfill { visibility: hidden; pointer-events: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vchats { order: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] [data-half="l"] { order: 2; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtorb { order: 3; display: block; flex: none; width: 76px; height: 52px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] [data-half="r"] { order: 4; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall { order: 5; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtn { flex: none; max-width: 100%; color: var(--aad-ink-2); font: 500 0.6875rem / 1.2 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall > .aad-vtn-bar { display: block; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] :is(.aad-vtab.is-on, .aad-vchats.is-on) .aad-vtn { color: var(--aad-ink); font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtb { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.5625rem; box-shadow: 0 0 0 2px var(--aad-panel); display: grid !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall .aad-vti { width: 24px; height: 24px; }
+/* the orb at the bar's centre (its spot is .aad-vtorb's, the halves balanced by desktop.js); never in the composer here */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-orb { left: calc(var(--aad-pane-dock-x) + var(--aad-pane-dock-width) / 2 - 30px); bottom: calc(var(--aad-pane-dock-bottom) + (var(--aad-pane-dock-height) - 60px) / 2); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"][data-aad-feed] .aad-orb { visibility: visible; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .win .dchats .pane-main .ch-row2 { grid-template-columns: auto minmax(0, 1fr) auto 0 auto auto; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .win .dchats .pane-main .ch-row2::after { display: none; }
+/* everything else ends at the bar */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] #stage > .wsp:not([data-aad-role]) { bottom: var(--aad-pane-main-bottom); }

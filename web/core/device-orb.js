@@ -5,6 +5,10 @@
  * orb itself is native (it floats over other apps); its look is this Wizard's web/assist/everywhere.html. Its voice
  * is a device.recording take marked `send`: core/device-recording.js sends those when it next runs (at once while
  * this page is alive in the background, otherwise when the app is opened).
+ *
+ * Both Android apps: the floating orb wears the look of this page's orb (wizard-os#649). The full WizardOS app gets the
+ * skin id and its orb colour filter through WizardOSNative.everywhereLook(skin, filter) at start, on every skin change
+ * and when the app goes to the background; older APKs lack the method and keep their fixed look.
  */
 (() => {
   'use strict';
@@ -39,4 +43,16 @@
 
   window.WosDeviceOrb = { get ready() { return ready; }, get state() { return { ...state }; }, toggle, refresh };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', discover, { once: true }); else discover();
+
+  function sendLook() {
+    const N = window.WizardOSNative;
+    if (typeof N?.everywhereLook !== 'function') return;
+    const root = document.documentElement;
+    const skin = window.WosSkin?.current || root.dataset.skin || 'nebula';
+    // skins.js writes --sk-orb inline on <html> for every skin but Nebula (which has no filter).
+    try { N.everywhereLook(String(skin), root.style.getPropertyValue('--sk-orb').trim()); } catch (_) {}
+  }
+  window.addEventListener('wos:skin', () => setTimeout(sendLook, 0));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) sendLook(); });
+  sendLook();
 })();
