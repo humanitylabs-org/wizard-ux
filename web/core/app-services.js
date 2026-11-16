@@ -129,15 +129,24 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
+  // Android Chrome places the Paste bubble of a framed field from the frame's geometry before the keyboard resized it,
+  // so the first hold-to-paste in an app showed Paste at the top of the screen (or off it) until the app was reopened.
+  // One extra layout of the app document after each frame resize puts it back on the caret. Same-origin frames only.
+  function pasteRelayout(frame) {
+    let win; try { win = frame.contentWindow; if (!win || win.__wosPasteRelayout || !win.document) return; win.__wosPasteRelayout = true; } catch (_) { return; }
+    win.addEventListener('resize', () => {
+      try { const b = win.document.body; if (!b) return; const was = b.style.minHeight; b.style.minHeight = '1px'; win.requestAnimationFrame(() => { b.style.minHeight = was; }); } catch (_) {}
+    });
+  }
   function attach(frame, { appId, path, openThread, openContextDraft, isFront, isVisible, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
     const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now(), since: Date.now() };
     if (!registered(st)) return () => {};
-    const load = () => { if (st.boundaryNav) { st.navOk = st.navExpect; st.navExpect = false; } if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); stoppedCheck(st); };
+    const load = () => { if (st.boundaryNav) { st.navOk = st.navExpect; st.navExpect = false; } if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} pasteRelayout(frame); cleanupLegacy(st).catch(() => {}); restoreReturn(st); stoppedCheck(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); stoppedShow(st, false); if (st.badged) setBadge(st.appId, 0); };
-    frames.set(frame, st); frame.addEventListener('load', load);
+    frames.set(frame, st); frame.addEventListener('load', load); pasteRelayout(frame);
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     // Browser owner boundary (wizard-os#133): a sandboxed frame gets its Back/appearance/field channel. Every legacy
     // service below fails closed for it on its own (valid() cannot read an opaque document).
