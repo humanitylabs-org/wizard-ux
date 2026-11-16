@@ -205,16 +205,73 @@
     if (st.stopEl?.isConnected) return;
     const el = document.createElement('div'); el.className = 'wos-app-stopped'; el.setAttribute('role', 'status');
     const h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
-    h.textContent = appName(st) + ' is stopped.'; p.textContent = 'Ask your Wizard to start it, then tap Try again.';
-    b.type = 'button'; b.textContent = 'Try again';
-    b.addEventListener('click', async () => {
-      b.disabled = true;
+    h.textContent = appName(st) + ' is stopped.'; p.textContent = 'Tap Start to start it again.';
+    b.type = 'button'; b.textContent = 'Start';
+    b.addEventListener('click', () => stoppedStart(st, el, p, b));
+    el.append(h, p, b); host.appendChild(el); st.stopEl = el;
+  }
+  /* Start from the stopped page (wizard-ux issue 1475): the agent has no tool that starts an app, so the page starts it
+   * itself through the App Manager's owner route (wizard-app-manager#716, same owner gate as Store Update):
+   * POST store-install/_start/<app> {} -> 202 job, then GET the same address until `running` or `failed`. An App
+   * Manager without the route answers 400 "bad app id" or 404 "not found": the owner updates WizardOS first. */
+  const START_API = (() => {
+    try { const src = globalThis.document?.currentScript?.src; if (src) return new URL('../store-install/_start/', src).href; } catch (_) {}
+    return ORIGIN + '/wizard-os-home/store-install/_start/';
+  })();
+  const START_WAIT_MS = 180000, UP_WAIT_MS = 45000;
+  const nap = ms => new Promise(r => setTimeout(r, ms));
+  const oneLine = (e, fallback) => String(e || '').split('\n')[0].trim().slice(0, 240) || fallback;
+  async function startAsk(id, post) {
+    // Each request is bounded, so a box that takes the connection but never answers can't leave "Starting…" forever.
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), 20000);
+    try {
+      const res = await fetch(START_API + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}),
+        ...(post ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' } : {}) });
+      let j = null; try { j = await res.json(); } catch (_) {}
+      return { status: res.status, j: j && typeof j === 'object' ? j : {} };
+    } finally { if (t) clearTimeout(t); }
+  }
+  // {ok: true} | {old: true} (App Manager without the route) | {error: '<one line>'}
+  async function startApp(id) {
+    if (typeof fetch !== 'function') return { error: 'This device cannot start apps.' };
+    try {
+      let { status, j } = await startAsk(id, true), polls = 0, reposted = false;
+      const until = Date.now() + START_WAIT_MS;
+      for (;;) {
+        if (j.state === 'running') return { ok: true };
+        if (j.state === 'failed') return { error: oneLine(j.error, 'It did not start.') };
+        if (status === 400 && j.error === 'bad app id') return { old: true };
+        if (status === 404 && !/not installed/i.test(j.error || '')) {
+          if (polls && !reposted) { reposted = true; ({ status, j } = await startAsk(id, true)); continue; } // the App Manager restarted mid-start
+          return { old: true };
+        }
+        if (status === 405) return { old: true };
+        if (status < 200 || status > 299 || j.state !== 'starting') return { error: oneLine(j.error, 'Your Wizard answered ' + status + '.') };
+        if (Date.now() > until) return { error: 'It is taking a long time to start.' };
+        await nap(polls++ ? 1500 : 600);
+        ({ status, j } = await startAsk(id, false));
+      }
+    } catch (_) { return { error: 'Could not reach your Wizard.' }; }
+  }
+  async function stoppedStart(st, el, p, b) {
+    if (b.disabled) return;
+    const frame = st.frame, alive = () => frames.get(frame) === st && st.stopEl === el;
+    b.disabled = true; b.textContent = 'Starting…'; p.textContent = 'Starting ' + appName(st) + '…';
+    const r = await startApp(st.appId);
+    if (!alive()) return;
+    if (r.ok) {
+      // Running for the App Manager can come a moment before the app answers: wait for its address, then load it.
+      const u = pageUrl(frame), until = Date.now() + UP_WAIT_MS;
+      if (u && u.origin === ORIGIN && within(u, st.url)) while (Date.now() < until && await answersDown(u.href)) { await nap(1500); if (!alive()) return; }
       try { await window.WizCore?.refreshApps?.(); } catch (_) {}
-      if (frames.get(frame) !== st) return;
+      if (!alive()) return;
       st.stopTried = true; stoppedShow(st, false);
       stoppedReload(st, pageUrl(frame));
-    });
-    el.append(h, p, b); host.appendChild(el); st.stopEl = el;
+      return;
+    }
+    b.disabled = false;
+    if (r.old) { b.textContent = 'Start'; p.textContent = 'Update WizardOS in Settings, then tap Start.'; return; }
+    b.textContent = 'Retry'; p.textContent = 'Could not start ' + appName(st) + ': ' + r.error;
   }
   // Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): an app in front says the
   // owner read a chat ({network, names}); the WizardOS Android app clears that chat app's notification from the tray
