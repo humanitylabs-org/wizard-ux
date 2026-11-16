@@ -4,7 +4,7 @@
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
-import {installRelease} from './store-install.js';
+import {installRelease, followInstall, runningInstall} from './store-install.js';
 import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetRemoved, pendingForgets} from './store-remove.js';
 import {githubStatus, githubStart, githubSignOut, githubSheet, normalizeStatus, shouldPoll} from './store-github.js';
 await window.WosAppSetup.ready;
@@ -104,7 +104,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     }
     // First-run shell discovery can finish after the Store's own reads.
     try { if(framed) await parent.WizCore?.appsLoaded?.(); } catch (_) {}
-    S.loaded = true; paint();
+    S.loaded = true; paint(); resumeInstalls();
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
     else if(top()==='search') search(S.q);
@@ -498,6 +498,33 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
         if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), replace: true }, location.origin);
       }
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
+    finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
+  }
+  // A reload while an install/update runs (#1481): ask the App Manager for the job of every row that would offer
+  // Update/Switch or whose Runtipi status is in-between (store_start.TRANSITIONAL + restarting), and follow a running
+  // one to its end without posting again. Each job is followed once; nothing opens when it ends.
+  const MIDWAY = /^(installing|updating|backing_up|restoring|starting|stopping|resetting|uninstalling|restarting)$/;
+  const resumed = new Set();
+  function resumeInstalls() {
+    for (const base of S.apps) {
+      const a = selected(base), i = S.installed.get(key(a));
+      if (!i || i.conflict || S.busy.has(a.id) || S.removing.has(a.id) || !(['update','switch'].includes(status(a)) || MIDWAY.test(i.status || ''))) continue;
+      runningInstall(a.id).then(r => r && resume(a, r));
+    }
+  }
+  async function resume(a, { endpoint, job }) {
+    const at = `${a.id}|${job.started}`, sel = job.selection;
+    if (resumed.has(at) || S.busy.has(a.id) || S.removing.has(a.id)) return;
+    resumed.add(at); S.busy.add(a.id); S.busyAt.set(a.id, Number(job.started) * 1000 || Date.now()); refresh();
+    const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
+    try {
+      await followInstall(endpoint, job, sel);
+      try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
+      await load(true);
+      const actual=S.installed.get(key(a));
+      if(!actual || actual.conflict || actual.repo!==sel.repo || actual.commit!==sel.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
+      say(successMessage(await appAccess(routerId(a))), true);
+    } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
   }
 
