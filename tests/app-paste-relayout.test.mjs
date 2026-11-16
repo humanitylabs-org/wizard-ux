@@ -26,6 +26,13 @@ test('a keyboard resize of an app frame lays the app out once more, then restore
  f.frames.shift()();
  assert.equal(f.body.style.minHeight,'');
 });
+test('several resizes before the next frame keep the app\'s own min-height',()=>{
+ const f=fixture(); f.body.style.minHeight='50vh';
+ f.listeners.resize[0](); f.listeners.resize[0]();
+ assert.equal(f.frames.length,1);
+ f.frames.shift()();
+ assert.equal(f.body.style.minHeight,'50vh');
+});
 test('attaching the same frame again does not stack resize listeners',()=>{
  const f=fixture();
  f.window.WizAppServices.attach(f.frame,{appId:'telegram',path:f.app.url,isVisible:()=>true});

@@ -134,8 +134,14 @@
   // One extra layout of the app document after each frame resize puts it back on the caret. Same-origin frames only.
   function pasteRelayout(frame) {
     let win; try { win = frame.contentWindow; if (!win || win.__wosPasteRelayout || !win.document) return; win.__wosPasteRelayout = true; } catch (_) { return; }
+    // Coalesced: several resizes before the next frame make one nudge, and the app's own min-height comes back.
+    let pending = null;
     win.addEventListener('resize', () => {
-      try { const b = win.document.body; if (!b) return; const was = b.style.minHeight; b.style.minHeight = '1px'; win.requestAnimationFrame(() => { b.style.minHeight = was; }); } catch (_) {}
+      try {
+        const b = win.document.body; if (!b || pending) return;
+        pending = { b, was: b.style.minHeight }; b.style.minHeight = '1px';
+        win.requestAnimationFrame(() => { const p = pending; pending = null; if (p) p.b.style.minHeight = p.was; });
+      } catch (_) { pending = null; }
     });
   }
   function attach(frame, { appId, path, openThread, openContextDraft, isFront, isVisible, back, readingStorage } = {}) {
