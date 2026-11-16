@@ -222,11 +222,14 @@
   const nap = ms => new Promise(r => setTimeout(r, ms));
   const oneLine = (e, fallback) => String(e || '').split('\n')[0].trim().slice(0, 240) || fallback;
   async function startAsk(id, post) {
-    const res = await fetch(START_API + encodeURIComponent(id), post
-      ? { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' }
-      : { credentials: 'same-origin', cache: 'no-store' });
-    let j = null; try { j = await res.json(); } catch (_) {}
-    return { status: res.status, j: j && typeof j === 'object' ? j : {} };
+    // Each request is bounded, so a box that takes the connection but never answers can't leave "Starting…" forever.
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), 20000);
+    try {
+      const res = await fetch(START_API + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}),
+        ...(post ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' } : {}) });
+      let j = null; try { j = await res.json(); } catch (_) {}
+      return { status: res.status, j: j && typeof j === 'object' ? j : {} };
+    } finally { if (t) clearTimeout(t); }
   }
   // {ok: true} | {old: true} (App Manager without the route) | {error: '<one line>'}
   async function startApp(id) {

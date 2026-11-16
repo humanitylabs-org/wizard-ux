@@ -896,6 +896,12 @@
       "kind": "write-or-stream",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard-os-home/store-install/_start": {
+      "status": "not-exercised",
+      "source": "web/core/app-services.js",
+      "kind": "write-or-stream",
+      "note": "Only the stopped-app page's Start button calls it (wizard-ux#1475; tests/qa-app-stopped.cjs answers it with a stand-in). Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard-os-home/store-data/router/v1": {
       "status": "not-exercised",
       "source": "web/store/store-router.js",

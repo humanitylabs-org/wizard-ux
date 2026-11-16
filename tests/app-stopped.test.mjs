@@ -13,7 +13,7 @@ class El {
  addEventListener(t,f){(this.listeners[t]||=[]).push(f);} removeEventListener(){}
  find(cls){if(this.className===cls)return this;for(const c of this.children){const r=c.find?.(cls);if(r)return r;}return null;}
 }
-function fixture({status='running',answer={status:502,headers:{}},body=null,origin='https://wizard.example',url,start=null}={}) {
+function fixture({status='running',answer={status:502,headers:{}},body=null,origin='https://wizard.example',url,start=null,fastAbort=false}={}) {
  const location=new URL('https://wizard.example/wizard-os-home/'), id='messenger';
  const appUrl=url||'/messenger/', loads=[], fetched=[];
  const head=new El('head'), byId={};
@@ -29,9 +29,11 @@ function fixture({status='running',answer={status:502,headers:{}},body=null,orig
  const starts=[];
  const fetch=async(h,o)=>{
   if(h.includes('/store-install/_start/')){starts.push([h,o]);const a=start?await start(o?.method||'GET',starts.length,h):{status:404,json:{error:'not found'}};
+   if(a.hang)return new Promise((_,no)=>o.signal.addEventListener('abort',()=>no(new Error('aborted'))));
    if(a.throw)throw new Error('offline');return {status:a.status,headers:{get:()=>null},json:async()=>a.json};}
   fetched.push([h,o]);return {status:answer.status,headers:{get:k=>answer.headers[k.toLowerCase()]??null},body:{cancel(){}}};};
- vm.runInNewContext(source,{window,location,URL,fetch,AbortController,addEventListener(){},setInterval(){},setTimeout,clearTimeout,document,CustomEvent:class{},navigator:{}});
+ const timer=fastAbort?(fn,ms)=>setTimeout(fn,ms===20000?1:ms):setTimeout;
+ vm.runInNewContext(source,{window,location,URL,fetch,AbortController,addEventListener(){},setInterval(){},setTimeout:timer,clearTimeout,document,CustomEvent:class{},navigator:{}});
  window.WizAppServices.attach(frame,{appId:id,path:app.url,isVisible:()=>true});
  const fire=async()=>{for(const f of frame.listeners.load||[])f();await new Promise(r=>setTimeout(r,5));};
  return {app,host,frame,fire,fetched,loads,starts,answer,panel:()=>host.find('wos-app-stopped'),child};
@@ -108,4 +110,11 @@ test('an empty page whose app answers by the time it is asked loads again once (
 test('an opaque page (browser boundary) that answers is not reloaded',async()=>{
  const f=fixture({answer:{status:200,headers:{}}}); f.frame.contentDocument=null; await f.fire();
  assert.equal(f.panel(),null); assert.equal(f.loads.length,0);
+});
+test('every start request carries an abort deadline, so a box that never answers ends in Retry',async()=>{
+ const f=fixture({fastAbort:true,start:async()=>({hang:true})}); await f.fire(); const p=f.panel();
+ await click(p.children[2]);
+ assert.ok(f.starts[0][1].signal,'the POST has an abort signal');
+ assert.equal(p.children[2].textContent,'Retry'); assert.equal(p.children[2].disabled,false);
+ assert.equal(p.children[1].textContent,'Could not start Messenger: Could not reach your Wizard.');
 });
