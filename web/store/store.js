@@ -524,7 +524,11 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       const actual=S.installed.get(key(a));
       if(!actual || actual.conflict || actual.repo!==sel.repo || actual.commit!==sel.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
       say(successMessage(await appAccess(routerId(a))), true);
-    } catch (err) { say(err.message || 'Install failed.'); }
+    } catch (err) {
+      // A lost poll must not block a later reattach: a job that really ended is no longer `installing`, so it can't
+      // be resumed again anyway.
+      resumed.delete(at); say(err.message || 'Install failed.');
+    }
     finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
   }
 
