@@ -18,6 +18,11 @@ export async function installRelease(a, { base = new URL('../', import.meta.url)
   if (r.status === 404 && !j.error) throw new Error('This Wizard’s App Manager needs updating before Store installs are available.');
   if (r.status === 403 || r.status === 404) throw new Error(j.error || 'Not allowed.');
   if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
+  return followInstall(endpoint, j, selection);
+}
+// Follows a running App Manager job to its end without posting again: a tap and a reload's resume share it (issue 1481).
+export async function followInstall(endpoint, job, selection) {
+  let j = job;
   for (let i = 0; j.state === 'installing' && i < 360; i++) {
     await new Promise(res => setTimeout(res, 2500));
     const s = await fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' });
@@ -26,4 +31,13 @@ export async function installRelease(a, { base = new URL('../', import.meta.url)
   if (j.state !== 'installed') throw new Error(j.error || 'The App Manager did not finish. Refresh to check its status.');
   if (!j.selection || ['source','repo','commit','operation'].some(k => j.selection[k] !== selection[k])) throw new Error('The App Manager returned a different release. Refresh before retrying.');
   return j;
+}
+// The job the App Manager is running for an app, or null (404 = no job; any other answer reads as none) (issue 1481).
+export async function runningInstall(id, { base = new URL('../', import.meta.url) } = {}) {
+  const endpoint = new URL('store-install/' + encodeURIComponent(id), base).href;
+  try {
+    const r = await fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' });
+    const job = r.ok ? await r.json().catch(() => null) : null;
+    return job?.state === 'installing' && job.selection && typeof job.selection === 'object' ? { endpoint, job } : null;
+  } catch (_) { return null; }
 }

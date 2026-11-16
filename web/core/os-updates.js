@@ -86,12 +86,16 @@
   const AU_API = new URL('../store-install/_app-updates', document.currentScript?.src || location.href).href;
   const AU_WAIT = 4000;   // ms the optional App Manager state may take before the list paints without it
   let apps = null, appsAt = 0, appsBusy = null, appsIssue = '', au = null;
-  let appAct = '', appMsg = {};   // the app button waiting for the App Manager; {id: {ok, text, at}} after it answered
+  let appAct = '', appMsg = {}, appsPoll = 0;   // the app button waiting for the App Manager; {id: {ok, text, at}} after it answered
   const APP_MSG_FOR = 120e3;      // how long a row keeps saying what its button did
   function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
   const BUG_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9][0-9]{0,9}$/;
+  // Every in-between Runtipi status (App Manager store_start.TRANSITIONAL, plus restarting) is busy (issue 1481).
+  const MIDWAY = /^(installing|updating|backing_up|restoring|starting|stopping|resetting|uninstalling|restarting)$/;
+  // The App Manager's running app updates (`running`, older App Managers: none): busy from its first step (issue 1481).
+  const STEP = { preparing: 'Updating…', updating: 'Updating…', installing: 'Updating…', checking: 'Checking…', 'rolling back': 'Rolling back…' };
   function appRows(doc, mgr) {
     const out = [], m = mgr && typeof mgr === 'object' ? mgr : {};
     const held = new Set(Array.isArray(m.holds) ? m.holds : []);
@@ -99,6 +103,7 @@
     const rolled = new Set(Array.isArray(m.last?.rolled_back) ? m.last.rolled_back : []);
     const fresh = new Set(Array.isArray(m.last?.updated) ? m.last.updated : []);
     const notes = m.notes && typeof m.notes === 'object' && !Array.isArray(m.notes) ? m.notes : null;
+    const running = new Map((Array.isArray(m.running) ? m.running : []).filter(r => r && typeof r.app === 'string').map(r => [r.app, String(r.step || '')]));
     for (const x of Array.isArray(doc?.installed) ? doc.installed : []) {
       const id = x?.info?.id; if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) continue;
       const urn = typeof x.info.urn === 'string' ? x.info.urn : '';
@@ -114,7 +119,8 @@
       }
       // A hold is standing policy: show it even while the app is up to date (Codex P2), never over a failure.
       if (held.has(id) && ['ready', 'current', 'unknown'].includes(state)) { state = 'held'; label = 'Held'; }
-      if (/^(updating|installing|starting|stopping|restarting)$/.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1)}…`; }
+      if (MIDWAY.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1).replace(/_/g, ' ')}…`; }
+      else if (running.has(id)) { state = 'busy'; label = STEP[running.get(id)] || 'Updating…'; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
       const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
       // The bug the App Manager filed or found for this failed version (wizard-app-manager#524), only a plain GitHub
@@ -151,14 +157,25 @@
         if (d && Array.isArray(d.installed)) { apps = appRows(d, au); appsIssue = ''; }
         else appsIssue = 'Couldn’t read the installed apps.';
       } catch (_) { appsIssue = 'Couldn’t reach the installed apps.'; }
-      appsAt = Date.now(); appsBusy = null; changed(); return apps;
+      appsAt = Date.now(); appsBusy = null; changed(); pollApps(); return apps;
     })();
     return appsBusy;
+  }
+  // While a row is busy, read the list again every 5 s so it clears by itself when the run ends; only while the list
+  // is on screen (a hidden page waits without reading), and it stops once nothing is busy (issue 1481).
+  function pollApps() {
+    if (appsPoll || !apps?.some(a => a.state === 'busy')) return;
+    appsPoll = setTimeout(() => {
+      appsPoll = 0;
+      let shown = false; try { shown = !!document.querySelector('[data-osu-apps]')?.getClientRects().length; } catch (_) {}
+      if (!appsOn() || !shown) return;
+      if (document.hidden) pollApps(); else void loadApps(true);
+    }, 5000);
   }
   function appsHtml() {
     if (!appsOn()) return '';
     // One read per minute at most, failed or not: a failed read must not refetch on every repaint.
-    if (!appsAt || Date.now() - appsAt > FRESH) void loadApps();
+    if (!appsAt || Date.now() - appsAt > FRESH) void loadApps(); else pollApps();
     const head = '<span class="osu-lbl">Apps</span>';
     if (!apps) return `<div class="osu-sec" data-osu-apps>${head}<p class="st-note" role="status">${esc(appsIssue || 'Checking apps…')}</p></div>`;
     const rows = apps.map(a => {
@@ -223,7 +240,8 @@
     }).finally(() => {
       appAct = ''; changed();
       // Read the rows again from GET; an update starts in the background, so look once more a moment later.
-      void reloadApps().then(() => { if (body.action === 'apply') setTimeout(() => void loadApps(true), 1500); });
+      // The run takes a few seconds to name the app in the App Manager's `running`; look until it does (issue 1481).
+      void reloadApps().then(() => { if (body.action === 'apply') for (const ms of [1500, 5000, 10000]) setTimeout(() => void loadApps(true), ms); });
     });
     return true;
   }
