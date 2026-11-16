@@ -240,7 +240,8 @@
     }).finally(() => {
       appAct = ''; changed();
       // Read the rows again from GET; an update starts in the background, so look once more a moment later.
-      void reloadApps().then(() => { if (body.action === 'apply') setTimeout(() => void loadApps(true), 1500); });
+      // The run takes a few seconds to name the app in the App Manager's `running`; look until it does (#1481).
+      void reloadApps().then(() => { if (body.action === 'apply') for (const ms of [1500, 5000, 10000]) setTimeout(() => void loadApps(true), ms); });
     });
     return true;
   }
