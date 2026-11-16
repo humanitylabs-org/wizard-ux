@@ -2215,7 +2215,7 @@
       } catch(e) { toast('!',String(e.message || e),2600);return 'busy'; }
       finally { dictationFinishing = false; }
       $('#voiceTime').textContent = '0:00';
-      try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
+      try { await VOICE.start(); } catch (e) { toast('🎙', e.code === 'update_busy' ? e.message : 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
     }
     if (action === 'start') return 'voice';
@@ -2309,7 +2309,7 @@
     const space = sid === '__new__' ? CHATS.chanSpaceOf?.(chatsWin(wid)) : null; // the AI apps feed is no desk window
     vMode = 'talk'; vNewChat = false; vChanKey = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '', ...(sid === '__new__' ? { box, ...(typeof space === 'string' ? { space } : {}) } : {}) }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
-    try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
+    try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', e.code === 'update_busy' ? e.message : 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';
   }
 
@@ -2407,7 +2407,7 @@
       vMode = 'dictate'; vNewChat = false; vTarget = null;
       dictTarget = fields().capture();
       $('#voiceTime').textContent = '0:00';
-      try { await VOICE.start(); } catch (e) { vMode = 'talk'; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
+      try { await VOICE.start(); } catch (e) { vMode = 'talk'; toast('🎙', e.code === 'update_busy' ? e.message : 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'dictating';
     }
     dictationFinishing = true;
