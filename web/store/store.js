@@ -500,7 +500,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
   }
-  // A reload while an install/update runs (#1481): ask the App Manager for the job of every row that would offer
+  // A reload while an install/update runs (issue 1481): ask the App Manager for the job of every row that would offer
   // Update/Switch or whose Runtipi status is in-between (store_start.TRANSITIONAL + restarting), and follow a running
   // one to its end without posting again. Each job is followed once; nothing opens when it ends.
   const MIDWAY = /^(installing|updating|backing_up|restoring|starting|stopping|resetting|uninstalling|restarting)$/;

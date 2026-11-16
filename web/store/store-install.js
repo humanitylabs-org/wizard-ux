@@ -20,7 +20,7 @@ export async function installRelease(a, { base = new URL('../', import.meta.url)
   if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
   return followInstall(endpoint, j, selection);
 }
-// Follows a running App Manager job to its end without posting again: a tap and a reload's resume share it (#1481).
+// Follows a running App Manager job to its end without posting again: a tap and a reload's resume share it (issue 1481).
 export async function followInstall(endpoint, job, selection) {
   let j = job;
   for (let i = 0; j.state === 'installing' && i < 360; i++) {
@@ -32,7 +32,7 @@ export async function followInstall(endpoint, job, selection) {
   if (!j.selection || ['source','repo','commit','operation'].some(k => j.selection[k] !== selection[k])) throw new Error('The App Manager returned a different release. Refresh before retrying.');
   return j;
 }
-// The job the App Manager is running for an app, or null (404 = no job; any other answer reads as none) (#1481).
+// The job the App Manager is running for an app, or null (404 = no job; any other answer reads as none) (issue 1481).
 export async function runningInstall(id, { base = new URL('../', import.meta.url) } = {}) {
   const endpoint = new URL('store-install/' + encodeURIComponent(id), base).href;
   try {

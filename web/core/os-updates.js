@@ -92,9 +92,9 @@
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
   const BUG_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9][0-9]{0,9}$/;
-  // Every in-between Runtipi status (App Manager store_start.TRANSITIONAL, plus restarting) is busy (#1481).
+  // Every in-between Runtipi status (App Manager store_start.TRANSITIONAL, plus restarting) is busy (issue 1481).
   const MIDWAY = /^(installing|updating|backing_up|restoring|starting|stopping|resetting|uninstalling|restarting)$/;
-  // The App Manager's running app updates (`running`, older App Managers: none): busy from its first step (#1481).
+  // The App Manager's running app updates (`running`, older App Managers: none): busy from its first step (issue 1481).
   const STEP = { preparing: 'Updating…', updating: 'Updating…', installing: 'Updating…', checking: 'Checking…', 'rolling back': 'Rolling back…' };
   function appRows(doc, mgr) {
     const out = [], m = mgr && typeof mgr === 'object' ? mgr : {};
@@ -162,7 +162,7 @@
     return appsBusy;
   }
   // While a row is busy, read the list again every 5 s so it clears by itself when the run ends; only while the list
-  // is on screen (a hidden page waits without reading), and it stops once nothing is busy (#1481).
+  // is on screen (a hidden page waits without reading), and it stops once nothing is busy (issue 1481).
   function pollApps() {
     if (appsPoll || !apps?.some(a => a.state === 'busy')) return;
     appsPoll = setTimeout(() => {
@@ -240,7 +240,7 @@
     }).finally(() => {
       appAct = ''; changed();
       // Read the rows again from GET; an update starts in the background, so look once more a moment later.
-      // The run takes a few seconds to name the app in the App Manager's `running`; look until it does (#1481).
+      // The run takes a few seconds to name the app in the App Manager's `running`; look until it does (issue 1481).
       void reloadApps().then(() => { if (body.action === 'apply') for (const ms of [1500, 5000, 10000]) setTimeout(() => void loadApps(true), ms); });
     });
     return true;
