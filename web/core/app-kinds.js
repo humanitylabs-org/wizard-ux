@@ -1,7 +1,7 @@
 /* App kinds (Miguel's design): both shells sort apps the same way, in App Store order.
- *   Apps        anything with a screen you use
- *   Agent apps  backend-only apps your agent uses (tap = its settings sheet)
- *   Agents      each agent's chats; "Build agents" opens the Agents app that makes and manages them
+ *   Apps        anything with a screen you use, the main agent's chats included
+ *   Agent apps  backend-only apps your agent uses (tap = its settings sheet); only apps with no screen of their own
+ *   Agents      each other agent's chats; "Build agents" opens the Agents app that makes and manages them
  *   Connectors  sign-ins to another service (AI subscriptions, bank feeds, Cloudflare...)
  * System apps (the defaults WizardOS ships for its parking spots, wizard-os docs/SYSTEM_APPS.md) lead their group and
  * wear one accent ring. Every group ends with a "+ Get ..." tile that opens that section of the App Store.
@@ -20,6 +20,12 @@
   // Notifications shown in Chats (a package holds WosSkinHost.inboxThreads): its page is no longer the way in, so it
   // sits with the agent apps (system ring, tap = its settings sheet) even while the app still serves a page.
   const inChats = a => !!a && a.id === 'notifications' && !!window.WosSkinHost?.inboxThreads;
+  /* James (ux#1505): "An agent app should only be something that the user doesn't have a UX for." The main agent's
+   * chats (id `wizard`) is a screen you use, so it is an app: closing its window must never hide it under For agents.
+   * A backend-only tile whose app declares a screen (wizard.md `type: view`, the only screen flag the box projects) is an app too
+   * (e.g. Money before its route is published); its tile opens the settings sheet until the page is there. */
+  const MAIN_CHATS = 'wizard';
+  const hasScreen = a => !!a && a.type === 'view' && a.category !== 'agent';
   const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
   // Section labels and the App Store section each "+ Get" tile opens (store/store.js KINDS ids).
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });
@@ -30,21 +36,22 @@
     const mine = APPS.filter(a => !['system', 'agents'].includes(a.id) && !C.isMaintenanceApp?.(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats, main agent first (as registered). The Agents app itself is the "Build agents" tile.
-    const agents = mine.filter(a => a.kind === 'chats').sort((x, y) => isSystem(y) - isSystem(x));
-    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a) && !inChats(a)).sort(byName);
+    const agents = mine.filter(a => a.kind === 'chats' && a.id !== MAIN_CHATS).sort((x, y) => isSystem(y) - isSystem(x));
+    const back = [...mine.filter(inChats), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
+    const screens = back.filter(a => hasScreen(a) && !isConnector(a));
+    const people = [...mine.filter(a => (a.kind !== 'chats' || a.id === MAIN_CHATS) && !conns.includes(a) && !inChats(a)), ...screens].sort(byName);
     // In development (James, 23 Oct 2026): launcher links and test copies fold under their own row.
     const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
-    const back = [...mine.filter(inChats), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
-    return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
+    return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a) && !screens.includes(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];
   /* The kinds as plain rows for layouts (the Orb and Apps views' app sheet, both shells): { apps, wiz, agents, conns,
    * dev }, system apps first, the main agent left out (it is Chats); ico(a) draws the shell's own mark. */
   function rows(APPS, APP, ico) {
     const K = kinds(APPS, APP), row = a => ({ id: a.id, name: a.name, icon: ico(a), system: isSystem(a) });
-    const agents = K.agents.filter(a => a.id !== 'wizard').map(row);
+    const agents = K.agents.filter(a => a.id !== MAIN_CHATS).map(row);
     if (K.builder) agents.push({ ...row(K.builder), name: 'Build agents' });
-    return { apps: sysFirst(K.apps).map(row), wiz: sysFirst(K.wiz).map(row), agents, conns: sysFirst(K.conns).map(row), dev: K.dev.map(row) };
+    return { apps: sysFirst(K.apps.filter(a => a.id !== MAIN_CHATS)).map(row), wiz: sysFirst(K.wiz).map(row), agents, conns: sysFirst(K.conns).map(row), dev: K.dev.map(row) };
   }
   /* Open any of those rows: an app with a screen (or an agent's chats) through openApp; an agent app (no screen) shows
    * its settings sheet. Returns false for an unknown id. */
@@ -53,5 +60,5 @@
     if (APP[id] && (a.url || a.kind !== 'wizard')) return openApp(id) !== false;
     window.WosAppRoute?.open(a.id, { name: a.name }); return true;
   }
-  window.WosAppKinds = Object.freeze({ inChats, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, LABELS, GET, storeUrl });
+  window.WosAppKinds = Object.freeze({ inChats, hasScreen, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, LABELS, GET, storeUrl });
 })();

@@ -1001,7 +1001,9 @@
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
         // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
-        openDesk: (id, place = null) => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id, typeof place === 'function' ? place : null) : shell.openApp?.(id)) : false,
+        // An installed app with no page yet (an app tile in kinds without a window, ux#1505) shows its settings sheet.
+        openDesk: (id, place = null) => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id, typeof place === 'function' ? place : null) : shell.openApp?.(id))
+          || !!shell.openAnyApp?.(id, () => false) : false,
         // Add to home screen: the Desks' own hold on an app tile (core/home-screen-apps.js, its sheet and its checks), for a
         // layout's own app icons (the AI apps view's Home, round 7). can(id) says whether that app may be offered.
         homeScreen: Object.freeze({

@@ -102,3 +102,39 @@ test('the App Store is a normal system tile leading Apps, listed once (ux#1493)'
   assert.equal(rows.apps.filter(r => r.id === 'app-store').length, 1);
   assert.equal(rows.apps.find(r => r.id === 'app-store').system, true);
 });
+
+// ux#1505 (James): "An agent app should only be something that the user doesn't have a UX for."
+test('apps with their own screen are Apps, never Agent apps: the main agent chats and a screenless view app', async () => {
+  const { groups, window } = await shell({ apps: [
+    // Money with its route not published yet: no url, but it declares a screen (type: view).
+    { id: 'money', name: 'Money', desc: 'Review transactions.', source: 'apps.json', type: 'view', category: 'app' },
+    { id: 'transcriber', name: 'Transcriber', desc: 'Local speech-to-text.', source: 'apps.json', type: 'service', category: 'system' },
+    { id: 'wizard-twitterapi', name: 'TwitterAPI.io', desc: 'X search.', source: 'apps.json', type: 'external', category: 'app' },
+  ] });
+  assert.ok(groups.apps.some(a => a.id === 'wizard'), 'the main agent chats is in Apps');
+  assert.ok(!groups.agents.some(a => a.id === 'wizard'), 'not under Agents (For agents)');
+  assert.ok(groups.apps.some(a => a.id === 'money'), 'a view app with no page yet is in Apps');
+  assert.ok(!groups.wiz.some(a => a.id === 'money'), 'and not an Agent app');
+  assert.deepEqual(ids(groups.wiz), ['transcriber'], 'only screenless apps stay Agent apps');
+  assert.deepEqual(ids(groups.conns), ['wizard-twitterapi']);
+  const { APPS, APP } = window.WizCore.apps('mobile');
+  // The layouts' rows keep Chats out (it is their fixed Chats) but list Money with the apps.
+  const rows = window.WosAppKinds.rows(APPS, APP, () => '');
+  assert.ok(!rows.apps.some(r => r.id === 'wizard') && !rows.agents.some(r => r.id === 'wizard'));
+  assert.ok(rows.apps.some(r => r.id === 'money') && !rows.wiz.some(r => r.id === 'money'));
+  // Its tile opens the app's settings sheet until the page is there.
+  const opened = [];
+  window.WosAppRoute = { open: id => opened.push(id) };
+  assert.equal(window.WosAppKinds.openRow(APPS, APP, 'money', () => false), true);
+  assert.deepEqual(opened, ['money']);
+});
+
+test('hasScreen: a declared view is a screen; services, agents and untyped tiles are not', () => {
+  const ctx = { window: {} };
+  vm.runInNewContext(kindsJs, ctx);
+  const { hasScreen } = ctx.window.WosAppKinds;
+  assert.equal(hasScreen({ id: 'money', type: 'view' }), true);
+  assert.equal(hasScreen({ id: 'x', type: 'service' }), false);
+  assert.equal(hasScreen({ id: 'x', type: 'view', category: 'agent' }), false);
+  assert.equal(hasScreen({ id: 'x' }), false);
+});
