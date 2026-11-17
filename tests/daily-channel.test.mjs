@@ -19,7 +19,7 @@ function daysStore(routes, { store = new Map(), now = () => 1e12 } = {}) {
   const req = async (url, init = {}) => {
     calls.push([init.method || 'GET', url]);
     const h = routes[(init.method || 'GET') + ' ' + url];
-    const v = typeof h === 'function' ? h() : h;
+    const v = typeof h === 'function' ? await h() : h;
     if (v === undefined || v instanceof Error) { const e = v || new Error('HTTP 404'); if (!e.status) e.status = 404; throw e; }
     return { json: async () => clone(v) };
   };
@@ -79,7 +79,7 @@ test('today: POST names today’s thread; a new day goes on top and becomes toda
 /* ---- chats.js: the Daily block ---- */
 const block = cut(chats, '  /* The Daily channel (wizard-ux issue 1469', '  // Unread (wizard-ux issue 1259)');
 const NOW = Date.UTC(2026, 10, 17, 9);
-function fixture({ agent = 'hermes', on = true, days, today = null, history = {} } = {}) {
+function fixture({ agent = 'hermes', on = true, days, today = null, history = {}, routes: shared = null } = {}) {
   const wins = { w: { id: 'w', thread: null } }, opened = [], pins = [], renders = [], reads = [], store = new Map();
   const drafts = {};
   const channels = [{ id: 'daily', agent, name: 'Daily', kind: 'daily', pinned: true, pinOrder: 0 }, { id: 'launch', agent, name: 'Launch' }];
@@ -98,7 +98,7 @@ function fixture({ agent = 'hermes', on = true, days, today = null, history = {}
     toTurns: rows => rows.map(r => ({ a: { text: r.text, at: r.at } })),
     turnHtml: (c, tn) => `<div class="msg a">${tn.a.text}</div>`,
     openChannel: (w, id, feed) => { opened.push(['feed', id, !!feed]); return true; },
-    requestAnimationFrame: () => {}, setTimeout: fn => fn(),
+    requestAnimationFrame: () => {}, setTimeout: fn => fn(), CH: { w: {} },
     LIVE: {
       pinAgent: (sid, a) => pins.push(a + '|' + sid),
       messages: async sid => { reads.push(sid); const h = history[sid]; if (h instanceof Error) throw h; return h || []; },
@@ -107,7 +107,7 @@ function fixture({ agent = 'hermes', on = true, days, today = null, history = {}
     Date: class extends Date { static now() { return NOW; } },
   };
   // The real days store over a fake box.
-  const routes = { 'GET /wizard/v1/channels/daily/days': { today, days, next: null } };
+  const routes = shared || { 'GET /wizard/v1/channels/daily/days': { today, days, next: null } };
   const t = daysStore(routes);
   env.LIVE.chanDaily = t.d; env._routes = routes;
   // openChat's own hook order: the window takes the thread, then dailyClaim.
@@ -154,11 +154,11 @@ for (const [label, agent] of [['main', 'hermes'], ['host-profile', 'host'], ['co
     assert.ok(h.above.includes('dday:2026-11-15') && !h.above.includes('dday:2026-11-16'));
     // 04:59: the box still names yesterday's thread; the send stays where it is.
     f.routes['POST /wizard/v1/channels/daily/today'] = { day: '2026-11-16', sessionId: 's16', created: false };
-    assert.equal(await f.env.dailyTarget(f.w), false); assert.equal(f.w.thread, 's16');
+    assert.equal(await f.env.dailyTarget(f.w), 's16'); assert.equal(f.w.thread, 's16');
     // 05:00: the first send makes today's thread; the view moves there, and the words typed go with it.
     f.drafts['direct:s16'] = { text: 'Plan for today', files: [] };
     f.routes['POST /wizard/v1/channels/daily/today'] = { day: '2026-11-17', sessionId: 's17', created: true };
-    assert.equal(await f.env.dailyTarget(f.w), true);
+    assert.equal(await f.env.dailyTarget(f.w), 's17');
     assert.equal(f.w.thread, 's17');
     assert.deepEqual(clone(f.w.daily), { id: 'daily', agent, sid: 's17' });
     assert.deepEqual(clone(f.drafts), { 'direct:s17': { text: 'Plan for today', files: [] } });
@@ -168,7 +168,7 @@ for (const [label, agent] of [['main', 'hermes'], ['host-profile', 'host'], ['co
     assert.ok(h2.above.includes('dday:2026-11-16'), 'yesterday is now a fold above today');
     // Unreachable: the open thread takes the send.
     f.routes['POST /wizard/v1/channels/daily/today'] = new Error('offline');
-    assert.equal(await f.env.dailyTarget(f.w), false); assert.equal(f.w.thread, 's17');
+    assert.equal(await f.env.dailyTarget(f.w), 's17', 'unreachable: the day on screen at the tap'); assert.equal(f.w.thread, 's17');
   });
 }
 
@@ -181,6 +181,7 @@ test('a draft left on yesterday’s thread follows the next Daily open to today�
   f.routes['GET /wizard/v1/channels/daily/days'] = { today: 's17', days: DAYS, next: null };
   f.t.d.fresh(); await f.t.d.read('daily');
   f.env.openDaily(f.w, 'daily');
+  for (let i = 0; i < 5; i++) await settle();
   assert.equal(f.w.thread, 's17');
   assert.deepEqual(clone(f.drafts), { 'direct:s17': { text: 'half a thought', files: [] } });
 });
@@ -226,7 +227,58 @@ test('the words being sent never come back as the new day’s draft (the field w
   f.env._c.w = { draft: 'Plan for today' }; // the window's copy still holds the words just sent
   f.env._el = { querySelector: sel => sel === '.ch-compose textarea' ? { value: '' } : null };
   f.routes['POST /wizard/v1/channels/daily/today'] = { day: '2026-11-17', sessionId: 's17', created: true };
-  assert.equal(await f.env.dailyTarget(f.w), true);
+  assert.equal(await f.env.dailyTarget(f.w), 's17');
   assert.equal(f.w.thread, 's17');
   assert.deepEqual(clone(f.drafts), {}, 'no draft on either day');
+});
+
+test('the send stays pinned to Daily when the window moves on while the box is asked', async () => {
+  const f = fixture({ days: DAYS.slice(1), today: null });
+  await f.t.d.read('daily');
+  f.env.openDaily(f.w, 'daily');
+  let answer; f.routes['POST /wizard/v1/channels/daily/today'] = () => new Promise(r => { answer = r; });
+  const pending = f.env.dailyTarget(f.w);
+  await settle();
+  f.env.openChat('w', 'elsewhere'); // the owner opens another thread before the box answers
+  answer({ day: '2026-11-17', sessionId: 's17', created: true });
+  assert.equal(await pending, 's17', 'the send still goes to today’s Daily thread');
+  assert.equal(f.w.thread, 'elsewhere', 'and the window stays where the owner went');
+});
+
+/* Two devices on one box (AGENTS.md: synced state ships with a stale-device and a simultaneous-edit test). */
+function sharedBox() {
+  const box = { days: DAYS.slice(1), made: 0 };
+  return { box, routes: {
+    get 'GET /wizard/v1/channels/daily/days'() { return { today: box.days[0].day === '2026-11-17' ? box.days[0].sessionId : null, days: box.days, next: null }; },
+    'POST /wizard/v1/channels/daily/today': async () => { await settle(); if (box.days[0].day !== '2026-11-17') { box.made++; box.days = [day('2026-11-17', 's17', 0, '')].concat(box.days); } return { day: '2026-11-17', sessionId: 's17', created: box.made === 1 }; },
+  } };
+}
+test('stale device: a kept copy from yesterday opens at once and moves to today’s thread another device started', async () => {
+  const { box, routes } = sharedBox();
+  const a = fixture({ routes }), b = fixture({ routes });
+  await a.t.d.read('daily'); await b.t.d.read('daily');
+  // Device B posts first after 05:00: the box makes today's thread.
+  b.env.openDaily(b.w, 'daily'); await settle();
+  assert.equal(await b.env.dailyTarget(b.w), 's17'); assert.equal(box.made, 1);
+  // Device A still keeps yesterday as the newest day; its tap must not hide today.
+  assert.equal(a.t.d.state('daily').days[0].sessionId, 's16');
+  a.env.openDaily(a.w, 'daily');
+  for (let i = 0; i < 5; i++) await settle();
+  assert.equal(a.w.thread, 's17', 'the fresh read wins');
+  assert.deepEqual(clone(a.w.daily), { id: 'daily', agent: 'hermes', sid: 's17' });
+  assert.ok(a.env.dailyHtml(a.w, {}).above.includes('dday:2026-11-16'));
+  // A view left open on yesterday when today appears shows today as a fold below, never hidden.
+  a.env.openChat('w', 's16'); a.w.daily = { id: 'daily', agent: 'hermes', sid: 's16' };
+  assert.match(a.env.dailyHtml(a.w, {}).below, /dday:2026-11-17/);
+});
+
+test('simultaneous first posts on two devices land in one today thread', async () => {
+  const { box, routes } = sharedBox();
+  const a = fixture({ routes }), b = fixture({ routes });
+  await a.t.d.read('daily'); await b.t.d.read('daily');
+  a.env.openDaily(a.w, 'daily'); b.env.openDaily(b.w, 'daily'); await settle();
+  assert.equal(a.w.thread, 's16'); assert.equal(b.w.thread, 's16');
+  const [ra, rb] = await Promise.all([a.env.dailyTarget(a.w), b.env.dailyTarget(b.w)]);
+  assert.deepEqual([ra, rb], ['s17', 's17']); assert.equal(box.made, 1, 'one thread made');
+  assert.equal(a.w.thread, 's17'); assert.equal(b.w.thread, 's17');
 });

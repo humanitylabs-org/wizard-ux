@@ -857,20 +857,41 @@ window.WizCore.chats = function createChats(H) {
     return sid;
   }
   // A tap on Daily: its newest thread in this window (the AI apps sidebar: in the main chat column, as a row tap does).
+  // The box is asked again on every tap (another device may have started today's thread): a quick answer picks the
+  // thread, a slow one lets the kept copy open at once and moves the view on when it lands (dailyFollow).
+  const DAILY_WAIT = 800;
   function openDaily(w, id) {
     const c0 = dailyChan(id); if (!c0 || !LIVE.chanDaily || !w) return false;
+    let done = false; const start = w.thread;
     const go = () => {
+      if (done) return true; done = true;
+      if (w.thread !== start) return false; // the window moved on while the box was asked
       const st = LIVE.chanDaily.state(id);
       if (!st.ok && !st.days.length) return openChannel(w, id, true); // never read and unreachable: the plain feed
       const sid = dailyHead(st); st.days.forEach(d => dailyPin(d.sessionId, c0.agent));
       dailyNext = { sid, daily: { id, agent: c0.agent }, at: Date.now() };
       openChat(w.id, sid);
+      if (fresh) fresh.then(() => dailyFollow(id, sid));
       return true;
     };
+    const fresh = Promise.resolve(LIVE.chanDaily.read(id)).catch(() => {});
     const st = LIVE.chanDaily.state(id);
-    if (st.ok || st.days.length) return go();
-    Promise.resolve(LIVE.chanDaily.read(id)).catch(() => {}).then(go);
+    fresh.then(go);
+    if (st.ok || st.days.length) setTimeout(go, DAILY_WAIT);
     return true;
+  }
+  // The days read after a Daily view opened on the kept copy: a newer day there moves every window still showing that
+  // view on the thread it opened, words in its box going along.
+  function dailyFollow(id, sid) {
+    const st = LIVE.chanDaily?.state(id), head = dailyHead(st); if (!st || head === sid || head === '__new__') return;
+    if (sid !== '__new__' && !(st.days.findIndex(d => d.sessionId === head) < st.days.findIndex(d => d.sessionId === sid))) return;
+    for (const wid of Object.keys(CH)) {
+      const w = W[wid]; if (!w || !dailyOn(w) || w.daily.id !== id || w.thread !== sid) continue;
+      const ta = elOf(wid)?.querySelector?.('.ch-compose textarea'); if (ta) ch(wid).draft = ta.value;
+      saveDraft(wid);
+      dailyNext = { sid: head, daily: { id, agent: w.daily.agent }, at: Date.now(), from: draftKey(w) };
+      openChat(wid, head);
+    }
   }
   // openChat's hook: the thread a Daily tap (or a send that moved to a new day) opened takes the Daily view; any other
   // open leaves it. A draft typed on the day before follows the view to the new day's thread.
@@ -895,20 +916,25 @@ window.WizCore.chats = function createChats(H) {
     if (w.daily) { delete w.daily; save(); }
     return false;
   }
-  // sendChat's hook: a send from the Daily view goes to today's thread. When the day moved on (or this is the day's first
-  // post) the view opens today's thread first, taking the composer with it. Unreachable: the open thread takes it.
+  // sendChat's hook: the thread a send from the Daily view goes to, pinned at the tap: today's, as the box names it.
+  // When the day moved on (or this is the day's first post) and the window still shows the view, it opens today's thread
+  // first, taking the box with it. Unreachable: the day thread on screen at the tap takes it (the words are never lost).
   async function dailyTarget(w) {
-    const d = w?.daily; if (!d || !dailyOn(w)) return false;
-    let r = null; try { r = await LIVE.chanDaily.today(d.id); } catch (_) { return false; }
-    if (!r?.sessionId || W[w.id] !== w || w.daily !== d || r.sessionId === w.thread) return false;
+    const d = w?.daily; if (!d || !dailyOn(w)) return '';
+    const was = w.thread;
+    let r = null; try { r = await LIVE.chanDaily.today(d.id); } catch (_) { return was; }
+    if (!r?.sessionId) return was;
     dailyPin(r.sessionId, d.agent);
-    // The box as it is now: the words being sent already left it (the send clears the field before it asks).
-    const ta = elOf(w.id)?.querySelector?.('.ch-compose textarea'); if (ta) ch(w.id).draft = ta.value;
-    saveDraft(w.id);
-    dailyNext = { sid: r.sessionId, daily: d, at: Date.now(), from: draftKey(w) };
-    openChat(w.id, r.sessionId);
-    if (W[w.id] === w && w.daily) { LIVE.chanDaily.read(d.id); return true; }
-    return false;
+    if (r.sessionId === was) return was;
+    if (W[w.id] === w && w.daily === d && w.thread === was) {
+      // The box as it is now: the words being sent already left it (the send clears the field before it asks).
+      const ta = elOf(w.id)?.querySelector?.('.ch-compose textarea'); if (ta) ch(w.id).draft = ta.value;
+      saveDraft(w.id);
+      dailyNext = { sid: r.sessionId, daily: d, at: Date.now(), from: draftKey(w) };
+      openChat(w.id, r.sessionId);
+    }
+    LIVE.chanDaily.read(d.id);
+    return r.sessionId;
   }
   const DAILY_FMT = (() => { try { return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (_) { return null; } })();
   const dailyDay = day => { const t = Date.parse(day + 'T12:00:00Z'); return DAILY_FMT && isFinite(t) ? DAILY_FMT.format(t) : day; };
@@ -927,7 +953,7 @@ window.WizCore.chats = function createChats(H) {
     const open = DAILY_OPEN.get(w.id) || new Set(), at = st.days.findIndex(d => d.sessionId === w.thread);
     const earlier = (at >= 0 ? st.days.slice(at + 1) : st.days.filter(d => d.sessionId !== w.thread)).slice().reverse();
     const more = st.next ? `<button type="button" class="ch-dday-more" data-chddaymore data-morph-key="dday:more"${st.more ? ' disabled' : ''}>${st.more ? 'Loading earlier days…' : 'Earlier days'}</button>` : '';
-    const days = earlier.map(d => {
+    const fold = list => list.map(d => {
       const on = open.has(d.day), h = on ? DAILY_HIST.get(d.sessionId) : null;
       const opener = clip(dailyLine(String(d.opener || '').split('\n').find(l => l.trim()) || '').replace(/[*_`#>]+/g, '').trim(), 90), n = d.count;
       const body = !on ? '' : h?.turns ? `<div class="ch-dday-b">${h.turns.length ? h.turns.map(tn => turnHtml(c, tn, false, false, '', false, false, '')).join('') : '<p class="ch-dday-none">Nothing was said this day.</p>'}</div>`
@@ -935,9 +961,10 @@ window.WizCore.chats = function createChats(H) {
         : '<div class="ch-dday-b"><p class="ch-dday-none" role="status">Loading…</p></div>';
       return `<section class="ch-dday${on ? ' open' : ''}" data-morph-key="dday:${esc(d.day)}"><button type="button" class="ch-dday-h" data-chdday="${esc(d.day)}" aria-expanded="${on}"><b>${esc(dailyDay(d.day))}</b>${opener ? `<span class="ch-dday-o">${esc(opener)}</span>` : ''}<small>${n} ${n === 1 ? 'message' : 'messages'}</small><i aria-hidden="true"></i></button>${body}</section>`;
     }).join('');
-    // Before today's first post the open thread is an earlier day's: an empty Today line follows it.
+    // Before today's first post the open thread is an earlier day's: an empty Today line follows it. A newer day (the
+    // view stayed open across the boundary, or another device started it) folds below, never hidden.
     const today = w.thread === '__new__' || (!st.today && at === 0) ? '<div class="ch-day ch-dday-today" data-morph-key="dday:today"><span>Today</span></div>' : '';
-    return { above: more + days, below: today };
+    return { above: more + fold(earlier), below: fold(at > 0 ? st.days.slice(0, at).reverse() : []) + today };
   }
   // Taps inside the Daily view: a day's header folds or unfolds it, Earlier days reads the next page.
   function dailyClick(e, id, w) {
@@ -4600,8 +4627,8 @@ window.WizCore.chats = function createChats(H) {
     if (!w) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const c = ch(wid);
     // The Daily view sends to today's thread (issue 1469): the box names it, and the view moves there first.
-    if (w.daily && !opts.sid && !opts.away && typeof dailyTarget === 'function') await dailyTarget(w);
-    const sid = opts.sid || w.thread; if (!sid) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
+    const daySid = w.daily && !opts.sid && !opts.away && typeof dailyTarget === 'function' ? await dailyTarget(w) : '';
+    const sid = opts.sid || daySid || w.thread; if (!sid) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const here = !opts.away && w.thread === sid; // the window still shows the thread this was sent from (opts.away: sent from elsewhere, e.g. a review desk)
     const voice = 'seal' in opts; // a voice send: the composer goes only as taken at the tap, never the live tray
     const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
