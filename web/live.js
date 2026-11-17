@@ -425,7 +425,8 @@
   // The owner's day: their time zone and day_starts_at from WizardOS settings (WizConfig).
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
-  const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
+  // A failure the owner dismissed on this device is no error any more (issue 1488; the Agent Service drops it too).
+  const isErr = s => (s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access')) && !globalThis.WosErrors?.dismissed?.(s);
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => window.WizChatsListModel.isListWorking(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
@@ -1163,7 +1164,7 @@
         if (globalThis.WizChatsListModel.isListWorking(s)) { working.push(s); continue; }
         if (snoozeLast() && isDeferred(s)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
-        if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
+        if (s.status === 'queued' && s.queueReason === 'provider_access' && !globalThis.WosErrors?.dismissed?.(s)) { needs.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;

@@ -1616,7 +1616,7 @@ window.WizCore.chats = function createChats(H) {
     const def = deferredOf(s) && !working && !needs, at = def ? null : attOf(s);
     // A send a graceful restart holds (wizard/graceful-restart; WizReach.restartHeld: queued, on its way, or a 202 held
     // for the restart) is saved, not working yet, also while the service is down for the restart itself.
-    return working ? (globalThis.WizReach?.restartHeld?.(s) ? 'held' : s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    return working ? (globalThis.WizReach?.restartHeld?.(s) ? 'held' : s.pend === 'waiting' ? 'offline' : 'working') : (s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access') && !window.WosErrors?.dismissed?.(s) ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
   }
   const stiBadge = (s, cls = '') => { const k = stiKind(s); return `<span class="emo sti ${k}${cls}" title="${STI_TIP[k]}" aria-label="${STI_TIP[k]}">${STI[k]}</span>`; };
   // Loading placeholders: quiet rows/bubbles shaped like the real ones, with a soft shimmer.

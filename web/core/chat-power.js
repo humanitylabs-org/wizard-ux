@@ -399,7 +399,7 @@ window.WosChatPower = function chatPower(A) {
   }
 
   /* ================= #11/#12 failure recovery ================= */
-  const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s.id));
+  const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s));
   /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread. Off by default:
    * only while the wizard/background-continue tweak is on. Showing the panel starts nothing; only the tap does. */
   const BG_TWEAK = 'wizard/background-continue';
@@ -559,18 +559,14 @@ window.WosChatPower = function chatPower(A) {
     return !!H.openLink?.(`/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`, 'Fix Wizard');
 
   }
-  async function dismissThread(sid) {
-    const pending = E?.dismissFailure(sid); rerenderAll();
-    const ok = await pending;
-    toast(ok ? '✓' : '!', ok ? 'Dismissed · history kept' : 'Couldn’t dismiss · try again', ok ? 1400 : 2600);
-    rerenderAll();
-  }
+  // Issue 1488: the card and the header warning go on the same frame; Wizard saves it quietly in the background.
+  function dismissThread(sid) { E?.dismissFailure(sid); rerenderAll(); }
   function rerenderAll() { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w) A.renderChats(w); } H.changed?.(); }
 
   /* Errors section extras: background work Wizard flagged (/wizard/attention) and voice notes that didn't send. */
   const voiceFailed = () => (OUTBOX ? OUTBOX.unsent().filter(it => it.state === 'failed' && (it.audio || it.audioFile)) : []);
   let confirmDel = { id: '', at: 0 };
-  function errorsFilter(list) { return E ? list.filter(s => !E.dismissed(s.id)) : list; }
+  function errorsFilter(list) { return E ? list.filter(s => !E.dismissed(s)) : list; }
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
