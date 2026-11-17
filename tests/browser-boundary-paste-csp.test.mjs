@@ -18,22 +18,22 @@ test('nginx names only this Tailscale address\'s own :9691 in connect-src and fr
   assert.ok(rule, 'a Tailscale Host gets exactly https://$host:9691');
   assert.match(map, /default "https:\/\/\*\.ts\.net:9691";/);
   const re = new RegExp(rule[1].replace(/\\\\/g, '\\'));
-  for (const h of ['wizard.tail1234.ts.net', 'box-1.example-tailnet.ts.net']) assert.ok(re.test(h), h);
+  for (const h of ['wizard.example.ts.net', 'box-1.example.ts.net']) assert.ok(re.test(h), h);
   for (const h of ['localhost', 'evil.example', 'a b.ts.net', 'x.ts.net;script-src *', 'ts.net', '.ts.net', 'x.ts.net.evil.example', '-x.ts.net']) assert.ok(!re.test(h), h);
   assert.ok(tpl.indexOf('$wizard_troubleshoot_direct') < tpl.indexOf('server {'), 'defined before the server block');
 });
-test('the dev server (server.py) follows the same Host rule', () => {
+test('the dev server (server.py) names its own configured Tailscale address, never the request\'s Host', () => {
   const py = String.raw`
 import sys; sys.path.insert(0, '.')
 import server
-class H(server.Handler):
-    def __init__(self, host): self.headers = {'Host': host} if host is not None else {}
-for h in ['wizard.tail1234.ts.net', 'Wizard.Tail1234.ts.net:443', 'localhost:9271', 'x.ts.net;script-src *', None]:
-    print(H(h)._troubleshoot_direct())
+for o in [['https://wizard.example.ts.net'], ['http://127.0.0.1:9271', 'https://Wizard.Example.ts.net:443/'], ['http://localhost:9271'], ['https://x.ts.net;script-src *'], ['https://-x.ts.net'], ['http://wizard.example.ts.net'], []]:
+    print(server.troubleshoot_direct(o))
 `;
   const out = execFileSync('python3', ['-c', py], { cwd: new URL('..', import.meta.url), encoding: 'utf8' }).trim().split('\n');
-  assert.deepEqual(out, ['https://wizard.tail1234.ts.net:9691', 'https://wizard.tail1234.ts.net:9691', 'https://*.ts.net:9691', 'https://*.ts.net:9691', 'https://*.ts.net:9691']);
-  assert.match(read('server.py'), /connect-src 'self' https:\/\/derp1\.tailscale\.com\/generate_204 \{direct\};[^"]*frame-src 'self' blob: \{direct\};/);
+  assert.deepEqual(out, ['https://wizard.example.ts.net:9691', 'https://wizard.example.ts.net:9691', 'https://*.ts.net:9691', 'https://*.ts.net:9691', 'https://*.ts.net:9691', 'https://*.ts.net:9691', 'https://*.ts.net:9691']);
+  const src = read('server.py');
+  assert.match(src, /connect-src 'self' https:\/\/derp1\.tailscale\.com\/generate_204 \{direct\};[^"]*frame-src 'self' blob: \{direct\};/);
+  assert.match(src, /direct = TROUBLESHOOT_DIRECT/);
 });
 
 // 2. Android paste (wizard-ux#1480): the shell can't reach a sandboxed app document, so the app side nudges itself.
