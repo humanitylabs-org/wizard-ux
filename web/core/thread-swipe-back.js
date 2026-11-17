@@ -31,8 +31,9 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
     // Can it still scroll the way the finger pulls? (raw < 0: the content moves left, so it needs room on its right.)
     const scrolls = (n, raw) => !!n && (raw < 0 ? n.scrollLeft + n.clientWidth < n.scrollWidth - 1 : n.scrollLeft > 0);
     // The Chats list's state: a feed is open (its Back button), or the home shows the Channels | Activity tabs.
-    const listState = root => {
-      const list = root.querySelector('.ch-list'); if (!list) return null;
+    // Always the list the finger is on: a shell can hold several Chats windows (main and routed agents, other desks).
+    const listState = t => {
+      const list = t && t.closest ? t.closest('.ch-list') : null; if (!list) return null;
       if (list.querySelector('.ch-chan-h [data-chchanback]')) return { mode: 'feed', list, th: list, dir: 1 };
       const tabs = list.querySelector('.ch-chan-tabs .ch-rdy-bar'), on = tabs && tabs.querySelector('[data-chview][aria-pressed="true"]');
       if (!on) return null;
@@ -57,7 +58,8 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
           sw = { mode: 'thread', dir: 1, x: t0.clientX, y: t0.clientY, t: performance.now(), th, on: false, dx: 0 };
           return;
         }
-        const st = listState(root); if (!st || !st.th) return;
+        const st = listState(e.target); if (!st || !st.th) return;
+        st.win = e.target.closest('[data-chats]') || root;
         if (st.list.querySelector('.ch-row-wrap.swiped') || e.target.closest('.ch-swipe-acts')) return; // an open row tray is the row's
         if (root.ownerDocument?.querySelector('.ch-sheet')) return; // a row or channel sheet is open: it closes first
         sw = { ...st, x: t0.clientX, y: t0.clientY, t: performance.now(), on: false, dx: 0, target: e.target, sc: scroller(e.target, root) };
@@ -91,7 +93,7 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
           // Settle: the tab's own tap path switches the page, then the new page slides in from the side it lies on.
           s.th.style.transition = 'none'; s.th.style.transform = ''; s.th.style.opacity = '';
           s.tabs.querySelector(`[data-chview="${s.to}"]`)?.click();
-          const body = root.querySelector('.ch-list > .ch-scroll'); if (!body) return;
+          const body = s.list.isConnected !== false ? s.list.querySelector(':scope > .ch-scroll') : s.win.querySelector('.ch-list > .ch-scroll'); if (!body) return;
           body.style.transition = 'none'; body.style.transform = `translateX(${-s.dir * 48}px)`; body.style.opacity = '.4';
           api.frame(() => api.frame(() => reset(body)));
           return;

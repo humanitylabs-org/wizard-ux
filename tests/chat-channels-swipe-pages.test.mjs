@@ -31,7 +31,9 @@ function harness({ page = 'channels', feed = false, tabs = true, tray = false, v
   bar.querySelectorAll = () => [chan, act];
   list.querySelector = q => q === '.ch-chan-h [data-chchanback]' ? (feed ? el('[data-chchanback]', list) : null)
     : q === '.ch-chan-tabs .ch-rdy-bar' ? (tabs && !feed ? bar : null) : q === ':scope > .ch-scroll' ? body : q === '.ch-row-wrap.swiped' ? (tray ? el() : null) : null;
-  root.querySelector = q => q === '.ch-list' ? list : q === '.ch-list > .ch-scroll' ? body : null;
+  // The shell root's first list is another Chats window (a routed agent, another desk): never the one to read.
+  const decoy = el('.ch-list', root); decoy.querySelector = () => { throw new Error('read another window\'s list'); };
+  root.querySelector = q => q === '.ch-list' ? decoy : q === '.ch-list > .ch-scroll' ? el('.ch-scroll', decoy) : null;
   const realNow = performance.now;
   setup({
     part: n => (n === 'list' || n === 'thread' ? root : null), route: () => ({ view }), env: { edgeInset: 24 },
@@ -120,6 +122,14 @@ test('a channel or agent feed: a swipe right is Back (to the Channels list); a s
   assert.equal(h.swipe(160, 6, 400).back, true);
   const g = harness({ feed: true });
   const r = g.swipe(-160, 6, 400); assert.equal(r.back, false); assert.equal(r.to, null);
+});
+
+test('two Chats windows: the swipe reads the list under the finger, never the first list in the shell', () => {
+  const h = harness();
+  const r = h.swipe(-160, 6, 400); // the harness's shell root answers '.ch-list' with another window that throws
+  assert.equal(r.to, 'activity'); assert.equal(h.body.style.transform, '', 'our own body settles');
+  const g = harness({ feed: true });
+  assert.equal(g.swipe(160, 6, 400).back, true, 'a feed in this window goes back, whatever the other window shows');
 });
 
 test('switch off (no Channels tabs, no feed): the Chats list has no swipe', () => {
