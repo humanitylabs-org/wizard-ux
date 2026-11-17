@@ -53,7 +53,7 @@ window.WizCore.migrateChatsFocus = function (wins, desks) {
  * off) the emoji in front of a name. The AI apps desktop reads these too. */
 window.WizCore.CHANNEL_EMOJI = ['💬', '🚀', '📌', '💡', '🛠️', '📅', '🎯', '📚', '🎨', '🎵', '💰', '🏠', '✈️', '❤️', '🌱', '⭐', '🔥', '🧪', '📝', '🤖', '👥', '🎉', '⚙️', '🌍'];
 window.WizCore.channelFace = function channelFace(name, general = false) {
-  const n = String(name || ''), m = n.match(/^(?:\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{EMod}?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{EMod}?)*)/u);
+  const n = String(name || ''), m = n.match(/^(?:\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:[\u{E0020}-\u{E007E}]+\u{E007F})?[\uFE0E\uFE0F]?\p{EMod}?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{EMod}?)*)/u);
   if (general) return { emoji: '#️⃣', label: n || 'General', own: false };
   if (!m) return { emoji: '💬', label: n, own: false };
   const bare = n.slice(m[0].length).replace(/^[\s\uFE0F]+/u, '');
@@ -62,7 +62,10 @@ window.WizCore.channelFace = function channelFace(name, general = false) {
 window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
   const f = window.WizCore.channelFace(name), bare = f.own ? f.bare : String(name || '').trim();
   if (!emoji) return bare || String(name || '').trim();
-  return (emoji + (bare ? ' ' + bare : '')).slice(0, 60).trim();
+  // The 60-character limit (UTF-16, as the stores count it) trims whole characters off the end, never half of one.
+  const chars = Array.from(emoji + (bare ? ' ' + bare : ''));
+  while (chars.join('').length > 60) chars.pop();
+  return chars.join('').trim();
 };
 window.WizCore.chats = function createChats(H) {
   'use strict';

@@ -2313,6 +2313,11 @@ test('issue 1506: channelFace reads the emoji at the start of a name; channelEmo
   assert.equal(C.channelEmojiName('🚀 Launch', ''), 'Launch', 'takes it off');
   assert.equal(C.channelEmojiName('🚀', ''), '🚀', 'never an empty name');
   assert.ok(C.channelEmojiName('x'.repeat(60), '🎯').length <= 60, 'the 60-character name limit holds');
+  // Codex P2s: a subdivision flag (tag sequence) is one emoji; near the limit a trailing astral character is dropped whole.
+  assert.deepEqual(face('🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Scots'), ['🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}', 'Scots']);
+  assert.equal(C.channelEmojiName('🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Scots', ''), 'Scots', 'no tag characters left behind');
+  const near = C.channelEmojiName('x'.repeat(56) + '😀', '🎯');
+  assert.ok(near.length <= 60 && !/[\uD800-\uDBFF]$/.test(near) && near.isWellFormed(), 'no lone surrogate: ' + JSON.stringify(near));
   assert.ok(C.CHANNEL_EMOJI.length >= 12 && C.CHANNEL_EMOJI.every(e => C.channelFace(e + ' x').own), 'every picker emoji reads back as one');
 });
 
