@@ -1,0 +1,54 @@
+[
+  {
+    "case": "phone-nebula",
+    "autoOpened": 1,
+    "frames": [
+      "https://offline-troubleshooter-popup.test/troubleshoot/"
+    ],
+    "checksCard": false,
+    "closedBy": "close button",
+    "afterClose": 0,
+    "reopenedBy": 0,
+    "after15s": 0,
+    "reopened": 1
+  },
+  {
+    "case": "phone-grove",
+    "autoOpened": 1,
+    "frames": [
+      "https://offline-troubleshooter-popup.test/troubleshoot/"
+    ],
+    "checksCard": false,
+    "closedBy": "close button",
+    "afterClose": 0,
+    "reopenedBy": 0,
+    "after15s": 0,
+    "reopened": 1
+  },
+  {
+    "case": "phone-grove-calm",
+    "autoOpened": 1,
+    "frames": [
+      "https://offline-troubleshooter-popup.test/troubleshoot/"
+    ],
+    "checksCard": false,
+    "closedBy": "close button",
+    "afterClose": 0,
+    "reopenedBy": 0,
+    "after15s": 0,
+    "reopened": 1
+  },
+  {
+    "case": "desktop-nebula",
+    "autoOpened": 1,
+    "frames": [
+      "https://offline-troubleshooter-popup.test/troubleshoot/"
+    ],
+    "checksCard": false,
+    "closedBy": "close button",
+    "afterClose": 0,
+    "reopenedBy": 0,
+    "after15s": 0,
+    "reopened": 1
+  }
+]

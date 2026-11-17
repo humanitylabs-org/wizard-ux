@@ -1,0 +1,26 @@
+[
+  {
+    "case": "phone-nebula",
+    "autoOpened": 0,
+    "frames": [],
+    "checksCard": false
+  },
+  {
+    "case": "phone-grove",
+    "autoOpened": 0,
+    "frames": [],
+    "checksCard": false
+  },
+  {
+    "case": "phone-grove-calm",
+    "autoOpened": 0,
+    "frames": [],
+    "checksCard": false
+  },
+  {
+    "case": "desktop-nebula",
+    "autoOpened": 0,
+    "frames": [],
+    "checksCard": false
+  }
+]
