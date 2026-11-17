@@ -60,7 +60,7 @@ test('the thread shows the clear card at once, with Dismiss and without Retry; t
   assert.match(card, /<b>Reply not sent<\/b><p>\$\{esc\(window\.WosModels\.refusal\(s\)\)\}<\/p>/);
   assert.match(card, /data-chdismiss>Dismiss/);
   assert.doesNotMatch(card.slice(0, card.indexOf(': (!runErr')), /data-chretry|Choose another model/);
-  assert.match(card, /^\+ \(refused \? `[^\n]*\n\s*: \(!runErr && s\?\.safeError/, 'refused wins: no second, generic Reply not sent card beside it');
+  assert.match(card, /^\+ \(refused \? `[^\n]*\n\s*: \(!runErr && (?:!signedOut && )?s\?\.safeError/, 'refused wins: no second, generic Reply not sent card beside it');
   assert.match(chats, /placeholder="\$\{!isNew && window\.WosModels\?\.foreignApp\?\.\(s\) \? `This chat lives in \$\{esc\(window\.WosModels\.foreignApp\(s\)\)\} · reply there`/);
   assert.match(chats, /if \(p\.state === 'failed'\) return `[^`]*\$\{OUTBOX\.canRetry\(p\) && !window\.WosModels\?\.foreignApp\?\.\(s\) \?/);
 });

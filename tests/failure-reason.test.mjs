@@ -85,7 +85,7 @@ test('Errors row and thread use the reason in place of "Error: <message>" and th
   assert.match(chats, /const rerr = needs && !working \? window\.WosModels\?\.runError\?\.\(s\) : null;/);
   assert.match(chats, /: rerr \? esc\(rerr\.line\) : working \?/);
   assert.match(chats, /const runErr = !working && !!window\.WosModels\?\.runError\?\.\(s\);/);
-  assert.match(chats, /\(!runErr && s\?\.safeError && !s\?\.reconnect/);
+  assert.match(chats, /\(!runErr && (?:!signedOut && )?s\?\.safeError && !s\?\.reconnect/);
   const tw = 'web/tweaks/wizard/failure-reason/';
   assert.equal(JSON.parse(read(tw + 'manifest.json')).id, TWEAK);
   assert.ok(JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes(TWEAK));
