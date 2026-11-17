@@ -1,0 +1,20 @@
+[
+  {
+    "skin": "nebula",
+    "steps": {
+      "order": [
+        "Activity",
+        "Channels"
+      ]
+    }
+  },
+  {
+    "skin": "grove",
+    "steps": {
+      "order": [
+        "Activity",
+        "Channels"
+      ]
+    }
+  }
+]

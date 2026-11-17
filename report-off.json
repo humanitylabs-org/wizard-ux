@@ -1,0 +1,22 @@
+[
+  {
+    "skin": "nebula",
+    "off": true,
+    "steps": {
+      "tabs": [],
+      "afterSwipes": "list",
+      "sameList": false
+    },
+    "errors": []
+  },
+  {
+    "skin": "grove",
+    "off": true,
+    "steps": {
+      "tabs": [],
+      "afterSwipes": "list",
+      "sameList": false
+    },
+    "errors": []
+  }
+]
