@@ -22,10 +22,10 @@
   const inChats = a => !!a && a.id === 'notifications' && !!window.WosSkinHost?.inboxThreads;
   /* James (ux#1505): "An agent app should only be something that the user doesn't have a UX for." The main agent's
    * chats (id `wizard`) is a screen you use, so it is an app: closing its window must never hide it under For agents.
-   * A backend-only tile whose app declares a screen (wizard.md `type: view`, as the Store sorts it) is an app too
+   * A backend-only tile whose app declares a screen (wizard.md `type: view`, the only screen flag the box projects) is an app too
    * (e.g. Money before its route is published); its tile opens the settings sheet until the page is there. */
   const MAIN_CHATS = 'wizard';
-  const hasScreen = a => !!a && (a.type === 'view' || a.has_view === true) && a.category !== 'agent';
+  const hasScreen = a => !!a && a.type === 'view' && a.category !== 'agent';
   const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
   // Section labels and the App Store section each "+ Get" tile opens (store/store.js KINDS ids).
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });

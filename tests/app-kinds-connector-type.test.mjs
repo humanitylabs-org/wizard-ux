@@ -134,7 +134,6 @@ test('hasScreen: a declared view is a screen; services, agents and untyped tiles
   vm.runInNewContext(kindsJs, ctx);
   const { hasScreen } = ctx.window.WosAppKinds;
   assert.equal(hasScreen({ id: 'money', type: 'view' }), true);
-  assert.equal(hasScreen({ id: 'x', has_view: true }), true);
   assert.equal(hasScreen({ id: 'x', type: 'service' }), false);
   assert.equal(hasScreen({ id: 'x', type: 'view', category: 'agent' }), false);
   assert.equal(hasScreen({ id: 'x' }), false);
