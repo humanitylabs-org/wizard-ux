@@ -26,7 +26,7 @@ function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q =
     openSpacePicker: (w, a, tab, o) => { calls.push(['picker', w.id, a, j(o)]); ctx.spacePicker = { o }; }, spacePicker: null,
   };
   vm.createContext(ctx);
-  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* A post is the owner') + '\nthis.channelsBody = channelsBody; this.chanNew = chanNew;', ctx);
+  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* A post is the owner') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
   return ctx;
 }
 
@@ -38,22 +38,21 @@ test('1308: the Channels list ends with an accent + New channel row after Genera
   assert.doesNotMatch(list({ agents: [] }).channelsBody({ id: 'w1' }, []), /data-chchannew/, 'no agent to own a channel: no row');
   // A list still on an agent that is hidden now gets no row: its channel is never filed under another agent (Codex P1).
   const hidden = list({ agents: [{ id: 'hermes' }, { id: 'pi' }], focused: 'philosopher' });
-  assert.doesNotMatch(hidden.channelsBody(hidden.W.w1, []), /data-chchannew/); assert.equal(hidden.chanNew('w1'), false);
-  const pi = list({ agents: [{ id: 'hermes' }, { id: 'pi' }], focused: 'pi' }); assert.equal(pi.chanNew('w1'), true); assert.equal(pi.calls[0][2], 'pi', 'the list\'s own agent');
-  // The list's own + (phone, classic) on the Channels list starts a new channel as well (Codex P2).
-  assert.match(chats, /const fabNew = chanOn && chanView === 'channels' && !n && !F && typeof chanNewAgent === 'function' && !!chanNewAgent\(w\);/);
-  assert.match(chats, /class="ch-fab" \$\{fabNew \? 'data-chchannew' : 'data-chnew'\} data-chfab aria-label="\$\{fabNew \? 'New channel' :/);
+  assert.doesNotMatch(hidden.channelsBody(hidden.W.w1, []), /data-chchannew/); assert.equal(hidden.chanNewForm(hidden.W.w1), false);
+  const pi = list({ agents: [{ id: 'hermes' }, { id: 'pi' }], focused: 'pi' }); assert.equal(pi.chanNewForm(pi.W.w1), true); assert.equal(pi.calls[0][2], 'pi', 'the list\'s own agent');
+  // The list's own round + (phone, classic) on the Channels list starts a new chat, as on Activity (issue 1489).
+  assert.doesNotMatch(chats, /fabNew/);
+  assert.match(chats, /class="ch-fab" data-chnew data-chfab aria-label="\$\{AGID \? esc\(`New chat with \$\{agentName\(AGID\)\}`\) : 'New chat'\}">/);
   const css = read('web/tweaks/wizard/chat-channels/tweak.css');
   assert.match(css, /\.ch-chan-add \{[^}]*min-height: 44px;[^}]*color: var\(--wz-accent/, 'one line high like the channels, in the skin accent');
 });
 
-test('1308: chanNew opens the existing name form only on the Channels list with no channel open', () => {
+test('1489: only the + New channel row opens the name form; the shells\' + never does', () => {
   const c = list();
-  assert.equal(c.chanNew('w1::side'), true);
+  assert.equal(c.chanNewForm(c.W['w1::side']), true);
   assert.deepEqual(j(c.calls), [['picker', 'w1::side', 'hermes', { naming: true, from: 'w1::side', direct: true }]], 'naming form, opened straight on its input');
-  for (const [why, o] of [['Activity tab', { view: 'activity' }], ['a channel open', { open: { id: 'b' } }], ['a search typed', { q: 'x' }]]) {
-    const d = list(o); assert.equal(d.chanNew('w1'), false, why); assert.equal(d.calls.length, 0, why);
-  }
+  assert.doesNotMatch(chats, /function chanNew\(|chanCompose, chanNew,/, 'no shell entry point to the form');
+  assert.equal((chats.match(/chanNewForm\(/g) || []).length, 2, 'defined once, called only by the row');
   assert.match(cut(chats, '  function channelClick(', '  /* The channel'), /const nc = e\.target\.closest\('\[data-chchannew\]'\); if \(nc\) \{ chanNewForm\(w, nc\); return true; \}/, 'the row opens the form');
   assert.match(chats, /if \(p\.naming && !p\.busy && !p\.direct\) \{ p\.naming = false; renderSpacePicker\(\); \} else closeSpacePicker\(\);/, 'Esc on a direct form cancels it');
 });
@@ -85,28 +84,13 @@ test('1308: creating a channel opens its empty feed with the box focused and sen
   assert.deepEqual(off.at(-1), ['sendChat', 'Fill my new Space “T'], 'classic Spaces (switch off) keep their auto-fill');
 });
 
-// --- the shell's + / ⌥N (desktop.js) ---
-function shellNew({ owns = true, view = 'channels', feed = null, side = true, focused = null, open = null } = {}) {
-  const asked = [];
-  const ctx = { asked, ownsChatList: owns, feedOpen: () => feed, focused: () => focused, sideMain: () => ({ id: 'main' }),
-    sideHost: side ? { isConnected: true, closest: () => null } : { isConnected: true, closest: () => ({}) },
-    CHATS: { chanView: () => view, chanOpen: () => open, chanNew: wid => (asked.push(wid), true) } };
-  vm.createContext(ctx); vm.runInContext(cut(desktop, '  function chanNew() {', '  // A take started in a channel') + '\nthis.chanNew = chanNew;', ctx);
-  return ctx;
-}
-
-test('1308: + / ⌥N on the Channels list (AI apps sidebar or a classic Chats window) opens the new-channel form', () => {
-  const a = shellNew(); assert.equal(a.chanNew(), true); assert.deepEqual(a.asked, ['main::side']);
-  for (const [why, o] of [['Activity tab', { view: 'activity' }], ['switch off', { view: '' }], ['a feed open in the column', { feed: { id: 'x' } }], ['sidebar folded to the rail', { side: false }]]) {
-    const s = shellNew(o); assert.equal(s.chanNew(), false, why); assert.deepEqual(s.asked, [], why);
-  }
-  const c = shellNew({ owns: false, focused: { id: 'w7', app: 'chats' } }); assert.equal(c.chanNew(), true); assert.deepEqual(c.asked, ['w7::list'], 'classic: the window\'s list pane');
-  assert.equal(shellNew({ owns: false, focused: { id: 'w7', app: 'chats' }, open: { id: 'b' } }).chanNew(), false, 'classic with a channel open: its box (chanPost) instead');
-  assert.equal(shellNew({ owns: false, focused: { id: 'a', app: 'frame' } }).chanNew(), false);
-  assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| chanNew\(\) \|\| newChat\(\); \}\);/, '⌥N: channel box, else new channel, else New chat');
-  assert.match(desktop, /chatChannelNew: \(\) => chanNew\(\),\n    chatChannelView: \(\) => CHATS\.chanView\?\.\(\) \|\| '',/);
+// --- the shell's + / ⌥N (desktop.js): never a new channel (issue 1489) ---
+test('1489: + / ⌥N on the Channels list (AI apps sidebar or a classic Chats window) start a new chat, not a channel', () => {
+  assert.doesNotMatch(desktop, /function chanNew\(|chatChannelNew/);
+  assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| newChat\(\); \}\);/, '⌥N: channel box, else New chat');
+  assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),\n    chatChannelView: \(\) => CHATS\.chanView\?\.\(\) \|\| '',/);
   const host = read('web/core/skin-host.js');
-  assert.match(host, /channelNew: \(\) => live\(\) \? !!shell\.chatChannelNew\?\.\(\) : false,/);
+  assert.match(host, /channelNew: \(\) => false,/, 'kept for layouts built against it, never a channel');
   assert.match(host, /channelView: \(\) => live\(\) \? shell\.chatChannelView\?\.\(\) \|\| '' : '',/);
 });
 
@@ -116,7 +100,7 @@ function aiPlus({ view, feed = null, thread = null, post = true, made = true }) 
   const ctx = { calls, FEED: '__feed__', chatThread: thread, feedOn: () => feed, closeMenu: () => calls.push('closeMenu'), newChat: () => calls.push('newChat'),
     api: { sessions: { channelView: () => view, channelPost: () => (calls.push('channelPost'), post), channelNew: () => (calls.push('channelNew'), made) } } };
   vm.createContext(ctx);
-  vm.runInContext(cut(aad, '  const newOrPost = () =>', '  api.listen(newBtn') + '\nthis.plus = plus;', ctx);
+  vm.runInContext(cut(aad, '  const plus = () =>', '  api.listen(newBtn') + '\nthis.plus = plus;', ctx);
   ctx.plus(); return calls;
 }
 
@@ -124,8 +108,10 @@ test('1310: the AI apps + follows the sidebar tab, not a feed left in the main c
   const FEED = '__feed__', general = { id: '__general__', name: 'General' };
   assert.deepEqual(aiPlus({ view: 'activity', feed: general, thread: FEED }), ['newChat'], 'Activity: a blank new chat (newChat closes the feed), never General\'s box');
   assert.deepEqual(aiPlus({ view: 'channels', feed: general, thread: FEED }), ['channelPost', 'closeMenu'], 'Channels › General: its box');
-  assert.deepEqual(aiPlus({ view: 'channels' }), ['channelNew', 'closeMenu'], 'Channels list, none open: a new channel');
-  assert.deepEqual(aiPlus({ view: 'activity', made: false }), ['channelNew', 'newChat'], 'Activity with nothing open: New chat');
+  assert.deepEqual(aiPlus({ view: 'channels' }), ['newChat'], 'Channels list, none open: a blank new chat, never a channel (issue 1489)');
+  assert.deepEqual(aiPlus({ view: 'activity' }), ['newChat'], 'Activity with nothing open: New chat');
+  assert.match(aad, /api\.listen\(newBtn, 'click', plus\); api\.listen\(rNew, 'click', plus\);/);
+  assert.match(aad, /code === 'KeyN' && !sh\) return once\(plus\)/);
   assert.match(aad, /const newChat = \(\) => \{[^\n]*if \(chatThread === FEED \|\| feedOn\(\)\) \{ chatThread = null; api\.sessions\.channelBack\?\.\(\); \}/, 'newChat closes the leftover feed first');
 });
 
@@ -159,32 +145,23 @@ test('1311: on the desktop a sent New chat stays open and follows its new thread
   assert.match(chats, /if \(isNew && !left && !opts\.away && it\?\.sessionId && W\[wid\] === w && w\.thread === sid && c\.readNav === navAtSend\) openChat\(wid, it\.sessionId\);/, 'then it follows the new thread id');
 });
 
-// --- 1328: the phone's + (stock Chats list button and the AI apps phone layout) on the Channels list ---
-test('1328: on the phone, + on the Channels list with no channel open opens the new-channel form', () => {
+// --- 1328 / 1489: the phone's + (stock Chats list button and the AI apps phone layout) on the Channels list ---
+test('1489: on the phone, + on the Channels list with no channel open starts a new chat', () => {
   const app = read('web/app.js');
+  assert.doesNotMatch(app, /chatChannelNew/, 'no new-channel route from the phone shell');
   const pick = name => { const m = app.match(new RegExp(`\\n    ${name}: (\\(\\) => \\{[^\\n]*\\}|\\(\\) => [^\\n]*),\\n`)); assert.ok(m, name); return m[1]; };
-  const shell = ({ focus = { id: 'w1', app: 'chats', thread: null }, made = true, view = 'channels' } = {}) => {
-    const asked = [], ctx = { asked, idx: 0, desks: [{ focus: focus?.id }], W: focus ? { [focus.id]: focus } : {},
-      CHATS: { chanNew: wid => (asked.push(wid), made), chanView: () => view, chanCompose: () => false } };
-    vm.createContext(ctx);
-    return { asked, chanNew: vm.runInContext(`(${pick('chatChannelNew')})`, ctx), view: vm.runInContext(`(${pick('chatChannelView')})`, ctx) };
-  };
-  const s = shell(); assert.equal(s.chanNew(), true); assert.deepEqual(s.asked, ['w1'], 'the phone Chats window asks chats.js chanNew');
-  assert.equal(s.view(), 'channels');
-  assert.equal(shell({ made: false }).chanNew(), false, 'Activity / a channel open: chats.js says no');
-  assert.equal(shell({ focus: { id: 'w1', app: 'chats', thread: 'x' } }).chanNew(), false, 'a thread open: never a channel');
-  assert.equal(shell({ focus: { id: 'a', app: 'frame' } }).chanNew(), false, 'an app in front');
-  assert.equal(shell({ view: '' }).view(), '', 'switch off');
-  // The phone AI apps layout's round +: Activity = New chat; Channels = the open channel's box, else the form, else New chat.
+  const view = v => { const ctx = { CHATS: { chanView: () => v } }; vm.createContext(ctx); return vm.runInContext(`(${pick('chatChannelView')})`, ctx)(); };
+  assert.equal(view('channels'), 'channels'); assert.equal(view(''), '', 'switch off');
+  // The phone AI apps layout's round +: Activity = New chat; Channels = the open channel's box, else New chat.
   const phone = read('web/layouts/ai-apps/layout.js');
   const line = phone.match(/\n  api\.listen\(newBtn, 'click', (\(\) => \{[^\n]*\})\);\n/)?.[1]; assert.ok(line, 'phone + handler');
-  const plus = ({ view, post = false, made = false }) => {
+  const plus = ({ view, post = false }) => {
     const calls = [], ctx = { calls, closeMenu: () => calls.push('closeMenu'), closeSheet: () => {}, closeDrawer: () => {}, goHome: () => calls.push('newChat'),
-      api: { sessions: { channelView: () => view, channelPost: () => (calls.push('channelPost'), post), channelNew: () => (calls.push('channelNew'), made) } } };
+      api: { sessions: { channelView: () => view, channelPost: () => (calls.push('channelPost'), post), channelNew: () => (calls.push('channelNew'), true) } } };
     vm.createContext(ctx); vm.runInContext(`(${line})`, ctx)(); return calls;
   };
-  assert.deepEqual(plus({ view: 'channels', made: true }), ['channelPost', 'channelNew', 'closeMenu'], 'Channels list, none open: a new channel');
+  assert.deepEqual(plus({ view: 'channels' }), ['channelPost', 'newChat'], 'Channels list, none open: a new chat, never a channel');
   assert.deepEqual(plus({ view: 'channels', post: true }), ['channelPost', 'closeMenu'], 'a channel open: its box');
-  assert.deepEqual(plus({ view: 'activity', post: true, made: true }), ['newChat'], 'Activity: a normal New chat (issue 1310)');
-  assert.deepEqual(plus({ view: '' }), ['channelPost', 'channelNew', 'newChat'], 'switch off: New chat');
+  assert.deepEqual(plus({ view: 'activity', post: true }), ['newChat'], 'Activity: a normal New chat (issue 1310)');
+  assert.deepEqual(plus({ view: '' }), ['channelPost', 'newChat'], 'switch off: New chat');
 });

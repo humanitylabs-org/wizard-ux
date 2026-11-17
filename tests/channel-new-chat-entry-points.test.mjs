@@ -120,13 +120,13 @@ test('recordReply files a new post from the AI apps feed (no desk window) into t
 test('the orb / ⌥S path and New chat keys reach the channel: wiring in desktop, phone and both AI apps layouts', () => {
   const talk = cut(desktop, '  async function talk(', '  // Composer mic:');
   assert.match(talk, /action === 'toggle' && !forceNew\) \{ const c = chanFront\(\); if \(c && c\.wid !== focused\(\)\?\.id && c\.sid === '__new__'\) return chanTalk\(c, ''\);/);
-  assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| chanNew\(\) \|\| newChat\(\); \}\);/);
+  assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| newChat\(\); \}\);/);
   assert.match(desktop, /code === 'Enter'\) return hit\(\(\) => \{ if \(!e\.repeat\) chanPost\(\) \|\| newChat\(\); \}\);/);
   assert.match(desktop, /name: 'New chat'[^\n]*run: \(\) => chanPost\(\) \|\| newChat\(\)/);
   assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),/);
   assert.match(read('web/core/skin-host.js'), /channelPost: \(\) => live\(\) \? !!shell\.chatChannelPost\?\.\(\) : false,/);
   assert.match(read('web/app.js'), /chatChannelPost: \(\) => \{ const w = W\[desks\[idx\]\?\.focus\]; return w\?\.app === 'chats' && !w\.thread && !!CHATS\.chanCompose\?\.\(w\.id\); \},/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelView\?\.\(\) !== 'activity' && \(api\.sessions\.channelPost\?\.\(\) \|\| api\.sessions\.channelNew\?\.\(\)\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box or the new-channel form');
+  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelView\?\.\(\) !== 'activity' && api\.sessions\.channelPost\?\.\(\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box');
   const aad = read('web/layouts/ai-apps/desktop.js');
   assert.match(aad, /api\.listen\(newBtn, 'click', plus\); api\.listen\(rNew, 'click', plus\);/);
   assert.match(aad, /code === 'KeyN' && !sh\) return once\(plus\)/);
@@ -142,5 +142,5 @@ test('chanCompose: only a feed with its own box takes a new chat', () => {
   vm.createContext(ctx); vm.runInContext(src, ctx);
   assert.equal(ctx.chanCompose('feed'), true); assert.deepEqual(ended, [['feed', true]], 'the feed goes to its end with its box focused');
   assert.equal(ctx.chanCompose('list'), false); assert.equal(ctx.chanCompose('none'), false);
-  assert.match(chats, /chanSpaceOf, chanCompose, chanNew, chanView: \(\) => channelsOn\(\) \? chanView : '', chanBox:/, 'exported to the shells');
+  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => channelsOn\(\) \? chanView : '', chanBox:/, 'exported to the shells');
 });

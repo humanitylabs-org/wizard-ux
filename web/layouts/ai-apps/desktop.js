@@ -728,9 +728,9 @@ export default function desktop(api) {
   const settings = () => { unpeek(); api.desk.settings(); };
   // + with a channel's feed in front posts in that channel: its own box (wizard-ux issue 1291). ⌂ still goes Home.
   // The sidebar's tab decides (wizard-ux issues 1308, 1310): Activity, a blank new chat (a feed left in the column closes);
-  // Channels with a channel open, its box; the Channels list with none open, + / ⌥N start a new channel.
-  const newOrPost = () => { if (chatThread === FEED && feedOn() && api.sessions.channelView?.() !== 'activity' && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
-  const plus = () => { if (!feedOn() && api.sessions.channelNew?.()) { closeMenu(); return; } newOrPost(); };
+  // Channels with a channel open, its box; the Channels list with none open, a blank new chat as on Activity (only the
+  // list's + New channel row makes a channel, wizard-ux issue 1489).
+  const plus = () => { if (chatThread === FEED && feedOn() && api.sessions.channelView?.() !== 'activity' && api.sessions.channelPost?.()) { closeMenu(); return; } newChat(); };
   api.listen(newBtn, 'click', plus); api.listen(rNew, 'click', plus);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
   // the cog's count (System notices set to Badge, …): WosBell.attention, as on the stock desktop's cog and the phone's gear
@@ -1346,7 +1346,7 @@ export default function desktop(api) {
     const p = press; if (!p || p.held || p.moved) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; if (Math.hypot(dx, dy) < 48) return;
     p.moved = true; p.cancel?.();
-    if (p.drag && dy < 0 && -dy > Math.abs(dx)) newOrPost();
+    if (p.drag && dy < 0 && -dy > Math.abs(dx)) plus();
   }
   function up(run) {
     const p = press; press = null; if (!p) return; p.cancel?.(); p.target.classList.remove('is-pressed'); if (p.target === orbBtn) eng?.press?.(false);
