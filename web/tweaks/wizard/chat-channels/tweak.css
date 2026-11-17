@@ -164,3 +164,19 @@ html[data-tweaks~="wizard/chat-channels"] .ch-needs-done, html[data-tweaks~="wiz
 html[data-tweaks~="wizard/chat-channels"] .ch-needs-done { flex: none; min-height: 30px; padding: 0 12px; font-size: 0.8125rem; }
 html[data-tweaks~="wizard/chat-channels"] .ch-needs-done svg, html[data-tweaks~="wizard/chat-channels"] .ch-tacts button.ch-tact-md svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 html[data-tweaks~="wizard/chat-channels"] .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent; font-weight: 600; }
+/* The Daily channel (wizard-ux issue 1469): earlier days fold above the open day in the thread view. Each day's header is
+ * opaque (the raised surface over the panel colour, dark fallback), so messages scrolling under it never show through. */
+html[data-tweaks~="wizard/chat-channels"] .ch-dday { margin: 6px 0; border: 1px solid var(--wz-border, var(--line)); border-radius: 14px; background: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text, var(--ink)); }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-h { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 14px; align-items: center; gap: 4px 10px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 14px; background: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)), var(--wz-panel, var(--wz-base, var(--bg))); color: inherit; font: inherit; font-size: var(--wz-text-sm, 0.8125rem); text-align: left; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-h b { font-weight: 750; white-space: nowrap; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-o { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-h small { color: var(--wz-text-muted, var(--ink-3)); white-space: nowrap; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-h i { width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: .6; justify-self: center; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday.open .ch-dday-h i { transform: rotate(-135deg); }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday.open .ch-dday-h { position: sticky; top: 0; z-index: 2; border-radius: 14px 14px 0 0; border-bottom: 1px solid var(--wz-border, var(--line)); }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-b { display: flex; flex-direction: column; gap: 10px; padding: 10px 10px 12px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-none { margin: 4px 2px; color: var(--wz-text-muted, var(--ink-3)); font-size: var(--wz-text-sm, 0.8125rem); }
+html[data-tweaks~="wizard/chat-channels"] :is(.ch-dday-more, .ch-dday-retry) { align-self: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--wz-border, var(--line)); border-radius: 99px; background: var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-accent, var(--ink-2)); font: inherit; font-size: var(--wz-text-sm, 0.8125rem); font-weight: 650; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-more { display: block; margin: 4px auto 8px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-more[disabled] { opacity: .6; cursor: default; }
+html[data-tweaks~="wizard/chat-channels"] .ch-dday-today { margin-top: 14px; }
