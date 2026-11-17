@@ -1479,7 +1479,7 @@
 
   /* ---------------- home desk ---------------- */
   function renderHome() {
-    const L = live(), needs = L.needs.length;
+    const L = live(), A = window.WizCore.activityHome?.(LIVE), needs = (A ? A.needs : L.needs).length; // amber = Activity's needs you with Channels on (issue 1517)
     // The card still opens all Ready threads; its pill shares the phone/desktop unread projection.
     const ready = window.WizCore.workspaceNav.chatsCount(LIVE);
     // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.

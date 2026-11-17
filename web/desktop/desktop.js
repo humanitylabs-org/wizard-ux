@@ -1446,7 +1446,7 @@
   addEventListener('wizard:notifications', () => render());
   function paintBar() {
     window.WosBell?.paint?.();
-    const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
+    const A = LIVE?.ok ? C.activityHome?.(LIVE) : null, L = LIVE?.ok ? { ...LIVE.groups(), ...A } : { needs: [], ready: [], working: [] }; // needs = Activity's with Channels on (issue 1517)
     C.workspaceNav.refreshChats(LIVE, APP.wizard?.id || 'wizard');
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
@@ -1559,7 +1559,8 @@
   // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
   function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
   function homeHtml(i) {
-    const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
+    // Needs you / Unread: Activity's Ready split with Channels on (wizard-ux issue 1517), else LIVE.groups().
+    const A = LIVE?.ok ? C.activityHome?.(LIVE) : null, L = LIVE?.ok ? { ...LIVE.groups(), ...A } : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
