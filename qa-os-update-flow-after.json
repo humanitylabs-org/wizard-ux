@@ -126,6 +126,21 @@
    "paused": true,
    "panel": true,
    "flow": true
+  },
+  {
+   "check": "sheets",
+   "skin": "nebula",
+   "esc": {
+    "sheet": false,
+    "dialogs": 0,
+    "esc": [
+     "esc:os-update-sheet"
+    ]
+   },
+   "stale": {
+    "sheet": false,
+    "dialogs": 0
+   }
   }
  ]
 }
