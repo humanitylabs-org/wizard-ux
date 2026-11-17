@@ -451,18 +451,35 @@
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
   /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
-   * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe. */
-  let DS = null, dockSwiped = 0;
+   * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe.
+   * Bar scrub (wizard-ux#1491, switch wizard/bar-scrub, off by default): the whole bar scrubs like the little
+   * handle did and the handle is gone (its tweak.css). A quick flick still moves one desk; a drag that lasts
+   * past BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) steps one desk per SC_STEP px with a tick and the desk name, release lands. The bar's
+   * own direction: drag left = the desk to the right (the old handle went the other way). */
+  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180;
+  const barScrubOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/bar-scrub'); } catch (_) { return false; } };
+  const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); } s.live = false; scrub.classList.remove('on'); };
   $('#dock').addEventListener('pointerdown', e => {
     if (e.target.closest('#orbWrap, #scrub') || (sheet && sheet !== 'settings')) return; // Settings never blocks a desk swipe
     if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
-    DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
+    DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false, sc: barScrubOn(), ts: e.timeStamp, start: idx, at: idx, live: false, up: false };
   });
   $('#dock').addEventListener('pointermove', e => {
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
     if (!DS.h && window.WosSkinHost?.claimed(e.pointerId)) { DS = null; return; } // a skin gesture owns this finger
     if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); if (sheet === 'settings') liftSettings(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
+    if (DS.sc) {
+      if (DS.up) return;
+      if (dy < -30) { DS.up = true; barScrubBack(DS); placeTrack(0, true); return; } // going up: the iPhone's swipe out
+      if (!DS.live && e.timeStamp - DS.ts >= BAR_FLICK_MS) { DS.live = true; placeTrack(0, true); scrub.classList.add('on'); scLabel(DS.at); vib(10); }
+      if (DS.live) {
+        const n = Math.max(0, Math.min(desks.length - 1, DS.start - Math.round(dx / SC_STEP)));
+        if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
+        if (n !== DS.at) { DS.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(n); }
+        return;
+      }
+    }
     let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
     placeTrack(d * 1.1, false);
   });
@@ -471,6 +488,13 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
+    // A drag that lasted past BAR_FLICK_MS and then held still never got the move that starts the scrub: land where it points.
+    if (s.sc && !s.live && !s.up && e.timeStamp - s.ts >= BAR_FLICK_MS) { const n = Math.max(0, Math.min(desks.length - 1, s.start - Math.round(dx / SC_STEP))); s.live = true; if (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || [])) s.at = n; }
+    if (s.sc && (s.live || s.up)) {
+      // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
+      if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
+      scrub.classList.remove('on'); goDesk(s.at, true); tourEv('desk', { home: idx === HOME }); return;
+    }
     if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
     if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }
     else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); }
@@ -733,7 +757,7 @@
     if (n !== SC.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
-  function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
+  function scLabel(at = SC.at) { scrub.querySelector('.sc-label').textContent = deskName(at); }
   // A cancelled touch (iOS takes it for its own swipe home) or one that rose more than a nudge is the system's
   // swipe out, not a scrub: put the desk back where it started instead of landing on the scrubbed one.
   const scEnd = e => {
