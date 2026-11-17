@@ -1,0 +1,414 @@
+{
+  "origin": "https://chat-daily-channel.test",
+  "web": "/home/builder/work/wizard-ux-1469/web",
+  "broken": false,
+  "cases": [
+    {
+      "stem": "phone-nebula",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/v1/channels/daily/today"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/v1/runs"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ],
+      "runs": [
+        {
+          "session": "qa-d0",
+          "input": "Plan the trip for Friday"
+        }
+      ],
+      "today": 1,
+      "order": [
+        "daily",
+        "alerts",
+        "launch",
+        "__general__"
+      ],
+      "dayReads": [
+        "first",
+        "2026-11-15",
+        "first"
+      ],
+      "reads": [
+        "qa-d1:messages",
+        "qa-d2:messages",
+        "qa-d0",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages"
+      ],
+      "feedShown": 0,
+      "folds": [
+        "Sat, Nov 14 Signal: travel day 1 message",
+        "Sun, Nov 15 Signal: a quiet Sunday 3 messages"
+      ],
+      "todayOnScreen": true,
+      "boxAfter": "",
+      "pass": true
+    },
+    {
+      "stem": "phone-grove",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/v1/channels/daily/today"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/v1/runs"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ],
+      "runs": [
+        {
+          "session": "qa-d0",
+          "input": "Plan the trip for Friday"
+        }
+      ],
+      "today": 1,
+      "order": [
+        "daily",
+        "alerts",
+        "launch",
+        "__general__"
+      ],
+      "dayReads": [
+        "first",
+        "2026-11-15",
+        "first"
+      ],
+      "reads": [
+        "qa-d1:messages",
+        "qa-d2:messages",
+        "qa-d0",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages"
+      ],
+      "feedShown": 0,
+      "folds": [
+        "Sat, Nov 14 Signal: travel day 1 message",
+        "Sun, Nov 15 Signal: a quiet Sunday 3 messages"
+      ],
+      "todayOnScreen": true,
+      "boxAfter": "",
+      "pass": true
+    },
+    {
+      "stem": "classic-nebula",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/v1/channels/daily/today"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/v1/runs"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ],
+      "runs": [
+        {
+          "session": "qa-d0",
+          "input": "Plan the trip for Friday"
+        }
+      ],
+      "today": 1,
+      "order": [
+        "daily",
+        "alerts",
+        "launch",
+        "__general__"
+      ],
+      "dayReads": [
+        "first",
+        "2026-11-15",
+        "first"
+      ],
+      "reads": [
+        "qa-d1:messages",
+        "qa-d2:messages",
+        "qa-d0",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages"
+      ],
+      "feedShown": 0,
+      "folds": [
+        "Sat, Nov 14 Signal: travel day 1 message",
+        "Sun, Nov 15 Signal: a quiet Sunday 3 messages"
+      ],
+      "todayOnScreen": true,
+      "boxAfter": "",
+      "foldsAfter": [
+        "2026-11-14",
+        "2026-11-15",
+        "2026-11-16"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "classic-grove",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/v1/channels/daily/today"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/v1/runs"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ],
+      "runs": [
+        {
+          "session": "qa-d0",
+          "input": "Plan the trip for Friday"
+        }
+      ],
+      "today": 1,
+      "order": [
+        "daily",
+        "alerts",
+        "launch",
+        "__general__"
+      ],
+      "dayReads": [
+        "first",
+        "2026-11-15",
+        "first"
+      ],
+      "reads": [
+        "qa-d1:messages",
+        "qa-d2:messages",
+        "qa-d0",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages"
+      ],
+      "feedShown": 0,
+      "folds": [
+        "Sat, Nov 14 Signal: travel day 1 message",
+        "Sun, Nov 15 Signal: a quiet Sunday 3 messages"
+      ],
+      "todayOnScreen": true,
+      "boxAfter": "",
+      "foldsAfter": [
+        "2026-11-14",
+        "2026-11-15",
+        "2026-11-16"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "ai-apps-nebula",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/v1/channels/daily/today"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/v1/runs"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ],
+      "runs": [
+        {
+          "session": "qa-d0",
+          "input": "Plan the trip for Friday"
+        }
+      ],
+      "today": 1,
+      "order": [
+        "daily",
+        "alerts",
+        "launch",
+        "__general__"
+      ],
+      "dayReads": [
+        "first",
+        "2026-11-15",
+        "first"
+      ],
+      "reads": [
+        "qa-d1:messages",
+        "qa-d2:messages",
+        "qa-d0",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages"
+      ],
+      "feedShown": 0,
+      "folds": [
+        "Sat, Nov 14 Signal: travel day 1 message",
+        "Sun, Nov 15 Signal: a quiet Sunday 3 messages"
+      ],
+      "todayOnScreen": true,
+      "boxAfter": "",
+      "foldsAfter": [
+        "2026-11-14",
+        "2026-11-15",
+        "2026-11-16"
+      ],
+      "pass": true
+    },
+    {
+      "stem": "ai-apps-grove",
+      "errors": [],
+      "refused": [],
+      "writes": [
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/v1/channels/daily/today"
+        },
+        {
+          "method": "POST",
+          "path": "/wizard/hermes/v1/runs"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        },
+        {
+          "method": "PUT",
+          "path": "/wizard/thread-seen"
+        }
+      ],
+      "runs": [
+        {
+          "session": "qa-d0",
+          "input": "Plan the trip for Friday"
+        }
+      ],
+      "today": 1,
+      "order": [
+        "daily",
+        "alerts",
+        "launch",
+        "__general__"
+      ],
+      "dayReads": [
+        "first",
+        "2026-11-15",
+        "first"
+      ],
+      "reads": [
+        "qa-d1:messages",
+        "qa-d2:messages",
+        "qa-d0",
+        "qa-d0:messages",
+        "qa-d0:messages",
+        "qa-d0:messages"
+      ],
+      "feedShown": 0,
+      "folds": [
+        "Sat, Nov 14 Signal: travel day 1 message",
+        "Sun, Nov 15 Signal: a quiet Sunday 3 messages"
+      ],
+      "todayOnScreen": true,
+      "boxAfter": "",
+      "foldsAfter": [
+        "2026-11-14",
+        "2026-11-15",
+        "2026-11-16"
+      ],
+      "pass": true
+    }
+  ]
+}
