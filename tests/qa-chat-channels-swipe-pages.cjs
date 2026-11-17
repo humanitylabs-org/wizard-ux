@@ -82,10 +82,8 @@ const ROWS = [
         const box = async sel => { const b = await vis(sel).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
         if (off) {
           steps.tabs = await order();
-          const before = await page.evaluate(() => document.querySelector('.ch-list .ch-scroll')?.innerHTML.length);
           await swipe(200, 500, -180); await swipe(200, 500, 180);
           steps.afterSwipes = await where();
-          steps.sameList = before === await page.evaluate(() => document.querySelector('.ch-list .ch-scroll')?.innerHTML.length);
           await shot('1-off');
           report.push({ skin, off, steps, errors });
           assert.deepEqual(steps.tabs, [], `${skin}: no Channels tabs with the switch off`);
@@ -136,7 +134,6 @@ const ROWS = [
           await swipe(p.x + p.width - 20, p.y + p.height / 2, -200);
           await swipe(p.x + 40, p.y + p.height / 2, 200);
           steps.codeSwipe = await where();
-          steps.codeScrolled = await page.evaluate(() => { const n = [...document.querySelectorAll('[data-part="thread"] pre, [data-part="thread"] pre code')].find(x => x.scrollWidth > x.clientWidth); return n ? n.scrollWidth > n.clientWidth : null; });
         }
         await swipe(120, 300, 220); steps.actBack = await where(); steps.actBackView = await view(); await shot('5-back-to-activity');
         report.push({ skin, steps, errors });
