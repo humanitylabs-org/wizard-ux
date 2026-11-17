@@ -148,12 +148,12 @@ const report = { origin, web, cases: [] };
         assert.equal(s.back, listBeside ? '' : '‹ Channels', `${stem}: the feed ${listBeside ? 'beside the channel list' : 'shows ‹ Channels'}`);
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p02"]').click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-thread')].some(t => t.getClientRects().length && /Synthetic ask for Launch post 2/.test(t.innerText)), null, { timeout: 8000 }); await nap(700);
-        s = await step('post'); assert.equal(s.back, '‹ # Launch', 'a post: back to its channel at every width');
+        s = await step('post'); assert.equal(s.back, '‹ 💬 Launch', 'a post: back to its channel at every width');
         await vis('.aad-cback, .aad-oneback').click();
         await vis('.aad-feed .ch-chan-feed').waitFor({ timeout: 5000 }); await nap(800);
         s = await step('post-back'); assert.equal(s.back, listBeside ? '' : '‹ Channels', 'Back from the post: the feed');
         // Esc on the post too
-        await vis('.aad-feed .ch-post-b[data-chopen="qa-p02"]').click(); await nap(900); assert.equal(await back(), '‹ # Launch');
+        await vis('.aad-feed .ch-post-b[data-chopen="qa-p02"]').click(); await nap(900); assert.equal(await back(), '‹ 💬 Launch');
         await page.keyboard.press('Escape'); await vis('.aad-feed .ch-chan-feed').waitFor({ timeout: 5000 }); await nap(600);
         // Back from the feed: the channel list
         if (!listBeside) await vis('.aad-cback, .aad-oneback').click(); else await page.keyboard.press('Escape');

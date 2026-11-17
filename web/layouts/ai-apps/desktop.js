@@ -329,6 +329,11 @@ export default function desktop(api) {
   }
   const FEED = '__feed__', feedBox = el('div', 'aad-feed'); feedBox.hidden = true;
   const feedOn = () => api.sessions.channelFeedOpen?.() || null;
+  // A channel as its emoji and words (wizard-ux issue 1506): "🚀 Launch", General "#️⃣ General"; an agent's feed keeps its name.
+  function chanTitle(c) {
+    const n = String(c?.name || ''), f = !c?.agentFeed && globalThis.WizCore?.channelFace?.(n, !!c?.general || c?.id === '__general__');
+    return c?.agentFeed ? n : f ? `${f.emoji} ${f.label}` : `# ${n}`;
+  }
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   // one app at a time, the list alone: its row for the chat already open behind it shows that chat again (another row
@@ -881,6 +886,7 @@ export default function desktop(api) {
     if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
     // Channels on (issue 1256): the chat's channel, muted on a second line, as in Chats' Activity
     if (s.channel) title.append(el('span', 'aad-chan-line', { text: `# ${s.channel}` }));
+    if (s.channel && typeof chanTitle === 'function') title.lastChild.textContent = chanTitle({ name: s.channel, general: s.channel === 'General' }); // (issue 1506: its emoji, not #)
     // (issue 1336: another agent's thread names it after the channel, "# WizardOS Chats · Philosopher")
     if (s.channel && s.agentName) title.lastChild?.append?.(` · ${s.agentName}`);
     // A saved, unsent draft (switch wizard/draft-marks, wizard-ux issue 1445): "✎ Draft" leads the second line (its CSS)
@@ -1797,7 +1803,7 @@ export default function desktop(api) {
     // another chat (or none) in the column: that post's Back is spent; the feed itself keeps it for a reopen
     if (fromFeed && chatThread !== fromFeed.sid && chatThread !== FEED) fromFeed = null;
     const b = feedBack(), up = b ? '' : listBack(); cBack.hidden = !b && !up; if (!b && !up) return;
-    const name = b ? `# ${b.name || ''}` : up; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
+    const name = b ? (typeof chanTitle === 'function' ? chanTitle(b) : `# ${b.name || ''}`) : up; cBack.textContent = `‹ ${name}`; cBack.title = 'Back (Esc)'; cBack.setAttribute('aria-label', `Back to ${name} (Esc)`);
   }
   api.listen(cBack, 'click', () => chatBack());
   // A channel opened in the sidebar: its feed comes into the column in place of the chat there (the app panel stays).
@@ -2339,7 +2345,7 @@ export default function desktop(api) {
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     const fresh = chatThread !== FEED && !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
-    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? `# ${feedOn()?.name || ''}` : chatThread ? feedTitle(chatThread) || titleOf(chatThread) : '';
+    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread === FEED ? (typeof chanTitle === 'function' ? chanTitle(feedOn()) : `# ${feedOn()?.name || ''}`) : chatThread ? feedTitle(chatThread) || titleOf(chatThread) : '';
     tt.textContent = docked ? t : ''; tt.title = t; paintBack();
     cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : chatThread === FEED ? 'Close the channel (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();

@@ -127,7 +127,7 @@ const report = { origin, web, cases: [] };
         await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').click();
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p12"]').waitFor({ timeout: 8000 }); await nap(800);
         entry.feed = await seen();
-        assert.ok(entry.feed.feed && /# Launch/.test(entry.feed.title), 'the feed in the chat column: ' + JSON.stringify(entry.feed));
+        assert.ok(entry.feed.feed && /💬 Launch/.test(entry.feed.title), 'the feed in the chat column: ' + JSON.stringify(entry.feed));
         await page.screenshot({ path: path.join(out, stem + '-2-feed.png') });
         await reload();
         entry.feedReloaded = await seen();

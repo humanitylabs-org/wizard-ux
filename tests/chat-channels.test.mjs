@@ -66,7 +66,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={setChanModel,chanModel,channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={chanEmojiPick,chanEmojiTap,chanSetEmoji,openChannelEmoji,chanFace,setChanModel,chanModel,channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -227,7 +227,7 @@ test('posting reuses the Space-fixed-at-send path: a new chat sent from a channe
 });
 
 const ids = html => [...html.matchAll(/data-chchan="([^"]+)"/g)].map(m => m[1]);
-const sheetButtons = html => [...html.matchAll(/data-(rsch\w+)>(?:<svg[^]*?<\/svg>)?([^<]*)</g)].map(m => m[2]);
+const sheetButtons = html => [...html.matchAll(/data-(rsch\w+)>(?:<svg[^]*?<\/svg>|<span[^>]*>[^<]*<\/span>)?([^<]*)</g)].map(m => m[2]);
 
 test('a post is the owner\'s first message with photo thumbnails, never a title card; read once per thread', async () => {
   const history = { a: [{ role: 'user', text: 'Please fix the boot logo\non the phone', files: [{ id: 'f1', name: 'shot.png', mime: 'image/png' }, { id: 'f2', name: 'notes.pdf', mime: 'application/pdf' }], at: NOW - 5 * H }, { role: 'assistant', text: 'On it' }] };
@@ -276,12 +276,12 @@ test('A–Z / Z–A sort, pinned channels on top in pin order, General always la
   assert.equal(f.toasts.at(-1), 'Pinned');
 });
 
-test('long-press sheet on a channel: Pin, Rename, Archive channel, Mark channel read, New post; General gets Mark channel read and New post', () => {
+test('long-press sheet on a channel: Pin, Rename, Emoji…, Archive channel, Mark channel read, New post; General gets Mark channel read and New post', () => {
   const f = fixture();
   f.openChannelSheet('w', 'launch');
   assert.match(f.sheets.at(-1), /aria-label="Channel actions"[^]*# Launch/);
   // Mark channel read comes with Channels since wizard-ux issue 1358 (it had its own switch).
-  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Archive channel', 'Mark channel read', 'New post']);
+  assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Emoji…', 'Archive channel', 'Mark channel read', 'New post']);
   assert.doesNotMatch(f.sheets.at(-1), /Delete/i);
   f.openChannelSheet('w', '__general__');
   assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Mark channel read', 'New post']);
@@ -316,7 +316,7 @@ test('Archive: an archived channel moves to a folded Archive section, Restore br
   // The channel's chat stays where it is (Activity's # line still names it).
   assert.equal(f.chanName(row('d', 1)), 'Voice');
   // Archived sheet: Restore, no New post.
-  f.openChannelSheet('w', 'voice'); assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Restore', 'Mark channel read']);
+  f.openChannelSheet('w', 'voice'); assert.deepEqual(sheetButtons(f.sheets.at(-1)), ['Pin', 'Rename', 'Emoji…', 'Restore', 'Mark channel read']);
   // Pruning: newest chat 40 days old and archived 31 days ago → gone from Archive (the Space itself is untouched).
   assert.equal(f.CHAN_ARCHIVE_PRUNE_DAYS, 30);
   const p = JSON.parse(f.store.get('wos.chats.channel-prefs.v1')); p.archived.voice = new Date(NOW - 31 * 24 * H).toISOString(); f.store.set('wos.chats.channel-prefs.v1', JSON.stringify(p));
@@ -2276,4 +2276,105 @@ test('draft marks (issue 1445): a Channels line whose box holds a draft wears th
   const after = lines();
   assert.equal(after.launch, false, 'sent or discarded: gone');
   assert.equal(Object.entries(after).find(([k]) => /general/i.test(k))?.[1], true, 'General (main agent) box key chan::<id>');
+});
+
+// Issue 1506: a channel's emoji where the # was. The emoji is the start of the channel's own name; General is #️⃣ and a
+// name with no emoji gets 💬. The real top-level helpers (window.WizCore.channelFace / channelEmojiName) run here.
+const coreTop = (() => { const i = src.indexOf('/* Channel emoji (wizard-ux issue 1506'); return src.slice(i, src.indexOf('window.WizCore.chats = function', i)); })();
+function emojiCore() { const ctx = { window: { WizCore: {} } }; vm.createContext(ctx); vm.runInContext(coreTop, ctx); return ctx.window.WizCore; }
+function emojiFixture(opts = {}) {
+  const f = fixture({ spacesList: [
+    { id: 'launch', name: '🚀 Launch', threads: ['a'] },
+    { id: 'voice', name: 'Voice', threads: ['d'] },
+    { id: 'apple', name: '🍎Zeta', threads: [] },
+    { id: 'host-ops', name: '🛠️ Host ops', agent: 'host', threads: ['h1'] },
+    { id: 'box', name: 'Box', agent: 'container', threads: ['k1'] },
+    { id: 'locked', name: '🔒 Locked', agent: 'restricted', threads: ['r1'] },
+  ], agents: { h1: 'host', k1: 'container', r1: 'restricted' }, ...opts });
+  f.env.window.WizCore = emojiCore();
+  return f;
+}
+const chanLines = html => [...html.matchAll(/data-chchan="([^"]+)"[^>]*><span class="ch-chan-hash ch-chan-emo" aria-hidden="true">([^<]*)<\/span><b>([^<]*)<\/b>/g)].map(m => [m[1], m[2], m[3]]);
+
+test('issue 1506: channelFace reads the emoji at the start of a name; channelEmojiName puts or takes it off', () => {
+  const C = emojiCore(), face = (n, g) => { const x = C.channelFace(n, g); return [x.emoji, x.label]; };
+  assert.deepEqual(face('🚀 Launch'), ['🚀', 'Launch']);
+  assert.deepEqual(face('🚀Launch'), ['🚀', 'Launch']);
+  assert.deepEqual(face('Launch'), ['💬', 'Launch'], 'no emoji: the default');
+  assert.deepEqual(face('General', true), ['#️⃣', 'General']);
+  assert.deepEqual(face('🇳🇱 Dutch'), ['🇳🇱', 'Dutch'], 'a flag');
+  assert.deepEqual(face('👩‍💻 Code'), ['👩‍💻', 'Code'], 'a joined emoji');
+  assert.deepEqual(face('1️⃣ First'), ['1️⃣', 'First'], 'a keycap');
+  assert.deepEqual(face('2024 plans'), ['💬', '2024 plans'], 'plain digits are words');
+  assert.deepEqual(face('#launch'), ['💬', '#launch']);
+  assert.deepEqual(face('🚀'), ['🚀', '🚀'], 'an emoji-only name keeps its words');
+  assert.equal(C.channelEmojiName('Launch', '🎯'), '🎯 Launch');
+  assert.equal(C.channelEmojiName('🚀 Launch', '🎯'), '🎯 Launch', 'replaces the one in front');
+  assert.equal(C.channelEmojiName('🚀 Launch', ''), 'Launch', 'takes it off');
+  assert.equal(C.channelEmojiName('🚀', ''), '🚀', 'never an empty name');
+  assert.ok(C.channelEmojiName('x'.repeat(60), '🎯').length <= 60, 'the 60-character name limit holds');
+  // Codex P2s: a subdivision flag (tag sequence) is one emoji; near the limit a trailing astral character is dropped whole.
+  assert.deepEqual(face('🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Scots'), ['🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}', 'Scots']);
+  assert.equal(C.channelEmojiName('🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Scots', ''), 'Scots', 'no tag characters left behind');
+  const near = C.channelEmojiName('x'.repeat(56) + '😀', '🎯');
+  assert.ok(near.length <= 60 && !/[\uD800-\uDBFF]$/.test(near) && near.isWellFormed(), 'no lone surrogate: ' + JSON.stringify(near));
+  assert.ok(C.CHANNEL_EMOJI.length >= 12 && C.CHANNEL_EMOJI.every(e => C.channelFace(e + ' x').own), 'every picker emoji reads back as one');
+});
+
+test('issue 1506: the Channels list shows each channel\'s emoji where the # was, sorted by its words; General is #️⃣', () => {
+  const f = emojiFixture();
+  // All agents: A–Z by the words, not the emoji (🍎Zeta sorts last), General last.
+  assert.deepEqual(chanLines(f.channelsBody(f.w, [])), [['box', '💬', 'Box'], ['host-ops', '🛠️', 'Host ops'], ['launch', '🚀', 'Launch'], ['locked', '🔒', 'Locked'], ['voice', '💬', 'Voice'], ['apple', '🍎', 'Zeta'], ['__general__', '#️⃣', 'General']]);
+  // The main agent's own list.
+  f.w.focus = { kind: 'agent', key: 'hermes' };
+  assert.deepEqual(chanLines(f.channelsBody(f.w, [])), [['launch', '🚀', 'Launch'], ['voice', '💬', 'Voice'], ['apple', '🍎', 'Zeta'], ['__general__', '#️⃣', 'General']]);
+  // The open feed's header and the channel sheet's title carry it too.
+  f.openChannel(f.w, 'launch');
+  assert.match(f.chanHead(f.w, f.chanOpen(f.w)), /<span class="ch-chan-hash ch-chan-emo" aria-hidden="true">🚀<\/span>Launch<\/b>/);
+  f.openChannelSheet('w', 'voice'); assert.match(f.sheets.at(-1), /<div class="ch-sheet-t">💬 Voice<\/div>/);
+  f.openChannelSheet('w', '__general__'); assert.match(f.sheets.at(-1), /<div class="ch-sheet-t">#️⃣ General<\/div>/);
+  assert.doesNotMatch(f.channelsBody(f.w, []), /aria-hidden="true">#<\/span>/, 'no # left on a channel');
+});
+
+test('issue 1506 main vs routed: host-profile, container and restricted channels show their own emoji in their agent\'s list and feed', () => {
+  const f = emojiFixture();
+  for (const [agent, id, emoji, words] of [['host', 'host-ops', '🛠️', 'Host ops'], ['container', 'box', '💬', 'Box'], ['restricted', 'locked', '🔒', 'Locked']]) {
+    f.w.focus = { kind: 'agent', key: agent };
+    assert.deepEqual(chanLines(f.channelsBody(f.w, [])), [[id, emoji, words], ['__general__', '#️⃣', 'General']], agent);
+    f.openChannel(f.w, id);
+    assert.match(f.chanHead(f.w, f.chanOpen(f.w)), new RegExp(`aria-hidden="true">${emoji}</span>${words}</b>`), agent);
+    f.channelBack(f.w);
+  }
+  // Setting an emoji renames that agent's own channel (one item edit), never a main one with the same words.
+  f.chanSetEmoji('box', '🎯');
+  assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: 'spaces/box/name', item: '🎯 Box' });
+});
+
+test('issue 1506: Rename has the emoji row; a tap puts that emoji in front, a tap on the chosen one takes it off; Emoji… opens the full sheet', () => {
+  const f = emojiFixture();
+  f.openChannelSheet('w', 'launch');
+  assert.match(f.sheets.at(-1), /data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">🚀<\/span>Emoji…/);
+  f.channelClick(click({ 'data-rschrename': '' }), 'w', f.w);
+  const html = f.sheets.at(-1);
+  assert.match(html, /data-chrnform[^]*value="🚀 Launch"[^]*class="ch-emoji-pick" role="group" aria-label="Channel emoji"/);
+  assert.match(html, /data-chemoji="🚀" aria-pressed="true"/); assert.match(html, /data-chemoji="🎯" aria-pressed="false"/);
+  // A fake form: the tap edits the field, fires input (the New channel form keeps its Create button in step) and rings the pick.
+  const fired = [], inp = { value: '🚀 Launch', disabled: false, dispatchEvent: e => fired.push(e.type) };
+  const btns = ['🚀', '🎯'].map(e => ({ dataset: { chemoji: e }, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, closest: sel => sel === 'form' ? formEl : null }));
+  const formEl = { querySelector: () => inp, querySelectorAll: () => btns };
+  f.env.Event = class { constructor(t) { this.type = t; } };
+  const tap = b => f.channelClick({ target: { closest: sel => sel === '[data-chemoji]' ? b : null } }, 'w', f.w);
+  assert.equal(tap(btns[1]), true); assert.equal(inp.value, '🎯 Launch'); assert.deepEqual(fired, ['input']);
+  assert.deepEqual(btns.map(b => b.attrs['aria-pressed']), ['false', 'true']);
+  tap(btns[1]); assert.equal(inp.value, 'Launch', 'the chosen one again: off (the list shows 💬)');
+  f.submitChannelRename({ querySelector: () => ({ value: inp.value, focus() {} }) });
+  assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: 'spaces/launch/name', item: 'Launch' });
+  // Emoji… = the existing emoji sheet (search + categories), keyed to this channel; its pick renames with that emoji.
+  const opened = []; f.env.openEmojiSheet = (...a) => opened.push(a);
+  f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rschemoji': '' }), 'w', f.w);
+  assert.deepEqual(opened, [['w', 'chanemoji:voice', 'Emoji for Voice']]);
+  assert.equal(f.chanSetEmoji('voice', '🎵'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: 'spaces/voice/name', item: '🎵 Voice' });
+  // The switch off: no emoji row (the sheet itself is Channels-only).
+  f.setOn(false); assert.equal(f.chanEmojiPick('Launch'), '');
 });

@@ -124,7 +124,7 @@ const report = { origin, web, broken, cases: [] };
         }
         await thread().waitFor({ timeout: 10000 });
         // The thread's own header names the channel (AI apps draws its own column header with the day thread's title).
-        if (!ai) await thread().locator('.ch-head').getByText('# Daily').waitFor({ timeout: 8000 });
+        if (!ai) await thread().locator('.ch-head').getByText('💬 Daily').waitFor({ timeout: 8000 });
         await thread().getByText('Done, the bank call is on Tuesday at 10:00.').waitFor({ timeout: 8000 });
         entry.feedShown = await page.locator('.ch-chan-feed').filter({ visible: true }).count();
         assert.equal(entry.feedShown, 0, 'no post feed in between');
@@ -168,7 +168,7 @@ const report = { origin, web, broken, cases: [] };
         if (!phone) {
           entry.foldsAfter = await thread().locator('.ch-dday-h').evaluateAll(b => b.map(x => x.dataset.chdday));
           assert.ok(entry.foldsAfter.includes(Y), 'yesterday is now a fold above today: ' + entry.foldsAfter);
-          if (!ai) assert.ok(await thread().locator('.ch-head').getByText('# Daily').count());
+          if (!ai) assert.ok(await thread().locator('.ch-head').getByText('💬 Daily').count());
           await page.screenshot({ path: path.join(out, stem + '-4-after-first-post.png') });
         }
         // Back: to the Channels list.

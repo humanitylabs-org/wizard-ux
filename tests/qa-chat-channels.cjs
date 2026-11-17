@@ -113,7 +113,7 @@ const report = { origin, web, cases: [] };
         const tabs = vis('.ch-chan-tabs'); await tabs.waitFor();
         assert.equal(await vis('[data-chview="activity"]').getAttribute('aria-pressed'), 'true', 'Activity is the default');
         entry.channelLine = await vis('.ch-list [data-chopen="qa-l1"]').innerText();
-        assert.match(entry.channelLine, /# Launch/); assert.match(await vis('.ch-list [data-chopen="qa-g1"]').innerText(), /# General/);
+        assert.match(entry.channelLine, /💬 Launch/); assert.match(await vis('.ch-list [data-chopen="qa-g1"]').innerText(), /#️⃣ General/);
         await page.screenshot({ path: path.join(out, stem + '-activity.png') });
         // Unread (wizard-ux issue 1259): the bold Activity rows per channel, to match the Channels counts below.
         entry.activityUnread = await page.locator('.ch-list .ch-row.unread').filter({ visible: true }).evaluateAll(b => [...new Set(b.map(x => x.dataset.chopen))].sort());
@@ -236,7 +236,7 @@ const report = { origin, web, cases: [] };
         await vis('.ch-chan-open[data-chchan="voice"]').click(); await vis('.ch-chan-h').waitFor();
         assert.equal(await page.locator('.ch-fab').filter({ visible: true }).count(), 0, 'no + in a channel');
         const box = vis('.ch-chan-compose'), ta = box.locator('textarea');
-        assert.equal(await ta.getAttribute('placeholder'), 'Message # Voice');
+        assert.equal(await ta.getAttribute('placeholder'), 'Message 💬 Voice');
         assert.ok(await box.locator('.ch-attach').isVisible() && await box.locator('.ch-mlabel').isVisible() && await box.locator('[data-chmic]').count() >= 0, 'attach and model label in the box');
         entry.boxModel = (await box.locator('.ch-mlabel').innerText()).trim();
         entry.boxMic = await box.locator('[data-chmic]').count();

@@ -189,3 +189,13 @@ html[data-tweaks~="wizard/chat-channels"] :is(.ch-dday-more, .ch-dday-retry) { a
 html[data-tweaks~="wizard/chat-channels"] .ch-dday-more { display: block; margin: 4px auto 8px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-dday-more[disabled] { opacity: .6; cursor: default; }
 html[data-tweaks~="wizard/chat-channels"] .ch-dday-today { margin-top: 14px; }
+/* Channel emoji (wizard-ux issue 1506): the channel's emoji where the # was, and the emoji row under the name field of
+ * New channel and Rename (selected = ringed in the accent). */
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-emo { flex: none; display: inline-grid; place-items: center; width: 1.375em; margin-right: 0; color: var(--wz-text, var(--ink)); font-weight: 400; line-height: 1; }
+html[data-tweaks~="wizard/chat-channels"] .ch-chan-h .ch-chan-emo { margin-right: 6px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-sheet-emo { display: inline-grid; place-items: center; width: 20px; font-size: var(--wz-text-md, 1rem); line-height: 1; }
+html[data-tweaks~="wizard/chat-channels"] .ch-emoji-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin: 8px 6px 4px; }
+html[data-tweaks~="wizard/chat-channels"] .ch-rename .ch-emoji-pick { margin: 6px 10px 10px; }
+html[data-tweaks~="wizard/chat-channels"] :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button { display: grid; place-items: center; width: auto; min-width: 0; min-height: 40px; padding: 0; border: 1px solid transparent; border-radius: var(--wz-radius, 10px); background: color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent); color: inherit; font-size: var(--wz-text-lg, 1.25rem); font-weight: 400; line-height: 1; cursor: pointer; }
+html[data-tweaks~="wizard/chat-channels"] :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button[aria-pressed="true"] { border-color: var(--wz-accent, var(--violet-2)); background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 18%, transparent); }
+html[data-tweaks~="wizard/chat-channels"] :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 1px; }

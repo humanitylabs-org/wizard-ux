@@ -46,6 +46,27 @@ window.WizCore.migrateChatsFocus = function (wins, desks) {
     return !hadLegacy || d.wins.length || d.home;
   });
 };
+/* Channel emoji (wizard-ux issue 1506, switch wizard/chat-channels): a channel shows an emoji where the # was. The
+ * emoji is the start of the channel's own name ("🚀 Launch"), so it syncs and renames with the name, a channel whose
+ * owner already typed an emoji in front keeps it, and nothing new is stored. General is #️⃣; a name with no emoji
+ * gets 💬. channelFace(name, general) → { emoji, label, own }; channelEmojiName(name, emoji) puts (or, with '', takes
+ * off) the emoji in front of a name. The AI apps desktop reads these too. */
+window.WizCore.CHANNEL_EMOJI = ['💬', '🚀', '📌', '💡', '🛠️', '📅', '🎯', '📚', '🎨', '🎵', '💰', '🏠', '✈️', '❤️', '🌱', '⭐', '🔥', '🧪', '📝', '🤖', '👥', '🎉', '⚙️', '🌍'];
+window.WizCore.channelFace = function channelFace(name, general = false) {
+  const n = String(name || ''), m = n.match(/^(?:\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:[\u{E0020}-\u{E007E}]+\u{E007F})?[\uFE0E\uFE0F]?\p{EMod}?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{EMod}?)*)/u);
+  if (general) return { emoji: '#️⃣', label: n || 'General', own: false };
+  if (!m) return { emoji: '💬', label: n, own: false };
+  const bare = n.slice(m[0].length).replace(/^[\s\uFE0F]+/u, '');
+  return { emoji: m[0], label: bare || n, own: true, bare };
+};
+window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
+  const f = window.WizCore.channelFace(name), bare = f.own ? f.bare : String(name || '').trim();
+  if (!emoji) return bare || String(name || '').trim();
+  // The 60-character limit (UTF-16, as the stores count it) trims whole characters off the end, never half of one.
+  const chars = Array.from(emoji + (bare ? ' ' + bare : ''));
+  while (chars.join('').length > 60) chars.pop();
+  return chars.join('').trim();
+};
 window.WizCore.chats = function createChats(H) {
   'use strict';
   const { esc, clip, norm, ago, emoOf } = window.WizCore;
@@ -769,7 +790,7 @@ window.WizCore.chats = function createChats(H) {
     o.focus = prev && ['agent', 'space'].includes(prev.kind) && prev.key ? { kind: prev.kind, key: String(prev.key) } : null;
     save(); return true;
   }
-  const chanByName = dir => (a, b) => dir * String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const chanByName = dir => (a, b) => dir * String(typeof chanFace === 'function' ? chanFace(a.name).label : a.name).localeCompare(String(typeof chanFace === 'function' ? chanFace(b.name).label : b.name), undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   // The channels the list shows: the Spaces of the Focus's agent (all visible agents' on All). Pinned first in pin
   // order, then A–Z (default) or Z–A, General last; { archived: true } gives the archived ones, sorted the same way.
   function channelsFor(w, { archived = false } = {}) {
@@ -783,6 +804,9 @@ window.WizCore.chats = function createChats(H) {
   const rowAgent = s => (LIVE.ownerOf ? LIVE.ownerOf(s) : LIVE.agentOf(s.id)) || AGS()?.defaultId() || 'hermes';
   const inChannel = (ch0, s) => ch0.agentFeed ? rowAgent(s) === ch0.agent : ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
+  // A channel's emoji and words (issue 1506): { emoji, label } of a channel ({ name, general }) or a name.
+  const chanFace = c => window.WizCore?.channelFace?.(typeof c === 'string' ? c : c?.name, typeof c === 'string' ? c === 'General' : !!c?.general || c?.id === CHAN_GENERAL) || { emoji: '#', label: typeof c === 'string' ? c : c?.name || '' };
+  const chanTitle = c => { const f = chanFace(c); return `${f.emoji} ${f.label}`; };
   // A layout that draws its own chat list (AI apps) asks for these through the Chats API: the "# channel" of a row
   // ('' with the switch off) and the sidebar's Channels pane, the desktop's id::side window (issue 1256).
   // A row's channel is its OWN agent's Space (a main and a routed thread can share an id), as inChannel files it.
@@ -1229,8 +1253,8 @@ window.WizCore.chats = function createChats(H) {
     const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
-    const un = chanNewCount(ch0, mine, gAg);
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash" aria-hidden="true">#</span><b>${esc(ch0.name)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(ch0.name)}"><i aria-hidden="true"></i></button></div>`
+    const un = chanNewCount(ch0, mine, gAg), face = typeof chanFace === 'function' ? chanFace(ch0) : { emoji: '#', label: ch0.name };
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash ch-chan-emo" aria-hidden="true">${esc(face.emoji)}</span><b>${esc(face.label)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(face.label)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
@@ -1507,7 +1531,7 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-chan-feed">${shown.length || sending.length ? html : '<span class="ch-none">No posts in the last 30 days.</span>'}${archNote}</div>`;
   }
   function chanHead(w, open) {
-    if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : '<span class="ch-chan-hash" aria-hidden="true">#</span>'}${esc(open.name)}</b></div>`;
+    if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : `<span class="ch-chan-hash ch-chan-emo" aria-hidden="true">${esc(chanFace(open).emoji)}</span>`}${esc(open.agentFeed ? open.name : chanFace(open).label)}</b></div>`;
     const sort = chanView === 'channels' ? orderBar('Sort channels', 'data-chchansort', ['az', 'za'], chanPrefs().sort, o => o === 'az' ? 'A–Z' : 'Z–A') : '';
     return `<div class="ch-chan-tabs">${orderBar('Chats view', 'data-chview', ['channels', 'activity'], chanView, o => o === 'activity' ? 'Activity' : 'Channels')}${sort}</div>`;
   }
@@ -1517,20 +1541,50 @@ window.WizCore.chats = function createChats(H) {
     if (!el || !channelsOn() || (cid !== CHAN_GENERAL && !sp)) return false;
     closeRowSheet();
     const p = chanPrefs(), pinned = p.pins.includes(cid), arch = !!p.archived[cid], name = sp ? sp.name : 'General';
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Channel actions"><div class="ch-sheet-b"><div class="ch-sheet-t"># ${esc(name)}</div>
-      ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Channel actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(chanTitle(sp ? name : { name, general: true }))}</div>
+      ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button><button type="button" data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">${esc(chanFace(name).emoji)}</span>Emoji…</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
       ${typeof markDoneOn === 'function' && markDoneOn() ? `<button type="button" data-rschread>${MARK_DONE_SVG}Mark channel read</button>` : ''}
       ${arch ? '' : `<button type="button" data-rschnew><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New post</button>`}</div></div>`);
     rowSheet = { wid, chan: cid, trigger };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
     vib(10); return true;
   }
+  /* Channel emoji (issue 1506): a row of emoji under the name field of New channel and Rename. A tap puts that emoji in
+   * front of the name; a tap on the one already there takes it off (the list then shows 💬). Any other emoji: type it
+   * first in the name, or Emoji… in the channel's actions (the full emoji sheet with search). */
+  function chanEmojiPick(name) {
+    const L = window.WizCore?.CHANNEL_EMOJI; if (!Array.isArray(L) || !channelsOn()) return '';
+    const f = chanFace(String(name || '')), cur = f.own ? f.emoji : '';
+    return `<div class="ch-emoji-pick" role="group" aria-label="Channel emoji">${L.map(e => `<button type="button" data-chemoji="${esc(e)}" aria-pressed="${e === cur}" aria-label="Emoji ${esc(e)}">${esc(e)}</button>`).join('')}</div>`;
+  }
+  function chanEmojiSync(form) {
+    const f = chanFace(String(form?.querySelector('input')?.value || '')), cur = f.own ? f.emoji : '';
+    for (const x of form?.querySelectorAll('[data-chemoji]') || []) x.setAttribute('aria-pressed', String(x.dataset.chemoji === cur));
+  }
+  function chanEmojiTap(b) {
+    const form = b?.closest('form'), inp = form?.querySelector('input'); if (!inp || inp.disabled) return false;
+    const f = chanFace(inp.value), e = b.dataset.chemoji;
+    inp.value = window.WizCore.channelEmojiName(inp.value, f.own && f.emoji === e ? '' : e);
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    chanEmojiSync(form); return true;
+  }
+  // The full emoji sheet (the topic emoji one) for a channel; the pick renames it with that emoji in front.
+  function openChannelEmoji(wid, cid) {
+    const sp = spaces().find(s => s.id === cid); if (!sp) return false;
+    openEmojiSheet(wid, `chanemoji:${cid}`, `Emoji for ${chanFace(sp.name).label}`);
+    return true;
+  }
+  function chanSetEmoji(cid, e) {
+    const sp = spaces().find(s => s.id === cid); if (!sp || !e) return false;
+    const f = chanFace(sp.name);
+    return chanRenameTo(cid, window.WizCore.channelEmojiName(sp.name, f.own && f.emoji === e ? '' : e)) !== false;
+  }
   function openChannelRename(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp) return;
     closeRowSheet();
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Rename channel"><form class="ch-sheet-b ch-rename" data-chrnform>
       <div class="ch-sheet-t">Rename channel</div>
-      <input type="text" name="t" maxlength="60" value="${esc(sp.name)}" autocomplete="off" enterkeyhint="done" aria-label="Channel name">
+      <input type="text" name="t" maxlength="60" value="${esc(sp.name)}" autocomplete="off" enterkeyhint="done" aria-label="Channel name">${chanEmojiPick(sp.name)}
       <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="submit" class="go">Save</button></div></form></div>`);
     rowSheet = { wid, chan: cid, rename: true };
     const inp = el.querySelector('.ch-rename input'); if (inp) { inp.focus(); inp.select(); }
@@ -1557,16 +1611,24 @@ window.WizCore.chats = function createChats(H) {
     if (!t || t.length > 60 || /[\u0000-\u001f\u007f]/u.test(t)) { form.querySelector('input').focus(); return; }
     if (spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(t))) { toast('!', 'Already a channel with that name', 2200); return; }
     closeRowSheet();
-    if (t === sp.name) return;
+    chanRenameTo(cid, t);
+  }
+  function chanRenameTo(cid, t) {
+    const sp = spaces().find(s => s.id === cid); if (!sp || !t || t.length > 60) return false;
+    if (spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(t))) { toast('!', 'Already a channel with that name', 2200); return false; }
+    if (t === sp.name) return true;
     if (chanStore()) LIVE.chanStore.patch({ id: cid, name: t }); // the store's channel (issue 1261)
     else LIVE.prefOps([{ op: 'set', key: `spaces/${cid}/name`, item: t }]);
     chanRepaintAll(); toast('✎', 'Renamed', 1400);
+    return true;
   }
   function channelSheetClick(e) {
     if (!rowSheet?.chan) return false;
     const { wid, chan: cid } = rowSheet, w = W[wid] || W[owner(wid)], p = chanPrefs(), name = spaces().find(s => s.id === cid)?.name || 'General';
     if (e.target.closest('[data-rschpin]')) { const on = !p.pins.includes(cid); p.pins = on ? p.pins.concat(cid) : p.pins.filter(x => x !== cid); chanPrefEdit(p, { id: cid, pinned: on }); closeRowSheet(); chanRepaintAll(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rschrename]')) { openChannelRename(wid, cid); return true; }
+    if (e.target.closest('[data-rschemoji]')) { openChannelEmoji(wid, cid); return true; }
+    const em = e.target.closest('[data-chemoji]'); if (em) { chanEmojiTap(em); return true; }
     if (e.target.closest('[data-rscharch]')) {
       const arch = !p.archived[cid], wasPinned = p.pins.includes(cid);
       if (arch) { p.archived[cid] = new Date().toISOString(); p.pins = p.pins.filter(x => x !== cid); } else delete p.archived[cid];
@@ -1652,8 +1714,8 @@ window.WizCore.chats = function createChats(H) {
     PW?.ensureModels?.();
     // The label: this box's own pick (wizard-ux issue 1309), else the default a new chat from this list starts on.
     const mlabel = PW?.modelLabel ? PW.modelLabel({ ...w, thread: '__new__' }, null, chanModel(w)) : '';
-    const say = open.agentFeed ? `Message ${open.name}` : `Message # ${open.name}`;
-    return `<form data-part="composer" class="ch-compose ch-chan-compose${hasContent(c.draft, c.files || []) ? ' has-text' : ''}" data-morph-key="chanbox:${esc(key)}" data-chform data-chchanform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach pictures or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${esc(say)}" aria-label="${esc(say)}" enterkeyhint="enter">${esc(c.draft || '')}</textarea>${mlabel}</div>${PW?.micBtn ? PW.micBtn(w.id) : ''}<button type="submit" class="ch-send" aria-label="${esc(open.agentFeed ? `Post to ${open.name}` : `Post in # ${open.name}`)}"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>`;
+    const say = open.agentFeed ? `Message ${open.name}` : `Message ${typeof chanTitle === 'function' ? chanTitle(open) : '# ' + open.name}`;
+    return `<form data-part="composer" class="ch-compose ch-chan-compose${hasContent(c.draft, c.files || []) ? ' has-text' : ''}" data-morph-key="chanbox:${esc(key)}" data-chform data-chchanform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach pictures or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${esc(say)}" aria-label="${esc(say)}" enterkeyhint="enter">${esc(c.draft || '')}</textarea>${mlabel}</div>${PW?.micBtn ? PW.micBtn(w.id) : ''}<button type="submit" class="ch-send" aria-label="${esc(open.agentFeed ? `Post to ${open.name}` : `Post in ${typeof chanTitle === 'function' ? chanTitle(open) : '# ' + open.name}`)}"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>`;
   }
   // The feed's newest post sits at the bottom: keep it in view after a send or when the feed opens.
   function chanToEnd(wid, focus = false) {
@@ -1847,7 +1909,7 @@ window.WizCore.chats = function createChats(H) {
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-line">${typeof draftTag === 'function' ? draftTag(s) : ''}# ${esc(chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span>` : ''}${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-tag"># ${esc(chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span> · ` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof draftTag === 'function' ? draftTag(s) : ''}${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof actRowMark === 'function' ? actRowMark(s) : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
+      ${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-line">${typeof draftTag === 'function' ? draftTag(s) : ''}${esc(typeof chanTitle === 'function' ? chanTitle(chanName(s)) : '# ' + chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span>` : ''}${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${typeof rowChan !== 'undefined' && rowChan ? `<span class="ch-chan-tag">${esc(typeof chanTitle === 'function' ? chanTitle(chanName(s)) : '# ' + chanName(s))}${typeof agentTail === 'function' ? agentTail(s) : ''}</span> · ` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof draftTag === 'function' ? draftTag(s) : ''}${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}${typeof rowChan !== 'undefined' && rowChan && typeof actRowMark === 'function' ? actRowMark(s) : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -2519,7 +2581,7 @@ window.WizCore.chats = function createChats(H) {
     const pickTitle = SPACE.ch ? 'Move to channel' : p.sid && spacesOf(p.sid).length ? `Move to ${SPACE.one}` : `Add to a ${SPACE.one}`;
     const wrap = document.createElement('div'); wrap.dataset.chspacepicker = '';
     wrap.className = 'ch-space-shade';
-    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? pickTitle : esc(a.label) + (SPACE.ch ? ' channels' : ' Spaces')}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? pickTitle : p.direct ? 'New channel' : esc(a.label)}</b><button type="button" data-spclose aria-label="Close ${SPACE.ch ? 'channels' : 'Spaces'}">×</button></header><div class="ch-space-rows">${p.sid || p.direct ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${(p.direct ? [] : rows).map(o => { const on = p.sid ? spaceContains(o.key, p.sid) : f?.kind === 'space' && f.key === o.key; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${on}"><span>${esc(o.label)}</span><small>${o.unread || ''}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}${gen}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">${SPACE.ch ? 'New channel' : 'New space'}</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="${SPACE.ch ? 'Channel name' : 'Space name'}" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>' + (SPACE.ch ? '+ New channel' : '+ New space') + '</button>'}</div>`;
+    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? pickTitle : esc(a.label) + (SPACE.ch ? ' channels' : ' Spaces')}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? pickTitle : p.direct ? 'New channel' : esc(a.label)}</b><button type="button" data-spclose aria-label="Close ${SPACE.ch ? 'channels' : 'Spaces'}">×</button></header><div class="ch-space-rows">${p.sid || p.direct ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${(p.direct ? [] : rows).map(o => { const on = p.sid ? spaceContains(o.key, p.sid) : f?.kind === 'space' && f.key === o.key; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${on}"><span>${esc(o.label)}</span><small>${o.unread || ''}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}${gen}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">${SPACE.ch ? 'New channel' : 'New space'}</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="${SPACE.ch ? 'Channel name' : 'Space name'}" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${SPACE.ch && !p.busy && typeof chanEmojiPick === 'function' ? chanEmojiPick(p.name) : ''}${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>' + (SPACE.ch ? '+ New channel' : '+ New space') + '</button>'}</div>`;
     document.body.appendChild(wrap);
     const card = wrap.firstElementChild, strip = p.direct ? null : p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
     if (r?.height && r.top > 0 && r.top < innerHeight) { card.style.bottom = `${Math.max(8, innerHeight - r.top + 8)}px`; if (innerWidth > 640) card.style.left = `${Math.max(8, Math.min(tr?.left || r.left, innerWidth - 296))}px`; }
@@ -2532,13 +2594,14 @@ window.WizCore.chats = function createChats(H) {
       if (e.target === wrap && Date.now() < focusHoldUntil) { e.preventDefault(); return; }
       if (e.target === wrap || e.target.closest('[data-spclose]')) { closeSpacePicker(); return; }
       if (p.busy) return;
+      const em = e.target.closest('[data-chemoji]'); if (em) { chanEmojiTap(em); return; }
       if (e.target.closest('[data-spnew]')) { p.naming = true; renderSpacePicker(); return; }
       const s = e.target.closest('[data-spspace]');
       if (e.target.closest('[data-spgeneral]') && p.sid) { closeSpacePicker(); if (fileInGeneral(p.sid, p.agent)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) rerenderList(ww); } return; }
       if (s && p.sid) { closeSpacePicker(); if (fileInSpace(s.dataset.spspace, p.sid, p.agent)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) rerenderList(ww); } return; }
       if (s || e.target.closest('[data-spall]')) { closeSpacePicker(); setFocus(w, s ? { kind: 'space', key: s.dataset.spspace } : { kind: 'agent', key: p.agent }); }
     });
-    wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
+    wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); if (typeof chanEmojiSync === 'function') chanEmojiSync(e.target.form); } });
     wrap.querySelector('form')?.addEventListener('submit', e => { e.preventDefault(); createPickerSpace(p); });
     wrap.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy && !p.direct) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
@@ -3921,7 +3984,7 @@ window.WizCore.chats = function createChats(H) {
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s && !DL ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : DL ? '# ' + dailyName(w) : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s && !DL ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : DL ? (typeof chanTitle === 'function' ? chanTitle(dailyName(w)) : '# ' + dailyName(w)) : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
       ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}${s && !isNew && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${!isNew && window.WosModels?.foreignApp?.(s) ? `This chat lives in ${esc(window.WosModels.foreignApp(s))} · reply there` : working && !held ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -4937,7 +5000,8 @@ window.WizCore.chats = function createChats(H) {
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid, nid, grp } = rowSheet; closeRowSheet(); if (nid) void noteRowAct(nid, rsa.dataset.rsact, grp); else threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
-    const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
+    const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji && String(rowSheet.key).startsWith('chanemoji:')) { const cid = rowSheet.key.slice(10); closeRowSheet(); chanSetEmoji(cid, emoji.dataset.chtopicemoji); return true; }
+    if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
     if (e.target.closest('[data-rsspacepicker]') && rowSheet?.sid) {
       const { sid, trigger } = rowSheet; closeRowSheet();
