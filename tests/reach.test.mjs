@@ -219,7 +219,7 @@ test('a blocked public check is unknown even if the host answers with 502; it ne
 });
 test('primary nginx policy and generator retain the narrow public probe allowlist', () => {
   const csp = readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1];
-  assert.deepEqual(csp.match(/connect-src ([^;]+)/)[1].split(' '), ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204', 'https://*.ts.net:9691']);
+  assert.deepEqual(csp.match(/connect-src ([^;]+)/)[1].split(' '), ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204', '$wizard_troubleshoot_direct']);
   assert.match(readFileSync(new URL('../packaging/entrypoint.sh', import.meta.url), 'utf8'), /cp \/etc\/wizard-shell\/static.conf \/tmp\/wizard-static.conf/);
 });
 test('Troubleshoot decides on a current diagnosis, not one from before the disconnect', async () => {
@@ -252,7 +252,8 @@ test('gateway route down but the direct line answers: the Tailscale row and the 
 });
 test('the shell CSP lets the window frame and ping only Troubleshooter’s own line on a Tailscale address', () => {
   for (const csp of [readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1], readFileSync(new URL('../server.py', import.meta.url), 'utf8')]) {
-    assert.match(csp, /frame-src 'self' blob: https:\/\/\*\.ts\.net:9691;/);
-    assert.match(csp, /connect-src [^;]*https:\/\/\*\.ts\.net:9691;/);
+    // This address's own :9691 only (nginx $wizard_troubleshoot_direct, server.py {direct}); see browser-boundary-paste-csp.
+    assert.match(csp, /frame-src 'self' blob: (?:\$wizard_troubleshoot_direct|\{direct\});/);
+    assert.match(csp, /connect-src [^;]*(?:\$wizard_troubleshoot_direct|\{direct\});/);
   }
 });

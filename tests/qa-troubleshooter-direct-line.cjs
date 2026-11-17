@@ -12,7 +12,8 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), host = 'wizard.qa-tail.ts.net', origin = `https://${host}`, direct = `https://${host}:9691`, prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'troubleshooter-direct-line-evidence');
 const conf = process.env.QA_CSP_FROM || path.join(repo, 'packaging/static.conf');
-const csp = /Content-Security-Policy "([^"]+)"/.exec(fs.readFileSync(conf, 'utf8'))[1];
+// nginx fills $wizard_troubleshoot_direct with this page's own https://<host>:9691 (packaging/nginx.conf.template).
+const csp = /Content-Security-Policy "([^"]+)"/.exec(fs.readFileSync(conf, 'utf8'))[1].replace(/\$wizard_troubleshoot_direct/g, direct);
 const broken = process.env.QA_EXPECT === 'broken';
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));

@@ -148,6 +148,17 @@
   }
   addEventListener('scroll', () => { if (appOn) reportKeys(false); }, { capture: true, passive: true });
   addEventListener('resize', () => { if (appOn) reportKeys(false); });
+  // Android paste (wizard-ux#1480): Chrome places a framed field's Paste bubble from the frame's pre-keyboard geometry
+  // until the app document lays out once more. The shell nudges a same-origin app's body after each frame resize
+  // (core/app-services.js pasteRelayout); it can't reach this opaque document, so this page does the same nudge itself.
+  let pasteNudge = null;
+  addEventListener('resize', () => {
+    try {
+      const b = document.body; if (!b || pasteNudge || typeof requestAnimationFrame !== 'function') return;
+      pasteNudge = { b, was: b.style.minHeight }; b.style.minHeight = '1px';
+      requestAnimationFrame(() => { const p = pasteNudge; pasteNudge = null; if (p) p.b.style.minHeight = p.was; });
+    } catch (_) { pasteNudge = null; }
+  });
   const textField = el => !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA)$/.test(el.tagName || '')
     && !(el.tagName === 'INPUT' && /^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/i.test(el.type || '')));
   // Mirrors the shell's own pass-throughs (desktop onKey): ⌥← / ⌥→ word moves, ⌥⇧ arrows selecting in a field,

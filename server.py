@@ -27,6 +27,8 @@ LLM_URL = os.environ.get("TINFOIL_PROXY_URL", "http://127.0.0.1:3301/v1/chat/com
 ROUTER_MODEL = os.environ.get("WIZARD_OS_ROUTER_MODEL", "deepseek-v4-1-flash")
 ALLOWED_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
 ALLOWED_ORIGINS.update(origin.strip().rstrip("/") for origin in os.environ.get("WIZARD_ORIGIN", "").split(",") if origin.strip())
+# A Tailscale address (lowercase DNS labels under .ts.net): the only Host whose own :9691 the CSP names.
+TS_HOST = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.ts\.net")
 MAX_AUDIO = 24 * 1024 * 1024
 
 
@@ -82,7 +84,13 @@ class Handler(SimpleHTTPRequestHandler):
         if args and str(args[1]).startswith(("4", "5")):
             super().log_message(fmt, *args)
 
+    def _troubleshoot_direct(self):
+        # Troubleshooter's own line on this address only (same rule as packaging/nginx.conf.template).
+        host = str(self.headers.get("Host") or "").strip().lower().split(":")[0] if getattr(self, "headers", None) else ""
+        return f"https://{host}:9691" if TS_HOST.fullmatch(host) else "https://*.ts.net:9691"
+
     def end_headers(self):
+        direct = self._troubleshoot_direct()
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -91,7 +99,7 @@ class Handler(SimpleHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
             # One cross-site read: Tailscale's 204 connectivity check, the offline pop-up's Internet row (core/reach.js).
-            "connect-src 'self' https://derp1.tailscale.com/generate_204 https://*.ts.net:9691; media-src 'self' blob:; frame-src 'self' blob: https://*.ts.net:9691; manifest-src 'self'; base-uri 'none'; "
+            f"connect-src 'self' https://derp1.tailscale.com/generate_204 {direct}; media-src 'self' blob:; frame-src 'self' blob: {direct}; manifest-src 'self'; base-uri 'none'; "
             "form-action 'self'; frame-ancestors 'none'",
         )
         self.send_header("Permissions-Policy", "microphone=(self)")
