@@ -1494,7 +1494,7 @@
       <div class="home-gap home-gap-a"></div>
       <div class="home-attn">
       <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready${ready ? `, ${ready} unread` : ''}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span>${ready ? `<span class="n">${ready}</span>` : ''}</button>
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready${ready ? `, ${ready} ${window.WizCore.workspaceNav.readyWord(LIVE)}` : ''}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span>${ready ? `<span class="n">${ready}</span>` : ''}</button>
         <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
       </div>
       ${unsentCard()}

@@ -32,7 +32,7 @@ function harness(rows, { on = true, bellUnread = 0 } = {}) {
   vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const deferredOf =', 'const attOf =',
     'const chanNeeds =', 'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const chanAt ='].map(t => line(chats, '  ' + t)).join('\n')
     + '\n' + block(chats, '  function activityReady(live) {', '  /* Activity with Channels on') + '\nthis.needs = actNeeds; this.unread = actUnread; this.chanAt = chanAt;', c);
-  vm.runInContext(block(nav, '  function chatsCount(live) {', '  function refreshChats(') + '\nthis.badge = chatsCount;', c);
+  vm.runInContext(block(nav, '  function chatsCount(live) {', '  function refreshChats(') + '\nthis.badge = chatsCount; this.word = readyWord;', c);
   // What Activity's Ready section lists: the same model call activityBody makes (phone/Classic) and the AI apps sidebar's.
   const M = c.WizChatsListModel;
   const activity = () => M.activityGroups(c.LIVE.workGroups(rows), { needs: c.needs, unread: c.unread, at: c.chanAt }, { order: 'newest', now: NOW }).ready.map(s => s.id);
@@ -49,6 +49,7 @@ test('issue 1504: with 2 green and 4 amber, the orb badge and Home count 6, the 
   assert.equal(c.LIVE.visibleUnread(c.LIVE.unified()).length, 3, 'the old unread tally: the 3 the reporter saw');
   assert.equal(c.badge(c.LIVE), 6, 'orb badge / Home Ready card = Activity Ready');
   assert.equal(sidebar(), 6, 'the AI apps sidebar Ready lists the same 6');
+  assert.equal(c.word(c.LIVE), 'ready', 'Home and the status bar call it ready, not unread (Codex P2)');
 });
 
 test('issue 1504: the badge follows Activity as threads are opened and marked done', () => {
@@ -70,6 +71,7 @@ test('issue 1504: with Channels off (no Activity view) the badge keeps the unrea
   const { c } = harness(robert(), { on: false });
   assert.equal(c.WizCore.activityReady(c.LIVE), null);
   assert.equal(c.badge(c.LIVE), c.LIVE.visibleUnread(c.LIVE.unified()).length);
+  assert.equal(c.word(c.LIVE), 'unread');
 });
 
 test('issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)', () => {
