@@ -346,7 +346,9 @@
     }
     if (!root.dataset.wosUpdating) { root.dataset.wosUpdating = '1'; tellPaused(true); }
     placeholders(true);
-    if (sheet && !reloading) { /* a ready/confirm sheet left open is stale now */ }
+    // A ready / confirm / heads-up / waiting / details sheet left open is stale now (Automatic or another device
+    // started the update): close it, so no button on it can send another request. Its callbacks only act on a tap.
+    if (sheet && !reloading) { const d = sheet; sheet = null; try { d.close(); } catch (_) {} }
     if (!el) {
       el = document.createElement('div'); el.id = 'wosUpdating'; el.className = 'osu-busy';
       el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
@@ -423,6 +425,10 @@
     confirm, render,
     get updating() { return updating(); },
     get paused() { return paused(); },
+    // An update sheet is open: Esc / Back closes exactly that sheet (core/escape-back.js 'os-update-sheet'; desktop
+    // Esc never reaches the dialog's own cancel). Closing is the same as dismissing it: nothing is sent.
+    get sheetOpen() { return !!sheet?.open; },
+    closeSheet() { const d = sheet; if (!d?.open) return ''; try { d.close(); } catch (_) {} return 'os-update-sheet'; },
     // The full Updating panel is showing (not minimized, no sheet over it): Esc / Back minimizes it (back()).
     get panelOpen() { const u = updating(); return !!u && !minimized(u) && !document.querySelector('dialog[open]'); },
     back() { const u = updating(); if (!u || minimized(u)) return ''; minimize(u, true); render(); return 'os-update'; },

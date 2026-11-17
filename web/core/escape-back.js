@@ -65,6 +65,7 @@
     add('update-list', () => W.WizWebUpdate?._state?.()?.listOpen, () => W.WizWebUpdate.back());
     add('resources', () => W.WosResources?.state?.panel, () => W.WosResources.back());
     stack.watch(() => W.WosUpdateFlow?.panelOpen, () => W.WosUpdateFlow.back(), 'os-update', true);
+    stack.watch(() => W.WosUpdateFlow?.sheetOpen, () => W.WosUpdateFlow.closeSheet(), 'os-update-sheet', true);
     // Layout api.back.push is registered into this same stack by both shells.
     // One observer sees openings, never a polling timer or delayed click action.
     const observer = new MutationObserver(() => stack.sync());

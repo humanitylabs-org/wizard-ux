@@ -19,7 +19,8 @@ function fixture() {
  const links={isOpen:()=>state.open==='links',back(){hits.push('links');state.open='';}};
  module('WosDevice','device','sheet');w.WizWebUpdate={_state:()=>({listOpen:state.open==='update-list'}),back(){hits.push('update-list');state.open='';}};
  w.WosResources={get state(){return {panel:state.open==='resources'};},back(){hits.push('resources');state.open='';}};
- w.WosUpdateFlow={get panelOpen(){return state.open==='os-update';},back(){hits.push('os-update');state.open='';return 'os-update';}};
+ w.WosUpdateFlow={get panelOpen(){return state.open==='os-update';},back(){hits.push('os-update');state.open='';return 'os-update';},
+  get sheetOpen(){return state.open==='os-update-sheet';},closeSheet(){hits.push('os-update-sheet');state.open='';return 'os-update-sheet';}};
  w.WizCore={status:{get state(){return {fatal:state.open==='status'};},back(){hits.push('status');state.open='';}}};
  c.CH={get x(){return {sheet:state.open==='filter-sheet'};}};
  for(const [variable,name] of [['swipeOpen','row-swipe'],['spacePicker','space-picker'],['rowSheet','thread-actions']]) Object.defineProperty(c,variable,{get:()=>state.open===name});
@@ -40,7 +41,7 @@ test('phone history/native Back and desktop Escape install the identical shared 
  assert.match(desktop,/escapeOverlay: close => escapeBack\.push\(close\)/);
 });
 test('enumerate EVERY registered shared Back handler: actual desktop Escape reaches each exactly once',()=>{
- const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources','os-update'];
+ const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources','os-update','os-update-sheet'];
  assert.deepEqual(Array.from(f.stack.names()).sort(),expected.sort());
  for(const name of expected) {f.state.open=name;const n=f.hits.length;f.press();assert.deepEqual(f.hits.slice(n),[name],name);}
 });
@@ -50,6 +51,13 @@ test('the WizardOS Updating panel (drawn over everything) takes Esc before a new
  f.stack.sync();f.state.open='context';f.stack.sync();   // the menu opened AFTER the panel showed
  f.press();assert.deepEqual(f.hits,['os-update']);assert.equal(f.state.open,'context');
  f.press();assert.deepEqual(f.hits,['os-update','context']);
+});
+test('an open WizardOS update sheet takes Esc before a newer owner under it, and closes only itself',()=>{
+ const f=fixture();let open=true;
+ Object.defineProperty(f.w.WosUpdateFlow,'sheetOpen',{configurable:true,get:()=>open});f.w.WosUpdateFlow.closeSheet=()=>{f.hits.push('os-update-sheet');open=false;return 'os-update-sheet';};
+ f.stack.sync();f.state.open='context';f.stack.sync();
+ f.press();assert.deepEqual(f.hits,['os-update-sheet']);assert.equal(f.state.open,'context');
+ f.press();assert.deepEqual(f.hits,['os-update-sheet','context']);
 });
 test('voice-note cancellation beats image viewer, menu, chat and app focus; never sends',()=>{
  const f=fixture();f.state.open='viewer';f.state.voice=true;f.press();assert.deepEqual(f.hits,['voice-cancel']);assert.equal(f.state.open,'viewer');f.press();assert.deepEqual(f.hits,['voice-cancel','viewer']);

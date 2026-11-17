@@ -642,6 +642,7 @@
   // WizardOS is updating (core/os-update-flow.js shows its Updating panel): every send waits here, whatever started
   // it (the composer, a voice take, Welcome, Share). The message stays saved and goes once the update is over.
   const osUpdating = () => { try { return !!window.WosUpdateFlow?.paused; } catch (_) { return false; } };
+  const heldForUpdate = new Set();   // app voice input (retryConversation) held while WizardOS updates
   async function pump() {
     if (pumping) return; pumping = true;
     try {
@@ -728,6 +729,8 @@
           // before the app may mutate anything. No audio upload to an ordinary Chat.
           if (!it.durable || it.storageError) throw new Error('Device save failed · App voice input message not dispatched; keep this tab open');
           if (!window.WizAppServices?.conversation) throw new Error('App voice input conversation unavailable');
+          // WizardOS is updating: this direct delivery waits like every send in pump(), and goes once it is over.
+          if (osUpdating()) { heldForUpdate.add(id); it.state = 'held'; it.error = 'Waiting while WizardOS updates · sends when it’s done'; await put(it); return it; }
           it.state = 'sending'; await put(it);
           const receipt = await bounded(() => window.WizAppServices.conversation.deliver(it.conversation, { request_id: it.id, text: it.text, files: it.files }));
           if (receipt?.accepted !== true || receipt.request_id !== it.id) throw new Error('App voice input receipt uncertain');
@@ -976,7 +979,11 @@
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
-  addEventListener('wos:sending-paused', e => { if (!e.detail?.paused) wake(); });
+  addEventListener('wos:sending-paused', e => {
+    if (e.detail?.paused) return;
+    wake();
+    for (const id of [...heldForUpdate]) { heldForUpdate.delete(id); api.retryConversation(id); }   // app voice input held above
+  });
   // A graceful restart is over (WizReach dispatches wizreachchange): sends it held are ordinary sent receipts again, so
   // a later restart never reads them as held, and the cleanup that kept them for the hold runs now (issue 1362).
   addEventListener('wizreachchange', () => {

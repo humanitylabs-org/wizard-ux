@@ -4,6 +4,7 @@
 //  1. Settings › About shows the "WizardOS update ready" card (screenshots per skin with QA_OUT=<dir>).
 //  2. Desktop: while the Updating panel is open, Esc minimizes the panel and does nothing else (Settings, open behind
 //     it, stays as it was); the next Esc does what Esc does without the panel (one press, one owner).
+//  4. Esc on an update sheet closes only that sheet; a sheet left open when an update starts elsewhere closes.
 //  3. An Update now the Mac never took stops holding sends on the device that tapped it after 16 minutes.
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
@@ -96,6 +97,27 @@ const openSettings=pg=>pg.evaluate(()=>(window.__wos?.openSettings||window.__wux
    assert.deepEqual(m,{paused,panel:paused,flow:paused},`tapped ${ago/60e3} min ago: ${JSON.stringify(m)}`);
    assert.deepEqual(errors,[],'page errors');
    results.push({check:'stale-request',minutesAgo:ago/60e3,...m});await ctx.close();
+  }
+  // 4. Desktop: Esc on an open update sheet (the Update now confirm) closes that sheet only, sends nothing; and a
+  // sheet left open when an update starts elsewhere (Automatic, another device) closes as the Updating panel shows.
+  if(!only||only==='sheet')for(const skin of ['nebula']){
+   let st={...base};
+   const {ctx,pg,errors,writes}=await boot(browser,{shell:'desktop',skin,w:1280,h:800,status:()=>st});
+   await pg.waitForFunction(()=>window.WosUpdates?.state?.by_host===true,null,{timeout:15000});
+   await pg.evaluate(()=>window.WosUpdateFlow.confirm());
+   await pg.waitForFunction(()=>window.WosUpdateFlow.sheetOpen===true,null,{timeout:5000});
+   await pg.keyboard.press('Escape');await pg.waitForTimeout(300);
+   const esc=await pg.evaluate(()=>({sheet:window.WosUpdateFlow.sheetOpen,dialogs:document.querySelectorAll('dialog[open]').length,esc:(window.__wuxLog||[]).filter(x=>x.startsWith('esc:'))}));
+   assert.deepEqual(esc,{sheet:false,dialogs:0,esc:['esc:os-update-sheet']},`Esc closes the update sheet ${JSON.stringify(esc)}`);
+   await pg.evaluate(()=>window.WosUpdateFlow.confirm());
+   await pg.waitForFunction(()=>window.WosUpdateFlow.sheetOpen===true,null,{timeout:5000});
+   st={...base,host_update:{id:'u2',phase:'stopping',target:'0.3.243',result:null,reason:null,at:Math.floor(Date.now()/1000)}};
+   await pg.evaluate(()=>window.WosUpdates.load(true));
+   await pg.waitForFunction(()=>document.getElementById('wosUpdating')?.hidden===false,null,{timeout:15000});
+   const stale=await pg.evaluate(()=>({sheet:window.WosUpdateFlow.sheetOpen,dialogs:document.querySelectorAll('dialog[open]').length}));
+   assert.deepEqual(stale,{sheet:false,dialogs:0},`a stale sheet closes when the update starts ${JSON.stringify(stale)}`);
+   assert.deepEqual(writes.filter(w=>w.includes('_updates')),[],'no update request');assert.deepEqual(errors,[],'page errors');
+   results.push({check:'sheets',skin,esc,stale});await ctx.close();
   }
   console.log(JSON.stringify({ok:true,results},null,1));
  }catch(e){console.error(JSON.stringify(results,null,1));console.error(e.message);process.exitCode=1;}
