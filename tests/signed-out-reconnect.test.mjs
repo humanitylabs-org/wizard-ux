@@ -151,19 +151,25 @@ test('issue 1500: the Errors row (desktop sidebar) offers Reconnect and no Retry
   const b = boot(); b.set([claudeExpired]);
   const src = read('web/core/chat-power.js');
   const body = src.slice(src.indexOf('  function errorRow(s, rowHtml) {'), src.indexOf('  function errorsExtra() {'));
+  const helpers = src.slice(src.indexOf('  const failedRoute = s =>'), src.indexOf('  function failureHtml(w, s) {'));
+  assert.match(helpers, /const signedOutFail = /);
+  // threadModel stands for the id-only lookup: with a routed id equal to a main one it reads the OTHER thread's
+  // route (here a working OpenRouter model). The row's own model must win (Codex P1).
   const make = () => vm.runInNewContext(`(function(){ const esc = s => String(s ?? ''); const E = { busy: new Map() }; const M = window.WosModels;
-    const retrying = new Map(); const threadModel = s => ({ model: s.model, provider: s.provider });
-    const signedOutFail = (s, busy = '') => (s && M?.signedOutFail ? M.signedOutFail({ ...s, ...threadModel(s) }, busy || (retrying.has(s.id) ? 'retry' : '')) : null);
-    ${body} return errorRow; })()`, b.ctx);
+    const retrying = new Map(); const threadModel = s => ({ model: 'glm-5.3', provider: 'openrouter' });
+    ${helpers} ${body} return errorRow; })()`, b.ctx);
   const errorRow = make();
   for (const [kind, agent] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
     const row = errorRow({ ...failed(SUB), id: 'same-id', agent, agentKind: kind }, '<button data-chopen="same-id">row</button>');
     assert.match(row, /data-chreconnect="wizard-claude" data-recovery-run="">Reconnect Claude/, kind);
     assert.doesNotMatch(row, /data-errretry|>Retry</, kind); assert.match(row, /data-errdismiss/, kind);
   }
+  // A chat another app owns (Telegram, Slack …) stays Dismiss-only: no reply can ever deliver there (Codex P2).
+  b.ctx.WosModels.foreignApp = s => (s.source === 'telegram' ? 'Telegram' : '');
+  const foreign = errorRow({ ...failed(SUB), source: 'telegram' }, '');
+  assert.doesNotMatch(foreign, /Reconnect|data-errretry/); assert.match(foreign, /data-errdismiss/);
   b.set([claudeOk]);
   assert.match(errorRow(failed(SUB), ''), /data-errretry/);
-  assert.match(src, /const signedOutFail = \(s, busy = ''\) => \(s && M\?\.signedOutFail \? M\.signedOutFail\(\{ \.\.\.s, \.\.\.threadModel\(s\) \}/);
 });
 
 test('issue 1500: the generic "not processed… send it again" line is hidden above a Reconnect card', () => {
