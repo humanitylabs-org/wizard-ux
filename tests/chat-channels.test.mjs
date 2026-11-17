@@ -111,6 +111,29 @@ test('the chevron expands working, needs-you and last-24h posts, newest first; t
   assert.doesNotMatch(general, /ch-chan-recent/, 'only the expanded channel shows its posts');
 });
 
+test('issue 1531: a channel with only older chats never reads as empty; a channel with none says so', () => {
+  const spacesList = [{ id: 'home', name: 'Home', threads: ['h1', 'h2', 'h3', 'h4', 'h5'] }, { id: 'quiet', name: 'Quiet', threads: [] }];
+  const rows = [row('h1', 30), row('h2', 50), row('h3', 70), row('h4', 90), row('h5', 100)];
+  for (const [agent, ag] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const sl = spacesList.map(s => ag ? { ...s, agent: ag } : s), agents = Object.fromEntries(rows.map(r => [r.id, ag]));
+    const f = fixture({ spacesList: sl, agents, sessions: Object.fromEntries(rows.map(r => [r.id, r])) });
+    if (ag) f.w.focus = { kind: 'agent', key: ag };
+    f.channelClick(click({ 'data-chchanx': 'home' }), 'w', f.w); f.channelClick(click({ 'data-chchanx': 'quiet' }), 'w', f.w);
+    const html = f.channelsBody(f.w, rows.map(r => ag ? { ...r, owner: ag } : r)), chans = html.split('class="ch-chan"').slice(1);
+    const home = chans.find(c => c.includes('data-chchan="home"')), quiet = chans.find(c => c.includes('data-chchan="quiet"'));
+    assert.deepEqual([...home.matchAll(/class="ch-chan-post" data-chopen="([^"]+)"/g)].map(m => m[1]), ['h1', 'h2', 'h3'], `${agent}: the newest three, newest first`);
+    assert.doesNotMatch(home, /Nothing in the last 24 hours|ch-none/, `${agent}: no empty line for a channel with chats`);
+    assert.match(quiet, /<span class="ch-none">No chats yet<\/span>/, `${agent}: a channel with no chats keeps an empty line`);
+  }
+  // Older chats only the box's channel store knows about: their number and a way into the channel.
+  const f = fixture({ spacesList });
+  f.env.LIVE.chanStore = { state: () => ({ sort: 'az', channels: [{ id: 'home', count: 6 }, { id: 'quiet', count: 0 }] }), patch: async () => ({ ok: true }), move() {} };
+  f.channelClick(click({ 'data-chchanx': 'home' }), 'w', f.w); f.channelClick(click({ 'data-chchanx': 'quiet' }), 'w', f.w);
+  const html = f.channelsBody(f.w, []), chans = html.split('class="ch-chan"').slice(1);
+  assert.match(chans.find(c => c.includes('data-chchanx="home"')), /<button type="button" class="ch-chan-post ch-chan-more" data-chchan="home"><span>6 chats, open channel<\/span><\/button>/);
+  assert.match(chans.find(c => c.includes('data-chchanx="quiet"')), /No chats yet/);
+});
+
 test('opening a channel is its Space Focus; Back returns to the list with the old Focus', () => {
   const f = fixture();
   f.w.focus = { kind: 'agent', key: 'hermes' };

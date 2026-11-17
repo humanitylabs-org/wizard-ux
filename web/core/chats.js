@@ -1250,13 +1250,23 @@ window.WizCore.chats = function createChats(H) {
       + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
     return marks ? `<span class="ch-chan-ind">${marks}</span>` : '';
   }
+  // The drop-down of a channel whose chats are not in the loaded list (older ones only the box's store counts): their
+  // number and a way in; the empty line is kept for a channel that holds no chats at all (issue 1531).
+  const CHAN_RECENT_MIN = 3;
+  function chanNoRecent(ch0) {
+    const st = typeof chanStore === 'function' ? chanStore() : null, n = (!ch0.general && !ch0.agentFeed && st?.channels?.find?.(c => c.id === ch0.id)?.count) || 0;
+    return n > 0 ? `<button type="button" class="ch-chan-post ch-chan-more" data-chchan="${esc(ch0.id)}"><span>${n} ${n === 1 ? 'chat' : 'chats'}, open channel</span></button>` : '<span class="ch-none">No chats yet</span>';
+  }
   function channelLine(ch0, rows, now, cur = '', gAg = '', dAg = '') {
     const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
-    const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
+    const byNew = (a, b) => chanAt(b) - chanAt(a);
+    let recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort(byNew) : [];
+    // Nothing from the last day: the newest few anyway, so a channel with chats never reads as empty (issue 1531).
+    if (ex && !recent.length) recent = mine.slice().sort(byNew).slice(0, CHAN_RECENT_MIN);
     // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
     const un = chanNewCount(ch0, mine, gAg), face = typeof chanFace === 'function' ? chanFace(ch0) : { emoji: '#', label: ch0.name };
     return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash ch-chan-emo"${face.label ? ' aria-hidden="true"' : ''}>${esc(face.emoji)}</span><b>${esc(face.label)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(face.label || face.emoji)}"><i aria-hidden="true"></i></button></div>`
-      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
+      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : chanNoRecent(ch0)}</div>` : '') + '</div>';
   }
   // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
   // it is a visible one the form can take (a hidden agent's list gets no row: never filed under another agent).
