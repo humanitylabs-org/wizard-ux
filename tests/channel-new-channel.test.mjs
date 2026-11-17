@@ -165,3 +165,23 @@ test('1489: on the phone, + on the Channels list with no channel open starts a n
   assert.deepEqual(plus({ view: 'activity', post: true }), ['newChat'], 'Activity: a normal New chat (issue 1310)');
   assert.deepEqual(plus({ view: '' }), ['channelPost', 'newChat'], 'switch off: New chat');
 });
+
+// --- 1489: main and routed agents alike, the Channels list's round + is the list's own New chat ---
+test('1489: the Channels list + starts a new chat in the list\'s own agent window, for main and routed agents', () => {
+  const fabLine = chats.split('\n').find(l => l.includes('const fab = feed ?'));
+  assert.ok(fabLine, 'the round + line');
+  const click = cut(chats, "    if (e.target.closest('[data-chnew]')) {", "    const dx = e.target.closest('[data-chdraftx]');");
+  for (const [kind, agent, name] of [['main', '', ''], ['host-ops', 'host-ops', 'Host'], ['box', 'box', 'Box'], ['locked', 'locked', 'Locked']]) {
+    const names = { 'host-ops': 'Host', box: 'Box', locked: 'Locked' };
+    const ctx = { feed: null, AGID: agent, esc, agentName: a => names[a], chanComposer: () => '' };
+    vm.createContext(ctx); vm.runInContext(fabLine.replace('const fab', 'this.fab'), ctx);
+    assert.doesNotMatch(ctx.fab, /data-chchannew|New channel/, `${kind}: never the name form`);
+    assert.match(ctx.fab, new RegExp(`class="ch-fab" data-chnew data-chfab aria-label="${agent ? `New chat with ${name}` : 'New chat'}"`), kind);
+    // The tap: a blank New chat in the list's owner window (the routed agent's own window), with no form.
+    const listId = agent ? `agent-${agent}::list` : 'w1::list', ownerId = agent ? `agent-${agent}` : 'w1', opened = [];
+    const run = { ch: () => ({ q: '' }), owner: id => id.replace('::list', ''), openNewDraft: (o, r) => opened.push([o, r]), setDraft() {}, elOf: () => null, setTimeout() {},
+      window: { WizCore: {} }, e: { target: { closest: sel => (sel === '[data-chnew]' ? {} : null) } }, id: listId };
+    vm.createContext(run); vm.runInContext(`this.r = (() => {\n${click}\n    return false; })();`, run);
+    assert.equal(run.r, true, kind); assert.deepEqual(j(opened), [[ownerId, '']], `${kind}: a blank new chat in its own window`);
+  }
+});
