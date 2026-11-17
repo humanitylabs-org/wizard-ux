@@ -80,7 +80,7 @@ test('Esc / Back registers the desktop guide above surface navigation; newer she
   assert.match(js, /WizEscapeBack\.installOwners\(escapeBack/);
   assert.match(shared, /add\('tour',[^\n]+desk\.finish\('skip'\)/);
   assert.ok(shared.indexOf('if (top)') < shared.indexOf('if (surface?.())'));
-  assert.match(shared, /sort\(\(a, b\) => b.at - a.at\)/);
+  assert.match(shared, /sort\(\(a, b\) => \(b.first === true\) - \(a.first === true\) \|\| b.at - a.at\)/);   // recency; only an owner marked `first` (the Updating panel) goes ahead
   for (const name of ['palette', 'keys', 'settings']) assert.ok(js.includes(`watchEscape('${name}'`), name);
 });
 test('both shells boot the Welcome modal and open it for the Setup app', () => {

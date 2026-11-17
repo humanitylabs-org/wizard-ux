@@ -254,6 +254,8 @@
   const inAppFrame = () => document.activeElement?.tagName === 'IFRAME';
   function quietReady() {
     if (!pending || !H?.autoApply || going || checking || rescuing || armed || !printNow) return false;
+    // WizardOS is updating (core/os-update-flow.js): the interface may be mid-swap; it reloads itself when done.
+    if (window.WosUpdateFlow?.updating) return false;
     if (!document.hidden && (Date.now() - lastInput < QUIET_IDLE_MS || typing() || inAppFrame())) return false;
     const p = plan(); if (p.host || !p.ok || p.keeps) return false;
     try { if (H.quietHold?.()) return false; } catch (_) { return false; }

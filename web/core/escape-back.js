@@ -12,8 +12,9 @@
       entries.add(entry);
       return () => entries.delete(entry);
     }
-    function watch(active, back, name) {
-      const entry = { active, back, name, at: 0, token: null, watched: true };
+    // `first`: a layer drawn over everything (the WizardOS Updating panel) takes Back before newer owners under it.
+    function watch(active, back, name, first = false) {
+      const entry = { active, back, name, at: 0, token: null, watched: true, first: !!first };
       entries.add(entry);
       return () => entries.delete(entry);
     }
@@ -28,7 +29,7 @@
       if (event?.isComposing || event?.keyCode === 229 || event?.repeat) return 'held';
       const take = recording?.(); if (take) return typeof take === 'string' ? take : 'voice-cancel';
       sync();
-      const top = [...entries].filter(e => e.watched ? e.token : e.active()).sort((a, b) => b.at - a.at)[0];
+      const top = [...entries].filter(e => e.watched ? e.token : e.active()).sort((a, b) => (b.first === true) - (a.first === true) || b.at - a.at)[0];
       // A layer may be waiting for an asynchronous stop/close. Never fall through
       // to a second owner just because its callback returned false or a promise.
       if (top) { if (!top.watched) entries.delete(top); const did = top.back({ outside }); return typeof did === 'string' && did ? did : top.name; }
@@ -63,6 +64,8 @@
     add('device', () => W.WosDevice?.sheet, () => W.WosDevice.back());
     add('update-list', () => W.WizWebUpdate?._state?.()?.listOpen, () => W.WizWebUpdate.back());
     add('resources', () => W.WosResources?.state?.panel, () => W.WosResources.back());
+    stack.watch(() => W.WosUpdateFlow?.panelOpen, () => W.WosUpdateFlow.back(), 'os-update', true);
+    stack.watch(() => W.WosUpdateFlow?.sheetOpen, () => W.WosUpdateFlow.closeSheet(), 'os-update-sheet', true);
     // Layout api.back.push is registered into this same stack by both shells.
     // One observer sees openings, never a polling timer or delayed click action.
     const observer = new MutationObserver(() => stack.sync());
