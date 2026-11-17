@@ -351,6 +351,18 @@
       "kind": "read",
       "note": "Chats channel store (wizard-ux issue 1261): read only while the off-by-default wizard/chat-channels switch is on, which none of the three flows turn on; tests/chat-channel-store.test.mjs covers it against a fake store. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channels/{}/days": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "The Daily channel's day threads (wizard-ux issue 1469, wizard-agent-service issue 527): read only while the off-by-default wizard/chat-channels switch is on and the box has a channel of kind daily, which none of the three flows turn on; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/channels/{}/today": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write",
+      "note": "Today's Daily thread (wizard-ux issue 1469): asked only by a send from the Daily view with wizard/chat-channels on; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
       "source": "web/live.js",

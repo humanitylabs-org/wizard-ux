@@ -934,7 +934,7 @@
     const valid = c => !!c && typeof c.id === 'string' && ID.test(c.id) && typeof c.name === 'string' && typeof c.agent === 'string' && AGENT.test(c.agent);
     const one = c => ({ id: c.id, agent: c.agent, name: c.name.slice(0, 60), order: Number(c.order) || 0, createdAt: typeof c.createdAt === 'string' ? c.createdAt : '', archived: !!c.archived,
       ...(c.archived ? { archivedAt: typeof c.archivedAt === 'string' ? c.archivedAt : '' } : {}), pinned: !!c.pinned, ...(c.pinned ? { pinOrder: Number.isFinite(c.pinOrder) ? c.pinOrder : 0 } : {}),
-      ...(c.kind === 'alerts' ? { kind: 'alerts' } : {}), count: Number(c.count) || 0 });
+      ...(c.kind === 'alerts' ? { kind: 'alerts' } : c.kind === 'daily' ? { kind: 'daily', dayStartsAt: typeof c.dayStartsAt === 'string' ? c.dayStartsAt.slice(0, 5) : '05:00' } : {}), count: Number(c.count) || 0 });
     const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one) } : null;
     const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
     let doc = null; try { doc = clean(JSON.parse(store?.getItem(CHANNELS_CACHE) || 'null')); } catch (_) {}
@@ -1109,6 +1109,99 @@
     return { marks, pull, push, fresh, get off() { return off; } };
   }
   /* ---- end channel reads ---- */
+  /* ---- channel daily (wizard-ux issue 1469) ----
+   * The Daily channel's days (wizard-agent-service issue 527, docs/chats-channels.md, Daily channel): one real thread
+   * per day in a channel of kind 'daily'. read(id) is GET /wizard/v1/channels/<id>/days (newest first, 14 a page;
+   * `today` = today's thread id or null before the first post after the day boundary); more(id) reads the next older
+   * page; today(id) is POST /wizard/v1/channels/<id>/today, which names today's thread and makes it at the first send of
+   * the day (racing sends get the same one), so the box alone decides where the day starts. state(id) is the days this
+   * device knows (kept on the device, so an offline reload still opens Daily) and reads again every `every`. Chats asks
+   * only while its wizard/chat-channels switch is on. */
+  const CHANNEL_DAILY_CACHE = 'wos.chats.daily.v1';
+  function channelDaily({ req, emit, now = () => Date.now(), storage = null, every = 60e3, keepMax = 60 } = {}) {
+    const ID = /^[a-z0-9-]{1,48}$/, DAYRX = /^\d{4}-\d{2}-\d{2}$/, SID = /^[A-Za-z0-9_.:-]{1,200}$/;
+    const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+    const day = d => d && typeof d === 'object' && DAYRX.test(d.day) && typeof d.sessionId === 'string' && SID.test(d.sessionId)
+      ? { day: d.day, sessionId: d.sessionId, title: str(d.title, 200), opener: str(d.opener, 200), count: Math.max(0, Number(d.count) || 0), lastAt: str(d.lastAt, 40) } : null;
+    const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
+    const S = new Map();
+    let kept = {}; try { const v = JSON.parse(store?.getItem(CHANNEL_DAILY_CACHE) || 'null'); if (v && typeof v === 'object' && !Array.isArray(v)) kept = v; } catch (_) {}
+    const tell = () => { try { emit(); } catch (_) {} };
+    const save = () => {
+      const out = {}; for (const [id, s] of S) if (s.days.length) out[id] = { today: s.today, days: s.days.slice(0, keepMax), end: s.end && s.days.length <= keepMax };
+      try { store?.setItem(CHANNEL_DAILY_CACHE, JSON.stringify(out)); } catch (_) {}
+    };
+    function entry(id) {
+      let s = S.get(id); if (s) return s;
+      const k = kept[id] && typeof kept[id] === 'object' ? kept[id] : null, days = Array.isArray(k?.days) ? k.days.map(day).filter(Boolean) : [];
+      s = { id, today: typeof k?.today === 'string' && SID.test(k.today) ? k.today : null, days, end: k?.end === true, next: null, at: 0, ok: false, busy: null, more: null, gone: false };
+      s.next = !s.end && days.length ? days[days.length - 1].day : null;
+      S.set(id, s); return s;
+    }
+    // A first page replaces those days (older days already read stay below it, unless the box says there are none);
+    // an older page joins below. next = the cursor of the next older page: the oldest day held, while the box has more.
+    function merge(s, page, older) {
+      const got = (Array.isArray(page.days) ? page.days : []).map(day).filter(Boolean), have = new Set(got.map(d => d.day));
+      const more = typeof page.next === 'string' && DAYRX.test(page.next);
+      const byDay = (a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : 0;
+      if (older) { s.days = s.days.filter(d => !have.has(d.day)).concat(got).sort(byDay); s.end = !more; }
+      else {
+        const last = got.length ? got[got.length - 1].day : '', below = more && last ? s.days.filter(d => !have.has(d.day) && d.day < last) : [];
+        s.days = got.concat(below).sort(byDay);
+        if (!below.length) s.end = !more;
+        s.today = typeof page.today === 'string' && SID.test(page.today) ? page.today : null;
+      }
+      s.next = !s.end && s.days.length ? s.days[s.days.length - 1].day : null;
+    }
+    function read(id) {
+      if (!ID.test(id)) return Promise.resolve(null);
+      const s = entry(id); if (s.busy) return s.busy;
+      s.at = now();
+      s.busy = (async () => {
+        try { const j = await (await req(`/wizard/v1/channels/${encodeURIComponent(id)}/days`, { cache: 'no-store' })).json(); merge(s, j || {}, false); s.ok = true; s.gone = false; save(); }
+        catch (e) { if (e?.status === 404) { s.gone = true; s.days = []; s.today = null; s.next = null; save(); } }
+        finally { s.busy = null; tell(); }
+        return s;
+      })();
+      return s.busy;
+    }
+    function more(id) {
+      const s = ID.test(id) ? entry(id) : null; if (!s || !s.next) return Promise.resolve(null);
+      if (s.more) return s.more;
+      const cursor = s.next;
+      s.more = (async () => {
+        try { const j = await (await req(`/wizard/v1/channels/${encodeURIComponent(id)}/days?cursor=${encodeURIComponent(cursor)}`, { cache: 'no-store' })).json(); merge(s, j || {}, true); save(); }
+        catch (_) { /* offline: the button stays */ }
+        finally { s.more = null; tell(); }
+        return s;
+      })();
+      tell();
+      return s.more;
+    }
+    // Today's thread, made by the box if this is the day's first send: { day, sessionId, created } (throws when unreachable).
+    async function today(id) {
+      if (!ID.test(id)) throw new Error('bad channel');
+      const r = await req(`/wizard/v1/channels/${encodeURIComponent(id)}/today`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const j = await r.json(), d = day({ day: j?.day, sessionId: j?.sessionId });
+      if (!d) throw new Error('bad answer');
+      const s = entry(id), at = s.days.findIndex(x => x.day === d.day);
+      if (at >= 0) s.days[at] = { ...s.days[at], sessionId: d.sessionId };
+      else s.days = [d].concat(s.days.filter(x => x.day < d.day)).concat(s.days.filter(x => x.day > d.day)).sort((a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : 0);
+      if (s.days[0]?.day === d.day) s.today = d.sessionId;
+      save(); tell();
+      return { day: d.day, sessionId: d.sessionId, created: j.created === true };
+    }
+    // What this device knows of a channel's days; reading it keeps it fresh.
+    function state(id) {
+      if (!ID.test(id)) return null;
+      const s = entry(id);
+      if (!s.busy && now() - s.at >= every) read(id);
+      return s;
+    }
+    const fresh = () => { for (const s of S.values()) s.at = 0; };
+    return { state, read, more, today, fresh };
+  }
+  /* ---- end channel daily ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -2061,6 +2154,7 @@
       applyLocal(s); return s;
     } });
   L.chanReads = channelReads({ req, emit: () => L.emit() });
+  L.chanDaily = channelDaily({ req, emit: () => L.emit() });
   /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
    * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
    * instead of waiting out the store's 5-minute off interval. */
