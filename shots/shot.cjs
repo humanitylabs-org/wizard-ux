@@ -3,7 +3,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const root = process.argv[2], out = process.argv[3], mode = process.argv[4] || 'on';
 const srv = http.createServer((q, r) => { const f = path.join(root, decodeURIComponent(q.url.split('?')[0].split('#')[0])); fs.readFile(f, (e, b) => { if (e) { r.statusCode = 404; return r.end(); } r.setHeader('content-type', f.endsWith('.html') ? 'text/html' : f.endsWith('.css') ? 'text/css' : f.endsWith('.js') ? 'text/javascript' : 'application/octet-stream'); r.end(b); }); }).listen(0, async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const p = await b.newPage({ viewport: { width: 380, height: 132 }, deviceScaleFactor: 2 });
+  const p = await b.newPage({ viewport: { width: +(process.env.W || 380), height: 132 }, deviceScaleFactor: 2 });
   const calls = [];
   await p.exposeFunction('nativeCall', n => calls.push(n));
   await p.addInitScript(on => { window.WizardNative = { send(){}, cancel(){}, pause(){}, listen(){}, unlock(){}, items(){return '[]'}, openWizard(){}, close(){}, log(){}, locked(){return false}, full(){}, corner(){}, shot(){ nativeCall('shot'); }, shots(){return 0},
