@@ -15,6 +15,7 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -27,6 +28,27 @@ LLM_URL = os.environ.get("TINFOIL_PROXY_URL", "http://127.0.0.1:3301/v1/chat/com
 ROUTER_MODEL = os.environ.get("WIZARD_OS_ROUTER_MODEL", "deepseek-v4-1-flash")
 ALLOWED_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
 ALLOWED_ORIGINS.update(origin.strip().rstrip("/") for origin in os.environ.get("WIZARD_ORIGIN", "").split(",") if origin.strip())
+# Troubleshooter's own line (core/reach.js): the CSP names https://<address>:9691 for this server's own Tailscale
+# address(es) from WIZARD_ORIGIN only (the configured owner origin, never the request), like nginx's
+# $wizard_troubleshoot_direct. Without one it keeps the old *.ts.net:9691 allowance.
+def _ts_label(label):
+    return 0 < len(label) <= 63 and label[0] != "-" and label[-1] != "-" and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in label)
+
+
+def troubleshoot_direct(origins):
+    out = []
+    for origin in origins:
+        try:
+            u = urllib.parse.urlsplit(origin)
+        except ValueError:
+            continue
+        host = (u.hostname or "").lower()
+        if u.scheme == "https" and host.endswith(".ts.net") and len(host) <= 253 and all(_ts_label(x) for x in host.split(".")):
+            out.append(f"https://{host}:9691")
+    return " ".join(dict.fromkeys(out)) or "https://*.ts.net:9691"
+
+
+TROUBLESHOOT_DIRECT = troubleshoot_direct(os.environ.get("WIZARD_ORIGIN", "").split(","))
 MAX_AUDIO = 24 * 1024 * 1024
 
 
@@ -83,6 +105,7 @@ class Handler(SimpleHTTPRequestHandler):
             super().log_message(fmt, *args)
 
     def end_headers(self):
+        direct = TROUBLESHOOT_DIRECT
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -91,7 +114,7 @@ class Handler(SimpleHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
             # One cross-site read: Tailscale's 204 connectivity check, the offline pop-up's Internet row (core/reach.js).
-            "connect-src 'self' https://derp1.tailscale.com/generate_204 https://*.ts.net:9691; media-src 'self' blob:; frame-src 'self' blob: https://*.ts.net:9691; manifest-src 'self'; base-uri 'none'; "
+            f"connect-src 'self' https://derp1.tailscale.com/generate_204 {direct}; media-src 'self' blob:; frame-src 'self' blob: {direct}; manifest-src 'self'; base-uri 'none'; "
             "form-action 'self'; frame-ancestors 'none'",
         )
         self.send_header("Permissions-Policy", "microphone=(self)")

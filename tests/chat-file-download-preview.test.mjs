@@ -41,7 +41,8 @@ test('the shell CSP lets the viewer frame blob: PDFs and nothing else cross-orig
   const csp = /Content-Security-Policy "([^"]+)"/.exec(read('../packaging/static.conf'))[1];
   const frame = /(?:^|; )frame-src ([^;]+)/.exec(csp)?.[1].trim().split(/\s+/);
   // The one other frame: Troubleshooter's own line on this Tailscale address (wizard-troubleshooter issue 37).
-  assert.deepEqual(frame, ["'self'", 'blob:', 'https://*.ts.net:9691']);
+  // nginx fills it with this address's own https://<host>:9691 (packaging/nginx.conf.template, wizard-os#133).
+  assert.deepEqual(frame, ["'self'", 'blob:', '$wizard_troubleshoot_direct']);
   assert.match(csp, /object-src 'none'/);
   assert.match(read('../server.py'), /frame-src 'self' blob:/);
 });
