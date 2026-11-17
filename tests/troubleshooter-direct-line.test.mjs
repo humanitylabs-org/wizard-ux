@@ -8,19 +8,20 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../web/core/reach.js', import.meta.url), 'utf8');
 function mount({ fetch, hostname = 'wizard.tail.ts.net', stored = null, shell = 'phone', url } = {}) {
   const calls = [], timers = new Map(), handlers = {}, assigned = []; let id = 0;
-  const frame = { hidden: true, addEventListener(type, fn) { handlers[type] = fn; }, getAttribute() { return this.src; }, contentDocument: { location: { pathname: '/troubleshoot/' }, querySelector() { return {}; } } };
+  const frame = { hidden: true, contentWindow: { direct: true }, addEventListener(type, fn) { handlers[type] = fn; }, getAttribute() { return this.src; }, contentDocument: { location: { pathname: '/troubleshoot/' }, querySelector() { return {}; } } };
   const direct = { hidden: true }, directLink = { target: '_blank', removeAttribute(k) { delete this[k]; } };
   const details = { open: true };
   const elements = { iframe: frame, details, '[data-recovery-check]': { addEventListener() {} }, '[data-recovery-message]': {}, '[data-recovery-rows]': {}, '[data-recovery-remote]': {}, '[data-recovery-direct]': direct, '[data-recovery-direct-link]': directLink };
   const cls = new Set(['opening']);
   const root = { isConnected: true, cls, classList: { add(c) { cls.add(c); }, remove(c) { cls.delete(c); } }, querySelector(s) { assert.ok(elements[s], s); return elements[s]; } };
   const store = new Map(stored ? [['wz.troubleshoot.direct', stored]] : []);
-  const context = { navigator: { onLine: true }, document: { hidden: false, documentElement: { dataset: { shell } } }, location: { hostname, assign(u) { assigned.push(u); } }, Date, Event, AbortController, URL,
+  const msgs = [];
+  const context = { addEventListener(type, fn) { if (type === 'message') msgs.push(fn); }, navigator: { onLine: true }, document: { hidden: false, documentElement: { dataset: { shell } } }, location: { hostname, assign(u) { assigned.push(u); } }, Date, Event, AbortController, URL,
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) },
     requestAnimationFrame(fn) { fn(); }, setTimeout(fn, ms) { timers.set(++id, { fn, ms }); return id; }, clearTimeout(t) { timers.delete(t); }, dispatchEvent() {},
     fetch: async (u, o = {}) => { calls.push([u, o.method]); return fetch(u, o); } };
   context.window = context; vm.runInNewContext(source, context);
-  return { context, root, details, calls, frame, direct, directLink, timers, handlers, assigned, store, mount: () => context.WizReach.mountRecovery(root, url) };
+  return { context, root, details, ready: (origin = 'https://wizard.tail.ts.net:9691', source = frame.contentWindow) => msgs.forEach(fn => fn({ data: { type: 'wizard-troubleshooter:ready' }, origin, source })), calls, frame, direct, directLink, timers, handlers, assigned, store, mount: () => context.WizReach.mountRecovery(root, url) };
 }
 const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
 const fire = (h, ms) => { for (const [k, t] of [...h.timers]) if (t.ms === ms) { h.timers.delete(k); t.fn(); } };
@@ -45,7 +46,11 @@ test('when Wizard’s usual address can’t serve it, the window opens the direc
     h.mount(); fire(h, 0); await flush();
     assert.equal(h.frame.src, DIRECT + '?provider=claude&run_id=r1', shell);
     assert.equal(shown(h).local, false, 'no Connection help screen first');
-    h.handlers.load(); // a cross-origin page: its load is the proof, the ping already answered
+    h.handlers.load(); // a cross-origin page: a load alone (maybe an error page or a refused frame) shows nothing
+    assert.equal(h.frame.hidden, true); assert.equal(shown(h).ready, false);
+    h.ready('https://evil.example'); h.ready(undefined, {}); // another origin or another window proves nothing
+    assert.equal(shown(h).ready, false);
+    h.ready(); // the real repair page's own message
     assert.equal(h.frame.hidden, false); assert.equal(shown(h).ready, true); assert.equal(shown(h).opening, false);
     assert.equal(h.details.open, false); assert.equal(h.direct.hidden, true);
     assert.deepEqual(h.assigned, [], 'never leaves WizardOS for another browser');
@@ -67,7 +72,17 @@ test('a slow usual route goes to the direct line after 8 s', async () => {
   assert.equal(h.frame.src, undefined); assert.equal(shown(h).local, false);
   fire(h, 8000); await flush();
   assert.equal(h.frame.src, DIRECT);
-  h.handlers.load(); assert.equal(shown(h).ready, true);
+  h.handlers.load(); h.ready(); assert.equal(shown(h).ready, true);
+});
+
+test('a direct line whose page never says it is ready (error page, refused frame) falls back to local help', async () => {
+  const h = mount({ fetch: async (u, o) => o.method === 'HEAD' ? { ok: false, status: 502 } : isDirect(u) ? { ok: false, status: 0, type: 'opaque' } : never() });
+  h.mount(); fire(h, 0); await flush();
+  assert.equal(h.frame.src, DIRECT);
+  h.handlers.load();
+  assert.equal(shown(h).local, false);
+  fire(h, 8000);
+  assert.equal(h.frame.hidden, true); assert.equal(shown(h).local, true); assert.equal(h.direct.hidden, false, 'its button stays as the last way out');
 });
 
 // Acceptance (James, 15 Nov): fresh install, empty localStorage, ts.net host, gateway ping fails -> one tap lands on
@@ -79,17 +94,20 @@ test('empty localStorage + ts.net host + gateway down: one Open Troubleshooter t
   h.context.WizReach.open(); fire(h, 0); await flush();
   assert.equal(h.frame.src, DIRECT);
   assert.equal(shown(h).local, false, 'no Connection help, no second tap');
-  h.handlers.load();
+  h.handlers.load(); h.ready();
   assert.equal(shown(h).ready, true); assert.equal(h.frame.hidden, false);
   fire(h, 4000); fire(h, 15000); await flush(); // later failing checks never hide the open repair page
   assert.equal(h.frame.hidden, false); assert.equal(h.frame.src, DIRECT); assert.deepEqual(h.assigned, []);
 });
 
 test('the direct address is learned from Troubleshooter’s status and only for this same Wizard host', async () => {
-  const h = mount({ fetch: async u => u === '/troubleshoot/api/status' ? { ok: true, status: 200, json: async () => ({ overall: 'ok', checks: [], direct: 'https://wizard.tail.ts.net:9700/troubleshoot/' }) } : { ok: true, status: 200 } });
+  const h = mount({ hostname: 'wizard.example.com', fetch: async u => u === '/troubleshoot/api/status' ? { ok: true, status: 200, json: async () => ({ overall: 'ok', checks: [], direct: 'https://wizard.example.com:9691/troubleshoot/' }) } : { ok: true, status: 200 } });
   await h.context.WizReach.diagnose(0);
-  assert.equal(h.store.get('wz.troubleshoot.direct'), 'https://wizard.tail.ts.net:9700/troubleshoot/');
-  assert.equal(h.context.WizReach.directUrl('/troubleshoot/?x=1'), 'https://wizard.tail.ts.net:9700/troubleshoot/?x=1');
+  assert.equal(h.store.get('wz.troubleshoot.direct'), 'https://wizard.example.com:9691/troubleshoot/');
+  assert.equal(h.context.WizReach.directUrl('/troubleshoot/?x=1'), 'https://wizard.example.com:9691/troubleshoot/?x=1');
+  // Another advertised port is ignored: the shell CSP lets the window reach only :9691.
+  const other = mount({ stored: 'https://wizard.tail.ts.net:9700/troubleshoot/', fetch: async () => never() });
+  assert.equal(other.context.WizReach.directUrl('/troubleshoot/'), 'https://wizard.tail.ts.net:9691/troubleshoot/');
   const evil = mount({ stored: 'https://evil.example:9691/troubleshoot/', fetch: async () => never() });
   assert.equal(evil.context.WizReach.directUrl('/troubleshoot/'), 'https://wizard.tail.ts.net:9691/troubleshoot/');
   const lan = mount({ hostname: 'wizard.local', fetch: async () => never() });

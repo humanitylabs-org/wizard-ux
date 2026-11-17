@@ -16,7 +16,9 @@ const csp = /Content-Security-Policy "([^"]+)"/.exec(fs.readFileSync(conf, 'utf8
 const broken = process.env.QA_EXPECT === 'broken';
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
-const REPAIR = '<!doctype html><title>Fix Wizard</title><header><h1>Fix Wizard</h1></header><main><p id="ok">All working</p></main>';
+// Stand-in for the real page: the same ready message as wizard-troubleshooter web/index.html sends a framing shell.
+const REPAIR = '<!doctype html><title>Fix Wizard</title><header><h1>Fix Wizard</h1></header><main><p id="ok">All working</p></main>'
+  + "<script>try { if (window.parent !== window) window.parent.postMessage({ type: 'wizard-troubleshooter:ready' }, '*'); } catch (e) {}</script>";
 const CASES = [
   { name: 'phone-nebula', shell: 'phone', skin: 'nebula' },
   { name: 'phone-grove', shell: 'phone', skin: 'grove' },
@@ -43,7 +45,7 @@ const CASES = [
           const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
           if (u.origin === direct) {
             if (p === '/troubleshoot/api/ping') { seen.directPing++; return r.fulfill({ json: { ok: true } }); }
-            if (p === '/troubleshoot/' || p === '/troubleshoot/index.html') { seen.directPage++; return r.fulfill({ contentType: 'text/html', body: REPAIR, headers: { 'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self' ${origin}` } }); }
+            if (p === '/troubleshoot/' || p === '/troubleshoot/index.html') { seen.directPage++; return r.fulfill({ contentType: 'text/html', body: REPAIR, headers: { 'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'self' ${origin}` } }); }
             return r.fulfill({ status: 404, body: 'none' });
           }
           if (u.origin !== origin) return r.abort();

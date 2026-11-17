@@ -150,10 +150,11 @@
    * The address comes from Troubleshooter's own status report when we last saw it, else the standard port 9691, which
    * is treated as known on any Tailscale (*.ts.net) address. The window frames it in place (the shell CSP allows
    * https://*.ts.net:9691), so the owner never leaves WizardOS and never sees a second screen first. */
-  const DIRECT_KEY = 'wz.troubleshoot.direct';
+  const DIRECT_KEY = 'wz.troubleshoot.direct', DIRECT_PORT = '9691';
   function directBase() {
-    try { const u = new URL(localStorage.getItem(DIRECT_KEY) || ''); if (u.protocol === 'https:' && u.hostname === location.hostname && u.pathname === '/troubleshoot/') return { base: `${u.origin}/troubleshoot/`, confirmed: true }; } catch (_) {}
-    if (/\.ts\.net$/i.test(String(location.hostname || ''))) return { base: `https://${location.hostname}:9691/troubleshoot/`, confirmed: false };
+    // Only the standard port: the shell CSP lets the window ping and frame exactly https://*.ts.net:9691.
+    try { const u = new URL(localStorage.getItem(DIRECT_KEY) || ''); if (u.protocol === 'https:' && u.hostname === location.hostname && u.port === DIRECT_PORT && u.pathname === '/troubleshoot/') return { base: `${u.origin}/troubleshoot/`, confirmed: true }; } catch (_) {}
+    if (/\.ts\.net$/i.test(String(location.hostname || ''))) return { base: `https://${location.hostname}:${DIRECT_PORT}/troubleshoot/`, confirmed: false };
     return { base: '', confirmed: false };
   }
   function directUrl(target) {
@@ -199,10 +200,20 @@
       direct.hidden = false;
     };
     const local = text => { root.classList.remove('opening'); details.open = true; remoteMessage(text); offerDirect(); };
+    // The direct line is another origin (its own port), so the shell can't read it. The real repair page says it
+    // loaded with a 'wizard-troubleshooter:ready' message (wizard-troubleshooter web/index.html); an error page, a
+    // missing page or a refused frame never does, and after 8 s local help shows instead.
+    let directOrigin = '';
+    window.addEventListener?.('message', e => {
+      if (!directOn || remoteReady || !connected() || e?.data?.type !== 'wizard-troubleshooter:ready') return;
+      if (e.origin !== directOrigin || e.source !== frame.contentWindow) return;
+      clearTimeout(loadTimer); showRepair();
+    });
     const useDirect = url => {
       directOn = true; clearTimeout(loadTimer);
-      frame.src = url; // shown on its load: the ping already proved the line answers
-      loadTimer = setTimeout(() => { if (connected() && !remoteReady) { directOn = false; local('The repair page didn’t load. Local connection help is still available.'); } }, 8000);
+      try { directOrigin = new URL(url).origin; } catch (_) { directOrigin = ''; }
+      frame.src = url;
+      loadTimer = setTimeout(() => { if (connected() && !remoteReady) { directOn = false; frame.hidden = true; local('The repair page didn’t load. Local connection help is still available.'); } }, 8000);
     };
     const failed = text => {
       clearTimeout(loadTimer); remoteLoading = false;
@@ -238,8 +249,8 @@
     }
     frame.addEventListener('load', () => {
       if (!frame.getAttribute('src')) return; // initial about:blank is not a failed repair-page load
-      // The direct line is another origin (its own port): unreadable by design, and its ping already answered.
-      if (directOn) { clearTimeout(loadTimer); clearTimeout(readyTimer); if (connected()) showRepair(); return; }
+      // The direct line is another origin: its own ready message is the proof, never the load event.
+      if (directOn) return;
       if (sealed) {
         // Every load is a new document that must answer again (the channel was just renewed), also after the page
         // once answered: a reload or in-frame step that lands on an error page never answers. 8 s, then local help.
