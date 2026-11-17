@@ -74,12 +74,15 @@
      corner/unlocked only. With them the row packs a little tighter so all five fit beside the orb. */
   #camC,#pickC{display:none}
   body.corner.canattach #camC,body.corner.canattach #pickC{display:flex}
-  body.corner.canattach .chip{width:42px;height:42px;margin-top:-21px}
+  /* Step and size shrink on narrow phones so all five stay inside the corner window (min(screen - 14dp, 380dp)). */
+  body.corner.canattach{--st:min(48px,calc((100vw - 142px) / 5));--cs:calc(var(--st) - 6px)}
+  body.corner.canattach .chip{width:var(--cs);height:var(--cs);margin-top:calc(var(--cs) / -2)}
+  body.corner.canattach .chip svg{width:min(24px,calc(var(--cs) * .55));height:min(24px,calc(var(--cs) * .55))}
   body.corner.canattach #pauseC{right:136px}
-  body.corner.canattach #cancelC{right:184px}
-  body.corner.canattach #shotC{right:232px}
-  body.corner.canattach #camC{left:auto;right:280px}
-  body.corner.canattach #pickC{left:auto;right:328px}
+  body.corner.canattach #cancelC{right:calc(136px + var(--st))}
+  body.corner.canattach #shotC{right:calc(136px + var(--st) * 2)}
+  body.corner.canattach #camC{left:auto;right:calc(136px + var(--st) * 3)}
+  body.corner.canattach #pickC{left:auto;right:calc(136px + var(--st) * 4)}
   #camC b,#pickC b{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;border-radius:9px;background:#b99bff;color:#140b2c;
     font:700 10px/17px system-ui;text-align:center;display:none}
   #camC.has b,#pickC.has b{display:block}

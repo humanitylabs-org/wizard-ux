@@ -202,11 +202,11 @@ final class VoiceCapture {
      * carries on. Returns true when a surface showed it; false = nothing is on screen and the caller shows the orb.
      */
     boolean pickDone(List<EverywhereOutbox.Attachment> got, int tooBig) {
-        if (!away) return view != null;
+        if (!away) { PickedFiles.drop(got); return view != null; }
         int added = 0, skipped = 0;
-        if (listening && got != null) for (EverywhereOutbox.Attachment a : got) {
-            if (a == null || a.data == null || a.data.length == 0) continue;
-            if (attachedCount() >= attachCap()) { skipped++; continue; }
+        if (got != null) for (EverywhereOutbox.Attachment a : got) {
+            if (a == null || a.file == null || !a.file.isFile() || a.file.length() == 0) { if (a != null) PickedFiles.drop(a.file); continue; }
+            if (!listening || attachedCount() >= attachCap()) { skipped++; PickedFiles.drop(a.file); continue; }
             picked.add(a);
             added++;
         }
@@ -517,6 +517,7 @@ final class VoiceCapture {
         listening = false;
         paused = false;
         shots.clear();
+        PickedFiles.drop(picked); // a cancelled or empty take never carries them
         picked.clear();
         main.removeCallbacks(awayTimeout);
         away = false; pausedForPick = false; lastCounts = null;

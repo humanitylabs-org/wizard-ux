@@ -90,14 +90,15 @@ public final class EverywhereOutbox {
 
     /**
      * A photo taken with the corner orb's Camera button or a file picked with Attach while talking (wizard-os issue 655,
-     * switch wizard/assist-attach). Bytes, a cleaned name and a type; kind is "photo" or "file".
+     * switch wizard/assist-attach). A private copy on disk (assist PickedFiles), a cleaned name and a type; kind is
+     * "photo" or "file". Enqueueing moves the copy into the outbox.
      */
     public static final class Attachment {
-        public final byte[] data;
+        public final File file;
         public final String name, mime, kind;
 
-        public Attachment(byte[] data, String name, String mime, String kind) {
-            this.data = data; this.name = name; this.mime = mime; this.kind = kind;
+        public Attachment(File file, String name, String mime, String kind) {
+            this.file = file; this.name = name; this.mime = mime; this.kind = kind;
         }
     }
 
@@ -282,9 +283,16 @@ public final class EverywhereOutbox {
         if (picked != null && !it.dictation()) {
             int n = 0;
             for (Attachment a : picked) {
-                if (a == null || a.data == null || a.data.length == 0) continue;
+                if (a == null || a.file == null || !a.file.isFile() || a.file.length() == 0) continue;
                 File f = new File(audioDir, it.id + "-file" + (++n) + ".bin");
-                try (FileOutputStream o = new FileOutputStream(f)) { o.write(a.data); o.getFD().sync(); }
+                if (!a.file.renameTo(f)) { // same disk, so a move; else copy it over and drop the picked copy
+                    try (InputStream in = new FileInputStream(a.file); FileOutputStream o = new FileOutputStream(f)) {
+                        byte[] buf = new byte[64 * 1024];
+                        for (int r; (r = in.read(buf)) > 0; ) o.write(buf, 0, r);
+                        o.getFD().sync();
+                    }
+                    ai.wizards.os.assist.PickedFiles.drop(a.file);
+                }
                 try {
                     it.files.put(new JSONObject().put("path", f.getAbsolutePath()).put("name", a.name).put("mime", a.mime).put("kind", a.kind));
                 } catch (JSONException e) { throw new IOException(e); }
@@ -436,7 +444,7 @@ public final class EverywhereOutbox {
                 boolean kept = ai.wizards.os.recording.CancelledTakes.keepUnheard(dir.getParentFile(), audio, it.source);
                 // Compatibility entry point delegates to CaptureJournal.release(null): unheard is not a receipt.
                 String why = kept ? "No words heard · recording kept in Settings → Cancelled recordings" : "No speech in that recording";
-                synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); save(); }
+                synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); deleteShots(it); save(); }
                 meetingNote(it, "event", "failed", "error", why);
                 Log.i(TAG, "no words in " + it.id + (kept ? " · kept" : " · not kept"));
                 // A failed keep leaves the journal and original intact for recovery.

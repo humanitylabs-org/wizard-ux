@@ -16,7 +16,6 @@ import android.provider.OpenableColumns;
 import android.util.Log;
 import android.widget.Toast;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -59,6 +58,7 @@ public class AssistPickActivity extends Activity {
             if (p != null) photo = new File(p);
         }
         if (asked) return; // recreated while the camera or picker is open: wait for its answer
+        PickedFiles.prune(this);
         KeyguardManager k = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         if (k != null && k.isKeyguardLocked()) { deliver(null, 0); return; }
         if (!AssistAttach.on(this) || !VoiceCapture.get(this).away()) { deliver(null, 0); return; }
@@ -123,15 +123,20 @@ public class AssistPickActivity extends Activity {
             List<EverywhereOutbox.Attachment> got = new ArrayList<>();
             int tooBig = 0;
             if (cameraJpeg != null) {
+                // The photo moves out of the camera's reach (the provider serves only assist-cam/) into the picked copies.
+                File kept = null;
                 if (ok && cameraJpeg.isFile()) {
                     if (!AttachPolicy.fits(cameraJpeg.length())) { if (cameraJpeg.length() > 0) tooBig++; }
-                    else try (InputStream in = new FileInputStream(cameraJpeg)) {
-                        byte[] b = read(in);
-                        if (b != null) got.add(new EverywhereOutbox.Attachment(b, "photo-" + System.currentTimeMillis() + ".jpg", "image/jpeg", AttachPolicy.KIND_PHOTO));
-                    } catch (IOException e) { Log.w(TAG, "camera photo unreadable", e); }
+                    else {
+                        File to = PickedFiles.fresh(this);
+                        if (cameraJpeg.renameTo(to)) kept = to;
+                        else try (InputStream in = new FileInputStream(cameraJpeg)) { kept = PickedFiles.copy(this, in); }
+                        catch (IOException e) { Log.w(TAG, "camera photo unreadable", e); }
+                    }
                 }
+                if (kept != null) got.add(new EverywhereOutbox.Attachment(kept, "photo-" + System.currentTimeMillis() + ".jpg", "image/jpeg", AttachPolicy.KIND_PHOTO));
                 //noinspection ResultOfMethodCallIgnored
-                cameraJpeg.delete();
+                if (cameraJpeg.isFile()) cameraJpeg.delete();
             }
             int room = AttachPolicy.MAX_ON;
             for (Uri u : uris) {
@@ -140,12 +145,15 @@ public class AssistPickActivity extends Activity {
                     String[] meta = meta(u);
                     long size = meta[1] == null ? -1 : Long.parseLong(meta[1]);
                     if (size > AttachPolicy.MAX_BYTES) { tooBig++; continue; }
-                    byte[] b;
-                    try (InputStream in = getContentResolver().openInputStream(u)) { b = in == null ? null : read(in); }
-                    if (b == null) { tooBig++; continue; }
-                    if (b.length == 0) continue;
+                    File copy;
+                    try (InputStream in = getContentResolver().openInputStream(u)) {
+                        if (in == null) continue;
+                        copy = PickedFiles.copy(this, in); // streamed to a private file, never held whole in memory
+                    }
+                    if (copy == null) { tooBig++; continue; }
+                    if (copy.length() == 0) { PickedFiles.drop(copy); continue; }
                     String name = AttachPolicy.safeName(meta[0], "file");
-                    got.add(new EverywhereOutbox.Attachment(b, name, AttachPolicy.mime(getContentResolver().getType(u), name), AttachPolicy.KIND_FILE));
+                    got.add(new EverywhereOutbox.Attachment(copy, name, AttachPolicy.mime(getContentResolver().getType(u), name), AttachPolicy.KIND_FILE));
                 } catch (Exception e) { Log.w(TAG, "picked file unreadable", e); }
             }
             final int big = tooBig;
@@ -166,22 +174,9 @@ public class AssistPickActivity extends Activity {
         return r;
     }
 
-    /** Whole stream, or null when it is bigger than one file may be. */
-    private static byte[] read(InputStream in) throws IOException {
-        ByteArrayOutputStream o = new ByteArrayOutputStream();
-        byte[] buf = new byte[64 * 1024];
-        long total = 0;
-        for (int n; (n = in.read(buf)) > 0; ) {
-            total += n;
-            if (total > AttachPolicy.MAX_BYTES) return null;
-            o.write(buf, 0, n);
-        }
-        return o.toByteArray();
-    }
-
     /** Hand the result to the take (once) and bring the orb back when nothing is on screen. */
     private void deliver(List<EverywhereOutbox.Attachment> got, int tooBig) {
-        if (delivered) return;
+        if (delivered) { PickedFiles.drop(got); return; }
         delivered = true;
         VoiceCapture capture = VoiceCapture.get(this);
         boolean shown = capture.pickDone(got, tooBig);
