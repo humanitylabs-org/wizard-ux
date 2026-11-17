@@ -102,6 +102,14 @@ test('Troubleshooter navigation is same-tab on phone and a safe new tab on deskt
   h.ctx.document.documentElement.dataset.shell = 'desktop'; await h.api.open();
   assert.deepEqual(h.opened[1], ['/troubleshoot/', '_blank', 'noopener']);
 });
+test('the outage pop-up (auto) never leaves the shell: without shell windows it opens nothing (issue 1472)', () => {
+  const h = setup();
+  assert.equal(h.api.open({ auto: true }), false); assert.deepEqual(h.opened, []);
+  h.ctx.document.documentElement.dataset.shell = 'desktop';
+  assert.equal(h.api.open({ auto: true }), false); assert.deepEqual(h.opened, []);
+  h.ctx.WizOpenApp = id => { h.opened.push(id); return true; };
+  assert.equal(h.api.open({ auto: true }), true); assert.deepEqual(h.opened, ['troubleshooter']);
+});
 
 // James, 27 Oct: an Agent Service restart showed "Agent Service needs attention", then a Tinfoil repair-engine
 // failure; it reconnected on its own. A self-healing outage reads as reconnecting, never as an alarm.
