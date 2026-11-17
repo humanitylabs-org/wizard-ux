@@ -1964,9 +1964,9 @@
     if (!q) {
       // Recent is a placement, not a second copy of the Apps catalogue. Resolve aliases before deduping.
       const recentIds = [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => APP[id] && !['app-store', 'agents'].includes(id) && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
-      const remainingApps = APPS.filter(a => !recentIds.includes(a.id) && !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'));
+      const remainingApps = APPS.filter(a => !recentIds.includes(a.id) && a.id !== 'agents' && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'));
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Apps <span>${remainingApps.length}</span></h4><div class="lgrid">${remainingApps.map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Apps <span>${remainingApps.length}</span></h4><div class="lgrid">${remainingApps.map(appTile).join('')}<button class="lapp" data-storekind="apps"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens the Store's Apps section, so the App Store's own tile is its one data-app entry
       return;
     }
     const n = norm(q);
