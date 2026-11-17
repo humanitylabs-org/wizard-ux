@@ -9,17 +9,19 @@ function paint(recent,APPS){
  const body={scrollTop:0,scrollHeight:400};
  const context={APPS,APP,tileN:0,oursSkin:()=>false,$:()=>body,store:{get:()=>recent},window:{WizCore:{isMaintenanceApp:()=>false}},appTile:a=>`<button data-app="${a.id}"></button>`};
  vm.runInNewContext(render+';renderLauncher("",false);',context);
- return {html:body.innerHTML,ids:[...body.innerHTML.matchAll(/data-app="([^"]+)"/g)].map(m=>m[1])};
+ // App tiles (appTile) vs the "+ Get apps" tile, which also opens the Store (data-app="app-store", class lapp).
+ return {html:body.innerHTML,ids:[...body.innerHTML.matchAll(/<button data-app="([^"]+)"/g)].map(m=>m[1]),get:body.innerHTML.match(/class="lapp" data-app="app-store"/g)?.length||0};
 }
 const apps=[{id:'alpha',kind:'wizard'},{id:'beta',kind:'wizard'},{id:'wizard',kind:'chats'},{id:'app-store',kind:'wizard'}];
 test('Recent and Apps render one tile per resolved app id, preserving both destinations',()=>{
  const result=paint(['retired','alpha','alpha','wizard'],apps);
  assert.deepEqual(result.ids,['alpha','wizard','beta','app-store']);
  assert.equal(new Set(result.ids).size,result.ids.length);
- assert.match(result.html,/>Recent</);assert.match(result.html,/>Apps <span>1<\/span>/);
+ assert.match(result.html,/>Recent</);assert.match(result.html,/>Apps <span>2<\/span>/);assert.equal(result.get,1);
 });
 test('empty or stale recents leave every available app reachable once',()=>{
  const result=paint(['missing'],apps);
- assert.deepEqual(result.ids,['alpha','beta','wizard','app-store']);
+ // The App Store is a normal tile too (ux#1493), and the Get apps tile stays.
+ assert.deepEqual(result.ids,['alpha','beta','wizard','app-store']);assert.equal(result.get,1);
  assert.equal(new Set(result.ids).size,result.ids.length);
 });
