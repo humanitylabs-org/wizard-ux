@@ -1582,7 +1582,7 @@ window.WizCore.chats = function createChats(H) {
     let t = window.WizCore.channelEmojiName(sp.name, off ? '' : e);
     if (!t) { toast('!', 'Name too long for an emoji: shorten it first', 2200); return false; }
     // An emoji-only name taken off becomes 'Channel'; a second one of the same agent gets 'Channel 2', and so on.
-    if (off && !f.bare) { const taken = n => spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(n)); for (let i = 2; taken(t) && i < 100; i++) t = `Channel ${i}`; }
+    if (off && !f.bare) { const taken = n => spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(n)); for (let i = 2; taken(t); i++) t = `Channel ${i}`; }
     return chanRenameTo(cid, t) !== false;
   }
   function openChannelRename(wid, cid) {

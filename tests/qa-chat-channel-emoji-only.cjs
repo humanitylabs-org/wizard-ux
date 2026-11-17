@@ -19,6 +19,13 @@ const SPACES = [
   { id: 'solo', name: '🎯', agent: 'hermes', threads: [], createdAt: iso(now - 7e8) },
   { id: 'long', name: 'Long ' + 'x'.repeat(54), agent: 'hermes', threads: [], createdAt: iso(now - 6e8) },
 ];
+// Routed agents of each kind (host profile, container, restricted), each with its own emoji-only channel (Codex P1).
+const AGENTS = [{ id: 'hermes', label: 'Archimedes', harness: 'hermes', privacy: 'standard', is_default: true, status: 'running', appearance: { glyph: 'a', hue: 260 }, model: { provider: 'anthropic', model: 'claude-opus-4' } }];
+const ROUTED = [['host', 'Host ops'], ['container', 'Box'], ['restricted', 'Locked']];
+for (const [id, label] of ROUTED) {
+  AGENTS.push({ id, label, harness: 'hermes', privacy: 'standard', status: 'running', appearance: { glyph: id[0], hue: 120 }, model: { provider: 'anthropic', model: 'claude-opus-4' } });
+  SPACES.push({ id: id + '-solo', name: '🎯', agent: id, threads: [], createdAt: iso(now - 5e8) });
+}
 const FIRST = 'Get the launch checklist ready for Friday.', chip = '';
 const PNG = fs.readFileSync(path.join(repo, 'web', 'robert-thread-orb.png'));
 const ROWS = [
@@ -69,6 +76,7 @@ const report = { origin, web, broken, cases: [] };
           }
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
+          if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: AGENTS } });
           if (p === '/wizard/files/qa-img-1/content' || /^\/wizard\/files\/qa-up-\d+\/content$/.test(p)) return r.fulfill({ body: PNG, contentType: 'image/png' });
           if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: ROWS, has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
@@ -100,9 +108,11 @@ const report = { origin, web, broken, cases: [] };
         const solo = entry.list.find(x => x[0] === 'solo');
         if (broken) {
           assert.deepEqual(solo, ['solo', '🎯', '🎯'], 'main: the emoji-only channel shows its emoji twice');
+          for (const [id] of ROUTED) assert.deepEqual(entry.list.find(x => x[0] === id + '-solo'), [id + '-solo', '🎯', '🎯'], id);
           entry.pass = true; continue;
         }
         assert.deepEqual(solo, ['solo', '🎯', ''], 'the emoji-only channel shows its emoji once');
+        for (const [id] of ROUTED) assert.deepEqual(entry.list.find(x => x[0] === id + '-solo'), [id + '-solo', '🎯', ''], `${id}: once too`);
         // Feed header: once.
         await vis('.ch-chan-open[data-chchan="solo"]').click();
         await vis('.ch-chan-h').waitFor();
@@ -122,7 +132,18 @@ const report = { origin, web, broken, cases: [] };
         assert.deepEqual((entry.ops || []).filter(o => /\/name$/.test(o.key)), [{ op: 'set', key: 'spaces/solo/name', item: 'Channel' }]);
         entry.afterClear = await lines();
         assert.deepEqual(entry.afterClear.find(x => x[0] === 'solo'), ['solo', '💬', 'Channel']);
-        await nap(phone ? 1600 : 1600);
+        await nap(1600);
+        // A routed agent's emoji-only channel (host profile, container, restricted) clears the same way, as its own item.
+        for (const [id] of ROUTED) {
+          await menu(vis(`.ch-chan-open[data-chchan="${id}-solo"]`));
+          await vis('[data-rschrename]').click();
+          await vis('.ch-rename [data-chemoji="🎯"]').click();
+          assert.equal(await vis('.ch-rename input').inputValue(), 'Channel', id);
+          await vis('.ch-rename .go').click();
+          await page.waitForFunction(i => [...document.querySelectorAll(`.ch-chan-open[data-chchan="${i}-solo"]`)].some(x => x.getClientRects().length && x.querySelector('b')?.textContent === 'Channel'), id, { timeout: 8000 });
+          assert.deepEqual((entry.ops || []).filter(o => /\/name$/.test(o.key)).at(-1), { op: 'set', key: `spaces/${id}-solo/name`, item: 'Channel' }, id);
+          await nap(1600);
+        }
         // A 59-character name: an emoji tap keeps the name whole and says why.
         await menu(vis('.ch-chan-open[data-chchan="long"]'));
         await vis('[data-rschrename]').click();

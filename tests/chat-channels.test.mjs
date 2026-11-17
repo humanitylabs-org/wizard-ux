@@ -2421,6 +2421,13 @@ test('issue 1523: the picker clears an emoji-only name (💬 Channel), main vs r
   assert.equal(inp.value, 'Channel'); assert.deepEqual(fired, ['input']);
 });
 
+test('issue 1523: clearing finds a free Channel N past 99 (Codex P2: 200 channels per agent)', () => {
+  const taken = [{ id: 'c1', name: 'Channel', threads: [] }].concat(Array.from({ length: 120 }, (_, i) => ({ id: 'c' + (i + 2), name: `Channel ${i + 2}`, threads: [] })));
+  const f = emojiFixture({ spacesList: [{ id: 'solo', name: '🚀', threads: [] }, ...taken] });
+  assert.equal(f.chanSetEmoji('solo', '🚀'), true);
+  assert.equal(f.ops.at(-1).item, 'Channel 122');
+});
+
 test('issue 1523: a name with no room for the emoji is kept whole and the owner is told', () => {
   const long = 'x'.repeat(59), f = emojiFixture({ spacesList: [{ id: 'long', name: long, threads: [] }] });
   assert.equal(f.chanSetEmoji('long', '🎯'), false);
