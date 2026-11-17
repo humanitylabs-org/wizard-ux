@@ -88,7 +88,8 @@ test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; a
 
 test('switch off (today): nothing changes, the skin still decides and drop-list tweaks still run', async () => {
   const d = device(null, { mix: OLD_MIX, recipe: OLD_RECIPE }); await d.E.refresh();
-  assert.deepEqual(d.running(), ['miguel/archive-top', 'miguel/now-playing', 'miguel/reply-summary']);
+  // The skin decides what it saved a choice for (Send and go off); the owner's other switches still run (#1529).
+  assert.deepEqual(d.running(), ['miguel/archive-top', 'miguel/now-playing', 'miguel/reply-summary', 'wizard/failure-reason', 'wizard/link-token-repair']);
   assert.ok(d.E.state.tweaks.some(t => t.id === 'wizard/failure-reason'), 'drop items still offered');
   assert.equal(d.saved().recipeCarried, undefined);
 });
