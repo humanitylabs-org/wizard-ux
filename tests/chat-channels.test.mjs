@@ -193,6 +193,11 @@ test('the Activity / Channels tab choice is remembered on the device; Activity i
   assert.equal(fixture().view, 'activity', 'a fresh device starts on Activity');
 });
 
+test('the header tabs read Channels | Activity, left to right (issue 1467)', () => {
+  const f = fixture(), html = f.chanHead(f.w, null);
+  assert.ok(html.indexOf('data-chview="channels"') >= 0 && html.indexOf('data-chview="channels"') < html.indexOf('data-chview="activity"'), 'Channels is the left tab');
+});
+
 test('main vs routed: host-profile, container and restricted rows belong only to their own agent\'s channels', () => {
   const agents = { h1: 'host', k1: 'container', r1: 'restricted', h2: 'host', a: '' };
   const f = fixture({ agents });
