@@ -261,3 +261,11 @@ test('canOffer accepts registered frontends only (multi-app/system/shell items g
     assert.equal(can(bad), false, JSON.stringify(bad));
   assert.equal(f.window.WizHomeScreenApps.state.open, false, 'canOffer never opens the sheet');
 });
+test('pinned single-app session keeps the shared media viewer visible over the app (#1520)',()=>{
+  const css = read('core/home-screen-apps.css');
+  const hide = css.split('\n').find(l => /^html\[data-app-session\] #device > /.test(l) && /display:\s*none/.test(l));
+  assert.ok(hide, 'the single-app hide rule exists');
+  assert.match(hide, /:not\(\.mviewer\)/, 'the hide rule must not hide .mviewer, or tapped photos open invisibly');
+  assert.match(hide, /:not\(#singleApp\)/); assert.match(hide, /:not\(#toast\)/);
+  assert.match(read('core/chats.css'), /\.mviewer\[hidden\] \{ display: none; \}/, 'a closed viewer still stays hidden');
+});
