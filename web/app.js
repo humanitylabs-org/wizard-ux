@@ -3268,7 +3268,8 @@
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : w.agent ? 'agent chats' : 'thread list', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats`, ...pin };
     }
-    if (chan) return { id, mode: 'auto', ...pin, name: `# ${chan.name} channel` };
+    // Issue 1523: the channel by its emoji and words ("🚀 Launch channel"), as the Chats list shows it.
+    if (chan) return { id, mode: 'auto', ...pin, name: `${window.WizCore?.channelFace?.(chan.name, !!chan.general)?.title || '# ' + chan.name} channel` };
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
     if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
       return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
@@ -3613,7 +3614,7 @@
     voiceDestination.classList.toggle('quick', q === 'cmd');
     if (!q) { if (was) paintVoiceDestination(); return; }
     const agent = window.WizConfig.agent();
-    const want = q === 'cmd' ? '⚡ Quick command · keep talking for ' + agent : 'To ' + (V.snap?.view?.channel ? '# ' + V.snap.view.channel : V.snap?.view?.kind === 'chat thread' ? 'this thread' : agent) + ' · tap to send';
+    const want = q === 'cmd' ? '⚡ Quick command · keep talking for ' + agent : 'To ' + (V.snap?.view?.channel ? (window.WizCore?.channelFace?.(V.snap.view.channel, V.snap.view.channel === 'General')?.title || '# ' + V.snap.view.channel) : V.snap?.view?.kind === 'chat thread' ? 'this thread' : agent) + ' · tap to send';
     if (voiceDestination.textContent !== want) voiceDestination.textContent = want;
   }
   let G = null;

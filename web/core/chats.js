@@ -49,23 +49,24 @@ window.WizCore.migrateChatsFocus = function (wins, desks) {
 /* Channel emoji (wizard-ux issue 1506, switch wizard/chat-channels): a channel shows an emoji where the # was. The
  * emoji is the start of the channel's own name ("🚀 Launch"), so it syncs and renames with the name, a channel whose
  * owner already typed an emoji in front keeps it, and nothing new is stored. General is #️⃣; a name with no emoji
- * gets 💬. channelFace(name, general) → { emoji, label, own }; channelEmojiName(name, emoji) puts (or, with '', takes
- * off) the emoji in front of a name. The AI apps desktop reads these too. */
+ * gets 💬. channelFace(name, general) → { emoji, label, own, title }; channelEmojiName(name, emoji) puts (or, with '', takes
+ * off) the emoji in front of a name. The AI apps desktop reads these too. Issue 1523: a name that is only an emoji has
+ * no words (label '', title the emoji once); taking that emoji off gives the name 'Channel' (shown with 💬); and an
+ * emoji that would push the name past 60 characters gives '' (the caller says so) instead of cutting the name. */
 window.WizCore.CHANNEL_EMOJI = ['💬', '🚀', '📌', '💡', '🛠️', '📅', '🎯', '📚', '🎨', '🎵', '💰', '🏠', '✈️', '❤️', '🌱', '⭐', '🔥', '🧪', '📝', '🤖', '👥', '🎉', '⚙️', '🌍'];
 window.WizCore.channelFace = function channelFace(name, general = false) {
   const n = String(name || ''), m = n.match(/^(?:\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:[\u{E0020}-\u{E007E}]+\u{E007F})?[\uFE0E\uFE0F]?\p{EMod}?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{EMod}?)*)/u);
-  if (general) return { emoji: '#️⃣', label: n || 'General', own: false };
-  if (!m) return { emoji: '💬', label: n, own: false };
+  if (general) return { emoji: '#️⃣', label: n || 'General', own: false, title: `#️⃣ ${n || 'General'}` };
+  if (!m) return { emoji: '💬', label: n, own: false, title: `💬 ${n}` };
   const bare = n.slice(m[0].length).replace(/^[\s\uFE0F]+/u, '');
-  return { emoji: m[0], label: bare || n, own: true, bare };
+  return { emoji: m[0], label: bare, own: true, bare, title: bare ? `${m[0]} ${bare}` : m[0] };
 };
 window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
   const f = window.WizCore.channelFace(name), bare = f.own ? f.bare : String(name || '').trim();
-  if (!emoji) return bare || String(name || '').trim();
-  // The 60-character limit (UTF-16, as the stores count it) trims whole characters off the end, never half of one.
-  const chars = Array.from(emoji + (bare ? ' ' + bare : ''));
-  while (chars.join('').length > 60) chars.pop();
-  return chars.join('').trim();
+  if (!emoji) return bare || 'Channel';
+  // The 60-character limit (UTF-16, as the stores count it): a name that has no room for the emoji is never cut.
+  const t = (emoji + (bare ? ' ' + bare : '')).trim();
+  return t.length > 60 ? '' : t;
 };
 window.WizCore.chats = function createChats(H) {
   'use strict';
@@ -790,7 +791,7 @@ window.WizCore.chats = function createChats(H) {
     o.focus = prev && ['agent', 'space'].includes(prev.kind) && prev.key ? { kind: prev.kind, key: String(prev.key) } : null;
     save(); return true;
   }
-  const chanByName = dir => (a, b) => dir * String(typeof chanFace === 'function' ? chanFace(a.name).label : a.name).localeCompare(String(typeof chanFace === 'function' ? chanFace(b.name).label : b.name), undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const chanByName = dir => (a, b) => dir * String(typeof chanFace === 'function' ? chanFace(a.name).label || a.name : a.name).localeCompare(String(typeof chanFace === 'function' ? chanFace(b.name).label || b.name : b.name), undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   // The channels the list shows: the Spaces of the Focus's agent (all visible agents' on All). Pinned first in pin
   // order, then A–Z (default) or Z–A, General last; { archived: true } gives the archived ones, sorted the same way.
   function channelsFor(w, { archived = false } = {}) {
@@ -806,7 +807,7 @@ window.WizCore.chats = function createChats(H) {
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
   // A channel's emoji and words (issue 1506): { emoji, label } of a channel ({ name, general }) or a name.
   const chanFace = c => window.WizCore?.channelFace?.(typeof c === 'string' ? c : c?.name, typeof c === 'string' ? c === 'General' : !!c?.general || c?.id === CHAN_GENERAL) || { emoji: '#', label: typeof c === 'string' ? c : c?.name || '' };
-  const chanTitle = c => { const f = chanFace(c); return `${f.emoji} ${f.label}`; };
+  const chanTitle = c => { const f = chanFace(c); return f.title || (f.label ? `${f.emoji} ${f.label}` : f.emoji); };
   // A layout that draws its own chat list (AI apps) asks for these through the Chats API: the "# channel" of a row
   // ('' with the switch off) and the sidebar's Channels pane, the desktop's id::side window (issue 1256).
   // A row's channel is its OWN agent's Space (a main and a routed thread can share an id), as inChannel files it.
@@ -1254,7 +1255,7 @@ window.WizCore.chats = function createChats(H) {
     const recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort((a, b) => chanAt(b) - chanAt(a)) : [];
     // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
     const un = chanNewCount(ch0, mine, gAg), face = typeof chanFace === 'function' ? chanFace(ch0) : { emoji: '#', label: ch0.name };
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash ch-chan-emo" aria-hidden="true">${esc(face.emoji)}</span><b>${esc(face.label)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(face.label)}"><i aria-hidden="true"></i></button></div>`
+    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash ch-chan-emo"${face.label ? ' aria-hidden="true"' : ''}>${esc(face.emoji)}</span><b>${esc(face.label)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(face.label || face.emoji)}"><i aria-hidden="true"></i></button></div>`
       + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : '<span class="ch-none">Nothing in the last 24 hours</span>'}</div>` : '') + '</div>';
   }
   // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
@@ -1531,7 +1532,7 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-chan-feed">${shown.length || sending.length ? html : '<span class="ch-none">No posts in the last 30 days.</span>'}${archNote}</div>`;
   }
   function chanHead(w, open) {
-    if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : `<span class="ch-chan-hash ch-chan-emo" aria-hidden="true">${esc(chanFace(open).emoji)}</span>`}${esc(open.agentFeed ? open.name : chanFace(open).label)}</b></div>`;
+    if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : `<span class="ch-chan-hash ch-chan-emo"${chanFace(open).label ? ' aria-hidden="true"' : ''}>${esc(chanFace(open).emoji)}</span>`}${esc(open.agentFeed ? open.name : chanFace(open).label)}</b></div>`;
     const sort = chanView === 'channels' ? orderBar('Sort channels', 'data-chchansort', ['az', 'za'], chanPrefs().sort, o => o === 'az' ? 'A–Z' : 'Z–A') : '';
     return `<div class="ch-chan-tabs">${orderBar('Chats view', 'data-chview', ['channels', 'activity'], chanView, o => o === 'activity' ? 'Activity' : 'Channels')}${sort}</div>`;
   }
@@ -1563,21 +1564,26 @@ window.WizCore.chats = function createChats(H) {
   }
   function chanEmojiTap(b) {
     const form = b?.closest('form'), inp = form?.querySelector('input'); if (!inp || inp.disabled) return false;
-    const f = chanFace(inp.value), e = b.dataset.chemoji;
-    inp.value = window.WizCore.channelEmojiName(inp.value, f.own && f.emoji === e ? '' : e);
+    const f = chanFace(inp.value), e = b.dataset.chemoji, off = f.own && f.emoji === e, t = window.WizCore.channelEmojiName(inp.value, off ? '' : e);
+    if (!t) { toast('!', 'Name too long for an emoji: shorten it first', 2200); inp.focus(); return true; }
+    inp.value = t;
     inp.dispatchEvent(new Event('input', { bubbles: true }));
     chanEmojiSync(form); return true;
   }
   // The full emoji sheet (the topic emoji one) for a channel; the pick renames it with that emoji in front.
   function openChannelEmoji(wid, cid) {
     const sp = spaces().find(s => s.id === cid); if (!sp) return false;
-    openEmojiSheet(wid, `chanemoji:${cid}`, `Emoji for ${chanFace(sp.name).label}`);
+    openEmojiSheet(wid, `chanemoji:${cid}`, `Emoji for ${chanFace(sp.name).label || chanFace(sp.name).emoji}`);
     return true;
   }
   function chanSetEmoji(cid, e) {
     const sp = spaces().find(s => s.id === cid); if (!sp || !e) return false;
-    const f = chanFace(sp.name);
-    return chanRenameTo(cid, window.WizCore.channelEmojiName(sp.name, f.own && f.emoji === e ? '' : e)) !== false;
+    const f = chanFace(sp.name), off = f.own && f.emoji === e;
+    let t = window.WizCore.channelEmojiName(sp.name, off ? '' : e);
+    if (!t) { toast('!', 'Name too long for an emoji: shorten it first', 2200); return false; }
+    // An emoji-only name taken off becomes 'Channel'; a second one of the same agent gets 'Channel 2', and so on.
+    if (off && !f.bare) { const taken = n => spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(n)); for (let i = 2; taken(t); i++) t = `Channel ${i}`; }
+    return chanRenameTo(cid, t) !== false;
   }
   function openChannelRename(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp) return;
@@ -1599,7 +1605,7 @@ window.WizCore.chats = function createChats(H) {
     chanReadTo(chanReadKey(c, c.general ? chanGenAgent(w) : ''), Date.now());
     if (unread.length) LIVE.markSeen(unread);
     clearTimeout(chanReadPaintT); chanReadPaint(); paintListsNow();
-    toast('✓', `# ${c.name} read`, 1400);
+    toast('✓', `${chanTitle(c)} read`, 1400);
     return true;
   }
   function chanRepaintAll() { for (const id of Object.keys(CH)) { const x = W[id]; if (x && !x.thread) rerenderList(x); } }
