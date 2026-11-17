@@ -101,10 +101,43 @@ test('a routed dismissal never hides a main thread with the same id (and the oth
 
 test('the shell hides the card and the header warning from the same record, and never toasts on Dismiss', () => {
   const power = read('web/core/chat-power.js'), chats = read('web/core/chats.js');
-  assert.match(power, /function dismissThread\(sid\) \{ E\?\.dismissFailure\(sid\); rerenderAll\(\); \}/);
+  assert.match(power, /function dismissThread\(wid, sid\) \{ E\?\.dismissFailure\(sid, rowFor\(wid, sid\)\); rerenderAll\(\); \}/);
+  assert.match(power, /if \(t\.closest\('\[data-chdismiss\]'\) && w\?\.thread\) \{ dismissThread\(id, w\.thread\); return true; \}/);
+  assert.match(power, /const ed = t\.closest\('\[data-errdismiss\]'\); if \(ed\) \{ dismissThread\(id, ed\.dataset\.errdismiss\); return true; \}/);
   assert.doesNotMatch(power, /Couldn’t dismiss · try again', ok \? 1400 : 2600/);
   assert.match(power, /const failedShown = s => [^\n]*!\(E && E\.dismissed\(s\)\);/);
   assert.match(power, /function errorsFilter\(list\) \{ return E \? list\.filter\(s => !E\.dismissed\(s\)\) : list; \}/);
   const sti = chats.slice(chats.indexOf('  function stiKind(s) {'), chats.indexOf('  const stiBadge'));
   assert.match(sti, /\(s\.status === 'failed' \|\| s\.status === 'interrupted' \|\| s\.queueReason === 'provider_access'\) && !window\.WosErrors\?\.dismissed\?\.\(s\) \? 'failed'/);
+});
+
+// Codex P2 on the PR: a Dismiss tap in a routed window must dismiss the row that window shows, not the id-first
+// main row. Runs the real chat-power rowFor/dismissThread lines with a window per kind and a main row sharing the id.
+test('Dismiss in a window dismisses the row that window shows, for every kind', () => {
+  const power = read('web/core/chat-power.js');
+  const a = power.indexOf('  const rowFor = (wid, sid) =>'), b = power.indexOf('  function rerenderAll()');
+  for (const [name, agent] of KINDS) {
+    const main = failedRow(''), routed = failedRow(agent || 'unused');
+    const app = boot({ rows: [main] });
+    const LIVE = { session: id => (id === main.id ? main : null), sessionFor: (id, ag) => (ag && id === routed.id ? routed : null) };
+    const wins = { w1: { id: 'w1', agent } }, calls = [];
+    const ctx = { LIVE, E: app.E, H: { win: id => wins[id] }, A: { owner: id => id, winAgent: w => w.agent || '' }, rerenderAll: () => calls.push('paint') };
+    vm.runInNewContext(`${power.slice(a, b)}\nthis.dismissThread = dismissThread;`, ctx);
+    ctx.dismissThread('w1', main.id);
+    const shown = agent ? routed : main, other = agent ? main : null;
+    assert.equal(app.E.dismissed(shown), true, `${name}: the shown row is dismissed`);
+    if (other) assert.equal(app.E.dismissed(other), false, `${name}: the main row with the same id keeps its card`);
+    assert.deepEqual(calls, ['paint'], `${name}: repainted at once`);
+  }
+});
+
+test('Retry still hides the old failure until the list catches up (WosErrors.cleared)', () => {
+  const row = failedRow(''), app = boot({ rows: [row] });
+  assert.equal(typeof app.E.cleared?.set, 'function');
+  app.E.cleared.set(row.id, Date.now());
+  assert.equal(app.E.dismissed(row), true);
+  app.E.cleared.set(row.id, Date.now() - 121e3);
+  assert.equal(app.E.dismissed(row), false);
+  const power = read('web/core/chat-power.js');
+  assert.match(power, /E\?\.cleared\.set\(sid, Date\.now\(\)\);/);
 });

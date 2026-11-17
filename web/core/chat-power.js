@@ -560,7 +560,9 @@ window.WosChatPower = function chatPower(A) {
 
   }
   // Issue 1488: the card and the header warning go on the same frame; Wizard saves it quietly in the background.
-  function dismissThread(sid) { E?.dismissFailure(sid); rerenderAll(); }
+  // The row this window shows: a routed thread may share its id with a main one (rowOf in chats.js).
+  const rowFor = (wid, sid) => { const w = H.win(A.owner ? A.owner(wid) : wid), a = w ? A.winAgent?.(w) : ''; return (a && LIVE.sessionFor ? LIVE.sessionFor(sid, a) : null) || LIVE.session(sid); };
+  function dismissThread(wid, sid) { E?.dismissFailure(sid, rowFor(wid, sid)); rerenderAll(); }
   function rerenderAll() { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w) A.renderChats(w); } H.changed?.(); }
 
   /* Errors section extras: background work Wizard flagged (/wizard/attention) and voice notes that didn't send. */
@@ -805,10 +807,10 @@ window.WosChatPower = function chatPower(A) {
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
     if (t.closest('[data-chretrymodel]') && w?.thread) { openModels(id, 'retry'); if (sheet) sheet.mode = 'retry'; paint(id, A.elOf(id)); return true; }
-    if (t.closest('[data-chdismiss]') && w?.thread) { dismissThread(w.thread); return true; }
+    if (t.closest('[data-chdismiss]') && w?.thread) { dismissThread(id, w.thread); return true; }
     // Errors section
     const er = t.closest('[data-errretry]'); if (er) { retryThread(A.owner(id), er.dataset.errretry); return true; }
-    const ed = t.closest('[data-errdismiss]'); if (ed) { dismissThread(ed.dataset.errdismiss); return true; }
+    const ed = t.closest('[data-errdismiss]'); if (ed) { dismissThread(id, ed.dataset.errdismiss); return true; }
     const ar = t.closest('[data-attretry]'); if (ar) { E.retryAttention(ar.dataset.attretry).then(ok => toast(ok ? '↻' : '!', ok ? 'Retrying' : 'Couldn’t retry · try again', ok ? 1400 : 2400)); return true; }
     const ad = t.closest('[data-attdismiss]'); if (ad) { E.dismissAttention(ad.dataset.attdismiss).then(ok => toast(ok ? '✓' : '!', ok ? 'Dismissed' : 'Couldn’t dismiss · try again', ok ? 1400 : 2400)); return true; }
     const od = t.closest('[data-obdismiss]'); if (od) {

@@ -14,6 +14,7 @@
  *   WosErrors.dismissFailure(sessionId, row?)           → true: the card is gone at once (issue 1488); the save to
  *                                                         Wizard goes on quietly in the background, retried, never a toast
  *   WosErrors.dismissed(row | sessionId)                → true while that failure stays dismissed on this device
+ *   WosErrors.cleared                                   → Map sid → time: Retry hides the old failure for two minutes
  * A dismissal is kept per agent + thread in localStorage (wos.failure-dismissals.v1) until a newer request or run, so a
  * reload or a slow/refused save never brings the card back. Routed agents' threads post { agent_id } (Agent Service
  * keeps each agent's own fence).
@@ -77,7 +78,7 @@
   }
   const resendAll = () => { for (const [key, r] of Object.entries(readRecs())) if (r && !r.sent && !timers.has(key)) sendDismissal(key); };
   const E = {
-    items: [], ready: false, at: 0, loading: null, busy: new Map(), gone: new Set(), listeners: new Set(),
+    items: [], ready: false, at: 0, loading: null, busy: new Map(), gone: new Set(), cleared: new Map(), listeners: new Set(),
     onChange(fn) { E.listeners.add(fn); return () => E.listeners.delete(fn); },
     emit() { for (const fn of E.listeners) { try { fn(); } catch (e) { console.error(e); } } },
     load(force) {
@@ -112,6 +113,8 @@
     dismissed(x) {
       const s = x && typeof x === 'object' ? x : null, sid = s ? s.id : x;
       if (!sid) return false;
+      // Retry hides the old failure until Wizard's list catches up (or two minutes pass).
+      const t = E.cleared.get(sid); if (t && Date.now() - t < 120e3) return true; if (t) E.cleared.delete(sid);
       const recs = readRecs(), key = recKey(agentOfRow(s || window.WizLive?.session?.(sid), sid), sid), rec = recs[key];
       if (!rec) return false;
       if (s && newerThan(s, rec)) { delete recs[key]; writeRecs(recs); return false; }
