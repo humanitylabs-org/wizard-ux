@@ -70,6 +70,7 @@
     if (f && (!f.target || Date.now() - (f.since || 0) > 3 * 3600e3)) { ls.set(FLOW, null); return null; }
     return f;
   }
+  const STALE_FLOW = 16 * 60e3;   // HOST_REQUEST_TTL (15 min) + the Mac's minute
   const hu = () => st()?.host_update || null;
   const headsUp = () => { const h = st()?.host_headsup; return h && typeof h.at === 'number' && h.at * 1000 > Date.now() - 90e3 ? h : null; };
   let maxStep = 0, stepFor = '';
@@ -109,6 +110,9 @@
       const ended = h && h.phase === 'done' && (f.id && h.id ? h.id === f.id : h.target === f.target && h.at * 1000 >= f.since - 120e3);
       if (ended) { ls.set(FLOW, null); landed(h, f); return null; }
       if (!U()?.issue && s.installed === f.target && !s.installing && !u) { ls.set(FLOW, null); return null; }
+      // Nothing behind it any more: no request (the App Manager drops one the Mac never took after 15 minutes,
+      // updates.HOST_REQUEST_TTL), no step from the Mac, Wizard reachable. Stop showing Updating and holding sends.
+      if (!u && !U()?.issue && !s.installing && Date.now() - (f.since || 0) > STALE_FLOW) { ls.set(FLOW, null); return null; }
       u = u || { target: f.target, phase: 'pending' };
       u.since = Math.min(u.since || Infinity, f.since);
     }

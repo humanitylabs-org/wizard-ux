@@ -4,19 +4,21 @@
 //  1. Settings › About shows the "WizardOS update ready" card (screenshots per skin with QA_OUT=<dir>).
 //  2. Desktop: while the Updating panel is open, Esc minimizes the panel and does nothing else (Settings, open behind
 //     it, stays as it was); the next Esc does what Esc does without the panel (one press, one owner).
+//  3. An Update now the Mac never took stops holding sends on the device that tapped it after 16 minutes.
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(process.env.QA_WEB||path.join(__dirname,'../web')),origin='https://os-update.test',prefix='/wizard-os-home/';
-const out=process.env.QA_OUT||'';if(out)fs.mkdirSync(out,{recursive:true});
+const out=process.env.QA_OUT||'',only=process.env.QA_ONLY||'';   // QA_ONLY=card|esc|stale runs one checkif(out)fs.mkdirSync(out,{recursive:true});
 const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':f.endsWith('.svg')?'image/svg+xml':'application/octet-stream';
 const base={mode:'ask',chosen:true,channel:'latest',installed:'0.3.242',latest:'0.3.243',stable:'0.3.240',update_available:true,unpinned:false,checked:true,
  installing:false,interrupted:false,failed:false,failure_reason:null,retry_target:null,superseded:null,by_host:true,host_pending:null,host_headsup:null,
  receipt:'pinned',host_update:null,quick:false,waits_for_work:true,impact:{impact:'service',interrupts:'os'},waiting_for:[],when_idle:null};
-async function boot(browser,{shell,skin,status,w,h}){
+async function boot(browser,{shell,skin,status,w,h,flow}){
  const phone=shell==='phone';
  const ctx=await browser.newContext({viewport:{width:w,height:h},isMobile:phone,hasTouch:phone,serviceWorkers:'block'});
  await ctx.routeWebSocket('**/*',ws=>ws.close());
- await ctx.addInitScript(({shell,skin})=>{if(window!==window.top)return;for(const[k,v]of Object.entries({'wos.shell':shell,'wux.shell':shell,'wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.desktop-view.v1':'classic','wos.skin':skin}))localStorage.setItem(k,v);},{shell,skin});
+ await ctx.addInitScript(({shell,skin,flow})=>{if(window!==window.top)return;for(const[k,v]of Object.entries({'wos.shell':shell,'wux.shell':shell,'wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.desktop-view.v1':'classic','wos.skin':skin}))localStorage.setItem(k,v);
+  if(flow&&!sessionStorage.getItem('qa.flow')){sessionStorage.setItem('qa.flow','1');localStorage.setItem('wos.osu.flow.v1',JSON.stringify({target:flow.target,since:Date.now()-flow.ago}));}},{shell,skin,flow:flow||null});
  const errors=[],writes=[];
  await ctx.route('**/*',async r=>{
   const q=r.request(),u=new URL(q.url()),p=u.pathname;
@@ -41,7 +43,7 @@ const openSettings=pg=>pg.evaluate(()=>(window.__wos?.openSettings||window.__wux
  const browser=await chromium.launch({headless:true});const results=[];
  try{
   // 1. The Settings card, two skins, both shells.
-  for(const skin of ['nebula','grove'])for(const v of [{shell:'desktop',w:1280,h:800},{shell:'phone',w:390,h:844}]){
+  if(!only||only==='card')for(const skin of ['nebula','grove'])for(const v of [{shell:'desktop',w:1280,h:800},{shell:'phone',w:390,h:844}]){
    const {ctx,pg,errors}=await boot(browser,{...v,skin,status:()=>base});
    await openSettings(pg);
    const card=pg.locator('.osu-card:visible').first();await card.waitFor({state:'visible',timeout:15000});
@@ -61,7 +63,7 @@ const openSettings=pg=>pg.evaluate(()=>(window.__wos?.openSettings||window.__wux
   // own Back (About & updates → the Settings list): the press a stray second owner would show up in.
   const focusSettings=async pg=>{const b=await pg.locator('.st-root[data-settings-root]').boundingBox();await pg.mouse.click(b.x+b.width-40,b.y+b.height-30);await pg.waitForTimeout(200);};
   const panelHidden=pg=>pg.evaluate(()=>document.getElementById('wosUpdating')?.hidden);
-  for(const skin of ['nebula','grove']){
+  if(!only||only==='esc')for(const skin of ['nebula','grove']){
    const ctl=await boot(browser,{shell:'desktop',skin,w:1280,h:800,status:()=>base});
    await openSettings(ctl.pg);await ctl.pg.locator('.osu-card:visible').first().waitFor({timeout:15000});await ctl.pg.waitForTimeout(1500);await focusSettings(ctl.pg);
    const ctlBefore=await shell(ctl.pg);await ctl.pg.keyboard.press('Escape');await ctl.pg.waitForTimeout(300);const ctlAfter=await shell(ctl.pg);await ctl.ctx.close();
@@ -84,6 +86,16 @@ const openSettings=pg=>pg.evaluate(()=>(window.__wos?.openSettings||window.__wux
    assert.deepEqual(after2,{panelHidden:true,shell:{...ctlAfter,esc:['esc:os-update','esc:settings-page']}},`${skin}: the next Esc does what Esc does without the panel ${JSON.stringify({after2,ctlAfter})}`);
    assert.deepEqual(errors,[],`${skin}: page errors`);assert.deepEqual(writes.filter(w=>w.includes('_updates')),[],`${skin}: no update request`);
    results.push({check:'esc-minimizes-only-the-panel',skin,before,after1,after2,control:{ctlBefore,ctlAfter}});await ctx.close();
+  }
+  // 3. A tapped Update now the Mac never took (the App Manager stops reporting it after 15 minutes): the device that
+  // tapped stops showing Updating and stops holding sends. Control: tapped a minute ago, still waiting for the Mac.
+  if(!only||only==='stale')for(const [ago,paused] of [[20*60e3,false],[60e3,true]]){
+   const {ctx,pg,errors}=await boot(browser,{shell:'phone',skin:'nebula',w:390,h:844,status:()=>base,flow:{target:'0.3.243',ago}});
+   await pg.waitForFunction(()=>window.WosUpdates?.state,null,{timeout:15000});await pg.waitForTimeout(2500);
+   const m=await pg.evaluate(()=>({paused:window.WosUpdateFlow.paused,panel:!!document.getElementById('wosUpdating'),flow:localStorage.getItem('wos.osu.flow.v1')!==null}));
+   assert.deepEqual(m,{paused,panel:paused,flow:paused},`tapped ${ago/60e3} min ago: ${JSON.stringify(m)}`);
+   assert.deepEqual(errors,[],'page errors');
+   results.push({check:'stale-request',minutesAgo:ago/60e3,...m});await ctx.close();
   }
   console.log(JSON.stringify({ok:true,results},null,1));
  }catch(e){console.error(JSON.stringify(results,null,1));console.error(e.message);process.exitCode=1;}
