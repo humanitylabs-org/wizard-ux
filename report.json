@@ -1,0 +1,50 @@
+[
+  {
+    "case": "phone-nebula",
+    "landedMs": 88,
+    "title": "Fix Wizard",
+    "helpFrames": 0,
+    "foldedFrames": 13,
+    "sampled": 15,
+    "popups": [],
+    "location": "https://wizard.qa-tail.ts.net/wizard-os-home/index.html?phone",
+    "seen": {
+      "directPing": 4,
+      "directPage": 2,
+      "usual": 4
+    },
+    "text": "Connection help"
+  },
+  {
+    "case": "phone-grove",
+    "landedMs": 67,
+    "title": "Fix Wizard",
+    "helpFrames": 0,
+    "foldedFrames": 47,
+    "sampled": 54,
+    "popups": [],
+    "location": "https://wizard.qa-tail.ts.net/wizard-os-home/index.html?phone",
+    "seen": {
+      "directPing": 4,
+      "directPage": 2,
+      "usual": 4
+    },
+    "text": "Connection help"
+  },
+  {
+    "case": "desktop-nebula",
+    "landedMs": 106,
+    "title": "Fix Wizard",
+    "helpFrames": 0,
+    "foldedFrames": 46,
+    "sampled": 51,
+    "popups": [],
+    "location": "https://wizard.qa-tail.ts.net/wizard-os-home/desktop.html",
+    "seen": {
+      "directPing": 2,
+      "directPage": 1,
+      "usual": 2
+    },
+    "text": "Connection help"
+  }
+]

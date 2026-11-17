@@ -1,0 +1,50 @@
+[
+  {
+    "case": "phone-nebula",
+    "landedMs": null,
+    "title": "",
+    "helpFrames": 539,
+    "foldedFrames": 0,
+    "sampled": 540,
+    "popups": [],
+    "location": "https://wizard.qa-tail.ts.net/wizard-os-home/index.html?phone",
+    "seen": {
+      "directPing": 0,
+      "directPage": 0,
+      "usual": 4
+    },
+    "text": "Connection help Can’t reach your Wizard? Can’t reach your Wizard. Check this device’s internet connection. Open the Tailscale app and check it’s connected and s"
+  },
+  {
+    "case": "phone-grove",
+    "landedMs": null,
+    "title": "",
+    "helpFrames": 600,
+    "foldedFrames": 0,
+    "sampled": 600,
+    "popups": [],
+    "location": "https://wizard.qa-tail.ts.net/wizard-os-home/index.html?phone",
+    "seen": {
+      "directPing": 0,
+      "directPage": 0,
+      "usual": 4
+    },
+    "text": "Connection help Can’t reach your Wizard? Can’t reach your Wizard. Check this device’s internet connection. Open the Tailscale app and check it’s connected and s"
+  },
+  {
+    "case": "desktop-nebula",
+    "landedMs": null,
+    "title": "",
+    "helpFrames": 600,
+    "foldedFrames": 0,
+    "sampled": 600,
+    "popups": [],
+    "location": "https://wizard.qa-tail.ts.net/wizard-os-home/desktop.html",
+    "seen": {
+      "directPing": 0,
+      "directPage": 0,
+      "usual": 2
+    },
+    "text": "Connection help Can’t reach your Wizard? Can’t reach your Wizard. Check this device’s internet connection. Open the Tailscale app and check it’s connected and s"
+  }
+]
