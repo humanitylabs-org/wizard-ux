@@ -88,3 +88,36 @@ test('switch is a catalogued off-by-default tweak whose sheet only hides the han
   for (const rule of css.split('}').map(r => r.trim()).filter(Boolean)) assert.match(rule, /^html\[data-tweaks~="wizard\/bar-scrub"\] #scrub/);
   assert.match(APP, /const barScrubOn = \(\) => \{ try \{ return String\(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('wizard\/bar-scrub'\)/);
 });
+
+// wizard-ux#1516: with Settings open, a scrub parks it like a flick does. The real placeTrack, liftSettings,
+// rideSettings and dropParkedSettings run here with the dock block; the scrub's first snap (still on the start desk)
+// used to count as "home again" and re-open Settings, so it stayed open over the desk the scrub landed on.
+const fn = name => { const a = APP.indexOf(`  function ${name}(`); assert.ok(a > 0, name); const b = APP.indexOf('\n  }\n', a); return APP.slice(a, b + 4); };
+function settingsShell({ at = 2 } = {}) {
+  const s = shell({ at }), c = s.ctx, dev = new Set(['sheet-open']);
+  const el = () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false } });
+  Object.assign(c, {
+    sheet: 'settings', stDesk: null, innerWidth: 412, track: el(), tourEv() {},
+    device: { clientWidth: 412, classList: { add: k => dev.add(k), remove: k => dev.delete(k), contains: k => dev.has(k) } },
+    settingsEl: { ...el(), inert: false, setAttribute() {}, removeAttribute() {} },
+  });
+  const dock = c.$(); c.$ = q => q === '.nebula' ? el() : dock; delete c.placeTrack; delete c.liftSettings;
+  vm.runInContext(['placeTrack', 'liftSettings', 'dropParkedSettings', 'rideSettings'].map(fn).join('\n'), c);
+  return { ...s, dev };
+}
+test('switch on: a scrub with Settings open parks it on its desk and lands three desks over', () => {
+  const s = settingsShell();
+  s.ctx.goDesk = n => { s.ctx.idx = n; s.ctx.placeTrack(0, true); };
+  s.finger(s.slow(-84));
+  assert.equal(s.ctx.idx, 5);
+  assert.equal(s.ctx.sheet, null, 'Settings is not the open sheet over desk 5');
+  assert.equal(s.dev.has('sheet-open'), false); assert.equal(s.dev.has('st-parked'), true);
+  assert.equal(s.ctx.stDesk, 'd2', 'parked on the desk it was opened on');
+  s.ctx.goDesk(2); assert.equal(s.ctx.sheet, 'settings', 'landing back on its desk shows it again');
+});
+test('switch on: a scrub with Settings open that comes back to its own desk shows Settings again', () => {
+  const s = settingsShell();
+  s.ctx.goDesk = n => { s.ctx.idx = n; s.ctx.placeTrack(0, true); };
+  s.finger([[-20, 40], [-30, 200], [-60, 300], [-10, 400]]);
+  assert.equal(s.ctx.idx, 2); assert.equal(s.ctx.sheet, 'settings'); assert.equal(s.dev.has('sheet-open'), true);
+});
