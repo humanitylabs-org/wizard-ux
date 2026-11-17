@@ -13,7 +13,8 @@
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare', 'wizard-monarch', 'wizard-simplefin', 'wizard-teller']);
   const isConnector = a => !!a && (typeof a.type === 'string' && a.type ? a.type === 'external'
     : CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || ''));
-  const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
+  // The App Store is a system app too: a normal tile leading Apps (James, ux#1493), beside the "+ Get apps" tiles.
+  const SYSTEM_IDS = new Set(['app-store', 'wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
   const isSystem = a => !!a && (SYSTEM_IDS.has(a.id) || a.system === true);
   const inDev = a => !isSystem(a) && (window.WizCore?.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
   // Notifications shown in Chats (a package holds WosSkinHost.inboxThreads): its page is no longer the way in, so it
@@ -26,7 +27,7 @@
   const storeUrl = kind => '/wizard-os-home/store/index.html?kind=' + encodeURIComponent(kind || 'apps');
   function kinds(APPS, APP) {
     const C = window.WizCore || {};
-    const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !C.isMaintenanceApp?.(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
+    const mine = APPS.filter(a => !['system', 'agents'].includes(a.id) && !C.isMaintenanceApp?.(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats, main agent first (as registered). The Agents app itself is the "Build agents" tile.
     const agents = mine.filter(a => a.kind === 'chats').sort((x, y) => isSystem(y) - isSystem(x));
