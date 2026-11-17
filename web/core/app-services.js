@@ -656,6 +656,7 @@
         check();
         const base = source.location.href;
         return mediaView(st, items, index, it => {
+          if (it?.blob != null) return null; // bytes come only from a sandboxed window (boundaryMedia)
           let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { return null; }
           const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
           const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
@@ -994,7 +995,10 @@
       if (n === want) i = clean.length;
       const href = url(it); if (!href) continue;
       const kind = it?.kind === 'video' ? 'video' : 'image';
-      clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
+      // A picture's quick stand-in (the copy the app already shows) passes the same address check as the picture,
+      // so the viewer can show it at once while the original loads (ux#1509).
+      const ph = kind === 'image' && (it?.placeholderBlob != null || (typeof it?.placeholder === 'string' && it.placeholder)) ? url(it.placeholderBlob != null ? { blob: it.placeholderBlob } : { url: it.placeholder }) : null;
+      clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100), ...(ph && ph !== href ? { placeholder: ph } : {}) });
     }
     return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
   }

@@ -1261,15 +1261,23 @@
   }
   // Pictures: this host's own addresses go as they are; the page's own blob: pictures (its opaque origin's, which the shell
   // can't read) go as their bytes. Anything else is left out, and its place kept so the tapped item stays the one shown.
+  // A picture's quick stand-in (`placeholder`, the copy the app already shows) goes the same way, so the viewer shows
+  // it at once while the original loads (ux#1509); one that can't be sent is simply left out.
+  function stand(it) {
+    if (it?.kind === 'video' || typeof it?.placeholder !== 'string' || !it.placeholder) return Promise.resolve({});
+    let u; try { u = new URL(it.placeholder, location.href); } catch (_) { return Promise.resolve({}); }
+    if (u.protocol === 'blob:') return fetch(u.href).then(r => r.blob()).then(placeholderBlob => ({ placeholderBlob }), () => ({}));
+    return Promise.resolve(/^https?:$/.test(u.protocol) && u.origin === location.origin ? { placeholder: u.href } : {});
+  }
   function shellMedia(items, index) {
     if (!Array.isArray(items)) return false;
     let any = false;
     const list = items.slice(0, 500).map(it => {
       let u; try { u = new URL(String(it?.url || ''), location.href); } catch (_) { return {}; }
       const o = { kind: it?.kind === 'video' ? 'video' : 'image', name: String(it?.name || '').slice(0, 200), ...(it?.mime ? { mime: String(it.mime).slice(0, 100) } : {}) };
-      if (u.protocol === 'blob:') { any = true; return fetch(u.href).then(r => r.blob()).then(blob => ({ ...o, blob }), () => ({})); }
+      if (u.protocol === 'blob:') { any = true; return Promise.all([fetch(u.href).then(r => r.blob()), stand(it)]).then(([blob, ph]) => ({ ...o, ...ph, blob }), () => ({})); }
       if (!/^https?:$/.test(u.protocol) || u.origin !== location.origin) return {};
-      any = true; return { ...o, url: u.href };
+      any = true; return stand(it).then(ph => ({ ...o, ...ph, url: u.href }));
     });
     if (!any) return false;
     Promise.all(list).then(all => shellAsk('media.view', { items: all, index: Math.floor(+index) || 0 }));

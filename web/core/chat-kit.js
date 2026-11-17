@@ -849,6 +849,7 @@
     (document.getElementById('device') || document.body).appendChild(el);
     el.addEventListener('click', e => {
       const mm = e.target.closest('.mv-menu');
+      if (e.target.closest('[data-mv="retry"]')) { const it = V.items[V.i]; if (it?.kind === 'image') picture(V.el.querySelector('.mv-stage'), it); return; }
       if (mm) {
         if (!V.menuArmed && e.detail !== 0) return; // the finger lifting off the long-press that opened it: only a fresh press counts
         const k = e.target.closest('[data-mvm]')?.dataset.mvm; const it = V.items[V.i];
@@ -881,7 +882,7 @@
     const stage = el.querySelector('.mv-stage');
     el.addEventListener('pointerdown', () => { V.eatClick = null; });
     stage.addEventListener('pointerdown', e => {
-      if (!V.items[V.i] || V.items[V.i].kind !== 'image' || e.button !== 0) return;
+      if (!V.items[V.i] || V.items[V.i].kind !== 'image' || e.button !== 0 || e.target?.closest?.('.mv-fail')) return; // Retry stays a plain button
       stopFling();
       stage.setPointerCapture?.(e.pointerId);
       V.ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1055,7 +1056,7 @@
     el.querySelector('.mv-ti small').textContent = V.items.length > 1 ? `${V.i + 1} of ${V.items.length}` : sizeLabel(it.bytes);
     el.querySelector('[data-mv="prev"]').hidden = el.querySelector('[data-mv="next"]').hidden = V.items.length < 2;
     el.querySelector('[data-mv="copy"]').hidden = true;
-    if (it.kind === 'image') { stage.innerHTML = `<img src="${esc(it.url)}" alt="${esc(it.name || 'Photo')}" draggable="false">`; const im = stage.querySelector('img'); im.onload = fit; if (im.complete) fit(); }
+    if (it.kind === 'image') picture(stage, it);
     else if (it.kind === 'video') stage.innerHTML = `<video src="${esc(it.url)}" controls playsinline autoplay preload="metadata"></video>`;
     else if (it.kind === 'audio') stage.innerHTML = `<div class="mv-file"><span class="mv-ic">♪</span><b>${esc(it.name || 'Audio')}</b><audio src="${esc(it.url)}" controls autoplay preload="metadata"></audio>${it.transcript ? `<p class="mv-tx">${esc(it.transcript)}</p>` : ''}</div>`;
     else if (TEXTY.test(it.mime || '') || TEXT_EXT.test(it.name || '')) {
@@ -1082,6 +1083,45 @@
     } else stage.innerHTML = fileCard(it, isPdf(it) ? 'Download it to open it in a PDF app.' : 'Download it to open it in another app.');
     paint();
   }
+  /* A picture never opens on an empty black stage (ux#1509): the app's stand-in (`placeholder`, the copy its bubble
+   * already shows) is shown and fitted at once, the original loads beside it and takes its place (zoom and pan kept),
+   * a quiet loading mark shows meanwhile, and a failed load says so with Retry. The pictures either side are fetched
+   * ahead so a swipe is quick too. */
+  function picture(stage, it) {
+    const want = it;
+    stage.innerHTML = `<img src="${esc(it.placeholder || it.url)}" alt="${esc(it.name || 'Photo')}" draggable="false"><span class="mv-load" role="status" aria-label="Loading"></span>`;
+    let img = stage.querySelector('img'); const mark = stage.querySelector('.mv-load');
+    const live = () => V.items[V.i] === want && viewer.isOpen() && img.isConnected;
+    const done = () => { mark?.remove?.(); stage.querySelector('.mv-fail')?.remove?.(); };
+    const fail = () => {
+      if (!live()) return; mark?.remove?.(); if (!img.naturalWidth) img.hidden = true;
+      if (stage.querySelector('.mv-fail')) return;
+      stage.insertAdjacentHTML('beforeend', '<div class="mv-fail" role="alert"><span>Couldn’t load this photo</span><button type="button" data-mv="retry">Retry</button></div>');
+    };
+    if (it.placeholder && typeof Image === 'function') {
+      img.onload = () => { if (live()) fit(); };
+      // A stand-in that fails is dropped quietly: the original is still on its way.
+      img.onerror = () => { if (live()) img.removeAttribute('src'); };
+      if (img.complete && img.naturalWidth) fit();
+      const big = new Image(); V.big = big;
+      // The loaded original itself takes the stand-in's place (no second fetch), keeping zoom and pan.
+      big.onload = () => { if (!live()) return; big.alt = img.alt; big.setAttribute('draggable', 'false'); big.style.cssText = img.style.cssText; img.replaceWith(big); img = big; done(); fit(); };
+      big.onerror = () => { if (live()) fail(); };
+      big.src = it.url;
+    } else {
+      if (it.placeholder) img.src = it.url;
+      img.onload = () => { if (!live()) return; done(); fit(); };
+      img.onerror = fail;
+      if (img.complete && img.naturalWidth) { done(); fit(); }
+    }
+    ahead();
+  }
+  function ahead() {
+    if (V.items.length < 2 || typeof Image !== 'function') return;
+    V.ahead = [-1, 1].map(d => V.items[(V.i + d + V.items.length) % V.items.length]).filter(x => x?.kind === 'image' && x !== V.items[V.i]).map(x => {
+      const im = new Image(); im.src = x.url; return im;
+    });
+  }
   const isPdf = it => /pdf/i.test(it.mime || '') || /\.pdf$/i.test(it.name || '');
   // Browsers with a built-in PDF reader say so; the Android app's WebView has none and keeps the card + Download.
   const pdfInline = () => navigator.pdfViewerEnabled === true && !appDownloads();
@@ -1100,7 +1140,7 @@
       clearGesture();
       if (menu(false)) return true; // Back/Esc: the Save/Share menu first, the photo stays open
       for (const m of V.el.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
-      stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; dropPdf(); V.items = []; V.ptr.clear(); V.g = null;
+      stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; dropPdf(); V.items = []; V.ahead = []; V.big = null; V.ptr.clear(); V.g = null;
       K.onChange(false); if (V.focus?.isConnected) V.focus.focus({ preventScroll: true }); V.focus = null; return true;
     },
     isOpen: () => !!V.el && !V.el.hidden,
