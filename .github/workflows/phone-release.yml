@@ -48,7 +48,10 @@ jobs:
           v=$(sed -n "s/^ *versionName '\([0-9][0-9.]*\)'.*/\1/p" android/app/build.gradle | head -1)
           echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::No versionName in android/app/build.gradle"; exit 1; }
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if gh release view "android-v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if draft=$(gh release view "android-v$v" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" = true ]; then
+              echo "::error::android-v$v is a draft (an earlier run failed its readback, or a Thales draft): check and publish or delete it by hand"; exit 1
+            fi
             echo "android-v$v already exists: nothing to release." | tee -a "$GITHUB_STEP_SUMMARY"
             echo "new=false" >> "$GITHUB_OUTPUT"
           else

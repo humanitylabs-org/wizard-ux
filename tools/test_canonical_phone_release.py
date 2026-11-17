@@ -151,28 +151,43 @@ class PhoneReleaseTests(unittest.TestCase):
                 release.draft(Path(self.temp.name), phone)
             self.assertEqual(run.call_count, 1)
 
-    def test_ci_publish_creates_a_published_latest_release(self):
+    def test_ci_publish_only_after_draft_readback(self):
         phone = self.metadata()
         out = Path(self.temp.name)
         (out / 'wizard-os-0.10.14.apk').write_bytes(self.apk.read_bytes())
-        calls = []
+        draft_state = dict(url='u', isDraft=True, targetCommitish=phone['source_commit'], assets=[{'name': 'wizard-os-0.10.14.apk'}, {'name': 'phone.json'}])
 
-        def fake_run(argv, **kw):
-            calls.append(list(map(str, argv)))
-            result = unittest.mock.Mock(returncode=1 if argv[:3] == ['gh', 'release', 'view'] and len(calls) == 1 else 0)
-            return result
-        state = dict(url='u', isDraft=False, targetCommitish=phone['source_commit'], assets=[{'name': 'wizard-os-0.10.14.apk'}, {'name': 'phone.json'}])
-        with patch.object(release.subprocess, 'run', side_effect=fake_run), \
-                patch.object(release, 'text', return_value=release.json.dumps(state)), \
-                self.assertRaises(FileNotFoundError):  # stops at the byte readback (nothing downloaded in the fake)
-            release.draft(out, phone, publish=True)
+        def go(good_bytes, calls):
+
+            def fake_run(argv, **kw):
+                argv = list(map(str, argv))
+                calls.append(argv)
+                if argv[:3] == ['gh', 'release', 'download']:
+                    d = Path(argv[argv.index('--dir') + 1])
+                    (d / 'wizard-os-0.10.14.apk').write_bytes(self.apk.read_bytes() if good_bytes else b'tampered')
+                    release.write_json(d / 'phone.json', phone)
+                return unittest.mock.Mock(returncode=1 if argv[:3] == ['gh', 'release', 'view'] else 0)
+            states = iter([draft_state, dict(draft_state, isDraft=False)])
+            with patch.object(release.subprocess, 'run', side_effect=fake_run), \
+                    patch.object(release, 'text', side_effect=lambda *a, **k: release.json.dumps(next(states))):
+                try:
+                    release.draft(out, phone, publish=True)
+                finally:
+                    import shutil
+                    shutil.rmtree(out / 'draft-readback', ignore_errors=True)
+            return calls
+        calls = go(True, [])
         create = next(c for c in calls if c[:3] == ['gh', 'release', 'create'])
-        self.assertIn('--latest', create)
-        self.assertNotIn('--draft', create)
-        with patch.object(release.subprocess, 'run', side_effect=lambda *a, **k: unittest.mock.Mock(returncode=1)), \
-                patch.object(release, 'text', return_value=release.json.dumps(dict(state, isDraft=True))), \
-                self.assertRaisesRegex(ValueError, 'readback'):
-            release.draft(out, phone, publish=True)
+        self.assertIn('--draft', create)
+        self.assertNotIn('--latest', create)
+        self.assertEqual(calls[-1][:3], ['gh', 'release', 'edit'])
+        self.assertIn('--draft=false', calls[-1])
+        self.assertIn('--latest', calls[-1])
+        captured = []
+        with self.assertRaisesRegex(ValueError, 'bytes readback'):
+            go(False, captured)
+        self.assertTrue(any(c[:3] == ['gh', 'release', 'create'] for c in captured))
+        self.assertFalse(any(c[:3] == ['gh', 'release', 'edit'] for c in captured), 'never published after a failed readback')
 
     def test_ci_needs_a_rising_version_code(self):
         phone = self.metadata()
