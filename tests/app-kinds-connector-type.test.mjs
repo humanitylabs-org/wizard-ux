@@ -86,3 +86,19 @@ test('isConnector: type decides when present', () => {
   assert.equal(isConnector({ id: 'wizard-chatgpt' }), true);
   assert.equal(isConnector({ id: 'x', desc: 'Sign in to Foo' }), true);
 });
+
+test('the App Store is a normal system tile leading Apps, listed once (ux#1493)', async () => {
+  const { window, groups } = await shell({ apps: [
+    { id: 'money', name: 'Money', desc: 'Review transactions.', url: '/money/', source: 'apps.json', type: 'view', category: 'app' },
+  ] });
+  const store = groups.apps.filter(a => a.id === 'app-store');
+  assert.equal(store.length, 1, 'App Store is in the Apps group exactly once');
+  assert.equal(store[0].url, '/wizard-os-home/store/index.html');
+  assert.ok(window.WosAppKinds.isSystem(store[0]), 'App Store wears the system tile');
+  const order = window.WosAppKinds.sysFirst(groups.apps).map(a => a.id);
+  assert.ok(order.indexOf('app-store') < order.indexOf('money'), 'system apps lead Apps');
+  for (const k of ['wiz', 'agents', 'conns', 'dev']) assert.ok(!groups[k].some(a => a.id === 'app-store'), `not also in ${k}`);
+  const rows = window.WosAppKinds.rows(window.WizCore.apps('mobile').APPS, window.WizCore.apps('mobile').APP, () => '');
+  assert.equal(rows.apps.filter(r => r.id === 'app-store').length, 1);
+  assert.equal(rows.apps.find(r => r.id === 'app-store').system, true);
+});
