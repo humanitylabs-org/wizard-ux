@@ -125,6 +125,12 @@ test('issue 1531: a channel with only older chats never reads as empty; a channe
     assert.doesNotMatch(home, /Nothing in the last 24 hours|ch-none/, `${agent}: no empty line for a channel with chats`);
     assert.match(quiet, /<span class="ch-none">No chats yet<\/span>/, `${agent}: a channel with no chats keeps an empty line`);
   }
+  // Store off (Spaces): chats filed in the Space but not in the loaded list still count (Codex P2).
+  const sp = fixture({ spacesList });
+  sp.channelClick(click({ 'data-chchanx': 'home' }), 'w', sp.w); sp.channelClick(click({ 'data-chchanx': 'quiet' }), 'w', sp.w);
+  const spHtml = sp.channelsBody(sp.w, []).split('class="ch-chan"').slice(1);
+  assert.match(spHtml.find(c => c.includes('data-chchanx="home"')), /data-chchan="home"><span>5 chats, open channel<\/span>/);
+  assert.match(spHtml.find(c => c.includes('data-chchanx="quiet"')), /No chats yet/);
   // Older chats only the box's channel store knows about: their number and a way into the channel.
   const f = fixture({ spacesList });
   f.env.LIVE.chanStore = { state: () => ({ sort: 'az', channels: [{ id: 'home', count: 6 }, { id: 'quiet', count: 0 }] }), patch: async () => ({ ok: true }), move() {} };

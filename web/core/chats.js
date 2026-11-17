@@ -1254,7 +1254,9 @@ window.WizCore.chats = function createChats(H) {
   // number and a way in; the empty line is kept for a channel that holds no chats at all (issue 1531).
   const CHAN_RECENT_MIN = 3;
   function chanNoRecent(ch0) {
-    const st = typeof chanStore === 'function' ? chanStore() : null, n = (!ch0.general && !ch0.agentFeed && st?.channels?.find?.(c => c.id === ch0.id)?.count) || 0;
+    // The store's count, else (store off: Spaces) the Space's own chat list, which also holds chats not loaded here.
+    const st = typeof chanStore === 'function' ? chanStore() : null, own = !ch0.general && !ch0.agentFeed;
+    const n = (own && (st ? st.channels?.find?.(c => c.id === ch0.id)?.count : spaces().find(s => s.id === ch0.id && spaceAgent(s) === ch0.agent)?.threads?.length)) || 0;
     return n > 0 ? `<button type="button" class="ch-chan-post ch-chan-more" data-chchan="${esc(ch0.id)}"><span>${n} ${n === 1 ? 'chat' : 'chats'}, open channel</span></button>` : '<span class="ch-none">No chats yet</span>';
   }
   function channelLine(ch0, rows, now, cur = '', gAg = '', dAg = '') {
