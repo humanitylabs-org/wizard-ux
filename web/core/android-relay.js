@@ -154,7 +154,60 @@
   setTimeout(() => { chatSettled = true; attachSync(); }, 5000);
   attachSync();
 
-  window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port(), resume, chatRead,
+  /* App windows (wizard-os issue 650, switch wizard/app-windows, off by default). In the Android app, a link to a Wizard
+   * app (a chat link, a link inside another app, a notification's Open) opens that app's own Android window: the one
+   * its home-screen icon opens, pinned or not. Back at the app's start returns to where the link was. Links to Wizard's
+   * own pages (home, chats, threads) stay in the main window. The main page copies the switch to the Android app (an
+   * app window's page never sees the shell's switches); off, the app answers false and every link keeps its old way. */
+  const WINDOWS_SWITCH = 'wizard/app-windows';
+  let windowsWas = null;
+  function windowsSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.appWindowsSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(WINDOWS_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === windowsWas) return;
+    windowsWas = on; try { n.appWindowsSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => windowsSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; windowsSync(); });
+  setTimeout(() => { chatSettled = true; windowsSync(); }, 5000);
+  windowsSync();
+  // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
+  // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
+  function appOfLink(u) {
+    const P = window.WizHomeScreenPolicy, reg = window.WizCore?.apps?.('mobile'), DL = window.WizCore?.deeplink;
+    if (!P || !reg || !u || u.origin !== location.origin) return null;
+    const ok = a => !!a && a.kind === 'wizard' && typeof a.url === 'string' && !!a.url && !P.isShell(a.url) && P.within(a.url, a.url);
+    if (P.isShell(u.href)) { const id = DL?.isOwn?.(u) ? DL.parse(u.href)?.open : ''; const a = id ? reg.APP?.[id] : null; return ok(a) ? { app: a, path: '' } : null; }
+    let best = null;
+    for (const a of reg.APPS || []) if (ok(a) && P.within(u.href, a.url) && (!best || a.url.length > best.url.length)) best = a;
+    return best ? { app: best, path: u.pathname + u.search + u.hash } : null;
+  }
+  // Open an app's own window (path: a page inside it, '' = where it was). True when the Android app opened it.
+  function openAppWindow(id, path = '') {
+    const n = window.WizardOSNative, P = window.WizHomeScreenPolicy;
+    if (!n || typeof n.openAppWindow !== 'function' || !P) return false;
+    const a = window.WizCore?.apps?.('mobile')?.APP?.[id];
+    if (!a || a.kind !== 'wizard' || !a.url || P.isShell(a.url)) return false;
+    let rel = '';
+    if (path) {
+      let u; try { u = new URL(path, location.href); } catch (_) { return false; }
+      if (u.origin !== location.origin || !P.within(u.href, a.url)) return false;
+      rel = u.pathname + u.search + u.hash;
+    }
+    if (P.mode && P.id === a.id) return false; // already this app's window: the link stays in it
+    try { return n.openAppWindow(a.id, rel, P.displayName(a) || '') === true; } catch (_) { return false; }
+  }
+  // A tapped link (core/links.js): true when it opened an app's own window.
+  function appLink(href) {
+    if (typeof window.WizardOSNative?.openAppWindow !== 'function') return false;
+    let u; try { u = new URL(href, location.href); } catch (_) { return false; }
+    const hit = appOfLink(u); return !!hit && openAppWindow(hit.app.id, hit.path);
+  }
+
+  window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port(), resume, chatRead, openAppWindow, appLink,
     legacy(source, appId, method, args = []) {
       const spec = legacySpec(source, appId);
       if (!spec.methods.includes(method) || !Array.isArray(args) || args.length > 3 || args.some(x => x !== null && !['string', 'number', 'boolean'].includes(typeof x))) throw new Error('Unknown legacy device method');

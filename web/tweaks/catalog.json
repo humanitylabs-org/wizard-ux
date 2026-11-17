@@ -35,7 +35,8 @@
     "wizard/sidebar-chats-view",
     "wizard/app-panel-left",
     "wizard/assist-attach",
-    "wizard/bar-scrub"
+    "wizard/bar-scrub",
+    "wizard/app-windows"
   ],
   "defaults": [
     "wizard/unified-inbox",
