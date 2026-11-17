@@ -1035,12 +1035,14 @@ window.WizCore.chats = function createChats(H) {
       const el = elOf(id); if (el) renderChatList(x, el);
     }
   });
-  // A row's marker at its right end (the one-line phone list has no status icon, so its spinner shows here too).
+  // A row's marker, drawn just left of its title (wizard-ux issue 1497, James: "move the dots to the left of the title";
+  // the one-line phone list has no status icon, so its spinner shows here too). A row with no marker keeps an empty slot
+  // of the same width, so titles stay in one column.
   function actRowMark(s) {
     const m = actMark(s);
     return m === 'working' ? '<span class="ch-act-ind"><i class="ch-spin" role="img" aria-label="Working"></i></span>'
       : m === 'needs' ? '<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"></i></span>'
-      : m === 'new' ? '<span class="ch-act-ind"><i class="ch-chan-dot new" role="img" aria-label="Unread"></i></span>' : '';
+      : m === 'new' ? '<span class="ch-act-ind"><i class="ch-chan-dot new" role="img" aria-label="Unread"></i></span>' : '<span class="ch-act-ind" aria-hidden="true"></span>';
   }
   // A thread of an agent other than the main one names it after its channel ("# WizardOS Chats · Philosopher"): words,
   // never a coloured dot, so it never competes with the status dots. '' for the main agent.

@@ -104,10 +104,13 @@ html[data-tweaks~="wizard/chat-channels"] .ch-post-rr { display: flex; flex-wrap
 html[data-tweaks~="wizard/chat-channels"] .ch-post-rr .ch-post-sts { display: inline-flex; align-items: center; gap: 8px; }
 html[data-tweaks~="wizard/chat-channels"] .ch-post-reply { min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: .8125rem; font-weight: 500; }
 
-/* Activity as a short what-needs-me list (wizard-ux issue 1336). One marker per row at its right end, the same three
-   meanings everywhere: the spinner (working), amber (needs you, until addressed) and green (unread, until opened); the
-   violet unread time and dot go. */
-html[data-tweaks~="wizard/chat-channels"] .ch-row .ch-act-ind { flex: none; align-self: center; display: inline-flex; padding-left: 8px; }
+/* Activity as a short what-needs-me list (wizard-ux issue 1336). One marker per row, the same three meanings everywhere:
+   the spinner (working), amber (needs you, until addressed) and green (unread, until opened); the violet unread time and
+   dot go. Issue 1497 (James: "move the dots to the left of the title"): the marker sits just left of the title, after the
+   row's status icon where it has one, in a slot of its own width on every row (empty when there is no marker), so the
+   titles stay in one column. It lines up with the title's line. */
+html[data-tweaks~="wizard/chat-channels"] .ch-row > :is(.emo.sti, .ch-topic-mark) { order: -2; }
+html[data-tweaks~="wizard/chat-channels"] .ch-row > .ch-act-ind { order: -1; flex: none; align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; width: 10px; height: 1.375rem; margin: 0 -3px 0 0; padding: 0; }
 html[data-tweaks~="wizard/chat-channels"] .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }
 /* Ready's one sort: a compact "Newest first ⌄" menu on the header line, beside the fold arrow (issue 1354) */
 html[data-tweaks~="wizard/chat-channels"] .ch-sec-hl { position: relative; }
@@ -134,12 +137,18 @@ html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw { --ch-
 @supports (color: oklch(from red l c h)) { html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw { --ch-new: oklch(from var(--green, var(--wz-success)) l c 150); } }
 html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }
 html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-st.is-needs { width: 8px; height: 8px; background: var(--amber, var(--wz-warning)); }
+/* (issue 1497) the marker leads the row, just left of the title, in a 12 px slot on every row (empty when it has none) */
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-row > .aad-st { order: -1; margin: 0 -2px 0 0; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-row > .aad-st:is(.is-new, .is-needs) { margin: 0 0 0 2px; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-row:has(.aad-chan-line) > .aad-st { align-self: flex-start; margin-top: 4px; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-row:has(.aad-chan-line) > .aad-st:is(.is-new, .is-needs) { margin-top: 6px; }
+html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-rw .aad-chat:not(:has(> .aad-st))::before { content: ""; order: -1; flex: none; width: 12px; margin-right: -2px; }
 html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-more-older { display: block; width: calc(100% - 16px); margin: 4px 8px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, currentColor); font: inherit; font-size: .8125rem; text-align: left; padding: 0 8px; cursor: pointer; }
 html[data-tweaks~="wizard/chat-channels"][data-layout="ai-apps"] .aad-more-older:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 /* the one-line phone list (wizard/desktop-chats): the marker takes the accent unread dot's slot after the time; the
    spinner shows only there (the other lists keep the row's own status icon at its left) */
 html[data-tweaks~="wizard/chat-channels"] .ch-row .ch-act-ind .ch-spin { display: none; }
-html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind { order: 6; margin: 0 2px 0 -2px; padding-left: 0; }
+html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row > .ch-act-ind { order: -1; align-self: center; height: auto; margin: 0 -2px 0 0; padding: 0; }
 html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind .ch-spin { display: inline-block; width: 10px; height: 10px; box-sizing: border-box; }
 html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { background: transparent; }
 html[data-tweaks~="wizard/chat-channels"][data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:has(.ch-act-ind)::after { content: none; }

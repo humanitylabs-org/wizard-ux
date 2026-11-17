@@ -31,6 +31,24 @@ const ROWS = [
 ].map(shape);
 const CLAUDE = [{ id: 'qa-c1', title: 'Essay outline', at: now - 30 * 6e4, preview: 'Outline ready.' }].map(shape);
 const READ = ['qa-y1', 'qa-r1', 'qa-r2'];
+// wizard-ux issue 1497: each Activity row's marker sits just left of its title (none at the right end), and the titles of
+// rows with and without a marker start in one column.
+const markLeft = async (page, rows, mark, title) => {
+  const g = await page.locator(rows).evaluateAll((n, [mark, title]) => n.filter(x => x.getClientRects().length).map(x => {
+    const r = x.getBoundingClientRect(), m = x.querySelector(mark), t = x.querySelector(title).getBoundingClientRect(), mr = m && m.getClientRects().length ? m.getBoundingClientRect() : null;
+    return { id: x.dataset.chopen || x.closest('[data-sid]')?.dataset.sid, row: [Math.round(r.left), Math.round(r.right)], title: [Math.round(t.left), Math.round(t.top), Math.round(t.bottom)],
+      mark: mr ? [Math.round(mr.left), Math.round(mr.right), Math.round(mr.top + mr.height / 2)] : null };
+  }), [mark, title]);
+  const marked = g.filter(x => x.mark);
+  assert.ok(marked.length >= 3, 'markers drawn: ' + JSON.stringify(g));
+  for (const x of marked) {
+    assert.ok(x.mark[1] <= x.title[0] + 1 && x.title[0] - x.mark[1] <= 14, `${x.id}: marker just left of the title ` + JSON.stringify(x));
+    assert.ok(x.mark[0] < x.row[0] + (x.row[1] - x.row[0]) / 2, `${x.id}: marker not on the right ` + JSON.stringify(x));
+    assert.ok(x.mark[2] >= x.title[1] && x.mark[2] <= Math.min(x.title[2], x.title[1] + 22), `${x.id}: marker on the title's line ` + JSON.stringify(x));
+  }
+  assert.equal(new Set(g.map(x => x.title[0])).size, 1, 'titles in one column with and without a marker: ' + JSON.stringify(g));
+  return g;
+};
 const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
 (async () => {
   const browser = await chromium.launch(), report = [];
@@ -103,6 +121,8 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
           entry.sorts = (await page.locator('.aad-sortmenu .aad-pop-i').allInnerTexts()).map(t => t.trim());
           assert.deepEqual(entry.sorts, ['Newest first', 'Oldest first', 'Needs you first']);
           await shot('sort-menu'); await page.keyboard.press('Escape'); await nap(200);
+          if (await page.locator('.aad-sec[data-sec="working"][aria-expanded="false"]').count()) { await vis('.aad-sec[data-sec="working"]').click(); await nap(300); }
+          entry.markLeft = await markLeft(page, ':is(#aad-sec-working, #aad-sec-ready, #aad-sec-recent) .aad-rw .aad-row', '.aad-st', '.aad-row-t');
           await shot('activity');
           // Opening green clears it from Ready; opening yellow keeps it.
           await vis('.aad-rw[data-sid="qa-g1"] .aad-row').click(); await nap(700);
@@ -146,6 +166,7 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
           assert.match(entry.claudeLine, /# General · Claude/);
           entry.marks = await page.locator('.ch-list .ch-sec[data-sec="ready"] .ch-row').evaluateAll(n => n.map(x => [x.dataset.chopen, x.querySelector('.ch-act-ind i')?.getAttribute('aria-label') || '', x.querySelector('time') ? getComputedStyle(x.querySelector('time')).color : '']));
           assert.deepEqual(entry.marks.map(m => m.slice(0, 2)).sort(), [['qa-c1', 'Unread'], ['qa-g1', 'Unread'], ['qa-y1', 'Needs you']]);
+          entry.markLeft = await markLeft(page, '.ch-list .ch-sec:is([data-sec="ready"], [data-sec="recent"]) .ch-row', '.ch-act-ind > i', '.tp b');
           await shot('activity');
           // Opening green clears it from Ready; opening yellow keeps it (Back between).
           const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
