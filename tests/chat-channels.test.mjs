@@ -2307,17 +2307,21 @@ test('issue 1506: channelFace reads the emoji at the start of a name; channelEmo
   assert.deepEqual(face('1️⃣ First'), ['1️⃣', 'First'], 'a keycap');
   assert.deepEqual(face('2024 plans'), ['💬', '2024 plans'], 'plain digits are words');
   assert.deepEqual(face('#launch'), ['💬', '#launch']);
-  assert.deepEqual(face('🚀'), ['🚀', '🚀'], 'an emoji-only name keeps its words');
+  assert.deepEqual(face('🚀'), ['🚀', ''], 'an emoji-only name has no words (issue 1523: never "🚀 🚀")');
+  assert.equal(C.channelFace('🚀').title, '🚀'); assert.equal(C.channelFace('🚀 Launch').title, '🚀 Launch'); assert.equal(C.channelFace('Launch').title, '💬 Launch');
   assert.equal(C.channelEmojiName('Launch', '🎯'), '🎯 Launch');
   assert.equal(C.channelEmojiName('🚀 Launch', '🎯'), '🎯 Launch', 'replaces the one in front');
   assert.equal(C.channelEmojiName('🚀 Launch', ''), 'Launch', 'takes it off');
-  assert.equal(C.channelEmojiName('🚀', ''), '🚀', 'never an empty name');
-  assert.ok(C.channelEmojiName('x'.repeat(60), '🎯').length <= 60, 'the 60-character name limit holds');
+  assert.equal(C.channelEmojiName('🚀', ''), 'Channel', 'never an empty name: an emoji-only one taken off is Channel (issue 1523)');
+  assert.equal(C.channelEmojiName('🚀', '🎯'), '🎯', 'an emoji-only name swaps its emoji');
+  assert.equal(C.channelEmojiName('x'.repeat(60), '🎯'), '', 'no room for the emoji: never cuts the name (issue 1523)');
+  assert.equal(C.channelEmojiName('x'.repeat(59), '🎯'), '');
+  assert.equal(C.channelEmojiName('x'.repeat(57), '🎯'), '🎯 ' + 'x'.repeat(57), 'exactly 60 fits');
   // Codex P2s: a subdivision flag (tag sequence) is one emoji; near the limit a trailing astral character is dropped whole.
   assert.deepEqual(face('🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Scots'), ['🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}', 'Scots']);
   assert.equal(C.channelEmojiName('🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Scots', ''), 'Scots', 'no tag characters left behind');
-  const near = C.channelEmojiName('x'.repeat(56) + '😀', '🎯');
-  assert.ok(near.length <= 60 && !/[\uD800-\uDBFF]$/.test(near) && near.isWellFormed(), 'no lone surrogate: ' + JSON.stringify(near));
+  assert.equal(C.channelEmojiName('x'.repeat(56) + '😀', '🎯'), '', 'never half of a character either');
+  assert.equal(C.channelEmojiName('🚀 ' + 'x'.repeat(57), '🎯'), '🎯 ' + 'x'.repeat(57), 'swapping one emoji for another of the same length fits');
   assert.ok(C.CHANNEL_EMOJI.length >= 12 && C.CHANNEL_EMOJI.every(e => C.channelFace(e + ' x').own), 'every picker emoji reads back as one');
 });
 
@@ -2377,4 +2381,80 @@ test('issue 1506: Rename has the emoji row; a tap puts that emoji in front, a ta
   assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: 'spaces/voice/name', item: '🎵 Voice' });
   // The switch off: no emoji row (the sheet itself is Channels-only).
   f.setOn(false); assert.equal(f.chanEmojiPick('Launch'), '');
+});
+
+// Issue 1523 (AI review of 1519): an emoji-only channel name, a name with no room for an emoji, and the toast/pin words.
+test('issue 1523: an emoji-only channel shows its emoji once in the list, feed header and sheet', () => {
+  const f = emojiFixture({ spacesList: [{ id: 'solo', name: '🚀', threads: ['a'] }, { id: 'voice', name: 'Voice', threads: ['d'] }] });
+  const body = f.channelsBody(f.w, []);
+  assert.match(body, /data-chchan="solo"[^>]*><span class="ch-chan-hash ch-chan-emo">🚀<\/span><b><\/b>/, 'once, and read out (no words beside it)');
+  assert.doesNotMatch(body, /🚀[^<]*<\/span><b>🚀/);
+  assert.match(body, /recent posts in 🚀"/);
+  f.openChannel(f.w, 'solo');
+  assert.match(f.chanHead(f.w, f.chanOpen(f.w)), /<span class="ch-chan-hash ch-chan-emo">🚀<\/span><\/b>/);
+  f.channelBack(f.w);
+  f.openChannelSheet('w', 'solo'); assert.match(f.sheets.at(-1), /<div class="ch-sheet-t">🚀<\/div>/);
+  // Its composer says it once too.
+  f.openChannel(f.w, 'solo'); assert.match(f.chanComposer(f.w, f.chanOpen(f.w)), /placeholder="Message 🚀"/);
+});
+
+test('issue 1523: the picker clears an emoji-only name (💬 Channel), main vs routed; Channel taken gets Channel 2', () => {
+  const f = emojiFixture({ spacesList: [
+    { id: 'solo', name: '🚀', threads: [] }, { id: 'old', name: 'Channel', threads: [] },
+    { id: 'h', name: '🎯', agent: 'host', threads: [] }, { id: 'k', name: '🎯', agent: 'container', threads: [] }, { id: 'r', name: '🎯', agent: 'restricted', threads: [] },
+  ] });
+  // The emoji sheet: tapping the emoji it already has takes it off.
+  assert.equal(f.chanSetEmoji('solo', '🚀'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: 'spaces/solo/name', item: 'Channel 2' }, 'the main agent already has a Channel');
+  assert.deepEqual(chanLines(f.channelsBody(f.w, [])).find(x => x[0] === 'solo'), ['solo', '💬', 'Channel 2']);
+  for (const [agent, id] of [['host', 'h'], ['container', 'k'], ['restricted', 'r']]) {
+    assert.equal(f.chanSetEmoji(id, '🎯'), true, agent);
+    assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: `spaces/${id}/name`, item: 'Channel' }, `${agent}: its own list has no Channel yet`);
+  }
+  // The Rename form's emoji row does the same to the field.
+  f.env.rowSheet = { wid: 'w', chan: 'solo', rename: true };
+  const fired = [], inp = { value: '🚀', disabled: false, dispatchEvent: e => fired.push(e.type), focus() {} };
+  const btn = { dataset: { chemoji: '🚀' }, setAttribute() {}, closest: sel => sel === 'form' ? formEl : null };
+  const formEl = { querySelector: () => inp, querySelectorAll: () => [btn] };
+  f.env.Event = class { constructor(t) { this.type = t; } };
+  f.channelClick({ target: { closest: sel => sel === '[data-chemoji]' ? btn : null } }, 'w', f.w);
+  assert.equal(inp.value, 'Channel'); assert.deepEqual(fired, ['input']);
+});
+
+test('issue 1523: a name with no room for the emoji is kept whole and the owner is told', () => {
+  const long = 'x'.repeat(59), f = emojiFixture({ spacesList: [{ id: 'long', name: long, threads: [] }] });
+  assert.equal(f.chanSetEmoji('long', '🎯'), false);
+  assert.equal(f.ops.length, 0, 'no rename');
+  assert.match(f.toasts.at(-1), /too long for an emoji/);
+  const fired = [], inp = { value: long, disabled: false, dispatchEvent: e => fired.push(e.type), focus() { this.focused = true; } };
+  const btn = { dataset: { chemoji: '🎯' }, setAttribute() {}, closest: sel => sel === 'form' ? formEl : null };
+  const formEl = { querySelector: () => inp, querySelectorAll: () => [btn] };
+  f.env.Event = class { constructor(t) { this.type = t; } };
+  f.env.rowSheet = { wid: 'w', chan: 'long', rename: true };
+  assert.equal(f.channelClick({ target: { closest: sel => sel === '[data-chemoji]' ? btn : null } }, 'w', f.w), true);
+  assert.equal(inp.value, long, 'the field keeps every character'); assert.deepEqual(fired, []); assert.ok(inp.focused);
+  // 60 characters with an emoji already in front: swapping it still fits.
+  const full = emojiFixture({ spacesList: [{ id: 'full', name: '🚀 ' + 'x'.repeat(57), threads: [] }] });
+  assert.equal(full.chanSetEmoji('full', '🎯'), true);
+  assert.equal(full.ops.at(-1).item, '🎯 ' + 'x'.repeat(57));
+});
+
+test('issue 1523: Mark channel read says the channel by its emoji; the voice pin and orb hint do too; switch off: not offered', () => {
+  const f = emojiFixture({ spacesList: [{ id: 'launch', name: '🚀 Launch', threads: [] }, { id: 'voice', name: 'Voice', threads: [] }, { id: 'solo', name: '🎯', threads: [] }] });
+  f.env.LIVE.sessionsFor = () => []; f.env.paintListsNow = () => {};
+  const read = vm.runInContext('chanMarkRead', f.env);
+  for (const [cid, words] of [['launch', '🚀 Launch read'], ['voice', '💬 Voice read'], ['solo', '🎯 read'], ['__general__', '#️⃣ General read']]) {
+    assert.equal(read(f.w, cid), true, cid); assert.equal(f.toasts.at(-1), words);
+  }
+  assert.ok(!f.toasts.some(t => /^# /.test(t)), 'never #');
+  // Channels off: Mark channel read is not offered at all.
+  f.setOn(false); assert.equal(read(f.w, 'launch'), false);
+  // The voice view of a channel's feed (app.js viewOf) and the orb's hint name it by its title.
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name: `\$\{window\.WizCore\?\.channelFace\?\.\(chan\.name, !!chan\.general\)\?\.title \|\| '# ' \+ chan\.name\} channel` \};/);
+  assert.match(app, /channelFace\?\.\(V\.snap\.view\.channel, V\.snap\.view\.channel === 'General'\)\?\.title/);
+  const C = emojiCore(), pinName = c => `${C.channelFace(c.name, !!c.general)?.title || '# ' + c.name} channel`;
+  assert.equal(pinName({ name: '🚀 Launch' }), '🚀 Launch channel');
+  assert.equal(pinName({ name: '🎯' }), '🎯 channel');
+  assert.equal(pinName({ name: 'General', general: true }), '#️⃣ General channel');
 });

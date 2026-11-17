@@ -332,7 +332,7 @@ export default function desktop(api) {
   // A channel as its emoji and words (wizard-ux issue 1506): "🚀 Launch", General "#️⃣ General"; an agent's feed keeps its name.
   function chanTitle(c) {
     const n = String(c?.name || ''), f = !c?.agentFeed && globalThis.WizCore?.channelFace?.(n, !!c?.general || c?.id === '__general__');
-    return c?.agentFeed ? n : f ? `${f.emoji} ${f.label}` : `# ${n}`;
+    return c?.agentFeed ? n : f ? f.title || `${f.emoji} ${f.label}` : `# ${n}`;
   }
   const panel = el('div', 'aad-panel'); panel.append(head, agentsRow, chanBox, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
