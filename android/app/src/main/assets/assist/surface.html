@@ -70,6 +70,24 @@
     font:700 10px/17px system-ui;text-align:center;display:none}
   #shotC.has b{display:block}
   #shotC.flash{background:rgba(185,168,255,.32)}
+  /* Camera and Attach (wizard-os issue 655, switch wizard/assist-attach, off by default): two more chips beside Screen,
+     corner/unlocked only. With them the row packs a little tighter so all five fit beside the orb. */
+  #camC,#pickC{display:none}
+  body.corner.canattach #camC,body.corner.canattach #pickC{display:flex}
+  /* Step and size shrink on narrow phones so all five stay inside the corner window (min(screen - 14dp, 380dp)). */
+  body.corner.canattach{--st:min(48px,calc((100vw - 142px) / 5));--cs:calc(var(--st) - 6px)}
+  body.corner.canattach .chip{width:var(--cs);height:var(--cs);margin-top:calc(var(--cs) / -2)}
+  body.corner.canattach .chip svg{width:min(24px,calc(var(--cs) * .55));height:min(24px,calc(var(--cs) * .55))}
+  body.corner.canattach #pauseC{right:136px}
+  body.corner.canattach #cancelC{right:calc(136px + var(--st))}
+  body.corner.canattach #shotC{right:calc(136px + var(--st) * 2)}
+  body.corner.canattach #camC{left:auto;right:calc(136px + var(--st) * 3)}
+  body.corner.canattach #pickC{left:auto;right:calc(136px + var(--st) * 4)}
+  #camC b,#pickC b{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;border-radius:9px;background:#b99bff;color:#140b2c;
+    font:700 10px/17px system-ui;text-align:center;display:none}
+  #camC.has b,#pickC.has b{display:block}
+  #camC.flash,#pickC.flash{background:rgba(185,168,255,.32)}
+  #camC.full,#pickC.full,#shotC.full{border-color:rgba(255,190,85,.5)}
   #bub{display:none;position:absolute;left:4px;right:136px;top:50%;transform:translateY(-50%) translateX(12px);opacity:0;
     padding:11px 14px;border-radius:18px;background:rgba(20,14,40,.96);border:1px solid rgba(185,168,255,.35);
     box-shadow:0 6px 28px rgba(0,0,0,.45);transition:opacity .28s,transform .28s}
@@ -103,6 +121,9 @@
 <button class="chip" id="cancelC" aria-label="Cancel"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg><small>cancel</small></button>
 
 <button class="chip" id="shotC" aria-label="Attach a screenshot"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3"/></svg><b id="shotN"></b><small>screen</small></button>
+
+<button class="chip" id="camC" aria-label="Take a photo"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1.5-2h5.6l1.5 2h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.4"/></svg><b id="camN"></b><small>camera</small></button>
+<button class="chip" id="pickC" aria-label="Attach pictures or files"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 11.5l-6.8 6.8a4.2 4.2 0 0 1-6-6l7.3-7.3a2.8 2.8 0 0 1 4 4l-7.2 7.2a1.4 1.4 0 0 1-2-2l6.5-6.5"/></svg><b id="pickN"></b><small>attach</small></button>
 
 <div class="wm-zoom" id="zl"><div class="zl-h">What you told the Wizard</div><div id="zlist"></div></div>
 <div class="wm-hint" id="hint"></div>
@@ -156,7 +177,7 @@ const words = M.words($('words'), { anchor: orbXY, lanes:[.56,.61,.66,.71], max:
 let idleTimer=0;
 function idleClose(ms){clearTimeout(idleTimer);idleTimer=setTimeout(()=>{if(S.state==='card'||S.state==='idle')N.close()},ms)}
 function setTop(t){$('top').textContent=t||'';$('top').classList.toggle('on',!!t)}
-function chips(on){['unlockC','cancelC','pauseC','shotC'].forEach(id=>$(id).classList.toggle('on',on));if(!on)shotBadge(0);$('unlockC').style.display=S.locked?'':'none';
+function chips(on){['unlockC','cancelC','pauseC','shotC','camC','pickC'].forEach(id=>$(id).classList.toggle('on',on));if(!on){shotBadge(0);attachBadges(0,0)}$('unlockC').style.display=S.locked?'':'none';
   if(inCorner())N.corner&&N.corner(on)}
 function setCard(k,m,s,acts,cls){
   $('k').textContent=k;$('m').textContent=m;$('s').textContent=s||'';
@@ -177,6 +198,14 @@ const inCorner=()=>MODE==='corner';
 function shotBadge(n){$('shotN').textContent=n>0?String(n):'';$('shotC').classList.toggle('has',n>0);
   $('shotC').setAttribute('aria-label',n>0?n+(n===1?' screenshot':' screenshots')+' attached':'Attach a screenshot')}
 
+/* Camera and Attach (wizard-os issue 655): only in the corner, only when the app says the switch is on. */
+function canAttach(){let on=false;try{on=MODE==='corner'&&typeof N.attachOn==='function'&&!!N.attachOn()}catch(e){}
+  document.body.classList.toggle('canattach',on);return on}
+function badge(id,n,one,many,idle){$(id.replace('C','N')).textContent=n>0?String(n):'';$(id).classList.toggle('has',n>0);
+  $(id).setAttribute('aria-label',n>0?n+' '+(n===1?one:many)+' attached':idle)}
+function attachBadges(pictures,files){badge('camC',pictures,'picture','pictures','Take a photo');badge('pickC',files,'file','files','Attach pictures or files')}
+function flash(id){$(id).classList.add('flash');setTimeout(()=>$(id).classList.remove('flash'),260)}
+
 /* ---------- called by native ---------- */
 const W = window.W = {
   setMode(m){
@@ -184,6 +213,7 @@ const W = window.W = {
     document.body.classList.toggle('corner',MODE==='corner');document.documentElement.classList.toggle('corner',MODE==='corner');
     window.ORB_R=MODE==='corner'?.62:.32;
     document.body.classList.toggle('canshot',MODE==='corner'&&typeof N.shot==='function');
+    canAttach();
     document.documentElement.style.background=document.body.style.background=MODE==='corner'?'transparent':'#000';
     rs();
   },
@@ -192,6 +222,7 @@ const W = window.W = {
     if(inCorner()){$('bub').classList.remove('on');N.corner&&N.corner(false)}
     if(card.open)card.sink();$('zl').classList.remove('on','deep');
     S.state='listen';S.heard='';S.paused=false;mode='calm';glow=.9;ripples.push({r:18,a:.5});
+    canAttach();
     orbMode('listen');
     M.haptic('press');M.chime([523,.9,.07]);
     setTop('listening');chips(true);
@@ -266,6 +297,15 @@ const W = window.W = {
     if(n>0){shotBadge(n);M.haptic('press');$('shotC').classList.add('flash');setTimeout(()=>$('shotC').classList.remove('flash'),260);N.log&&N.log('shot attached '+n);return}
     M.haptic('error');N.log&&N.log('shot failed '+n);
   },
+  /* Back from Camera / Attach: {shots, pictures, files, added, skipped, tooBig, max}. Each button shows its own count. */
+  onAttach(o){
+    o=o||{};shotBadge(+o.shots||0);attachBadges(+o.pictures||0,+o.files||0);
+    const full=(+o.shots||0)+(+o.pictures||0)+(+o.files||0)>=(+o.max||8);
+    ['shotC','camC','pickC'].forEach(id=>$(id).classList.toggle('full',full));
+    if(o.added>0){M.haptic('press');flash(S.picked||'pickC')}
+    if(o.skipped>0||o.tooBig>0)M.haptic('error');
+    N.log&&N.log('attach added='+(o.added|0)+' skipped='+(o.skipped|0)+' tooBig='+(o.tooBig|0));
+  },
   reset(){clearTimeout(idleTimer);$('bub').classList.remove('on');if(card.open)card.sink();S.state='idle';S.heard='';S.paused=false;setTop('');chips(false);orbMode('idle')},
   onUnlockCancelled(){W._after=null;if(S.state==='listen')hint.show('still locked · still listening','unlock',2200,true)},
   openWizard(){N.openWizard(S.heard||'')},
@@ -296,6 +336,8 @@ $('cancelC').addEventListener('click',e=>{e.stopPropagation();N.cancel();W.onNot
 $('pauseC').addEventListener('click',e=>{e.stopPropagation();N.pause&&N.pause()});
 $('unlockC').addEventListener('click',e=>{e.stopPropagation();N.unlock()});
 $('shotC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'&&N.shot)N.shot()});
+$('camC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'&&N.camera){S.picked='camC';N.camera()}});
+$('pickC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'&&N.pick){S.picked='pickC';N.pick()}});
 M.spread(document.body,{onOut(){ if(inCorner())return; if(S.state==='list'){$('zl').classList.add('deep');return} if(S.state!=='listen'&&S.state!=='think')W.showList() },
   onIn(){ if(S.state==='list')W.back() }});
 document.addEventListener('pointerdown',()=>{M.sound.unlock()},{capture:true});

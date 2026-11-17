@@ -55,6 +55,12 @@ public final class EverywhereOutbox {
                     ? "Spoken into the WizardOS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
                     : "The user spoke this by holding their Android phone's side button (WizardOS assistant, phone unlocked). ")
                 : "The user spoke this to the Wizard Everywhere floating orb on their Android phone, outside the WizardOS app (they may be in another app). ";
+        if (it.files != null && it.files.length() > 0) { // Camera / Attach (wizard-os issue 655, switch wizard/assist-attach)
+            int pictures = 0;
+            for (int i = 0; i < it.files.length(); i++) if ("photo".equals(it.files.optJSONObject(i) == null ? "" : it.files.optJSONObject(i).optString("kind"))) pictures++;
+            return where + "The original recording is attached as a voice note."
+                    + ai.wizards.os.assist.AttachPolicy.describe(shots, pictures, it.files.length() - pictures);
+        }
         return where + "The original recording is attached as a voice note."
                 + (shots > 0 ? " They attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on their screen while talking." : "");
     }
@@ -82,6 +88,20 @@ public final class EverywhereOutbox {
         default void onDictated(Item it, String text) { }
     }
 
+    /**
+     * A photo taken with the corner orb's Camera button or a file picked with Attach while talking (wizard-os issue 655,
+     * switch wizard/assist-attach). A private copy on disk (assist PickedFiles), a cleaned name and a type; kind is
+     * "photo" or "file". Enqueueing moves the copy into the outbox.
+     */
+    public static final class Attachment {
+        public final File file;
+        public final String name, mime, kind;
+
+        public Attachment(File file, String name, String mime, String kind) {
+            this.file = file; this.name = name; this.mime = mime; this.kind = kind;
+        }
+    }
+
     public static final class Item {
         public String id, state = "waiting", text = "", error = "", sessionId, audioPath = "", body = "", runId = "";
         public String source = SRC_EVERYWHERE;
@@ -95,6 +115,8 @@ public final class EverywhereOutbox {
         JSONObject audioFile;
         /** Screenshot paths (kept until Wizard accepts the message) and their Wizard Files records, in order. */
         JSONArray shots = new JSONArray(), shotFiles = new JSONArray();
+        /** Camera pictures and picked files ({path, name, mime, kind}) and their Wizard Files records, in order. */
+        JSONArray files = new JSONArray(), fileRecs = new JSONArray();
 
         public boolean dictation() { return SRC_DICTATION.equals(source); }
 
@@ -104,7 +126,7 @@ public final class EverywhereOutbox {
                     .put("createdAt", createdAt).put("nextAt", nextAt).put("sentAt", sentAt).put("attempts", attempts)
                     .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile)
                     .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked)
-                    .put("meetingEvent", meetingEvent);
+                    .put("meetingEvent", meetingEvent).put("files", files).put("fileRecs", fileRecs);
         }
 
         static Item from(JSONObject o) {
@@ -119,6 +141,8 @@ public final class EverywhereOutbox {
             it.meetingEvent = o.optString("meetingEvent");
             JSONArray a = o.optJSONArray("shots"); if (a != null) it.shots = a;
             JSONArray f = o.optJSONArray("shotFiles"); if (f != null) it.shotFiles = f;
+            JSONArray pf = o.optJSONArray("files"); if (pf != null) it.files = pf;
+            JSONArray pr = o.optJSONArray("fileRecs"); if (pr != null) it.fileRecs = pr;
             return it;
         }
 
@@ -127,7 +151,7 @@ public final class EverywhereOutbox {
             return new JSONObject().put("id", id).put("state", "sending".equals(state) ? "sending" : state)
                     .put("text", text).put("error", error).put("createdAt", createdAt).put("attempts", attempts)
                     .put("hasAudio", !audioPath.isEmpty()).put("sessionId", sessionId)
-                    .put("source", source).put("shots", shots.length());
+                    .put("source", source).put("shots", shots.length()).put("files", files.length());
         }
     }
 
@@ -233,6 +257,11 @@ public final class EverywhereOutbox {
 
     /** Same, keeping a take id chosen at record time and the meeting interruption it belongs to. */
     public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked, String id, String meetingEvent) throws IOException {
+        return enqueueRecording(recording, source, screenshots, null, locked, id, meetingEvent);
+    }
+
+    /** Same, with pictures and files from the corner orb's Camera and Attach (wizard-os issue 655); null = none. */
+    public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, List<Attachment> picked, boolean locked, String id, String meetingEvent) throws IOException {
         Item it = new Item();
         it.locked = locked;
         String registered = custody.idFor(recording);
@@ -249,6 +278,24 @@ public final class EverywhereOutbox {
                 File f = new File(audioDir, it.id + "-shot" + (++n) + ".png");
                 try (FileOutputStream o = new FileOutputStream(f)) { o.write(png); o.getFD().sync(); }
                 it.shots.put(f.getAbsolutePath());
+            }
+        }
+        if (picked != null && !it.dictation()) {
+            int n = 0;
+            for (Attachment a : picked) {
+                if (a == null || a.file == null || !a.file.isFile() || a.file.length() == 0) continue;
+                File f = new File(audioDir, it.id + "-file" + (++n) + ".bin");
+                if (!a.file.renameTo(f)) { // same disk, so a move; else copy it over and drop the picked copy
+                    try (InputStream in = new FileInputStream(a.file); FileOutputStream o = new FileOutputStream(f)) {
+                        byte[] buf = new byte[64 * 1024];
+                        for (int r; (r = in.read(buf)) > 0; ) o.write(buf, 0, r);
+                        o.getFD().sync();
+                    }
+                    ai.wizards.os.assist.PickedFiles.drop(a.file);
+                }
+                try {
+                    it.files.put(new JSONObject().put("path", f.getAbsolutePath()).put("name", a.name).put("mime", a.mime).put("kind", a.kind));
+                } catch (JSONException e) { throw new IOException(e); }
             }
         }
         it.createdAt = System.currentTimeMillis();
@@ -317,6 +364,11 @@ public final class EverywhereOutbox {
     private static void deleteShots(Item it) {
         for (int i = 0; i < it.shots.length(); i++) //noinspection ResultOfMethodCallIgnored
             new File(it.shots.optString(i)).delete();
+        for (int i = 0; i < it.files.length(); i++) {
+            JSONObject picked = it.files.optJSONObject(i);
+            if (picked != null) //noinspection ResultOfMethodCallIgnored
+                new File(picked.optString("path")).delete();
+        }
     }
 
     /* ------------------------------------------------------------------ delivery */
@@ -392,7 +444,7 @@ public final class EverywhereOutbox {
                 boolean kept = ai.wizards.os.recording.CancelledTakes.keepUnheard(dir.getParentFile(), audio, it.source);
                 // Compatibility entry point delegates to CaptureJournal.release(null): unheard is not a receipt.
                 String why = kept ? "No words heard · recording kept in Settings → Cancelled recordings" : "No speech in that recording";
-                synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); save(); }
+                synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); deleteShots(it); save(); }
                 meetingNote(it, "event", "failed", "error", why);
                 Log.i(TAG, "no words in " + it.id + (kept ? " · kept" : " · not kept"));
                 // A failed keep leaves the journal and original intact for recovery.
@@ -470,6 +522,17 @@ public final class EverywhereOutbox {
             if (f == null || f.optString("id").isEmpty()) throw new HttpError(502, "Wizard Files returned no id");
             synchronized (this) { it.shotFiles.put(f); save(); }
         }
+        // 2c. Camera pictures and picked files (wizard-os issue 655), one upload each, kept as they land like screenshots.
+        for (int i = it.fileRecs.length(); i < it.files.length(); i++) {
+            JSONObject pf = it.files.optJSONObject(i);
+            File data = pf == null ? null : new File(pf.optString("path"));
+            if (data == null || !data.isFile()) { synchronized (this) { it.fileRecs.put(JSONObject.NULL); save(); } continue; }
+            JSONObject r = request("POST", "/wizard/files/upload", readAll(new FileInputStream(data)), "application/octet-stream",
+                    new String[]{"X-Wizard-Filename", pf.optString("name", "file"), "X-Wizard-Mime", pf.optString("mime", "application/octet-stream")});
+            JSONObject f = r.optJSONObject("file");
+            if (f == null || f.optString("id").isEmpty()) throw new HttpError(502, "Wizard Files returned no id");
+            synchronized (this) { it.fileRecs.put(f); save(); }
+        }
         // 3. Its own thread. 409 = an earlier try already created it.
         if (!it.sessionReady) {
             try {
@@ -484,6 +547,10 @@ public final class EverywhereOutbox {
             if (it.audioFile != null) ids.put(it.audioFile.optString("id"));
             for (int i = 0; i < it.shotFiles.length(); i++) {
                 JSONObject f = it.shotFiles.optJSONObject(i);
+                if (f != null && !f.optString("id").isEmpty()) ids.put(f.optString("id"));
+            }
+            for (int i = 0; i < it.fileRecs.length(); i++) {
+                JSONObject f = it.fileRecs.optJSONObject(i);
                 if (f != null && !f.optString("id").isEmpty()) ids.put(f.optString("id"));
             }
             if (ids.length() > 0) b.put("wizard_file_ids", ids);

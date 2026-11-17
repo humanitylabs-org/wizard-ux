@@ -1529,6 +1529,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 ai.wizards.os.notify.BridgedNotificationListener.openAccess(MainActivity.this);
             });
         }
+        /* ---- Camera and Attach on the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by
+         * default): the corner orb has its own page, so the shell copies the switch here (assist/AssistAttach). ---- */
+        @JavascriptInterface
+        public void assistAttachSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.assist.AssistAttach.setOn(MainActivity.this, on);
+        }
         @JavascriptInterface
         public int chatNotifyRead(String json) {
             if (MainActivity.this instanceof AppSessionActivity) return 0;

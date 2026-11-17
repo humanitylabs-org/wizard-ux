@@ -46,6 +46,8 @@ final class VoiceCapture {
         /** Wizard isn't reachable yet: it's saved on the phone and retrying by itself. */
         default void onQueued(String why) { }
         default void onPaused(boolean paused) { }
+        /** Back from the Camera or Attach picker (wizard-os issue 655): counts JSON from AttachPolicy.counts. */
+        default void onAttached(String counts) { }
     }
 
     private static volatile VoiceCapture instance;
@@ -73,6 +75,8 @@ final class VoiceCapture {
     /** Screenshots taken with the corner orb's Screen button while talking; they ride with this take. */
     static final int MAX_SHOTS = 4;
     private final List<byte[]> shots = new ArrayList<>();
+    /** Pictures (Camera) and files (Attach) for this take, while switch wizard/assist-attach is on (wizard-os issue 655). */
+    private final List<EverywhereOutbox.Attachment> picked = new ArrayList<>();
 
     private VoiceCapture(Context app) {
         this.app = app;
@@ -133,13 +137,92 @@ final class VoiceCapture {
 
     int shotCount() { return shots.size(); }
 
-    /** Attach a screenshot to the take in progress (max four). False when nothing is being recorded or it is full. */
+    /** Everything this take carries: screenshots, pictures and files. */
+    int attachedCount() { return shots.size() + picked.size(); }
+
+    /** One cap for the whole take: four screenshots with the switch off (as before), eight things with it on. */
+    int attachCap() { return AttachPolicy.cap(AssistAttach.on(app)); }
+
+    int photoCount() {
+        int n = 0;
+        for (EverywhereOutbox.Attachment a : picked) if (AttachPolicy.KIND_PHOTO.equals(a.kind)) n++;
+        return n;
+    }
+
+    String attachCounts(int added, int skipped, int tooBig) {
+        int pictures = photoCount();
+        return AttachPolicy.counts(shots.size(), pictures, picked.size() - pictures, added, skipped, tooBig, AssistAttach.on(app));
+    }
+
+    /** Attach a screenshot to the take in progress. False when nothing is being recorded or the take is full. */
     boolean addShot(byte[] png) {
-        if (!listening || png == null || png.length == 0 || shots.size() >= MAX_SHOTS) return false;
+        if (!listening || png == null || png.length == 0 || attachedCount() >= attachCap()) return false;
         shots.add(png);
         Log.i(TAG, "screenshot attached " + shots.size() + " bytes=" + png.length);
         return true;
     }
+
+    /* ---------------------------------------------------------------- Camera / Attach (wizard-os issue 655) */
+
+    private boolean away, pausedForPick;
+    private final Runnable awayTimeout = () -> {
+        if (!away) return;
+        Log.i(TAG, "picker never came back; the take goes on");
+        View v = view;
+        endAway();
+        if (v == null) finishOnDismiss("pick-timeout");
+        else v.onAttached(attachCounts(0, 0, 0));
+    };
+
+    /** True while the camera or the file picker is open for this take: hiding the orb then must not end it. */
+    boolean away() { return away; }
+
+    /** The camera or picker is opening: the take pauses (nothing is lost) until it comes back. */
+    boolean beginAway() {
+        if (!listening || away) return false;
+        away = true;
+        pausedForPick = false;
+        if (!paused) { togglePause(); pausedForPick = paused; }
+        main.removeCallbacks(awayTimeout);
+        main.postDelayed(awayTimeout, AttachPolicy.AWAY_MS);
+        Log.i(TAG, "away for camera/attach paused=" + paused);
+        return true;
+    }
+
+    private void endAway() {
+        main.removeCallbacks(awayTimeout);
+        if (!away) return;
+        away = false;
+        if (pausedForPick && listening && paused) togglePause();
+        pausedForPick = false;
+    }
+
+    /**
+     * The camera or picker came back with these (possibly none). They join the take up to its cap and the recording
+     * carries on. Returns true when a surface showed it; false = nothing is on screen and the caller shows the orb.
+     */
+    boolean pickDone(List<EverywhereOutbox.Attachment> got, int tooBig) {
+        if (!away) { PickedFiles.drop(got); return view != null; }
+        int added = 0, skipped = 0;
+        if (got != null) for (EverywhereOutbox.Attachment a : got) {
+            if (a == null || a.file == null || !a.file.isFile() || a.file.length() == 0) { if (a != null) PickedFiles.drop(a.file); continue; }
+            if (!listening || attachedCount() >= attachCap()) { skipped++; PickedFiles.drop(a.file); continue; }
+            picked.add(a);
+            added++;
+        }
+        endAway();
+        Log.i(TAG, "camera/attach back added=" + added + " skipped=" + skipped + " tooBig=" + tooBig + " total=" + attachedCount());
+        String counts = attachCounts(added, skipped, tooBig);
+        if (view == null) { lastCounts = counts; return false; }
+        lastCounts = null;
+        view.onAttached(counts);
+        return true;
+    }
+
+    private String lastCounts;
+
+    /** What the orb should show when it comes back after a picker (null when nothing is waiting). */
+    String takeLastCounts() { String c = lastCounts; lastCounts = null; return c; }
 
     /**
      * The surface went away mid-take (Back, Home, screen off, another app). What was said is never lost:
@@ -271,6 +354,8 @@ final class VoiceCapture {
 
     void send(String via) {
         if (!listening) return;
+        main.removeCallbacks(awayTimeout);
+        away = false; pausedForPick = false;
         listening = false;
         main.removeCallbacks(meter);
         if (paused && recorder != null) try { recorder.resume(); } catch (IllegalStateException ignored) { }
@@ -311,7 +396,8 @@ final class VoiceCapture {
             if (!event.isEmpty()) ai.wizards.os.mizel.MeetingLoans.note(app, event, ai.wizards.os.mizel.MeetingLoans.obj(
                     "event", "queued", "voiceTakeId", take, "deliveryKey", take));
             // Debug QA audio is a different file from the take the journal registered; it gets its own id.
-            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots), locked, qa != null ? null : take, event);
+            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots),
+                    picked.isEmpty() ? null : new ArrayList<>(picked), locked, qa != null ? null : take, event);
             endLoan("stopped", null, null);
         } catch (Exception e) {
             endLoan("save_failed", "failed", "The recording could not be saved on the phone");
@@ -320,6 +406,7 @@ final class VoiceCapture {
             return;
         }
         shots.clear();
+        picked.clear();
         pendingId = it.id;
         reported = false;
         sending = true;
@@ -430,6 +517,10 @@ final class VoiceCapture {
         listening = false;
         paused = false;
         shots.clear();
+        PickedFiles.drop(picked); // a cancelled or empty take never carries them
+        picked.clear();
+        main.removeCallbacks(awayTimeout);
+        away = false; pausedForPick = false; lastCounts = null;
         main.removeCallbacks(meter);
         if (qaSend != null) main.removeCallbacks(qaSend);
         dropRecorder();

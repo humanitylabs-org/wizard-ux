@@ -135,6 +135,25 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) chatSync(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => chatSync()); else chatSync();
 
+  /* Camera and Attach on the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by default).
+   * The corner orb is its own native page and never sees the shell's switches, so the shell copies this one to the
+   * Android app. As above, an off is applied only once the switches have settled. */
+  const ATTACH_SWITCH = 'wizard/assist-attach';
+  let attachWas = null;
+  function attachSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.assistAttachSwitch !== 'function') return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(ATTACH_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === attachWas) return;
+    attachWas = on; try { n.assistAttachSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => attachSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; attachSync(); });
+  setTimeout(() => { chatSettled = true; attachSync(); }, 5000);
+  attachSync();
+
   window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port(), resume, chatRead,
     legacy(source, appId, method, args = []) {
       const spec = legacySpec(source, appId);
