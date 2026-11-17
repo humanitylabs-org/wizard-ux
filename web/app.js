@@ -1700,7 +1700,7 @@
     }, true); } catch (e) {}
     try { FIELDS?.bind(win.document); } catch (e) {}
     try { bindWinPinch(win.document, id); } catch (e) {}
-    armFrameBack(f, win);
+    try { armFrameBack(f, win); } catch (e) {} // another origin (Troubleshooter's direct line) can't be read
     shareCutout();
     frameEdge(f); setTimeout(() => { if (f.isConnected) frameEdge(f); }, 800); // apps that paint their theme after boot
   }

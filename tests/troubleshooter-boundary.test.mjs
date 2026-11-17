@@ -66,9 +66,20 @@ test('switch on: a page that never answers falls back to local help and the dire
   const h = mount();
   h.mount(); fire(h, 0); await flush();
   h.handlers.load();
-  fire(h, 8000);
+  fire(h, 8000); fire(h, 4000); await flush(); // the direct line doesn't answer either (its ping times out)
   assert.equal(h.frame.hidden, true);
   assert.equal(h.direct.hidden, false, 'the direct line is offered');
+});
+
+test('switch on: a page that never answers opens the direct line in the window when that line answers', async () => {
+  const h = mount({ fetch: async (u, o) => o.method === 'HEAD' ? { ok: true, status: 200 } : String(u).startsWith('https://wizard.tail.ts.net:9691/') ? { ok: false, status: 0, type: 'opaque' } : new Promise(() => {}) });
+  h.mount(); fire(h, 0); await flush();
+  h.handlers.load();
+  fire(h, 8000); await flush();
+  assert.equal(h.frame.src, 'https://wizard.tail.ts.net:9691/troubleshoot/');
+  h.handlers.load(); // another origin: unreadable and never on this channel; its ping already answered
+  assert.equal(h.frame.hidden, false);
+  fire(h, 8000); assert.equal(h.frame.hidden, false);
 });
 
 test('switch off: the loaded document is still the proof, read as before', async () => {
@@ -85,7 +96,7 @@ test('switch on: after it once answered, a later load that never answers (an err
   h.handlers.load(); h.answer();
   assert.equal(h.frame.hidden, false);
   h.ready(false); h.handlers.load(); // the boundary renewed the channel on this load; nothing answers now
-  fire(h, 8000);
+  fire(h, 8000); fire(h, 4000); await flush();
   assert.equal(h.frame.hidden, true, 'the error page is not left on screen as the repair page');
   assert.equal(h.direct.hidden, false);
 });
